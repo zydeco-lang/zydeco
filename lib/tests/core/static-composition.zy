@@ -1,0 +1,34 @@
+begin
+  param (/VType; /Unit; /Thk; /Ret; /Int64; /process) : @(import("../../std/builtin.zy")) that
+
+  let Transform = val pi (_ : Int64) . Int64 that
+  let val compose (first : Transform) (second : Transform) : Transform =
+    val (value : Int64) => second (first value)
+  that
+  let val keep (A : VType) (value : A) : A = value that
+  let Stored =
+    data
+    | +Store : Transform * Thk (Ret Int64)
+    end
+  that
+
+  do captured <- ret 17;
+  let val constant (_ : Int64) : Int64 = captured in
+  let mixed : Stored = +Store(compose (keep Int64) constant, { ret captured }) in
+  match mixed
+  | +Store(function, suspended) =>
+    let module = pack (= Int64 as Int64 : VType)
+    where
+      (#apply = function, #read = suspended)
+    end in
+    let (/apply; /read) = module in
+    let composed = (apply, keep Int64) in
+    let (first, second) = composed in
+    let result = second (first 0) in
+    do observed <- ! read;
+    match (result, observed)
+    | (17, 17) => ! process/exit 0
+    | _ => ! process/exit 1
+    end
+  end
+end

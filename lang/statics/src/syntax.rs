@@ -307,7 +307,7 @@ pub struct PackPi {
     pub codomain: TypeId,
 }
 
-/// One runtime binder of a total value function.
+/// One value binder of a statically eliminated value function.
 #[derive(Clone, Debug)]
 pub struct ValueParameter {
     pub domain: TypeId,

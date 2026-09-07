@@ -509,21 +509,23 @@ It is not restricted to the host boundary or to a statically known callee.
 
 ### Current implementation and validation
 
-The compiler already checks and executes thunked `forall` and codata contracts and the package-`pi` adapters above.
-It still runs `PackageChecker`, which rejects source package returns, constructor payloads, and plain-arrow domains
-with `tyck.first-class-package`; `ValueFunctionChecker` independently rejects value functions carried in packages.
-Those occurrence bans are implementation gaps relative to static elimination and explicit runtime contracts.
-Their replacement must preserve witness-scope checks
-while satisfying the [shared residual validation](normalization.md#residual-validation-and-execution).
+The compiler checks and executes thunked `forall` and codata contracts and the package-`pi` adapters above.
+Packages with representable payloads may be returned, stored in constructors,
+and passed through plain computation arrows.
+Static packages carrying value functions compose
+through the shared [static elaboration and residual validation](normalization.md#implementation-status).
+Their known introductions and openings reduce while runtime package openings preserve the typed witness scope.
 
-Validation must cover static packages carrying value functions, manifest-only domains,
-and dynamically passed thunks of package `pi`, including both directions of the explicit `forall` adapters.
-Pair these accepted cases with unavailable witness evidence, abstract-type escape or false disclosure,
-and a value function that remains in a runtime payload.
+The existential and package-`pi` regression tests retain unavailable-witness, abstract-type escape,
+and false-disclosure rejections beside the accepted runtime transport cases.
+The core runtime-contract fixtures exercise dynamically passed codata and package-`pi` thunks,
+both directions of the explicit `forall` adapters, and a callback that keeps a provider's representation type hidden.
+`static_elimination.rs` rejects attempts to retain a value function in a runtime payload,
+including a hidden existential, and pairs witness recovery through static forwarding with rejection
+of hidden runtime witnesses after forwarding or repacking.
 
-Fusing a `pack` into its opening and flowing demand through package-dependent applications remain optimizations
-to measure; the latter currently demand their arguments whole.
-Neither optimization may determine whether an otherwise supported static composition is accepted.
+Demand propagation through runtime package-dependent computation applications remains an optimization to measure;
+those applications currently demand their arguments whole.
 
 ## Elaboration and runtime representation
 

@@ -5,6 +5,13 @@ use zydeco_utils::arena::ArenaAccess;
 /* ------------------------- Existential type scope ------------------------- */
 
 impl TypeId {
+    /// Test known existential evidence without changing inference-hole scopes.
+    /// Static inspection may expose only witnesses already visible to its caller.
+    pub(crate) fn has_visible_witnesses(&self, tycker: &Tycker<'_>, scope: &SkolemScope) -> bool {
+        TypeSupport::of(*self, tycker)
+            .is_ok_and(|support| support.skolems.iter().all(|witness| scope.contains(witness)))
+    }
+
     /// Require this type to be well scoped under `scope`.
     ///
     /// Unsolved inference holes inherit the requirement by narrowing the

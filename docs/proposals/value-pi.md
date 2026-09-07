@@ -27,7 +27,8 @@ The resulting runtime data construction may depend on runtime inputs, but the va
 and application themselves have no runtime representation.
 The same transformation is available inside patterns without introducing a separate class of named views.
 
-This proposal specifies the replacement for the implementation's second-class occurrence restrictions.
+The implementation follows the shared
+[static elimination contract](normalization.md#static-elimination-and-residual-code).
 The remaining implementation work is recorded under [Implementation Boundary](#implementation-boundary).
 
 ## One Classifier
@@ -67,7 +68,7 @@ let val unpack ((X, value) : Box) : X = value that
 The inferred classifier of `unpack` is `val pi ((X, _) : Box) . X`.
 The dependency is static: a codomain may depend on type arguments and on witnesses disclosed
 by a package pattern, but not on an arbitrary runtime value.
-`ValPi` therefore remains a value type even though its telescope contains both erased and runtime binders.
+`ValPi` therefore remains a value type even though its telescope contains both type and value binders.
 
 The checked value binder retains two pieces of static evidence: the canonical witness telescope
 and a structural projection route through the parameter pattern.
@@ -87,7 +88,7 @@ val (A : VType) (value : A) => value
 
 Parameters are curried from left to right.
 Type parameters erase during lowering; value parameters extend the lexical environment used for static reduction.
-Runtime parameter patterns must be irrefutable because applying a value function is total.
+Value parameter patterns must be irrefutable because applying a value function is total.
 
 The corresponding block-form introduction is `param val`:
 
@@ -231,10 +232,8 @@ let first_view ~> second_view ~> result = input in ...
 ```
 
 applies `first_view`, then `second_view`, and finally matches `result`.
-Naming a statically computed function before the pattern permits higher-order static selection
-and lexical capture without making the pattern grammar ambiguous.
-The current occurrence checker still rejects some such compositions, as described
-under [Implementation Boundary](#implementation-boundary).
+Naming a statically computed function before the pattern permits higher-order static selection and lexical capture
+without making the pattern grammar ambiguous.
 
 The typing rule is ordinary value-function elimination followed by pattern checking:
 
@@ -339,7 +338,7 @@ The shared [static elimination contract](normalization.md#static-elimination-and
 higher-order `ValPi` composition, lexical capture, and residual runtime data.
 For value functions, this admits transport through intermediate products, constructors,
 named components, and packages, as well as function-valued parameters and results.
-For example, the revised design accepts this composition, which the current occurrence checker rejects:
+For example, this composition is accepted:
 
 ```zydeco
 let Endomorphism = val pi (_ : Unit) . Unit that
@@ -378,9 +377,8 @@ let std = builtin |> make_std in
 
 Inlining duplicates a body at each application, so emitted size and compiler recursion depth grow
 with the unfolded program; the workspace test configuration raises its minimum stack accordingly.
-Static resolution also lets a caller's demand flow through an application into the callee's body,
-so unused components of an instantiated package become ordinary dead bindings;
-the demand analysis records this alongside its binding decisions.
+Static elimination exposes the callee's residual body and lexical argument bindings to demand analysis,
+so unused components of an instantiated package become ordinary dead bindings.
 Factoring repeated residual code into direct blocks remains a backend optimization after static elimination.
 It must preserve specialization by static arguments and cannot reintroduce runtime `ValPi` values.
 
@@ -389,7 +387,7 @@ It must preserve specialization by static arguments and cannot reintroduce runti
 The implemented `ValPi` representation uses typed binder and argument variants for one telescope.
 Formation, introduction, elimination, substitution, formatting,
 and package-witness recovery follow the same structural recursion.
-A runtime binder stores its optional package-witness telescope together with a typed projection route (`ignore`,
+A value binder stores its optional package-witness telescope together with a typed projection route (`ignore`,
 `package`, or component-wise `product`); this route is internal static evidence and erases before dynamics.
 
 This representation replaces `VArrow`, `VForall`, and `VPackPi` with `ValPi`.
@@ -398,15 +396,14 @@ dependency graph, expansion plan, or view-specific source loading.
 `val` and `let val` produce ordinary values. Pipelines elaborate to ordinary `ValPi` application.
 The `f ~> p` pattern retains only the machinery described under [Value Views](#value-views).
 
-The unified `ValPi` representation is implemented, but general static composition is not.
-`ValueFunctionChecker` still rejects products and higher-order domains with `tyck.first-class-value-function`,
-and SPS resolution follows a restricted set of definition bindings and application spines.
-Replacing these occurrence bans must follow the [shared normalization boundary](normalization.md#implementation-status),
-updating demand analysis and execution entry points together.
+The shared [static elaborator](normalization.md#implementation-status) handles higher-order functions,
+partial applications, lexical captures, products, constructors, named components, packages, and views.
+SPS no longer resolves value-function definitions; a surviving value function there is an internal invariant failure.
 
-Regression cases must pair accepted static transport through products, packages, partial applications,
-and higher-order parameters and results with rejected unresolved runtime transport.
-They must cover lexical capture of runtime data, preserved sharing, and the same acceptance outcome
-across checking, interpretation, and compiled lowering.
-Existing tests that intentionally reject reducible products and higher-order domains describe the superseded requirement
-and must change with that implementation.
+`lang/tests/tests/value_pi.rs` and `static_elimination.rs` pair accepted static transport
+with rejected runtime transport, check lexical capture and runtime sharing,
+and compare checking, interpretation, and compiled lowering.
+Dependent calls recover witnesses from statically forwarded or constructed packages,
+including product arguments and named projections, under the shared evidence-inspection rule.
+The core static-composition and value-view fixtures execute on the interpreter and compiled backends.
+The recursive self-application regression exercises the shared reducer's documented resource boundary.

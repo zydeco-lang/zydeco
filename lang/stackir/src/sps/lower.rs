@@ -2,11 +2,10 @@ use super::{
     check::BranchJoinProgram,
     demand::{DefinitionDemand, Demand},
     syntax::*,
-    value_functions as definitions,
 };
 use ariadne::{Label, Report, ReportKind};
 use derive_more::{AsMut, AsRef};
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 use thiserror::Error;
 use zydeco_statics::{
     BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, arena::StaticsArena,
@@ -19,29 +18,19 @@ use zydeco_utils::{
     span::{PathDisplay, Span, internal_ariadne_span},
 };
 
-/// Errors reported when lowering cannot keep a value function second-class.
-///
-/// The occurrence rule confines value functions to definitions and
-/// applications, so a head that does not statically resolve is a source-level
-/// failure: the program compiled, but the module layer cannot elaborate.
+/// An internal invariant failure in a purportedly residual typed program.
+/// Source-level static-elimination failures are reported by the shared checker.
 #[derive(Clone, Debug, Error)]
 pub enum SpsLowerError {
-    /// A value application whose head does not statically resolve to a
-    /// definition of a value function.
-    #[error("value application does not statically resolve to a definition")]
-    UnresolvedApplication { function: ss::ValueId },
-    /// A value abstraction reached as a value instead of through unfolding at
-    /// one of its applications.
-    #[error("a value abstraction must be applied through its definition")]
-    MaterializedAbstraction { value: ss::ValueId },
+    #[error("internal compiler error: a value function survived static elimination")]
+    ResidualValueFunction { value: ss::ValueId },
 }
 
 impl SpsLowerError {
     /// The typed node blamed for the failure.
     fn value(&self) -> ss::ValueId {
         match self {
-            | Self::UnresolvedApplication { function } => *function,
-            | Self::MaterializedAbstraction { value } => *value,
+            | Self::ResidualValueFunction { value } => *value,
         }
     }
 
@@ -70,14 +59,7 @@ impl SpsLowerError {
             .unwrap_or_else(internal_ariadne_span);
         let formatter = zydeco_statics::fmt::Formatter::new(scoped, statics);
         let term = self.value().ugly(&formatter);
-        let label = match self {
-            | Self::UnresolvedApplication { .. } => {
-                "this application head does not resolve to a value-function definition"
-            }
-            | Self::MaterializedAbstraction { .. } => {
-                "this abstraction only lowers through unfolding at its applications"
-            }
-        };
+        let label = "this value should have been eliminated before lowering";
         Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
             .with_message(self.to_string())
             .with_label(Label::new((file_path, range)).with_message(format!("{label}:\n{term}")))
@@ -90,7 +72,7 @@ impl SpsLowerError {
 pub enum BuiltinRootLowerError {
     #[error(transparent)]
     Package(#[from] BuiltinPackageLowerError),
-    #[error("value functions must remain second-class through lowering")]
+    #[error("static elimination left an invalid residual program")]
     Sps(Vec<SpsLowerError>),
 }
 
@@ -125,8 +107,7 @@ struct ValuePlan<T> {
     value: T,
 }
 
-/// A source-pattern decision whose view transformations have not yet been
-/// expanded into structural Stack IR bindings and matches.
+/// A residual pattern decision containing a literal comparison.
 #[derive(Clone)]
 enum MatchPlan {
     Fail,
@@ -136,12 +117,6 @@ enum MatchPlan {
         pattern: ss::VPatId,
         success: Box<MatchPlan>,
         failure: Box<MatchPlan>,
-    },
-    Apply {
-        binder: DefId,
-        function: ss::ValueId,
-        argument: DefId,
-        tail: Box<MatchPlan>,
     },
 }
 
@@ -191,13 +166,7 @@ pub struct Lowerer<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     demand: DefinitionDemand,
-    /// Definitions of second-class value functions whose binding lowering has
-    /// elided, mapped to the right-hand side their applications unfold to.
-    /// Entries follow lowering order, so a right-hand side only chases
-    /// definitions recorded before it.
-    value_functions: HashMap<ss::DefId, ss::ValueId>,
-    /// Source-level lowering failures collected so far; the pass reports them
-    /// instead of constructing a program when nonempty.
+    /// Internal residual invariant failures collected during lowering.
     lower_errors: Vec<SpsLowerError>,
 }
 
@@ -231,9 +200,8 @@ impl<'a> Lowerer<'a> {
     ) -> Self {
         let arena = StackirArena::default();
         let demand = DefinitionDemand::new(statics, root);
-        let value_functions = HashMap::new();
         let lower_errors = Vec::new();
-        Self { arena, spans, scoped, statics, demand, value_functions, lower_errors }
+        Self { arena, spans, scoped, statics, demand, lower_errors }
     }
 
     fn product_arity(&self, ty: ss::TypeId) -> usize {
@@ -259,11 +227,12 @@ impl<'a> Lowerer<'a> {
     }
 
     /// Whether a pattern must be lowered through the match-plan machinery
-    /// instead of a structural binder: it contains a view application or a
-    /// refutable literal row, possibly nested under other patterns.
+    /// instead of a structural binder: it contains a refutable literal row,
+    /// possibly nested under other patterns.
     fn pattern_needs_match_plan(&self, pattern: ss::VPatId) -> bool {
         match &self.statics.vpats[&pattern] {
-            | ss::ValuePattern::View(_) | ss::ValuePattern::Lit(_) => true,
+            | ss::ValuePattern::Lit(_) => true,
+            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
             | ss::ValuePattern::Named(Named(_, pattern))
             | ss::ValuePattern::Ctor(Ctor(_, pattern))
             | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => {
@@ -277,89 +246,6 @@ impl<'a> Lowerer<'a> {
             }
             | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
                 false
-            }
-        }
-    }
-
-    /// Expand a view-bearing pattern used by a complex-value `let` into the
-    /// ordered structural bindings that implement its value-level cuts.
-    fn lower_value_pattern_bindings(
-        &mut self, pattern: ss::VPatId, bindee: ValueId, site: Option<ss::TermId>,
-    ) -> Vec<ValueStep> {
-        if !self.pattern_needs_match_plan(pattern) {
-            return vec![ValueStep::Bind(ValueBinding {
-                binder: pattern.lower(self, ()),
-                bindee,
-                site,
-            })];
-        }
-
-        match self.statics.vpats[&pattern].clone() {
-            | ss::ValuePattern::Named(Named(_, inner))
-            | ss::ValuePattern::SCons(ss::ConsN(_, inner)) => {
-                self.lower_value_pattern_bindings(inner, bindee, site)
-            }
-            | ss::ValuePattern::View(view) => {
-                let ss::ViewPattern { function, pattern } = *view;
-                let unfolded =
-                    self.unfold_value_application(function, ValuePlan::pure(bindee), site);
-                let result = self.alloc_admin_def("__view_result__");
-                let binder = result.build(self, None);
-                let binding =
-                    ValueStep::Bind(ValueBinding { binder, bindee: unfolded.value, site });
-                let result = result.build(self, site);
-                let nested = self.lower_value_pattern_bindings(pattern, result, site);
-                unfolded.steps.into_iter().chain([binding]).chain(nested).collect()
-            }
-            | ss::ValuePattern::Alias(Alias(patterns)) => {
-                let whole = self.alloc_admin_def("__view_alias__");
-                let whole_pattern = whole.build(self, None);
-                let binding = ValueStep::Bind(ValueBinding { binder: whole_pattern, bindee, site });
-                std::iter::once(binding)
-                    .chain(patterns.into_iter().flat_map(|pattern| {
-                        let bindee = whole.build(self, site);
-                        self.lower_value_pattern_bindings(pattern, bindee, site)
-                    }))
-                    .collect()
-            }
-            | ss::ValuePattern::VCons(patterns) => {
-                let layout = self.product_layout(self.statics.annotations_vpat[&pattern]);
-                let components = patterns
-                    .iter()
-                    .map(|_| self.alloc_admin_def("__view_component__"))
-                    .collect::<Vec<_>>();
-                let fields = components.iter().map(|definition| definition.build(self, None));
-                let binder = VCons::new(fields.collect(), layout).build(self, None);
-                let binding = ValueStep::Bind(ValueBinding { binder, bindee, site });
-                std::iter::once(binding)
-                    .chain(patterns.into_iter().zip(components).flat_map(
-                        |(pattern, definition)| {
-                            let bindee = definition.build(self, site);
-                            self.lower_value_pattern_bindings(pattern, bindee, site)
-                        },
-                    ))
-                    .collect()
-            }
-            | ss::ValuePattern::Ctor(Ctor(name, inner)) => {
-                let payload = self.alloc_admin_def("__view_payload__");
-                let payload_pattern = payload.build(self, None);
-                let data = self.statics.data_pat_hints[&pattern];
-                let index = self.statics.datas[&data]
-                    .iter()
-                    .position(|(candidate, _)| candidate == &name)
-                    .expect("constructor tag not found");
-                let binder = Ctor(CtorIdx { idx: index, name }, payload_pattern).build(self, None);
-                let binding = ValueStep::Bind(ValueBinding { binder, bindee, site });
-                let bindee = payload.build(self, site);
-                std::iter::once(binding)
-                    .chain(self.lower_value_pattern_bindings(inner, bindee, site))
-                    .collect()
-            }
-            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
-                unreachable!("a view-free pattern is lowered by the structural fast path")
-            }
-            | ss::ValuePattern::Lit(_) => {
-                unreachable!("a literal pattern is refutable and cannot bind a value")
             }
         }
     }
@@ -379,23 +265,6 @@ impl<'a> Lowerer<'a> {
         match plan {
             | MatchPlan::Fail => SHole(stack).build(self, site),
             | MatchPlan::Tail(tail) => tail.lower(self, stack),
-            | MatchPlan::Apply { binder, function, argument, tail } => {
-                let argument_value = argument.build(self, site);
-                let unfolded =
-                    self.unfold_value_application(function, ValuePlan::pure(argument_value), site);
-                let result_pattern = binder.build(self, None);
-                let result = binder.build(self, site);
-                let binding = ValueStep::Bind(ValueBinding {
-                    binder: result_pattern,
-                    bindee: unfolded.value,
-                    site,
-                });
-                ValuePlan {
-                    steps: unfolded.steps.into_iter().chain([binding]).collect(),
-                    value: result,
-                }
-                .lower_into(self, move |_, lowerer| lowerer.lower_match_plan(*tail, stack, site))
-            }
             | MatchPlan::Pattern { scrutinee, pattern, success, failure } => {
                 match self.statics.vpats[&pattern].clone() {
                     | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => {
@@ -495,22 +364,8 @@ impl<'a> Lowerer<'a> {
                         let body = SCoprodMatch { scrut, arms }.build(self, site);
                         Let { binder: Bullet, bindee: stack, tail: body }.build(self, site)
                     }
-                    | ss::ValuePattern::View(view) => {
-                        let ss::ViewPattern { function, pattern } = *view;
-                        let output = self.alloc_admin_def("__view_result__");
-                        let nested = MatchPlan::Pattern {
-                            scrutinee: output,
-                            pattern,
-                            success,
-                            failure: failure.clone(),
-                        };
-                        let transformed = MatchPlan::Apply {
-                            binder: output,
-                            function,
-                            argument: scrutinee,
-                            tail: Box::new(nested),
-                        };
-                        self.lower_match_plan(transformed, stack, site)
+                    | ss::ValuePattern::View(_) => {
+                        unreachable!("static elaboration eliminates views")
                     }
                     | ss::ValuePattern::Lit(literal) => {
                         let ss::Literal::Integer(integer) = literal else {
@@ -557,7 +412,7 @@ impl<'a> Lowerer<'a> {
         &mut self, scrut: ValueId, arms: &[Matcher<ss::VPatId, ss::CompuId>], stack: StackId,
         site: Option<ss::TermId>,
     ) -> CompuId {
-        let scrutinee = self.alloc_admin_def("__view_scrutinee__");
+        let scrutinee = self.alloc_admin_def("__match_scrutinee__");
         let binder = scrutinee.build(self, None);
         let plan = self.match_plan(scrutinee, arms);
         let tail = self.lower_match_plan(plan, stack, site);
@@ -572,7 +427,7 @@ impl<'a> Lowerer<'a> {
                 patterns.iter().any(|pattern| self.is_coprod_pattern(*pattern))
             }
             | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => self.is_coprod_pattern(*pattern),
-            | ss::ValuePattern::View(view) => self.is_coprod_pattern(view.pattern),
+            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
             | ss::ValuePattern::Hole(_)
             | ss::ValuePattern::Var(_)
             | ss::ValuePattern::Lit(_)
@@ -611,72 +466,13 @@ impl<'a> Lowerer<'a> {
         let projected = selected.build(self, site);
         (ValueBinding { binder, bindee: head, site }, projected)
     }
-
-    /// Whether the recorded classifier of one typed value is a `val pi`.
-    fn is_value_function_value(&self, value: ss::ValueId) -> bool {
-        definitions::is_value_function(self.statics, value)
-    }
-
-    /// Elide the lowering of one value-function definition binding, recording
-    /// its right-hand side for unfolding at each application instead.
-    /// Returns whether the binding was elided; a definition that cannot
-    /// unfold materializes, and lowering its right-hand side reports the node
-    /// that cannot be applied through.
-    fn record_value_function_binding(&mut self, binder: ss::VPatId, bindee: ss::ValueId) -> bool {
-        if !self.is_value_function_value(bindee)
-            || !definitions::is_unfoldable_definition(self.statics, &self.value_functions, bindee)
-        {
-            return false;
-        }
-        match definitions::bound_definitions(self.statics, binder) {
-            | Some(bound) => {
-                bound.into_iter().for_each(|def| {
-                    self.value_functions.insert(def, bindee);
-                });
-                true
-            }
-            | None => false,
-        }
-    }
-
-    /// Unfold one value application: reduce the application spine ending at
-    /// `function` — including `outer_argument`, already lowered — against the
-    /// function's abstractions, elaborating each cut as a lexical pattern
-    /// binding. A head that does not statically resolve records a source
-    /// error and lowers to a hole: value functions never materialize as
-    /// closures, and the pass reports the collected errors instead of a program.
-    fn unfold_value_application(
-        &mut self, function: ss::ValueId, outer_argument: ValuePlan<ValueId>,
-        site: Option<ss::TermId>,
-    ) -> ValuePlan<ValueId> {
-        let (arguments, head) =
-            definitions::application_spine(self.statics, &self.value_functions, function);
-        let mut steps: Vec<ValueStep> = Vec::new();
-        let mut cursor = head;
-        let mut pending: Vec<ValuePlan<ValueId>> =
-            arguments.into_iter().map(|argument| argument.lower(self, ())).collect();
-        pending.push(outer_argument);
-        for argument in pending {
-            let Some((param, body)) =
-                definitions::next_abstraction(self.statics, &self.value_functions, cursor)
-            else {
-                self.lower_errors.push(SpsLowerError::UnresolvedApplication { function });
-                return ValuePlan::pure(Hole.build(self, site));
-            };
-            steps.extend(argument.steps);
-            steps.extend(self.lower_value_pattern_bindings(param, argument.value, site));
-            cursor = body;
-        }
-        let residual = cursor.lower(self, ());
-        steps.extend(residual.steps);
-        ValuePlan { steps, value: residual.value }
-    }
 }
 
 impl<'a> RootLowerer<'a> {
     pub fn new(
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena, root: ss::CompuId,
     ) -> Self {
+        let root = statics.execution_compu(root);
         Self { lowerer: Lowerer::new(spans, scoped, statics, root), root }
     }
 }
@@ -686,6 +482,7 @@ impl<'a> BuiltinRootLowerer<'a> {
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
         root: ss::CompuId, signature: ss::PackPi,
     ) -> Self {
+        let root = statics.execution_compu(root);
         Self { lowerer: Lowerer::new(spans, scoped, statics, root), root, signature }
     }
 
@@ -853,26 +650,21 @@ impl Lower for ss::ValueId {
                 if lo.demand.is_absent(lo.statics, &binder) {
                     return tail.lower(lo, ());
                 }
-                if lo.record_value_function_binding(binder, bindee) {
-                    return tail.lower(lo, ());
-                }
                 let bindee = bindee.lower(lo, ());
                 let tail = tail.lower(lo, ());
-                let bindings = lo.lower_value_pattern_bindings(binder, bindee.value, site);
+                let bindings = [ValueStep::Bind(ValueBinding {
+                    binder: binder.lower(lo, ()),
+                    bindee: bindee.value,
+                    site,
+                })];
                 ValuePlan {
                     steps: bindee.steps.into_iter().chain(bindings).chain(tail.steps).collect(),
                     value: tail.value,
                 }
             }
-            | ss::Value::ValAbs(Abs(ss::ValBinder::Type(_), body)) => body.lower(lo, ()),
-            | ss::Value::ValAbs(Abs(ss::ValBinder::Value(_), _)) => {
-                lo.lower_errors.push(SpsLowerError::MaterializedAbstraction { value: *self });
+            | ss::Value::ValAbs(_) | ss::Value::ValApp(_) => {
+                lo.lower_errors.push(SpsLowerError::ResidualValueFunction { value: *self });
                 ValuePlan::pure(Hole.build(lo, site))
-            }
-            | ss::Value::ValApp(App(function, ss::ValArgument::Type(_))) => function.lower(lo, ()),
-            | ss::Value::ValApp(App(function, ss::ValArgument::Value(argument))) => {
-                let argument = argument.lower(lo, ());
-                lo.unfold_value_application(function, argument, site)
             }
             | ss::Value::Thunk(Thunk(body)) => {
                 let stack = Bullet.build(lo, site);
@@ -1029,9 +821,6 @@ impl Lower for ss::CompuId {
                 if lo.demand.is_absent(lo.statics, &binder) {
                     return tail.lower(lo, stack);
                 }
-                if lo.record_value_function_binding(binder, bindee) {
-                    return tail.lower(lo, stack);
-                }
                 let bindee = bindee.lower(lo, ());
                 bindee.lower_into(lo, move |bindee, lo| {
                     if lo.pattern_needs_match_plan(binder) {
@@ -1137,106 +926,28 @@ mod tests {
         super::super::check::check(stackir, &scoped, &statics);
     }
 
-    /// One typed fixture binding a value-function definition whose right-hand
-    /// side wraps the abstraction in a lexical `let`, which no source program
-    /// produces today but lowering must still reject with a report rather
-    /// than materializing a closure.
-    struct UnfoldableFixture {
-        statics: StaticsArena,
-        scoped: ScopedArena,
-        root: ss::CompuId,
-    }
-
-    impl UnfoldableFixture {
-        fn new() -> Self {
-            use zydeco_surface::bitter::arena::BitterScope;
-            use zydeco_syntax::VarName;
-            let mut allocator = IdAllocator::<StaticsScope>::new();
-            let mut defs = IdAllocator::<BitterScope>::new();
-            let mut scoped = ScopedArena::default();
-            let unit_ty = allocator.alloc();
-            let function_ty = allocator.alloc();
-            let triv = allocator.alloc();
-            let ignored_pat = allocator.alloc();
-            let param_pat = allocator.alloc();
-            let binder_pat = allocator.alloc();
-            let abstraction = allocator.alloc();
-            let right_hand_side = allocator.alloc();
-            let application = allocator.alloc();
-            let root = allocator.alloc();
-            let kind = allocator.alloc();
-            let head = allocator.alloc();
-            let ret = allocator.alloc();
-            let mut statics = StaticsArena::default();
-
-            statics.kinds_pre.insert_new(kind, ss::Fillable::Done(ss::Kind::VType(ss::VType)));
-            statics.types_pre.insert_new(unit_ty, ss::Fillable::Done(ss::UnitTy.into()), kind);
-            statics.types_pre.insert_new(
-                function_ty,
-                ss::Fillable::Done(
-                    ss::ValPi {
-                        binder: ss::ValPiBinder::Value(ss::ValueParameter {
-                            domain: unit_ty,
-                            witnesses: None,
-                            witness_projection: ss::PackageWitnessProjection::Ignore,
-                        }),
-                        codomain: unit_ty,
-                    }
-                    .into(),
-                ),
-                kind,
-            );
-
-            statics.values.insert_new(triv, ss::Triv.into());
-            statics.vpats.insert_new(ignored_pat, ss::ValuePattern::Triv(ss::Triv));
-            let param_def: ss::DefId = defs.alloc();
-            statics.vpats.insert_new(param_pat, ss::ValuePattern::Var(param_def));
-            scoped.insert_def(param_def, VarName("value".to_owned()));
-            let binder_def: ss::DefId = defs.alloc();
-            statics.vpats.insert_new(binder_pat, ss::ValuePattern::Var(binder_def));
-            scoped.insert_def(binder_def, VarName("wrapped".to_owned()));
-            statics.values.insert_new(head, ss::Value::Var(binder_def));
-
-            statics
-                .values
-                .insert_new(abstraction, ss::Abs(ss::ValBinder::Value(param_pat), triv).into());
-            statics.values.insert_new(
-                right_hand_side,
-                ss::Let { binder: ignored_pat, bindee: triv, tail: abstraction }.into(),
-            );
-            statics
-                .values
-                .insert_new(application, ss::App(head, ss::ValArgument::Value(triv)).into());
-            statics.annotations_value.insert_new(abstraction, function_ty);
-            statics.annotations_value.insert_new(right_hand_side, function_ty);
-            statics.compus.insert_new(ret, ss::Return(application).into());
-            statics.compus.insert_new(
-                root,
-                ss::Let { binder: binder_pat, bindee: right_hand_side, tail: ret }.into(),
-            );
-
-            Self { statics, scoped, root }
-        }
-    }
-
     #[test]
-    fn let_wrapped_value_function_definitions_report_lowering_errors() {
-        let fixture = UnfoldableFixture::new();
+    fn residual_value_functions_report_an_internal_invariant_failure() {
+        let mut allocator = IdAllocator::<StaticsScope>::new();
+        let unit = allocator.alloc();
+        let pattern = allocator.alloc();
+        let abstraction = allocator.alloc();
+        let root = allocator.alloc();
+        let mut statics = StaticsArena::default();
+        statics.values.insert_new(unit, ss::Triv.into());
+        statics.vpats.insert_new(pattern, ss::ValuePattern::Triv(ss::Triv));
+        statics.values.insert_new(abstraction, ss::Abs(ss::ValBinder::Value(pattern), unit).into());
+        statics.compus.insert_new(root, ss::Return(abstraction).into());
         let spans = SpanArena::default();
+        let scoped = ScopedArena::default();
 
-        let errors = RootLowerer::new(&spans, &fixture.scoped, &fixture.statics, fixture.root)
+        let errors = RootLowerer::new(&spans, &scoped, &statics, root)
             .run()
-            .expect_err("a let-wrapped definition must not lower");
+            .expect_err("unelaborated static syntax cannot lower");
         assert!(
-            errors
-                .iter()
-                .any(|error| { matches!(error, SpsLowerError::MaterializedAbstraction { .. }) }),
-            "expected a materialized abstraction error, found: {errors:?}"
+            matches!(errors.as_slice(), [SpsLowerError::ResidualValueFunction { value }] if *value == abstraction)
         );
-        // Building each report must not panic even when the fixture has no
-        // span arena or source map; unresolved spans degrade gracefully.
-        errors.iter().for_each(|error| {
-            let _ = error.to_report(&spans, &fixture.scoped, &fixture.statics);
-        });
+        // Internal fixtures need a useful report even without source spans.
+        let _ = errors[0].to_report(&spans, &scoped, &statics);
     }
 }

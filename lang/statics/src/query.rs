@@ -2313,7 +2313,10 @@ impl<'db> SourceCheckRequest<'db> {
         tycker.resolve_holes_and_collect();
         let result = match root {
             | None => Err(KontFailure),
-            | Some(root) => tycker.normalize_and_validate_k().map(|()| root),
+            | Some(root) => tycker
+                .normalize_and_validate_k()
+                .and_then(|()| tycker.elaborate_static_root_k(root))
+                .map(|()| root),
         };
         let diagnostics = result.is_err().then(|| tycker.error_diagnostics());
         let completion =

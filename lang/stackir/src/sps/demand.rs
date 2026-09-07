@@ -3,8 +3,6 @@ use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_syntax::{Alias, ConsN, Ctor, Named};
 use zydeco_utils::prelude::ArenaAccess;
 
-use super::value_functions as definitions;
-
 /// How live code consumes the value bound by one definition.
 ///
 /// The analysis reads the checked program backwards from the root: a binding
@@ -75,9 +73,6 @@ impl Demand {
 /// which plain `Let` bindings cannot express.
 pub struct DefinitionDemand {
     demands: HashMap<ss::DefId, Demand>,
-    /// Value-function definitions seen so far, used to resolve application
-    /// heads so caller demand can reach callee bodies.
-    value_functions: definitions::Definitions,
     /// The joined demand each visited value node was analyzed under, so
     /// lowering can skip product positions nothing projects.
     contexts: HashMap<ss::ValueId, Demand>,
@@ -86,16 +81,11 @@ pub struct DefinitionDemand {
 impl DefinitionDemand {
     /// Analyze one checked root. The root's own result is demanded whole.
     ///
-    /// The traversal repeats until its demand tables stop growing: an
-    /// application site demands its argument through the parameter pattern of
-    /// the callee, whose definitions are only complete once the callee body
-    /// has been visited, and joins only grow, so successive rounds converge.
+    /// The traversal repeats until its demand tables stop growing: a
+    /// recursive body may refer to bindings visited earlier in the traversal.
+    /// Demand joins only grow, so successive rounds converge.
     pub fn new(statics: &StaticsArena, root: ss::CompuId) -> Self {
-        let mut analysis = Self {
-            demands: HashMap::new(),
-            value_functions: HashMap::new(),
-            contexts: HashMap::new(),
-        };
+        let mut analysis = Self { demands: HashMap::new(), contexts: HashMap::new() };
         loop {
             let previous = (analysis.demands.clone(), analysis.contexts.clone());
             analysis.visit_compu(statics, &root, Demand::Used);
@@ -162,8 +152,7 @@ impl DefinitionDemand {
             // pattern demands the scrutinee whole even when its payload
             // binders are all ignored.
             | ss::ValuePattern::Ctor(_) => Demand::Used,
-            // The view's function result is matched structurally; keep it whole.
-            | ss::ValuePattern::View(_) => Demand::Used,
+            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
             // Comparing against a literal reads the scrutinee whole.
             | ss::ValuePattern::Lit(_) => Demand::Used,
             | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => Demand::Absent,
@@ -194,9 +183,8 @@ impl DefinitionDemand {
     fn visit_compu(&mut self, statics: &StaticsArena, compu: &ss::CompuId, ctx: Demand) {
         match statics.compus[compu].clone() {
             | ss::Computation::Hole(_) => {}
-            | ss::Computation::VAbs(ss::Abs(param, body)) => {
+            | ss::Computation::VAbs(ss::Abs(_, body)) => {
                 if !ctx.is_absent() {
-                    self.visit_pattern(statics, &param);
                     // The function's result is demanded by unknown callers.
                     self.visit_compu(statics, &body, Demand::Used);
                 }
@@ -207,8 +195,7 @@ impl DefinitionDemand {
             }
             | ss::Computation::TAbs(ss::Abs(_, body)) => self.visit_compu(statics, &body, ctx),
             | ss::Computation::TApp(ss::App(head, _)) => self.visit_compu(statics, &head, ctx),
-            | ss::Computation::Fix(ss::Fix(param, body)) => {
-                self.visit_pattern(statics, &param);
+            | ss::Computation::Fix(ss::Fix(_, body)) => {
                 self.visit_compu(statics, &body, Demand::Used);
             }
             // Forcing enters the thunk, so the thunk value is consumed whole;
@@ -221,16 +208,13 @@ impl DefinitionDemand {
             | ss::Computation::Do(ss::Bind { binder, bindee, tail }) => {
                 self.visit_compu(statics, &tail, ctx);
                 // The sequencing always evaluates; only its result is slimmed.
-                self.visit_pattern(statics, &binder);
                 let binder_demand = self.pattern_demand(statics, &binder);
                 self.visit_compu(statics, &bindee, binder_demand);
             }
             | ss::Computation::Let(ss::Let { binder, bindee, tail }) => {
-                definitions::record_binding(statics, &mut self.value_functions, binder, bindee);
                 self.visit_compu(statics, &tail, ctx);
                 let binder_demand = self.pattern_demand(statics, &binder);
                 if !binder_demand.is_absent() {
-                    self.visit_pattern(statics, &binder);
                     self.visit_value(statics, &bindee, binder_demand);
                 }
             }
@@ -239,7 +223,6 @@ impl DefinitionDemand {
                     .iter()
                     .map(|arm| {
                         self.visit_compu(statics, &arm.tail, ctx.clone());
-                        self.visit_pattern(statics, &arm.binder);
                         self.pattern_demand(statics, &arm.binder)
                     })
                     .fold(Demand::Absent, Demand::join);
@@ -276,60 +259,15 @@ impl DefinitionDemand {
             | ss::Value::Var(def) => self.join_def(def, ctx),
             | ss::Value::Named(Named(_, inner)) => self.visit_value(statics, &inner, ctx),
             | ss::Value::Let(ss::Let { binder, bindee, tail }) => {
-                definitions::record_binding(statics, &mut self.value_functions, binder, bindee);
                 self.visit_value(statics, &tail, ctx);
                 let binder_demand = self.pattern_demand(statics, &binder);
                 if !binder_demand.is_absent() {
-                    self.visit_pattern(statics, &binder);
                     self.visit_value(statics, &bindee, binder_demand);
                 }
             }
-            | ss::Value::ValAbs(ss::Abs(param, body)) => {
-                if !ctx.is_absent() {
-                    if let ss::ValBinder::Value(param) = param {
-                        self.visit_pattern(statics, &param);
-                    }
-                    // The abstraction's result is consumed only at its
-                    // applications, so the caller's demand is the demand of
-                    // its body.
-                    self.visit_value(statics, &body, ctx);
-                }
-            }
-            | ss::Value::ValApp(ss::App(function, argument)) => {
-                // Applying a value function unfolds its definition: a runtime
-                // argument is demanded like a let bindee, against the
-                // parameter pattern its cut binds, and the caller's demand
-                // reaches the callee's body through the head's definition
-                // binding.
-                let reduction = definitions::reduce_application(
-                    statics,
-                    &self.value_functions,
-                    function,
-                    &argument,
-                );
-                match argument {
-                    | ss::ValArgument::Type(_) => self.visit_value(statics, &function, ctx),
-                    | ss::ValArgument::Value(argument) => {
-                        match reduction {
-                            | Some((parameters, _)) => {
-                                let argument_demand = parameters
-                                    .last()
-                                    .map(|parameter| self.pattern_demand(statics, parameter))
-                                    .unwrap_or(Demand::Used);
-                                self.visit_value(statics, &argument, argument_demand);
-                                self.visit_value(statics, &function, ctx);
-                            }
-                            | None => {
-                                // Statically unresolved heads do not occur in
-                                // checked programs; stay conservative when
-                                // they do.
-                                self.visit_value(statics, &function, Demand::Used);
-                                self.visit_value(statics, &argument, Demand::Used);
-                            }
-                        }
-                    }
-                }
-            }
+            // The lowerer diagnoses malformed residual inputs. No static
+            // resolver participates in demand or backend acceptance.
+            | ss::Value::ValAbs(_) | ss::Value::ValApp(_) => {}
             // The thunk's suspended body produces the demanded result.
             | ss::Value::Thunk(ss::Thunk(body)) => self.visit_compu(statics, &body, ctx),
             | ss::Value::Ctor(Ctor(_, payload)) => {
@@ -360,31 +298,6 @@ impl DefinitionDemand {
                 }
                 self.visit_value(statics, &head, head_demand);
             }
-        }
-    }
-
-    /// Visit the view functions embedded in a live pattern.
-    fn visit_pattern(&mut self, statics: &StaticsArena, pattern: &ss::VPatId) {
-        match statics.vpats[pattern].clone() {
-            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {}
-            | ss::ValuePattern::Named(Named(_, inner)) => self.visit_pattern(statics, &inner),
-            | ss::ValuePattern::Ctor(Ctor(_, payload)) => self.visit_pattern(statics, &payload),
-            | ss::ValuePattern::Alias(Alias(patterns)) => {
-                for pattern in patterns.iter() {
-                    self.visit_pattern(statics, pattern);
-                }
-            }
-            | ss::ValuePattern::VCons(items) => {
-                for item in items {
-                    self.visit_pattern(statics, &item);
-                }
-            }
-            | ss::ValuePattern::SCons(ConsN(_, tail)) => self.visit_pattern(statics, &tail),
-            | ss::ValuePattern::View(view) => {
-                self.visit_value(statics, &view.function, Demand::Used);
-                self.visit_pattern(statics, &view.pattern);
-            }
-            | ss::ValuePattern::Lit(_) => {}
         }
     }
 }

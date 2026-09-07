@@ -38,6 +38,12 @@ e2e_sources!({
     tuple_do => "tests/core/tuple-do.zy",
     uniform => "tests/core/uniform.zy",
     value_views => "tests/core/value-views.zy",
+    value_views_runtime => "tests/core/value-views-runtime.zy",
+    static_composition => "tests/core/static-composition.zy",
+    runtime_codata_contract => "tests/core/runtime-codata-contract.zy",
+    runtime_package_adapters => "tests/core/runtime-package-adapters.zy",
+    runtime_package_callback => "tests/core/runtime-package-callback.zy",
+    runtime_package_payload => "tests/core/runtime-package-payload.zy",
 });
 
 // `iota` exports a lazy value rather than exiting, so it is checked, not run.

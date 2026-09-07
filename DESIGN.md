@@ -11,11 +11,9 @@ and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source
 
 Zydeco separates values from computations. Values include variables, thunks, units,
 products, constructors, literals, total value functions, and existential packages.
-The compiler currently restricts occurrences of value functions and packages to support static resolution.
-The revised [value-function](docs/proposals/value-pi.md#static-elimination)
-and [package](docs/proposals/package-modularization.md#static-package-composition) proposals replace those
-second-class restrictions with static elimination and explicit thunked runtime contracts;
-general higher-order static composition remains to be implemented.
+Value functions and packages support higher-order static composition
+under the shared [static elimination contract](docs/proposals/normalization.md#static-elimination-and-residual-code).
+Runtime callable contracts remain explicit computations behind `Thk`.
 Computations may perform effects and include forcing thunks, computation-function application,
 do-bindings, and returning values.
 
@@ -118,14 +116,11 @@ Products group values. Existential packages also carry type witnesses on which l
 allowing a package to expose operations while hiding their representation types.
 A telescope is an ordered sequence of binders in which later classifiers may refer to earlier bindings.
 
-The current package checker permits a package to be introduced by `pack`, bound by a definition,
-opened by a pattern, nested in products, named components, and other packages,
-and supplied to package-dependent or value arrows whose patterns open it.
-Their package-witness bindings and structural projection routes are resolved statically.
-Storing a package in a constructor payload, passing one under a plain computation arrow,
-or returning one from a computation is currently rejected with `tyck.first-class-package`.
-These are implementation limitations relative to the revised static elimination requirement:
-source package transport should be accepted when its static components disappear and its residual data is representable.
+Packages may be introduced by `pack`, opened by patterns, and composed through products,
+named components, constructors, other packages, and function arguments and results.
+Their package-witness bindings and structural projection routes are resolved statically
+under the [shared phase contract](docs/proposals/normalization.md#static-elimination-and-residual-code).
+Representable package payloads may also flow through computation parameters and returns.
 [Package modularization](docs/proposals/package-modularization.md#explicit-runtime-contracts) distinguishes
 this static composition from explicit runtime contracts, which may use products of thunks or thunked arrows,
 `forall`, codata, and package-dependent computation `pi`.
@@ -412,8 +407,8 @@ so they likewise add no runtime module representation.
 ## Value Functions
 
 `val P => V` introduces a total value function and `val pi P . A` classifies it.
-Type parameters erase; runtime parameters must be irrefutable, and lowering unfolds an application
-by resolving its head to the abstraction and binding the argument as a lexical pattern,
+Type parameters erase; value parameters must be irrefutable, and shared static elaboration reduces an application
+by resolving its head to the abstraction and binding the argument in its lexical environment,
 so no closure or environment is built for a value function.
 `param val P in V` is the lexical block-form introduction,
 while its `that` variant contributes the same value parameter to the nearest `begin` context.
@@ -422,12 +417,11 @@ Plain `param` continues to introduce type functions and computations.
 Juxtaposition, `value |> function`, `function <| value`, and the view pattern `function ~> pattern` are one operation;
 evaluating it does no more than move value data into its memory representation.
 Only the nested pattern of a view contributes bindings and refutability.
-The current occurrence checker admits definition bindings, including partial type instantiation, and applications,
-directly or through a view pattern, but rejects storage and higher-order domains.
-The revised design admits such composition when static elaboration eliminates every runtime `ValPi` occurrence.
+Static composition admits partial applications, products, constructors, packages, and higher-order parameters
+and results under the [shared residual contract](docs/proposals/normalization.md#residual-validation-and-execution).
 Runtime callable values remain explicit suspended computations behind `Thk`;
 failed static elimination does not implicitly construct one.
-The intended behavior and remaining implementation work are specified together
+The behavior and implementation boundary are specified together
 in [Value Functions and Views with `ValPi`](docs/proposals/value-pi.md), with the pattern rules
 under [Value Views](docs/proposals/value-pi.md#value-views).
 
@@ -437,8 +431,7 @@ Both computation package-dependent arrows (`PackPi`) and value-function classifi
 A binder that opens abstract witnesses elaborates to a package-dependent arrow on its own.
 A thunk of that arrow may be passed or selected at runtime: its signature supplies the static witness dependency,
 so the callee implementation need not be statically known.
-A package under a plain computation arrow is still rejected by the occurrence checker, including manifest-only domains;
-the revised proposal removes that asymmetry when the residual payload is representable.
+A package may also be passed through a plain computation arrow when its residual payload is representable.
 These are static dependencies on type identities, rather than dependencies on arbitrary runtime values.
 Libraries compose through these functions and packages without an additional module or namespace sort.
 
@@ -597,14 +590,21 @@ Allocation-producing judgment queries return typed fragments keyed by their occu
 which the checker materializes into its arena.
 Context-sensitive unification, fill resolution, and existential-opening internals remain checker-owned:
 a mutable pre-node is not determined by its site alone.
-`check_source` still orchestrates judgments, hole resolution, normalization, and validation in one checker run.
+`check_source` orchestrates judgments, hole resolution, normalization, coverage,
+and static elaboration in one checker run.
 The query retains only its most recent full-arena result; finer judgment results have their own memoization.
 The [query-owned statics design](docs/proposals/query-owned-statics.md) records the achieved architecture
 and the conversion patterns behind it.
 
 Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable typed representation.
 `check` owns local kinding and typing rules, `normalize` owns substitution and definitional normalization,
-`elaborate` owns type-directed source translations, and `validate` owns post-check whole-program properties.
+`elaborate` owns type-directed source translations and shared static value residualization,
+and `validate` owns post-check whole-program properties.
+Static residualization runs before the typed arena is published, preserving the source graph for queries
+and adding one executable root used by both interpreter linking and SPS lowering.
+The same reducer inspects value structure during dependent application checking to recover visible package witnesses.
+Its supported reductions and resource limits are specified
+in [Compile-Time Normalization](docs/proposals/normalization.md#implementation-status).
 Its coverage pass checks data matches with a typed pattern matrix.
 Generalized comatch clauses are first elaborated type-directly into shared argument matches and unique codata arms,
 after which the same pass checks argument coverage and missing destructors along every observation path.
@@ -612,8 +612,8 @@ The [exhaustiveness design note](docs/proposals/exhaustiveness.md) explains matr
 copattern elaboration, counterexample construction, and the invariants supplied by typed syntax.
 The same module also provides the type lint, an optional self-check
 of the finished arena behind the `--lint-types` flag; its well-formedness pass re-establishes hole closure,
-annotation presence and sorts, paired-view agreement, and reference existence,
-its re-derivation pass re-derives kinds and constructor shapes, and violations surface as internal compiler errors.
+annotation presence and sorts, paired-view agreement, and reference existence, its re-derivation pass re-derives kinds
+and constructor shapes in source and residual roots, and violations surface as internal compiler errors.
 The [type lint design note](docs/proposals/tyck-lint.md) records the invariant catalogue
 and the remaining re-derivation work.
 This separation lets validation consume completed typed syntax without becoming more type-checking branches.
@@ -879,13 +879,12 @@ but the embedding must supply the imports before invoking either function.
 
 - Value-function application inlines each body at its use, so emitted code and compiler recursion depth grow
   with the unfolded program, dominated by multiply-instantiated library functors.
-  The workspace raises its test-stack minimum accordingly; compiling each definition once remains future work recorded
+  The workspace raises its test-stack minimum accordingly; factoring repeated residual code remains future work recorded
   in [Value Functions and Views with `ValPi`](docs/proposals/value-pi.md).
-- Value-function and package occurrence bans still reject some statically eliminable compositions.
-  Shared static elaboration remains to replace them; thunked `forall`, codata,
-  and package-dependent computation arrows already provide runtime contracts.
-  Demand does not yet flow through package-dependent applications,
-  so functor arguments materialize whole ([Package modularization](docs/proposals/package-modularization.md)).
+- Static reduction has the documented [resource bounds](docs/proposals/normalization.md#implementation-status)
+  and does not enter computations to discover static functions or witnesses.
+  Demand does not yet flow through runtime package-dependent computation applications,
+  so their arguments materialize whole ([Package modularization](docs/proposals/package-modularization.md)).
 - The standard native test path is AMD64 on Linux or macOS.
   The CLI defaults to the host architecture, so an ARM host needs explicit AMD64 target selection
   and appropriate tools for native execution.

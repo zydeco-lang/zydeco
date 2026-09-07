@@ -174,6 +174,12 @@ impl<'a> RederiveChecker<'a> {
         let ambient = Scope { defs: HashSet::new(), witnesses: self.ambient_witnesses.clone() };
         self.collect_root_spine(root);
         self.check_root(root, &ambient);
+        if let Some(residual) =
+            self.statics.static_elaboration.as_ref().and_then(|elaboration| elaboration.residual)
+        {
+            self.collect_root_spine(residual);
+            self.check_root(residual, &ambient);
+        }
         self.check_definition_roots(&ambient);
         self.errors
     }

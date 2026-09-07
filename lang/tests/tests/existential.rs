@@ -678,10 +678,9 @@ end
 }
 
 #[test]
-fn rejects_a_plain_computation_arrow_over_a_package_domain() {
-    SourceCase::assert_rejected(
-        SourceCase::check(
-            r#"
+fn accepts_a_plain_computation_arrow_over_a_package_domain() {
+    SourceCase::assert_accepted(SourceCase::run(
+        r#"
 begin
   let Box =
     exists (X : VType) . X
@@ -693,16 +692,13 @@ begin
   ! exit value
 end
 "#,
-        ),
-        TyckDiagnosticCode::FirstClassPackage,
-    );
+    ));
 }
 
 #[test]
-fn rejects_returning_a_package_from_a_computation() {
-    SourceCase::assert_rejected(
-        SourceCase::check(
-            r#"
+fn accepts_returning_a_package_from_a_computation() {
+    SourceCase::assert_accepted(SourceCase::run(
+        r#"
 begin
   let Box =
     exists (X : VType) . X
@@ -711,29 +707,29 @@ begin
   def producer : Thk (Ret Box) = {
     ret boxed
   } that
+  do returned <- ! producer;
+  let (X, value) = returned in
   ! exit 0
 end
 "#,
-        ),
-        TyckDiagnosticCode::FirstClassPackage,
-    );
+    ));
 }
 
 #[test]
-fn rejects_a_package_in_a_constructor_payload() {
-    SourceCase::assert_rejected(
-        SourceCase::check(
-            r#"
+fn accepts_a_package_in_a_constructor_payload() {
+    SourceCase::assert_accepted(SourceCase::run(
+        r#"
 begin
   let Box =
     exists (X : VType) . X
   that
   def boxed : Box = (Int64, 0) that
   def Holder = data | +Hold : Box end that
-  ! exit 0
+  do stored <- ret (+Hold(boxed) : Holder);
+  match stored
+  | +Hold(value) => ! exit 0
+  end
 end
 "#,
-        ),
-        TyckDiagnosticCode::FirstClassPackage,
-    );
+    ));
 }

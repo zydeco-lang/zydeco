@@ -1,6 +1,6 @@
 [env]
-# Raised for unfolded value-function programs; see docs/proposals/value-pi.md.
-# Temporary until definitions compile once instead of inlining per application.
+# Raised for residual programs produced by static composition; see docs/proposals/value-pi.md.
+# Factoring repeated residual code into direct blocks remains a backend optimization.
 RUST_MIN_STACK = "16777216"
 
 [target.wasm32-unknown-unknown]

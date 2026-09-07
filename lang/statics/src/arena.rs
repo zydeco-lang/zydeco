@@ -706,6 +706,10 @@ pub struct StaticsArena {
     /// Source-bounded facts shared with retained analyses after checking.
     indexes: Arc<StaticsIndexes>,
 
+    /// Shared executable elaboration of the checked source root. Source
+    /// annotations and original nodes remain available for static queries.
+    pub static_elaboration: Option<crate::elaborate::static_values::StaticElaboration>,
+
     /// kind arena before normalization
     pub kinds_pre: KindArena,
     /// manifest kind-pattern arena
@@ -769,6 +773,29 @@ impl DerefMut for StaticsArena {
 }
 
 impl StaticsArena {
+    /// Select the common residual computation before interpretation or lowering.
+    pub fn execution_compu(&self, source: CompuId) -> CompuId {
+        match &self.static_elaboration {
+            | Some(crate::elaborate::static_values::StaticElaboration {
+                source: TermAnnId::Compu(original, _),
+                residual: Some(TermAnnId::Compu(residual, _)),
+            }) if *original == source => *residual,
+            | _ => source,
+        }
+    }
+
+    /// Select the residual of a representable checked value. Static library
+    /// exports retain their source-level semantics for interactive inspection.
+    pub fn execution_value(&self, source: ValueId) -> ValueId {
+        match &self.static_elaboration {
+            | Some(crate::elaborate::static_values::StaticElaboration {
+                source: TermAnnId::Value(original, _),
+                residual: Some(TermAnnId::Value(residual, _)),
+            }) if *original == source => *residual,
+            | _ => source,
+        }
+    }
+
     /// Pre-reserve retained, source-shaped storage from the name-resolved
     /// program. Term facts know their exact external ID extents; generated
     /// type pages can reserve only their estimated outer key-space count.

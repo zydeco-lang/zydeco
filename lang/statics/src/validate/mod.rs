@@ -15,11 +15,3 @@ pub use lint::*;
 /// Structural re-derivation of annotations from term structure.
 pub mod rederive;
 pub use rederive::*;
-
-/// Second-class occurrence validation for packages.
-pub mod package;
-pub use package::*;
-
-/// Second-class occurrence validation for value functions.
-pub mod value_function;
-pub use value_function::*;

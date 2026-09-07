@@ -1,0 +1,34 @@
+begin
+  param (/VType; /Unit; /Int64; /process) : @(import("../../std/builtin.zy")) that
+  let Tagged =
+    data
+    | +First : Unit
+    | +Second : Unit
+    | +Third : Unit
+    | +Fourth : Unit
+    | +Fifth : Unit
+    | +Sixth : Unit
+    | +Seventh : Unit
+    | +Eighth : Unit
+    end
+  that
+  let View = val pi (_ : Tagged) . Tagged that
+  let val keep (value : Tagged) : Tagged = value that
+  let val compose (first : View) (second : View) : View =
+    val (value : Tagged) => second (first value)
+  that
+  let inspect = compose keep keep that
+
+  do selected <- ret (+Eighth() : Tagged);
+  match selected
+  | inspect ~> +First(_) => ! process/exit 1
+  | inspect ~> +Second(_) => ! process/exit 1
+  | inspect ~> +Third(_) => ! process/exit 1
+  | inspect ~> +Fourth(_) => ! process/exit 1
+  | inspect ~> +Fifth(_) => ! process/exit 1
+  | inspect ~> +Sixth(_) => ! process/exit 1
+  | inspect ~> +Seventh(_) => ! process/exit 1
+  | inspect ~> +Eighth(_) => ! process/exit 0
+  | _ => ! process/exit 1
+  end
+end

@@ -1,0 +1,32 @@
+begin
+  param (/VType; /CType; /Thk; /Ret; /Int64; /Unit; /process) : @(import("../../std/builtin.zy")) that
+
+  let Box = exists (X : VType) . X that
+  let Methods (X : VType) =
+    codata
+    | .get : Ret X
+    | .replace : X -> Ret X
+    end
+  that
+  let Curried = forall (X : VType) . X -> Methods X that
+  let Packaged = pi ((X, _) : Box) . Methods X that
+
+  def curried : Thk Curried = {
+    fn (X : VType) (value : X) =>
+      comatch
+      | .get => ret value
+      | .replace replacement => ret replacement
+      end
+  } that
+  def packaged : Thk Packaged = {
+    fn ((X, value) : Box) => ! curried X value
+  } that
+  def restored : Thk Curried = {
+    fn (X : VType) (value : X) => ! packaged ((X, value) : Box)
+  } that
+
+  do selected <- ret packaged;
+  do first <- ! selected ((Int64, 0) : Box) .get;
+  do second <- ! restored Int64 first .replace 0;
+  ! process/exit second
+end

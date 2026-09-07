@@ -61,6 +61,9 @@ A compiler-internal closure for this evaluator is not a runtime closure in the e
 Its lexical environment may contain references to residual runtime values,
 which remain shared when the static function uses them more than once.
 Static function parameters may range over other functions, and static results may themselves be functions.
+Matching a known constructor specializes the corresponding arm: inspecting its tag is pure,
+and the chosen arm's computations remain suspended in the residual program.
+An unknown scrutinee retains its runtime match and any remaining literal comparisons.
 
 Runtime inputs need not be known as concrete values for that reduction to succeed:
 
@@ -110,15 +113,38 @@ their `pi`/`forall` adapters, and the scope conditions for hidden types.
 
 ### Implementation Status
 
-The current arena-wide finalizer below normalizes kinds and types; it is not this general static value evaluator.
-The implementation still uses occurrence bans and restricted value-function unfolding.
-The reference interpreter represents value abstractions with closures, while SPS lowering unfolds them.
-A reference evaluator may retain semantic closures for static functions,
-provided shared elaboration enforces the same residual boundary before execution.
-The revised design therefore requires static elaboration and residual validation shared by executable entry points.
+The arena-wide finalizer below normalizes kinds and types.
+During dependent application checking, `elaborate::static_values` also inspects value structure
+with the same lexical reducer to recover package witnesses through higher-order applications,
+products, and named projections.
+This inspection leaves computations opaque and exposes only witnesses already visible in the caller's scope;
+opening and repacking a hidden runtime package cannot disclose its witness.
+After local checking and coverage validation, `elaborate::static_values` evaluates the checked source
+with lexical static closures and shared references to runtime values.
+It creates fresh typed residual nodes in the checker's unpublished arena
+and records the executable root alongside the original source root; source annotations
+and query facts remain available for inspection.
+Both interpreter linking and SPS lowering select that residual root.
+The type lint checks both representations, while SPS demand analysis consumes the residual program directly.
+
+Runtime reification rejects surviving value functions and runtime interfaces requiring their representation
+with `tyck.static-elimination` at the responsible source term.
+Residual computation classifiers receive the same representation check,
+including result contracts after polymorphic instantiation.
+Unapplied static library exports remain available to consumers and interactive inspection.
+The old occurrence validators and backend-specific definition-spine resolver have been removed.
+
+Recursive type aliases can encode self-application even without value-level `fix`.
+The implementation bounds each reduction request to 128 nested applications
+and 65,536 applications, including view applications.
+Exhausting either limit during source residualization reports `tyck.static-elimination`;
+an evidence inspection that cannot finish supplies no witnesses to the dependent application checker.
+These resource bounds protect compiler termination without claiming a termination proof for arbitrary recursive types.
+Computation application, `do`, forcing, effects, and general recursion remain residual forms;
+the evaluator does not execute them to obtain static information.
 The [value-function implementation account](value-pi.md#implementation-boundary)
 and [package implementation account](package-modularization.md#current-implementation-and-validation) record
-the remaining construct-specific work and regression cases.
+the construct-specific regression cases and remaining optimizations.
 
 ## Package Signatures
 
@@ -142,8 +168,6 @@ A value entry may carry ordinary runtime data or a value function used during st
 its type may mention preceding type entries.
 Its source-level classifier is `#x :: A`, while `#x = v` introduces the corresponding named value.
 Only its representable residual data survives static elimination.
-The current checker still rejects value-function fields; allowing them is part
-of the revised static composition requirement above.
 
 The package signature can be represented by nested package and product types:
 
@@ -249,9 +273,7 @@ exists
 
 Opening this package creates an abstract `Key` and then binds `Map ≡ Tree Key`.
 Only `Key` belongs to the `PackPi` witness telescope. If no abstract witnesses remain, a computation arrow
-over the manifest package should be accepted whenever erasing its static prefix leaves a representable payload.
-The current plain-arrow occurrence rejection is an implementation restriction to remove,
-not a consequence of manifest normalization.
+over the manifest package is accepted whenever erasing its static prefix leaves a representable payload.
 For now, `PackPi` opens only a leading existential prefix.
 Supporting abstract existential components nested beneath preceding value products is deferred;
 this implementation limit does not impose a normal form on package signatures.

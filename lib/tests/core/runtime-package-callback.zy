@@ -1,0 +1,22 @@
+begin
+  param (/VType; /CType; /Thk; /Ret; /Int64; /Unit; /process) : @(import("../../std/builtin.zy")) that
+  let Entry = exists (X : VType) . X * Thk (X -> Ret Int64) that
+  let HiddenByPackage =
+    codata
+    | .open : forall (R : CType) .
+      Thk (pi ((X, _, _) : Entry) . R) -> R
+    end
+  that
+
+  def boxed : Thk HiddenByPackage = {
+    comatch
+    | .open (R : CType) (use : Thk (pi ((X, _, _) : Entry) . R)) =>
+      ! use ((Int64, 0, { fn (value : Int64) => ret value }) : Entry)
+    end
+  } that
+  do selected <- ret boxed;
+  do status <- ! selected .open (Ret Int64) {
+    fn ((X, value, read) : Entry) => ! read value
+  };
+  ! process/exit status
+end

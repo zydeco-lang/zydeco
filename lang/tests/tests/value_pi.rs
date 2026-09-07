@@ -80,10 +80,9 @@ end
 }
 
 #[test]
-fn value_functions_reject_storage_in_products() {
-    SourceCase::assert_rejected(
-        SourceCase::check(
-            r#"
+fn value_functions_flow_through_products() {
+    SourceCase::assert_accepted(SourceCase::run(
+        r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
   let keep_unit : val pi (value : Unit) . Unit = keep Unit that
@@ -93,9 +92,7 @@ begin
   ! exit 0
 end
 "#,
-        ),
-        TyckDiagnosticCode::FirstClassValueFunction,
-    );
+    ));
 }
 
 #[test]
@@ -110,15 +107,14 @@ begin
 end
 "#,
         ),
-        TyckDiagnosticCode::FirstClassValueFunction,
+        TyckDiagnosticCode::StaticElimination,
     );
 }
 
 #[test]
-fn value_functions_reject_higher_order_domains() {
-    SourceCase::assert_rejected(
-        SourceCase::check(
-            r#"
+fn value_functions_accept_higher_order_domains() {
+    SourceCase::assert_accepted(SourceCase::run(
+        r#"
 begin
   let val apply_twice (function : val pi (_ : Unit) . Unit) : Unit =
     () |> function
@@ -126,16 +122,13 @@ begin
   ! exit 0
 end
 "#,
-        ),
-        TyckDiagnosticCode::FirstClassValueFunction,
-    );
+    ));
 }
 
 #[test]
-fn value_functions_reject_constructor_payload_types() {
-    SourceCase::assert_rejected(
-        SourceCase::check(
-            r#"
+fn value_functions_accept_static_constructor_payload_types() {
+    SourceCase::assert_accepted(SourceCase::run(
+        r#"
 begin
   let Stored =
     data
@@ -145,9 +138,7 @@ begin
   ! exit 0
 end
 "#,
-        ),
-        TyckDiagnosticCode::FirstClassValueFunction,
-    );
+    ));
 }
 
 #[test]

@@ -1,0 +1,28 @@
+begin
+  param (/VType; /Unit; /Thk; /Ret; /Int64; /process) : @(import("../../std/builtin.zy")) that
+  let Entry = exists (X : VType) . X * Thk (X -> Ret Int64) that
+  let Holder =
+    data
+    | +Hold : Entry
+    end
+  that
+
+  def ! choose (which : Int64) : Ret Entry =
+    match which
+    | 0 => ret ((Int64, 0, { fn (value : Int64) => ret value }) : Entry)
+    | _ => ret ((Unit, (), { fn (_ : Unit) => ret 1 }) : Entry)
+    end
+  that
+  def ! consume (entry : Entry) : Ret Int64 =
+    let (X, value, read) = entry in
+    ! read value
+  that
+
+  do hidden <- ! choose 0;
+  do stored <- ret (+Hold(hidden) : Holder);
+  match stored
+  | +Hold(entry) =>
+    do status <- ! consume entry;
+    ! process/exit status
+  end
+end

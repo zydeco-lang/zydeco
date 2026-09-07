@@ -7,7 +7,7 @@ use {
         *,
     },
     crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena, TermContexts},
-    crate::validate::{CoverageChecker, PackageChecker, ValueFunctionChecker},
+    crate::validate::CoverageChecker,
     zydeco_surface::metadata::{BuiltinMeta, FfiMeta, MetadataKind},
     zydeco_utils::prelude::ArenaAccess,
 };
@@ -2414,6 +2414,7 @@ impl<'a> Tycker<'a> {
         self.finish_judgments();
         let root = root?;
         self.finish_check_k()?;
+        self.elaborate_static_root_k(root)?;
         Ok(root)
     }
 
@@ -2487,6 +2488,12 @@ impl<'a> Tycker<'a> {
         self.normalize_and_validate_k()
     }
 
+    pub(crate) fn elaborate_static_root_k(&mut self, root: TermAnnId) -> ResultKont<()> {
+        let elaboration = crate::elaborate::static_values::StaticElaborator::run(self, root)?;
+        self.statics.static_elaboration = Some(elaboration);
+        Ok(())
+    }
+
     /// Resolve holes and collect their solutions, the first half of the
     /// finish phase.
     pub(crate) fn resolve_holes_and_collect(&mut self) {
@@ -2525,24 +2532,6 @@ impl<'a> Tycker<'a> {
             self.statics.coverage_errors = coverage.clone();
             self.errors.extend(coverage.into_iter().map(|error| TyckErrorEntry {
                 error: TyckError::Coverage(error),
-                blame,
-                stack: rpds::VectorSync::new_sync(),
-            }));
-        }
-        if self.errors.is_empty() {
-            let blame = std::panic::Location::caller();
-            let first_class = ValueFunctionChecker::new(&self.statics).validate();
-            self.errors.extend(first_class.into_iter().map(|error| TyckErrorEntry {
-                error: TyckError::FirstClassValueFunction(error),
-                blame,
-                stack: rpds::VectorSync::new_sync(),
-            }));
-        }
-        if self.errors.is_empty() {
-            let blame = std::panic::Location::caller();
-            let first_class = PackageChecker::new(&self.statics).validate();
-            self.errors.extend(first_class.into_iter().map(|error| TyckErrorEntry {
-                error: TyckError::FirstClassPackage(error),
                 blame,
                 stack: rpds::VectorSync::new_sync(),
             }));
@@ -5167,10 +5156,22 @@ impl ValuePiInstantiation {
         env: &ss::TyEnv, tycker: &mut Tycker<'_>, projection: &ss::PackageWitnessProjection,
         domain: ss::TypeId, argument: ss::ValueId,
     ) -> ResultKont<Vec<ProjectedPackageArgument>> {
+        if matches!(projection, ss::PackageWitnessProjection::Ignore) {
+            return Ok(Vec::new());
+        }
+        let shape = argument.static_shape(tycker);
+        Self::projected_shape_k(env, tycker, projection, domain, argument, &shape)
+    }
+
+    fn projected_shape_k(
+        env: &ss::TyEnv, tycker: &mut Tycker<'_>, projection: &ss::PackageWitnessProjection,
+        domain: ss::TypeId, argument: ss::ValueId,
+        shape: &crate::elaborate::static_values::StaticShape,
+    ) -> ResultKont<Vec<ProjectedPackageArgument>> {
         match projection {
             | ss::PackageWitnessProjection::Ignore => Ok(Vec::new()),
             | ss::PackageWitnessProjection::Package { abstracts } => {
-                let Some(witnesses) = argument.package_witnesses(tycker) else {
+                let Some(witnesses) = shape.witnesses() else {
                     tycker.err_k(
                         TyckError::PackageWitnessesUnavailable { package: argument },
                         std::panic::Location::caller(),
@@ -5191,7 +5192,7 @@ impl ValuePiInstantiation {
                         std::panic::Location::caller(),
                     )?
                 };
-                let Some(arguments) = argument.product_components(tycker) else {
+                let crate::elaborate::static_values::StaticShape::Product(arguments) = shape else {
                     tycker.err_k(
                         TyckError::PackageWitnessesUnavailable { package: argument },
                         std::panic::Location::caller(),
@@ -5208,9 +5209,9 @@ impl ValuePiInstantiation {
                 }
                 projections.iter().zip(domains).zip(arguments).try_fold(
                     Vec::new(),
-                    |mut projected, ((projection, domain), argument)| {
-                        projected.extend(Self::projected_arguments_k(
-                            env, tycker, projection, domain, argument,
+                    |mut projected, ((projection, domain), shape)| {
+                        projected.extend(Self::projected_shape_k(
+                            env, tycker, projection, domain, argument, shape,
                         )?);
                         Ok(projected)
                     },

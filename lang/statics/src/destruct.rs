@@ -486,73 +486,15 @@ impl VPatId {
 }
 
 impl ValueId {
-    /// Recover the manifest witness prefix of an existential package.
-    ///
-    /// Following immutable value aliases preserves the identity of their
-    /// witness types. Named wrappers are transparent.
-    pub fn package_witnesses(&self, tycker: &Tycker<'_>) -> Option<Vec<StaticTermId>> {
-        let mut value = *self;
-        let mut visited = std::collections::HashSet::new();
-        loop {
-            if !visited.insert(value) {
-                return None;
-            }
-            match tycker.statics.values[&value].to_owned() {
-                | Value::Var(def) => {
-                    if let Some(witnesses) = tycker.statics.package_aliases.get(&def) {
-                        return Some(witnesses.clone());
-                    }
-                    value = *tycker.statics.value_aliases.get(&def)?;
-                }
-                | Value::Named(Named(_, inner)) => value = inner,
-                | Value::Let(Let { tail, .. }) => value = tail,
-                | Value::SCons(ConsN(witnesses, _)) => return Some(witnesses),
-                | Value::VCons(values) => {
-                    let witnesses = values
-                        .iter()
-                        .filter_map(|value| value.package_witnesses(tycker))
-                        .flatten()
-                        .collect::<Vec<_>>();
-                    return (!witnesses.is_empty()).then_some(witnesses);
-                }
-                | Value::Hole(_)
-                | Value::ValAbs(_)
-                | Value::ValApp(_)
-                | Value::Thunk(_)
-                | Value::Ctor(_)
-                | Value::Triv(_)
-                | Value::Proj(_)
-                | Value::Lit(_) => return None,
-            }
-        }
+    /// Recover static evidence using the same lexical reducer that eliminates
+    /// value functions before execution. Computations remain opaque.
+    pub(crate) fn static_shape(
+        &self, tycker: &mut Tycker<'_>,
+    ) -> crate::elaborate::static_values::StaticShape {
+        crate::elaborate::static_values::StaticElaborator::inspect(tycker, *self)
     }
 
-    /// Recover the physical components of a product value while following
-    /// immutable aliases and transparent wrappers.
-    pub(crate) fn product_components(&self, tycker: &Tycker<'_>) -> Option<Vec<ValueId>> {
-        let mut value = *self;
-        let mut visited = std::collections::HashSet::new();
-        loop {
-            if !visited.insert(value) {
-                return None;
-            }
-            match tycker.statics.values[&value].to_owned() {
-                | Value::Var(definition) => {
-                    value = *tycker.statics.value_aliases.get(&definition)?;
-                }
-                | Value::Named(Named(_, inner)) => value = inner,
-                | Value::Let(Let { tail, .. }) => value = tail,
-                | Value::VCons(values) => return Some(values),
-                | Value::Hole(_)
-                | Value::ValAbs(_)
-                | Value::ValApp(_)
-                | Value::Thunk(_)
-                | Value::Ctor(_)
-                | Value::Triv(_)
-                | Value::SCons(_)
-                | Value::Proj(_)
-                | Value::Lit(_) => return None,
-            }
-        }
+    pub fn package_witnesses(&self, tycker: &mut Tycker<'_>) -> Option<Vec<StaticTermId>> {
+        self.static_shape(tycker).witnesses()
     }
 }

@@ -11,6 +11,7 @@
 //! is exercised indirectly whenever a reference target loses its row.
 
 use zydeco_statics::{
+    ArenaAccess,
     arena::StaticsArena,
     syntax::{Fillable, Hole, TermAnnId, Thunk, Type, Value},
     validate::{LintChecker, LintError, LintNode, LintSite, LintSort},
@@ -127,12 +128,13 @@ fn reintroducing_a_type_hole_is_reported() {
 fn dropping_a_variable_annotation_is_reported() {
     let (mut statics, root) = linted_fixture();
     // Bound type variables are referenced through abstract witnesses after
-    // elaboration, so a value variable is the dependable reference site.
+    // elaboration. Source value definitions depend on their annotation entry;
+    // generated residual definitions additionally have a generated_defs entry.
     let (value, def) = statics
         .values
         .iter()
         .find_map(|(value, node)| match node {
-            | Value::Var(def) => Some((*value, *def)),
+            | Value::Var(def) if statics.generated_defs.get(def).is_none() => Some((*value, *def)),
             | _ => None,
         })
         .expect("the fixture references its bound variables");

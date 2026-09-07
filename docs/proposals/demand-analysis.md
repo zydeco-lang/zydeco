@@ -71,15 +71,11 @@ whose bindee is a thunk over `Fix`, so self- and mutual references live inside t
 and are only visited after the binding-site decision has been made.
 A dead recursive definition therefore dies with its enclosing `Let`, and a self-reference never resurrects it.
 
-Value functions make applications demand-transparent.
-An application unfolds a definition, so the head's expression carries the caller's demand into
-that definition's binding, and a runtime argument is demanded like a let bindee, by the parameter pattern its cut binds.
-Resolving the head uses the same static reduction the lowerer performs (`lang/stackir/src/sps/value_functions.rs`).
-One ordering wrinkle remains: the argument's demand reads the parameter pattern's definitions,
-which the pass only discovers when it visits the callee body — after the application site,
-because binding sites visit tails first.
-Since joins only grow, the traversal simply repeats until the demand tables stop growing;
-one extra round covers the standard library's chains.
+The [shared static elaborator](normalization.md#implementation-status) eliminates value-function applications
+before this traversal, exposing the residual callee body and lexical argument bindings.
+Demand therefore propagates through ordinary bindings without a second static resolver.
+The traversal repeats until its tables stop growing to account for recursive references; joins only grow,
+so successive rounds converge.
 
 A bare `Fix` node — one elaborated outside any `Let` bindee — is visited but never eliminated.
 Such a shape would let an outer fixpoint body reference an inner fixpoint's parameter across sibling bindings,
