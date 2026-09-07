@@ -3,6 +3,22 @@ use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::{CaseError, SourceCase};
 
 #[test]
+fn malformed_monadic_operation_contracts_are_diagnosed() {
+    for (definition, code) in [
+        ("OS", TyckDiagnosticCode::TypeExpected),
+        ("codata end", TyckDiagnosticCode::UnknownCoDataDestructor),
+        ("codata | .return : OS end", TyckDiagnosticCode::TypeExpected),
+        ("codata | .return (A : VType) : OS end", TyckDiagnosticCode::TypeExpected),
+        ("codata | .return (A : VType) : String -> M A end", TyckDiagnosticCode::TypeMismatch),
+    ] {
+        let body =
+            format!("let Monad (M : VType -> CType) : CType = {definition} in @[monadic] ret 0");
+        SourceCase::assert_rejected(SourceCase::check_monadic(&body), code);
+    }
+    SourceCase::assert_accepted(SourceCase::check_monadic("@[monadic] ret 0"));
+}
+
+#[test]
 fn binding_cycles_fail_before_dependent_annotations_are_checked() {
     for body in [
         "begin def ! (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",

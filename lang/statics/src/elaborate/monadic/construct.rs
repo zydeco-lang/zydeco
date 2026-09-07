@@ -925,7 +925,15 @@ where
         let App(abs, arg) = self;
         let (env, abs) = abs.mbuild(tycker, env)?;
         let abs_ty = tycker.statics.annotations_compu[&abs];
-        let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else { unreachable!() };
+        let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else {
+            return tycker.err(
+                TyckError::TypeExpected {
+                    expected: "a computation arrow for a monadic operation".to_owned(),
+                    found: abs_ty,
+                },
+                std::panic::Location::caller(),
+            );
+        };
         let (env, arg) = arg.mbuild(tycker, env)?;
         let arg_ty = tycker.statics.annotations_value[&arg];
         Lub::lub(param_ty, arg_ty, tycker)?;
@@ -943,7 +951,15 @@ where
         let App(abs, cs::Ty(arg)) = self;
         let (env, abs) = abs.mbuild(tycker, env)?;
         let abs_ty = tycker.statics.annotations_compu[&abs];
-        let Some((binder, body_ty)) = abs_ty.destruct_forall_binder(tycker) else { unreachable!() };
+        let Some((binder, body_ty)) = abs_ty.destruct_forall_binder(tycker) else {
+            return tycker.err(
+                TyckError::TypeExpected {
+                    expected: "a forall type for a monadic operation".to_owned(),
+                    found: abs_ty,
+                },
+                std::panic::Location::caller(),
+            );
+        };
         let (env, arg) = arg.mbuild(tycker, env)?;
         // Todo: check if the substitution is necessary
         // let arg = arg.subst_env(tycker, &env.ty)?;
@@ -1122,11 +1138,20 @@ where
         let head_ty = tycker.statics.annotations_compu[&head];
         let head_view = head_ty.unroll(tycker)?.subst_env(tycker, &env.ty)?;
         let Type::CoData(coda_id) = tycker.type_filled(&head_view)?.to_owned() else {
-            unreachable!()
+            return tycker.err(
+                TyckError::TypeExpected {
+                    expected: "codata for a monadic operation".to_owned(),
+                    found: head_ty,
+                },
+                std::panic::Location::caller(),
+            );
         };
         let _ = tycker.statics.codata_hints.upsert(head, coda_id);
         let coda = tycker.statics.codatas[&coda_id].to_owned();
-        let Some(ty) = coda.get(&dtor) else { unreachable!() };
+        let Some(ty) = coda.get(&dtor) else {
+            return tycker
+                .err(TyckError::UnknownCoDataDestructor(dtor), std::panic::Location::caller());
+        };
         let alloc = Alloc::alloc(tycker, Dtor(head, dtor), ty, &env.ty);
         Ok((env, alloc))
     }

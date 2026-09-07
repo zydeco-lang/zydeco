@@ -500,6 +500,8 @@ in `lang/statics/src/elaborate/monadic/mod.rs` and invoked from `lang/statics/sr
 
 Each annotated term resolves `Monad` and `Algebra` as ordinary types at its lexical site.
 The checker verifies their expected higher kinds and records the selected constructors in the translation environment.
+Translation checks each selected operation's codata membership and application type;
+an incompatible lexical basis produces a type error at the monadic block.
 It synthesizes the payload into the checker-wide checked-term repository,
 then algebra translation consumes that immutable handle.
 Each resolved monadic block retains one payload and one translated root;
