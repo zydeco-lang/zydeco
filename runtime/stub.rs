@@ -543,8 +543,25 @@ impl ArgumentFold {
 
 #[unsafe(export_name = "\x01zydeco_abort")]
 extern "sysv64" fn zydeco_abort() -> ! {
-    eprintln!("Zydeco runtime: pattern match failed");
-    std::process::exit(1)
+    RuntimeFailure::PatternMatch.exit()
+}
+
+enum RuntimeFailure {
+    PatternMatch,
+    IntegerDivisionByZero,
+    IntegerRemainderByZero,
+}
+
+impl RuntimeFailure {
+    fn exit(self) -> ! {
+        let message = match self {
+            Self::PatternMatch => "pattern match failed",
+            Self::IntegerDivisionByZero => "integer division by zero",
+            Self::IntegerRemainderByZero => "integer remainder by zero",
+        };
+        eprintln!("Zydeco runtime: {message}");
+        std::process::exit(1)
+    }
 }
 
 struct ManagedHeap;
@@ -705,6 +722,9 @@ macro_rules! integer_runtime {
         extern "sysv64" fn $div(first: Word, second: Word, spare: *mut Word) -> Word {
             let first = <$type as RuntimeInteger>::decode(first);
             let second = <$type as RuntimeInteger>::decode(second);
+            if second == 0 {
+                RuntimeFailure::IntegerDivisionByZero.exit();
+            }
             RuntimeInteger::encode(first.wrapping_div(second), spare)
         }
 
@@ -712,6 +732,9 @@ macro_rules! integer_runtime {
         extern "sysv64" fn $modulo(first: Word, second: Word, spare: *mut Word) -> Word {
             let first = <$type as RuntimeInteger>::decode(first);
             let second = <$type as RuntimeInteger>::decode(second);
+            if second == 0 {
+                RuntimeFailure::IntegerRemainderByZero.exit();
+            }
             RuntimeInteger::encode(first.wrapping_rem(second), spare)
         }
 

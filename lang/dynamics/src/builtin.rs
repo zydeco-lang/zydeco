@@ -1,12 +1,17 @@
 use crate::{
     host::HostRuntime,
-    syntax::{Computation, Prim, RcValue, SemValue, Thunk, Value},
+    syntax::{Computation, Prim, RcValue, RuntimeError, SemValue, Thunk, Value},
 };
 use std::io::{BufRead, Write};
 use zydeco_syntax::{BuiltinValueRole, FloatOperation, IntegerOperation};
 
 /// Typed access to host operations used to construct the Builtin package.
 pub struct BuiltinRuntime;
+
+pub enum BuiltinFailure {
+    Exit(i32),
+    Runtime(RuntimeError),
+}
 
 impl BuiltinRuntime {
     pub fn package_value(role: BuiltinValueRole) -> RcValue {
@@ -17,7 +22,7 @@ impl BuiltinRuntime {
     pub fn invoke(
         role: BuiltinValueRole, args: Vec<SemValue>, input: &mut dyn BufRead,
         output: &mut dyn Write, argv: &[String], host: &mut HostRuntime,
-    ) -> Result<Computation, i32> {
+    ) -> Result<Computation, BuiltinFailure> {
         use crate::impls::*;
         use BuiltinValueRole as Role;
 
@@ -27,7 +32,10 @@ impl BuiltinRuntime {
                 | IntegerOperation::Sub
                 | IntegerOperation::Mul
                 | IntegerOperation::Div
-                | IntegerOperation::Mod => integer_arithmetic(integer, operation, args),
+                | IntegerOperation::Mod => {
+                    return integer_arithmetic(integer, operation, args)
+                        .map_err(BuiltinFailure::Runtime);
+                }
                 | IntegerOperation::Eq | IntegerOperation::Lt | IntegerOperation::Gt => {
                     integer_branch(integer, operation, args)
                 }
@@ -89,5 +97,6 @@ impl BuiltinRuntime {
             | Role::RandomInt => random_int(args, input, output, argv, host),
             | Role::Exit => exit(args, input, output, argv, host),
         }
+        .map_err(BuiltinFailure::Exit)
     }
 }

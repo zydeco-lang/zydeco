@@ -56,6 +56,13 @@ fn dtor(body: Rc<ZCompute>, dtor: &str) -> ZCompute {
 // /* Arithmetic */
 macro_rules! integer_arithmetic_result {
     ($variant:ident, $first:expr, $second:expr, $operation:expr) => {{
+        if *$second == 0 {
+            match $operation {
+                | IntegerOperation::Div => return Err(RuntimeError::IntegerDivisionByZero),
+                | IntegerOperation::Mod => return Err(RuntimeError::IntegerRemainderByZero),
+                | _ => {}
+            }
+        }
         let result = match $operation {
             | IntegerOperation::Add => $first.wrapping_add(*$second),
             | IntegerOperation::Sub => $first.wrapping_sub(*$second),
@@ -74,7 +81,7 @@ macro_rules! integer_arithmetic_result {
 /// Evaluate width- and signedness-aware wrapping integer arithmetic.
 pub fn integer_arithmetic(
     integer_type: IntegerType, operation: IntegerOperation, args: Vec<ZValue>,
-) -> Result<ZCompute, i32> {
+) -> Result<ZCompute, RuntimeError> {
     let value = match (integer_type, args.as_slice()) {
         | (
             IntegerType::Int8,

@@ -182,11 +182,15 @@ pub enum ProgKont {
     Error(RuntimeError),
 }
 
-/// Recoverable failures raised by runtime-managed boundaries.
+/// Failures reported to the host without unwinding the evaluator.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum RuntimeError {
     #[error("pattern match failed")]
     PatternMatch,
+    #[error("integer division by zero")]
+    IntegerDivisionByZero,
+    #[error("integer remainder by zero")]
+    IntegerRemainderByZero,
     #[error(transparent)]
     Foreign(#[from] crate::foreign::ForeignRuntimeError),
 }

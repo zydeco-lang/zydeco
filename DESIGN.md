@@ -765,6 +765,8 @@ Zydeco exposes fixed-width numeric types whose runtime domains match Rust's prim
 and `UInt64` use the corresponding unsigned Rust types; `Float32` and `Float64` use `f32` and `f64`.
 Integer arithmetic wraps within the selected representation, comparisons retain signedness,
 and floating-point operations follow IEEE 754 at the selected width.
+Integer division and remainder by zero stop execution with a clear runtime error and nonzero exit status.
+Signed minimum divided by `-1` wraps to the signed minimum; the corresponding remainder is zero.
 
 An expected numeric type selects a literal's representation.
 Integer literals must fit that representation; floating-point literals are rounded

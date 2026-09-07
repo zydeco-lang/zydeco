@@ -322,8 +322,7 @@ class ZydecoHost {
     // Error codes are defined by zydeco-wasm-common's RuntimeFailure ABI.
     functions.set("runtime_error", (code) => {
       const message = code === 1 ? "pattern match failed" : `unknown runtime error ${code}`;
-      process.stderr.write(`Zydeco runtime: ${message}\n`);
-      throw new ExitSignal(1);
+      ZydecoHost.fail(message);
     });
     functions.set("string_literal", (offset, length) => this.stringLiteral(offset, length));
     this.installNumeric(functions);
@@ -353,6 +352,11 @@ class ZydecoHost {
     return this.values.string(this.utf8Decoder.decode(bytes));
   }
 
+  static fail(message) {
+    process.stderr.write(`Zydeco runtime: ${message}\n`);
+    throw new ExitSignal(1);
+  }
+
   installNumeric(functions) {
     const integerTypes = [
       ["int8", 8, true],
@@ -379,9 +383,13 @@ class ZydecoHost {
         mod: (left, right) => left % right,
       };
       for (const [operation, apply] of Object.entries(arithmetic)) {
-        functions.set(`${name}_${operation}`, (first, second, spare) =>
-          encode(apply(decode(first), decode(second)), spare),
-        );
+        functions.set(`${name}_${operation}`, (first, second, spare) => {
+          const divisor = decode(second);
+          if (divisor === 0n && (operation === "div" || operation === "mod")) {
+            ZydecoHost.fail(`integer ${operation === "div" ? "division" : "remainder"} by zero`);
+          }
+          return encode(apply(decode(first), divisor), spare);
+        });
       }
       const comparisons = {
         eq: (left, right) => left === right,

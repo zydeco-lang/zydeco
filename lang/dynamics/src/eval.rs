@@ -318,7 +318,12 @@ impl<'rt> Eval<'rt> for Computation {
                     &mut runtime.host,
                 ) {
                     | Ok(e) => Step::Step(e),
-                    | Err(exit_code) => Step::Done(ProgKont::ExitCode(exit_code)),
+                    | Err(crate::builtin::BuiltinFailure::Exit(code)) => {
+                        Step::Done(ProgKont::ExitCode(code))
+                    }
+                    | Err(crate::builtin::BuiltinFailure::Runtime(error)) => {
+                        Step::Done(ProgKont::Error(error))
+                    }
                 }
             }
             | Computation::Foreign(ForeignPrim { import }) => {
