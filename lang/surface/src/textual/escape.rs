@@ -22,12 +22,20 @@ pub struct LiteralEscapes<'source> {
 }
 
 impl<'source> LiteralEscapes<'source> {
+    pub fn new(body: &'source str) -> Self {
+        Self { characters: body.chars() }
+    }
+
+    pub fn remaining(&self) -> &'source str {
+        self.characters.as_str()
+    }
+
     pub fn string(body: &'source str) -> Result<String, EscapeError> {
-        Self { characters: body.chars() }.collect()
+        Self::new(body).collect()
     }
 
     pub fn character(body: &'source str) -> Result<char, EscapeError> {
-        let mut decoded = Self { characters: body.chars() };
+        let mut decoded = Self::new(body);
         let character = decoded.next().transpose()?.ok_or(EscapeError::CharacterLength)?;
         if decoded.next().transpose()?.is_some() {
             return Err(EscapeError::CharacterLength);

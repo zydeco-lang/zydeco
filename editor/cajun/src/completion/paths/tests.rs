@@ -95,6 +95,7 @@ fn import_paths_replace_the_complete_component_and_preserve_quotes_and_prefixes(
         (r#"@[import("nested/li¦brary_suffix.zy")] _"#, r#"@[import("nested/library.zy")] _"#),
         (r#"@(import("./nested/li¦brary_suffix.zy"))"#, r#"@(import("./nested/library.zy"))"#),
         (r#"@[import("nested/li¦"#, r#"@[import("nested/library.zy"#),
+        (r#"@(import("nested\u{2f}li¦"))"#, r#"@(import("nested\u{2f}library.zy"))"#),
     ] {
         let fixture = Fixture::new(marked);
         fixture.write("nested/library.zy");
@@ -153,6 +154,9 @@ fn unrelated_literals_comments_and_invalid_metadata_arguments_reject_path_comple
         "@[import(\"line\nlib¦\")] _",
         r#"@[import("lib\¦"#,
         r#"@[import("lib\¦"suffix.zy")] _"#,
+        r#"@[import("lib\q¦")] _"#,
+        r#"@[import("lib\u{12¦34}")] _"#,
+        r#"@[import("lib\u{110000}¦")] _"#,
     ] {
         let fixture = Fixture::new(marked);
         fixture.write("library.zy");

@@ -11,7 +11,7 @@ use zydeco_session::{
     CompilerSession,
     source::{SourceKind, SourcePathCandidateKind},
 };
-use zydeco_surface::textual::{LexicalTokenKind, LexicalTokens, escape::apply_string_escapes};
+use zydeco_surface::textual::{LexicalTokenKind, LexicalTokens, escape::LiteralEscapes};
 use zydeco_utils::span::FileMap;
 
 pub(super) struct SourcePathCursor {
@@ -48,12 +48,11 @@ impl SourcePathCursor {
         }
 
         let mut replacement = start..end;
-        let mut chars = source[start..end].char_indices();
-        while let Some((index, ch)) = chars.next() {
-            let next = if ch == '\\' { chars.next() } else { Some((index, ch)) };
-            let Some((last, decoded)) = next else { break };
-            let unit_start = start + index;
-            let unit_end = start + last + decoded.len_utf8();
+        let mut chars = LiteralEscapes::new(&source[start..end]);
+        let mut unit_start = start;
+        while let Some(decoded) = chars.next() {
+            let decoded = decoded.ok()?;
+            let unit_end = end - chars.remaining().len();
             if unit_start < offset && offset < unit_end {
                 return None;
             }
@@ -65,13 +64,14 @@ impl SourcePathCursor {
                     break;
                 }
             }
+            unit_start = unit_end;
         }
         // LSP completion edits must stay on one line, even though literals may span lines.
         if source[replacement.clone()].contains(['\n', '\r']) {
             return None;
         }
-        let directory = apply_string_escapes(&source[start..replacement.start]);
-        let prefix = apply_string_escapes(&source[replacement.start..offset]);
+        let directory = LiteralEscapes::string(&source[start..replacement.start]).ok()?;
+        let prefix = LiteralEscapes::string(&source[replacement.start..offset]).ok()?;
         let followed_by_separator = replacement.end < end;
         Some(Self {
             directory: PathBuf::from(directory),
