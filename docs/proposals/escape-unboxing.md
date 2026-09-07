@@ -180,9 +180,11 @@ The same rule applies to `ClosurePackage`.
 If a variable is unboxed, its binding expands into one field slot per logical element.
 Uses of the variable push those slots back in the same order as an unboxed `VCons`.
 
-If `rep(v) = S`, lowering keeps a single pointer but allocates the cell
+The proposed `rep(v) = S` representation keeps a single pointer but allocates the cell
 in the current stack frame instead of calling `zydeco_alloc_scanned`.
-The AMD64 emitter supports this via a `stack_alloc` flag on `ProductLayout`.
+This representation requires an explicit frame lifetime and reclamation discipline,
+including proof that references cannot survive the owning frame.
+It is not implemented; current lowering uses unboxed fields or a heap cell.
 
 ## Worked Example
 
@@ -247,9 +249,11 @@ The following is implemented:
 - Local `VCons` pack/unpack fusion for directly projected values.
 - `ClosurePackage` fusion for directly forced closures.
 - Variable-level expansion for `LetValue`-bound variables whose uses are all projections.
-- A `stack_alloc` flag on assembly `ProductLayout` and AMD64 emission support for stack-frame product allocation.
 
 The analysis lives in `lang/assembly/src/unbox.rs` and is consumed by `lang/assembly/src/lower.rs`.
+Stack-frame product allocation and interprocedural escape constraints remain planned.
+Implementing the stack representation requires tests for operand order, frame cleanup, call alignment,
+escaping references, and collection while a frame retains managed pointers.
 
 ## File Touchpoints
 
@@ -257,10 +261,10 @@ The analysis lives in `lang/assembly/src/unbox.rs` and is consumed by `lang/asse
 | --- | --- |
 | `lang/assembly/src/unbox.rs` | representation analysis and variable expansion metadata |
 | `lang/assembly/src/lower.rs` | skip `PackProduct` / `UnpackProduct` for unboxed values; expand unboxed variables |
-| `lang/assembly/src/analyze.rs` | recognize stack-allocated product slots |
-| `lang/assembly/src/syntax.rs` | `ProductLayout.stack_alloc` flag |
-| `lang/amd64/src/emit.rs` | stack-frame product allocation path |
-| `lang/tests/tests/compile.rs` | regression fixtures for direct tuples and closures |
+| `lang/assembly/src/analyze.rs` | track product fields during stack analysis |
+| `lang/assembly/src/syntax.rs` | logical and physical product layouts |
+| `lang/amd64/src/emit.rs` | heap product allocation and field access |
+| `lang/tests/tests/core.rs` | regression fixtures for direct tuples and closures |
 
 ## Validation
 

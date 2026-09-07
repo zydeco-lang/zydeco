@@ -18,7 +18,6 @@ use zydeco_stackir::{SpsLowProgram, sps_low::syntax as sk};
 pub struct LocalUnboxing {
     pub values: HashSet<sk::ValueId>,
     pub patterns: HashSet<sk::VPatId>,
-    pub stack_values: HashSet<sk::ValueId>,
     pub unboxed_vars: HashMap<sk::DefId, usize>,
 }
 

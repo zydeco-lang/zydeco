@@ -904,8 +904,7 @@ so higher-order control does not require tail-call or function-reference proposa
 The reusable variable environment, one-megabyte operand/control stack, products,
 closure packages, and boxed 64-bit scalars live in linear memory.
 Exhausting or underflowing this stack reports a runtime error through the shared host ABI.
-Products currently use a growing bump heap rather than a collector; ZASM products marked
-for stack allocation are conservatively placed in that heap as well.
+Products currently use a growing bump heap rather than a collector.
 
 ### Shared runtime ABI
 

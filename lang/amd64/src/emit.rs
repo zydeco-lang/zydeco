@@ -822,19 +822,8 @@ impl<'a> Emit<'a> for Instruction {
                     "pack_product {}/{}",
                     layout.elements, layout.arity
                 )));
-                if layout.stack_alloc {
-                    em.asm.text.extend([
-                        Instr::Comment("allocate product in the current stack frame".to_string()),
-                        Instr::Sub(BinArgs::ToReg(
-                            Reg::Rsp,
-                            Arg32::Signed(8 * layout.arity as i32),
-                        )),
-                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rsp))),
-                    ]);
-                } else {
-                    let context_words = em.assembly.contexts[&id].iter().len();
-                    em.emit_alloc_call(layout.arity, AllocationKind::Scanned, context_words);
-                }
+                let context_words = em.assembly.contexts[&id].iter().len();
+                em.emit_alloc_call(layout.arity, AllocationKind::Scanned, context_words);
                 for index in 0..layout.elements {
                     let destination = i32::try_from(index * 8).expect("product offset overflow");
                     if index + 1 == layout.elements && layout.elements < layout.arity {
@@ -866,15 +855,10 @@ impl<'a> Emit<'a> for Instruction {
                     }
                 }
                 em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
-                if layout.stack_alloc {
-                    let flips = layout.arity + layout.elements + 1;
-                    em.shift_stack_parity(i64::try_from(flips).expect("stack parity overflow"));
-                } else {
-                    em.shift_stack_parity(
-                        -i64::try_from(layout.elements).expect("product elements overflow"),
-                    );
-                    em.shift_stack_parity(1);
-                }
+                em.shift_stack_parity(
+                    -i64::try_from(layout.elements).expect("product elements overflow"),
+                );
+                em.shift_stack_parity(1);
             }
             | Instruction::UnpackProduct(sa::Unpack(layout)) => {
                 em.asm.text.push(Instr::Comment(format!(

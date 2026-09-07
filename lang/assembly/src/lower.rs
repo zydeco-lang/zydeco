@@ -249,14 +249,10 @@ impl<'a> Lower<'a> for sk::ValueId {
                 Push(Atom::Sym(sym)).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
-                let stack_alloc = lo.unboxing.stack_values.contains(self);
                 let kont: Kont<'a, Lowerer<'a>> = if lo.unboxing.values.contains(self) {
                     kont
                 } else {
-                    let mut product = ProductLayout::new(2, 2);
-                    if stack_alloc {
-                        product.stack_alloc = true;
-                    }
+                    let product = ProductLayout::new(2, 2);
                     Box::new(move |lo, cx| {
                         Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
                     })
@@ -296,14 +292,10 @@ impl<'a> Lower<'a> for sk::ValueId {
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::VCons(sk::VCons { items, layout }) => {
-                let stack_alloc = lo.unboxing.stack_values.contains(self);
                 let kont: Kont<'a, Lowerer<'a>> = if lo.unboxing.values.contains(self) {
                     kont
                 } else {
-                    let mut product = ProductLayout::new(layout.arity, items.len());
-                    if stack_alloc {
-                        product.stack_alloc = true;
-                    }
+                    let product = ProductLayout::new(layout.arity, items.len());
                     Box::new(move |lo, cx| {
                         Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
                     })

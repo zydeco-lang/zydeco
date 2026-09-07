@@ -90,8 +90,6 @@ pub struct Alloc<T>(pub T);
 pub struct ProductLayout {
     pub arity: usize,
     pub elements: usize,
-    /// Allocate the cell in the current stack frame instead of the copying heap.
-    pub stack_alloc: bool,
 }
 
 impl ProductLayout {
@@ -99,12 +97,7 @@ impl ProductLayout {
         assert!(arity > 0);
         assert!(elements > 0);
         assert!(elements <= arity);
-        Self { arity, elements, stack_alloc: false }
-    }
-
-    pub fn with_stack_alloc(mut self) -> Self {
-        self.stack_alloc = true;
-        self
+        Self { arity, elements }
     }
 }
 
