@@ -1,0 +1,4 @@
+-- expect: reject(tyck.expressivity)
+
+let value = (let 0 = 3 in 1) in
+ret value

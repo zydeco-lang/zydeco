@@ -111,7 +111,7 @@ impl PatternVariableStandIn {
     }
 }
 
-/// Structural patterns that bind without testing a constructor or literal.
+/// Patterns that match every value of their checked type.
 pub(super) struct ValuePatternShape;
 
 impl ValuePatternShape {
@@ -121,7 +121,11 @@ impl ValuePatternShape {
                 true
             }
             | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::is_irrefutable(tycker, *inner),
-            | ss::ValuePattern::Ctor(_) => false,
+            | ss::ValuePattern::Ctor(ss::Ctor(_, inner)) => {
+                tycker.statics.data_pat_hints.get(&pattern).is_some_and(|data| {
+                    tycker.statics.datas[data].len() == 1 && Self::is_irrefutable(tycker, *inner)
+                })
+            }
             | ss::ValuePattern::Lit(_) => false,
             | ss::ValuePattern::Alias(ss::Alias(patterns)) => {
                 patterns.iter().all(|pattern| Self::is_irrefutable(tycker, *pattern))

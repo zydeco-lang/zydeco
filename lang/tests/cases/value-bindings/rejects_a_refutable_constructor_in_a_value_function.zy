@@ -1,0 +1,5 @@
+-- expect: reject(tyck.expressivity)
+
+let Choice = data | +First : Unit | +Second : Unit end in
+let val f (choice : Choice) : Int64 = let +First() = choice in 1 in
+ret (f (+Second() : Choice))

@@ -343,6 +343,14 @@ impl TermChecker<'_> {
                         .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
                     match tail_out_ann {
                         | TermAnnId::Value(tail_out, tail_ty) => {
+                            if !ValuePatternShape::is_irrefutable(tycker, binder_out) {
+                                tycker.err_k(
+                                    TyckError::Expressivity(
+                                        "value bindings must be irrefutable patterns",
+                                    ),
+                                    std::panic::Location::caller(),
+                                )?
+                            }
                             binder_elaboration.close_scope_k(tycker, tail_ty)?;
                             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let binder = crate::query::InternedVPat::new(tycker.db, binder_out);

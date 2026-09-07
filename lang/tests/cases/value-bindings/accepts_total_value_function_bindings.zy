@@ -1,0 +1,2 @@
+let val f (x : Int64) : Int64 = let y = x in y in
+ret (f 3)
