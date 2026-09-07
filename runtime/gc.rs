@@ -8,6 +8,8 @@
 //! Collection is Cheney's breadth-first algorithm.  Roots are copied into the
 //! inactive semispace, then `scan` walks that space until it catches the allocation
 //! cursor.
+//! Each semispace has a block-start index; locating a payload's header reads one
+//! index region and one header, including for pointers into large blocks.
 //!
 //! Values use the same one-bit convention as OCaml: odd words are immediate values,
 //! while managed pointers are aligned and therefore even. Full-width scalars that
@@ -48,10 +50,13 @@ struct BlockHeader {
 }
 
 const HEADER_BYTES: usize = size_of::<BlockHeader>();
+const INDEX_REGION_WORDS: usize = Word::BITS as usize;
+pub(crate) const INDEX_REGION_BYTES: usize = INDEX_REGION_WORDS * WORD_BYTES;
 
 const _: () = {
     assert!(WORD_BYTES == 8, "the native runtime currently requires 64-bit words");
     assert!(HEADER_BYTES == 2 * WORD_BYTES);
+    assert!(size_of::<RegionStarts>() == 2 * WORD_BYTES);
 };
 
 impl BlockHeader {
@@ -75,6 +80,115 @@ impl BlockHeader {
     fn set_forwarded_to(&mut self, payload: *mut u8) {
         debug_assert_eq!(payload as Word & FORWARDED_BIT, 0);
         self.metadata = payload as Word | FORWARDED_BIT;
+    }
+}
+
+/// Block headers starting in one 512-byte region, plus the header of a block
+/// crossing into it. The predecessor is unused when a preceding start bit exists.
+#[derive(Clone, Copy)]
+struct RegionStarts {
+    headers: Word,
+    preceding_header: usize,
+}
+
+impl RegionStarts {
+    const EMPTY: Self = Self { headers: 0, preceding_header: 0 };
+}
+
+struct LocatedBlock {
+    header: *mut BlockHeader,
+    contents: BlockHeader,
+    interior_offset: usize,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct LookupWork {
+    regions: usize,
+    headers: usize,
+}
+
+/// An append-only index of block boundaries in one semispace.
+///
+/// Recording a block initializes each region it first touches. Starting again at
+/// offset zero therefore replaces stale metadata as the semispace is reused,
+/// without clearing its whole index or visiting dead blocks. Lookups must stay
+/// within the current allocation cursor; entries beyond it may be stale.
+struct BlockStartIndex<const REGIONS: usize> {
+    regions: [RegionStarts; REGIONS],
+    #[cfg(test)]
+    work: std::cell::Cell<LookupWork>,
+}
+
+impl<const REGIONS: usize> BlockStartIndex<REGIONS> {
+    const fn new() -> Self {
+        Self {
+            regions: [RegionStarts::EMPTY; REGIONS],
+            #[cfg(test)]
+            work: std::cell::Cell::new(LookupWork { regions: 0, headers: 0 }),
+        }
+    }
+
+    /// Record the next contiguous block, including regions crossed by its header.
+    fn record(&mut self, header_offset: usize, cell_bytes: usize) {
+        debug_assert_eq!(header_offset % WORD_BYTES, 0);
+        debug_assert!(cell_bytes >= HEADER_BYTES);
+        let first = header_offset / INDEX_REGION_BYTES;
+        let last = (header_offset + cell_bytes - 1) / INDEX_REGION_BYTES;
+        let word = (header_offset % INDEX_REGION_BYTES) / WORD_BYTES;
+        if word == 0 {
+            self.regions[first] = RegionStarts::EMPTY;
+        }
+        self.regions[first].headers |= 1 << word;
+        self.regions[first + 1..last + 1]
+            .fill(RegionStarts { headers: 0, preceding_header: header_offset });
+    }
+
+    fn region(&self, index: usize) -> RegionStarts {
+        #[cfg(test)]
+        self.work.update(|work| LookupWork { regions: work.regions + 1, ..work });
+        self.regions[index]
+    }
+
+    unsafe fn read_header(&self, header: *mut BlockHeader) -> BlockHeader {
+        #[cfg(test)]
+        self.work.update(|work| LookupWork { headers: work.headers + 1, ..work });
+        unsafe { header.read() }
+    }
+
+    /// Find the owning payload with one index-region read and one header read.
+    ///
+    /// The prefix mask includes the pointer's word. A pointer to either word of
+    /// a header therefore selects that header and fails the payload bounds check,
+    /// even when the header straddles an index-region boundary.
+    unsafe fn containing_block(
+        &self, value: Word, from_base: *mut u8, from_used: usize,
+    ) -> Option<LocatedBlock> {
+        if value & IMMEDIATE_TAG != 0 || value & (WORD_BYTES - 1) != 0 {
+            return None;
+        }
+        let offset = value.checked_sub(from_base as Word)?;
+        if offset < HEADER_BYTES || offset >= from_used {
+            return None;
+        }
+
+        let region_index = offset / INDEX_REGION_BYTES;
+        let region = self.region(region_index);
+        let word = (offset % INDEX_REGION_BYTES) / WORD_BYTES;
+        let preceding = region.headers & (Word::MAX >> (INDEX_REGION_WORDS - 1 - word));
+        let header_offset = if preceding == 0 {
+            region.preceding_header
+        } else {
+            let header_word = INDEX_REGION_WORDS - 1 - preceding.leading_zeros() as usize;
+            region_index * INDEX_REGION_BYTES + header_word * WORD_BYTES
+        };
+        let header = unsafe { from_base.add(header_offset).cast::<BlockHeader>() };
+        let contents = unsafe { self.read_header(header) };
+        let interior_offset = offset.checked_sub(header_offset + HEADER_BYTES)?;
+        if interior_offset / WORD_BYTES >= contents.size_words {
+            return None;
+        }
+        Some(LocatedBlock { header, contents, interior_offset })
     }
 }
 
@@ -113,18 +227,28 @@ pub(crate) struct Roots<'a> {
 
 /// Two fixed semispaces and the cursor in the currently active one.
 ///
-/// `BYTES` includes block headers.  The total heap reservation is therefore exactly
-/// `2 * BYTES`, independent of how long a Zydeco program runs.
-pub(crate) struct CheneyHeap<const BYTES: usize> {
+/// `BYTES` includes block headers. Each space additionally reserves two index
+/// words per 512 bytes (rounded up), or 3.125% for a whole number of regions.
+/// `REGIONS` is explicit because stable const generics cannot derive an array
+/// length from `BYTES`; construction checks their relationship.
+pub(crate) struct CheneyHeap<const BYTES: usize, const REGIONS: usize> {
     spaces: [Space<BYTES>; 2],
+    starts: [BlockStartIndex<REGIONS>; 2],
     active: usize,
     used: usize,
     collections: usize,
 }
 
-impl<const BYTES: usize> CheneyHeap<BYTES> {
+impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
     pub const fn new() -> Self {
-        Self { spaces: [Space::new(), Space::new()], active: 0, used: 0, collections: 0 }
+        assert!(REGIONS == BYTES.div_ceil(INDEX_REGION_BYTES), "incorrect block index capacity");
+        Self {
+            spaces: [Space::new(), Space::new()],
+            starts: [BlockStartIndex::new(), BlockStartIndex::new()],
+            active: 0,
+            used: 0,
+            collections: 0,
+        }
     }
 
     /// Allocate a block, collecting first when the active semispace is full.
@@ -155,6 +279,7 @@ impl<const BYTES: usize> CheneyHeap<BYTES> {
         let base = unsafe { self.active_base().add(self.used) };
         unsafe { base.cast::<BlockHeader>().write(BlockHeader::new(size_words, tag)) };
         let payload = unsafe { base.add(HEADER_BYTES) };
+        self.starts[self.active].record(self.used, cell_bytes);
         self.used += cell_bytes;
         Ok(payload)
     }
@@ -248,12 +373,11 @@ impl<const BYTES: usize> CheneyHeap<BYTES> {
         &mut self, value: Word, from_base: *mut u8, from_used: usize, to_base: *mut u8,
         to_used: &mut usize,
     ) -> Word {
-        let Some((old_header, interior_offset)) =
-            (unsafe { Self::containing_block(value, from_base, from_used) })
+        let Some(LocatedBlock { header: old_header, contents: old_header_value, interior_offset }) =
+            (unsafe { self.starts[self.active].containing_block(value, from_base, from_used) })
         else {
             return value;
         };
-        let old_header_value = unsafe { old_header.read() };
         if let Some(new_payload) = old_header_value.forwarded_to() {
             return unsafe { new_payload.add(interior_offset) } as Word;
         }
@@ -269,42 +393,9 @@ impl<const BYTES: usize> CheneyHeap<BYTES> {
         unsafe { (*old_header).set_forwarded_to(new_payload) };
         // A copied header must carry its ordinary tag, not a forwarding address.
         unsafe { (*new_header).metadata = old_header_value.metadata };
+        self.starts[1 - self.active].record(*to_used, cell_bytes);
         *to_used += cell_bytes;
         (unsafe { new_payload.add(interior_offset) }) as Word
-    }
-
-    /// Find the allocated block whose payload contains `value`.
-    ///
-    /// Linear lookup keeps the representation self-contained and is intentionally
-    /// favored over a dynamically allocated side table. It also handles Zydeco's
-    /// product-suffix interior pointers without compiler metadata.
-    unsafe fn containing_block(
-        value: Word, from_base: *mut u8, from_used: usize,
-    ) -> Option<(*mut BlockHeader, usize)> {
-        if value & IMMEDIATE_TAG != 0 {
-            return None;
-        }
-        if value & (WORD_BYTES - 1) != 0 {
-            return None;
-        }
-        let from_start = from_base as Word;
-        let from_end = from_start.checked_add(from_used)?;
-        if value < from_start + HEADER_BYTES || value >= from_end {
-            return None;
-        }
-
-        let mut cursor = 0;
-        while cursor < from_used {
-            let header = unsafe { from_base.add(cursor).cast::<BlockHeader>() };
-            let size_words = unsafe { (*header).size_words };
-            let payload = unsafe { header.cast::<u8>().add(HEADER_BYTES) } as Word;
-            let payload_end = payload.checked_add(size_words.checked_mul(WORD_BYTES)?)?;
-            if value >= payload && value < payload_end {
-                return Some((header, value - payload));
-            }
-            cursor = cursor.checked_add(Self::cell_bytes(size_words)?)?;
-        }
-        None
     }
 
     #[cfg(test)]
@@ -318,7 +409,7 @@ impl<const BYTES: usize> CheneyHeap<BYTES> {
     }
 }
 
-/// LLM generated tests.
+/// Generated Tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,16 +423,28 @@ mod tests {
             Self { words }
         }
 
-        unsafe fn allocate<const BYTES: usize>(
-            &mut self, heap: &mut CheneyHeap<BYTES>, words: usize, tag: BlockTag,
-        ) -> Result<*mut u8, OutOfMemory> {
+        fn roots(&mut self) -> Roots<'_> {
             let start = self.words.as_mut_ptr();
-            let roots = Roots {
+            Roots {
                 stack: RootRange { start, end: unsafe { start.add(N) } },
                 environment: RootRange { start: ptr::null_mut(), end: ptr::null_mut() },
                 host: &mut [],
-            };
-            unsafe { heap.allocate(words, tag, roots) }
+            }
+        }
+
+        unsafe fn allocate<const BYTES: usize, const REGIONS: usize>(
+            &mut self, heap: &mut CheneyHeap<BYTES, REGIONS>, words: usize, tag: BlockTag,
+        ) -> Result<*mut u8, OutOfMemory> {
+            unsafe { heap.allocate(words, tag, self.roots()) }
+        }
+
+        unsafe fn collect<const BYTES: usize, const REGIONS: usize>(
+            &mut self, heap: &mut CheneyHeap<BYTES, REGIONS>,
+        ) -> LookupWork {
+            let from_index = heap.active;
+            heap.starts[from_index].work.set(LookupWork::default());
+            unsafe { heap.collect(self.roots()) };
+            heap.starts[from_index].work.get()
         }
     }
 
@@ -356,8 +459,177 @@ mod tests {
     }
 
     #[test]
+    fn index_accepts_payloads_and_rejects_headers_and_unused_space() {
+        let mut heap = CheneyHeap::<4096, 8>::new();
+        let mut roots = TestRoots::new([]);
+        let base = heap.active_base();
+        // The third header starts at word 63 and crosses into the next region;
+        // the seventh starts exactly at a region boundary. Empty blocks, large
+        // blocks, and partial regions exercise payload bounds.
+        let blocks = [1, 58, 1, 0, 1, 119, 3, 0, 190, 64, 1]
+            .into_iter()
+            .map(|words| {
+                let payload =
+                    unsafe { roots.allocate(&mut heap, words, BlockTag::Scanned) }.unwrap();
+                unsafe { write_words(payload, &vec![IMMEDIATE_TAG; words]) };
+                (payload as Word, words)
+            })
+            .collect::<Vec<_>>();
+        let original_used = heap.used_bytes();
+        let index = &heap.starts[heap.active];
+
+        for offset in (0..4096).step_by(WORD_BYTES) {
+            let value = base as Word + offset;
+            let expected = blocks.iter().find_map(|&(payload, words)| {
+                (value >= payload && value < payload + words * WORD_BYTES)
+                    .then(|| (payload - HEADER_BYTES, value - payload))
+            });
+            let found = unsafe { index.containing_block(value, base, original_used) }
+                .map(|block| (block.header as Word, block.interior_offset));
+            assert_eq!(found, expected, "heap word at offset {offset}");
+            for invalid in [value | IMMEDIATE_TAG, value + 2] {
+                assert!(unsafe { index.containing_block(invalid, base, original_used) }.is_none());
+            }
+        }
+
+        let foreign = IMMEDIATE_TAG;
+        let inactive = heap.spaces[1 - heap.active].base() as Word + HEADER_BYTES;
+        for invalid in [0, ptr::from_ref(&foreign) as Word, inactive, base as Word + 4096] {
+            assert!(unsafe { index.containing_block(invalid, base, original_used) }.is_none());
+        }
+        assert_eq!(heap.used_bytes(), original_used);
+        assert_eq!(heap.collections(), 0);
+    }
+
+    #[test]
+    fn large_product_aliases_survive_semispace_reuse() {
+        let mut heap = CheneyHeap::<4096, 8>::new();
+        let mut roots = TestRoots::new([IMMEDIATE_TAG; 4]);
+        // These old starts will lie inside the large product when this space is
+        // reused. Its index must replace them, including the final partial region.
+        for _ in 0..32 {
+            let garbage = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+            unsafe { write_words(garbage, &[IMMEDIATE_TAG]) };
+        }
+        let leaf = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+        unsafe { write_words(leaf, &[immediate(77)]) };
+        roots.words[0] = leaf as Word;
+        let product = unsafe { roots.allocate(&mut heap, 200, BlockTag::Scanned) }.unwrap();
+        let mut fields = (0..200).map(immediate).collect::<Vec<_>>();
+        fields[199] = roots.words[0];
+        unsafe { write_words(product, &fields) };
+        roots.words = [
+            unsafe { product.add(150 * WORD_BYTES) } as Word,
+            product as Word,
+            unsafe { product.add(61 * WORD_BYTES) } as Word,
+            roots.words[0],
+        ];
+
+        for _ in 0..6 {
+            let previous = roots.words[1];
+            let work = unsafe { roots.collect(&mut heap) };
+            assert_eq!(work, LookupWork { regions: 5, headers: 5 });
+            assert_ne!(roots.words[1], previous);
+            assert_eq!(roots.words[0], roots.words[1] + 150 * WORD_BYTES);
+            assert_eq!(roots.words[2], roots.words[1] + 61 * WORD_BYTES);
+            assert_eq!(heap.used_bytes(), 2 * HEADER_BYTES + 201 * WORD_BYTES);
+            let product = roots.words[1] as *const Word;
+            for field in 0..199 {
+                assert_eq!(unsafe { product.add(field).read() }, immediate(field));
+            }
+            assert_eq!(unsafe { product.add(199).read() }, roots.words[3]);
+            assert_eq!(unsafe { (roots.words[3] as *const Word).read() }, immediate(77));
+
+            while heap.used_bytes() + HEADER_BYTES + WORD_BYTES <= 4096 {
+                let garbage = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+                unsafe { write_words(garbage, &[IMMEDIATE_TAG]) };
+            }
+        }
+
+        // Shrink the live set, then append a block over old index entries. Lookup
+        // must ignore stale entries both inside its new payload and past `used`.
+        let leaf = roots.words[3];
+        roots.words.fill(leaf);
+        unsafe { roots.collect(&mut heap) };
+        assert_eq!(heap.used_bytes(), HEADER_BYTES + WORD_BYTES);
+        let product = unsafe { roots.allocate(&mut heap, 200, BlockTag::Scanned) }.unwrap();
+        unsafe { write_words(product, &vec![IMMEDIATE_TAG; 200]) };
+        let base = heap.active_base();
+        let index = &heap.starts[heap.active];
+        for word in 0..200 {
+            let value = product as Word + word * WORD_BYTES;
+            let block = unsafe { index.containing_block(value, base, heap.used_bytes()) }.unwrap();
+            assert_eq!(block.header as Word + HEADER_BYTES, product as Word);
+            assert_eq!(block.interior_offset, word * WORD_BYTES);
+        }
+        for offset in (heap.used_bytes()..4096).step_by(WORD_BYTES) {
+            assert!(
+                unsafe { index.containing_block(base as Word + offset, base, heap.used_bytes()) }
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn chain_lookup_work_grows_linearly_with_live_edges() {
+        for blocks in [1024, 2048, 4096, 8192, 16384] {
+            let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
+            let mut roots = TestRoots::new([IMMEDIATE_TAG]);
+            for _ in 0..blocks {
+                let previous = roots.words[0];
+                let payload = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+                unsafe { write_words(payload, &[previous]) };
+                roots.words[0] = payload as Word;
+            }
+            let work = unsafe { roots.collect(&mut heap) };
+            assert_eq!(work, LookupWork { regions: blocks, headers: blocks });
+            assert_eq!(heap.used_bytes(), blocks * (HEADER_BYTES + WORD_BYTES));
+            let mut node = roots.words[0];
+            for _ in 0..blocks {
+                assert_ne!(node, IMMEDIATE_TAG);
+                node = unsafe { (node as *const Word).read() };
+            }
+            assert_eq!(node, IMMEDIATE_TAG);
+        }
+    }
+
+    #[test]
+    fn alias_lookup_work_is_independent_of_dead_block_count() {
+        for blocks in [1024, 4096, 16384] {
+            let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
+            let mut roots = TestRoots::new([IMMEDIATE_TAG]);
+            for _ in 0..blocks {
+                let payload = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+                unsafe { write_words(payload, &[immediate(42)]) };
+                roots.words[0] = payload as Word;
+            }
+            let mut aliases = TestRoots::new([roots.words[0]; 8192]);
+            let work = unsafe { aliases.collect(&mut heap) };
+            assert_eq!(work, LookupWork { regions: 8192, headers: 8192 });
+            assert_eq!(heap.used_bytes(), HEADER_BYTES + WORD_BYTES);
+            assert!(aliases.words.iter().all(|&word| word == aliases.words[0]));
+            assert_eq!(unsafe { (aliases.words[0] as *const Word).read() }, immediate(42));
+        }
+    }
+
+    #[test]
+    fn interior_lookup_work_is_independent_of_block_size() {
+        for words in [64, 1024, 16384] {
+            let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
+            let mut roots = TestRoots::new([IMMEDIATE_TAG]);
+            let payload = unsafe { roots.allocate(&mut heap, words, BlockTag::Opaque) }.unwrap();
+            unsafe { write_words(payload, &vec![immediate(17); words]) };
+            roots.words[0] = unsafe { payload.add((words - 1) * WORD_BYTES) } as Word;
+            let work = unsafe { roots.collect(&mut heap) };
+            assert_eq!(work, LookupWork { regions: 1, headers: 1 });
+            assert_eq!(heap.used_bytes(), HEADER_BYTES + words * WORD_BYTES);
+            assert_eq!(unsafe { (roots.words[0] as *const Word).read() }, immediate(17));
+        }
+    }
+
+    #[test]
     fn copies_reachable_blocks_and_rewrites_edges() {
-        let mut heap = CheneyHeap::<128>::new();
+        let mut heap = CheneyHeap::<128, 1>::new();
         let mut roots = TestRoots::new([0]);
         let leaf = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
         unsafe { write_words(leaf, &[immediate(41)]) };
@@ -393,7 +665,7 @@ mod tests {
 
     #[test]
     fn tagged_immediate_cannot_be_mistaken_for_a_heap_pointer() {
-        let mut heap = CheneyHeap::<80>::new();
+        let mut heap = CheneyHeap::<80, 1>::new();
         let mut roots = TestRoots::new([0]);
         let target = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
         let pointer_shaped_payload = target as Word | IMMEDIATE_TAG;
@@ -411,7 +683,7 @@ mod tests {
 
     #[test]
     fn preserves_interior_product_pointers() {
-        let mut heap = CheneyHeap::<104>::new();
+        let mut heap = CheneyHeap::<104, 1>::new();
         let mut roots = TestRoots::new([0]);
         let product = unsafe { roots.allocate(&mut heap, 3, BlockTag::Scanned).unwrap() };
         unsafe { write_words(product, &[immediate(10), immediate(20), immediate(30)]) };
@@ -432,7 +704,7 @@ mod tests {
 
     #[test]
     fn forwarding_breaks_cycles_without_a_mark_stack() {
-        let mut heap = CheneyHeap::<96>::new();
+        let mut heap = CheneyHeap::<96, 1>::new();
         let mut roots = TestRoots::new([0]);
         let first = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
         let second = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
@@ -454,7 +726,7 @@ mod tests {
 
     #[test]
     fn opaque_blocks_do_not_trace_payload_words() {
-        let mut heap = CheneyHeap::<96>::new();
+        let mut heap = CheneyHeap::<96, 1>::new();
         let mut roots = TestRoots::new([0]);
         let target = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
         unsafe { write_words(target, &[immediate(77)]) };
@@ -472,7 +744,7 @@ mod tests {
 
     #[test]
     fn rewrites_registered_host_roots() {
-        let mut heap = CheneyHeap::<80>::new();
+        let mut heap = CheneyHeap::<80, 1>::new();
         let mut roots = TestRoots::new([]);
         let target = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
         unsafe { write_words(target, &[immediate(55)]) };
@@ -498,7 +770,7 @@ mod tests {
 
     #[test]
     fn reports_oom_when_the_live_set_leaves_no_room() {
-        let mut heap = CheneyHeap::<64>::new();
+        let mut heap = CheneyHeap::<64, 1>::new();
         let mut roots = TestRoots::new([0, 0]);
         let first = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
         unsafe { write_words(first, &[immediate(0)]) };
@@ -511,5 +783,16 @@ mod tests {
         assert_eq!(error.requested_words, 1);
         assert_eq!(error.live_bytes, 2 * (HEADER_BYTES + WORD_BYTES));
         assert_eq!(error.capacity_bytes, 64);
+        // Failed allocation still leaves a valid copied graph and index. Dropping
+        // one root makes room for the next allocation through another collection.
+        assert!(
+            roots.words.iter().all(|&root| unsafe { (root as *const Word).read() == immediate(0) })
+        );
+        roots.words[1] = IMMEDIATE_TAG;
+        let fresh = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+        unsafe { write_words(fresh, &[immediate(1)]) };
+        assert_eq!(heap.collections(), 2);
+        assert_eq!(heap.used_bytes(), 2 * (HEADER_BYTES + WORD_BYTES));
+        assert_eq!(unsafe { (roots.words[0] as *const Word).read() }, immediate(0));
     }
 }

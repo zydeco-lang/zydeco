@@ -1079,13 +1079,13 @@ extern "sysv64" fn zydeco_bytes_slice_branch(
 ) -> Word {
     let start = <i64 as RuntimeInteger>::decode(start);
     let length = <i64 as RuntimeInteger>::decode(length);
-    let window = usize::try_from(start)
-        .ok()
-        .and_then(|start| usize::try_from(length).ok().and_then(|length| {
+    let window = usize::try_from(start).ok().and_then(|start| {
+        usize::try_from(length).ok().and_then(|length| {
             let end = start.checked_add(length)?;
             let source = unsafe { HostBytes::borrow(bytes) };
             (end <= source.len()).then(|| source[start..end].to_vec())
-        }));
+        })
+    });
     match window {
         | None => Continuation::without_arguments(when_none),
         | Some(window) => Continuation::with_one_argument(when_some, HostBytes::leak(window)),
@@ -1378,6 +1378,7 @@ unsafe extern "sysv64" {
 }
 
 const HEAP_SPACE_BYTES: usize = 1024 * 1024;
+const HEAP_INDEX_REGIONS: usize = HEAP_SPACE_BYTES.div_ceil(gc::INDEX_REGION_BYTES);
 const ENVIRONMENT_BYTES: usize = 1024 * 1024;
 const HOST_ROOT_CAPACITY: usize = 256;
 
@@ -1440,7 +1441,8 @@ fn out_of_host_roots(_error: HostRootOverflow) -> ! {
     std::process::exit(1)
 }
 
-static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES>> = RuntimeCell::new(CheneyHeap::new());
+static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>> =
+    RuntimeCell::new(CheneyHeap::new());
 static ENVIRONMENT: RuntimeCell<Environment> = RuntimeCell::new(Environment::new());
 static STACK_END: RuntimeCell<*mut Word> = RuntimeCell::new(std::ptr::null_mut());
 static HOST_ROOTS: RuntimeCell<HostRoots> = RuntimeCell::new(HostRoots::new());

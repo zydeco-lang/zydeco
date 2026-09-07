@@ -2,8 +2,8 @@
 
 ## Summary
 
-Zydeco's native backend allocates every escaping product, constructor, and closure package in a fixed two-space
-copying heap.
+Zydeco's native backend allocates every escaping product, constructor,
+and closure package in a fixed two-space copying heap.
 The call-by-push-value pipeline already places control and continuation structure on the machine stack,
 but values that are created and consumed locally still consume region space.
 This proposal adds a constraint-based escape analysis over SPSLow and an unboxing rewrite
@@ -36,8 +36,7 @@ do x <- ! { fn (x : Int64) => ret x } 0;
 ```
 
 In both cases the value is constructed and immediately projected or forced.
-A stack machine already has the fields available; the heap cell only adds allocation
-and eventual copying work.
+A stack machine already has the fields available; the heap cell only adds allocation and eventual copying work.
 Unboxing removes the cell and keeps the fields in the machine's natural stack-shaped representation.
 
 ## Background
@@ -52,9 +51,11 @@ Relevant facts:
   Sharing is represented by `LetValue` binders and `DefId` variables.
 - Assembly lowering turns every `VCons`, `Ctor`, and `ClosurePackage` into a `PackProduct` instruction.
 - The AMD64 emitter calls `zydeco_alloc_scanned` for every region-allocated `PackProduct`.
-- The runtime provides two fixed semispaces and uses Cheney copying collection when the active space fills.
-  SPSLow product layouts carry only their physical arity. Odd runtime words are tagged immediates;
-  aligned even words can be managed pointers, so the collector needs no compiler-generated pointer maps.
+- The runtime uses [native copying collection](../../DESIGN.md#native-garbage-collection)
+  when the active semispace fills.
+  SPSLow product layouts carry only their physical arity.
+  Odd runtime words are tagged immediates; aligned even words can be managed pointers,
+  so the collector needs no compiler-generated pointer maps.
 
 The CBPV value/computation distinction is what makes this design attractive: computation is already stack-shaped,
 while values are inert and can be flattened when they do not need a stable pointer identity.

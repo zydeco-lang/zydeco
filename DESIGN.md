@@ -787,6 +787,31 @@ from movable pointers exactly.
 Opaque scalar blocks are copied but their payload bits are never traced.
 Aligned Rust-owned pointers, such as host strings, are outside both semispaces and remain unchanged.
 
+### Native Garbage Collection
+
+The native runtime uses Cheney copying collection with two fixed 1 MiB semispaces.
+The live graph must fit in one semispace, including block headers; allocation reports out
+of memory when collection cannot make enough room.
+Collection updates the control stack, current environment, and registered host roots, preserving sharing,
+cycles, and word-aligned interior pointers into payloads.
+
+Each semispace has a block-start index that locates the owning header with one index-region read and one header read.
+For each 512-byte region, a bitmap records header starts at word granularity,
+and a predecessor offset identifies a block crossing into that region.
+The collector validates payload bounds before forwarding, so addresses into headers
+or outside allocated space remain unchanged.
+This avoids searching through preceding live or dead blocks for every pointer.
+
+Allocation and copying share the index's block-recording operation.
+It initializes regions as the allocation cursor enters them, replacing stale metadata
+when a semispace is reused; entries beyond the current cursor are never consulted.
+Collection therefore needs neither an index rebuild over dead objects nor a sweep to clear the whole index.
+Lookup work scales with inspected pointer references, while copying, scanning,
+and destination-index maintenance scale with the live graph.
+Each index occupies 32 KiB per 1 MiB semispace, adding 3.125% to the space reservation.
+The implementation and boundary, reuse, and lookup-work regressions live in [runtime/gc.rs](runtime/gc.rs);
+the workspace runs those tests through the `native_gc` target in `zydeco-tests`.
+
 ### Text and Bytes
 
 `String` is immutable UTF-8 text.
