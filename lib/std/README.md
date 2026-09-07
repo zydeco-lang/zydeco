@@ -184,6 +184,7 @@ a future checked-arithmetic capability should make their failure behavior explic
 `Float32` and `Float64` are IEEE-754 binary32 and binary64 values backed by Rust's `f32` and `f64`.
 Decimal and scientific literals use an expected `Float32` or `Float64` type and default to `Float64` otherwise.
 The float modules provide arithmetic, comparisons, negation, and shortest round-trippable decimal rendering.
+The exact spelling follows the shared [numeric representation rules](../../DESIGN.md#numeric-representations).
 Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior.
 In particular, every ordered comparison with NaN is false, while `float32/ne` and `float64/ne` report true.
 

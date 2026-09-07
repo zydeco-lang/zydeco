@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { FloatText } from "./wasm-numeric.mjs";
 
 const WORD_BITS = 64;
 const IMMEDIATE_SIGNED_MIN = -(0x4000_0000_0000_0000n);
@@ -438,7 +439,7 @@ class ZydecoHost {
           Transfers.withoutArguments(predicate(decode(first), decode(second)) ? whenTrue : whenFalse),
         );
       }
-      functions.set(`${name}_to_string`, (word) => this.values.string(String(decode(word))));
+      functions.set(`${name}_to_string`, (word) => this.values.string(FloatText.render(decode(word), width)));
     }
   }
 

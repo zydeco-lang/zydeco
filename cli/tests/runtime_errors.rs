@@ -61,6 +61,38 @@ impl RuntimeFixture {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
+fn float_text_agrees_across_runtime_backends() {
+    let fixture = RuntimeFixture::new();
+    let cases = [
+        ("float32", "add -0.0 -0.0", (-0.0_f32).to_string()),
+        ("float64", "add -0.0 -0.0", (-0.0_f64).to_string()),
+        ("float32", "add 0.1 0.2", (0.1_f32 + 0.2).to_string()),
+        ("float64", "add 0.1 0.2", (0.1_f64 + 0.2).to_string()),
+        ("float32", "add 1e21 0.0", 1e21_f32.to_string()),
+        ("float64", "add 1e21 0.0", 1e21_f64.to_string()),
+        ("float32", "div 1.0 0.0", f32::INFINITY.to_string()),
+        ("float64", "div -1.0 0.0", f64::NEG_INFINITY.to_string()),
+        ("float64", "div 0.0 0.0", f64::NAN.to_string()),
+        ("float32", "add 1e-45 0.0", f32::from_bits(1).to_string()),
+        ("float64", "add 5e-324 0.0", f64::from_bits(1).to_string()),
+        ("float64", "add 1.7976931348623157e308 0.0", f64::MAX.to_string()),
+    ];
+    let body = cases.iter().rev().fold("! process/exit 0".to_owned(), |tail, (group, operation, _)| {
+        format!(
+            "do value <- ! numeric/{group}/{operation}; do text <- ! numeric/{group}/to_string value; ! system/stdio/write_line text {{ {tail} }}"
+        )
+    });
+    let expected = cases.iter().map(|(_, _, text)| format!("{text}\n")).collect::<String>();
+    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+        let output = fixture.run(&body, backend);
+        assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(String::from_utf8_lossy(&output.stdout), expected, "{backend}");
+        assert!(output.stderr.is_empty(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
 fn standard_error_uses_its_own_injected_stream() {
     let fixture = RuntimeFixture::new();
     let body = r#"

@@ -777,6 +777,8 @@ Integer arithmetic wraps within the selected representation, comparisons retain 
 and floating-point operations follow IEEE 754 at the selected width.
 Integer division and remainder by zero stop execution with a clear runtime error and nonzero exit status.
 Signed minimum divided by `-1` wraps to the signed minimum; the corresponding remainder is zero.
+Float `to_string` uses Rust's `Display` spelling at the selected width: the shortest round-tripping decimal
+without exponent notation, with `-0`, `inf`, `-inf`, and `NaN` for the corresponding special values.
 
 An expected numeric type selects a literal's representation.
 Numeric literals use decimal digits, with an optional decimal fraction or complete exponent for floats.
