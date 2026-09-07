@@ -442,10 +442,10 @@ in the `Exn` monad instance to the monadic block.
 
 A caveat is that the monadic blocks don't naturally support any reference
 to variables defined outside the monadic blocks.
-Only compiler-canonical types and terms admitted by the algebra translation may be used directly inside monadic
-blocks. This includes fixed primitives such as `String`, while an abstract provider capability such as `OS`
-must still be passed through the translated interface. Other external terms used in a monadic block must also be
-passed in.
+Only compiler-canonical types and terms admitted by the algebra translation may be used directly inside monadic blocks.
+This includes fixed primitives such as `String`, while an abstract provider capability such
+as `OS` must still be passed through the translated interface.
+Other external terms used in a monadic block must also be passed in.
 Below is an example of a monadic block that raises an exception:
 
 ```zydeco
@@ -477,7 +477,7 @@ To briefly summarize,
 + The computation term translation in Figure 24 is implemented in the function `value_pattern_translation`
   and `computation_translation`
 + The monadic block translation in Figure 25 is implemented through direct invocation of the above functions
-  during the type checking phase in [`lang/statics/src/check/mod.rs`](../../../lang/statics/src/check/mod.rs)
+  during the type checking phase in [`lang/statics/src/check/monadic.rs`](../../../lang/statics/src/check/monadic.rs)
 
 #### Using *Global* Types and Terms in Monadic Blocks
 

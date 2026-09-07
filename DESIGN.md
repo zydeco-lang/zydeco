@@ -489,7 +489,7 @@ so importing and opening it requires neither a thunk nor a returned computation.
 Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` metadata annotation.
 The annotation may attach to any term.
 During type checking, its payload undergoes the algebra translation implemented
-in `lang/statics/src/elaborate/monadic/mod.rs` and invoked from `lang/statics/src/check/mod.rs`.
+in `lang/statics/src/elaborate/monadic/mod.rs` and invoked from `lang/statics/src/check/monadic.rs`.
 
 Each annotated term resolves `Monad` and `Algebra` as ordinary types at its lexical site.
 The checker verifies their expected higher kinds and records the selected constructors in the translation environment.
@@ -573,7 +573,7 @@ lowering therefore does not clone or extend `ScopedArena`.
 Type checking runs inside the session's salsa graph rather than as a free-standing pass.
 The session's `SourceQueryDb` extends the statics crate's `TyckDb` supertrait,
 so the checking queries and the source queries share one database and one revision system.
-The name-resolved program enters the graph as the tracked struct `ScopedData` (`lang/statics/src/query.rs`);
+The name-resolved program enters the graph as the tracked struct `ScopedData` (`lang/statics/src/query/input.rs`);
 `check_source(db, data)` is a tracked query that still runs the wholesale `Tycker` internally,
 and a layer of demand-driven fact queries answers per-node questions from the memoized analysis:
 
@@ -600,12 +600,25 @@ Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable
 `check` owns local kinding and typing rules, `normalize` owns substitution and definitional normalization,
 `elaborate` owns type-directed source translations and shared static value residualization,
 and `validate` owns post-check whole-program properties.
+The `check` facade declares checker state and exports its judgment API; `driver` coordinates source finalization,
+while `source` owns inference regions and reuse of synthesized terms.
+The `term` and `pattern` dispatchers retain administrative guards, expected-annotation preparation,
+and source-fact recording; their syntax-family modules contain the individual checking rules.
+Function witness handling and selective field lookup have their own `functions` and `projection` modules.
+The [checker module guide](lang/statics/src/check/README.md) maps these responsibilities and their internal interfaces.
+
+Normalization separates scope support, substitution, type reduction, inference refinement,
+hole resolution, and filled normalization.
+Query producers are grouped by syntax family, with shared keys in `query::input` and source orchestration
+in `query::source`; their public names remain exported by `query`.
+Static value elaboration likewise separates lexical evaluation, pattern handling, computation traversal,
+and residual representation checks while retaining one evaluator state and one phase boundary.
 Static residualization runs before the typed arena is published, preserving the source graph for queries
 and adding one executable root used by both interpreter linking and SPS lowering.
 The same reducer inspects value structure during dependent application checking to recover visible package witnesses.
 Its supported reductions and resource limits are specified
 in [Compile-Time Normalization](docs/proposals/normalization.md#implementation-status).
-Its coverage pass checks data matches with a typed pattern matrix.
+The coverage pass in `validate` checks data matches with a typed pattern matrix.
 Generalized comatch clauses are first elaborated type-directly into shared argument matches and unique codata arms,
 after which the same pass checks argument coverage and missing destructors along every observation path.
 The [exhaustiveness design note](docs/proposals/exhaustiveness.md) explains matrix specialization,

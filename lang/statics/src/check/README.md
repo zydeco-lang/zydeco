@@ -1,62 +1,71 @@
 # Type Checking
 
 `check` implements Zydeco's bidirectional kind and type checking.
-It consumes scoped surface syntax, elaborates it into typed syntax (kinds, types, values, computations),
-and records the resulting annotations in a `StaticsArena`.
+It consumes scoped surface syntax, elaborates typed kinds, types, values,
+and computations, and records their annotations in a `StaticsArena`.
+A source check also manages lexical scope, inference, source reuse, allocation sites, and diagnostics.
+The module boundaries separate those responsibilities so a rule can be maintained with its semantic mechanism.
 
-## Role in the pipeline
+## Source checking flow
 
-```markdown
-textual -> bitter -> scoped -> check -> validate -+-> dynamics
-                                                  +-> stackir -> assembly -> amd64
-```
+`Tycker` holds the mutable state for one source check.
+`driver` initializes that state, checks the root, closes inference, normalizes and validates the arena,
+and invokes static value elaboration before publishing a checked source.
+`source` owns the resulting source outcomes, local inference regions, and the immutable handles used
+to synthesize a resolved source term once.
 
-The type checker is the first phase that separates term categories and assigns explicit kinds and types.
+Local rules run through the `Tyck` protocol with an `Action` or `PatternAction`.
+Synthesis determines a classifier; analysis checks against an expected classifier.
+The term dispatcher prepares expected annotations and forwards that preparation through transparent wrappers.
+Term and pattern dispatchers retain the task stack, allocation-site entry and exit,
+and source annotation recording around their syntax-specific rules.
+These administrative boundaries preserve source identity and editor facts when a rule invokes another judgment.
 
-After local checking and normalization succeed, `validate::coverage` inspects the typed representation.
-Data matches must cover every inhabitant, including gaps created by nested constructor and product patterns.
-Generalized comatch clauses may mix abstraction patterns and destructors;
-each observation path must cover its arguments and every residual codata type must provide all of its destructors.
+After local inference closes, shared normalization contexts resolve holes and normalize the arena's kinds and types.
+Coverage validates data matches and codata observations.
+Static elaboration then supplies the residual root used by interpreter linking and SPS lowering.
+The phase rules are specified in [Compile-Time Normalization](../../../../docs/proposals/normalization.md).
 
-## Core data structures
+## Checking modules
 
-- `Tycker` is the driver that walks the scoped program, accumulates errors, and builds the `StaticsArena`.
-- `StaticsArena` stores typed nodes (kinds/types/values/computations) along with annotations
-  and auxiliary tables (sealed abstract types, data/codata, globals).
-- `AnnId`/`TermAnnId` carry the inferred or checked annotation for each node.
-- `FillId` and `Fillable<T>` represent type/kind holes that are solved during checking
-  and resolved at the end of the pass.
+| Module | Responsibility |
+| --- | --- |
+| `mod` | Checker state and the public checking API. |
+| `driver` | Source lifecycle, allocation sites, finalization, and diagnostic guards. |
+| `source` | Source outcomes, inference regions, and reuse of synthesized source terms. |
+| `judgment` | Synthesis/analysis modes, expected-annotation provenance, and the `Tyck` protocol. |
+| `binding` | Acyclic bindings, recursive groups, and typed pattern assignment. |
+| `term` | Term dispatch and rules grouped into atomic, structural, function, package, computation, data, and source-boundary modules. |
+| `pattern` | Pattern dispatch, opening scopes, and atomic, named, product, constructor, and alias rules. |
+| `functions` | Function formation, canonical package witnesses, and dependent introduction and application. |
+| `projection` | Field search, delayed substitution, telescope traversal, and selective package opening. |
+| `intrinsics` | Primitive classifiers, intrinsic materialization, and Builtin/foreign metadata registration. |
+| `monadic` | Monadic basis checking and algebra translation of a shared checked payload. |
+| `copattern` | Type-directed elaboration of generalized comatch clauses. |
+| `annotation`, `lub`, `syntactic` | Annotation conversions, type compatibility, and syntactic classification. |
+| `completion` | Expected annotations and compatibility evidence for completion queries. |
+| `error`, `dump` | Structured diagnostics and checker trace rendering. |
 
-## Type checking flow
-
-The top level is processed in SCC order (from the resolver’s dependency graph).
-Declarations are checked in either synthesis or analysis mode, and the checker keeps a task stack (`TyckTask`)
-as an internal trace. Structured user-facing diagnostics select the innermost relevant source task as their primary
-location and retain only semantically useful secondary locations, such as an expected type or sealed definition.
-
-Primitive definitions (e.g., `VType`, `CType`, `Thk`, `Ret`) are registered early
-so internal surface terms can be linked to their typed equivalents.
-
-## Monadic blocks and algebra translation
-
-Monadic blocks are elaborated during type checking via the algebra translation implemented in `monadic`.
-The payload is synthesized once into a shared checked-term handle. The translation consumes that handle through a
-monadic construction API and specialized environments, and every later reference to the resolved block reuses its
-one translated root.
+Keep a new syntax rule in its corresponding term or pattern family.
+Shared witness, projection, inference, and representation operations belong in the module that owns that mechanism;
+callers use its internal interface rather than repeating the rule.
+Expose only the operations needed by the enclosing subsystem, and retain the dispatcher-owned administrative boundaries.
+Regression tests for source reuse, projection, annotation compatibility, completion,
+and term preparation live with their owning modules and share the checker fixture in `tests`.
 
 ## Neighboring statics modules
 
-- `syntax` and `arena`: the durable typed representation and its annotation tables.
-- `environment`: typing, substitution, structure, and monadic environments.
-- `alloc`, `construct`, and `destruct`: typed allocation, construction, and inspection APIs.
-- `normalize`: substitution, hole solving, scope support, and definitional normalization.
-- `elaborate::monadic`: the algebra translation and its specialized construction API.
-- `validate`: whole-program checks over typed syntax, including data/codata coverage and
-  exhaustiveness, plus the type lint whose well-formedness pass re-establishes the finished
-  arena's structural invariants.
-- `fmt` and `source_span`: source-aware formatting and span lookup; the latter remains crate-private.
+`syntax`, `environment`, and `arena` define the durable typed representation.
+`alloc`, `construct`, and `destruct` supply typed allocation, construction, and inspection APIs.
+`normalize` separates scope support, substitution, type reduction, inference refinement, hole resolution,
+and filled normalization; the finalization caches remain shared across arena roots.
 
-The `check` module itself retains the checking rules, structured errors, least-upper-bound operations,
-syntactic queries needed by those rules, and diagnostic dump helpers.
-Its `copattern` component type-directs generalized comatch spines and elaborates them into ordinary typed abstractions,
-matches, and comatches before whole-program coverage validation.
+`query` separates shared database inputs from syntax-family judgment producers and source orchestration.
+It exports those queries through one public module boundary.
+`elaborate::monadic` implements the algebra translation, while `elaborate::static_values` shares evaluator state
+across value reduction, pattern handling, computation traversal, and residual construction and validation.
+
+`validate` consumes typed syntax for coverage and the optional type lint.
+`fmt` and the crate-private `source_span` provide formatting and source-aware diagnostic locations.
+The overall ownership and publication boundaries are described
+in [DESIGN.md](../../../../DESIGN.md#query-based-analysis).

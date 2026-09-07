@@ -1,5 +1,7 @@
 //! Type-directed elaboration of generalized comatch clauses.
 
+use super::functions::PackPiPatternSkolems;
+use super::pattern::CheckedPatternExt;
 use super::*;
 use std::collections::VecDeque;
 
