@@ -4,6 +4,10 @@
 //! checking. Keeping them outside [`crate::check`] lets whole-program static
 //! properties grow without adding more responsibilities to the checker.
 
+/// Readiness of residual runtime terms for execution.
+pub mod executable;
+pub use executable::*;
+
 /// Coverage and exhaustiveness validation for data matches and codata comatches.
 pub mod coverage;
 pub use coverage::*;

@@ -169,6 +169,7 @@ impl ReplEngine {
     fn link_checked(
         program: CheckedProgram,
     ) -> Result<zydeco_dynamics::syntax::DynamicsProgram, ReplLinkError> {
+        zydeco_statics::validate::ExecutionReadiness::check(&program.statics, program.root)?;
         match program.root {
             | TermAnnId::Value(root, _) => {
                 Ok(ValueRootLinker { scoped: program.scoped, statics: program.statics, root }.run())
@@ -370,6 +371,8 @@ enum ComputationEvaluationPlan {
 #[derive(Debug, Error)]
 enum ReplLinkError {
     #[error(transparent)]
+    Hole(#[from] zydeco_statics::validate::ExecutableHole),
+    #[error(transparent)]
     Builtin(#[from] BuiltinPackageError),
     #[error("checked computation root has no runtime entry contract")]
     UnsupportedRoot,
@@ -380,6 +383,28 @@ enum ReplLinkError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_holes_can_be_inspected_but_not_evaluated() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let input = engine
+            .install(
+                SourceNumber::new(1).unwrap(),
+                "let Int64 = @(intrinsic(i64)) in let x : Int64 = _ in ret x".to_owned(),
+            )
+            .unwrap();
+        assert!(matches!(
+            engine.evaluate(&input, ExpressionMode::Type),
+            EvaluationOutcome::Success(_)
+        ));
+        for mode in [ExpressionMode::Evaluate, ExpressionMode::Run] {
+            let EvaluationOutcome::Error(error) = engine.evaluate(&input, mode) else {
+                panic!("a runtime hole must be rejected before evaluation");
+            };
+            assert!(error.contains("unfilled value or computation hole"), "{error}");
+        }
+    }
 
     #[test]
     fn a_numbered_input_can_import_an_earlier_expression() {

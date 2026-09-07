@@ -91,6 +91,12 @@ Text blocks attached to holes supply multi-line string values:
 `--| text` immediately above `@(literal)` replaces the hole with the recovered text as a string literal,
 so embedded prose shares the attachment discipline of repository documentation.
 
+Typed value and computation holes remain available during checking and type inspection.
+Execution and lowering require a complete residual runtime program: a hole reachable through its values,
+thunks, or computations is rejected before any runtime effects occur.
+This check follows static elimination, so holes confined to eliminated static definitions do not block execution.
+Type annotations and wildcard patterns are outside this runtime completeness check.
+
 ### Lexical and Block Bindings
 
 `param P in body` introduces an abstraction, and `let P = value in body` introduces a lexical binding.

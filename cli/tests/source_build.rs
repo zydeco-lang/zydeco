@@ -1,5 +1,58 @@
 use std::{path::PathBuf, process::Command};
 
+#[test]
+fn typed_holes_are_inspectable_but_rejected_before_execution_or_lowering() {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("hole.zy");
+    for hole in ["_", "0"] {
+        std::fs::write(&source, format!(
+            "param (/Int64; /process) : @(import(\"{}\")) in let x : Int64 = {hole} in ! process/exit x",
+            workspace.join("lib/std/builtin.zy").display()
+        )).unwrap();
+        let checked =
+            Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("check").arg(&source).output().unwrap();
+        assert!(checked.status.success(), "{}", String::from_utf8_lossy(&checked.stderr));
+        for arguments in [
+            vec!["run"],
+            vec!["run", "--dry"],
+            vec!["build", "--target", "zir"],
+            vec!["build", "--target", "wasm-am"],
+            vec!["build", "--target", "wasm-sps"],
+        ] {
+            // Successful builds only need the IR target; failures must stop before emission.
+            if hole == "0" && arguments.last().is_some_and(|arg| arg.starts_with("wasm")) {
+                continue;
+            }
+            let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+                .args(&arguments)
+                .arg(&source)
+                .output()
+                .unwrap();
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(output.status.success(), hole == "0", "{arguments:?}: {error}");
+            if hole == "_" {
+                assert!(
+                    error.contains("unfilled value or computation hole"),
+                    "{arguments:?}: {error}"
+                );
+                assert!(!error.contains("panicked"));
+            }
+        }
+    }
+    std::fs::write(&source, format!(
+        "param (/Int64; /process) : @(import(\"{}\")) in let val unused (x : Int64) : Int64 = _ in ! process/exit 0",
+        workspace.join("lib/std/builtin.zy").display()
+    )).unwrap();
+    let output =
+        Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("run").arg(&source).output().unwrap();
+    assert!(
+        output.status.success(),
+        "an eliminated static function must not make the executable incomplete: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn partial_patterns_report_runtime_failure_across_backends() {

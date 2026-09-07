@@ -59,7 +59,8 @@ impl TermChecker<'_> {
                     TermAnnId::Type(ty, kd)
                 }
                 | Switch::Ana(AnnId::Type(ty)) => {
-                    // a hole in either value or computation; like undefined in Haskell
+                    // Preserve typed holes for inspection; execution readiness rejects
+                    // any that remain in the residual runtime program.
                     let kd = tycker.statics.type_kind(ty);
                     match tycker.kind_filled_k(&kd)?.to_owned() {
                         | ss::Kind::VType(ss::VType) => {
