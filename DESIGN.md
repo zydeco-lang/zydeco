@@ -822,6 +822,11 @@ These are distinct from grapheme clusters and from compiler source spans, which 
 `Char` is one Unicode scalar value.
 `Bytes` is an immutable octet sequence with no implicit encoding, and its indices and lengths count bytes.
 
+String and character literals share the escapes `\\`, `\"`, `\'`, `\n`, `\r`, `\t`, and `\0`.
+Unicode escapes use `\u{...}` with one to six hexadecimal digits denoting a Unicode scalar value;
+surrogates and values above `U+10FFFF` are rejected.
+Unknown or incomplete escapes are source errors.
+
 Builtin operations report invalid observations through computation-polymorphic branches.
 The library reifies those branches as `Option` for operations such as indexing,
 splitting, parsing, and codepoint conversion, or as `Result` for fallible I/O.

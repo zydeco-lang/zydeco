@@ -91,7 +91,7 @@ pub enum Tok<'input> {
     #[regex(r#""(?&string_char)*\\?"#)]
     #[token_metadata(skip)]
     UnterminatedString(&'input str),
-    #[regex(r#"'([ -~]|\\[nrt'|(\\)])'"#, priority = 3)]
+    #[regex(r"'([^\\\r\n]|\\[^\r\n]|\\u\{[^'\r\n]*\})'", priority = 3)]
     CharLit(&'input str),
     #[regex(r"'[^'\n\r]*'?", priority = 1)]
     #[token_metadata(skip)]

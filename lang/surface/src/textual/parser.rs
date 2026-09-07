@@ -1,5 +1,6 @@
 use super::{
     LexicalTokenKind, LexicalTokens,
+    escape::{EscapeError, LiteralEscapes},
     lexer::{Lexer, LexicalError, Tok, TokenKind},
     syntax::{
         EntityId, FloatLiteral, Hole, IntegerLiteral, Parser, PatId, Pattern, SourceUnit, Sp, Term,
@@ -29,6 +30,8 @@ pub enum LiteralError {
     Float(#[source] std::num::ParseFloatError),
     #[error("float literal exceeds the finite Float64 range")]
     FloatOutOfRange,
+    #[error(transparent)]
+    Escape(#[from] EscapeError),
     #[error("metadata integer must fit in a signed 64-bit integer: {0}")]
     MetadataInteger(#[source] std::num::ParseIntError),
 }
@@ -68,6 +71,16 @@ impl LiteralParser {
             range: self.range,
             error: LiteralError::MetadataInteger(error),
         })
+    }
+
+    pub(crate) fn string(self, source: &str) -> Result<String, LiteralFailure> {
+        LiteralEscapes::string(&source[1..source.len() - 1])
+            .map_err(|error| LiteralFailure { range: self.range, error: error.into() })
+    }
+
+    pub(crate) fn character(self, source: &str) -> Result<char, LiteralFailure> {
+        LiteralEscapes::character(&source[1..source.len() - 1])
+            .map_err(|error| LiteralFailure { range: self.range, error: error.into() })
     }
 }
 

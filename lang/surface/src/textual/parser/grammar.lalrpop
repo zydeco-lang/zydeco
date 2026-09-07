@@ -1,5 +1,5 @@
 use crate::textual::{
-    syntax::*, lexer::*, escape::self,
+    syntax::*, lexer::*,
     parser::{LiteralFailure, LiteralParser, ParsedNode, ParserToken, RecoveryAccumulator},
 };
 
@@ -112,10 +112,12 @@ Integer: IntegerLiteral = <start:@L> <value:"IntLit"> <end:@R> =>? {
 Float: FloatLiteral = <start:@L> <value:"FloatLit"> <end:@R> =>? {
     Ok(LiteralParser { range: start..end }.float(value)?)
 };
-String: String = <s:"StrLit"> => {
-    escape::apply_string_escapes(&s[1..s.len()-1])
+String: String = <start:@L> <value:"StrLit"> <end:@R> =>? {
+    Ok(LiteralParser { range: start..end }.string(value)?)
 };
-Char: char = <"CharLit"> => escape::apply_char_escapes(<>);
+Char: char = <start:@L> <value:"CharLit"> <end:@R> =>? {
+    Ok(LiteralParser { range: start..end }.character(value)?)
+};
 
 Literal: Literal = {
     <Integer> => <>.into(),

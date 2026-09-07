@@ -2704,6 +2704,17 @@ mod tests {
     }
 
     #[test]
+    fn escaped_literals_preserve_their_values_when_formatted() {
+        for source in [r#""a\0b\u{1F600}\u{7}""#, r"'\0'", r"'\u{1f600}'", r"'\u{10ffff}'"] {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+            assert_eq!(reparsed.render(LayoutIntentions::Preserve), formatted);
+        }
+    }
+
+    #[test]
     fn deeply_nested_groups_share_layout_documents() {
         let depth = 128;
         let grouped = format!("{}0{}", "(".repeat(depth), ")".repeat(depth));

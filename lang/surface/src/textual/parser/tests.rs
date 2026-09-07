@@ -6,6 +6,72 @@ use super::*;
 use strum::VariantArray;
 
 #[test]
+fn strings_and_characters_decode_the_same_escapes() {
+    for (escaped, expected) in [
+        (r"\0", '\0'),
+        (r"\n", '\n'),
+        (r"\r", '\r'),
+        (r"\t", '\t'),
+        (r"\\", '\\'),
+        (r"\'", '\''),
+        (r#"\""#, '"'),
+        (r"\u{0}", '\0'),
+        (r"\u{1F600}", '😀'),
+        (r"\u{10ffff}", '\u{10ffff}'),
+        ("é", 'é'),
+    ] {
+        let mut parser = Parser::new();
+        let source = format!("'{escaped}'");
+        let unit = StrictParser::source(&source, &mut parser).unwrap();
+        assert!(
+            matches!(
+                parser.arena.terms[&unit.root],
+                Term::Lit(super::super::syntax::Literal::Char(character)) if character == expected
+            ),
+            "{source}"
+        );
+
+        let mut parser = Parser::new();
+        let source = format!("\"a{escaped}b\"");
+        let unit = StrictParser::source(&source, &mut parser).unwrap();
+        let Term::Lit(super::super::syntax::Literal::String(value)) =
+            &parser.arena.terms[&unit.root]
+        else {
+            panic!("expected a string literal")
+        };
+        assert_eq!(value.as_str(), format!("a{expected}b"));
+    }
+}
+
+#[test]
+fn invalid_escapes_are_rejected_with_literal_spans() {
+    for (escaped, error) in [
+        (r"\q", EscapeError::Unknown('q')),
+        (r"\x", EscapeError::Unknown('x')),
+        (r"\u{}", EscapeError::UnicodeSyntax),
+        (r"\u{xyz}", EscapeError::UnicodeSyntax),
+        (r"\u{0000000}", EscapeError::UnicodeSyntax),
+        (r"\u{d800}", EscapeError::UnicodeScalar(0xd800)),
+        (r"\u{110000}", EscapeError::UnicodeScalar(0x110000)),
+    ] {
+        for quote in ['"', '\''] {
+            let source = format!("ret {quote}{escaped}{quote}");
+            let failure = StrictParser::source(&source, &mut Parser::new()).unwrap_err();
+            let issue = failure.issues().next().unwrap();
+            assert_eq!(issue.range, Some(4..source.len()), "{source}");
+            assert_eq!(
+                issue.kind,
+                ParseIssueKind::Literal { error: LiteralError::Escape(error.clone()) },
+                "{source}"
+            );
+        }
+    }
+    for source in [r#""\u""#, r#""\u{123""#, r"'ab'", r"''", "\"unfinished\\"] {
+        assert!(StrictParser::source(source, &mut Parser::new()).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn float_literals_reject_overflow_but_accept_finite_rounding() {
     for literal in ["1e400", "-1e400", "1.7976931348623159e308"] {
         let source = format!("ret {literal}");
