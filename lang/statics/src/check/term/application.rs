@@ -302,10 +302,12 @@ impl TermChecker<'_> {
                 std::panic::Location::caller(),
             )?;
             let (binder, binder_ty) = {
-                let ss::Type::App(ret_app_body_ty) = tycker.type_filled_k(&binder_ty)? else {
-                    unreachable!()
+                let thunk_hole = tycker.thk_hole(&self.info, self.inner);
+                let thunk_ty = Lub::lub_k(thunk_hole, binder_ty, tycker)?;
+                let ss::Type::App(thunk_app_body_ty) = tycker.type_filled_k(&thunk_ty)? else {
+                    unreachable!("a fixpoint binder was checked against a thunk type")
                 };
-                let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
+                let ss::App(_thunk_ty, body_ty) = thunk_app_body_ty;
                 (binder, body_ty)
             };
             let body_out_ann = TyEnvT::new(binder_elaboration.info.clone(), body)

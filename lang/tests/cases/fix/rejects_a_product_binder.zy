@@ -1,0 +1,3 @@
+-- expect: reject(tyck.type-mismatch)
+
+fix (loop : Int64 * Int64) => ret 0

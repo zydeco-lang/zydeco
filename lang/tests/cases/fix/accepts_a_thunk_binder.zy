@@ -1,0 +1,1 @@
+fix (loop : Thk (Ret Int64)) => ret 0
