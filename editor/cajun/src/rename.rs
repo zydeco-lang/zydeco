@@ -3,7 +3,7 @@ use tower_lsp::{
     jsonrpc,
     lsp_types::{Location, TextEdit, Url, WorkspaceEdit},
 };
-use zydeco_surface::textual::{LexicalToken, LexicalTokenKind, LexicalTokens};
+use zydeco_surface::textual::{LexicalTokenKind, LexicalTokens};
 
 /// The JSON-RPC code carrying LSP's `RequestFailed`, whose message clients
 /// display when a rename cannot proceed.
@@ -50,7 +50,7 @@ pub(crate) enum RenameRejection {
     /// The symbol's definition has no textual site, so a rewrite could not
     /// stay consistent.
     Synthesized,
-    /// The replacement contains no identifier at all.
+    /// The replacement is an empty string.
     Empty,
     /// The replacement would not lex as one identifier of the original class.
     Lexical { proposed: String, class: NameClass },
@@ -98,12 +98,17 @@ impl Renamer {
     /// parser applies.
     pub(crate) fn adopt(current: &str, replacement: &str) -> Result<Self, RenameRejection> {
         let class = NameClass::of(current);
-        match LexicalTokens::new(replacement).collect::<Vec<_>>().as_slice() {
-            | [] => Err(RenameRejection::Empty),
-            | [LexicalToken { kind: LexicalTokenKind::Keyword, .. }] => {
+        // Tooling skips some invalid spans. Require one token to cover the
+        // entire replacement so skipped errors or whitespace cannot validate it.
+        let token = LexicalTokens::new(replacement)
+            .next()
+            .filter(|token| token.range == (0..replacement.len()));
+        match token.map(|token| token.kind) {
+            | None if replacement.is_empty() => Err(RenameRejection::Empty),
+            | Some(LexicalTokenKind::Keyword) => {
                 Err(RenameRejection::Reserved { proposed: replacement.to_owned() })
             }
-            | [LexicalToken { kind, .. }] if class.describes(*kind) => {
+            | Some(kind) if class.describes(kind) => {
                 Ok(Self { replacement: replacement.to_owned() })
             }
             | _ => Err(RenameRejection::Lexical { proposed: replacement.to_owned(), class }),
@@ -131,6 +136,7 @@ mod tests {
     #[test]
     fn replacements_preserve_the_name_class() {
         assert!(Renamer::adopt("answer", "result").is_ok());
+        assert!(Renamer::adopt("answer", "result2").is_ok());
         assert!(Renamer::adopt("answer", "_hidden").is_ok());
         assert!(Renamer::adopt("answer", "x'").is_ok());
         assert!(Renamer::adopt("Nat", "Nat2").is_ok());
@@ -150,15 +156,41 @@ mod tests {
 
     #[test]
     fn replacements_must_lex_as_single_identifier_tokens() {
-        ["let", "+Some", ".next", "#field", "1x", "two words", ""].into_iter().for_each(|bad| {
-            let expected = if bad == "let" {
-                RenameRejection::Reserved { proposed: bad.to_owned() }
-            } else if bad.is_empty() {
-                RenameRejection::Empty
-            } else {
-                RenameRejection::Lexical { proposed: bad.to_owned(), class: NameClass::Lower }
-            };
-            assert_eq!(Renamer::adopt("answer", bad), Err(expected));
-        });
+        ["let", "+Some", ".next", "#field", "_", "1x", "0x1F", "1e", "$", "two words", ""]
+            .into_iter()
+            .for_each(|bad| {
+                let expected = if bad == "let" {
+                    RenameRejection::Reserved { proposed: bad.to_owned() }
+                } else if bad.is_empty() {
+                    RenameRejection::Empty
+                } else {
+                    RenameRejection::Lexical { proposed: bad.to_owned(), class: NameClass::Lower }
+                };
+                assert_eq!(Renamer::adopt("answer", bad), Err(expected), "{bad:?}");
+            });
+    }
+
+    #[test]
+    fn replacements_must_cover_the_entire_input() {
+        for bad in [
+            "$result",
+            "result$",
+            "1x result",
+            "result 1x",
+            "$let",
+            "let$",
+            " result",
+            "result ",
+            " ",
+            "\t\n",
+            "/- comment -/result",
+            "result -- comment",
+        ] {
+            assert_eq!(
+                Renamer::adopt("answer", bad),
+                Err(RenameRejection::Lexical { proposed: bad.to_owned(), class: NameClass::Lower }),
+                "{bad:?}"
+            );
+        }
     }
 }
