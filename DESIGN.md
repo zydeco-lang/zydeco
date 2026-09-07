@@ -694,6 +694,8 @@ compiler diagnostics retain a primary location, stable code, and optional semant
 Unsolved classifiers render as `_`.
 A primary error suppresses follow-on missing-solution messages for its failed expression
 and enclosing inferred classifiers; unrelated holes remain visible.
+Nominal mismatches distinguish the two abstract identities within the diagnostic and label their source introductions,
+so repeated names still identify the relevant seals, package openings, or type parameters.
 The checker task stack remains an internal trace. CLI and TUI render the diagnostics with Ariadne,
 while Cajun converts byte spans to the client's UTF-16 positions at the LSP boundary.
 Document revisions invalidate stale completion responses.

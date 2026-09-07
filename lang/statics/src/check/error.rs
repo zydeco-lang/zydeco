@@ -7,6 +7,9 @@ use zydeco_utils::span::Span;
 
 pub use zydeco_utils::err::*;
 
+mod nominal;
+use nominal::NominalMismatch;
+
 /// The shape required at the next step of a generalized copattern clause.
 #[derive(Debug, Clone, Copy)]
 pub enum CopatternStepKind {
@@ -379,11 +382,7 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::KindMismatch => "Kind mismatch".to_string(),
             | TyckError::TypeMismatch { expected, found } => {
-                format!(
-                    "Type mismatch: expected {}\n, found {}",
-                    self.pretty_statics_nested(expected, "\t"),
-                    self.pretty_statics_nested(found, "\t")
-                )
+                self.error_message(&TyckError::TypeMismatch { expected, found })
             }
             | TyckError::TypeExpected { expected, found } => {
                 format!(
@@ -748,11 +747,11 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::KindMismatch => "Kind mismatch".to_string(),
             | TyckError::TypeMismatch { expected, found } => {
-                format!(
+                NominalMismatch::new(self, error).map_or_else(|| format!(
                     "Type mismatch: expected {}, found {}",
                     self.pretty_statics_nested(*expected, ""),
                     self.pretty_statics_nested(*found, "")
-                )
+                ), |mismatch| mismatch.message(self))
             }
             | TyckError::TypeExpected { expected, found } => {
                 format!(
@@ -968,6 +967,9 @@ impl<'a> Tycker<'a> {
         &self, error: &TyckError, stack: &rpds::VectorSync<TyckTask>,
     ) -> Vec<String> {
         match error {
+            | TyckError::TypeMismatch { .. } if NominalMismatch::new(self, error).is_some() => {
+                vec![NominalMismatch::help()]
+            }
             | TyckError::MissingAnnotation => match self.missing_annotation_subject(stack) {
                 | MissingAnnotationSubject::Constructor(_) => vec![
                     "add a type ascription to the constructor or otherwise provide an expected type"
@@ -1047,6 +1049,13 @@ impl<'a> Tycker<'a> {
             related.push(TyckDiagnosticLabel { span, message: message.to_owned() });
         };
         match &error {
+            | TyckError::TypeMismatch { .. } => {
+                if let Some(mismatch) = NominalMismatch::new(self, &error) {
+                    for (span, message) in mismatch.labels(self) {
+                        add_related(span, message);
+                    }
+                }
+            }
             | TyckError::MissingSolution(fills) | TyckError::UnconstrainedInference(fills) => {
                 let message = if matches!(error, TyckError::MissingSolution(_)) {
                     "this hole also needs a solution"

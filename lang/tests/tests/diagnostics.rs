@@ -3,6 +3,47 @@ use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::{CaseError, SourceCase};
 
 #[test]
+fn nominal_type_mismatches_identify_their_distinct_source_bindings() {
+    for (body, origin) in [
+        (
+            "let Package = exists (X : VType) . X in fn (p : Package) (q : Package) => let (X, x) = p in let (X, y) = q in do _ <- (ret x : Ret X); ret ()",
+            "opened here",
+        ),
+        (
+            "let A = (def X : VType = Int64 in X) in let B = (def X : VType = Int64 in X) in fn (x : A) => (ret x : Ret B)",
+            "sealed here",
+        ),
+    ] {
+        let result = SourceCase::check(body);
+        let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
+            panic!("expected a type error for {body}: {result:?}");
+        };
+        let errors = analysis.outcome().diagnostics().unwrap();
+        let error =
+            errors.iter().find(|error| error.code == TyckDiagnosticCode::TypeMismatch).unwrap();
+        assert!(error.message.contains("X (identity 1)"), "{error:?}");
+        assert!(error.message.contains("X (identity 2)"), "{error:?}");
+        assert!(
+            error.help.iter().any(|help| help.contains("distinct abstract types")),
+            "{error:?}"
+        );
+        assert_eq!(error.related.len(), 2, "{error:?}");
+        assert_ne!(error.related[0].span, error.related[1].span);
+        for label in &error.related {
+            assert!(label.message.contains(origin), "{label:?}");
+            let (file, range) = analysis.spans().source_map().unwrap().range(label.span).unwrap();
+            assert_eq!(&file.source()[range], "X");
+        }
+    }
+    for body in [
+        "let Package = exists (X : VType) . X in fn (p : Package) => let (X, x) = p in do _ <- (ret x : Ret X); ret ()",
+        "let A = (def X : VType = Int64 in X) in let B = A in fn (x : A) => (ret x : Ret B)",
+    ] {
+        SourceCase::assert_accepted(SourceCase::check_linted(body));
+    }
+}
+
+#[test]
 fn incomplete_type_diagnostics_keep_independent_holes_without_cascades() {
     for (body, primary) in [
         ("let x : Int64 = { _ } in ret x", TyckDiagnosticCode::TypeMismatch),
