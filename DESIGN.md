@@ -885,6 +885,7 @@ so higher-order control does not require tail-call or function-reference proposa
 
 The reusable variable environment, one-megabyte operand/control stack, products,
 closure packages, and boxed 64-bit scalars live in linear memory.
+Exhausting or underflowing this stack reports a runtime error through the shared host ABI.
 Products currently use a growing bump heap rather than a collector; ZASM products marked
 for stack allocation are conservatively placed in that heap as well.
 
@@ -906,7 +907,8 @@ Generated modules import builtins from the `zydeco` namespace through these type
 The additional `string_literal(i32, i32) -> i64` import receives an offset and UTF-8 byte length
 in exported memory and returns the host's opaque string value.
 The mandatory `runtime_error(i32) -> ()` import reports fatal language errors.
-Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`; code `1` means pattern-match failure.
+Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`: `1` means pattern-match failure,
+`2` operand/control stack overflow, and `3` stack underflow.
 The host must report the error and stop execution unsuccessfully.
 Generated code traps if the host returns. Each module exports `entry`, the conventional `_start` alias,
 and `memory`, but the embedding must supply the imports before invoking either function.

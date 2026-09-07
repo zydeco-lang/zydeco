@@ -321,7 +321,12 @@ class ZydecoHost {
     const functions = new Map();
     // Error codes are defined by zydeco-wasm-common's RuntimeFailure ABI.
     functions.set("runtime_error", (code) => {
-      const message = code === 1 ? "pattern match failed" : `unknown runtime error ${code}`;
+      const messages = {
+        1: "pattern match failed",
+        2: "operand/control stack overflow",
+        3: "operand/control stack underflow",
+      };
+      const message = messages[code] ?? `unknown runtime error ${code}`;
       ZydecoHost.fail(message);
     });
     functions.set("string_literal", (offset, length) => this.stringLiteral(offset, length));

@@ -22,7 +22,7 @@ impl RuntimeFixture {
         std::fs::write(
             &source,
             format!(
-                "param (/OS; /Int64; /numeric; /process; /system) : @(import(\"{}\")) in {body}\n",
+            "param (/OS; /Ret; /Int64; /numeric; /process; /system) : @(import(\"{}\")) in {body}\n",
                 self.workspace.join("lib/std/builtin.zy").display(),
             ),
         )
@@ -56,6 +56,22 @@ impl RuntimeFixture {
         assert!(diagnostic.contains(expected), "{context}: {diagnostic}");
         assert!(!diagnostic.contains("panicked"), "{context}: {diagnostic}");
         assert!(output.stdout.is_empty(), "{context}: must not produce stdout");
+    }
+}
+
+#[test]
+fn wasm_machine_stack_overflow_has_a_runtime_diagnostic() {
+    let fixture = RuntimeFixture::new();
+    for depth in [200, 100_000] {
+        let body = format!(
+            "let fix count (n : Int64) : Ret Int64 = ! numeric/int64/eq (Ret Int64) n 0 {{ ret 0 }} {{ do next <- ! numeric/int64/sub n 1; do result <- ! count next; ! numeric/int64/add result 1 }} in do result <- ! count {depth}; ! process/exit 0"
+        );
+        let output = fixture.run(&body, "wasm-am");
+        if depth == 200 {
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        } else {
+            RuntimeFixture::assert_failure(output, "operand/control stack overflow", "wasm-am");
+        }
     }
 }
 

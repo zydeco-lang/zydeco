@@ -404,7 +404,7 @@ impl<'a> ModuleEncoder<'a> {
         function.instruction(&WasmInstruction::I32Const(self.plan.layout.heap_base as i32));
         function.instruction(&WasmInstruction::I32GeU);
         function.instruction(&WasmInstruction::If(BlockType::Empty));
-        function.instruction(&WasmInstruction::Unreachable);
+        RuntimeFailure::StackOverflow.emit(&mut function);
         function.instruction(&WasmInstruction::End);
         function.instruction(&WasmInstruction::GlobalGet(STACK_POINTER_GLOBAL));
         function.instruction(&WasmInstruction::LocalGet(0));
@@ -423,7 +423,7 @@ impl<'a> ModuleEncoder<'a> {
         function.instruction(&WasmInstruction::I32Const(self.plan.layout.stack_base as i32));
         function.instruction(&WasmInstruction::I32LeU);
         function.instruction(&WasmInstruction::If(BlockType::Empty));
-        function.instruction(&WasmInstruction::Unreachable);
+        RuntimeFailure::StackUnderflow.emit(&mut function);
         function.instruction(&WasmInstruction::End);
         function.instruction(&WasmInstruction::GlobalGet(STACK_POINTER_GLOBAL));
         function.instruction(&WasmInstruction::I32Const(WORD_BYTES as i32));
