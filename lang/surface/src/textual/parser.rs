@@ -27,6 +27,8 @@ pub enum LiteralError {
     Integer,
     #[error("invalid float literal: {0}")]
     Float(#[source] std::num::ParseFloatError),
+    #[error("float literal exceeds the finite Float64 range")]
+    FloatOutOfRange,
     #[error("metadata integer must fit in a signed 64-bit integer: {0}")]
     MetadataInteger(#[source] std::num::ParseIntError),
 }
@@ -51,10 +53,14 @@ impl LiteralParser {
     }
 
     pub(crate) fn float(self, source: &str) -> Result<FloatLiteral, LiteralFailure> {
-        source.parse::<f64>().map(Into::into).map_err(|error| LiteralFailure {
-            range: self.range,
+        let value = source.parse::<f64>().map_err(|error| LiteralFailure {
+            range: self.range.clone(),
             error: LiteralError::Float(error),
-        })
+        })?;
+        if !value.is_finite() {
+            return Err(LiteralFailure { range: self.range, error: LiteralError::FloatOutOfRange });
+        }
+        Ok(value.into())
     }
 
     pub(crate) fn metadata_integer(self, source: &str) -> Result<i64, LiteralFailure> {

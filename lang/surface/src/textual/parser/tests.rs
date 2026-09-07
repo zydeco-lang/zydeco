@@ -5,6 +5,21 @@ mod recovery;
 use super::*;
 use strum::VariantArray;
 
+#[test]
+fn float_literals_reject_overflow_but_accept_finite_rounding() {
+    for literal in ["1e400", "-1e400", "1.7976931348623159e308"] {
+        let source = format!("ret {literal}");
+        let failure = StrictParser::source(&source, &mut Parser::new())
+            .expect_err("overflowing literals must not become unprintable infinities");
+        let issue = failure.issues().next().unwrap();
+        assert_eq!(issue.range, Some(4..source.len()));
+        assert_eq!(issue.kind, ParseIssueKind::Literal { error: LiteralError::FloatOutOfRange });
+    }
+    for literal in ["0.0", "-0.0", "1.7976931348623157e308", "5e-324", "1e-400"] {
+        assert!(StrictParser::source(literal, &mut Parser::new()).is_ok(), "{literal}");
+    }
+}
+
 struct RejectionAssertions;
 
 impl RejectionAssertions {

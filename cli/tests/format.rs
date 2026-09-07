@@ -1,6 +1,18 @@
 use std::{fs, process::Command};
 
 #[test]
+fn fmt_rejects_overflowing_float_literals_without_rewriting_the_source() {
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("overflow.zy");
+    let source = "1e400\n";
+    fs::write(&file, source).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("fmt").arg(&file).output().unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("finite Float64 range"));
+    assert_eq!(fs::read_to_string(file).unwrap(), source);
+}
+
+#[test]
 fn fmt_formats_each_source_file_in_place() {
     let directory = tempfile::tempdir().unwrap();
     let first = directory.path().join("first.zy");

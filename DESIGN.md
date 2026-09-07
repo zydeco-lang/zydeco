@@ -766,8 +766,10 @@ Integer arithmetic wraps within the selected representation, comparisons retain 
 and floating-point operations follow IEEE 754 at the selected width.
 
 An expected numeric type selects a literal's representation.
-Integer literals must fit that representation; floating-point literals are rounded to the selected width,
-and narrowing a finite literal to `Float32` rejects overflow.
+Integer literals must fit that representation; floating-point literals are rounded
+to the selected width, including subnormal rounding and underflow to zero.
+Literals that overflow the finite `Float64` range are rejected during parsing,
+and narrowing a finite literal to `Float32` also rejects overflow.
 When no expected type selects a representation, integer literals synthesize `Int64`
 and decimal literals synthesize `Float64`.
 There are no implicit conversions between numeric types for existing values.
