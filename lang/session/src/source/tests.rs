@@ -100,9 +100,11 @@ impl SourceChecked {
             }));
         };
         let Fillable::Done(Type::PackPi(signature)) = self.statics.types_pre[&ty].clone() else {
-            return Err(TestPipelineError::Executable(ExecutableError::NonBuiltinExecutable {
-                found: ty,
-            }));
+            return Err(TestPipelineError::Executable(ExecutableError::non_builtin(
+                &self.scoped,
+                &self.statics,
+                ty,
+            )));
         };
         let arena = zydeco_dynamics::BuiltinRootLinker {
             scoped: self.scoped,
@@ -139,9 +141,11 @@ impl SourceChecked {
             }));
         };
         let Fillable::Done(Type::PackPi(signature)) = self.statics.types_pre[&ty].clone() else {
-            return Err(TestPipelineError::Executable(ExecutableError::NonBuiltinExecutable {
-                found: ty,
-            }));
+            return Err(TestPipelineError::Executable(ExecutableError::non_builtin(
+                &self.scoped,
+                &self.statics,
+                ty,
+            )));
         };
         let Self { spans, scoped, statics, root: _ } = self;
         let stackir =

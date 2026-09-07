@@ -1,6 +1,22 @@
 use std::{path::PathBuf, process::Command};
 
 #[test]
+fn non_executable_roots_report_their_source_type() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("library.zy");
+    for body in ["ret 0", "let Int64 = @(intrinsic(i64)) in fn (x : Int64) => ret x"] {
+        std::fs::write(&source, body).unwrap();
+        let output =
+            Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("run").arg(&source).output().unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(error.contains("package-dependent root"), "{error}");
+        assert!(error.contains("Ret") && error.contains("Int64"), "{error}");
+        assert!(!error.contains("TypeId") && !error.contains("#"), "{error}");
+    }
+}
+
+#[test]
 fn typed_holes_are_inspectable_but_rejected_before_execution_or_lowering() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let directory = tempfile::tempdir().unwrap();

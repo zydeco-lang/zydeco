@@ -145,8 +145,17 @@ pub enum ExecutableError {
     Materialize,
     #[error("cannot execute or lower a source root classified as {found}")]
     NonComputation { found: CheckedRootSort },
-    #[error("Builtin execution requires a package-dependent root, but found type {found:?}")]
-    NonBuiltinExecutable { found: zydeco_statics::syntax::TypeId },
+    #[error("Builtin execution requires a package-dependent root, but found type {found}")]
+    NonBuiltinExecutable { found: String },
+}
+
+impl ExecutableError {
+    pub(super) fn non_builtin(
+        scoped: &ScopedArena, statics: &StaticsArena, ty: zydeco_statics::syntax::TypeId,
+    ) -> Self {
+        use zydeco_statics::fmt::{Formatter, Ugly};
+        Self::NonBuiltinExecutable { found: ty.ugly(&Formatter::new(scoped, statics)) }
+    }
 }
 
 /// A failure in a phase that prevents type checking from starting.
@@ -394,7 +403,7 @@ impl CompilerSession {
             return Err(ExecutableError::NonComputation { found: root.into() });
         };
         let Fillable::Done(Type::PackPi(signature)) = statics.types_pre[&ty].clone() else {
-            return Err(ExecutableError::NonBuiltinExecutable { found: ty });
+            return Err(ExecutableError::non_builtin(&scoped, &statics, ty));
         };
         Ok(ExecutableProgram { spans, scoped, statics, root, signature: *signature })
     }
