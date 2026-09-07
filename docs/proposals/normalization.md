@@ -146,6 +146,50 @@ The [value-function implementation account](value-pi.md#implementation-boundary)
 and [package implementation account](package-modularization.md#current-implementation-and-validation) record
 the construct-specific regression cases and remaining optimizations.
 
+## Residual Primitive Calls
+
+Primitive operations retain their computation types and thunked package fields.
+For example, integer addition is supplied as `Thk (Int64 -> Int64 -> Ret Int64)`.
+This lets a program store an operation, choose it dynamically, or pass it to a computation parameter.
+When the compiler knows which primitive is being forced, that interface need not allocate a runtime thunk.
+
+High SPS initially represents a primitive as a closure whose body calls the external operation on its incoming stack.
+Before closure conversion, `sps::normalize` propagates knowledge of these suspended calls
+through lexical aliases, products and their projections, and constructor payloads.
+It applies the following reductions, where `S` is the supplied stack and `•` is the ambient stack:
+
+```text
+force (closure • => extern f •) S  ==>  extern f S
+let arg(p) :: • = arg(v) :: • in M  ==>  let p = v in M
+return v to (kont p => M)           ==>  let p = v in M
+```
+
+The force rule also applies when lexical facts identify the callee through a variable or package projection.
+The argument rule requires the residual stack to be the same ambient stack;
+other argument bindings remain explicit, while still forwarding facts about a visible argument.
+The return rule binds the returned value once, preserving sharing if the continuation uses it repeatedly.
+Unused value bindings disappear after these reductions when constructing the bindee is discardable.
+Suspended computations are discardable, but intrinsic value operations remain evaluated even
+when their results are unused, because they can trap.
+
+These are optional backend reductions over checked residual code.
+They preserve the supplied argument and continuation stack, the order and number of external calls,
+and the suspension of computations inside values.
+A primitive that escapes as a value keeps its thunk; a dynamically selected callee keeps its indirect force.
+The pass does not unfold recursion or inline general computation bodies.
+It rebuilds each surviving source subtree once and preserves the lexical ownership
+and branch-join invariant required by closure conversion.
+
+The result is a direct external operation in SPSLow, shared by all compiled backends. Numeric decoding,
+wrapping, and boxing still follow the [runtime representation](../../DESIGN.md#numeric-representations).
+Removing the primitive thunk therefore does not promise a single machine instruction:
+instruction selection and scalar representation optimizations remain backend work.
+The reference interpreter continues to execute the original residual computation interface.
+
+The Stack IR unit tests cover suspended and indirect calls, product suffixes, runtime sharing, and trapping values.
+The Builtin integration tests check that direct and library-aliased addition have no closure package or indirect force,
+while a primitive returned by a runtime branch keeps both and executes on every backend.
+
 ## Package Signatures
 
 A package signature is an ordered telescope whose later entries may refer to earlier type entries.

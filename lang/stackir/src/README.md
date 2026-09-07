@@ -9,23 +9,26 @@ and continuations explicit while preserving a close mapping to Zydeco terms.
 textual -> bitter -> scoped -> tyck -> stack
 ```
 
-The stack IR is built from one checked typed expression. High-level lowering is indexed by the consuming stack and
-constructs the paper's branch-join fragment directly: stack lets occur exactly around value-coproduct matches.
-Closure conversion then consumes that lexical tree and produces a distinct `SpsLowProgram` with blocks, jumps, and
-explicit closure and continuation packages. Both representations have one computation root rather than a top-level
-declaration collection.
+The stack IR is built from one checked typed expression.
+High-level lowering is indexed by the consuming stack and constructs the paper's branch-join fragment directly:
+stack lets occur exactly around value-coproduct matches.
+Normalization resolves known primitive forces into direct external calls and removes unused thunk bindings.
+Closure conversion then consumes that lexical tree and produces a distinct `SpsLowProgram` with blocks,
+jumps, and explicit closure and continuation packages.
+Both representations have one computation root rather than a top-level declaration collection.
 
 ## Key components
 
-- `sps::syntax` and `sps::arena` define lexical high SPS; `sps::lower` constructs a validated
-  `BranchJoinProgram` directly from checked syntax.
-- `sps::variables` provides free-variable analysis, and `sps::check` validates closed roots, lexical ownership, and
-  branch-join placement.
+- `sps::syntax` and `sps::arena` define lexical high SPS;
+  `sps::lower` constructs a validated `BranchJoinProgram` directly from checked syntax.
+- `sps::variables` provides free-variable analysis, and `sps::check` validates closed roots, lexical ownership,
+  and branch-join placement.
+- `sps::normalize` reduces primitive calls and immediate argument and return bindings before closure allocation,
+  following the [residual primitive call rules](../../../docs/proposals/normalization.md#residual-primitive-calls).
 - `sps_low::syntax` and `sps_low::arena` define first-order SPS with typed package forms.
-- `sps_low::convert` performs fresh structural closure conversion; `sps_low::check` validates the resulting lexical
-  ownership and retained branch-join invariant.
+- `sps_low::convert` performs fresh structural closure conversion;
+  `sps_low::check` validates the resulting lexical ownership and retained branch-join invariant.
 - `SpsLowPipeline` is the consuming boundary between high SPS and assembly-ready SPSLow.
 
-The paper correspondence and the phase invariants are summarized in the implementation
-architecture section of [`DESIGN.md`](../../../DESIGN.md); the stack-passing-style paper remains
-authoritative for the formal presentations.
+The paper correspondence and the phase invariants are summarized in the implementation architecture section
+of [`DESIGN.md`](../../../DESIGN.md); the stack-passing-style paper remains authoritative for the formal presentations.

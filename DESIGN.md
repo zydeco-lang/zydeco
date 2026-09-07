@@ -534,7 +534,8 @@ flowchart TD
 ```
 
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
-High SPS uses lexical branch-join syntax; closure conversion produces first-order SPSLow with code labels.
+High SPS uses lexical branch-join syntax; normalization resolves known primitive thunks
+before closure conversion produces first-order SPSLow with code labels.
 ZASM makes the control-flow graph explicit for assembly-derived backends.
 
 Before lowering into SPS, a demand analysis over the checked root records how each binding's value is consumed:
@@ -547,13 +548,20 @@ and package components a program uses rather than the whole standard-library ass
 The interpreter shares none of this; it links the complete program as the reference semantics.
 `docs/proposals/demand-analysis.md` develops the traversal rules and their soundness invariants.
 
+High SPS initially keeps primitive operations behind thunks.
+[Primitive call normalization](docs/proposals/normalization.md#residual-primitive-calls) follows known operations
+through lexical bindings and package projections, replaces their forces with direct external calls,
+and removes bindings made unused by that replacement.
+Immediate argument and return bindings also reduce while preserving runtime value sharing.
+Dynamically selected and escaping operations retain their thunk representation.
+
 | Responsibility | Implementation |
 | --- | --- |
 | Source graph, overlays, and shared analysis | `lang/session/src/source` |
 | Parsing, desugaring, and resolution | `lang/surface/src/{textual,bitter,scoped}` |
 | Typing, normalization, elaboration, and validation | `lang/statics/src` |
 | Linking and interpretation | `lang/dynamics/src` |
-| High SPS and closure conversion | `lang/stackir/src/{sps,sps_low}` |
+| High SPS, primitive call normalization, and closure conversion | `lang/stackir/src/{sps,sps_low}` |
 | ZASM lowering and allocation analysis | `lang/assembly/src` |
 | Code emission | `lang/{amd64,wasm-am,wasm-sps}/src` |
 

@@ -1,0 +1,11 @@
+begin
+  param (/process; builtin) : @(import("../../std/builtin.zy")) that
+  let make_std = @(import("../../std/std.zy")) that
+  let (/int64) = builtin |> make_std in
+  let package = (#operation = int64/add) in
+  do operation <- ret package/operation;
+  do first <- ! operation 40 1;
+  do second <- ! operation first 1;
+  do status <- ! int64/sub second 42;
+  ! process/exit status
+end

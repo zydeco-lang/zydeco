@@ -15,6 +15,8 @@ impl<'a> SpsLowPipeline<'a> {
 
     pub fn run(self, stackir: BranchJoinProgram) -> SpsLowProgram {
         crate::sps::check::check(stackir.as_program(), self.scoped, self.statics);
+        let stackir = crate::sps::normalize::Normalizer::new(stackir).run();
+        crate::sps::check::check(stackir.as_program(), self.scoped, self.statics);
         SpsLowConverter::new(stackir, self.scoped, self.statics).convert()
     }
 }

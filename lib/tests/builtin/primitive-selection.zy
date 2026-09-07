@@ -1,0 +1,15 @@
+begin
+  param (/Thk; /Ret; /Int64; /numeric; /process) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 in
+  let Operation = Thk (Int64 -> Int64 -> Ret Int64) in
+  do selected <- ! int64/eq
+    (Ret Operation)
+    1
+    1
+    { ret int64/add }
+    { ret int64/sub };
+  do first <- ! selected 19 23;
+  do second <- ! selected -21 -21;
+  do status <- ! int64/add first second;
+  ! process/exit status
+end

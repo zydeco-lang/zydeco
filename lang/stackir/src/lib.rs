@@ -29,6 +29,8 @@ pub mod sps {
     pub mod lower;
     /// Demand analysis that decides which checked bindings survive lowering.
     pub mod demand;
+    /// Normalize known primitive thunks before allocating closures.
+    pub mod normalize;
     /// Double check the stack IR is well-formed. For debugging purposes only.
     pub mod check;
     /// Free-variable analysis for stack IR.
