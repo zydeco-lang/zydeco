@@ -101,7 +101,7 @@ impl Parentheses {
 }
 
 /// Independent policy choices used by the textual pretty printer.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct PrettyOptions {
     pub indent: IndentWidth,
     pub line_width: usize,

@@ -12,6 +12,7 @@ use context::{GrammarContext, PatternRequirement, TermPrecedence, TermRequiremen
 use pretty::{DocAllocator, RcAllocator, RcDoc};
 pub use punning::NamedTermPunningAudit;
 use punning::{PunnedPatternPayload, PunnedTermPayload, Punning};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use zydeco_syntax::{Pretty, ViewSpine};
 
 use crate::metadata::FormatMeta;
@@ -26,6 +27,15 @@ pub struct PrettyFormatter<'arena> {
     grammar: GrammarContext<'arena>,
     punning: Punning<'arena>,
     options: PrettyOptions,
+    documents: Rc<LayoutDocuments<'arena>>,
+}
+
+/// Alternative layouts share child documents instead of rebuilding their subtrees.
+/// Policy is part of the key because format annotations can change it locally.
+#[derive(Default)]
+struct LayoutDocuments<'arena> {
+    terms: RefCell<HashMap<(TermId, TermRequirement, PrettyOptions), RcDoc<'arena>>>,
+    patterns: RefCell<HashMap<(PatId, PatternRequirement, PrettyOptions), RcDoc<'arena>>>,
 }
 
 struct ManifestParameterView<'arena> {
@@ -361,6 +371,7 @@ impl<'arena> PrettyFormatter<'arena> {
             grammar: GrammarContext::new(arena),
             punning: Punning::new(arena),
             options,
+            documents: Rc::default(),
         }
     }
 
@@ -381,6 +392,7 @@ impl<'arena> PrettyFormatter<'arena> {
             grammar: GrammarContext::new(arena),
             punning: Punning::new(arena),
             options,
+            documents: Rc::default(),
         }
     }
 
@@ -393,6 +405,7 @@ impl<'arena> PrettyFormatter<'arena> {
             grammar: GrammarContext::new(self.arena),
             punning: Punning::new(self.arena),
             options,
+            documents: self.documents.clone(),
         }
     }
 
@@ -402,25 +415,25 @@ impl<'arena> PrettyFormatter<'arena> {
 
     /// Render one complete source unit with a trailing newline.
     pub fn render_unit(&self, unit: SourceUnit) -> String {
-        let document = self.with_trailing_comments(unit.root.into(), unit.pretty(self));
+        let document = self.with_trailing_comments(unit.root.into(), self.term(unit.root));
         self.render_doc(document.append(RcDoc::hardline()))
     }
 
     /// Render one term without adding a trailing newline.
     pub fn render_term(&self, term: TermId) -> String {
-        let document = self.with_trailing_comments(term.into(), term.pretty(self));
+        let document = self.with_trailing_comments(term.into(), self.term(term));
         self.render_doc(document)
     }
 
     /// Render one pattern without adding a trailing newline.
     pub fn render_pattern(&self, pattern: PatId) -> String {
-        let document = self.with_trailing_comments(pattern.into(), pattern.pretty(self));
+        let document = self.with_trailing_comments(pattern.into(), self.pattern(pattern));
         self.render_doc(document)
     }
 
     /// Render one copattern spine without adding a trailing newline.
     pub fn render_copattern(&self, pattern: CoPatId) -> String {
-        let document = self.with_trailing_comments(pattern.into(), pattern.pretty(self));
+        let document = self.with_trailing_comments(pattern.into(), self.copattern(pattern));
         self.render_doc(document)
     }
 
@@ -1269,6 +1282,16 @@ impl<'arena> PrettyFormatter<'arena> {
     fn pattern_with_requirement(
         &self, pattern: PatId, requirement: PatternRequirement,
     ) -> RcDoc<'arena> {
+        let key = (pattern, requirement, self.options);
+        if let Some(document) = self.documents.patterns.borrow().get(&key) {
+            return document.clone();
+        }
+        let document = self.pattern_document(pattern, requirement);
+        self.documents.patterns.borrow_mut().insert(key, document.clone());
+        document
+    }
+
+    fn pattern_document(&self, pattern: PatId, requirement: PatternRequirement) -> RcDoc<'arena> {
         let document = match &self.arena.pats[&pattern] {
             | Pattern::Ann(Ann { tm, ty }) => self.annotation(
                 pattern.into(),
@@ -1426,6 +1449,16 @@ impl<'arena> PrettyFormatter<'arena> {
     }
 
     fn term_with_requirement(&self, term: TermId, requirement: TermRequirement) -> RcDoc<'arena> {
+        let key = (term, requirement, self.options);
+        if let Some(document) = self.documents.terms.borrow().get(&key) {
+            return document.clone();
+        }
+        let document = self.term_document(term, requirement);
+        self.documents.terms.borrow_mut().insert(key, document.clone());
+        document
+    }
+
+    fn term_document(&self, term: TermId, requirement: TermRequirement) -> RcDoc<'arena> {
         if let Term::SourceBoundary(SourceBoundary(inner))
         | Term::SignatureBoundary(SignatureBoundary(inner)) = &self.arena.terms[&term]
         {
@@ -2186,6 +2219,8 @@ impl<'arena> PrettyFormatter<'arena> {
         let spans = self.spans;
         let source = self.source;
         let options = self.options;
+        // Cached documents can contain this deferred layout; avoid an ownership cycle.
+        let documents = Rc::downgrade(&self.documents);
         DOC_ALLOCATOR
             .nesting(move |binding_nesting| {
                 let binding_nesting = isize::try_from(binding_nesting).unwrap_or(isize::MAX);
@@ -2196,6 +2231,7 @@ impl<'arena> PrettyFormatter<'arena> {
                     grammar: GrammarContext::new(arena),
                     punning: Punning::new(arena),
                     options,
+                    documents: documents.upgrade().unwrap_or_default(),
                 };
                 formatter.placed_binding_at(enclosing, binding, placement, binding_nesting)
             })
@@ -2665,6 +2701,26 @@ mod tests {
             ),
             "{\n  SomeComputation\n}\n"
         );
+    }
+
+    #[test]
+    fn deeply_nested_groups_share_layout_documents() {
+        let depth = 128;
+        let grouped = format!("{}0{}", "(".repeat(depth), ")".repeat(depth));
+        for (source, expected) in [
+            (grouped.clone(), "0\n"),
+            (format!("match input | {grouped} => ret 0 end"), "match input\n| 0 => ret 0\nend\n"),
+        ] {
+            let parsed = ParsedSource::new(&source);
+            let formatter = PrettyFormatter::with_source(
+                &parsed.parser.arena,
+                &parsed.parser.spans,
+                &parsed.source,
+            );
+            assert_eq!(formatter.render_unit(parsed.unit), expected);
+            assert!(formatter.documents.terms.borrow().len() <= 3 * (depth + 10));
+            assert!(formatter.documents.patterns.borrow().len() <= 2 * (depth + 1));
+        }
     }
 
     #[test]

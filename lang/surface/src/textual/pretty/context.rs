@@ -87,7 +87,7 @@ impl<'arena> GrammarContext<'arena> {
 
 /// Precedence levels of the `Term` nonterminal, ordered from tightest to
 /// loosest. These mirror the levels documented in `parser/grammar.lalrpop`.
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(super) enum TermPrecedence {
     Atom,
     Projection,
@@ -102,7 +102,7 @@ pub(super) enum TermPrecedence {
 }
 
 /// The grammar accepted at one term child position.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) enum TermRequirement {
     /// Any ordinary `Term`, as accepted by `TermId`.
     Any,
@@ -131,7 +131,7 @@ impl TermRequirement {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) enum PatternRequirement {
     Pattern,
     Annotated,
