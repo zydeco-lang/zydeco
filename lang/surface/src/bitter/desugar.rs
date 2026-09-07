@@ -1009,17 +1009,11 @@ impl Desugar for (t::CoData, t::EntityId) {
             .map(|t::CoDataArm { name, params, out }| {
                 let mut out = out.desugar(desugarer)?;
                 if let Some(params) = params {
-                    let b::Appli(params) = params.desugar(desugarer)?;
-                    for param in params.into_iter().rev() {
-                        match param {
-                            | b::CoPatternItem::Pat(pat) => {
-                                out = Alloc::alloc(desugarer, b::Pi(pat, out).into(), prev)
-                            }
-                            | b::CoPatternItem::Dtor(dtor) => {
-                                panic!("dtor in codata arm params: {:?}", dtor)
-                            }
-                        }
-                    }
+                    out = ParameterTelescope::desugar(params, prev, desugarer)?.quantify(
+                        Quantifier::Pi,
+                        out,
+                        desugarer,
+                    );
                 }
                 Ok(b::CoDataArm { name, out })
             })
