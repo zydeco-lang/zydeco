@@ -133,6 +133,7 @@ and its selected value projections elaborate to the existing product and alias p
 This is the package-use convention described in [Package Modularization](package-modularization.md),
 rather than a separate `use` construct.
 
-The initial implementation requires the payload to be irrefutable.
-Variable and structural payloads cover the field-binding use case; constructor payloads are deferred
+The initial implementation requires the payload to be [irrefutable](term.md#binding-patterns),
+including under `@[partial]`.
+Variable and structural payloads cover the field-binding use case; refutable constructor payloads are deferred
 until backend matching supports general nested fallthrough.

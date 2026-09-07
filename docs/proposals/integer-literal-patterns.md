@@ -43,8 +43,9 @@ reusing the term-level `IntegerLiteral::with_type` judgment, so `| 300` against 
 Float, string, and character literals in pattern position are rejected: float equality
 over NaN and signed zero needs its own decision, recorded below.
 
-Literal patterns are always refutable, so they are rejected wherever irrefutable patterns are required,
-such as value-function parameters.
+Literal patterns are always refutable.
+The [binding-pattern rules](term.md#binding-patterns) require an explicit `@[partial]` boundary
+in computation bindings and reject them in total value bindings.
 
 ## Coverage
 

@@ -115,6 +115,16 @@ impl PatternVariableStandIn {
 pub(super) struct ValuePatternShape;
 
 impl ValuePatternShape {
+    pub(super) fn require_binding_k(
+        tycker: &mut Tycker<'_>, source: su::PatId, pattern: ss::VPatId,
+    ) -> ResultKont<()> {
+        if !Self::is_irrefutable(tycker, pattern) && !tycker.scoped.allows_partial_binding(source) {
+            return tycker
+                .err_k(TyckError::RefutableBinding(source), std::panic::Location::caller());
+        }
+        Ok(())
+    }
+
     pub(super) fn is_irrefutable(tycker: &Tycker<'_>, pattern: ss::VPatId) -> bool {
         match &tycker.statics.vpats[&pattern] {
             | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {

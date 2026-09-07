@@ -1,14 +1,16 @@
 # Uniform Term Composition
 
 Zydeco uses one term language for kinds, types, values, and computations.
-`param`, `let`, and `def` are ordinary term constructors for abstractions, transparent bindings,
-and nominal definitions. Their `in` forms establish binders at the written position, while their `that` forms
-contribute binders to the nearest `begin ... end` block. A block dependency-orders those contributions
-and elaborates them into an ordinary heterogeneous telescope.
+`param`, `let`, and `def` are ordinary term constructors for abstractions,
+transparent bindings, and nominal definitions.
+Their `in` forms establish binders at the written position, while their `that` forms contribute binders
+to the nearest `begin ... end` block.
+A block dependency-orders those contributions and elaborates them into an ordinary heterogeneous telescope.
 
-A source file stores one complete term. The file contributes no context, parameters, declarations,
-namespace, or runtime structure around that term. Every dependency must occur in the term itself,
-through an ordinary binder or an import that is replaced by another independently checked term.
+A source file stores one complete term.
+The file contributes no context, parameters, declarations, namespace, or runtime structure around that term.
+Every dependency must occur in the term itself, through an ordinary binder or an import that is replaced
+by another independently checked term.
 
 ## Blocks and Mobile Bindings
 
@@ -42,15 +44,14 @@ The block supplies a boundary, but each binding still needs to say how it relate
 Each binding combines two choices.
 The form says what enters the context: `param` adds a parameter, `let` adds a transparent binding
 that the type checker may unfold during equality checking, and `def` gives the source binder a stable identity.
-The `val` modifier on `param` records that block reconstruction must introduce a total value function;
-without it, the parameter retains the existing type-function or computation-abstraction discipline.
+The `val` modifier on `param` records that block reconstruction must introduce a total value function; without it,
+the parameter retains the existing type-function or computation-abstraction discipline.
 The connective says where that binding is established.
 Keeping these choices separate allows the same kind of binding to be either lexical or block-wide.
 
 With `in`, the binding stays where it is written and its following term is its scope.
 Thus `param p in e` forms a local type or computation abstraction, `param val p in e` forms a local value abstraction,
-and the `in` variants of `let`
-and `def` form transparent and nominal local bindings.
+and the `in` variants of `let` and `def` form transparent and nominal local bindings.
 These forms support the familiar left-to-right reading of lexical scope.
 They provide the baseline against which the mobility of `that` can be understood.
 
@@ -110,8 +111,8 @@ fn a b c d => let x = a + c in d
 Here the four `param` forms become parameters of the resulting abstraction.
 Reading the source from left to right orders the otherwise independent parameters as `a`, `b`, `c`, and `d`.
 Dependency edges may still interleave definitions when their types or bodies require it.
-The unused parameter `b` remains part of the result because `param` constructs an explicit binder
-instead of asking the compiler to infer one from free variables.
+The unused parameter `b` remains part of the result because `param` constructs an explicit binder instead
+of asking the compiler to infer one from free variables.
 
 The examples above focus on placement. The other choice carried by a binding form concerns identity.
 The pairing of `def` and `let` is deliberate.
@@ -181,33 +182,73 @@ This keeps recursive types, recursive computations, and dependency cycles as thr
 The separation between static and computational recursion also explains two restrictions on mobile bindings.
 The scheduler accepts only types and values on the right of `def` and `let`.
 Its choices change static nesting, while effect order continues to follow computation syntax.
-Mobile patterns should be irrefutable for the same reason that ordinary binding patterns are:
-forming a context should produce bindings directly.
-Refutable decomposition belongs in `match`, where the source program states its branches explicitly.
+Mobile patterns follow the common [binding-pattern rules](#binding-patterns),
+including their explicit partiality boundary.
 
 Block elaboration supplies both a scope and an order for every contributed binder.
+
+## Binding Patterns
+
+Ordinary bindings establish a context directly, so their patterns must be irrefutable by default.
+An irrefutable pattern matches every value of its checked type.
+Variables, holes, unit, named wrappers, products, and existential unpacking are irrefutable
+when their component patterns are irrefutable.
+A constructor pattern is irrefutable when its data type has exactly one constructor and its payload is irrefutable.
+Integer literals and selections from a data type with multiple constructors are refutable.
+Alias groups and field-projection payloads use this same definition.
+
+This requirement applies to computation parameters and the patterns introduced by `let`,
+`def`, `do`, and `param`, including mobile bindings.
+A refutable pattern normally belongs in an explicit `match`, where the program provides alternatives.
+When failure should stop execution, `@[partial]` opts an individual computation binding
+or function header into refutable matching:
+
+```zydeco
+@[partial] let 0 = value in next
+@[partial] do +Some result <- action; next
+@[partial] fn (0 : Int64) (1 : Int64) => body
+```
+
+The annotation takes no arguments and applies only to the annotated construct's own binders.
+A function header includes all of its curried parameters; a named function binding includes its binder
+and parameter header.
+The annotation does not propagate into a function body, binding tail, or nested function,
+and annotating an entire `begin` block is rejected.
+A failed partial pattern stops execution with a clear runtime error and nonzero exit status.
+
+Value functions and value-producing `let` expressions remain total.
+Their patterns must be irrefutable even under `@[partial]`.
+A view transforms its input through a total value function; its result pattern may be refutable
+in a `match` or partial computation binding.
+This boundary keeps static reduction and coverage reasoning total; partiality belongs to computations.
+The annotation also does not extend alias groups or projection payloads to general refutable conjunctions.
 
 ## Nominal Identity
 
 Within a term, nominal identity distinguishes `def` from `let`.
 A type introduced by `def` is lexically generative: the source binder receives a stable abstract identity
-for the lifetime of that term occurrence. Repeated evaluation of the occurrence reuses the identity.
+for the lifetime of that term occurrence.
+Repeated evaluation of the occurrence reuses the identity.
 For a recursive type component, the checker allocates all member identities together
-before checking their defining equations. By contrast, `let` preserves its defining equation
-and therefore supports transparent equality.
+before checking their defining equations.
+By contrast, `let` preserves its defining equation and therefore supports transparent equality.
 
-Copying a term freshens its bound identities. Two copies of a term containing `def` consequently contain
-distinct nominal definitions, while two uses of one bound copy share the same definitions.
+Copying a term freshens its bound identities.
+Two copies of a term containing `def` consequently contain distinct nominal definitions,
+while two uses of one bound copy share the same definitions.
 
 ## Source Terms and Imports
 
-A source root is resolved and type checked under an empty context. After its own imports and optional companion
-annotation have been assembled, the complete root must synthesize its classifier. An expected classifier at a use
-site may be compared with that result, but it does not participate in elaborating the source root.
+A source root is resolved and type checked under an empty context.
+After its own imports and optional companion annotation have been assembled,
+the complete root must synthesize its classifier.
+An expected classifier at a use site may be compared with that result, but it does not participate
+in elaborating the source root.
 
-An implementation source `foo.zy` may have a companion `foo.zyi`. The companion contains one type term,
-which must itself synthesize a type. The pair is elaborated as the ordinary annotated term
-`(contents-of-foo.zy : contents-of-foo.zyi)`. The companion supplies no declarations or context.
+An implementation source `foo.zy` may have a companion `foo.zyi`.
+The companion contains one type term, which must itself synthesize a type.
+The pair is elaborated as the ordinary annotated term `(contents-of-foo.zy : contents-of-foo.zyi)`.
+The companion supplies no declarations or context.
 
 An import is metadata on a hole:
 
@@ -215,11 +256,12 @@ An import is metadata on a hole:
 @(import("library.zy"))
 ```
 
-The spelling `@(import("library.zy"))` abbreviates the same term. Source assembly makes the hole refer to the one
-independently checked source root. A source boundary prevents free names and mobile bindings from crossing between
-the two terms. Repeated imports share that root, including its bound and nominal identities.
+The spelling `@(import("library.zy"))` abbreviates the same term.
+Source assembly makes the hole refer to the one independently checked source root.
+A source boundary prevents free names and mobile bindings from crossing between the two terms.
+Repeated imports share that root, including its bound and nominal identities.
 
-This operation is ordinary term substitution. Its stability claim concerns well-typed, scope-respecting
-substitutions: substitution preserves typing, while the compiler may represent repeated occurrences by edges to one
-immutable term. Static sharing does not make an imported computation execute once; evaluation still occurs at each
-dynamic occurrence.
+This operation is ordinary term substitution.
+Its stability claim concerns well-typed, scope-respecting substitutions: substitution preserves typing,
+while the compiler may represent repeated occurrences by edges to one immutable term.
+Static sharing does not make an imported computation execute once; evaluation still occurs at each dynamic occurrence.

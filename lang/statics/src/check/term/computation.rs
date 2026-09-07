@@ -193,6 +193,7 @@ impl TermChecker<'_> {
             let binder_elaboration =
                 self.mk(binder).tyck_k(tycker, PatternAction::ana(binder_ty.into()))?;
             let (binder_out, _binder_ty) = binder_elaboration.as_value();
+            ValuePatternShape::require_binding_k(tycker, binder, binder_out)?;
             // finally, we tyck the tail
             let (tail_out, tail_ty) = {
                 let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
@@ -379,6 +380,7 @@ impl TermChecker<'_> {
                         }
                         | TermAnnId::Compu(tail_out, tail_ty) => {
                             binder_elaboration.close_scope_k(tycker, tail_ty)?;
+                            ValuePatternShape::require_binding_k(tycker, binder, binder_out)?;
                             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let binder = crate::query::InternedVPat::new(tycker.db, binder_out);
                             let bindee = crate::query::InternedValue::new(tycker.db, bindee_out);

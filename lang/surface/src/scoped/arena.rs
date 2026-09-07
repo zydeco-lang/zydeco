@@ -176,6 +176,8 @@ pub struct ScopedArena {
     pub terms: ArenaIndexed<ScopedScope, TermId>,
     /// Textual source origin of every resolved entity.
     pub origins: TextualOrigins,
+    /// Source binders explicitly opted in to refutable computation binding.
+    pub partial_binders: std::collections::HashSet<crate::textual::syntax::PatId>,
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
@@ -204,6 +206,15 @@ impl TermContexts {
 }
 
 impl ScopedArena {
+    pub fn allows_partial_binding(&self, pattern: PatId) -> bool {
+        match self.origins.source(&pattern.into()) {
+            | Some(crate::textual::syntax::EntityId::Pat(source)) => {
+                self.partial_binders.contains(&source)
+            }
+            | _ => false,
+        }
+    }
+
     /// Insert a synthetic definition issued by the pass creating it.
     pub fn insert_def(&mut self, id: DefId, name: VarName) {
         self.defs.insert_new(id, name);

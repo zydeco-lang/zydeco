@@ -45,6 +45,14 @@ pub enum DesugarError {
         #[source]
         source: MetadataValidationError,
     },
+    #[error("Invalid partial annotation: {source}")]
+    InvalidPartialMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MetadataValidationError,
+    },
+    #[error("A partial annotation must annotate a binding, parameter, or function")]
+    PartialPayloadNotBinding(Sp<t::TermId>),
     #[error("Intrinsic annotation must annotate a hole expression")]
     IntrinsicPayloadNotHole(Sp<t::TermId>),
     #[error("Invalid ffi annotation: {source}")]
@@ -76,6 +84,8 @@ impl DesugarError {
             | Self::InvalidIntrinsicMeta { term, .. }
             | Self::InvalidMonadicMeta { term, .. }
             | Self::InvalidTypeOfMeta { term, .. }
+            | Self::InvalidPartialMeta { term, .. }
+            | Self::PartialPayloadNotBinding(term)
             | Self::InvalidFfiMeta { term, .. }
             | Self::IntrinsicPayloadNotHole(term)
             | Self::FfiPayloadNotHole(term) => term.info,

@@ -33,10 +33,9 @@ without changing the syntax tree.
 ## Initial Semantic Boundary
 
 The implemented form currently aliases value patterns whose members are irrefutable.
-Variables, holes, named wrappers, unit, products, existential packages, and compositions
-of those shapes are irrefutable after type checking: every value of the expected type has that shape.
-Constructors remain refutable and are rejected within an alias group for now.
-Field projection patterns with irrefutable payloads belong to this set.
+The shared [binding-pattern rules](term.md#binding-patterns) define irrefutability,
+including single-constructor data with irrefutable payloads and field projections with irrefutable payloads.
+Refutable members are rejected even under `@[partial]`.
 Type and kind pattern aliases are also deferred.
 
 This boundary covers whole-value aliases and the motivating multi-field projection patterns.

@@ -268,7 +268,7 @@ A parenthesized semicolon pattern applies every member to the same bindee.
 For example, `((left, right); whole; copy)` destructures a pair and binds the complete pair twice.
 Semicolon is same-bindee composition, whereas comma assigns successive product components.
 Members retain source order and extend the pattern environment from left to right.
-Same-bindee aliases require irrefutable value members.
+Same-bindee aliases require [irrefutable value members](docs/proposals/term.md#binding-patterns).
 A group of direct field projections may additionally select static and dynamic fields
 while opening one package telescope.
 Irrefutable whole-value members retain that package for forwarding; general constructor aliases
@@ -295,7 +295,8 @@ then checks `pattern` against the unique payload.
 It associates to the right, allowing `/outer = /inner = payload` to express a staged path.
 Type checking elaborates the result into ordinary named and product patterns with typed holes outside the selected path.
 The pun `/field` expands to `/field = field`, while `/field : Type` annotates that generated payload binder.
-Projection payloads must be irrefutable; nested constructor matching through this pattern form is not implemented.
+Projection payloads must be [irrefutable](docs/proposals/term.md#binding-patterns);
+refutable nested constructor matching through this pattern form is not implemented.
 
 When a same-bindee group of direct projection patterns is checked against a package,
 it is also the package's selective elimination form.
@@ -902,8 +903,11 @@ Generated modules import builtins from the `zydeco` namespace through these type
 
 The additional `string_literal(i32, i32) -> i64` import receives an offset and UTF-8 byte length
 in exported memory and returns the host's opaque string value.
-Each module exports `entry`, the conventional `_start` alias, and `memory`,
-but the embedding must supply the imports before invoking either function.
+The mandatory `runtime_error(i32) -> ()` import reports fatal language errors.
+Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`; code `1` means pattern-match failure.
+The host must report the error and stop execution unsuccessfully.
+Generated code traps if the host returns. Each module exports `entry`, the conventional `_start` alias,
+and `memory`, but the embedding must supply the imports before invoking either function.
 
 ## Repository Layout
 

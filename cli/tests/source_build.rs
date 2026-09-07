@@ -2,6 +2,61 @@ use std::{path::PathBuf, process::Command};
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
+fn partial_patterns_report_runtime_failure_across_backends() {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("partial.zy");
+    let build = directory.path().join("build");
+    let builtin = workspace.join("lib/std/builtin.zy");
+    for (body, expected) in [
+        ("@[partial] let 0 = 0 in ! process/exit 0", 0),
+        ("@[partial] let 0 = 1 in ! process/exit 42", 1),
+        ("do r <- (@[partial] fn (0 : Int64) => ret 0) 1; ! process/exit 42", 1),
+        (
+            "let B = data | +T : Unit | +F : Unit end in @[partial] let +T() = (+F() : B) in ! process/exit 42",
+            1,
+        ),
+    ] {
+        std::fs::write(
+            &source,
+            format!(
+                "param (/process; /Int64; /Unit) : @(import(\"{}\")) in {body}\n",
+                builtin.display()
+            ),
+        )
+        .unwrap();
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_zydeco"));
+            command.arg("build").arg(&source).args(["--target", target, "--build-dir"]).arg(&build);
+            if target == "exe" {
+                command
+                    .args(["--target-arch", "x86-64", "--runtime-dir"])
+                    .arg(workspace.join("runtime"))
+                    .arg("--execute");
+            }
+            let mut output = command.output().unwrap();
+            if target != "exe" {
+                assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+                let extension = if target == "wasm-am" { "am" } else { "sps" };
+                output = Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
+                    .arg(workspace.join("lang/tests/wasm-host.mjs"))
+                    .arg(build.join(format!("partial.{extension}.wasm")))
+                    .output()
+                    .unwrap();
+            }
+            let diagnostic = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(output.status.code(), Some(expected), "{target}: {body}\n{diagnostic}");
+            assert!(output.stdout.is_empty(), "a failed pattern must not continue executing");
+            if expected != 0 {
+                assert!(diagnostic.contains("pattern match failed"), "{target}: {diagnostic}");
+                assert!(!diagnostic.contains("panicked"), "{target}: {diagnostic}");
+            }
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
 fn rebuilding_a_native_program_uses_the_current_assembly() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let directory = tempfile::tempdir().unwrap();

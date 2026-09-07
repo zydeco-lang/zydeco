@@ -35,6 +35,7 @@ pub enum MetadataKind {
     Ffi,
     Monadic,
     TypeOf,
+    Partial,
     Format,
     Debug,
 }
@@ -59,6 +60,7 @@ impl MetadataKind {
             | Self::Ffi => "Declare a native foreign-function target.",
             | Self::Monadic => "Translate an expression using the lexical monadic basis.",
             | Self::TypeOf => "Extract an expression's type or kind without running it.",
+            | Self::Partial => "Allow the annotated computation's own binding patterns to fail.",
             | Self::Format => "Override source formatting policy for an expression.",
             | Self::Debug => "Record a checked term as a compiler observation.",
         };
@@ -68,7 +70,9 @@ impl MetadataKind {
                 "source",
                 MetadataValue::Source,
             )]),
-            | Self::Literal | Self::Monadic | Self::TypeOf => MetadataArguments::None,
+            | Self::Literal | Self::Monadic | Self::TypeOf | Self::Partial => {
+                MetadataArguments::None
+            }
             | Self::Intrinsic => MetadataArguments::Positional(vec![MetadataParameter::new(
                 "role",
                 MetadataValue::Identifier(
@@ -495,6 +499,23 @@ impl SpecializeMeta for TypeOfMeta {
 
     fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error> {
         MetadataKind::TypeOf.definition().validate_arguments(arguments)?;
+        Ok(Self)
+    }
+}
+
+/// Opt in to refutable patterns on the annotated construct's own binders.
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PartialMeta;
+
+impl SpecializeMeta for PartialMeta {
+    type Error = MetadataValidationError;
+
+    fn name() -> &'static str {
+        MetadataKind::Partial.name()
+    }
+
+    fn from_arguments(arguments: &[Meta]) -> Result<Self, Self::Error> {
+        MetadataKind::Partial.definition().validate_arguments(arguments)?;
         Ok(Self)
     }
 }

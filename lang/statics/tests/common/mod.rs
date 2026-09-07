@@ -44,6 +44,7 @@ impl TestFixture {
         let spans = SpanArena::new();
         let prim = PrimDefs::default();
         let mut scoped = ScopedArena {
+            partial_binders: Default::default(),
             defs: Default::default(),
             pats: Default::default(),
             terms: Default::default(),

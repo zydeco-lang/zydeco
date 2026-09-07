@@ -1,6 +1,6 @@
 use crate::{
     bitter::{syntax as b, *},
-    metadata::{BuiltinMeta, FfiMeta, IntrinsicMeta, MonadicMeta, TypeOfMeta},
+    metadata::{BuiltinMeta, FfiMeta, IntrinsicMeta, MonadicMeta, PartialMeta, TypeOfMeta},
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
@@ -38,6 +38,61 @@ pub struct SourceUnitDesugarer<'a> {
 }
 
 impl<'a> Desugarer<'a> {
+    /// Record source identities before currying and block scheduling change binder nesting.
+    /// Only the annotated header contributes binders; its bodies and tails are untouched.
+    fn allow_partial_binders(&mut self, term: t::TermId) -> bool {
+        match self.lookup_term(term) {
+            | t::Term::Paren(t::Paren(terms)) if terms.len() == 1 => {
+                self.allow_partial_binders(terms[0])
+            }
+            | t::Term::Ann(t::Ann { tm, .. }) | t::Term::Meta(t::MetaTerm(_, tm)) => {
+                self.allow_partial_binders(tm)
+            }
+            | t::Term::Abs(t::Abs(params, _)) | t::Term::ValAbs(t::Abs(params, _)) => {
+                self.allow_partial_parameters(params);
+                true
+            }
+            | t::Term::Let(t::GenLet { binding, .. })
+            | t::Term::ContextBind(t::ContextBind { binding, .. }) => {
+                self.allow_partial_pattern(binding.binder);
+                if let Some(params) = binding.params {
+                    self.allow_partial_parameters(params);
+                }
+                true
+            }
+            | t::Term::Do(t::Bind { binder, .. })
+            | t::Term::Param(t::Param { binder, .. })
+            | t::Term::Fix(t::Fix(binder, _)) => {
+                self.allow_partial_pattern(binder);
+                true
+            }
+            | _ => false,
+        }
+    }
+
+    fn allow_partial_parameters(&mut self, parameters: t::CoPatId) {
+        match self.lookup_copat(parameters) {
+            | t::CoPattern::Pat(pattern) => {
+                self.allow_partial_pattern(pattern);
+            }
+            | t::CoPattern::App(t::Appli(parameters)) => {
+                parameters
+                    .into_iter()
+                    .for_each(|parameter| self.allow_partial_parameters(parameter));
+            }
+            | t::CoPattern::Dtor(_) => {}
+        }
+    }
+
+    fn allow_partial_pattern(&mut self, pattern: t::PatId) {
+        self.bitter.partial_binders.insert(pattern);
+        if let t::Pattern::Paren(t::Paren(patterns)) = self.lookup_pat(pattern)
+            && let [inner] = patterns.as_slice()
+        {
+            self.allow_partial_pattern(*inner);
+        }
+    }
+
     fn new(spans: &'a t::SpanArena, textual: &'a t::TextArena) -> Self {
         Self {
             allocator: IdAllocator::new(),
@@ -455,6 +510,20 @@ impl Desugar for t::TermId {
                 let annotation_site = metadata.span(desugarer.spans).clone().make(self);
                 let payload_site = term.span(desugarer.spans).clone().make(self);
                 let meta = desugarer.textual.semantic_meta(metadata);
+                match meta.specialize::<PartialMeta>() {
+                    | Ok(Some(PartialMeta)) => {
+                        if !desugarer.allow_partial_binders(term) {
+                            return Err(DesugarError::PartialPayloadNotBinding(payload_site));
+                        }
+                    }
+                    | Ok(None) => {}
+                    | Err(source) => {
+                        return Err(DesugarError::InvalidPartialMeta {
+                            term: annotation_site,
+                            source,
+                        });
+                    }
+                }
                 match meta.specialize::<TypeOfMeta>() {
                     | Ok(Some(TypeOfMeta)) => {
                         let operand = term.desugar(desugarer)?;

@@ -301,6 +301,7 @@ impl TermChecker<'_> {
                 TyckError::SortMismatch,
                 std::panic::Location::caller(),
             )?;
+            ValuePatternShape::require_binding_k(tycker, pat, binder)?;
             let (binder, binder_ty) = {
                 let thunk_hole = tycker.thk_hole(&self.info, self.inner);
                 let thunk_ty = Lub::lub_k(thunk_hole, binder_ty, tycker)?;

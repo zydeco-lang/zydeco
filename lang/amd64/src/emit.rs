@@ -807,7 +807,7 @@ impl<'a> Emit<'a> for Terminator {
             }
             | Terminator::Abort(sa::Abort) => {
                 em.asm.text.push(Instr::Comment("abort".to_string()));
-                em.asm.text.push(Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string())));
+                em.emit_aligned_call(JmpArgs::Label("zydeco_abort".to_string()));
             }
         }
     }

@@ -319,6 +319,12 @@ class ZydecoHost {
 
   imports() {
     const functions = new Map();
+    // Error codes are defined by zydeco-wasm-common's RuntimeFailure ABI.
+    functions.set("runtime_error", (code) => {
+      const message = code === 1 ? "pattern match failed" : `unknown runtime error ${code}`;
+      process.stderr.write(`Zydeco runtime: ${message}\n`);
+      throw new ExitSignal(1);
+    });
     functions.set("string_literal", (offset, length) => this.stringLiteral(offset, length));
     this.installNumeric(functions);
     this.installText(functions);

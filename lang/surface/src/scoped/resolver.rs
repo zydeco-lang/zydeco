@@ -96,13 +96,14 @@ impl<'a> Resolver<'a> {
     pub fn new(
         spans: &'a SpanArena, bitter: FrozenArena<BitterArena>, _prim_term: PrimTerms,
     ) -> Self {
-        let BitterArena { defs, pats: bitter_pats, terms: bitter_terms, origins } =
+        let BitterArena { defs, pats: bitter_pats, terms: bitter_terms, origins, partial_binders } =
             bitter.into_inner();
         let bitter = FrozenArena::new(BitterArena {
             defs,
             pats: bitter_pats,
             terms: bitter_terms,
             origins: TextualOrigins::default(),
+            partial_binders,
         });
         let mut pats = ArenaIndexed::default();
         pats.reserve_ids(bitter.pats.iter().map(|(pattern, _)| pattern));
@@ -192,10 +193,19 @@ impl<'a> Resolver<'a> {
         } = self;
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
-        let _ = bitter;
+        let partial_binders = bitter.into_inner().partial_binders;
         Ok(ResolvedProgram {
             prim,
-            arena: ScopedArena { defs, pats, terms, origins, users, blocks, documentation_scopes },
+            arena: ScopedArena {
+                defs,
+                pats,
+                terms,
+                origins,
+                partial_binders,
+                users,
+                blocks,
+                documentation_scopes,
+            },
         })
     }
 

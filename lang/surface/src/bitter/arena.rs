@@ -119,6 +119,8 @@ pub struct BitterArena {
 
     /// Textual source origin of every derived entity.
     pub origins: TextualOrigins,
+    /// Source binders explicitly opted in to refutable computation binding.
+    pub partial_binders: std::collections::HashSet<t::PatId>,
 }
 
 #[cfg(test)]

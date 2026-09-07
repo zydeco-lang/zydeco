@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::check::judgment::{Action, Tyck};
-use crate::check::pattern::PatternAction;
+use crate::check::pattern::{PatternAction, ValuePatternShape};
 
 pub struct Assign<Br, Be>(pub Br, pub Be);
 pub struct FixPoint<T>(pub T);
@@ -72,6 +72,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
             | TermAnnId::Value(bindee, ty) => {
                 let binder_elaboration =
                     env.mk(binder).tyck_k(tycker, PatternAction::ana(ty.into()))?;
+                ValuePatternShape::require_binding_k(
+                    tycker,
+                    binder,
+                    binder_elaboration.as_value().0,
+                )?;
                 let (binder, _) = binder_elaboration.as_value();
                 // Existential package patterns introduce abstract types whose
                 // scope extends over the following term.

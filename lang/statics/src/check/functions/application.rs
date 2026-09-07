@@ -255,6 +255,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
             .tyck_k(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
         let (pattern, domain) =
             binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        ValuePatternShape::require_binding_k(tycker, self.inner.binder, pattern)?;
         Lub::lub_k(signature.domain, domain, tycker)?;
 
         let Some(witnesses) = binder.package_telescope_k(tycker)? else {

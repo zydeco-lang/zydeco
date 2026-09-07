@@ -543,7 +543,8 @@ impl ArgumentFold {
 
 #[unsafe(export_name = "\x01zydeco_abort")]
 extern "sysv64" fn zydeco_abort() -> ! {
-    std::process::abort()
+    eprintln!("Zydeco runtime: pattern match failed");
+    std::process::exit(1)
 }
 
 struct ManagedHeap;

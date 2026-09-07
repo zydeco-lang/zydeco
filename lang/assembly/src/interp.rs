@@ -37,6 +37,8 @@ pub struct Runtime {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("pattern match failed")]
+    PatternMatch,
     #[error("Stack underflow")]
     StackUnderflow,
     #[error("Type error: {0}")]
@@ -104,7 +106,7 @@ impl Eval for Terminator {
                 let _ = external;
                 todo!()
             }
-            | Terminator::Abort(Abort) => todo!(),
+            | Terminator::Abort(Abort) => Err(Error::PatternMatch),
         }
     }
 }

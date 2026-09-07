@@ -88,10 +88,9 @@ val (A : VType) (value : A) => value
 
 Parameters are curried from left to right.
 Type parameters erase during lowering; value parameters extend the lexical environment used for static reduction.
-Value parameter patterns must be irrefutable because applying a value function is total.
-The same requirement applies to every value-producing `let`, including bindings inside a value-function body.
-A constructor pattern is irrefutable when its data type has exactly one constructor
-and its payload pattern is irrefutable.
+Applying a value function is total, so its parameters
+and value-producing bindings obey the [irrefutable binding-pattern rules](term.md#binding-patterns),
+even under `@[partial]`.
 This keeps value reduction and the transformations used by views total.
 
 The corresponding block-form introduction is `param val`:

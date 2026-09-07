@@ -14,8 +14,8 @@ use zydeco_assembly::{
 };
 use zydeco_wasm_common::{
     AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Intrinsics, Limits,
-    PointerLocal, ProductFields, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
-    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
+    PointerLocal, ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable,
+    WASM_PAGE_BYTES, WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
 };
 
 pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
@@ -231,8 +231,9 @@ impl ModulePlan {
             return Err(EmitError::DuplicateExtern(duplicate));
         }
 
-        let string_literal_function = (!strings.is_empty()).then_some(0);
-        let first_host_function = u32::from(string_literal_function.is_some());
+        let string_literal_function = (!strings.is_empty()).then_some(RuntimeFailure::IMPORT_COUNT);
+        let first_host_function =
+            RuntimeFailure::IMPORT_COUNT + u32::from(string_literal_function.is_some());
         let host_imports = externs
             .into_iter()
             .enumerate()
@@ -581,9 +582,7 @@ impl<'a> CaseEncoder<'a> {
                 self.function.instruction(&WasmInstruction::Unreachable);
             }
             | Terminator::Extern(external) => self.emit_extern(external)?,
-            | Terminator::Abort(_) => {
-                self.function.instruction(&WasmInstruction::Unreachable);
-            }
+            | Terminator::Abort(_) => RuntimeFailure::PatternMatch.emit(&mut self.function),
         }
         Ok(())
     }

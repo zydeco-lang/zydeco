@@ -453,6 +453,11 @@ impl<'a> Lower<'a> for sk::CompuId {
                     With::new(
                         cx,
                         Box::new(move |lo, cx| {
+                            // Partial-pattern fallthrough is an empty match, including for
+                            // scalar scrutinees. It has no constructor payload to unpack.
+                            if arms.is_empty() {
+                                return Abort.build(lo, cx);
+                            }
                             // Should we compile to a jump table?
                             // If any branch is not a constructor, we don't compile to a jump table.
                             let is_jump_table =

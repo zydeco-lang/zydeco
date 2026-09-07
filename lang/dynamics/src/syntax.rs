@@ -185,6 +185,8 @@ pub enum ProgKont {
 /// Recoverable failures raised by runtime-managed boundaries.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum RuntimeError {
+    #[error("pattern match failed")]
+    PatternMatch,
     #[error(transparent)]
     Foreign(#[from] crate::foreign::ForeignRuntimeError),
 }

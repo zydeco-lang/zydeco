@@ -66,6 +66,7 @@ pub enum TyckError {
     StaticNamedField { field: FieldName, found: TypeId },
     PatternAliasRequiresValue,
     RefutablePatternAlias,
+    RefutableBinding(su::PatId),
     RefutableFieldProjectionPattern,
     UnknownDataConstructor(CtorName),
     UnknownCoDataDestructor(DtorName),
@@ -151,6 +152,8 @@ pub enum TyckDiagnosticCode {
     PatternAliasRequiresValue,
     #[strum(serialize = "tyck.refutable-pattern-alias")]
     RefutablePatternAlias,
+    #[strum(serialize = "tyck.refutable-binding")]
+    RefutableBinding,
     #[strum(serialize = "tyck.refutable-field-projection-pattern")]
     RefutableFieldProjectionPattern,
     #[strum(serialize = "tyck.unknown-data-constructor")]
@@ -244,6 +247,7 @@ impl From<&TyckError> for TyckDiagnosticCode {
             | TyckError::StaticNamedField { .. } => Self::StaticNamedField,
             | TyckError::PatternAliasRequiresValue => Self::PatternAliasRequiresValue,
             | TyckError::RefutablePatternAlias => Self::RefutablePatternAlias,
+            | TyckError::RefutableBinding(_) => Self::RefutableBinding,
             | TyckError::RefutableFieldProjectionPattern => Self::RefutableFieldProjectionPattern,
             | TyckError::UnknownDataConstructor(_) => Self::UnknownDataConstructor,
             | TyckError::UnknownCoDataDestructor(_) => Self::UnknownCoDataDestructor,
@@ -426,6 +430,9 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::PatternAliasRequiresValue => {
                 "Pattern aliasing currently requires a value pattern".to_string()
+            }
+            | TyckError::RefutableBinding(_) => {
+                "Binding patterns must be irrefutable; use `@[partial]` on this binding or an explicit `match`".to_owned()
             }
             | TyckError::RefutablePatternAlias => {
                 "Pattern alias members must currently be irrefutable".to_string()
@@ -675,6 +682,7 @@ impl<'a> Tycker<'a> {
     /// Get the source span carried directly by an error payload.
     fn error_source_span(&self, error: &TyckError) -> Option<Span> {
         match error {
+            | TyckError::RefutableBinding(pattern) => Some(*pattern.span(self)),
             | TyckError::PackageWitnessesUnavailable { package } => {
                 self.statics_term_source_span((*package).into())
             }
@@ -788,6 +796,9 @@ impl<'a> Tycker<'a> {
             }
             | TyckError::PatternAliasRequiresValue => {
                 "Pattern aliasing currently requires a value pattern".to_string()
+            }
+            | TyckError::RefutableBinding(_) => {
+                "Binding patterns must be irrefutable; use `@[partial]` on this binding or an explicit `match`".to_owned()
             }
             | TyckError::RefutablePatternAlias => {
                 "Pattern alias members must currently be irrefutable".to_string()

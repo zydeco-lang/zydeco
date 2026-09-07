@@ -396,6 +396,7 @@ impl TermChecker<'_> {
                         }
                         }
                         | PatAnnId::Value(vpat, ty) => {
+                            ValuePatternShape::require_binding_k(tycker, pat, vpat)?;
                             // A value-pattern abstraction is pure when its body is a value
                             // and computational when its body is a computation.
                             let body_out_ann = TyEnvT::new(pat_out_ann.info.clone(), body)
@@ -589,6 +590,7 @@ impl TermChecker<'_> {
                                         TyckError::SortMismatch,
                                         std::panic::Location::caller(),
                                     )?;
+                                    ValuePatternShape::require_binding_k(tycker, pat, binder)?;
                                     let body_out_ann =
                                         TyEnvT::new(binder_elaboration.info.clone(), body).tyck_k(
                                             tycker,

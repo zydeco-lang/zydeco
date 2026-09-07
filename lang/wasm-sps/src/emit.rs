@@ -15,8 +15,8 @@ use zydeco_stackir::{
 use zydeco_syntax::Literal;
 use zydeco_wasm_common::{
     AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Intrinsics, Limits,
-    PointerLocal, ProductFields, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
-    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
+    PointerLocal, ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable,
+    WASM_PAGE_BYTES, WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
 };
 
 pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
@@ -277,8 +277,9 @@ impl ModulePlan {
         let (static_data, strings) = StringTable::build(string_entries)?;
 
         let layout = MemoryLayout::new(static_data.len())?;
-        let string_literal_function = (!strings.is_empty()).then_some(0);
-        let first_host_function = u32::from(string_literal_function.is_some());
+        let string_literal_function = (!strings.is_empty()).then_some(RuntimeFailure::IMPORT_COUNT);
+        let first_host_function =
+            RuntimeFailure::IMPORT_COUNT + u32::from(string_literal_function.is_some());
 
         let mut builtins = arena
             .admin
@@ -659,7 +660,7 @@ impl<'a> CaseEncoder<'a> {
                 self.emit_compu(tail)?;
                 self.function.instruction(&WasmInstruction::End);
             }
-            self.function.instruction(&WasmInstruction::Unreachable);
+            RuntimeFailure::PatternMatch.emit(&mut self.function);
         } else {
             let [sps::Matcher { binder, tail }] = arms.as_slice() else {
                 return Err(EmitError::InvalidCoprodMatch);
