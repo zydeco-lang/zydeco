@@ -63,14 +63,21 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
-    use zydeco_surface::textual::syntax::{Hole, Meta, MetaTerm, Term};
+    use zydeco_surface::textual::syntax::{Meta, MetaTerm, Term};
 
     #[test]
     fn source_graph_collects_documented_terms_across_imports() {
         let directory = tempdir().unwrap();
         let provider = directory.path().join("provider.zy");
         let root = directory.path().join("root.zy");
-        fs::write(&provider, "--| Provider term\n@(doc(module,\"provider\"))\n").unwrap();
+        fs::write(
+            &provider,
+            concat!(
+                "--| Provider term\n",
+                "@[doc(module,\"provider\")] fn (value : @(intrinsic(i64))) => ret value\n",
+            ),
+        )
+        .unwrap();
         fs::write(
             &root,
             concat!(
@@ -99,10 +106,8 @@ mod tests {
             provider_doc.site.directive.meta.arguments,
             [Meta::ident("module"), Meta::string("provider")]
         );
-        assert_eq!(provider_doc.term_source(), "@(doc(module,\"provider\"))");
-        // The paren spelling is sugar: the documented payload stays the hole,
-        // but its span covers the complete `@(doc(...))` form.
-        assert!(matches!(provider_doc.term(), Term::Hole(Hole)));
+        assert_eq!(provider_doc.term_source(), "fn (value : @(intrinsic(i64))) => ret value");
+        assert!(matches!(provider_doc.term(), Term::Abs(_)));
 
         assert_eq!(import_doc.path(), root.canonicalize().unwrap());
         assert_eq!(
