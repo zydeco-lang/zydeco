@@ -775,6 +775,9 @@ Integer division and remainder by zero stop execution with a clear runtime error
 Signed minimum divided by `-1` wraps to the signed minimum; the corresponding remainder is zero.
 
 An expected numeric type selects a literal's representation.
+Numeric literals use decimal digits, with an optional decimal fraction or complete exponent for floats.
+Unsupported prefixes and suffixes such as `0x1F` and `42u8`, and incomplete exponents such as `1e`,
+are lexical errors rather than separate number and identifier tokens.
 Integer literals must fit that representation; floating-point literals are rounded
 to the selected width, including subnormal rounding and underflow to zero.
 Literals that overflow the finite `Float64` range are rejected during parsing,

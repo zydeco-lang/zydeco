@@ -82,10 +82,14 @@ pub enum Tok<'input> {
     #[token("is")]
     Is,
 
-    #[regex(r"[\+-]?(?:[0-9]+\.[0-9]+(?:[eE][\+-]?[0-9]+)?|[0-9]+[eE][\+-]?[0-9]+)")]
+    #[regex(r"[\+-]?(?:[0-9]+\.[0-9]+(?:[eE][\+-]?[0-9]+)?|[0-9]+[eE][\+-]?[0-9]+)", priority = 4)]
     FloatLit(&'input str),
     #[regex(r"[\+-]?[0-9]+")]
     IntLit(&'input str),
+    #[regex(r"[\+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][\+-]?[0-9]+)?[A-Za-z_][A-Za-z0-9_]*", priority = 1)]
+    #[regex(r"[\+-]?[0-9]+(?:\.[0-9]+)?[eE][\+-]?", priority = 2)]
+    #[token_metadata(skip)]
+    MalformedNumber(&'input str),
     #[regex(r#""(?&string_char)*""#)]
     StrLit(&'input str),
     #[regex(r#""(?&string_char)*\\?"#)]
@@ -168,6 +172,8 @@ pub enum Tok<'input> {
 /// Malformed source emitted as a token to the parser's ordinary recovery machinery.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Error)]
 pub enum LexicalError {
+    #[error("malformed numeric literal; use decimal digits and a complete exponent")]
+    MalformedNumber,
     #[error("unrecognized source token")]
     UnrecognizedToken,
     #[error("block comment closing delimiter without an opening delimiter")]
@@ -253,6 +259,7 @@ impl<'source> Iterator for SourceTokens<'source> {
                     LexicalError::UnterminatedCharacter
                 })
             }
+            | Ok(Tok::MalformedNumber(_)) => SourceToken::Invalid(LexicalError::MalformedNumber),
             | Ok(Tok::Unknown(_)) | Err(()) => {
                 SourceToken::Invalid(LexicalError::UnrecognizedToken)
             }
@@ -350,7 +357,7 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Pack
             | Tok::Where
             | Tok::Is => Kind::Keyword,
-            | Tok::FloatLit(_) | Tok::IntLit(_) => Kind::Number,
+            | Tok::FloatLit(_) | Tok::IntLit(_) | Tok::MalformedNumber(_) => Kind::Number,
             | Tok::StrLit(_)
             | Tok::CharLit(_)
             | Tok::UnterminatedString(_)
@@ -426,6 +433,7 @@ impl Display for Tok<'_> {
             | Tok::DtorIdent(s)
             | Tok::FieldIdent(s)
             | Tok::FloatLit(s)
+            | Tok::MalformedNumber(s)
             | Tok::IntLit(s) => write!(f, "{kind:?}({s})"),
             | Tok::StrLit(s)
             | Tok::UnterminatedString(s)

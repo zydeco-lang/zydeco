@@ -5,6 +5,24 @@ use logos::Logos;
 use strum::VariantArray;
 
 #[test]
+fn malformed_numbers_are_single_lexical_errors() {
+    for source in ["0x1F", "0b101", "42u8", "1_000", "1e", "1e+", "-1.25E-", "1.5tail", "1e2tail"] {
+        let mut lexer = Lexer::new(source);
+        let error = lexer.next().unwrap().expect_err(source);
+        assert_eq!(error.inner, LexicalError::MalformedNumber);
+        assert_eq!(error.info.range(), 0..source.len());
+        assert!(lexer.next().is_none(), "{source}");
+    }
+    for source in ["0", "-42", "+7", "1.25", "1e2", "+1.25E-3", "-1e+2"] {
+        let mut lexer = Lexer::new(source);
+        assert!(lexer.next().unwrap().is_ok(), "{source}");
+        assert!(lexer.next().is_none(), "{source}");
+    }
+    let tokens = Lexer::new("1e2+3").collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(tokens.len(), 2);
+}
+
+#[test]
 fn every_fixed_spelling_lexes_to_its_declared_kind_and_formats_canonically() {
     TokenKind::VARIANTS.iter().copied().for_each(|kind| {
         for spelling in kind.source_spellings() {
