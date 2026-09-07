@@ -3,7 +3,7 @@
 --| Thunk Type and Return Type
 --| Primitive Base Types
 begin
-  param (
+  param val (
     /VType;
     /CType;
     /Thk;

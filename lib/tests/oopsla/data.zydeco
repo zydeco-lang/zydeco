@@ -1,6 +1,6 @@
 -- module Identity
 begin
-  param (
+  param val (
     /VType;
     /CType;
     /Thk;

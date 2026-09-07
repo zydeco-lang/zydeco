@@ -1373,18 +1373,6 @@ mod tests {
         let HoverContents::Markup(contents) = module.contents else {
             panic!("projection hover should use markup content")
         };
-        let builtin = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/builtin.zy")
-            .canonicalize()
-            .unwrap();
-        let builtin_source = std::fs::read_to_string(&builtin).unwrap();
-        let reader_definition =
-            definition_url(&builtin, source_position(&builtin_source, "(SystemReader :"));
-        let writer_definition =
-            definition_url(&builtin, source_position(&builtin_source, "(SystemWriter :"));
-        let os_definition =
-            definition_url(&builtin, source_position(&builtin_source, "(SystemOS :"));
-
         assert!(
             contents.value.starts_with("```zydeco\nstdio :"),
             "unexpected hover:\n{}",

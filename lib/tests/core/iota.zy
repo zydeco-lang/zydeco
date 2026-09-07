@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /Int64; /numeric; /system) :
+  param val (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /Int64; /numeric; /system) :
   @(import("../../std/builtin.zy")) that
   let int64 = numeric/int64 that
   let U = Thk that
