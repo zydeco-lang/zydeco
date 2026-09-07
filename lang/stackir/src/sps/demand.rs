@@ -1,27 +1,16 @@
-use std::collections::{BTreeMap, HashMap};
-use zydeco_statics::{arena::StaticsArena, syntax as ss};
-use zydeco_syntax::{Alias, ConsN, Ctor, Named};
-use zydeco_utils::prelude::ArenaAccess;
+//! Consumer demands used while rebuilding lexical high SPS.
 
-/// How live code consumes the value bound by one definition.
-///
-/// The analysis reads the checked program backwards from the root: a binding
-/// survives only when its binder is demanded, and a product survives only in
-/// the positions that are actually projected. Because values are pure and
-/// computation sequencing goes through `Do`, an absent binding or field can
-/// be skipped or replaced by a trivial value without observable effect.
+use super::syntax::*;
+use std::collections::{BTreeMap, HashMap};
+
+/// The observable part of a value. Shape demand survives until its unpack does.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Demand {
-    /// Nothing references the binding; its bindee never evaluates.
     #[default]
     Absent,
-    /// Only the listed product positions are ever projected; other positions
-    /// are never observed and may hold trivial values instead. An empty map
-    /// still observes the product's shape — a pattern that unpacks the
-    /// product needs a real product in that position, with every position
-    /// itself trivial.
+    /// Physical product positions. An empty map still requires a product.
     Fields(BTreeMap<usize, Demand>),
-    /// The value flows into an unknown context and must be kept whole.
+    /// An unknown consumer observes the whole value.
     Used,
 }
 
@@ -30,18 +19,13 @@ impl Demand {
         matches!(self, Self::Absent)
     }
 
-    /// Join two demands for the same binding: keep the union of what either
-    /// context needs.
-    fn join(self, other: Self) -> Self {
+    pub(super) fn join(self, other: Self) -> Self {
         match (self, other) {
             | (Self::Used, _) | (_, Self::Used) => Self::Used,
             | (Self::Absent, rest) | (rest, Self::Absent) => rest,
             | (Self::Fields(mut left), Self::Fields(right)) => {
                 for (position, demand) in right {
-                    let joined = match left.remove(&position) {
-                        | Some(left) => left.join(demand),
-                        | None => demand,
-                    };
+                    let joined = left.remove(&position).unwrap_or_default().join(demand);
                     left.insert(position, joined);
                 }
                 Self::Fields(left)
@@ -49,257 +33,85 @@ impl Demand {
         }
     }
 
-    /// The demand on the head of a resolved projection chain.
-    ///
-    /// `products` are stored outermost first: folding in reverse nests each
-    /// projection around the incoming demand of the projected value.
-    fn through_projections(self, products: &[ss::ProductProjection]) -> Self {
-        products.iter().rev().fold(self, |demand, projection| {
-            let mut fields = BTreeMap::new();
-            fields.insert(projection.position, demand);
-            Self::Fields(fields)
-        })
-    }
-}
-
-/// Demand analysis over one checked computation root.
-///
-/// The pass visits every computation that can still run, so any `Let` binder
-/// whose demand is absent is provably dead. Recursive `Fix` bindings are
-/// always visited and never eliminated: an outer fixpoint body may reference
-/// an inner fixpoint's parameter, so a binding-site decision taken before
-/// that body is visited could drop a definition that later code reaches.
-/// That reference pattern only arises between mutually recursive fixpoints,
-/// which plain `Let` bindings cannot express.
-pub struct DefinitionDemand {
-    demands: HashMap<ss::DefId, Demand>,
-    /// The joined demand each visited value node was analyzed under, so
-    /// lowering can skip product positions nothing projects.
-    contexts: HashMap<ss::ValueId, Demand>,
-}
-
-impl DefinitionDemand {
-    /// Analyze one checked root. The root's own result is demanded whole.
-    ///
-    /// The traversal repeats until its demand tables stop growing: a
-    /// recursive body may refer to bindings visited earlier in the traversal.
-    /// Demand joins only grow, so successive rounds converge.
-    pub fn new(statics: &StaticsArena, root: ss::CompuId) -> Self {
-        let mut analysis = Self { demands: HashMap::new(), contexts: HashMap::new() };
-        loop {
-            let previous = (analysis.demands.clone(), analysis.contexts.clone());
-            analysis.visit_compu(statics, &root, Demand::Used);
-            if analysis.demands == previous.0 && analysis.contexts == previous.1 {
-                break;
+    /// A logical cons item may represent the entire remaining physical suffix.
+    /// That suffix must keep its shape even when all its fields are dead.
+    pub(super) fn item(&self, position: usize, count: usize, layout: ProductLayout) -> Self {
+        match self {
+            | Self::Used => Self::Used,
+            | Self::Fields(fields) if position + 1 == count && count < layout.arity => {
+                Self::Fields(
+                    fields
+                        .range(position..)
+                        .map(|(field, demand)| (field - position, demand.clone()))
+                        .collect(),
+                )
             }
+            | Self::Fields(fields) => fields.get(&position).cloned().unwrap_or_default(),
+            | Self::Absent => Self::Absent,
         }
-        analysis
+    }
+}
+
+/// Demands on the free definitions of one surviving subtree. Lexical binders
+/// consume their entries; no checked-AST tables or global fixed point are needed.
+#[derive(Default)]
+pub(super) struct Demands(HashMap<DefId, Demand>);
+
+impl Demands {
+    pub fn singleton(def: DefId, demand: Demand) -> Self {
+        Self(HashMap::from([(def, demand)]))
     }
 
-    /// The demand one visited value node was analyzed under. Unvisited nodes
-    /// report whole-value demand, matching lowering without trimming.
-    pub fn value_demand(&self, node: ss::ValueId) -> Demand {
-        self.contexts.get(&node).cloned().unwrap_or(Demand::Used)
+    pub fn join(mut self, other: Self) -> Self {
+        for (def, demand) in other.0 {
+            let joined = self.0.remove(&def).unwrap_or_default().join(demand);
+            self.0.insert(def, joined);
+        }
+        self
     }
 
-    /// Print every definition's final demand, for debugging trimming.
-    pub fn trace(
-        &self, statics: &StaticsArena, scoped: &zydeco_surface::scoped::arena::ScopedArena,
-    ) {
-        use std::fmt::Write as _;
-        let mut names: Vec<_> = self
-            .demands
-            .iter()
-            .map(|(def, demand)| {
-                let name = statics.def_name(scoped, def).0.clone();
-                let mut described = String::new();
-                match demand {
-                    | Demand::Absent => write!(described, "absent"),
-                    | Demand::Used => write!(described, "used"),
-                    | Demand::Fields(fields) => {
-                        write!(described, "fields {:?}", fields.keys().collect::<Vec<_>>())
-                    }
-                }
-                .unwrap();
-                (name, described)
-            })
-            .collect();
-        names.sort();
-        names.into_iter().for_each(|(name, described)| eprintln!("{name}: {described}"));
+    pub fn contains(&self, def: &DefId) -> bool {
+        self.0.contains_key(def)
     }
 
-    /// Whether none of the definitions bound by `binder` is demanded.
-    pub fn is_absent(&self, statics: &StaticsArena, binder: &ss::VPatId) -> bool {
-        self.pattern_demand(statics, binder).is_absent()
+    pub fn remove(&mut self, def: &DefId) {
+        self.0.remove(def);
     }
 
-    /// The demand accumulated for the definitions bound by `pattern`.
-    pub fn pattern_demand(&self, statics: &StaticsArena, pattern: &ss::VPatId) -> Demand {
-        match statics.vpats[pattern].clone() {
-            | ss::ValuePattern::Var(def) => self.demands.get(&def).cloned().unwrap_or_default(),
-            | ss::ValuePattern::Named(Named(_, inner)) => self.pattern_demand(statics, &inner),
-            // Every member of a pattern alias matches the same scrutinee, so
-            // the demanded structure is the join of the members' demands.
-            | ss::ValuePattern::Alias(Alias(patterns)) => patterns
+    pub fn pattern(&self, arena: &StackirArena, binder: VPatId) -> Demand {
+        match &arena.inner.vpats[&binder] {
+            | ValuePattern::Var(def) => self.0.get(def).cloned().unwrap_or_default(),
+            | ValuePattern::Hole(_) | ValuePattern::Triv(_) => Demand::Absent,
+            | ValuePattern::Ctor(_) => Demand::Used,
+            | ValuePattern::Alias(Alias(patterns)) => patterns
                 .iter()
-                .map(|pattern| self.pattern_demand(statics, pattern))
+                .map(|pattern| self.pattern(arena, *pattern))
                 .fold(Demand::Absent, Demand::join),
-            | ss::ValuePattern::VCons(items) => {
-                self.positional_demand(statics, items.iter().copied())
-            }
-            | ss::ValuePattern::SCons(ConsN(_, tail)) => self.pattern_demand(statics, &tail),
-            // Matching a constructor observes the tag, so a constructor
-            // pattern demands the scrutinee whole even when its payload
-            // binders are all ignored.
-            | ss::ValuePattern::Ctor(_) => Demand::Used,
-            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
-            // Comparing against a literal reads the scrutinee whole.
-            | ss::ValuePattern::Lit(_) => Demand::Used,
-            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => Demand::Absent,
-        }
-    }
-
-    fn positional_demand(
-        &self, statics: &StaticsArena, patterns: impl Iterator<Item = ss::VPatId>,
-    ) -> Demand {
-        let fields = patterns
-            .enumerate()
-            .filter_map(|(position, pattern)| {
-                let demand = self.pattern_demand(statics, &pattern);
-                (!demand.is_absent()).then_some((position, demand))
-            })
-            .collect::<BTreeMap<_, _>>();
-        Demand::Fields(fields)
-    }
-
-    fn join_def(&mut self, def: ss::DefId, demand: Demand) {
-        let joined = match self.demands.remove(&def) {
-            | Some(left) => left.join(demand),
-            | None => demand,
-        };
-        self.demands.insert(def, joined);
-    }
-
-    fn visit_compu(&mut self, statics: &StaticsArena, compu: &ss::CompuId, ctx: Demand) {
-        match statics.compus[compu].clone() {
-            | ss::Computation::Hole(_) => {}
-            | ss::Computation::VAbs(ss::Abs(_, body)) => {
-                if !ctx.is_absent() {
-                    // The function's result is demanded by unknown callers.
-                    self.visit_compu(statics, &body, Demand::Used);
-                }
-            }
-            | ss::Computation::VApp(ss::App(head, argument)) => {
-                self.visit_compu(statics, &head, ctx);
-                self.visit_value(statics, &argument, Demand::Used);
-            }
-            | ss::Computation::TAbs(ss::Abs(_, body)) => self.visit_compu(statics, &body, ctx),
-            | ss::Computation::TApp(ss::App(head, _)) => self.visit_compu(statics, &head, ctx),
-            | ss::Computation::Fix(ss::Fix(_, body)) => {
-                self.visit_compu(statics, &body, Demand::Used);
-            }
-            // Forcing enters the thunk, so the thunk value is consumed whole;
-            // the context demand belongs to the result, which only a literal
-            // `Thunk` node could forward to its suspended body.
-            | ss::Computation::Force(ss::Force(thunk)) => {
-                self.visit_value(statics, &thunk, Demand::Used);
-            }
-            | ss::Computation::Ret(ss::Return(value)) => self.visit_value(statics, &value, ctx),
-            | ss::Computation::Do(ss::Bind { binder, bindee, tail }) => {
-                self.visit_compu(statics, &tail, ctx);
-                // Lowering still evaluates the bindee when its result is discarded.
-                // Keep its value dependencies; field demands can still trim products.
-                let binder_demand = self.pattern_demand(statics, &binder);
-                let binder_demand =
-                    if binder_demand.is_absent() { Demand::Used } else { binder_demand };
-                self.visit_compu(statics, &bindee, binder_demand);
-            }
-            | ss::Computation::Let(ss::Let { binder, bindee, tail }) => {
-                self.visit_compu(statics, &tail, ctx);
-                let binder_demand = self.pattern_demand(statics, &binder);
-                if !binder_demand.is_absent() {
-                    self.visit_value(statics, &bindee, binder_demand);
-                }
-            }
-            | ss::Computation::Match(ss::Match { scrut, arms }) => {
-                let scrut_demand = arms
+            | ValuePattern::VCons(VCons { items, layout }) => {
+                let fields = items
                     .iter()
-                    .map(|arm| {
-                        self.visit_compu(statics, &arm.tail, ctx.clone());
-                        self.pattern_demand(statics, &arm.binder)
-                    })
-                    .fold(Demand::Absent, Demand::join);
-                // Matching consumes the scrutinee even when no arm binder
-                // reads a position, so an absent demand still requires the
-                // value to exist.
-                let scrut_demand =
-                    if scrut_demand.is_absent() { Demand::Used } else { scrut_demand };
-                self.visit_value(statics, &scrut, scrut_demand);
-            }
-            | ss::Computation::CoMatch(ss::CoMatch { arms }) => {
-                for arm in &arms {
-                    // Dtor invocation sites decide the result demand.
-                    self.visit_compu(statics, &arm.tail, Demand::Used);
-                }
-            }
-            | ss::Computation::Dtor(ss::Dtor(head, _)) => {
-                self.visit_compu(statics, &head, Demand::Used);
-            }
-        }
-    }
-
-    fn visit_value(&mut self, statics: &StaticsArena, value: &ss::ValueId, ctx: Demand) {
-        if statics.foreign_imports.get(value).is_some() {
-            return;
-        }
-        let joined = match self.contexts.remove(value) {
-            | Some(earlier) => earlier.join(ctx.clone()),
-            | None => ctx.clone(),
-        };
-        self.contexts.insert(*value, joined);
-        match statics.values[value].clone() {
-            | ss::Value::Hole(_) | ss::Value::Triv(_) | ss::Value::Lit(_) => {}
-            | ss::Value::Var(def) => self.join_def(def, ctx),
-            | ss::Value::Named(Named(_, inner)) => self.visit_value(statics, &inner, ctx),
-            | ss::Value::Let(ss::Let { binder, bindee, tail }) => {
-                self.visit_value(statics, &tail, ctx);
-                let binder_demand = self.pattern_demand(statics, &binder);
-                if !binder_demand.is_absent() {
-                    self.visit_value(statics, &bindee, binder_demand);
-                }
-            }
-            // The lowerer diagnoses malformed residual inputs. No static
-            // resolver participates in demand or backend acceptance.
-            | ss::Value::ValAbs(_) | ss::Value::ValApp(_) => {}
-            // The thunk's suspended body produces the demanded result.
-            | ss::Value::Thunk(ss::Thunk(body)) => self.visit_compu(statics, &body, ctx),
-            | ss::Value::Ctor(Ctor(_, payload)) => {
-                self.visit_value(statics, &payload, Demand::Used);
-            }
-            | ss::Value::VCons(items) => match &ctx {
-                | Demand::Absent => {}
-                | Demand::Used => {
-                    for item in items {
-                        self.visit_value(statics, &item, Demand::Used);
-                    }
-                }
-                | Demand::Fields(fields) => {
-                    for (position, item) in items.into_iter().enumerate() {
-                        if let Some(demand) = fields.get(&position) {
-                            self.visit_value(statics, &item, demand.clone());
+                    .enumerate()
+                    .flat_map(|(position, pattern)| {
+                        let demand = self.pattern(arena, *pattern);
+                        if position + 1 == items.len() && items.len() < layout.arity {
+                            match demand {
+                                | Demand::Fields(fields) => fields
+                                    .into_iter()
+                                    .map(|(field, demand)| (position + field, demand))
+                                    .collect(),
+                                | Demand::Used => (position..layout.arity)
+                                    .map(|field| (field, Demand::Used))
+                                    .collect(),
+                                | Demand::Absent => Vec::new(),
+                            }
+                        } else if demand.is_absent() {
+                            Vec::new()
+                        } else {
+                            vec![(position, demand)]
                         }
-                    }
-                }
-            },
-            | ss::Value::SCons(ConsN(_, body)) => self.visit_value(statics, &body, ctx),
-            | ss::Value::Proj(ss::Proj(head, field)) => {
-                let head_demand = ctx.through_projections(&field.target.products);
-                if std::env::var_os("ZYDECO_TRACE_TRIMMING").is_some() {
-                    let positions: Vec<_> =
-                        field.target.products.iter().map(|step| step.position).collect();
-                    eprintln!("proj /{} steps {:?}", field.name, positions);
-                }
-                self.visit_value(statics, &head, head_demand);
+                    })
+                    .collect();
+                Demand::Fields(fields)
             }
         }
     }

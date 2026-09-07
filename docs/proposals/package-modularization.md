@@ -524,8 +524,9 @@ both directions of the explicit `forall` adapters, and a callback that keeps a p
 including a hidden existential, and pairs witness recovery through static forwarding with rejection
 of hidden runtime witnesses after forwarding or repacking.
 
-Demand propagation through runtime package-dependent computation applications remains an optimization to measure;
-those applications currently demand their arguments whole.
+[High-SPS normalization](normalization.md#residual-sps-normalization) exposes parameter demands
+when a known computation application reduces locally, allowing unused package fields to disappear.
+Applications that remain indirect conservatively demand their arguments whole.
 
 ## Elaboration and runtime representation
 

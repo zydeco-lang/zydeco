@@ -1,146 +1,96 @@
 # Demand Analysis
 
-Every backend lowers one checked root computation on demand, so intermediate representations never contain code
-that is unreachable from the root.
-Two size sources survive that property. First, a Zydeco program is one term:
-every top-level definition of every transitively imported file sits on the root's binding spine and is
-therefore syntactically reachable, so unused user definitions are lowered and emitted.
-Second, and much larger, the host Builtin package is materialized from its *signature*: the plan walks the package type
-and turns every operation entry into a closure program plus an extern declaration, regardless of what the program uses.
-The echo-sum example, which calls five operations, emitted 135 labeled closure programs and 131 externs
-before this analysis existed, because the numeric towers of the standard library all ride along inside the package.
+A program can reach a package without observing every field of that package.
+Ordinary reference liveness retains the entire construction, including all the closures it contains.
+Demand analysis asks how the surviving consumer uses each value, so unused operations
+and their dependencies can disappear before closure conversion allocates environments or emits code.
 
-Plain reference liveness does not fix the second source.
-The package construction references every field, so every operation is reachable
-from the root through the package value; nothing is dead in the liveness sense.
-What distinguishes the five used operations is not reachability but *how* the package is consumed:
-the program projects only certain positions, at certain depths.
-The pass described here therefore computes demands — for each binding, which product positions
-of its value are ever observed — and uses them to skip dead bindings and to materialize only the demanded part
-of the host package.
+The analysis is part of [residual SPS normalization](normalization.md#residual-sps-normalization).
+`lang/stackir/src/sps/demand.rs` defines consumer demands and their translation through patterns;
+`sps::normalize` uses those demands while rebuilding high SPS.
+The checked residual program lowers structurally, including the complete Builtin package plan.
+Host package fields and user product fields then follow the same elimination rules.
+The interpreter retains its reference semantics, and the editor retains the full checked program.
 
-The analysis lives in the stack IR crate (`lang/stackir/src/sps/demand.rs`) and runs once
-per root when the lowerer is constructed.
-This placement is deliberate.
-The interpreter is the reference semantics and keeps linking the whole program unchanged;
-the analysis session used by the editor needs the full checked program for completion and diagnostics.
-Compilation is the only consumer, and its two decision points — the `Let` arms of the SPS lowerer
-and the Builtin package materializer — already read the checked arena through the lowerer.
-A table shared through the statics crate would make the incremental check pay for a compilation-only concern,
-and rewriting the spine to drop dead bindings is awkward against an immutable, shared checked arena.
-By the time lowering has run, a later sweep of any IR is also too late: dead bindings are already inlined
-into the root program body, and eliminating there would require conservative reasoning about code flowing as data.
-Deciding at the boundary where purity is still syntactic keeps the rule exact.
+This placement relies on high SPS preserving lexical bindings, explicit sharing, and suspended computations.
+The former checked-AST analysis and demand-dependent lowering have been removed.
+Lowering temporarily constructs unused high-SPS nodes, but normalization removes them before closure conversion.
+Avoiding that temporary construction would be a compile-time optimization to justify with measurements.
 
 ## The demand lattice
 
-A demand describes what live code needs from one bound value.
-`Absent` means nothing references the binding, so its bindee never evaluates.
-`Fields` maps product positions to the demands placed on those positions;
-positions absent from the map are never observed and may hold trivial values.
-An empty `Fields` map is distinct from `Absent`: it records that a pattern structurally unpacks the product
-while no position of it is live, so the product's shape must still exist — lowered as a real product
-whose every position holds a trivial value — even though nothing inside it is observed.
-`Used` means the value flows into an unknown context, such as a function argument
-or a returned closure, and must be kept whole.
-Join takes the union of what either context needs, with `Used` absorbing everything.
+A demand describes what a consumer observes:
 
-Elimination is sound because values are pure: in call-by-push-value, evaluating a value performs no effects,
-and effect sequencing goes through `Do`, which the analysis never drops.
-Replacing an unobserved product position with `Triv` preserves the layout and is unobservable,
-and skipping the bindee of an `Absent` binding removes no evaluation.
-Runtime structure that observes a value — forcing a thunk, matching a constructor tag —
-counts as a use and is modeled as one.
+| Demand | Observation |
+| --- | --- |
+| `Absent` | No use of the value survives. |
+| `Fields` | Only the listed physical product positions and their nested demands are observed. |
+| `Used` | An unknown consumer requires the whole value. |
 
-## One backward pass
+Join combines observations from all consumers. `Used` absorbs every other demand;
+joining field demands takes their union and recursively joins demands on common positions.
+An empty `Fields` map differs from `Absent`: a surviving unpack still requires the product's shape,
+even when it reads none of the fields.
+Such a product can contain trivial values in every position.
 
-The traversal starts at the root with `Used` and works backwards through the spine,
-visiting each computation with the demand on its result.
-At a `Let` it visits the tail first, reads the accumulated demand of the binder's definitions,
-and only then visits the bindee with that demand; a binder whose demand is absent skips its bindee entirely.
-`Do` always evaluates both parts and passes the binder's demand as the return demand of its bindee,
-so `Ret` and application nodes propagate it onto their values.
-Projections run backwards by nesting: the resolved projection chain of `numeric/int64` turns a demand
-on the field into `Fields{int64-position: demand}` on the receiver.
+Demand describes observation, not permission to suppress evaluation.
+The normalizer applies its [discardability and stack-movement rules](normalization.md#residual-sps-normalization)
+before removing a binding or replacing an unobserved field with `Triv`.
+A trapping field remains evaluated even if no consumer observes its result.
 
-Two structural facts keep the traversal honest.
-Nested binding scopes are lexical: an inner bindee may demand an outer binder, which the pass decides later,
-but nothing can demand an inner binder from outside its scope.
-And recursion arrives contained: a recursive definition elaborates as a `Let`
-whose bindee is a thunk over `Fix`, so self- and mutual references live inside the bindee
-and are only visited after the binding-site decision has been made.
-A dead recursive definition therefore dies with its enclosing `Let`, and a self-reference never resurrects it.
+## Producer facts and consumer demands
 
-The [shared static elaborator](normalization.md#implementation-status) eliminates value-function applications
-before this traversal, exposing the residual callee body and lexical argument bindings.
-Demand therefore propagates through ordinary bindings without a second static resolver.
-The traversal repeats until its tables stop growing to account for recursive references; joins only grow,
-so successive rounds converge.
+At `let p = V in M`, the normalizer first records facts about `V` in the lexical environment used for `M`.
+Known callees, product fields, and constructor tags can expose local reductions in that consumer.
+The normalized consumer returns a map from its free definitions to their demands.
+The binder pattern translates those entries into a demand on `V`, which is then rebuilt under that demand.
+Demands on the bound definitions leave the map; demands from the surviving producer join the remaining entries.
+This makes alias forwarding, field pruning, and dead-binding elimination parts of one traversal.
 
-A bare `Fix` node — one elaborated outside any `Let` bindee — is visited but never eliminated.
-Such a shape would let an outer fixpoint body reference an inner fixpoint's parameter across sibling bindings,
-and that reference is only discovered after the inner binding-site decision;
-dropping by local decision could remove a definition that later code reaches.
-No elaboration producing this shape has been observed, so the guard is conservative rather than load-bearing.
+A return to a visible continuation becomes an ordinary binding before demand is read.
+Likewise, reducing a known application exposes its parameter and argument as a binding.
+The consumer's field demands can therefore prune a package passed to a locally reduced computation.
+A call whose implementation remains unknown conservatively observes its argument values whole.
+Escaping thunks remain suspended, and their normalized bodies contribute demands on their captures.
 
-## Positions in patterns and plans
+Lexical structure makes these demands local.
+A binder's entire surviving scope is visited before deciding whether to keep its producer,
+and independent branches join their demands before that decision.
+An executed `Fix` remains, with its self reference treated as an unknown callable;
+the normalized body contributes all demands on its outer captures.
+A dead thunk containing recursion can disappear without inspecting its body.
+There is no recursive-call specialization and no global demand fixed point.
 
-Reading a binder's demand out of a pattern requires knowing how pattern shapes map to positions.
-`VCons` concatenates positionally. `Alias` does not: every member of a pattern alias matches the *same* scrutinee,
-so the demanded structure is the join of the members' demands.
-The checker's own witness arithmetic records the same distinction —
-product patterns sum their components' arities while an alias picks one member's —
-and the lowered code confirms it by unpacking one package value once per alias member.
-`SCons` contributes nothing from its static components; type fields have no runtime position.
+## Physical positions and pattern aliases
 
-The same alignment lets the Builtin plan consume the analysis.
-The plan walks the package type, stripping existential wrappers, manifests, and named wrappers;
-the root's parameter pattern strips the same layers, with `SCons` static components carrying the witnesses.
-Pattern positions therefore index plan positions, and the root's parameter demand reads off exactly
-which operations must be materialized.
-Undemanded positions still receive `Triv` to preserve the product arity,
-since the parameter pattern destructures the whole package at runtime.
-User-level product constructions lower the same way: the lowerer reads each construction's recorded demand
-and fills unobserved positions with `Triv`, skipping the bindings and operations only they would have demanded.
-A position whose sub-demand is the empty `Fields` still lowers its item, which then becomes a product
-of trivial values — the shape a pattern somewhere unpacks.
+High SPS records the physical arity of every product construction and pattern.
+Ordinary items demand individual positions. If the last logical item represents the remaining suffix,
+its nested field positions are shifted into the containing product's physical positions.
+Rebuilding a suffix spread preserves a product of the required arity even when all its fields are absent,
+because constructing the enclosing product still reads that suffix.
+Static witnesses and named field routes have already erased or become structural patterns during lowering.
 
-## Uses that are not projections
+Every member of an `Alias` pattern observes the same scrutinee.
+Their demands join at the same positions; they do not concatenate.
+A whole-value use through one alias therefore keeps fields that another alias only projects selectively.
+Product construction and elimination can cancel when their logical components and physical layout align.
+Once that unpack disappears, its shape no longer contributes demand.
 
-Three consumption forms do not project, and each one had to be learned the hard way during bring-up;
-they are the invariants most worth reviewing.
+## Observations beyond projections
 
-Forcing is call position. `Force` demands its thunk whole, because a forced projection such as `int64/add` is *entered*,
-and entering an operation needs the closure at that position regardless of what is demanded of the result.
-The first version of the pass propagated the result demand through `Force`
-and pruned every used operation down to `Triv`.
-Only a literal `Thunk` node could forward a result demand to its suspended body,
-and even then a thunk can be forced from several sites, so bodies conservatively receive `Used`.
+An indirect force observes its thunk whole.
+The result demand is not a demand on the closure package.
+A direct primitive call can remove that closure use through normalization, while retaining the external call
+and every value needed by its supplied stack.
 
-Matching consumes the scrutinee. A constructor pattern observes the tag even when every payload binder is ignored,
-so constructor patterns demand the scrutinee whole.
-And when the join of all arms' demands is empty — every binder a hole — the match still evaluates
-and destructs its scrutinee, so the demand escalates to `Used` rather than staying absent.
-The version that ignored this dropped the scrutinee's binding and produced an open root;
-the SPS well-formedness check caught it as a free variable before any backend could misbehave.
-That check remains the safety net for any future under-approximation in this pass.
+A constructor pattern observes the tag even if it ignores every payload binder.
+Surviving constructor matches conservatively demand their scrutinees whole.
+Known-constructor selection can remove the other arms, so dependencies used only in those arms become absent.
+If selection cannot be established, all potentially live arms remain consumers.
 
-View patterns carry embedded value functions, which are live code whenever the enclosing binding or match is live;
-the analysis visits them at binding sites rather than during demand reads, so reading a pattern's demand stays pure.
-
-## Measured effect and review status
-
-On the add example, which calls `int64_add` and `process/exit`, the emitted assembly fell
-from 934 to 152 lines with two externs instead of 131.
-On echo-sum, 1059 lines and 131 externs became 299 lines and the five externs it actually uses.
-Flowing caller demand through value-function applications then collapsed whole-program assembly sizes:
-the minimal standard-library consumer, which calls two integer operations, fell from 19,527 lines to 2,218,
-and the utf8, float, and collections suites fell to a third or less of their previous sizes —
-the unused components of instantiated library packages became ordinary dead bindings.
-All end-to-end suites, interpreter included, pass unchanged, and the interpreter is untouched by design.
-
-What remains deliberately unexploited: forcing still demands thunks whole,
-so return positions inside closure bodies are not slimmed, and view functions are visited with `Used`.
-The all-absent match escalation is conservative.
-And the complement of the live set is precisely an unused-definition warning,
-which the editor could surface without touching the compiler again.
+The normalizer's tests pair nested and suffix field pruning with whole-product escape,
+and single-use closure reduction with shared alias patterns.
+They also retain trapping payloads and stack arguments, unknown branches with shared continuations,
+and unknown or recursive calls.
+The demand and core integration tests cover unused definitions, unused Builtin operations, package applications,
+and execution on the compiled backends.

@@ -380,8 +380,9 @@ let std = builtin |> make_std in
 
 Inlining duplicates a body at each application, so emitted size and compiler recursion depth grow
 with the unfolded program; the workspace test configuration raises its minimum stack accordingly.
-Static elimination exposes the callee's residual body and lexical argument bindings to demand analysis,
-so unused components of an instantiated package become ordinary dead bindings.
+Static elimination exposes the callee's residual body and lexical argument bindings. After lowering,
+[high-SPS normalization with demand analysis](normalization.md#residual-sps-normalization) removes unused components
+of the instantiated package.
 Factoring repeated residual code into direct blocks remains a backend optimization after static elimination.
 It must preserve specialization by static arguments and cannot reintroduce runtime `ValPi` values.
 

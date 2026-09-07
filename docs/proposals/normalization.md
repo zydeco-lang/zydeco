@@ -125,7 +125,8 @@ It creates fresh typed residual nodes in the checker's unpublished arena
 and records the executable root alongside the original source root; source annotations
 and query facts remain available for inspection.
 Both interpreter linking and SPS lowering select that residual root.
-The type lint checks both representations, while SPS demand analysis consumes the residual program directly.
+The type lint checks both representations. Compilation lowers the residual program into high SPS,
+where runtime normalization and demand analysis share the lexical representation.
 
 Runtime reification rejects surviving value functions and runtime interfaces requiring their representation
 with `tyck.static-elimination` at the responsible source term.
@@ -146,49 +147,102 @@ The [value-function implementation account](value-pi.md#implementation-boundary)
 and [package implementation account](package-modularization.md#current-implementation-and-validation) record
 the construct-specific regression cases and remaining optimizations.
 
-## Residual Primitive Calls
+## Residual SPS Normalization
+
+Static elaboration leaves computation application, forcing, returns, and runtime packages explicit.
+Those interfaces support abstraction in source code, but a known producer followed
+by its consumer can often execute locally without allocating the corresponding runtime package.
+`sps::normalize` performs these optional reductions on high SPS before closure conversion.
+The reference interpreter continues to execute the checked residual program directly.
+
+The pass combines lexical producer facts with [consumer demands](demand-analysis.md).
+Forward facts identify aliases, literal values, products, constructor tags, and suspended code.
+The surviving consumer returns field demands to each binding, so simplification immediately exposes
+which parts of its producer can disappear.
+Lowering itself constructs the complete high-SPS program, including the Builtin package;
+it no longer runs a separate checked-AST demand analysis.
+
+### Local reductions
+
+The following equations describe the principal reductions, with `S` the supplied stack and `•` its ambient variable:
+
+```text
+force (closure • => M) S          ==>  M[S/•]
+let arg(p) :: • = arg(v) :: S in M ==>  let p = v in M[S/•]
+return v to (kont p => M)         ==>  let p = v in M
+kont x => return x to •          ==>  •
+closure • => force f •           ==>  f
+```
+
+The forwarding equations apply to a variable `f` and a plain variable continuation binder.
+A pushed destructor tag selects the corresponding comatch arm and supplies its remaining stack.
+Matching product introductions and eliminations split into component bindings in evaluation order;
+matching constructor introductions and patterns similarly bind their payloads.
+A statically selected coproduct arm removes its stack guard and receives the guard's supplied stack.
+Unknown value branches retain their shared stack join.
+
+Substitution retains the producer's lexical value environment and the captured ambient stack of continuations.
+It stops at stack binders, including closures, recursive bodies, argument consumers,
+comatch arms, and the join guarding a value branch.
+This preserves the branch-join placement and single node occurrence invariants checked by `BranchJoinProgram`.
+
+A substituted stack may be constructed later than its original occurrence.
+Consequently, these substitutions require movable remaining frames: argument values must be discardable,
+tags recurse into the remaining stack, and continuation bodies remain suspended.
+Frames containing trapping intrinsic values retain their original boundary,
+so their evaluation cannot move past an intervening effect.
+A popped head argument is bound before the consumer runs.
+
+### Sharing and discardability
+
+Directly forced closure literals reduce locally.
+A general closure bound to a variable can move into its force when the variable has exactly one syntactic occurrence.
+Matching product components can establish the same ownership for their individual bindings.
+Occurrence counts conservatively include uses in dead code.
+Shared closure bodies remain bound; alias patterns do not establish exclusive ownership of their scrutinee.
+Recursion remains residual and is never unfolded by this pass.
+
+Value aliases forward without copying compound values.
+Literal substitution is limited to singly used bindings; trivial values can forward freely.
+A returned value used repeatedly remains bound once, preserving runtime sharing.
+The normalizer revisits exposed consumers through the reduction rules themselves, with no fixed-round schedule.
+It preserves definition identities while allocating fresh nodes for the surviving lexical tree.
+
+Unused bindings and product fields disappear only when constructing the value is discardable.
+Variables, literals, trivial values, and suspended closures are discardable;
+products and constructors inherit that property from their contents.
+Intrinsic value operations and holes remain evaluated because they may trap.
+An executed external call or `Fix` remains even when its result is unused.
+These rules preserve the order and number of effects and keep escaping computations suspended.
+
+### Residual Primitive Calls
 
 Primitive operations retain their computation types and thunked package fields.
 For example, integer addition is supplied as `Thk (Int64 -> Int64 -> Ret Int64)`.
-This lets a program store an operation, choose it dynamically, or pass it to a computation parameter.
-When the compiler knows which primitive is being forced, that interface need not allocate a runtime thunk.
-
-High SPS initially represents a primitive as a closure whose body calls the external operation on its incoming stack.
-Before closure conversion, `sps::normalize` propagates knowledge of these suspended calls
-through lexical aliases, products and their projections, and constructor payloads.
-It applies the following reductions, where `S` is the supplied stack and `•` is the ambient stack:
+A program can store that operation, select it dynamically, or pass it to an unknown consumer.
+High SPS initially represents it as a closure calling the external operation on its incoming stack:
 
 ```text
 force (closure • => extern f •) S  ==>  extern f S
-let arg(p) :: • = arg(v) :: • in M  ==>  let p = v in M
-return v to (kont p => M)           ==>  let p = v in M
 ```
 
-The force rule also applies when lexical facts identify the callee through a variable or package projection.
-The argument rule requires the residual stack to be the same ambient stack;
-other argument bindings remain explicit, while still forwarding facts about a visible argument.
-The return rule binds the returned value once, preserving sharing if the continuation uses it repeatedly.
-Unused value bindings disappear after these reductions when constructing the bindee is discardable.
-Suspended computations are discardable, but intrinsic value operations remain evaluated even
-when their results are unused, because they can trap.
-
-These are optional backend reductions over checked residual code.
-They preserve the supplied argument and continuation stack, the order and number of external calls,
-and the suspension of computations inside values.
-A primitive that escapes as a value keeps its thunk; a dynamically selected callee keeps its indirect force.
-The pass does not unfold recursion or inline general computation bodies.
-It rebuilds each surviving source subtree once and preserves the lexical ownership
-and branch-join invariant required by closure conversion.
+Producer facts recognize this wrapper through aliases, product projections, and constructor payloads.
+It reduces even when the primitive has several call sites: the rewrite copies only the external operation identity,
+with each site's original argument and continuation stack.
+Escaping operations retain their thunk representation, and dynamically selected callees retain indirect forces.
 
 The result is a direct external operation in SPSLow, shared by all compiled backends. Numeric decoding,
 wrapping, and boxing still follow the [runtime representation](../../DESIGN.md#numeric-representations).
-Removing the primitive thunk therefore does not promise a single machine instruction:
-instruction selection and scalar representation optimizations remain backend work.
-The reference interpreter continues to execute the original residual computation interface.
+Removing a primitive thunk does not promise a single machine instruction; instruction selection
+and scalar representation optimization remain backend work.
 
-The Stack IR unit tests cover suspended and indirect calls, product suffixes, runtime sharing, and trapping values.
-The Builtin integration tests check that direct and library-aliased addition have no closure package or indirect force,
-while a primitive returned by a runtime branch keeps both and executes on every backend.
+The Stack IR tests exercise local reductions beside cases requiring sharing,
+suspension, product shape, and trapping evaluation.
+Core fixtures check that direct identity, tuple, tag, and constructor eliminations remove closure
+and continuation packages.
+A combined runtime fixture checks captured arguments, a shared closure body,
+and dependencies removed with a known branch on every backend.
+Builtin tests retain both direct primitive calls and runtime-selected primitive thunks.
 
 ## Package Signatures
 

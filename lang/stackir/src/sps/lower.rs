@@ -1,8 +1,4 @@
-use super::{
-    check::BranchJoinProgram,
-    demand::{DefinitionDemand, Demand},
-    syntax::*,
-};
+use super::{check::BranchJoinProgram, syntax::*};
 use ariadne::{Label, Report, ReportKind};
 use derive_more::{AsMut, AsRef};
 use std::ops::Range;
@@ -165,7 +161,6 @@ pub struct Lowerer<'a> {
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
-    demand: DefinitionDemand,
     /// Internal residual invariant failures collected during lowering.
     lower_errors: Vec<SpsLowerError>,
 }
@@ -193,15 +188,11 @@ pub struct BuiltinRootLowerer<'a> {
 struct BuiltinPackageLowering;
 
 impl<'a> Lowerer<'a> {
-    /// Create a new lowerer with fresh stack arenas, analyzing which of the
-    /// root's bindings survive lowering.
-    pub fn new(
-        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena, root: ss::CompuId,
-    ) -> Self {
+    /// Create a structural lowerer with fresh stack arenas.
+    pub fn new(spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
         let arena = StackirArena::default();
-        let demand = DefinitionDemand::new(statics, root);
         let lower_errors = Vec::new();
-        Self { arena, spans, scoped, statics, demand, lower_errors }
+        Self { arena, spans, scoped, statics, lower_errors }
     }
 
     fn product_arity(&self, ty: ss::TypeId) -> usize {
@@ -473,7 +464,7 @@ impl<'a> RootLowerer<'a> {
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena, root: ss::CompuId,
     ) -> Self {
         let root = statics.execution_compu(root);
-        Self { lowerer: Lowerer::new(spans, scoped, statics, root), root }
+        Self { lowerer: Lowerer::new(spans, scoped, statics), root }
     }
 }
 
@@ -483,34 +474,17 @@ impl<'a> BuiltinRootLowerer<'a> {
         root: ss::CompuId, signature: ss::PackPi,
     ) -> Self {
         let root = statics.execution_compu(root);
-        Self { lowerer: Lowerer::new(spans, scoped, statics, root), root, signature }
-    }
-
-    /// The demand the analyzed root places on the host package. An executable
-    /// root is a package abstraction, so the parameter pattern's demand
-    /// describes exactly which package positions must be materialized.
-    fn package_demand(&self) -> Demand {
-        match &self.lowerer.statics.compus[&self.root] {
-            | ss::Computation::VAbs(ss::Abs(param, _)) => {
-                self.lowerer.demand.pattern_demand(self.lowerer.statics, param)
-            }
-            | _ => Demand::Used,
-        }
+        Self { lowerer: Lowerer::new(spans, scoped, statics), root, signature }
     }
 }
 
 impl BuiltinPackageLowering {
     fn lower(
-        value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>, demand: &Demand,
+        value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>,
     ) -> Result<ValueId, BuiltinPackageLowerError> {
         match value {
             | BuiltinPackageValue::Unit => Ok(Triv.build(lowerer, None)),
             | BuiltinPackageValue::Operation(role) => {
-                if demand.is_absent() {
-                    // The program never projects this entry; the position must
-                    // still hold a value to preserve the product layout.
-                    return Ok(Triv.build(lowerer, None));
-                }
                 let builtin = Builtin::for_role(&lowerer.arena.admin.builtins, role)?;
                 Ok(match builtin.sort {
                     | BuiltinSort::Operator => builtin.make_operator(lowerer),
@@ -518,23 +492,10 @@ impl BuiltinPackageLowering {
                 })
             }
             | BuiltinPackageValue::Product(product) => {
-                let values = match demand {
-                    | Demand::Absent => {
-                        product.into_iter().map(|_| Triv.build(lowerer, None)).collect::<Vec<_>>()
-                    }
-                    | Demand::Used => product
-                        .into_iter()
-                        .map(|value| Self::lower(value, lowerer, &Demand::Used))
-                        .collect::<Result<Vec<_>, _>>()?,
-                    | Demand::Fields(fields) => product
-                        .into_iter()
-                        .enumerate()
-                        .map(|(position, value)| match fields.get(&position) {
-                            | Some(demand) => Self::lower(value, lowerer, demand),
-                            | None => Ok(Triv.build(lowerer, None)),
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                };
+                let values = product
+                    .into_iter()
+                    .map(|value| Self::lower(value, lowerer))
+                    .collect::<Result<Vec<_>, _>>()?;
                 let layout = ProductLayout { arity: values.len() };
                 Ok(VCons::new(values, layout).build(lowerer, None))
             }
@@ -559,10 +520,9 @@ impl CompilerPass for BuiltinRootLowerer<'_> {
     type Error = BuiltinRootLowerError;
 
     fn run(self) -> Result<BranchJoinProgram, Self::Error> {
-        let demand = self.package_demand();
         let Self { mut lowerer, root, signature } = self;
         let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &signature)?;
-        let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer, &demand)?;
+        let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer)?;
         let stack = Cons(package, Bullet.build(&mut lowerer, None)).build(&mut lowerer, None);
         let root = root.lower(&mut lowerer, stack);
         lowerer.finish(root).map_err(BuiltinRootLowerError::Sps)
@@ -647,9 +607,6 @@ impl Lower for ss::ValueId {
             | ss::Value::Var(def) => ValuePlan::pure(def.build(lo, site)),
             | ss::Value::Named(Named(_, inner)) => inner.lower(lo, ()),
             | ss::Value::Let(Let { binder, bindee, tail }) => {
-                if lo.demand.is_absent(lo.statics, &binder) {
-                    return tail.lower(lo, ());
-                }
                 let bindee = bindee.lower(lo, ());
                 let tail = tail.lower(lo, ());
                 let bindings = [ValueStep::Bind(ValueBinding {
@@ -683,27 +640,7 @@ impl Lower for ss::ValueId {
             | ss::Value::Triv(Triv) => ValuePlan::pure(Triv.build(lo, site)),
             | ss::Value::VCons(items) => {
                 let layout = lo.product_layout(lo.statics.annotations_value[self]);
-                // Positions nothing projects are never observed; filling them
-                // with trivial values keeps the layout while skipping the
-                // bindings and operations only they would demand.
-                let fields = match lo.demand.value_demand(*self) {
-                    | Demand::Fields(fields) => Some(fields),
-                    | Demand::Absent | Demand::Used => None,
-                };
-                let items = items
-                    .iter()
-                    .enumerate()
-                    .map(|(position, item)| {
-                        let demanded =
-                            fields.as_ref().is_none_or(|fields| fields.get(&position).is_some());
-                        if demanded {
-                            item.lower(lo, ())
-                        } else {
-                            ValuePlan::pure(Triv.build(lo, site))
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                let items = ValuePlan::sequence(items);
+                let items = items.lower(lo, ());
                 items.map(|items| VCons::new(items, layout).build(lo, site))
             }
             | ss::Value::SCons(ss::ConsN(_witnesses, inner)) => {
@@ -818,9 +755,6 @@ impl Lower for ss::CompuId {
                 bindee.lower(lo, kont_stack_id)
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
-                if lo.demand.is_absent(lo.statics, &binder) {
-                    return tail.lower(lo, stack);
-                }
                 let bindee = bindee.lower(lo, ());
                 bindee.lower_into(lo, move |bindee, lo| {
                     if lo.pattern_needs_match_plan(binder) {

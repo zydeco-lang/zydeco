@@ -12,7 +12,8 @@ textual -> bitter -> scoped -> tyck -> stack
 The stack IR is built from one checked typed expression.
 High-level lowering is indexed by the consuming stack and constructs the paper's branch-join fragment directly:
 stack lets occur exactly around value-coproduct matches.
-Normalization resolves known primitive forces into direct external calls and removes unused thunk bindings.
+Normalization combines local β/η-reductions with field-sensitive demand analysis,
+resolving known calls and pruning unused bindings and package fields before allocation.
 Closure conversion then consumes that lexical tree and produces a distinct `SpsLowProgram` with blocks,
 jumps, and explicit closure and continuation packages.
 Both representations have one computation root rather than a top-level declaration collection.
@@ -23,8 +24,8 @@ Both representations have one computation root rather than a top-level declarati
   `sps::lower` constructs a validated `BranchJoinProgram` directly from checked syntax.
 - `sps::variables` provides free-variable analysis, and `sps::check` validates closed roots, lexical ownership,
   and branch-join placement.
-- `sps::normalize` reduces primitive calls and immediate argument and return bindings before closure allocation,
-  following the [residual primitive call rules](../../../docs/proposals/normalization.md#residual-primitive-calls).
+- `sps::normalize` rebuilds high SPS using local reductions and the consumer demands defined by `sps::demand`,
+  following the [residual normalization rules](../../../docs/proposals/normalization.md#residual-sps-normalization).
 - `sps_low::syntax` and `sps_low::arena` define first-order SPS with typed package forms.
 - `sps_low::convert` performs fresh structural closure conversion;
   `sps_low::check` validates the resulting lexical ownership and retained branch-join invariant.

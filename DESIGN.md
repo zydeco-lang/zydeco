@@ -534,26 +534,23 @@ flowchart TD
 ```
 
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
-High SPS uses lexical branch-join syntax; normalization resolves known primitive thunks
-before closure conversion produces first-order SPSLow with code labels.
+High SPS uses lexical branch-join syntax. Normalization simplifies known producers
+and consumers before closure conversion produces first-order SPSLow with code labels.
 ZASM makes the control-flow graph explicit for assembly-derived backends.
 
-Before lowering into SPS, a demand analysis over the checked root records how each binding's value is consumed:
-not at all, at specific product positions, or whole.
-Because value-function applications statically resolve to definitions, a caller's demand flows
-through an application into the callee's body, and an argument is demanded by the parameter pattern it binds.
-The lowering skips absent bindings and fills unobserved product positions with trivial values,
-and the host Builtin package materializes only demanded operations, so emitted programs contain the operations
-and package components a program uses rather than the whole standard-library assembly.
-The interpreter shares none of this; it links the complete program as the reference semantics.
-`docs/proposals/demand-analysis.md` develops the traversal rules and their soundness invariants.
+[Residual SPS normalization](docs/proposals/normalization.md#residual-sps-normalization) combines local β/η-reductions
+with [field-sensitive demand analysis](docs/proposals/demand-analysis.md).
+Known closures, argument frames, returns, and data eliminations reduce while preserving shared bodies,
+branch joins, and trapping evaluation.
+Surviving consumers determine which bindings and product fields remain.
+Lowering constructs both user values and the Builtin package structurally;
+normalization prunes their unused components through the same rules before closure conversion allocates environments.
+The interpreter retains the complete checked residual program as the reference semantics.
 
-High SPS initially keeps primitive operations behind thunks.
+Primitive operations initially retain their thunk representation.
 [Primitive call normalization](docs/proposals/normalization.md#residual-primitive-calls) follows known operations
-through lexical bindings and package projections, replaces their forces with direct external calls,
-and removes bindings made unused by that replacement.
-Immediate argument and return bindings also reduce while preserving runtime value sharing.
-Dynamically selected and escaping operations retain their thunk representation.
+through bindings and package projections and replaces their forces with direct external calls.
+Dynamically selected and escaping operations retain their thunk interface.
 
 | Responsibility | Implementation |
 | --- | --- |
@@ -561,7 +558,7 @@ Dynamically selected and escaping operations retain their thunk representation.
 | Parsing, desugaring, and resolution | `lang/surface/src/{textual,bitter,scoped}` |
 | Typing, normalization, elaboration, and validation | `lang/statics/src` |
 | Linking and interpretation | `lang/dynamics/src` |
-| High SPS, primitive call normalization, and closure conversion | `lang/stackir/src/{sps,sps_low}` |
+| High SPS, normalization with demand analysis, and closure conversion | `lang/stackir/src/{sps,sps_low}` |
 | ZASM lowering and allocation analysis | `lang/assembly/src` |
 | Code emission | `lang/{amd64,wasm-am,wasm-sps}/src` |
 

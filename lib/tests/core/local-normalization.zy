@@ -1,0 +1,30 @@
+begin
+  param (/Thk; /Ret; /Int64; /process; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int64 = numeric/int64 that
+  def Choice =
+    data
+    | +Selected : Int64
+    | +Other : Int64
+    end
+  that
+
+  let captured = 11 that
+  let invoke : Thk (Int64 -> Int64 -> Ret Int64) = {
+    fn x y =>
+      do sum <- ! int64/add x y;
+      ! int64/add captured sum
+  } that
+  let dead_factor = 100 that
+  do first <- ! invoke -11 0;
+
+  let shared : Thk (Int64 -> Ret Int64) = { fn x => ! int64/add x 1 } that
+  do second <- ! shared first;
+  do third <- ! shared second;
+  do selected <-
+    match (+Selected(third) : Choice)
+    | +Other(x) => ! int64/mul dead_factor x
+    | +Selected(x) => ret x
+    end;
+  do result <- ! int64/sub selected 2;
+  ! process/exit result
+end

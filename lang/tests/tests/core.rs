@@ -13,6 +13,7 @@ e2e_sources!({
     kont_clone => "tests/core/kont-clone.zy",
     label => "tests/core/label.zy",
     let_stack => "tests/core/let-stack.zy",
+    local_normalization => "tests/core/local-normalization.zy",
     literal_pattern => "tests/core/literal-pattern.zy",
     loop_ => "tests/core/loop.zydeco",
     loopy => "tests/core/loopy.zy",
@@ -45,6 +46,50 @@ e2e_sources!({
     runtime_package_callback => "tests/core/runtime-package-callback.zy",
     runtime_package_payload => "tests/core/runtime-package-payload.zy",
 });
+
+mod normalization {
+    use std::path::PathBuf;
+    use zydeco_cli::CommandCompiler;
+
+    struct Fixture;
+
+    impl Fixture {
+        fn sps(name: &str) -> String {
+            let path =
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/tests/core").join(name);
+            CommandCompiler::default()
+                .lower(&path)
+                .unwrap_or_else(|error| panic!("fixture {name}: {error}"))
+                .render_sps_low()
+                .lines()
+                .filter(|line| !line.starts_with("[function:"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    }
+
+    #[test]
+    fn direct_eliminations_remove_closure_and_continuation_packages() {
+        for name in ["direct-closure.zy", "direct-tuple.zy", "comatch.zy", "match.zy"] {
+            let sps = Fixture::sps(name);
+            assert_eq!(sps.matches("<extern:exit/1>").count(), 1, "{name}: {sps}");
+            if name == "direct-closure.zy" {
+                assert!(sps.contains("<extern:exit/1> arg(0) :: •"), "{name}: {sps}");
+            }
+            assert!(!sps.contains("pack-closure("), "{name}: {sps}");
+            assert!(!sps.contains("pack-continuation("), "{name}: {sps}");
+        }
+    }
+
+    #[test]
+    fn local_reductions_preserve_shared_bodies_and_remove_dead_branch_dependencies() {
+        let sps = Fixture::sps("local-normalization.zy");
+        assert_eq!(sps.matches("pack-closure(").count(), 1, "{sps}");
+        assert_eq!(sps.matches("open-closure ").count(), 2, "{sps}");
+        assert_eq!(sps.matches("<extern:int64_add/2>").count(), 3, "{sps}");
+        assert!(!sps.contains("<extern:int64_mul/2>"), "{sps}");
+    }
+}
 
 // `iota` exports a lazy value rather than exiting, so it is checked, not run.
 check_source!(iota, "tests/core/iota.zy");
