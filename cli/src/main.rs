@@ -267,11 +267,25 @@ impl Application {
                 let foreign_libraries = backend.foreign_libraries();
                 let executable = options.link_amd64(&artifact, &assembly, &foreign_libraries)?;
                 if execute {
-                    return Ok(executable.run(&[])?.code().unwrap_or(0));
+                    return Ok(Self::process_exit_code(executable.run(&[])?));
                 }
             }
         }
         Ok(0)
+    }
+
+    fn process_exit_code(status: std::process::ExitStatus) -> i32 {
+        if let Some(code) = status.code() {
+            return code;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            if let Some(signal) = status.signal() {
+                return 128 + signal;
+            }
+        }
+        1
     }
 
     fn artifact_name(path: &Path) -> Result<String, ApplicationError> {
@@ -307,6 +321,24 @@ impl ApplicationError {
         match self {
             | Self::Compile(error) => DiagnosticRenderer::error(error),
             | _ => eprintln!("{self}"),
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::Application;
+    use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
+
+    #[test]
+    fn native_exit_codes_preserve_normal_exits_and_report_signals_as_failures() {
+        for code in [0, 7, 134, 255] {
+            assert_eq!(Application::process_exit_code(ExitStatus::from_raw(code << 8)), code);
+        }
+        for signal in [6, 9, 15] {
+            let status = ExitStatus::from_raw(signal);
+            assert_eq!(status.code(), None);
+            assert_eq!(Application::process_exit_code(status), 128 + signal);
         }
     }
 }
