@@ -207,8 +207,11 @@ impl DefinitionDemand {
             | ss::Computation::Ret(ss::Return(value)) => self.visit_value(statics, &value, ctx),
             | ss::Computation::Do(ss::Bind { binder, bindee, tail }) => {
                 self.visit_compu(statics, &tail, ctx);
-                // The sequencing always evaluates; only its result is slimmed.
+                // Lowering still evaluates the bindee when its result is discarded.
+                // Keep its value dependencies; field demands can still trim products.
                 let binder_demand = self.pattern_demand(statics, &binder);
+                let binder_demand =
+                    if binder_demand.is_absent() { Demand::Used } else { binder_demand };
                 self.visit_compu(statics, &bindee, binder_demand);
             }
             | ss::Computation::Let(ss::Let { binder, bindee, tail }) => {

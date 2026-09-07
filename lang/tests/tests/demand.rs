@@ -1,6 +1,21 @@
 use std::path::PathBuf;
 use zydeco_cli::CommandCompiler;
-use zydeco_tests::utils::{SourceProgram, TestBackend};
+use zydeco_tests::utils::{SourceCase, SourceProgram, TestBackend};
+
+#[test]
+fn discarded_computation_results_keep_their_dependencies() {
+    for source in [
+        "let z = 7 in do _ <- ret z; ! exit 0",
+        "let w = 7 in do _ <- ret (w, 6); ! exit 0",
+        "let w = 7 in do _ <- (fn (y : Int64) => ret w) 3; ! exit 0",
+        "let w = 7 in let t = { ret w } in do _ <- ret t; ! exit 0",
+        "let val k (_ : Int64) : Int64 = 0 in let w = 5 in let r = k w in ! exit r",
+        "let val k (x : Int64) : Int64 = x in do _ <- ret (k 1); ! exit 0",
+    ] {
+        SourceCase::assert_accepted(SourceCase::run(source));
+        SourceCase::assert_accepted(SourceCase::lower(source));
+    }
+}
 
 fn fixture(relative: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
