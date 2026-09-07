@@ -72,8 +72,8 @@ zydeco repl
 ```
 
 Enter `ret 1` to evaluate a returning computation, or `@[type] ret 1` to inspect its type.
-Each submitted term has a number such as `[1]`; `@[import(1)] _` refers to that source in a later input.
-`@[help] _` lists commands, and `@[quit] _` exits.
+Each submitted term has a number such as `[1]`; `@(import(1))` refers to that source in a later input.
+`@(help)` lists commands, and `@(quit)` exits.
 A type checking rejection keeps the current text and number available for correction.
 See the [REPL workflow](CONTRIBUTING.md#use-the-interactive-repl) for submission keys and explicit execution.
 

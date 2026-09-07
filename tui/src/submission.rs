@@ -140,11 +140,11 @@ mod tests {
             SubmissionState::Complete(Ok(Submission::Expression(ExpressionMode::Type)))
         ));
         assert!(matches!(
-            SubmissionParser::parse("@[help] _"),
+            SubmissionParser::parse("@(help)"),
             SubmissionState::Complete(Ok(Submission::Control(ControlCommand::Help)))
         ));
         assert!(matches!(
-            SubmissionParser::parse("@[quit] _"),
+            SubmissionParser::parse("@(quit)"),
             SubmissionState::Complete(Ok(Submission::Control(ControlCommand::Quit)))
         ));
         assert!(matches!(
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn numbered_imports_are_regular_expressions() {
         assert!(matches!(
-            SubmissionParser::parse("@[import(1)] _"),
+            SubmissionParser::parse("@(import(1))"),
             SubmissionState::Complete(Ok(Submission::Expression(ExpressionMode::Evaluate)))
         ));
     }

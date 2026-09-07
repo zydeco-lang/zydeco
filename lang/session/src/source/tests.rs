@@ -396,19 +396,19 @@ fn checked_trivial_computation() -> SourceChecked {
 fn builtin_add_exit_source() -> &'static str {
     r#"
 begin
-  let Int64 = @[intrinsic(i64)] _ that
+  let Int64 = @(intrinsic(i64)) that
   param (
     (/OS; /int64; /process) :
     exists
-      @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+      @[builtin(os)] (OS : @(intrinsic(ctype)))
     .
       (#int64 ::
         (@[builtin(int64_add)] (#add ::
-          (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64))) *
+          (@(intrinsic(thk))) (Int64 -> Int64 -> (@(intrinsic(ret))) Int64))) *
         (@[builtin(int64_sub)] (#sub ::
-          (@[intrinsic(thk)] _) (Int64 -> Int64 -> (@[intrinsic(ret)] _) Int64)))) *
+          (@(intrinsic(thk))) (Int64 -> Int64 -> (@(intrinsic(ret))) Int64)))) *
       (#process ::
-        @[builtin(exit)] (#exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
+        @[builtin(exit)] (#exit :: (@(intrinsic(thk))) (Int64 -> OS)))
   ) in
     do sum <- ! int64/add 1 2;
     ! process/exit sum
@@ -495,8 +495,8 @@ fn assert_source_program_reaches_amd64(relative: impl AsRef<Path>) {
 fn source_graph_loads_nested_relative_imports_in_provider_order() {
     let fixture = SourceFixture::new();
     fixture.write("leaf.zy", "1");
-    fixture.write("nested/library.zy", r#"@[import("../leaf.zy")] _"#);
-    let root = fixture.write("main.zy", r#"@[import("nested/library.zy")] _"#);
+    fixture.write("nested/library.zy", r#"@(import("../leaf.zy"))"#);
+    let root = fixture.write("main.zy", r#"@(import("nested/library.zy"))"#);
 
     let graph = SourceGraph::load(&root).unwrap();
     let order = graph
@@ -533,7 +533,7 @@ fn source_graph_accepts_parenthesized_metadata_sugar_for_hole_payloads() {
 #[test]
 fn source_graph_discovers_an_adjacent_signature_before_its_implementation() {
     let fixture = SourceFixture::new();
-    fixture.write("main.zyi", "@[intrinsic(unit)] _");
+    fixture.write("main.zyi", "@(intrinsic(unit))");
     let root = fixture.write("main.zy", "()");
 
     let graph = SourceGraph::load(&root).unwrap();
@@ -553,7 +553,7 @@ fn source_graph_discovers_an_adjacent_signature_before_its_implementation() {
 #[test]
 fn source_graph_does_not_pair_program_roots_with_signatures() {
     let fixture = SourceFixture::new();
-    fixture.write("main.zyi", "@[intrinsic(i64)] _");
+    fixture.write("main.zyi", "@(intrinsic(i64))");
     let root = fixture.write("main.zydeco", "()");
 
     let graph = SourceGraph::load(root).unwrap();
@@ -567,8 +567,8 @@ fn source_graph_does_not_pair_program_roots_with_signatures() {
 fn source_graph_reports_unique_sources_as_they_are_discovered() {
     let fixture = SourceFixture::new();
     fixture.write("leaf.zy", "1");
-    fixture.write("nested/library.zy", r#"@[import("../leaf.zy")] _"#);
-    let root = fixture.write("main.zy", r#"@[import("nested/library.zy")] _"#);
+    fixture.write("nested/library.zy", r#"@(import("../leaf.zy"))"#);
+    let root = fixture.write("main.zy", r#"@(import("nested/library.zy"))"#);
     let mut progress = Vec::new();
 
     let graph = SourceGraph::load_with_progress(&root, |update| progress.push(update)).unwrap();
@@ -592,9 +592,9 @@ fn source_graph_reports_unique_sources_as_they_are_discovered() {
 fn source_graph_orders_a_diamond_after_its_shared_provider() {
     let fixture = SourceFixture::new();
     fixture.write("leaf.zy", "1");
-    fixture.write("left.zy", r#"@[import("leaf.zy")] _"#);
-    fixture.write("right.zy", r#"@[import("leaf.zy")] _"#);
-    let root = fixture.write("main.zy", r#"(@[import("left.zy")] _, @[import("right.zy")] _)"#);
+    fixture.write("left.zy", r#"@(import("leaf.zy"))"#);
+    fixture.write("right.zy", r#"@(import("leaf.zy"))"#);
+    let root = fixture.write("main.zy", r#"(@(import("left.zy")), @(import("right.zy")))"#);
 
     let graph = SourceGraph::load(&root).unwrap();
     let order = graph
@@ -619,8 +619,7 @@ fn source_graph_orders_a_diamond_after_its_shared_provider() {
 fn source_graph_deduplicates_files_but_preserves_import_occurrences() {
     let fixture = SourceFixture::new();
     let library = fixture.write("library.zy", "1");
-    let root =
-        fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("library.zy")] _)"#);
+    let root = fixture.write("main.zy", r#"(@(import("library.zy")), @(import("library.zy")))"#);
 
     let graph = SourceGraph::load(&root).unwrap();
     let library = graph.source_by_path(library).unwrap();
@@ -643,7 +642,7 @@ fn source_graph_deduplicates_symlinked_source_paths() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "1");
     symlink(fixture.path("library.zy"), fixture.path("alias.zy")).unwrap();
-    let root = fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("alias.zy")] _)"#);
+    let root = fixture.write("main.zy", r#"(@(import("library.zy")), @(import("alias.zy")))"#);
 
     let graph = SourceGraph::load(root).unwrap();
     let imports = &graph.sources[&graph.root].imports;
@@ -657,7 +656,7 @@ fn source_graph_deduplicates_symlinked_source_paths() {
 fn source_graph_accepts_absolute_import_paths() {
     let fixture = SourceFixture::new();
     let library = fixture.write("library.zy", "1").canonicalize().unwrap();
-    let root = fixture.write("main.zy", format!(r#"@[import("{}")] _"#, library.display()));
+    let root = fixture.write("main.zy", format!(r#"@(import("{}"))"#, library.display()));
 
     let graph = SourceGraph::load(root).unwrap();
     let [import] = graph.sources[&graph.root].imports.as_slice() else {
@@ -670,8 +669,8 @@ fn source_graph_accepts_absolute_import_paths() {
 #[test]
 fn source_graph_rejects_cycles_with_every_import_site() {
     let fixture = SourceFixture::new();
-    let first = fixture.write("first.zy", r#"@[import("second.zy")] _"#);
-    fixture.write("second.zy", r#"@[import("first.zy")] _"#);
+    let first = fixture.write("first.zy", r#"@(import("second.zy"))"#);
+    fixture.write("second.zy", r#"@(import("first.zy"))"#);
 
     let SourceLoadError::Cycle(cycle) = SourceGraph::load(first).unwrap_err() else {
         panic!("expected an import cycle")
@@ -697,7 +696,7 @@ fn source_graph_rejects_cycles_with_every_import_site() {
 #[test]
 fn source_graph_rejects_a_self_import_at_its_site() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", r#"@[import("main.zy")] _"#);
+    let root = fixture.write("main.zy", r#"@(import("main.zy"))"#);
 
     let SourceLoadError::Cycle(cycle) = SourceGraph::load(root).unwrap_err() else {
         panic!("expected a self-import cycle")
@@ -712,7 +711,7 @@ fn source_graph_rejects_a_self_import_at_its_site() {
 fn source_graph_rejects_cycles_through_a_companion_signature() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "()");
-    fixture.write("main.zyi", r#"@[import("main.zy")] _"#);
+    fixture.write("main.zyi", r#"@(import("main.zy"))"#);
 
     let SourceLoadError::Cycle(cycle) = SourceGraph::load(root).unwrap_err() else {
         panic!("expected a source dependency cycle")
@@ -726,7 +725,7 @@ fn source_graph_rejects_cycles_through_a_companion_signature() {
 #[test]
 fn source_graph_reports_a_missing_import_at_its_source_site() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", r#"@[import("missing.zy")] _"#);
+    let root = fixture.write("main.zy", r#"@(import("missing.zy"))"#);
 
     let SourceLoadError::ImportPath { importer, requested, .. } =
         SourceGraph::load(root).unwrap_err()
@@ -783,7 +782,7 @@ fn parser_failures_retain_the_rejected_token_range() {
 #[test]
 fn source_graph_rejects_an_unknown_builtin_role() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(number)] _");
+    let root = fixture.write("main.zy", "@(builtin(number))");
 
     let SourceLoadError::Parse(SourceParseError::BuiltinDirective { error, .. }) =
         SourceGraph::load(root).unwrap_err()
@@ -799,7 +798,7 @@ fn source_graph_rejects_an_unknown_builtin_role() {
 #[test]
 fn source_graph_rejects_a_roleless_intrinsic_splice() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[intrinsic] _");
+    let root = fixture.write("main.zy", "@(intrinsic)");
 
     let SourceLoadError::Parse(SourceParseError::IntrinsicDirective { error, .. }) =
         SourceGraph::load(root).unwrap_err()
@@ -819,7 +818,7 @@ fn source_graph_rejects_a_roleless_intrinsic_splice() {
 fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "1");
-    let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
+    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
@@ -842,7 +841,7 @@ fn textual_program_ascribes_an_implementation_with_its_signature() {
     use zydeco_surface::textual::syntax::{Ann, SignatureBoundary, Term};
 
     let fixture = SourceFixture::new();
-    fixture.write("library.zyi", "@[intrinsic(unit)] _");
+    fixture.write("library.zyi", "@(intrinsic(unit))");
     let root = fixture.write("library.zy", "()");
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
@@ -856,7 +855,7 @@ fn textual_program_ascribes_an_implementation_with_its_signature() {
 #[test]
 fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int64_add)] _");
+    let root = fixture.write("main.zy", "@(builtin(int64_add))");
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
@@ -882,8 +881,7 @@ fn program_assembly_shares_one_source_root_across_import_occurrences() {
 
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "fn value => value");
-    let root =
-        fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("library.zy")] _)"#);
+    let root = fixture.write("main.zy", r#"(@(import("library.zy")), @(import("library.zy")))"#);
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let Term::Paren(Paren(imports)) = &program.arena.terms[&program.unit.root] else {
@@ -919,8 +917,7 @@ fn repeated_imports_share_one_resolved_and_checked_term() {
 
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "1");
-    let root =
-        fixture.write("main.zy", r#"(@[import("library.zy")] _, @[import("library.zy")] _)"#);
+    let root = fixture.write("main.zy", r#"(@(import("library.zy")), @(import("library.zy")))"#);
 
     let checked = TestPipeline::check(root).unwrap();
     let typed_root = checked.root.as_term().expect("expected a checked product value");
@@ -958,7 +955,7 @@ fn program_assembly_retains_importer_and_provider_spans() {
 
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "fn value => value");
-    let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
+    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let boundary = program.unit.root;
@@ -981,7 +978,7 @@ fn program_assembly_rebases_every_nested_metadata_span() {
     use zydeco_surface::textual::syntax::{EntityId, MetaNode, MetaTerm, Term};
 
     let fixture = SourceFixture::new();
-    let source = r#"@[package(name("root"),nested("value"))] _"#;
+    let source = r#"@(package(name("root"),nested("value")))"#;
     let root = fixture.write("main.zy", source);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let Term::Meta(MetaTerm(metadata, _)) = &program.arena.terms[&program.unit.root] else {
@@ -1017,8 +1014,8 @@ fn program_assembly_expands_nested_imports_recursively() {
 
     let fixture = SourceFixture::new();
     fixture.write("leaf.zy", "1");
-    fixture.write("library.zy", r#"@[import("leaf.zy")] _"#);
-    let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
+    fixture.write("library.zy", r#"@(import("leaf.zy"))"#);
+    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let Term::SourceBoundary(SourceBoundary(library)) = program.arena.terms[&program.unit.root]
@@ -1040,7 +1037,7 @@ fn program_assembly_expands_nested_imports_recursively() {
 fn imported_free_names_do_not_capture_importer_bindings() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "value");
-    let root = fixture.write("main.zy", r#"let value = _ in @[import("library.zy")] _"#);
+    let root = fixture.write("main.zy", r#"let value = _ in @(import("library.zy"))"#);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let Err(failure) = resolve_program(program) else {
@@ -1058,7 +1055,7 @@ fn imported_free_names_do_not_capture_importer_bindings() {
 fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "param value that value");
-    let root = fixture.write("main.zy", r#"begin @[import("library.zy")] _ end"#);
+    let root = fixture.write("main.zy", r#"begin @(import("library.zy")) end"#);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let Err(failure) = resolve_program(program) else {
@@ -1075,7 +1072,7 @@ fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
 fn a_self_contained_imported_term_resolves_normally() {
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "fn value => value");
-    let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
+    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
@@ -1095,8 +1092,8 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
 
     let fixture = SourceFixture::new();
     fixture.write("library.zy", "fn value => value");
-    let root = fixture
-        .write("main.zy", r#"let library = @[import("library.zy")] _ in (library, library)"#);
+    let root =
+        fixture.write("main.zy", r#"let library = @(import("library.zy")) in (library, library)"#);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
@@ -1128,7 +1125,7 @@ fn the_source_pipeline_reaches_statics_without_a_declaration_entry() {
 #[test]
 fn a_literal_splice_parses_to_a_string_literal() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "--| Line one\n--| Line two\n@[literal] _");
+    let root = fixture.write("main.zy", "--| Line one\n--| Line two\n@(literal)");
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let zydeco_surface::textual::syntax::Term::Lit(
         zydeco_surface::textual::syntax::Literal::String(text),
@@ -1142,7 +1139,7 @@ fn a_literal_splice_parses_to_a_string_literal() {
 #[test]
 fn a_literal_splice_checks_as_a_string_value() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "--| Message\n@[literal] _");
+    let root = fixture.write("main.zy", "--| Message\n@(literal)");
     let checked = TestPipeline::check(root).unwrap();
 
     assert!(matches!(checked.root, zydeco_statics::syntax::TermAnnId::Value(_, _)));
@@ -1151,7 +1148,7 @@ fn a_literal_splice_checks_as_a_string_value() {
 #[test]
 fn a_literal_splice_without_an_attached_text_block_is_rejected() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[literal] _");
+    let root = fixture.write("main.zy", "@(literal)");
     let error = SourceGraph::load(root).unwrap_err();
     let SourceLoadError::Parse(SourceParseError::LiteralDirective { error, .. }) = error else {
         panic!("expected an invalid literal splice")
@@ -1176,7 +1173,7 @@ fn a_literal_splice_on_a_non_hole_term_is_rejected() {
 #[test]
 fn a_matching_companion_signature_checks_the_implementation() {
     let fixture = SourceFixture::new();
-    fixture.write("library.zyi", "@[intrinsic(unit)] _");
+    fixture.write("library.zyi", "@(intrinsic(unit))");
     let root = fixture.write("library.zy", "()");
 
     let checked = TestPipeline::check(root).unwrap();
@@ -1187,8 +1184,8 @@ fn a_matching_companion_signature_checks_the_implementation() {
 #[test]
 fn a_companion_signature_can_import_its_type_dependencies() {
     let fixture = SourceFixture::new();
-    fixture.write("unit_type.zy", "@[intrinsic(unit)] _");
-    fixture.write("library.zyi", r#"@[import("unit_type.zy")] _"#);
+    fixture.write("unit_type.zy", "@(intrinsic(unit))");
+    fixture.write("library.zyi", r#"@(import("unit_type.zy"))"#);
     let root = fixture.write("library.zy", "()");
 
     let checked = TestPipeline::check(root).unwrap();
@@ -1199,7 +1196,7 @@ fn a_companion_signature_can_import_its_type_dependencies() {
 #[test]
 fn a_mismatched_companion_signature_rejects_the_implementation() {
     let fixture = SourceFixture::new();
-    fixture.write("library.zyi", "@[intrinsic(i64)] _");
+    fixture.write("library.zyi", "@(intrinsic(i64))");
     let root = fixture.write("library.zy", "()");
 
     let analysis = CompilerSession::default().analyze(root).unwrap();
@@ -1232,9 +1229,9 @@ fn a_signature_root_must_itself_be_a_type() {
 #[test]
 fn an_imported_implementation_is_checked_against_its_companion_signature() {
     let fixture = SourceFixture::new();
-    fixture.write("library.zyi", "@[intrinsic(unit)] _");
+    fixture.write("library.zyi", "@(intrinsic(unit))");
     fixture.write("library.zy", "()");
-    let root = fixture.write("main.zy", r#"@[import("library.zy")] _"#);
+    let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
 
     let checked = TestPipeline::check(root).unwrap();
 
@@ -1244,8 +1241,8 @@ fn an_imported_implementation_is_checked_against_its_companion_signature() {
 #[test]
 fn an_explicit_signature_import_is_a_type_term() {
     let fixture = SourceFixture::new();
-    fixture.write("library.zyi", "@[intrinsic(unit)] _");
-    let root = fixture.write("main.zy", r#"@[import("library.zyi")] _"#);
+    fixture.write("library.zyi", "@(intrinsic(unit))");
+    let root = fixture.write("main.zy", r#"@(import("library.zyi"))"#);
 
     let checked = TestPipeline::check(root).unwrap();
 
@@ -1256,7 +1253,7 @@ fn an_explicit_signature_import_is_a_type_term() {
 fn an_explicit_signature_import_still_rejects_a_non_type_root() {
     let fixture = SourceFixture::new();
     fixture.write("library.zyi", "()");
-    let root = fixture.write("main.zy", r#"@[import("library.zyi")] _"#);
+    let root = fixture.write("main.zy", r#"@(import("library.zyi"))"#);
 
     let analysis = CompilerSession::default().analyze(root).unwrap();
 
@@ -1305,11 +1302,11 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
     use zydeco_statics::syntax::{Fillable, Kind, TermAnnId, Type};
 
     [
-        ("@[intrinsic(vtype)] _", "vtype"),
-        ("@[intrinsic(ctype)] _", "ctype"),
-        ("@[intrinsic(thk)] _", "thk"),
-        ("@[intrinsic(ret)] _", "ret"),
-        ("@[intrinsic(unit)] _", "unit"),
+        ("@(intrinsic(vtype))", "vtype"),
+        ("@(intrinsic(ctype))", "ctype"),
+        ("@(intrinsic(thk))", "thk"),
+        ("@(intrinsic(ret))", "ret"),
+        ("@(intrinsic(unit))", "unit"),
     ]
     .into_iter()
     .for_each(|(source, expected)| {
@@ -1350,7 +1347,7 @@ fn explicit_intrinsic_splices_produce_canonical_cbpv_terms() {
 #[test]
 fn intrinsic_spellings_are_ordinary_bindable_names_in_root_sources() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "begin def VType = @[intrinsic(unit)] _ that VType end");
+    let root = fixture.write("main.zy", "begin def VType = @(intrinsic(unit)) that VType end");
     let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
@@ -1378,9 +1375,9 @@ fn intrinsic_kind_spellings_bind_as_ordinary_kind_aliases() {
     let root = fixture.write(
         "main.zy",
         r#"begin
-  let VType = @[intrinsic(vtype)] _ in
-  let CType = @[intrinsic(ctype)] _ in
-  let Unit = @[intrinsic(unit)] _ in
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Unit = @(intrinsic(unit)) in
   exists (#X = XType : VType) (Y : CType) .
     Unit
 end"#,
@@ -1459,7 +1456,7 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write(
         "main.zy",
-        "begin let Int64 = @[intrinsic(i64)] _ that def value : Int64 = 1 that ret value end",
+        "begin let Int64 = @(intrinsic(i64)) that def value : Int64 = 1 that ret value end",
     );
     let checked = SourceGraph::load(root)
         .unwrap()
@@ -1515,8 +1512,8 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
     let root = fixture.write(
         "main.zy",
         concat!(
-            "begin let IntA = @[intrinsic(i64)] _ that ",
-            "let IntB = @[intrinsic(i64)] _ that ",
+            "begin let IntA = @(intrinsic(i64)) that ",
+            "let IntB = @(intrinsic(i64)) that ",
             "def a : IntA = 1 that def b : IntB = a that ret b end",
         ),
     );
@@ -1561,8 +1558,8 @@ fn one_package_signature_rejects_duplicate_builtin_type_roles() {
 param (
   (IntA, IntB, value) :
   exists
-    @[builtin(reader)] (IntA : @[intrinsic(vtype)] _)
-    @[builtin(reader)] (IntB : @[intrinsic(vtype)] _)
+    @[builtin(reader)] (IntA : @(intrinsic(vtype)))
+    @[builtin(reader)] (IntB : @(intrinsic(vtype)))
   . IntA
 ) in
   ret value
@@ -1583,10 +1580,10 @@ fn one_package_signature_rejects_duplicate_builtin_operation_roles() {
 param (
   (OS, = first, = second) :
   exists
-    @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+    @[builtin(os)] (OS : @(intrinsic(ctype)))
   .
-    ((@[builtin(int64_add)] (#first :: @[intrinsic(unit)] _)) *
-     (@[builtin(int64_add)] (#second :: @[intrinsic(unit)] _)))
+    ((@[builtin(int64_add)] (#first :: @(intrinsic(unit)))) *
+     (@[builtin(int64_add)] (#second :: @(intrinsic(unit)))))
 ) in
   ret ()
 "#,
@@ -1601,14 +1598,14 @@ param (
 fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
     let cases = [
         concat!(
-            "exists @[builtin(reader)] (Reader as (@[intrinsic(unit)] _) : ",
-            "@[intrinsic(vtype)] _) . (@[intrinsic(unit)] _)"
+            "exists @[builtin(reader)] (Reader as (@(intrinsic(unit))) : ",
+            "@(intrinsic(vtype))) . (@(intrinsic(unit)))"
         ),
         concat!(
-            "exists @[builtin(reader)] (Reader : @[intrinsic(ctype)] _) . ",
-            "(@[intrinsic(unit)] _)"
+            "exists @[builtin(reader)] (Reader : @(intrinsic(ctype))) . ",
+            "(@(intrinsic(unit)))"
         ),
-        concat!("exists @[builtin(os)] (OS : @[intrinsic(vtype)] _) . ", "(@[intrinsic(unit)] _)"),
+        concat!("exists @[builtin(os)] (OS : @(intrinsic(vtype))) . ", "(@(intrinsic(unit)))"),
     ];
 
     cases.into_iter().for_each(|source| {
@@ -1624,7 +1621,7 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
 #[test]
 fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int64_add)] (#add :: @[intrinsic(unit)] _)");
+    let root = fixture.write("main.zy", "@[builtin(int64_add)] (#add :: @(intrinsic(unit)))");
     let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
@@ -1651,7 +1648,7 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
 #[test]
 fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int64_add)] @[intrinsic(unit)] _");
+    let root = fixture.write("main.zy", "@[builtin(int64_add)] @(intrinsic(unit))");
     let scoped =
         SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
@@ -1688,17 +1685,17 @@ fn continuation_io_uses_its_foundational_builtin_classifier() {
         "main.zy",
         r#"
 begin
-  let Int64 = @[intrinsic(i64)] _ that
+  let Int64 = @(intrinsic(i64)) that
   param (
     (/OS; /stdio; /process) :
     exists
-      @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+      @[builtin(os)] (OS : @(intrinsic(ctype)))
     .
       (#stdio :: @[builtin(write_int)]
-        (#write_int :: (@[intrinsic(thk)] _)
-          (Int64 -> (@[intrinsic(thk)] _) OS -> OS))) *
+        (#write_int :: (@(intrinsic(thk)))
+          (Int64 -> (@(intrinsic(thk))) OS -> OS))) *
       (#process :: @[builtin(exit)]
-        (#exit :: (@[intrinsic(thk)] _) (Int64 -> OS)))
+        (#exit :: (@(intrinsic(thk))) (Int64 -> OS)))
   ) in
     ! stdio/write_int 7 { ! process/exit 0 }
 end
@@ -1720,13 +1717,13 @@ fn exact_builtin_classifiers_follow_bound_intrinsic_aliases() {
         "main.zy",
         r#"
 begin
-  let Thk = @[intrinsic(thk)] _ that
-  let Ret = @[intrinsic(ret)] _ that
-  let Int64 = @[intrinsic(i64)] _ that
+  let Thk = @(intrinsic(thk)) that
+  let Ret = @(intrinsic(ret)) that
+  let Int64 = @(intrinsic(i64)) that
   param (
     (/OS; /int64; /process) :
     exists
-      @[builtin(os)] (OS : @[intrinsic(ctype)] _)
+      @[builtin(os)] (OS : @(intrinsic(ctype)))
     .
       (#int64 :: @[builtin(int64_add)] (#add :: Thk (Int64 -> Int64 -> Ret Int64))) *
       (#process :: @[builtin(exit)] (#exit :: Thk (Int64 -> OS)))

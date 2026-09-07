@@ -17,8 +17,8 @@ before producing a computation or package:
 
 ```zydeco
 begin
-  let make_std = @[import("../std/std.zy")] _ that
-  param (/VType; /Thk; /String; /OS; builtin) : @[import("../std/builtin.zy")] _ that
+  let make_std = @(import("../std/std.zy")) that
+  param (/VType; /Thk; /String; /OS; builtin) : @(import("../std/builtin.zy")) that
 
   ...
 end
@@ -252,7 +252,7 @@ At a package boundary, use one projection-pattern group to open the existential 
 and bind only the public types and module values the consumer needs:
 
 ```zydeco
-param (/VType; /Thk; /String; builtin) : @[import("../std/builtin.zy")] _ in
+param (/VType; /Thk; /String; builtin) : @(import("../std/builtin.zy")) in
 let (/int64; /process) = builtin |> make_std in
 ...
 ```
@@ -272,11 +272,11 @@ This projection-pattern idiom serves the role of package `use` without adding a 
 
 The canonical builtin package is the single source of `@[builtin(...)]` host-capability metadata.
 Compiler intrinsics, in contrast, are canonical importable terms in their own right:
-a source splices `@[intrinsic(i64)] _` directly where the term is needed, while host operations are acquired
+a source splices `@(intrinsic(i64))` directly where the term is needed, while host operations are acquired
 by importing the builtin package and projecting only the required dependencies,
 which keeps the names subject to ordinary language-level resolution without repeating the complete host interface.
 
-Within that signature, fixed representations use canonical primitive intrinsics such as `@[intrinsic(i64)] _`
+Within that signature, fixed representations use canonical primitive intrinsics such as `@(intrinsic(i64))`
 and are re-exported through manifest packages whose fields carry the public type names.
 Host-type roles are reserved for abstract capability patterns, as in `exists @[builtin(reader)] (Reader : VType) . ...`.
 This keeps generative resource identities beside the provider boundary that owns them.

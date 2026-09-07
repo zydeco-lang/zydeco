@@ -20,11 +20,11 @@ use zydeco_surface::textual::SourceNumber;
 const HELP: &str = concat!(
     "Every numbered input is one complete, declaration-free source term.\n",
     "\n",
-    "@[import(1)] _       refer to input [1] as a shared hygienic term\n",
+    "@(import(1))       refer to input [1] as a shared hygienic term\n",
     "@[type] expression   classify without evaluating\n",
     "@[run] expression    require immediate evaluation\n",
-    "@[help] _            show this help\n",
-    "@[quit] _            leave the REPL\n",
+    "@(help)            show this help\n",
+    "@(quit)            leave the REPL\n",
     "\n",
     "Enter submits complete syntax and continues an incomplete term on a new line.\n",
     "Type-checking errors keep the current input available for editing and retry.\n",
@@ -58,7 +58,7 @@ impl Repl {
             directory,
             editor: SourceEditor::default(),
             transcript: vec![TranscriptItem::Notice(
-                "Declaration-free REPL ready. Use `@[help] _` for commands.".to_owned(),
+                "Declaration-free REPL ready. Use `@(help)` for commands.".to_owned(),
             )],
             retry_output: None,
             next_number: 1,
@@ -260,7 +260,7 @@ impl Repl {
             .chain(self.retry_output.iter().flat_map(TranscriptEntry::lines))
             .collect::<Vec<_>>();
         let block =
-            Block::default().borders(Borders::ALL).title(" history · import with @[import(n)] _ ");
+            Block::default().borders(Borders::ALL).title(" history · import with @(import(n)) ");
         let inner = block.inner(area);
         let maximum = lines.len().saturating_sub(inner.height as usize);
         let scroll = maximum.saturating_sub(self.transcript_scroll.min(maximum));
@@ -321,7 +321,7 @@ impl Repl {
                     Style::default().fg(Color::Black).bg(Color::Cyan),
                 ),
                 Span::styled(
-                    "  Alt+Enter newline  Ctrl+Enter force  Ctrl+Q quit  @[help] _",
+                    "  Alt+Enter newline  Ctrl+Enter force  Ctrl+Q quit  @(help)",
                     Style::default().fg(Color::DarkGray),
                 ),
             ])),
@@ -410,14 +410,14 @@ mod tests {
 
         let rendered = terminal.backend().to_string();
         assert!(rendered.contains("[1] source"), "{rendered}");
-        assert!(rendered.contains("@[import(n)] _"), "{rendered}");
+        assert!(rendered.contains("@(import(n))"), "{rendered}");
     }
 
     #[test]
     fn help_does_not_consume_an_input_number() {
         let directory = tempfile::tempdir().unwrap();
         let mut repl = Repl::new(directory.path().to_path_buf());
-        repl.editor.insert_str("@[help] _");
+        repl.editor.insert_str("@(help)");
         repl.submit(false);
 
         assert_eq!(repl.current_number().get(), 1);

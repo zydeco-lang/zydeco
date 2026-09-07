@@ -70,7 +70,7 @@ a source root is resolved and type checked under an empty context and must synth
 An expected classifier at an import site may be compared with that result, but it does not participate
 in elaborating the imported source.
 
-Imports are typed metadata on holes, such as `@[import("library.zy")] _`.
+Imports are typed metadata on holes, such as `@(import("library.zy"))`.
 Parenthesized metadata `@(meta)` abbreviates the bracket form whose payload is a hole,
 so `@(import("library.zy"))` names the same import.
 A compiler session discovers the file dependency graph, orders providers before their consumers,
@@ -87,7 +87,7 @@ Companion files participate in the same dependency graph, may use imports, and m
 Companion discovery applies to reusable `.zy` sources only; `.zydeco` program roots remain unpaired.
 
 Text blocks attached to holes supply multi-line string values:
-`--| text` immediately above `@[literal] _` replaces the hole with the recovered text as a string literal,
+`--| text` immediately above `@(literal)` replaces the hole with the recovered text as a string literal,
 so embedded prose shares the attachment discipline of repository documentation.
 
 ### Lexical and Block Bindings
@@ -662,12 +662,12 @@ See the [editor configuration guide](editor/README.md#runtime-configuration) for
 ### Interactive Inputs
 
 The REPL stores submitted terms as numbered session overlays, reusing the file-source model.
-`@[import(1)] _` refers to source input `[1]`; a quoted target such as `@[import("1")] _` is a filesystem path.
+`@(import(1))` refers to source input `[1]`; a quoted target such as `@(import("1"))` is a filesystem path.
 Both imports retain the same hygienic boundary and static sharing rules.
 A type checking rejection preserves the editor and reserves the input number for a corrected retry.
 
 Root metadata supplies frontend commands: `@[type]` requests static inspection,
-`@[run]` explicitly requests evaluation, and `@[help] _` and `@[quit] _` control the REPL.
+`@[run]` explicitly requests evaluation, and `@(help)` and `@(quit)` control the REPL.
 Default evaluation supports values and directly returning computations;
 explicit execution may supply a Builtin host contract.
 The frontend captures output and uses empty stdin and arguments.

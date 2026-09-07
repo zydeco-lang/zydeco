@@ -54,18 +54,15 @@ impl ReplEngine {
             self.directory.join(format!(".zydeco-repl-value-root-{}", number.get()));
         let builtin = format!("{:?}", self.builtin.to_string_lossy());
         let direct_wrapper = format!(
-            concat!(
-                "param (/Unit = _) : @[import({})] _ in\n",
-                "@[debug(\"{}\")] @[import({})] _\n",
-            ),
+            concat!("param (/Unit = _) : @(import({})) in\n", "@[debug(\"{}\")] @(import({}))\n",),
             builtin,
             Self::INPUT_OBSERVATION,
             number.get(),
         );
         let returned_wrapper = format!(
             concat!(
-                "param (/Unit = _) : @[import({})] _ in\n",
-                "ret (@[debug(\"{}\")] @[import({})] _)\n",
+                "param (/Unit = _) : @(import({})) in\n",
+                "ret (@[debug(\"{}\")] @(import({})))\n",
             ),
             builtin,
             Self::INPUT_OBSERVATION,
@@ -399,7 +396,7 @@ mod tests {
             }
         }
 
-        let second_path = engine.install(second, "@[import(1)] _".to_owned()).unwrap();
+        let second_path = engine.install(second, "@(import(1))".to_owned()).unwrap();
         match engine.evaluate(&second_path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int64"),
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
@@ -407,7 +404,7 @@ mod tests {
             }
         }
 
-        let third_path = engine.install(third, "ret (@[import(1)] _)".to_owned()).unwrap();
+        let third_path = engine.install(third, "ret (@(import(1)))".to_owned()).unwrap();
         match engine.evaluate(&third_path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int64"),
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
@@ -471,7 +468,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let mut engine = ReplEngine::new(directory.path().to_path_buf());
         let path =
-            engine.install(SourceNumber::new(1).unwrap(), "@[import(2)] _".to_owned()).unwrap();
+            engine.install(SourceNumber::new(1).unwrap(), "@(import(2))".to_owned()).unwrap();
 
         match engine.evaluate(&path, ExpressionMode::Evaluate) {
             | EvaluationOutcome::Error(error) => {

@@ -99,7 +99,7 @@ mod tests {
         let leaf = nested.join("leaf.zy");
         let root = directory.path().join("main.zy");
         let source = concat!(
-            "(\"🦀\", @[import(1)] _, @[import(\"library.zy\")] _, ",
+            "(\"🦀\", @(import(1)), @(import(\"library.zy\")), ",
             "@(import(\"nested/leaf.zy\")))\n",
         );
         std::fs::write(&library, "()\n").unwrap();

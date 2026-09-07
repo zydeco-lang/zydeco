@@ -190,7 +190,7 @@ fn rejects_call_site_inference_across_an_imported_source_boundary() {
     SourceCase::assert_rejected(
         SourceCase::check_with_import(
             r#"
-let identity = @[import("imported.zy")] _ in
+let identity = @(import("imported.zy")) in
 ! identity ()
 "#,
             r#"{ fn value => ret value }"#,

@@ -12,8 +12,8 @@ A consumer can open one package and select only the type identities and module v
 
 ```zydeco
 begin
-  let make_std = @[import("../../std/std.zy")] _ that
-  param (/VType; /Thk; /String; /OS; builtin) : @[import("../../std/builtin.zy")] _ in
+  let make_std = @(import("../../std/std.zy")) that
+  param (/VType; /Thk; /String; /OS; builtin) : @(import("../../std/builtin.zy")) in
   let (/Result; /Path; /IoError; /result; /fs; /stdio; /process) = builtin |> make_std in
 
   ...
@@ -92,7 +92,7 @@ This is the important case for Builtin, because a source can state its capabilit
 without copying the complete host ABI:
 
 ```zydeco
-param (/Bytes; /Reader; /io; builtin) : @[import("builtin.zy")] _ in
+param (/Bytes; /Reader; /io; builtin) : @(import("builtin.zy")) in
 ...
 ```
 

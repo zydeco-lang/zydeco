@@ -70,13 +70,13 @@ mod tests {
         let directory = tempdir().unwrap();
         let provider = directory.path().join("provider.zy");
         let root = directory.path().join("root.zy");
-        fs::write(&provider, "--| Provider term\n@[doc(module,\"provider\")] _\n").unwrap();
+        fs::write(&provider, "--| Provider term\n@(doc(module,\"provider\"))\n").unwrap();
         fs::write(
             &root,
             concat!(
                 "(\n",
                 "  --| Imported provider\n",
-                "  @[doc(import)] @[import(\"provider.zy\")] _,\n",
+                "  @[doc(import)] @(import(\"provider.zy\")),\n",
                 "  --| Root literal\n",
                 "  @[doc(example)] 1\n",
                 ")\n",
@@ -99,7 +99,9 @@ mod tests {
             provider_doc.site.directive.meta.arguments,
             [Meta::ident("module"), Meta::string("provider")]
         );
-        assert_eq!(provider_doc.term_source(), "_");
+        assert_eq!(provider_doc.term_source(), "@(doc(module,\"provider\"))");
+        // The paren spelling is sugar: the documented payload stays the hole,
+        // but its span covers the complete `@(doc(...))` form.
         assert!(matches!(provider_doc.term(), Term::Hole(Hole)));
 
         assert_eq!(import_doc.path(), root.canonicalize().unwrap());
@@ -107,7 +109,7 @@ mod tests {
             import_doc.site.directive.comment.as_ref().unwrap().text.as_ref(),
             "Imported provider"
         );
-        assert_eq!(import_doc.term_source(), "@[import(\"provider.zy\")] _");
+        assert_eq!(import_doc.term_source(), "@(import(\"provider.zy\"))");
         assert!(matches!(
             import_doc.term(),
             Term::Meta(MetaTerm(meta, _))
@@ -131,9 +133,9 @@ mod tests {
             &root,
             concat!(
                 "(\n",
-                "  @[import(\"provider.zy\")] _,\n",
+                "  @(import(\"provider.zy\")),\n",
                 "  --| Effective documentation\n",
-                "  @[doc] _,\n",
+                "  @(doc),\n",
                 "  --| Root warning\n",
                 "  _\n",
                 ")\n",

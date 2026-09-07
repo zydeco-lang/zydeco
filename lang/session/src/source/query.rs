@@ -741,7 +741,7 @@ mod tests {
     fn root_analysis_reuses_unchanged_dependencies() {
         let fixture = Fixture::new();
         let provider = fixture.write("provider.zy", "1");
-        let root = fixture.write("root.zy", r#"@[import("provider.zy")] _"#);
+        let root = fixture.write("root.zy", r#"@(import("provider.zy"))"#);
         let unrelated = fixture.write("unrelated.zy", "1");
         let mut session = CompilerSession::default();
         session.template(&unrelated).unwrap();
@@ -750,7 +750,7 @@ mod tests {
         let repeated = session.analyze(&root).unwrap();
         assert!(Arc::ptr_eq(&first, &repeated));
 
-        session.set_overlay(&root, r#"@[import("provider.zy")] _"#.to_string()).unwrap();
+        session.set_overlay(&root, r#"@(import("provider.zy"))"#.to_string()).unwrap();
         let after_identical_input = session.analyze(&root).unwrap();
         assert!(Arc::ptr_eq(&first, &after_identical_input));
 
@@ -771,14 +771,14 @@ mod tests {
     fn graph_rebuild_reuses_unchanged_parsed_templates() {
         let fixture = Fixture::new();
         let provider = fixture.write("provider.zy", "1");
-        let root = fixture.write("root.zy", r#"@[import("provider.zy")] _"#);
+        let root = fixture.write("root.zy", r#"@(import("provider.zy"))"#);
         let mut session = CompilerSession::default();
 
         let first = session.graph(&root).unwrap();
         let first_provider = source_template(&first, &provider);
         let first_root = first.sources[&first.root].template.clone();
 
-        session.set_overlay(&root, "\n@[import(\"provider.zy\")] _".to_string()).unwrap();
+        session.set_overlay(&root, "\n@(import(\"provider.zy\"))".to_string()).unwrap();
         let second = session.graph(&root).unwrap();
         let second_provider = source_template(&second, &provider);
         let second_root = second.sources[&second.root].template.clone();
@@ -797,7 +797,7 @@ mod tests {
         let without_signature = session.analyze(&root).unwrap();
         assert!(without_signature.outcome().root().is_some());
 
-        session.set_overlay(&signature, "@[intrinsic(i64)] _".to_owned()).unwrap();
+        session.set_overlay(&signature, "@(intrinsic(i64))".to_owned()).unwrap();
         let graph = session.graph(&root).unwrap();
         assert!(graph.sources[&graph.root].signature.is_some());
         let with_signature = session.analyze(&root).unwrap();
@@ -835,7 +835,7 @@ mod tests {
         let root = fixture.directory.path().join("root.zy");
         let mut session = CompilerSession::default();
         session.set_overlay(&provider, "1".to_string()).unwrap();
-        session.set_overlay(&root, r#"@[import("provider.zy")] _"#.to_string()).unwrap();
+        session.set_overlay(&root, r#"@(import("provider.zy"))"#.to_string()).unwrap();
 
         let graph = session.graph(&root).unwrap();
 
@@ -861,7 +861,7 @@ mod tests {
         let root = fixture.directory.path().join("root.zy");
         let mut session = CompilerSession::default();
         session.set_overlay(&input, "()".to_owned()).unwrap();
-        session.set_overlay(&root, "@[import(1)] _".to_owned()).unwrap();
+        session.set_overlay(&root, "@(import(1))".to_owned()).unwrap();
 
         let graph = session.graph(&root).unwrap();
 
@@ -962,7 +962,7 @@ mod tests {
         let library = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
         let builtin = library.join("builtin.zy").canonicalize().unwrap();
         let source = format!(
-            r#"let Builtin = @[import("{builtin}")] _ in
+            r#"let Builtin = @(import("{builtin}")) in
 param (
   /VType; /CType; /Thk; /Ret; /Unit;
   /Int8; /Int16; /Int32; /Int64;

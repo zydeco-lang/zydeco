@@ -138,14 +138,14 @@ zydeco repl
 
 Use `cargo run -p zydeco-tui` to work directly on the Ratatui frontend.
 The REPL accepts one complete term per numbered input.
-`@[import(1)] _` refers to an earlier input; `@[import("1")] _` refers to a file named `1`.
+`@(import(1))` refers to an earlier input; `@(import("1"))` refers to a file named `1`.
 
 | Root annotation | Behavior |
 | --- | --- |
 | `@[type] expression` | Inspect the term and its classifier without evaluating it. |
 | `@[run] expression` | Explicitly request evaluation, including supplying a supported Builtin host contract. |
-| `@[help] _` | Show commands and editing keys. |
-| `@[quit] _` | Exit the REPL. |
+| `@(help)` | Show commands and editing keys. |
+| `@(quit)` | Exit the REPL. |
 
 Without a command, the REPL inspects kinds and types and evaluates values or directly returning computations.
 Use `@[run]` for computations requiring the host package; arbitrary unapplied functions still need arguments.

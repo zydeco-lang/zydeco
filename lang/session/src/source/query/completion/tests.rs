@@ -285,7 +285,7 @@ fn exact_prefix_match_remains_primary_over_type_evidence() {
 #[test]
 fn a_companion_signature_supplies_the_root_expectation() {
     let fixture = Fixture::new("let matching = 1 in let other = 'x' in _¦")
-        .with_dependency("main.zyi", "@[intrinsic(i64)] _");
+        .with_dependency("main.zyi", "@(intrinsic(i64))");
     assert_eq!(fixture.names(), ["matching"]);
     assert_eq!(fixture.compatibility("matching"), Some(AnnotationCompatibility::Equal));
     assert_eq!(fixture.compatibility("other"), Some(AnnotationCompatibility::Mismatch));
@@ -295,7 +295,7 @@ fn a_companion_signature_supplies_the_root_expectation() {
 fn source_graph_copying_preserves_the_cursor_without_exporting_imported_locals() {
     let fixture = Fixture::new("let public = @[import(\"provider.zy\")] _ in ¦")
         .with_dependency("provider.zy", "let private = 1 in private")
-        .with_dependency("provider.zyi", "@[intrinsic(i64)] _");
+        .with_dependency("provider.zyi", "@(intrinsic(i64))");
     assert_eq!(fixture.names(), ["public"]);
     assert_eq!(fixture.annotation("public").as_deref(), Some("Int64"));
 }

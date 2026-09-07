@@ -180,8 +180,8 @@ end
 #[test]
 fn typeof_rejects_unannotated_holes_and_kind_operands() {
     [
-        "let T = @[typeof] _ in ret ()",
-        "let T : VType = @[typeof] _ in ret ()",
+        "let T = @(typeof) in ret ()",
+        "let T : VType = @(typeof) in ret ()",
         "let T = @(typeof) in ret ()",
     ]
     .into_iter()

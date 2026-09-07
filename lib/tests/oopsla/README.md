@@ -584,7 +584,7 @@ For example:
 
 ```zydeco
 begin
-  let library = @[import("relative/path/to/library.zy")] _ that
+  let library = @(import("relative/path/to/library.zy")) that
   param builtin that
   let public = library builtin that
 
@@ -613,7 +613,7 @@ The easiest program we can write is a term that accepts the Builtin package and 
 
 `lib/playground/main.zydeco`
 ```zydeco
-param (/system) : @[import("../std/builtin.zy")] _ in
+param (/system) : @(import("../std/builtin.zy")) in
   let (/process) = system in
   ! (process/exit) 42
 ```

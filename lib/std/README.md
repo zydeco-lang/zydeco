@@ -5,7 +5,7 @@
 Select the foundational kinds and types directly from the Builtin contract:
 
 ```zydeco
-param (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) : @[import("lib/std/builtin.zy")] _ in
+param (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) : @(import("lib/std/builtin.zy")) in
 ...
 ```
 
@@ -15,7 +15,7 @@ so one field search reaches every public name and every selection shares one typ
 A pure library function states its interface with just this parameter:
 
 ```zydeco
-param (/Ret; /Int64) : @[import("lib/std/builtin.zy")] _ in
+param (/Ret; /Int64) : @(import("lib/std/builtin.zy")) in
 fn (value : Int64) => (ret value : Ret Int64)
 ```
 
@@ -31,7 +31,7 @@ The available surface names are:
 | Capabilities | `Reader`, `Writer`, `OS` |
 
 Host operations live in the same contract under the `numeric`, `text`, and `system` groups, and the search descends
-through them: `param (/stdio; /process) : @[import("lib/std/builtin.zy")] _ in` selects two operations
+through them: `param (/stdio; /process) : @(import("lib/std/builtin.zy")) in` selects two operations
 from the `system` group without naming it.
 The [integer example](../tests/std/minimal.zy) selects `Int64` and `Ret` this way,
 then uses the assembled standard package for arithmetic.

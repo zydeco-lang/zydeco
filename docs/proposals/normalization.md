@@ -108,8 +108,8 @@ The canonical Builtin signature uses the inferred form for the leading CBPV univ
 
 ```zydeco
 exists
-  (VType as @[intrinsic(vtype)] _)
-  (CType as @[intrinsic(ctype)] _)
+  (VType as @(intrinsic(vtype)))
+  (CType as @(intrinsic(ctype)))
 .
   ...
 ```

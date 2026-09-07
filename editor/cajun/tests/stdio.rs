@@ -231,7 +231,7 @@ fn stdio_server_exposes_import_document_links_after_resolution_errors() {
     let directory = tempfile::tempdir().unwrap();
     let library = directory.path().join("library.zy");
     let root = directory.path().join("main.zy");
-    let source = "(@[import(\"library.zy\")] _, missing)\n";
+    let source = "(@(import(\"library.zy\")), missing)\n";
     std::fs::write(&library, "()\n").unwrap();
     std::fs::write(&root, source).unwrap();
     let uri = Url::from_file_path(&root).unwrap().to_string();
@@ -513,7 +513,7 @@ fn stdio_server_completes_current_names_after_parse_errors_with_optional_type_la
         }
 
         let source =
-            "let matching = 1 in let other = 'x' in val unknown => (_ : @[intrinsic(i64)] _)";
+            "let matching = 1 in let other = 'x' in val unknown => (_ : @(intrinsic(i64)))";
         server.notify(
             "textDocument/didChange",
             json!({
@@ -989,7 +989,7 @@ fn stdio_server_warns_about_ineffective_text_blocks() {
         })
     );
 
-    let attached = "--| Effective documentation.\n@[doc] _";
+    let attached = "--| Effective documentation.\n@(doc)";
     server.notify(
         "textDocument/didChange",
         json!({

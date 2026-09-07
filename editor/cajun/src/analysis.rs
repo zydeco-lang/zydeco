@@ -873,7 +873,7 @@ mod tests {
         let library = directory.path().join("library.zy");
         let root = directory.path().join("main.zy");
         std::fs::write(&library, "()\n").unwrap();
-        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        std::fs::write(&root, "@(import(\"library.zy\"))\n").unwrap();
         let library = library.canonicalize().unwrap();
         let root = root.canonicalize().unwrap();
         let mut progress = Vec::new();
@@ -902,7 +902,7 @@ mod tests {
         let root = directory.path().join("main.zy");
         std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
             .unwrap();
-        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        std::fs::write(&root, "@(import(\"library.zy\"))\n").unwrap();
         let (project, session) = ProjectState::load(&root, &HashMap::new()).unwrap();
 
         let definition = project.definition(&library, Position::new(1, 7)).unwrap();
@@ -934,7 +934,7 @@ mod tests {
         let root = directory.path().join("main.zy");
         std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
             .unwrap();
-        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        std::fs::write(&root, "@(import(\"library.zy\"))\n").unwrap();
         let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
 
         let from_binder = project.rename(&library, Position::new(1, 7), "result").unwrap();
@@ -960,7 +960,7 @@ mod tests {
         let root = directory.path().join("main.zy");
         std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
             .unwrap();
-        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        std::fs::write(&root, "@(import(\"library.zy\"))\n").unwrap();
         let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
 
         assert_eq!(
@@ -998,7 +998,7 @@ mod tests {
         let root = directory.path().join("main.zy");
         std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
             .unwrap();
-        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        std::fs::write(&root, "@(import(\"library.zy\"))\n").unwrap();
         let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
 
         assert_eq!(
@@ -1018,7 +1018,7 @@ mod tests {
         let root = directory.path().join("main.zy");
         std::fs::write(&library, "begin\n  let answer = () that\n  (answer, answer)\nend\n")
             .unwrap();
-        std::fs::write(&root, "@[import(\"library.zy\")] _\n").unwrap();
+        std::fs::write(&root, "@(import(\"library.zy\"))\n").unwrap();
         let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
 
         assert_eq!(
@@ -1184,7 +1184,7 @@ mod tests {
         let source = concat!(
             "param (\n",
             "  (/VType; /CType; /Thk; /Ret) :\n",
-            "  @[import(\"../builtin.zy\")] _\n",
+            "  @(import(\"../builtin.zy\"))\n",
             ") in\n",
             "begin\n",
             "  def Result (A : VType) (E : VType) =\n",

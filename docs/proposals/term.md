@@ -212,7 +212,7 @@ which must itself synthesize a type. The pair is elaborated as the ordinary anno
 An import is metadata on a hole:
 
 ```zydeco
-@[import("library.zy")] _
+@(import("library.zy"))
 ```
 
 The spelling `@(import("library.zy"))` abbreviates the same term. Source assembly makes the hole refer to the one

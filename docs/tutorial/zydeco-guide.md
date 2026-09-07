@@ -57,7 +57,7 @@ end
 
 Notes:
 
-- `@(import("path"))` is sugar for `@[import("path")] _`.
+- `@(import("path"))` is sugar for `@(import("path"))`.
   Both forms mean “refer to the independently checked source term here.” Repeated imports share the compiler term,
   but evaluate it at each dynamic occurrence.
 - Relative import paths are resolved from the file that contains the import;
@@ -80,11 +80,11 @@ In the REPL, root metadata selects a command for the submitted term:
 ```zydeco
 @[type] ret 1
 @[run] ret 1
-@[help] _
-@[quit] _
+@(help)
+@(quit)
 ```
 
-An earlier REPL input can be spliced by number with `@[import(1)] _`.
+An earlier REPL input can be spliced by number with `@(import(1))`.
 Editor support is provided by the `cajun` language server under `editor/`.
 
 ---
@@ -283,7 +283,7 @@ and the provider's local binder differ.
 It is how a library states its dependency on the builtin provider while opening some of its fields:
 
 ```zydeco
-pi (_ : @[import("../std/builtin.zy")] _) .
+pi (_ : @(import("../std/builtin.zy"))) .
   exists (= State : VType -> VType -> CType) .
     (#get :: ...) * (#put :: ...) * ...
 ```

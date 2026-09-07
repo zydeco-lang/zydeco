@@ -24,16 +24,16 @@ A short session can therefore look like this:
 [1] 40
   ⇒ 40 : Int64
 
-[2] @[import(1)] _
+[2] @(import(1))
   ⇒ 40 : Int64
 
-[3] ret (@[import(1)] _)
+[3] ret (@(import(1)))
   ⇒ 40 : Int64
 ```
 
 The spelling `@[import(1)]` uses an unquoted positive integer.
-In a complete term, the annotation attaches to the hole that receives the imported source, hence `@[import(1)] _`.
-Quotation deliberately keeps its existing meaning: `@[import("1")] _` asks for a file whose path is `1`.
+In a complete term, the annotation attaches to the hole that receives the imported source, hence `@(import(1))`.
+Quotation deliberately keeps its existing meaning: `@(import("1"))` asks for a file whose path is `1`.
 
 This is a source import, rather than a reference to a cached runtime result.
 The source graph keeps one checked term for the imported input and places a source boundary on every reference to it.
@@ -48,7 +48,7 @@ Import cycles use the same graph check as file cycles.
 Session overlays are never written to the working directory and disappear when the process exits.
 
 Control commands do not enter numbered history.
-`@[help] _` leaves the current number available, and `@[quit] _` ends the session.
+`@(help)` leaves the current number available, and `@(quit)` ends the session.
 A type checking rejection also stays outside history while its diagnostic remains visible in the output pane.
 During that recovery path, the current number remains a draft.
 
@@ -61,8 +61,8 @@ Instead, it gives a frontend meaning to a small set of root metadata annotations
 | --- | --- |
 | `@[type] expression` | Check the expression and display its static classification without running it. |
 | `@[run] expression` | Require the expression to run, supplying the host Builtin contract when necessary. |
-| `@[help] _` | Display interactive help. |
-| `@[quit] _` | Exit the application. |
+| `@(help)` | Display interactive help. |
+| `@(quit)` | Exit the application. |
 
 Only a recognized annotation at the root is a command.
 `type` and `run` must annotate an expression, whereas the two control commands must annotate `_`.
@@ -71,7 +71,7 @@ Other metadata continues through the language pipeline unchanged, so adding an o
 or future language annotation does not require the REPL parser to know about it.
 
 Imports occupy a different layer even though they share the annotation syntax.
-`@[import(...)] _` is a language directive understood by source assembly and can appear anywhere a term may appear.
+`@(import(...))` is a language directive understood by source assembly and can appear anywhere a term may appear.
 The four commands above are terminal policy and are meaningful only at the submitted root.
 Keeping this boundary prevents UI behavior from becoming part of the core syntax.
 

@@ -396,10 +396,7 @@ pub mod utils {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => {
                     let basis = library.join("control/monad.zy").canonicalize().unwrap();
-                    format!(
-                        concat!("let monadic_basis = @[import(\"{}\")] _ in\n",),
-                        basis.display()
-                    )
+                    format!(concat!("let monadic_basis = @(import(\"{}\")) in\n",), basis.display())
                 }
             };
             let open_monadic = match prelude {
@@ -411,7 +408,7 @@ pub mod utils {
             };
 
             format!(
-                r#"let Builtin = @[import("{builtin}")] _ in
+                r#"let Builtin = @(import("{builtin}")) in
 {monadic}param (
   /VType; /CType; /Thk; /Ret; /Unit;
   /Int8; /Int16; /Int32; /Int64;
