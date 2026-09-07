@@ -6,8 +6,7 @@ exists
   -- Compiler-canonical types are manifest components on the surface: every
   -- public name is unique across the complete package, so consumers select
   -- kinds, types, operations, and capabilities by direct field search.
-  (
-    = Thk as @(intrinsic(thk)) : CType -> VType)
+  (= Thk as @(intrinsic(thk)) : CType -> VType)
   (= Ret as @(intrinsic(ret)) : VType -> CType)
   (= Unit as @(intrinsic(unit)) : VType)
   (= Int8 as @(intrinsic(i8)) : VType)
