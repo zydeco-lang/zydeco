@@ -9,6 +9,7 @@ fn main() {
 
     if let Ok(dir) = env::var("ZYDECO_LIB_DIR") {
         println!("cargo:rustc-link-search=native={dir}");
+        println!("cargo:rerun-if-changed={dir}/lib{lib}.a");
     }
 
     println!("cargo:rustc-link-lib=static={lib}");

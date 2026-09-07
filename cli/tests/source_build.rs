@@ -1,5 +1,42 @@
 use std::{path::PathBuf, process::Command};
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn rebuilding_a_native_program_uses_the_current_assembly() {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("rebuild.zy");
+    let build = directory.path().join("build");
+    let builtin = workspace.join("lib/std/builtin.zy");
+
+    for expected in [17, 23, 23] {
+        std::fs::write(
+            &source,
+            format!(
+                "param (/process; /Int64) : @(import(\"{}\")) in ! process/exit {expected}\n",
+                builtin.display()
+            ),
+        )
+        .unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .arg("build")
+            .arg(&source)
+            .args(["--target-arch", "x86-64", "--build-dir"])
+            .arg(&build)
+            .arg("--runtime-dir")
+            .arg(workspace.join("runtime"))
+            .arg("--execute")
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "native rebuild failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 #[test]
 fn a_root_term_builds_without_project_configuration() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/builtin/exit.zy");
