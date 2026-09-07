@@ -309,6 +309,22 @@ fn runtime_boundaries_reject_static_requirements_consistently() {
 }
 
 #[test]
+fn aliases_of_partial_value_applications_preserve_bound_arguments() {
+    let source = r#"
+let val pair (a : Int64) (b : Int64) : Int64 * Int64 = (a, b) in
+let partial = pair 1 in
+let alias = partial in
+let (a, b) = alias 2 in
+! int64/eq OS a 1 {
+  ! int64/eq OS b 2 { ! exit 0 } { ! exit 41 }
+} { ! exit 42 }
+"#;
+    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::run(source));
+    SourceCase::assert_accepted(SourceCase::lower(source));
+}
+
+#[test]
 fn exponentially_composed_value_functions_reach_the_static_reduction_limit() {
     for depth in [10, 16, 20] {
         let mut source = "let val g0 (x : Int64) : Int64 = x in\n".to_owned();
