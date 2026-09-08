@@ -1,7 +1,8 @@
 # Package modularization with projection patterns
 
-Zydeco represents libraries with total value functions, computation functions, products, and existential packages,
-following the account in [Uniform Term Composition](term.md) and [Compile-Time Normalization](normalization.md).
+Zydeco represents libraries with total value functions, computation functions, products,
+and existential packages, following the account in [Uniform Term Composition](term.md)
+and [static elimination](../references/language.md#10-static-elimination).
 This gives libraries a precise term-level meaning,
 but a positional package pattern makes every consumer repeat the provider's complete public telescope.
 Adding one standard-library type or module then changes programs that never use it.
@@ -184,7 +185,7 @@ Generic code receives its carrier and operations explicitly,
 as in the [numeric dictionary interfaces](../../lib/std/README.md#numeric-capabilities-and-explicit-instances).
 
 These boundaries use the existing package and product representation.
-The shared [erasure contract](normalization.md#static-elimination-and-residual-code) removes manifest fields;
+The shared [erasure contract](../references/language.md#10-static-elimination) removes manifest fields;
 runtime operation fields use ordinary products and thunks.
 No dynamic field table or separate module object is needed.
 The [Builtin contract](../../lib/std/builtin.zy) supplies the complete shape used by the launcher.
@@ -373,7 +374,7 @@ as a manifest entry beside the two kinds.
 ## Static package composition
 
 Packages are the module language
-and follow the shared [static elimination contract](normalization.md#static-elimination-and-residual-code).
+and follow the shared [static elimination contract](../references/language.md#10-static-elimination).
 For packages, elaboration resolves type identities, named selections, and static function components,
 while retaining ordinary payload data and explicitly authored computations.
 Passing, returning, and nesting packages, including packages carrying [value functions](value-pi.md#static-elimination),
@@ -541,7 +542,7 @@ The compiler checks and executes thunked `forall` and codata contracts and the p
 Packages with representable payloads may be returned, stored in constructors,
 and passed through plain computation arrows.
 Static packages carrying value functions compose
-through the shared [static elaboration and residual validation](normalization.md#implementation-status).
+through the shared [static elaboration and residual validation](../references/compiler.md#static-elimination).
 Their known introductions and openings reduce while runtime package openings preserve the typed witness scope.
 
 The existential and package-`pi` regression tests retain unavailable-witness, abstract-type escape,
@@ -552,8 +553,8 @@ both directions of the explicit `forall` adapters, and a callback that keeps a p
 including a hidden existential, and pairs witness recovery through static forwarding with rejection
 of hidden runtime witnesses after forwarding or repacking.
 
-[High-SPS normalization](normalization.md#residual-sps-normalization) exposes parameter demands
-when a known computation application reduces locally, allowing unused package fields to disappear.
+[High-SPS normalization](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand) exposes parameter
+demands when a known computation application reduces locally, allowing unused package fields to disappear.
 Applications that remain indirect conservatively demand their arguments whole.
 
 ## Elaboration and runtime representation

@@ -15,7 +15,7 @@ stack lets occur exactly around value-coproduct matches.
 Normalization combines local β/η-reductions with field-sensitive demand analysis,
 resolving known calls and pruning unused bindings and package fields before allocation.
 Known arithmetic calls become typed primitive values with direct result bindings;
-[primitive call normalization](../../../docs/proposals/normalization.md#residual-primitive-calls) owns the arithmetic
+[primitive call normalization](../../../docs/references/compiler.md#primitive-calls) owns the arithmetic
 and return-reduction rules.
 Closure conversion then consumes that lexical tree and produces a distinct `SpsLowProgram` with blocks,
 jumps, and explicit closure and continuation packages.
@@ -31,8 +31,9 @@ Both representations have one computation root rather than a top-level declarati
   `high::lower` constructs a validated `BranchJoinProgram` directly from checked syntax.
 - `high::variables` provides free-variable analysis, and `high::check` validates closed roots, lexical ownership,
   and branch-join placement.
-- `high::normalize` rebuilds high SPS using local reductions and the consumer demands defined by `high::demand`,
-  following the [residual normalization rules](../../../docs/proposals/normalization.md#residual-sps-normalization).
+- `high::normalize` rebuilds high SPS using local reductions
+  and the consumer demands defined by `high::demand`, following the
+  [residual normalization rules](../../../docs/references/compiler.md#c8-high-sps-lowering-normalization-and-demand).
 - `low::syntax` and `low::arena` define first-order SPS with typed package forms.
 - `low::convert` performs fresh structural closure conversion; `low::check` validates the resulting lexical ownership
   and retained branch-join invariant.

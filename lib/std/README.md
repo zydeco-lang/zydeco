@@ -248,7 +248,7 @@ let _ : Numeric Bool Carrier = operations in
 ! operations/additive/add (21 : Carrier) 21
 ```
 
-The [manifest type rules](../../docs/proposals/normalization.md#manifest-types) supply the disclosed equation;
+The [manifest type rules](../../docs/references/language.md#9-polymorphism-and-packages) supply the disclosed equation;
 [package selection](../../docs/proposals/field-projection.md#existential-package-selection) governs the shared opening.
 Naming a manifest field after its carrier avoids imposing a generic role label on each consumer.
 When exporting several instances, use distinctive value names such as `int64_instance` and `float32_instance`
@@ -256,9 +256,8 @@ so their selection is unambiguous.
 
 Selection remains explicit value flow: lexical bindings and arguments determine which dictionary is used.
 Several implementations for one carrier can coexist without global instance search or coherence checking.
-A wrapper can carry additional abstract
-or manifest type fields under the same package scope rules. Its static components obey the
-[static elimination contract](../../docs/proposals/normalization.md#static-elimination-and-residual-code);
+A wrapper can carry additional abstract or manifest type fields under the same package scope rules.
+Its static components obey the [static elimination contract](../../docs/references/language.md#10-static-elimination);
 ordinary dictionary thunks may remain at runtime.
 The [runtime contract design](../../docs/proposals/package-modularization.md#explicit-runtime-contracts)
 describes adapters when operations must be dynamically selectable.

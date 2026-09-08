@@ -45,7 +45,8 @@ the first collides with the enclosing binding delimiter, and the second makes mu
 `aliased => pattern` reuses the header/body separator and suggests control flow.
 The semicolon form accommodates several field selections uniformly and preserves source order
 if later pattern designs introduce sequential observations.
-The [coverage proposal](exhaustiveness.md#current-boundary) retains the unresolved refutable-conjunction questions.
+The [coverage proposal](exhaustiveness.md#refutable-conjunctions) retains the unresolved
+refutable-conjunction questions.
 
 ## The Shape of a Source File
 

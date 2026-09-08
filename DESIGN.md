@@ -2,8 +2,10 @@
 
 Zydeco is a proof-of-concept language for studying call-by-push-value (CBPV),
 stack-manipulating computation, and relative monads.
-This document describes the current language and implementation boundaries.
-The linked proposals explain individual mechanisms and their rationale;
+This document gives the project design and repository map.
+The [language reference](docs/references/language.md) specifies source behavior,
+and the [compiler reference](docs/references/compiler.md) follows phase contracts and maintenance entry points.
+Linked proposals retain independently reviewable rationale and open decisions;
 [CONTRIBUTING.md](CONTRIBUTING.md) covers tooling,
 and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source-level walkthrough.
 
@@ -12,7 +14,7 @@ and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source
 Zydeco separates values from computations. Values include variables, thunks, units,
 products, constructors, literals, total value functions, and existential packages.
 Value functions and packages support higher-order static composition
-under the shared [static elimination contract](docs/proposals/normalization.md#static-elimination-and-residual-code).
+under the shared [static elimination contract](docs/references/language.md#10-static-elimination).
 Runtime callable contracts remain explicit computations behind `Thk`.
 Computations may perform effects and include forcing thunks, computation-function application,
 do-bindings, and returning values.
@@ -126,7 +128,7 @@ A telescope is an ordered sequence of binders in which later classifiers may ref
 Packages may be introduced by `pack`, opened by patterns, and composed through products,
 named components, constructors, other packages, and function arguments and results.
 Their package-witness bindings and structural projection routes are resolved statically
-under the [shared phase contract](docs/proposals/normalization.md#static-elimination-and-residual-code).
+under the [shared phase contract](docs/references/language.md#10-static-elimination).
 Representable package payloads may also flow through computation parameters and returns.
 [Package modularization](docs/proposals/package-modularization.md#explicit-runtime-contracts) distinguishes
 this static composition from explicit runtime contracts, which may use products of thunks or thunked arrows,
@@ -426,7 +428,7 @@ Juxtaposition, `value |> function`, `function <| value`, and the view pattern `f
 evaluating it does no more than move value data into its memory representation.
 Only the nested pattern of a view contributes bindings and refutability.
 Static composition admits partial applications, products, constructors, packages, and higher-order parameters
-and results under the [shared residual contract](docs/proposals/normalization.md#residual-validation-and-execution).
+and results under the [shared residual contract](docs/references/language.md#10-static-elimination).
 Runtime callable values remain explicit suspended computations behind `Thk`;
 failed static elimination does not implicitly construct one.
 The behavior and implementation boundary are specified together
@@ -459,8 +461,8 @@ staging, and inference;
 its [source-boundary account](docs/references/language.md#12-sources-imports-and-entry) covers imports and signatures.
 
 Classifier queries share the checked-term repository with source providers and monadic elaboration.
-The [checker guide](lang/statics/src/check/README.md#classifier-extraction-and-checked-term-reuse) owns
-the synthesize-once protocol, context extension, and separation from ordinary metadata forwarding.
+The [compiler reference](docs/references/compiler.md#inference-and-reuse) owns the synthesize-once protocol,
+context extension, and separation from ordinary metadata forwarding.
 
 ## Standard Library and Host Boundary
 
@@ -510,151 +512,47 @@ Monad operations are supplied at runtime, and there is no general specialization
 
 ## Implementation Architecture
 
-Source assembly discovers imports and companion signatures before desugaring the combined term graph.
-The checked program can then support tooling, interpretation, or compilation:
-
-```mermaid
-flowchart TD
-    source[Source graph and parsing] --> desugar[Desugaring]
-    desugar --> resolve[Name resolution]
-    resolve --> check[Type checking and validation]
-    check --> tooling[Editor and static queries]
-    check --> builtin[Executable Builtin boundary]
-    builtin --> interp[Linking and interpretation]
-    builtin --> sps[High SPS]
-    sps --> low[First-order SPSLow]
-    low --> structured[Structured WebAssembly]
-    low --> zasm[Portable ZASM lowering and analysis]
-    zasm --> machine[Abstract-machine WebAssembly]
-    low --> native[Native ZASM and frame planning]
-    native --> amd64[AMD64]
-```
-
+The
+[compiler reference's phase map](docs/references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
+connects source loading and checking to interpretation, SPS lowering, and native or WebAssembly emission.
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
-High SPS uses lexical branch-join syntax. Normalization simplifies known producers
-and consumers before closure conversion produces first-order SPSLow with code labels.
-ZASM makes the control-flow graph explicit for assembly-derived backends.
+High SPS retains lexical branch joins; normalization simplifies known producers
+and consumers before closure conversion constructs first-order SPSLow.
+ZASM makes the control-flow graph explicit for assembly-derived targets.
 
-Within `zydeco-stackir`, `high` owns lexical closures and continuations,
-while `low` owns blocks, jumps, and explicit packages.
-The common `syntax` module defines value patterns, products, typed primitive values,
-external calls, and data eliminations, parameterized by the relevant node IDs.
-Both phases use the same `Let` form for value, stack, and argument bindings,
-including the explicit ambient-stack binder.
-Their syntax modules instantiate the shared forms with their own IDs; their separate value, stack,
-and computation enums determine which control-flow forms each phase admits.
-The shared `arena` module provides construction and definition-name lookup traits, while each phase owns its allocation
-and provenance storage under the [arena and ID invariants](#arena-and-id-invariants).
+| Responsibility | Owning reference | Implementation |
+| --- | --- | --- |
+| Source graph, overlays, and shared analysis | [C3](docs/references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention) | `lang/session/src/source` |
+| Parsing, desugaring, and resolution | [C4](docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution) | `lang/surface/src/{textual,bitter,scoped}` |
+| Typing, finalization, elaboration, and validation | [C5–C6](docs/references/compiler.md#c5-typed-representation-judgments-and-inference) | `lang/statics/src` |
+| Linking and interpretation | [C7](docs/references/compiler.md#c7-linking-and-the-reference-interpreter) | `lang/dynamics/src` |
+| High SPS, demand, and closure conversion | [C8–C9](docs/references/compiler.md#c8-high-sps-lowering-normalization-and-demand) | `lang/stackir/src/{high,low}` |
+| ZASM and representation analysis | [C10](docs/references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) | `lang/assembly/src` |
+| Native preparation, emission, and runtime | [C11–C12](docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) | `lang/{assembly,amd64,machine}`, `runtime` |
+| WebAssembly emission and embedding | [C13](docs/references/compiler.md#c13-webassembly-backends-and-embedding) | `lang/{wasm-am,wasm-sps,wasm-common}` |
 
-[Residual SPS normalization](docs/proposals/normalization.md#residual-sps-normalization) combines local β/η-reductions
-with [field-sensitive demand analysis](docs/proposals/demand-analysis.md).
-Known closures, argument frames, returns, and data eliminations reduce while preserving shared bodies,
-branch joins, and trapping evaluation.
-Surviving consumers determine which bindings and product fields remain.
-Lowering constructs both user values and the Builtin package structurally;
-normalization prunes their unused components through the same rules before closure conversion allocates environments.
-The interpreter retains the complete checked residual program as the reference semantics.
-
-Primitive operations initially retain their thunk representation.
-[Primitive call normalization](docs/proposals/normalization.md#residual-primitive-calls) follows known operations
-through bindings and package projections.
-Arithmetic becomes a typed value operation whose known return continuation becomes an ordinary result binding;
-other known operations become direct external calls.
-Dynamically selected and escaping operations retain their thunk interface with normalized bodies.
-AMD64 and both WebAssembly backends select numeric instructions for the typed arithmetic operations.
-
-| Responsibility | Implementation |
-| --- | --- |
-| Source graph, overlays, and shared analysis | `lang/session/src/source` |
-| Parsing, desugaring, and resolution | `lang/surface/src/{textual,bitter,scoped}` |
-| Typing, normalization, elaboration, and validation | `lang/statics/src` |
-| Linking and interpretation | `lang/dynamics/src` |
-| High SPS, normalization with demand analysis, and closure conversion | `lang/stackir/src/{high,low}` |
-| ZASM lowering and allocation analysis | `lang/assembly/src` |
-| Code emission | `lang/{amd64,wasm-am,wasm-sps}/src` |
-
-Every completed representation after type checking carries exactly one top-level expression or program root.
-`DynamicsProgram`, `BranchJoinProgram`, `SpsLowProgram`, and `AssemblyProgram` pair
-that root with the storage needed by their syntax.
-Node arenas and labeled block collections are therefore implementation storage,
-not declaration-oriented containers that determine how many programs a compilation contains.
-Each semantic phase consumes one complete program and produces one complete program;
-high SPS is lexical branch-join syntax, SPSLow is first-order with explicit code labels
-while retaining one lexical occurrence per stored node, and assembly materializes the control-flow graph.
-The single-occurrence invariant is what later passes rely on: a value node consumed
-by exactly one pattern makes representation decisions such as unboxing local.
-
-Mutation is confined to the builder owned by the phase that creates an arena.
-A completed owned arena crosses the phase boundary through the transparent `FrozenArena` wrapper,
-which provides read access without `DerefMut` and adds no allocation or indirection.
-Long-lived session products use `Arc` for sharing and expose shared references at pass boundaries.
-When a later phase synthesizes metadata for identifiers inherited from an earlier phase,
-it keeps a phase-local delta and resolves through the earlier immutable layers on a miss.
-Stack IR definition names and resolver-generated textual origins follow this rule;
-lowering therefore does not clone or extend `ScopedArena`.
+Each completed representation has one selected program root and the storage needed by its syntax.
+Phase-owned builders publish immutable products; later metadata lives in phase-local deltas.
+[C2](docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) defines allocation
+and provenance, and C8–C9 define lexical ownership before control-flow lowering.
 
 ### Query-Based Analysis
 
-Type checking runs inside the session's salsa graph rather than as a free-standing pass.
-The session's `SourceQueryDb` extends the statics crate's `TyckDb` supertrait,
-so the checking queries and the source queries share one database and one revision system.
-The name-resolved program enters the graph as the tracked struct `ScopedData` (`lang/statics/src/query/input.rs`);
-`check_source(db, data)` is a tracked query that still runs the wholesale `Tycker` internally,
-and a layer of demand-driven fact queries answers per-node questions from the memoized analysis:
+Source and statics queries share one Salsa database and revision system.
+Allocation-producing judgments return fragments for the checker to materialize;
+stateful inference and elaboration retain a mutable algorithmic core.
+[Query ownership](docs/references/compiler.md#query-and-checker-ownership) defines this boundary,
+and [analysis retention](docs/references/compiler.md#analysis-facts-and-materialization) distinguishes
+keyed tooling facts from full typed-tree consumers and fine-grained memos.
 
-- `normalized_type` reads a materialized normalized type;
-- `diagnostics` and `coverage` expose recorded diagnostics and coverage results;
-- `fill_solution`, `annotation_of_def`, `type_definition_of_def`, and `annotation_of_term` expose per-node facts
-  for editors and tooling.
-
-Facts are keyed by interned node IDs (`InternedType`, `InternedDef`, `InternedTerm`,
-`InternedFill`) because salsa query arguments must be salsa IDs.
-The `*_normalized` arena tables remain the downstream interface consumed by `zydeco-dynamics`
-and `zydeco-stackir`; the query layer reads them, it does not replace them.
-Allocation-producing judgment queries return typed fragments keyed by their occurrence sites,
-which the checker materializes into its arena.
-Context-sensitive unification, fill resolution, and existential-opening internals remain checker-owned:
-a mutable pre-node is not determined by its site alone.
-`check_source` orchestrates judgments, hole resolution, normalization, coverage,
-and static elaboration in one checker run.
-The query retains only its most recent full-arena result; finer judgment results have their own memoization.
-The [query-owned statics design](docs/proposals/query-owned-statics.md) records the achieved architecture
-and the conversion patterns behind it.
-
-Within `zydeco-statics`, `syntax`, `environment`, and `arena` define the durable typed representation.
-`check` owns local kinding and typing rules, `normalize` owns substitution and definitional normalization,
-`elaborate` owns type-directed source translations and shared static value residualization,
-and `validate` owns post-check whole-program properties.
-The `check` facade declares checker state and exports its judgment API; `driver` coordinates source finalization,
-while `source` owns inference regions and reuse of synthesized terms.
-The `term` and `pattern` dispatchers retain administrative guards, expected-annotation preparation,
-and source-fact recording; their syntax-family modules contain the individual checking rules.
-Function witness handling and selective field lookup have their own `functions` and `projection` modules.
-The [checker module guide](lang/statics/src/check/README.md) maps these responsibilities and their internal interfaces.
-
-Normalization separates scope support, substitution, type reduction, inference refinement,
-hole resolution, and filled normalization.
-Query producers are grouped by syntax family, with shared keys in `query::input` and source orchestration
-in `query::source`; their public names remain exported by `query`.
-Static value elaboration likewise separates lexical evaluation, pattern handling, computation traversal,
-and residual representation checks while retaining one evaluator state and one phase boundary.
-Static residualization runs before the typed arena is published, preserving the source graph for queries
-and adding one executable root used by both interpreter linking and SPS lowering.
-The same reducer inspects value structure during dependent application checking to recover visible package witnesses.
-Its supported reductions and resource limits are specified
-in [Compile-Time Normalization](docs/proposals/normalization.md#implementation-status).
-The coverage pass in `validate` checks data matches with a typed pattern matrix.
-Generalized comatch clauses are first elaborated type-directly into shared argument matches and unique codata arms,
-after which the same pass checks argument coverage and missing destructors along every observation path.
-The [exhaustiveness design note](docs/proposals/exhaustiveness.md) explains matrix specialization,
-copattern elaboration, counterexample construction, and the invariants supplied by typed syntax.
-The same module also provides the type lint, an optional self-check
-of the finished arena behind the `--lint-types` flag; its well-formedness pass re-establishes hole closure,
-annotation presence and sorts, paired-view agreement, and reference existence, its re-derivation pass re-derives kinds
-and constructor shapes in source and residual roots, and violations surface as internal compiler errors.
-The [type lint design note](docs/proposals/tyck-lint.md) records the invariant catalogue
-and the remaining re-derivation work.
-This separation lets validation consume completed typed syntax without becoming more type-checking branches.
+The [checker module guide](lang/statics/src/check/README.md) locates local judgments.
+[Finalization](docs/references/compiler.md#finalization) resolves and normalizes the shared type graph;
+[coverage](docs/references/compiler.md#coverage) validates typed matches;
+[static elaboration](docs/references/compiler.md#static-elimination) records the residual root used
+by both interpreter linking and SPS lowering.
+The optional [typed-arena lint](docs/references/compiler.md#typed-arena-lint) checks the published artifact's integrity.
+The [memory](docs/proposals/arena-gc.md), [pattern](docs/proposals/exhaustiveness.md),
+and [lint](docs/proposals/tyck-lint.md) records retain the remaining design questions.
 
 ### Source and Editor Analysis
 
@@ -1052,7 +950,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; factoring repeated residual code remains future work recorded
   in [Value Functions and Views with `ValPi`](docs/proposals/value-pi.md).
-- Static reduction has the documented [resource bounds](docs/proposals/normalization.md#implementation-status)
+- Static reduction has the documented [resource bounds](docs/references/language.md#10-static-elimination)
   and does not enter computations to discover static functions or witnesses.
   Demand does not yet flow through runtime package-dependent computation applications,
   so their arguments materialize whole ([Package modularization](docs/proposals/package-modularization.md)).

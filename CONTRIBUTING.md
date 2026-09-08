@@ -262,7 +262,7 @@ cargo test -p zydeco-tests --test cases -- literal-pattern/
 ```
 
 The [cases README](lang/tests/cases/README.md) holds the directive reference;
-[docs/proposals/data-driven-cases.md](docs/proposals/data-driven-cases.md) records the design.
+[the compiler reference](docs/references/compiler.md#source-fixtures-and-runtime-oracles) explains harness ownership.
 Fixtures join the repository Zydeco corpus, so the parser and formatter law tests
 in `zydeco-surface` cover them as well.
 

@@ -1,31 +1,41 @@
-# Compiler implementation reference outline
+# Zydeco compiler implementation reference
 
-This is the proposed contents of the reference for Zydeco maintainers.
-It is an outline for writing and consolidation, not a completed implementation manual.
-The [reference plan](../todos/reference-plan.md) records the investigation baseline and migration decisions;
-the [language reference](language.md) supplies the draft source-semantic account.
+This reference describes the compiler's current representations, phase contracts, and maintenance entry points.
+It assumes basic programming-languages background.
+The [language reference](language.md) owns source semantics;
+[CONTRIBUTING](../../CONTRIBUTING.md) owns setup and command-line workflows.
+Component guides map local modules, and linked design records retain alternatives and open decisions.
 
-Organize the reference around phase contracts and the lifetime of a program,
-with a crate and symbol index for navigation.
-A maintainer should be able to locate a bug, identify the invariants a change must preserve,
-and follow a source feature through every affected execution surface.
-Keep routine setup and commands in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+Each completed program has one selected root. Each phase establishes the representation its consumers need;
+source identities and diagnostic provenance survive even when runtime structure is erased or rebuilt.
+The distinction between source checking, executable selection, and backend preparation is essential
+when locating failures.
 
-Each phase chapter should state its input and output representations, owner and entry point,
-identity and storage lifetime, required and established invariants, failure behavior, and focused validation.
-Worked transformations should show why an invariant is needed.
-Link to language rules rather than independently restating acceptance or erasure semantics.
+1. [Architecture and a program's path](#c1-architecture-and-a-programs-path-through-the-compiler)
+2. [Compiler data and identities](#c2-compiler-data-identities-arenas-and-source-provenance)
+3. [Sources, sessions, and retention](#c3-source-loading-sessions-queries-and-memory-retention)
+4. [Parsing and resolution](#c4-parsing-desugaring-and-name-resolution)
+5. [Checking and inference](#c5-typed-representation-judgments-and-inference)
+6. [Elaboration and validation](#c6-typed-elaboration-residualization-and-validation)
+7. [Reference interpreter](#c7-linking-and-the-reference-interpreter)
+8. [High SPS and normalization](#c8-high-sps-lowering-normalization-and-demand)
+9. [Closure conversion](#c9-closure-conversion-and-first-order-spslow)
+10. [ZASM and local representations](#c10-zasm-stack-analysis-and-local-representation-choices)
+11. [Native preparation and emission](#c11-native-preparation-activation-frames-and-amd64-emission)
+12. [Native runtime and collection](#c12-shared-native-model-allocation-and-collection)
+13. [WebAssembly](#c13-webassembly-backends-and-embedding)
+14. [Builtin and foreign contracts](#c14-builtin-contracts-primitive-operations-and-foreign-calls)
+15. [Tooling](#c15-diagnostics-formatting-documentation-and-interactive-tooling)
+16. [Validation and extension](#c16-validation-debugging-and-extending-the-implementation)
 
 ## C1. Architecture and a program's path through the compiler
 
-- Workspace responsibilities, frontend entry points, and the distinction between analysis, executable selection,
-  interpretation, and compilation.
-- The single-root program model and the representations at each phase boundary.
-- One worked source-to-execution trace using a package field containing a returning thunk: imports and witnesses,
-  residualization, explicit control, closure conversion, and backend selection.
-- A second trace through rejection and diagnostics, including the retained source snapshot.
-
-The current pipeline is:
+[CommandCompiler](../../cli/src/compile.rs) adapts the revisioned compiler session to CLI commands and tests.
+[CompilerSession](../../lang/session/src/source/query.rs) owns source inputs and analysis;
+its products distinguish retained analysis facts, a complete checked program, and an executable computation.
+The interpreter and every compiled target start from the same checked source and static-elimination boundary.
+Compiled targets use stack-passing style (SPS), where arguments, destructor observations,
+and return continuations form explicit stacks.
 
 ```mermaid
 flowchart TD
@@ -45,309 +55,946 @@ flowchart TD
     Native --> AMD64[AMD64 emission and runtime linking]
 ```
 
-Audit this map against [command orchestration](../../cli/src/compile.rs),
-[session phases](../../lang/session/src/source/pipeline.rs), [SPS pipeline](../../lang/stackir/src/pipeline.rs),
-and [ZASM pipelines](../../lang/assembly/src/pipeline.rs).
-Expand the architecture overview from [DESIGN.md](../../DESIGN.md#implementation-architecture).
+The main boundaries are concrete program types:
+
+| Product | Establishing entry point | Consumer |
+| --- | --- | --- |
+| `TextualProgram`, `BitterProgram`, `ScopedProgram` | [Source assembly and surface pipeline](../../lang/session/src/source/pipeline.rs) | The next frontend phase |
+| `ProgramAnalysis` | `CompilerSession::analyze` | Diagnostics and tooling facts |
+| `CheckedProgram` | `CompilerSession::checked_program` | Full typed-tree inspection |
+| `ExecutableProgram` | `CompilerSession::executable_program` | Builtin root linking or lowering |
+| `DynamicsProgram` | [BuiltinRootLinker](../../lang/dynamics/src/link.rs) | Reference interpreter |
+| `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | High SPS normalization |
+| `SpsLowProgram` | [SpsLowPipeline::run](../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
+| `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | ZASM interpreter or AM Wasm |
+| `NativeProgram` | `LoweringPipeline::run_native` | AMD64 emitter |
+
+Consider this executable, which exits successfully:
+
+```zydeco check
+param (/Int64; /process) : @(import("../../lib/std/builtin.zy")) in
+let api = (#run = { fn (n : Int64) => ret n }, #spare = 7) in
+do code <- ! api/run 0;
+! process/exit code
+```
+
+Source loading checks the Builtin signature independently.
+Checking resolves `api/run` to a structural field route and relates `process` to the executable's package witnesses.
+Static elaboration erases static evidence while retaining the explicit thunk and computation calls.
+High lowering constructs the product and its consuming stack.
+Normalization exposes the known field and thunk, binds `n` to `0`, forwards the return
+into `code`, and removes unused package fields.
+Any remaining closure crosses C9 as a package with explicit captures.
+The selected backend then realizes the remaining host exit; the interpreter executes the checked residual term directly.
+
+A source error stops before that fork:
+
+```zydeco reject=tyck.unconstrained-inference at=1:4
+fn x => ret x
+```
+
+Its inference region cannot close. The session retains a rejected analysis with diagnostics and available facts;
+`CommandCompiler::analyze` reports rejection, and executable selection cannot produce a backend input.
+Load, parse, desugar, and resolve failures retain the source information available at their own boundary.
 
 ## C2. Compiler data, identities, arenas, and source provenance
 
-- Typed IDs, key spaces, sequential allocation, derived occurrence identities, and replay.
-  Explain why a source binder, a checking occurrence, and a runtime value need different identities.
-- Arena schemas, allocation capabilities, owning stores, side tables, and explicit insertion semantics.
-- Builder mutation, frozen outputs, shared phase products, and phase-local metadata deltas.
-- Cardinality of provenance relations across parsing, repeated checking, elaboration, and lowering.
-- Compact byte spans, rebasing into a program source map, source snapshots, and conversion to user-facing locations
-  and LSP UTF-16 positions.
+An ID's Rust type identifies its node category; its opaque key space and raw index identify an allocation.
+A source binder, a particular checking occurrence, and an emitted runtime value are different identities.
+[The arena utilities](../../lang/utils/src/arena.rs) separate issuing those IDs from owning and accessing their storage.
 
-Use [arena and ID invariants](../../DESIGN.md#arena-and-id-invariants),
-[arena utilities](../../lang/utils/src/arena.rs), [span utilities](../../lang/utils/src/span.rs),
-and [surface span storage](../../lang/surface/src/textual/span.rs).
-Use [the source-map exploration](../ideas/span-source-map.md) for design context.
+| Mechanism | Invariant |
+| --- | --- |
+| `IdAllocator<Scope>` | One non-cloneable sequential issuer owns a fresh key space and cursor. |
+| Derived allocation | Entity identity, checking occurrence, derivation family, and local slot reproduce an allocation site. |
+| `Allocates<Id>` | A capability declares which categories an operation may issue. |
+| `ArenaSchema<Id>` | An owning representation declares the item stored under an ID. |
+| Dense storage | The backing arena supplies the raw index and rejects another arena's key space. |
+| Sparse, paged, and indexed storage | Producer-issued IDs retain their identity when storage changes. |
+| Associative side tables | Each write explicitly inserts, replaces, upserts, or ensures an association. |
+| `FrozenArena<A>` | Consumers receive storage without the builder's indexed-mutation capability. |
+
+Sequential issuers normally live on a parser, resolver, or lowerer rather than its published arena.
+High SPS retains its definition issuer until consuming closure conversion moves it into the low administrative arena;
+low syntax has a separate issuer and never reuses high syntax IDs.
+Statics producer queries derive occurrence IDs, while the checker materializes their returned fragments.
+Rechecking the same source entity in a distinct occurrence must not overwrite an earlier elaboration.
+
+Provenance records the actual relation between representations.
+Surface-to-typed mappings are many-to-many because transparent syntax and repeated checking can share
+or duplicate results; one typed node may produce several IR nodes.
+Parsed entities use the tagged `EntityId` category rather than casts between definition, pattern, and term IDs.
+Generated definitions and phase-local provenance belong to the phase that creates them.
+
+[Span](../../lang/utils/src/span.rs) is two `u32` byte positions.
+Parsed file-local spans are rebased into the merged program's source-map address space,
+owned through the [surface span arena](../../lang/surface/src/textual/span.rs).
+Retained source text resolves those positions to files and human-readable locations after an error.
+Editor conversion to UTF-16 belongs at the protocol boundary; it must not change compiler byte offsets.
+Allocation and provenance changes should exercise arena tests and source-location tests,
+including repeated checking and non-ASCII source text.
 
 ## C3. Source loading, sessions, queries, and memory retention
 
-- Canonical paths, filesystem providers, overlays, numbered inputs, companions, dependency discovery,
-  cycles, assembly, and hygienic source boundaries.
-- `CompilerSession`, revision ownership, Salsa inputs, `ScopedData`, and `TyckDb`.
-- Checked and rejected analysis results, checked-program materialization, executable selection,
-  and consumers that need the complete arena.
-- Coarse source checking, allocation-producing judgment queries, and demand-driven fact queries.
-  Explain the checker-owned mutable inference core and the limits of query memoization.
-- Retained indexes versus occurrence payloads, `Arc` sharing, eviction, re-materialization,
-  and database-generation lifetimes.
+The [source graph](../../lang/session/src/source/graph.rs) identifies canonical paths,
+numbered inputs, imports, and type companions.
+The [loader](../../lang/session/src/source/loader.rs) obtains source text through session inputs,
+including editor overlays; [assembly](../../lang/session/src/source/program.rs) combines providers
+with explicit source and signature boundaries.
+Dependency cycles are diagnosed before checking.
+The independence of provider inference and source scope is specified in [L12](language.md#12-sources-imports-and-entry).
 
-Use [the session implementation](../../lang/session/src/source),
-[statics query inputs](../../lang/statics/src/query/input.rs), the achieved form
-of [query-owned statics](../proposals/query-owned-statics.md#achieved-form-2026-08-14),
-and [arena reclamation](../proposals/arena-gc.md).
-Validate with [session tests](../../lang/session/src/source/tests.rs) and query-local tests.
-Keep historical memory measurements labeled with their workload and revision.
+`CompilerSession` is the Salsa database and revision owner.
+[ScopedData](../../lang/statics/src/query/input.rs) connects the resolved root,
+primitive definitions, scoped arena, and spans to `TyckDb`.
+The coarse [check_source query](../../lang/statics/src/query/source.rs) runs the mutable checker, finalization,
+coverage, and static elaboration together, then publishes an `Arc<StaticsArena>` and a checked or rejected outcome.
+Splitting those phases into separately copied arenas would multiply the dominant materialization cost.
+
+### Query and checker ownership
+
+Allocation-producing syntax judgments are producer queries: they return node identities
+and immutable outcomes from explicit inputs.
+The checker inserts those outcomes into its materialized arena.
+The [intrinsic singleton query](../../lang/statics/src/query/intrinsic.rs) derives identities
+from a synthetic check-wide site, independent of the first source occurrence naming an intrinsic.
+The checker materializes those singletons before judgments read `IntrinsicStatics`.
+Unification, fill resolution, substitutions, package opening, copattern elaboration,
+and recursive-group processing retain a checker-owned algorithmic core.
+Their intermediate results depend on mutable inference state; replaying a site alone cannot reconstruct that state.
+
+A cached node must therefore be distinguished from a pure source-to-judgment function.
+Per-call arena snapshots would make query keys expensive and defeat reuse;
+a tracked mirror does not make an arbitrary table cell reconstructible from its site.
+A worklist redesign of the solver would be a separate algorithmic change.
+The current boundary gives producers deterministic identities while letting inference retain its sequential state.
+C5 defines the publication boundary after that state stops changing.
+
+### Analysis facts and materialization
+
+`analyze_source` builds documentation while the complete arena is available,
+then retains `StaticsArena::clone_keyed_indexes()` in `ProgramAnalysis`.
+That analysis is a source and fact snapshot, not a complete typed tree.
+
+| Retained keyed information | Transient occurrence payload |
+| --- | --- |
+| Definition annotations, bodies, alias entry points, and intrinsic roles | Typed values, computations, and patterns |
+| Fill sites, solutions, scopes, and abstract identities | Per-occurrence kinds and types |
+| Data/codata definitions, term facts, normalized top annotations, and provenance indexes | Derived node columns needed during full-tree traversal |
+
+Fact queries read those retained indexes. Full-tree consumers call `materialize_arena`, `checked_program`,
+or `executable_program`, which recover the arena through the coarse check.
+Materialization uses the session's current inputs, so callers must pair an analysis
+with the matching session revision or snapshot.
+Live consumers share the complete arena through `Arc`; lowerers add phase-local metadata instead of cloning it.
+Checker-only state, including per-node typing environments, is stripped before full-arena publication.
+Cajun may keep a project's materialization alive while that project is in use.
+
+`check_source` has a one-entry LRU configuration.
+The test session pool explicitly triggers eviction between analyses and periodically replaces its database generation.
+Fine-grained judgment memos have a different lifetime from the full arena;
+dropping an analysis alone does not promise reclamation of all database storage.
+[Retention design questions](../proposals/arena-gc.md) concern memo lifetime, compact facts, and parsed-source storage.
+[Session tests](../../lang/session/src/source/tests.rs) and query tests check facts after eviction,
+re-materialization, source hygiene, and failed revisions.
+Compiler cache reclamation is independent of program-value collection in C12.
 
 ## C4. Parsing, desugaring, and name resolution
 
-- Logos tokens, LALRPOP strict and recovering entry points, literal validation, and parse diagnostics.
-- Textual syntax, metadata, spans, trivia, and source intentions; the concrete information later formatting needs.
-- Bitter syntax and desugaring of binding headers, quantifiers, products, packages, named components,
-  annotations, and source boundaries.
-- Scoped syntax, lexical environments, binder collection, block dependency graphs, strongly connected components,
-  recursive groups, and residual mobile-binding sites.
-- Completion-hole identity and scope snapshots as clients of ordinary resolution.
+[Textual syntax](../../lang/surface/src/textual/README.md) owns Logos tokens, literal decoding,
+LALRPOP parsing, metadata syntax, spans, trivia, and retained layout intentions.
+Strict parsing supplies compilation input; recovering parsing supplies structured holes
+and recovery evidence for tooling.
+A recovered edit is not silently accepted as an executable program.
+Formatting consumes the same textual model, so parser changes must preserve the information required by C15.
 
-Use [textual](../../lang/surface/src/textual/README.md), [bitter](../../lang/surface/src/bitter/README.md),
-and [scoped](../../lang/surface/src/scoped/README.md) component guides together with their implementation modules.
-The tests should cover strict/recovered parsing, source hygiene, deterministic block ordering,
-and the language rules in L2–L3.
-Tree-sitter conformance belongs to the tooling and validation chapters.
+[Bitter desugaring](../../lang/surface/src/bitter/README.md) removes surface sugar while keeping unresolved names.
+It expands binding headers and telescopes, makes nominal sealing and CBPV introductions explicit,
+and retains special boundaries such as classifier queries and monadic payloads.
+Source assembly has already resolved import and literal splices.
+Primitive terms have compiler-owned identities, and every generated node records its textual origin.
+A special metadata node must survive whenever ordinary forwarding would change its checking environment or expectation.
+
+[Resolution](../../lang/surface/src/scoped/README.md) replaces names with `DefId`s and records lexical contexts.
+A source boundary resets the environment.
+In a block, resolution first collects mobile contributions and installs all their binders,
+then resolves occurrences and builds dependency edges from right-hand sides and annotations.
+SCCs form a condensation DAG; source order breaks ties and orders recursive members.
+Parameters become abstractions, acyclic definitions become lets, and recursive type components become `RecGroup`.
+`Residual` indirections preserve ownership at the original mobile sites after binders move.
+
+Resolution establishes binder identity before dependency ordering moves syntax;
+scheduling must preserve those identities.
+The checker subsequently verifies the admissibility of a recursive group.
+The context collector records visible and free definitions from the elaborated term,
+allowing completion to reuse scope rather than reconstruct it from later types.
+Parser agreement, recovery laws, formatting laws,
+and the [uniform-term fixtures](../../lang/tests/cases/uniform-term) exercise this boundary.
+The [term design](../proposals/term.md) retains its binding motivation and remaining recursion questions.
 
 ## C5. Typed representation, judgments, and inference
 
-- Sorted kinds, types, patterns, values, and computations; pre-nodes, fills, annotations,
-  normalized views, abstract identities, and package-witness evidence.
-- `Tycker`, `Tyck`, synthesis and analysis actions, term/pattern dispatch, environment handling, allocation sites,
-  source observations, and diagnostic guards.
-- Checked-term reuse for independent source synthesis, classifier extraction, and monadic payloads;
-  reconcile use-site expectations after canonical synthesis.
-- Constraint generation, compatibility, shape refinement, speculative rollback, occurs checks, scope intersections,
-  witness escape, and inference-region closure.
-- Substitution, type reduction, hole resolution, arena-wide normalization, and publication.
-  Separate these operations from the static value evaluator in C6.
-- Mechanism-specific guides for recursive bindings, named lookup, selective opening, and dependent function application.
+The [checker guide](../../lang/statics/src/check/README.md) maps the implementation modules.
+`Tycker` carries one source check's mutable state; `Tyck` and `PatternAction` select synthesis or analysis.
+Term and pattern dispatchers own task stacks, allocation-site guards, prepared expectations, and source-fact recording.
+Syntax-family rules should use those entry points so recursive judgments preserve the same administrative invariants.
 
-Use [the checker guide](../../lang/statics/src/check/README.md),
-including its [solver invariants](../../lang/statics/src/check/README.md#inference-regions-and-solver-invariants)
-and [checked-term reuse](../../lang/statics/src/check/README.md#classifier-extraction-and-checked-term-reuse),
-[driver](../../lang/statics/src/check/driver.rs), [source handling](../../lang/statics/src/check/source.rs),
-[typed syntax](../../lang/statics/src/syntax.rs), [arena](../../lang/statics/src/arena.rs),
-and [normalization modules](../../lang/statics/src/normalize).
-Link the formal judgments to [the existing calculus](../../lang/statics/type-system.typ).
-Use [statics tests](../../lang/statics/tests), [inference tests](../../lang/tests/tests/inference.rs),
-and source-family integration tests.
+[Typed syntax](../../lang/statics/src/syntax.rs) separates kinds, types, patterns, values, and computations.
+`TermAnnId` pairs a sorted term with its classifier.
+Kinds and types may initially contain fills; annotations, environments, nominal identities,
+and source occurrences are recorded in the [statics arena](../../lang/statics/src/arena.rs).
+
+| Mechanism | Typed representation and checking responsibility |
+| --- | --- |
+| Kinds and type functions | `VType`, `CType`, arrows, named kinds, type abstraction/application, and substitution |
+| Nominal and abstract types | Seals, `AbstId`s, definition bodies, and witness scopes |
+| Ordinary CBPV functions | `Arrow`, `Forall`, abstractions, and value/type application |
+| Value functions | `ValPi`, its binder sort, and witness projections for structured arguments |
+| Packages | `Exists`, manifest equations, `ManifestKind`, and static-prefix patterns |
+| Dependent computation functions | `PackPi` with canonical witnesses and a dependent codomain |
+| Products and named fields | Component vectors, labels, and resolved routes with physical product positions |
+
+### Inference and reuse
+
+The [source inference rules](language.md#4-classification-and-inference) determine where flexible value types arise.
+`InferenceRegion` in [source.rs](../../lang/statics/src/check/source.rs) records inherited fills at entry;
+closing the region rejects newly introduced pattern fills whose solutions remain incomplete.
+A source closes independently before `CheckedTerm::reconcile_k` compares an import-site expectation.
+
+[Compatibility](../../lang/statics/src/check/lub.rs) combines constraints through `Lub`.
+[Shape refinement](../../lang/statics/src/normalize/inference.rs) creates component fills
+of the required CBPV sorts and retains their originating site.
+Filling checks occurs and visible-skolem conditions.
+Sharing a flexible type across occurrences intersects admissible scopes; subsequent solutions obey that intersection.
+A failed speculative fill restores both solutions and scopes.
+Diagnostics retain the inference site and the conflicting body or call-site constraints.
+
+`CheckedTermRepository` retains a canonical result per resolved term for sources,
+classifier queries, and monadic payloads.
+Reuse requires a context extension preserving every original binding and visible witness;
+repeated or nested requests must agree on the arena root.
+This permits a recursive annotation to be revisited after recursive bindings are installed.
+A `TypeOf` boundary synthesizes its operand once, extracts and scope-checks the existing classifier IDs,
+and reconciles expectations afterward.
+It does not forward its own expectation, annotation, or seal into the operand.
+In particular, direct extraction from `ret v` relies on recording `Ret A : CType` correctly.
+
+### Package evidence and lookup
+
+A manifest entry checks its equation and substitutes it through the remaining telescope;
+an abstract entry introduces an identity subject to scope checks.
+Source formation and opening rules live in [L9](language.md#9-polymorphism-and-packages).
+`functions` establishes canonical witness telescopes for dependent binders
+and substitutes caller-visible evidence at application.
+A runtime thunk's implementation can be unknown while its signature supplies the dependency.
+Value-function witness projections separately record which structured argument components supply evidence.
+`PackPiInstantiationState` consumes the physical leading existential prefix
+and substitutes its abstract witnesses through the codomain.
+`ValPi` has a separate projection-based argument representation;
+its structured evidence handling does not extend `PackPi` to witnesses nested beneath arbitrary product fields.
+
+[Projection checking](../../lang/statics/src/check/projection) resolves a unique route
+through the receiver's allowed structure, including the identities shared by one selective package opening.
+The resolved route records every product position and its product type.
+Selected runtime fields elaborate to ordinary typed patterns; unselected static positions receive internal witnesses.
+A whole-package alias carries the same opening's prefix for forwarding.
+Witness inspection uses C6's static reducer and never obtains evidence by executing a computation.
+
+### Finalization
+
+After inference closes, hole solutions are stable for the remainder of finalization.
+[Resolution and normalization](../../lang/statics/src/normalize) share memo tables across every arena root,
+rebuilding changed paths and reusing results for shared tails.
+Original IDs remain valid lookup keys; `kinds_normalized` and `types_normalized` store changed finalized views,
+while unchanged IDs expose their existing nodes.
+Missing solutions and sort errors remain diagnostics.
+
+The shared context bounds structural traversal by the graph's nodes and edges, plus reductions that create new nodes.
+Starting a fresh memo at every root would repeatedly traverse shared package-signature tails.
+Compiler-owned identity maps use the repository's fast internal hashing;
+changing storage must preserve key-space identity.
+Finalized annotations feed coverage, residualization, and editor facts.
+[Inference](../../lang/tests/tests/inference.rs), [classifier-query](../../lang/tests/tests/typeof.rs),
+and [statics tests](../../lang/statics/tests) cover closure, scope, rejection, and reuse.
 
 ## C6. Typed elaboration, residualization, and validation
 
-- Type-directed copattern elaboration into shared argument matches and unique codata arms.
-- Monadic basis validation and algebra translation of a retained checked payload.
-- Static values: lexical evaluator state, static closures, runtime references, pattern binding, witness inspection,
-  residual computation traversal, and representation checking.
-- Original source root and executable residual root in one unpublished typed arena;
-  retained editor facts and the shared interpreter/compiler boundary.
-- Finalization order: close inference, resolve and normalize, validate coverage, then elaborate the static root.
-  Explain subsequent executable-hole validation and optional type linting.
-- Coverage matrices, specialization, correlated counterexamples, and bounded searches;
-  typed-arena well-formedness and partial re-derivation by the lint.
-- User diagnostics versus invariant failures; failures before runtime effects, resource-limit diagnostics,
-  and the absence of silent backend fallback.
+Elaboration turns checked source mechanisms into a form shared by execution backends.
+It runs in the unpublished arena so the source root and source facts remain available
+while generated nodes acquire fresh identities and provenance.
+The coarse check orders judgments, hole resolution, type normalization, coverage,
+and static-root elaboration before publishing its result.
 
-Use [static elaboration](../../lang/statics/src/elaborate/static_values),
-[monadic elaboration](../../lang/statics/src/elaborate/monadic),
-[copattern checking](../../lang/statics/src/check/copattern.rs), and [validators](../../lang/statics/src/validate).
-Consolidate the implementation portions of [normalization](../proposals/normalization.md),
-[exhaustiveness](../proposals/exhaustiveness.md), and [type linting](../proposals/tyck-lint.md).
-Use [static-elimination](../../lang/tests/tests/static_elimination.rs), [coverage](../../lang/tests/tests/coverage.rs),
-[monadic](../../lang/tests/tests/monadic.rs), and [lint](../../lang/tests/tests/tyck_lint.rs) regressions.
+### Monadic and copattern elaboration
+
+[Monadic checking](../../lang/statics/src/check/monadic.rs) checks the supplied `Monad` and `Algebra` basis,
+synthesizes the payload once under its monadic environment, and passes a `CheckedTerm`
+to the [algebra translation](../../lang/statics/src/elaborate/monadic).
+The translator constructs lifted types, structures, and terms, rebinding their static evidence into the output context.
+It translates the retained checked payload rather than rechecking its source under unrelated expectations.
+[L11](language.md#11-relative-monads) specifies the source translation and basis;
+generated code must satisfy the same finalization and residual representation boundaries as ordinary terms.
+
+[Copattern elaboration](../../lang/statics/src/check/copattern.rs) follows the expected residual classifier:
+a codata step groups destructor clauses, an arrow step introduces a shared argument
+and accumulates its patterns, and a universal step introduces a type binder.
+On reaching bodies, pending argument patterns become a correlated match.
+A package-dependent boundary currently admits one clause whose witnesses can scope the dependent result.
+The output has one typed arm per destructor and hints identifying generated argument matches and package binders.
+Repeated source destructors can therefore be exhaustive alternatives over arguments
+without becoming duplicate typed arms.
+
+### Coverage
+
+[Coverage validation](../../lang/statics/src/validate/coverage.rs) consumes normalized typed syntax
+and its data/codata hints.
+It converts variables, holes, and admitted alias groups to wildcards, preserves structural heads and product arities,
+erases package witnesses, and treats literal observations as opaque to structural coverage.
+Opaque patterns contribute no wildcard row.
+This implements the conservative source policy in [L7](language.md#7-patterns-and-coverage).
+
+A matrix row is one alternative; its columns are simultaneous constraints.
+For a selected head, specialization removes that head and inserts its payload columns.
+Wildcard rows specialize to wildcard payloads.
+The default matrix keeps wildcard rows and removes their first column.
+Data heads have one payload, product heads have their component arity, unit has none,
+and named wrappers and existential packages each have one dynamic field.
+Typed view observations remain opaque unless their nested pattern is already a wildcard.
+The uncovered-row recursion has these base cases:
+
+```text
+no columns: one uncovered empty row iff the matrix has no rows
+no rows and no known head space: an all-wildcard uncovered row
+no head space: recurse into the default matrix
+finite head space: recurse for every head, then rebuild its uncovered patterns
+```
+
+Keeping columns together preserves correlations: rows `(+True(_), _)`
+and `(_, +False(_))` leave `(+False(_), +True(_))` uncovered.
+Product matrices retain their typed component vectors and explicit nesting.
+A known empty data space has no inhabitants.
+Generated copattern argument matches use the same procedure; separate codata validation checks missing
+and duplicate typed destructors.
+
+Diagnostics retain at most eight uncovered witnesses and probe for a ninth to mark truncation.
+That bounds reported evidence, not the coverage decision.
+Normalization and local errors prevent malformed rows from reaching this pass.
+[Coverage tests](../../lang/tests/tests/coverage.rs) pair accepted matrices with correlated gaps,
+empty types, and nested observation failures.
+[Remaining pattern decisions](../proposals/exhaustiveness.md) cover usefulness, literal matching extensions,
+and refutable conjunctions.
+
+### Static elimination
+
+[Static elaboration](../../lang/statics/src/elaborate/static_values) uses a lexical evaluator
+whose values can contain static closures, package structure, and shared references to runtime data.
+It reduces type/value applications, known constructors, projections, and package openings.
+For example, applying `val x => (x, x)` to a runtime variable produces a shared residual binding and product;
+the runtime variable need not become a compile-time constant.
+Computation thunks remain suspended, and general computation execution supplies no static evidence.
+
+`StaticShape` supports witness inspection during dependent checking, including package and product structure.
+It exposes only caller-visible witnesses and returns opaque evidence when reduction cannot establish them.
+`StaticElaboration` records the original source root and an optional residual root:
+an unapplied static library export can be checked without having a runtime representation of its own.
+Reification creates fresh typed residual nodes, preserving runtime sharing and effect order.
+Representability checks cover surviving values, thunk bodies, and computation classifiers after instantiation.
+
+The source elimination requirements and reducer resource limits are specified
+in [L10](language.md#10-static-elimination).
+A residualization failure reports `tyck.static-elimination` at its source site;
+exhausted witness inspection supplies no evidence.
+Both linking and SPS lowering select the stored residual root.
+[ExecutionReadiness](../../lang/statics/src/validate) rejects reachable executable holes before effects;
+typed holes may still be inspected during ordinary checking.
+[Static-elimination regressions](../../lang/tests/tests/static_elimination.rs) distinguish erased library structure,
+runtime payloads, shared runtime data, and failed evidence recovery.
+
+### Typed-arena lint
+
+[LintChecker](../../lang/statics/src/validate/lint.rs) is an optional independent verifier over a complete arena.
+It checks fill closure, annotation presence and sorts, agreement of surface-keyed and node-keyed views,
+and existence of referenced nodes and definitions.
+Kind comparisons resolve normalized structure; raw kind-ID equality is insufficient after reconciliation.
+The well-formedness sweep includes orphaned allocations left by retries.
+Abstract-witness kinds can come from their annotation, a denoting type node, or an enclosing binder;
+requiring an `annotations_abst` row for every witness would reject legitimate artifacts.
+
+[Re-derivation](../../lang/statics/src/validate/rederive.rs) checks type-former kinds across the whole arena.
+Supported term-constructor shapes and witness binding are checked from source, residual,
+and definition roots, using the documented ambient-witness policy.
+Roots include recorded aliases, inlinable and type definitions, data/codata arms, and seals.
+Supported introduction shapes cover thunks, returns, named values, units, and literals;
+operand-dependent checks exclude abstract identities and applications other than `Thk` and `Ret`.
+Shared nodes can have different use-site instantiations,
+so the verifier cannot soundly compare every recorded parent/child annotation
+or reconstruct every lexical reference context from this artifact.
+Its visited-node cache checks a shared node under the first encountered scope only.
+Those limits and proposed stronger checks remain in the [lint design](../proposals/tyck-lint.md).
+
+`CommandCompiler::with_lint_types`, exposed as `--lint-types`, runs the verifier
+after a successful check and outside query memoization.
+Findings are typed internal errors and abort the gated command; they are not source diagnostics.
+Its hole policy also detects non-foreign term placeholders, so this verifier has a stricter completion expectation
+than ordinary hole inspection.
+[Mutation tests](../../lang/tests/tests/tyck_lint.rs) must show that a seeded corrupt fact is detected,
+paired with clean cases that prevent false positives.
 
 ## C7. Linking and the reference interpreter
 
-- Erasure into `DynamicsProgram`, one runtime root, and materialization of the typed Builtin package.
-- Dynamic syntax, semantic values, environments, thunks, continuation state, and the stepping loop.
-- Calls, returns, codata observations, matching, recursion, and host transfers.
-- Pure inspection and interactive evaluation versus the executable Builtin boundary.
-- Runtime errors, captured I/O in tests and the REPL, resource handles, and foreign-call loading.
-- Which source behaviors the interpreter checks against the compiled backends,
-  and which allocation or performance characteristics are interpreter-specific.
+[Linking](../../lang/dynamics/src/link.rs) selects residual syntax, erases types
+and witnesses, and constructs `DynamicsProgram`.
+Builtin root linking materializes the host package from its validated typed signature;
+foreign declarations remain checked call plans until their runtime loader is used.
+Named routes become structural tuple access, and aliases preserve a shared bindee.
 
-Use [the dynamics guide](../../lang/dynamics/src/README.md), [linker](../../lang/dynamics/src/link.rs),
-[runtime syntax](../../lang/dynamics/src/syntax.rs), [evaluator](../../lang/dynamics/src/eval.rs),
-and [host resources](../../lang/dynamics/src/host.rs).
-Cross-reference L6 for source dynamics and C14 for shared host contracts.
+[Runtime syntax](../../lang/dynamics/src/syntax.rs) separates dynamic terms from semantic values,
+environments, suspended computations, and continuation state.
+The [stepper](../../lang/dynamics/src/eval.rs) evaluates values, forces thunks,
+consumes arguments and destructor observations, matches data, and resumes return continuations.
+A thunk captures its lexical environment; `fix` supplies explicit computation recursion.
+No backend-specific demand or frame optimization changes this reference evaluation path.
+
+The interpreter uses Rust representations for values and host resources rather than the native tagged heap.
+Its allocation behavior therefore does not predict native or Wasm costs.
+The runtime borrows its input, output, error, and argument interfaces from the caller;
+CLI runs use process streams, while tests and the REPL supply captured streams.
+`ProgKont` distinguishes continuation outcomes, exit status, dry execution, and runtime errors.
+An executable failure is reported at this boundary rather than silently retried on another target.
+
+The [dynamics guide](../../lang/dynamics/src/README.md) maps runtime modules.
+[C14](#c14-builtin-contracts-primitive-operations-and-foreign-calls) owns shared host roles and call plans;
+[L6](language.md#6-computations-and-control) owns source dynamics.
+Source regressions and runtime parity tests use the interpreter as one observable execution surface.
 
 ## C8. High SPS lowering, normalization, and demand
 
-- Stack-passing style and the lexical branch-join fragment; a lowering judgment indexed by the consuming stack.
-- Shared IR forms and high-phase value, stack, and computation syntax.
-  Explain branch joins, ambient stacks, explicit sharing, and single-occurrence ownership.
-- Structural lowering of residual user code and Builtin fields into `BranchJoinProgram`.
-- Known producer/consumer reductions for thunks, calls, returns, products, and matches; body sharing,
-  discardability, traps, and effect preservation.
-- The `Absent` / `Fields` / `Used` demand lattice, pattern demands, and branch joins.
-  Unknown consumers conservatively require complete arguments.
-- Primitive thunk recognition, direct arithmetic, returning-continuation reduction, constant evaluation,
-  and residual external calls.
+[High lowering](../../lang/stackir/src/high/lower.rs) is indexed by the stack consuming a residual computation.
+It builds complete user and Builtin structures into `BranchJoinProgram`.
+High SPS retains lexical values, closures, continuations, arguments, and explicit ambient stacks.
+Stack lets guard value-coproduct matches so every branch shares one supplied continuation stack.
+The [high verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
+and this branch-join shape.
 
-Use [the Stack IR guide](../../lang/stackir/src/README.md), [high lowering](../../lang/stackir/src/high/lower.rs),
-[normalizer](../../lang/stackir/src/high/normalize.rs), [demand analysis](../../lang/stackir/src/high/demand.rs),
-and [high validation](../../lang/stackir/src/high/check.rs).
-The [pattern implementation account](../proposals/exhaustiveness.md#literal-and-alias-patterns)
-records integer decision lowering and shared alias bindees.
-Consolidate [residual normalization](../proposals/normalization.md#residual-sps-normalization)
-with [demand analysis](../proposals/demand-analysis.md).
-Validate using [demand tests](../../lang/tests/tests/demand.rs) and pipeline-local primitive tests.
-L10 defines mandatory source elimination; this chapter owns the optional residual transformations.
+[SpsLowPipeline](../../lang/stackir/src/pipeline.rs) validates high SPS, normalizes it,
+validates the rebuilt program, and consumes it through closure conversion.
+These optimizations are optional consequences of known runtime structure;
+they do not relax L10's source elimination boundary.
+The normalizer preserves definition identities while allocating fresh syntax for the surviving lexical tree.
+
+### Local reductions
+
+The [normalizer](../../lang/stackir/src/high/normalize.rs) records lexical facts for aliases,
+literals, products, constructors, and suspended code.
+Its principal reductions are:
+
+```text
+force (closure • => M) S          ==> M[S/•]
+let arg(p) :: • = arg(v) :: S in M ==> let p = v in M[S/•]
+return v to (kont p => M)         ==> let p = v in M
+kont x => return x to •          ==> •
+closure • => force f •           ==> f
+```
+
+Forwarding uses a variable `f` or a plain continuation binder.
+Known destructor tags select their comatch arm; known constructors select their match arm and bind the payload.
+Matching product introductions and patterns split into bindings in evaluation order.
+A selected value branch can drop its join guard; an unknown branch retains the shared stack.
+
+Substitution preserves the producer's lexical environment and the captured ambient stack.
+It stops at stack binders, including closures, recursion, argument consumers, comatch arms, and branch joins.
+Moving a remaining stack requires its argument values to be discardable;
+tags recurse through the stack, and continuation bodies stay suspended.
+A trapping argument retains its evaluation boundary.
+The popped head argument is bound before the consumer executes.
+
+### Sharing and discardability
+
+A directly forced closure literal reduces. A variable-bound general closure can move into its force only
+with one syntactic occurrence; counts conservatively include dead code.
+Shared closures stay bound, and aliases do not establish exclusive ownership.
+Recursion is never unfolded. Value aliases forward without copying compound values;
+nontrivial literals substitute only through singly used bindings, while trivial values can forward freely.
+A returned value used repeatedly keeps one binding.
+
+Discardability determines whether an unused producer may disappear.
+Variables, literals, trivial values, and suspended closures are discardable;
+products and constructors inherit it from their contents.
+Arithmetic is discardable only when total and its operands are discardable.
+Integer division, remainder, and holes retain possible traps unless literal folding proves successful evaluation.
+Executed external calls and `Fix` remain even if their result is unused.
+A dead suspended thunk can disappear without inspecting its recursive body.
+These conditions preserve the order and multiplicity of effects while local reductions expose further consumers.
+
+### Consumer demands
+
+[Demand analysis](../../lang/stackir/src/high/demand.rs) is the backward component of the same traversal:
+
+| Demand | Observation |
+| --- | --- |
+| `Absent` | No surviving consumer needs the value. |
+| `Fields` | Consumers need specified physical product positions and nested demands. |
+| `Used` | An unknown consumer requires the complete value. |
+
+Join unions field positions recursively, and `Used` absorbs other demands.
+An empty `Fields` map still observes product shape and differs from `Absent`.
+At `let p = V in M`, producer facts first normalize `M`; its free-definition demands are translated
+through `p` into a demand on `V`.
+The rebuilt producer contributes its own free demands, and demands for bound definitions leave the map.
+Independent branches join before the producer is rebuilt.
+There is no global demand fixed point or recursive-call specialization.
+
+A known call exposes argument and return bindings before demands are read,
+allowing a consumer to prune a passed package.
+Unknown calls observe arguments whole.
+Escaping thunk bodies contribute demands on their captures while remaining suspended.
+A surviving constructor match observes its scrutinee whole; known selection removes demands from discarded arms.
+Forcing a thunk observes that thunk, not a projection of its eventual result.
+
+Logical suffix patterns translate into physical product positions by shifting their nested demands.
+A rebuilt suffix spread retains the required product arity even when its individual fields are absent.
+Alias members join demands on the same scrutinee; a whole-value use
+through one alias defeats selective pruning by another.
+Eliminating an unpack can also eliminate its shape demand.
+An unobserved field becomes trivial only when its producer is discardable.
+
+### Primitive calls
+
+A known primitive thunk initially has the form `closure • => extern f •`.
+Recognizing it through aliases, projections, or constructor payloads exposes the external call even
+at several call sites: only the operation identity is copied, with each site's original stack.
+Known integer or float arithmetic with two visible arguments becomes `Primitive { operation, operands }`:
+
+```text
+extern add (arg(x) :: arg(y) :: (kont z => M)) ==> let z = PrimitiveAdd(x, y) in M
+```
+
+The argument stack's construction order evaluates the second operand before the first.
+The remaining stack must satisfy the movement conditions above.
+The result stays shared, and exposing its continuation as a binding avoids allocating a continuation package.
+Literal folding obeys [L13's numeric rules](language.md#13-primitive-values-and-capabilities).
+A zero divisor remains a runtime operation at its original position, even if its result is unused.
+
+Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
+An unknown callee remains indirect; other known Builtin operations remain external calls.
+The typed primitive survives SPSLow and ZASM, where C11 and C13 select native or Wasm arithmetic instructions.
+Word decoding, encoding, and conditional boxing still follow the target representation;
+this optimization does not prove that all scalar boxes disappear.
+
+### Pattern decisions and validation
+
+Integer literal match plans lower to the raw `BuiltinValueRole::Integer(t, Eq)` branch
+with success and failure continuations.
+There is no structural literal-pattern node in SPS.
+Structural aliases survive high and low SPS; assembly saves and reloads their bindee,
+while direct SPS Wasm uses a local.
+Resolved field routes already consist of ordinary structural patterns and erased witness evidence.
+
+Normalizer and pipeline tests pair reductions with shared closures, traps, unknown branches, and suspended recursion.
+[Demand tests](../../lang/tests/tests/demand.rs), [pattern fixtures](../../lang/tests/cases/literal-pattern),
+and [core fixtures](../../lang/tests/tests/core.rs) exercise package pruning and compiled decisions.
+A new reduction needs both a reducible example and a case where sharing, stack movement, or effects prevent it.
 
 ## C9. Closure conversion and first-order SPSLow
 
-- Free-variable analysis and fresh structural conversion from lexical high SPS.
-- Code labels, blocks, jumps, explicit closure packages, continuation packages, argument frames,
-  and closure/continuation opening.
-- Captured environments and residual stacks: what is packaged, what is erased,
-  and how definitions and provenance survive conversion.
-- The `SpsLowProgram` contract: one root, closed blocks, lexical node ownership, and retained branch-join invariants.
+[SpsLowConverter](../../lang/stackir/src/low/convert.rs) consumes lexical high SPS and creates fresh low syntax.
+Free-variable analysis determines ordered captures; renamed capture bindings close each generated block.
+A closure becomes an explicit environment and code package.
+Its entry unpacks the captured environment before consuming ordinary arguments.
+A continuation packages its code and residual stack, including the bindings needed when it resumes.
+Force and return become package opening followed by a jump.
 
-Use [low syntax](../../lang/stackir/src/low/syntax.rs), [conversion](../../lang/stackir/src/low/convert.rs),
-[validation](../../lang/stackir/src/low/check.rs), and [the consuming pipeline](../../lang/stackir/src/pipeline.rs).
-Show corresponding high and low terms before explaining storage details.
-Record the precise paper-to-code correspondence without treating a research calculus as the complete implementation.
+[Low syntax](../../lang/stackir/src/low/syntax.rs) separates `Block`, `Jump`,
+`ClosurePackage`, `ContinuationPackage`, `OpenClosure`, and `OpenContinuation`.
+Products, primitives, patterns, and external-call forms share their structural vocabulary with high SPS.
+Source captures remain value identities; code labels and lexical syntax nodes belong to the new low arena.
+Administrative definition allocation continues from the consumed high program as described in C2.
+
+`SpsLowProgram` has one root and first-order closed blocks.
+Its [verifier](../../lang/stackir/src/low/check.rs) checks reference closure,
+lexical node ownership, and retained branch joins.
+A single-occurrence syntax tree means runtime sharing is explicit in variables;
+it is not a proof that a continuation is dynamically used once.
+Native preparation must establish the stronger lifetime facts in C11.
+Structured Wasm can consume this representation directly because block boundaries and residual stacks are explicit.
 
 ## C10. ZASM, stack analysis, and local representation choices
 
-- Materializing a control-flow graph from SPSLow; instruction, block, label, environment,
-  and operand/control-stack representations.
-- Logical product arity versus physical fields, closure layout, and representation choices attached
-  to lexical occurrences.
-- Local pack/unpack fusion, direct closure forcing, and variable expansion for projection-only uses.
-- Stack and environment analysis, slot assignments, the ZASM interpreter, and the common portable lowering used
-  by assembly-derived targets.
-- The native lowering fork and the invariants it must establish before frame preparation.
-  Keep planned stack-allocated products and interprocedural escape analysis distinct from delivered local unboxing.
+[Assembly lowering](../../lang/assembly/src/lower.rs) consumes SPSLow into a control-flow graph
+with explicit operand and control stacks, environment variables, labels, and instructions.
+[StackAnalyzer](../../lang/assembly/src/analyze.rs) assigns the stack/environment locations needed by that graph.
+The portable result is an `AssemblyProgram` for the [ZASM interpreter](../../lang/assembly/src/interp.rs) or AM Wasm.
+Native lowering selects a distinct frame-aware path before preparation.
 
-Use [ZASM syntax](../../lang/assembly/src/syntax.rs), [lowering](../../lang/assembly/src/lower.rs),
-[analysis](../../lang/assembly/src/analyze.rs), [unboxing](../../lang/assembly/src/unbox.rs),
-and [interpreter](../../lang/assembly/src/interp.rs).
-Extract the implemented subset of [escape analysis and unboxing](../proposals/escape-unboxing.md).
+[ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes logical arity from the physically stored fields.
+Tuple tails and projections must respect that distinction; a suffix pointer refers into an existing payload.
+Closure package layout is derived from the shared machine model rather
+than a separately maintained field-order convention.
+Changing packing must update patterns, closure opening, stack analysis,
+and collector interior-pointer handling together.
+
+[LocalUnboxing](../../lang/assembly/src/unbox.rs) runs over SPSLow
+while producer/consumer relationships remain explicit.
+It marks immediate product construction/elimination pairs, direct closure forcing,
+and variable-bound products whose uses are all suitable projections.
+Lowering then omits the corresponding pack/unpack pair or expands a variable into field slots.
+Alias uses and escaping or unknown consumers require conservative treatment.
+
+The delivered analysis is local representation selection.
+It does not implement the proposed three-way choice among unboxed fields, stack-allocated products,
+and region-allocated products, or interprocedural escape propagation.
+Those choices and their constraints remain in [escape and unboxing](../proposals/escape-unboxing.md).
+Local analysis tests and core execution cases should verify both allocation removal and the uses that retain boxing.
 
 ## C11. Native preparation, activation frames, and AMD64 emission
 
-- `NativeProgram` as a checked input to emission; activation ownership, entry kinds, initialized bindings,
-  continuation provenance, and frame planning failures.
-- Frame layouts, packed slots, pending-continuation liveness, and aliasing of return slots.
-- Entry, local branch, suspension, return, and tail-transfer invariants.
-  Retained return-continuation slots and independently escaping closure captures have different lifetimes.
-- Mapping planned operations to AMD64 registers, machine-stack words, alignment, frame-base updates,
-  jumps, and native host bridges.
-- Native build artifacts, runtime source packaging, target selection, and tool invocation;
-  link to the commands in CONTRIBUTING rather than duplicate them.
+[NativeProgram::prepare](../../lang/assembly/src/frames.rs) validates the frame-aware ZASM result
+before [AMD64 emission](../../lang/amd64/src/emit.rs).
+The checked product contains activation ownership, entry contracts, initialized bindings,
+continuation provenance, packed frame slots, and root/suspension maps.
+Invalid preparation is a `FramePlanError`; emission cannot silently fall back to an unchecked environment layout.
 
-Use [frame preparation](../../lang/assembly/src/frames.rs), [AMD64 emission](../../lang/amd64/src/emit.rs),
-[native packaging](../../cli/src/native.rs), and [native frame invariants](../proposals/native-frames.md).
-Use [native-model regressions](../../lang/tests/tests/native_model.rs).
-The default uses retained frames with growable storage; compact environments remain a selectable experiment,
-and the moving-environment prototype is not an AMD64 backend.
+| Entry role | Required transition |
+| --- | --- |
+| Local branch | Keep the current activation and its established bindings. |
+| Closure entry | Establish an activation from captures and incoming arguments. |
+| Return continuation | Restore the retained activation and initialize the result binding. |
+
+Slot assignment combines ordinary liveness with preservation by pending continuations.
+A later result may reuse a dead slot only when no pending continuation still needs its binding.
+Nested continuations can retain different subsets of one activation;
+root and interference information must include all pending uses.
+Packed size is a safe bound from the assigned slots, not an optimal-coloring or recursion theorem.
+The same offsets are used for accesses, capture descriptors, and active root maps.
+
+The default retained environment stores frames in growable Rust-owned storage.
+Closure entry may reserve and relocate that storage; generated code reloads its active base into `rbp`.
+Saved references are logical offsets and tokens, never raw environment-slot pointers in managed values or closures.
+Suspend and Resume preserve the model's nesting discipline.
+Resuming consumes the most recent pending token, restores the owning frame and frontier,
+and releases younger unretained storage.
+A tail transfer reuses an unretained active frame or preserves it beneath its callee when a continuation still needs it.
+
+The lifetime justification comes from the concrete lowered stack operations:
+SPSLow values cannot contain a residual machine stack, and native continuation opening consumes its token destructively.
+Source `Ret` types and lexical node occurrence counts alone do not establish this property.
+Escaping ordinary closures own heap captures with adequate lifetime.
+A future machine-stack capture or multi-shot continuation operation must revisit preparation and storage together.
+
+The emitter serializes model-defined actions and implements SysV register placement,
+stack alignment, jumps, return prologues, and host bridges.
+[Native packaging](../../cli/src/native.rs) bundles the runtime and shared model
+and invokes the target toolchain using [CONTRIBUTING's build contract](../../CONTRIBUTING.md#compile-programs).
+[Native-model tests](../../lang/tests/tests/native_model.rs) check preparation and transitions;
+[native frame design](../proposals/native-frames.md) retains the detailed lifetime argument
+and experimental comparisons.
 
 ## C12. Shared native model, allocation, and collection
 
-- The dependency-free `zydeco-machine` boundary: word encoding, closure records, host-transfer records,
-  frame actions, and source-fingerprint artifact pairing.
-- Immediate and boxed numeric representations, products, closures, host-owned text and buffers,
-  and collector-visible versus opaque payloads.
-- The environment storage contract, nested frame tokens, failure atomicity, relocation at entry,
-  and enumeration of live initialized slots.
-- Cheney semispace allocation and collection, deferred root publication, suspended frames, control-stack roots,
-  registered host roots, and interior-pointer handling.
-- Block-start indexing, forwarding, copying, sharing and cycles, capacity limits, and failure after collection.
-- Experimental compact and managed environments: their implemented interfaces, evidence,
-  and additional obligations without treating them as the production default.
+[zydeco-machine](../../lang/machine/src/lib.rs) is a dependency-free `no_std` model shared
+by the compiler and native stub.
+It owns tagged words, closure records, host-transfer records, and frame actions.
+Code generation derives layout from 64-bit carriers; the target runtime checks its `usize` representation against them.
+The bundled model sources determine a fingerprinted entry symbol,
+so mismatched compiler/runtime source bundles fail to link.
+This is artifact pairing, not verification of handwritten instruction selection.
 
-Use [the machine model](../../lang/machine/src/lib.rs), [frame model](../../lang/machine/src/frames.rs),
-[runtime stub](../../runtime/stub.rs), [collector](../../runtime/gc.rs),
-and the model boundary in [native frames](../proposals/native-frames.md).
-Validate with model unit tests, [native-model tests](../../lang/tests/tests/native_model.rs),
-and [GC tests](../../lang/tests/tests/native_gc.rs).
-Distinguish reclamation of compiler arenas in C3 from collection of program values here.
+Odd words are immediate. Even words are pointer-shaped.
+Narrow integers, `Float32`, characters, tags, and the immediate portions of 64-bit integers fit in a word;
+full-width integer overflow of that encoding and all `Float64` payloads use opaque scalar boxes.
+Products and closures occupy scanned blocks.
+Source numeric domains and immediate ranges are specified in [L13](language.md#13-primitive-values-and-capabilities)
+and [the representation account](../../DESIGN.md#numeric-representations).
+Aligned host-owned objects outside the managed spaces remain unchanged by tracing.
+
+### Environment actions and roots
+
+[frames::Environment](../../lang/machine/src/frames.rs) exposes Enter, Suspend, Resume, and Roots actions.
+Enter reserves before changing state and returns the possibly relocated active base.
+Suspend validates captures and creates a tagged token; Resume validates its owner and nesting, then restores the frame.
+Roots returns mutable addresses for the active map joined with all pending suspension maps.
+Only initialized live slots are roots; reserved capacity and dead tagged words are insufficient evidence of liveness.
+
+The retained store grows geometrically and caches capacity at its high-water mark.
+Failed word reservation preserves existing state.
+Transitions may allocate Rust metadata but do not collect the managed heap;
+metadata allocation still has the Rust allocator's ordinary failure behavior.
+Root addresses expire at the next attempted environment transition.
+The experimental compact engine implements the same narrower action capability with suspension fragments;
+experimental moving environments require a different relocation contract and are not an AMD64 backend.
+[The frame design](../proposals/native-frames.md) owns those representation alternatives.
+
+### Managed allocation
+
+The [native stub](../../runtime/stub.rs) uses [CheneyHeap](../../runtime/gc.rs) with two fixed 1 MiB semispaces.
+The live graph, including headers, must fit in one space.
+Allocation receives a deferred root source: a successful fast allocation does not enumerate roots;
+collection requests the control-stack range, frame slots, and registered host roots and updates them in place.
+An oversized request can fail before enumeration.
+Failure after collection still leaves the relocated live graph valid.
+
+A block-start index finds the allocation owning a word-aligned interior payload pointer.
+Copying installs forwarding information and preserves sharing, cycles, and the interior offset.
+Cheney scanning traverses pointer-bearing payloads; opaque scalar bits are copied without tracing.
+Unmanaged pointers remain stable.
+Scanning order and forwarding must never reinterpret scalar bits as managed references.
+
+Host helpers that can trigger collection must publish every live managed word and reload relocated roots afterward.
+Raw borrowed C argument frames are discarded before any result-box allocation that can collect.
+[GC regressions](../../lang/tests/tests/native_gc.rs) cover roots, interior pointers,
+aliasing, cycles, capacity failure, and allocation after collection.
+Frame storage reclamation and managed-value liveness are separate obligations.
 
 ## C13. WebAssembly backends and embedding
 
-- The fork at SPSLow and the contracts shared through `wasm-common`.
-- `wasm-sps`: block functions, locals, tagged code handles, trampolining, explicit closure packages,
-  and persistent stack frames.
-- `wasm-am`: ZASM program points, program counter, dispatch loop, reusable environment,
-  operand/control stack, and stack failure paths.
-- Module imports and exports, linear memory, runtime words, spare scalar boxes, returning and control host calls,
-  and fatal runtime errors.
-- The Node test host, I/O and resource behavior, and the boundary between module and embedding.
-- Current limits: non-collecting heaps, the AM stack capacity, unsupported native FFI,
-  and the test host's argument-fold and randomness restrictions.
+Both emitters produce core `wasm32` modules with `memory`, `entry`, and `_start` exports.
+An embedding supplies the `zydeco` import namespace; the module is not a standalone WASI program.
+[wasm-common](../../lang/wasm-common/src) owns shared role and word conventions.
 
-Use [shared Wasm support](../../lang/wasm-common/src), [AM emission](../../lang/wasm-am/src/emit.rs),
-[SPS emission](../../lang/wasm-sps/src/emit.rs), and [the test host](../../lang/tests/wasm-host.mjs).
-Extract the implemented paths and unresolved default-target decision
-from [WebAssembly strategies](../proposals/wasm-backends.md).
-Keep historical benchmark results tied to the exact compared implementations.
+| Backend | Input and control representation | Storage consequences |
+| --- | --- | --- |
+| [wasm-sps](../../lang/wasm-sps/src/emit.rs) | One function for the root and each SPSLow block; structured code and locals inside blocks; a trampoline between blocks | Persistent `[head, tail]` stack frames, boxed products, and a bump heap |
+| [wasm-am](../../lang/wasm-am/src/emit.rs) | Portable ZASM program points, a private program counter, instruction functions, and a dispatch loop | Reusable indexed environment, fixed 1 MiB operand/control stack, and a bump heap |
+
+Neither path uses recursive host calls to realize unbounded Zydeco control transfers.
+SPS closure code handles are tagged table indices; AM program counters are private untagged indices.
+Both heaps grow without collection.
+The SPS path retains lexical structure but currently uses a whole-program local plan and uniform product boxing.
+The AM path reuses ZASM representation work but emits at machine-program-point granularity.
+
+### Module and host ABI
+
+Source values cross as tagged `i64` words. Pointer-shaped values address module or host-owned representations;
+module-created closures and stack packages remain opaque to the host except through the shared protocol.
+
+| Import shape | Contract |
+| --- | --- |
+| Returning operation | Zydeco arguments as `i64`, one `i64` result |
+| Control operation | Arguments as `i64`; result is count, closure, and two argument slots, all `i64` |
+| Potential full-width scalar result | A trailing `i32` spare-box address where the operation signature requires it |
+| `string_literal` | UTF-8 byte offset and length as `i32`, opaque host string word as `i64` |
+
+Control arity is at most two. Spare boxes belong to the module's allocation protocol;
+the host must not invent closure layouts or return unregistered control code.
+Native C imports are rejected by both emitters.
+
+The [Node test host](../../lang/tests/wasm-host.mjs) supplies captured I/O, resources, and scalar adapters.
+It does not provide a general deployment runtime: argument folds over two
+or more process arguments cannot currently construct the required lazy host tail,
+and randomness is deliberately restricted for tests.
+[Backend strategy questions](../proposals/wasm-backends.md) retain default-target criteria and historical comparisons.
+Conformance tests should distinguish module emission, embedding failures, stack exhaustion, and source runtime failures.
 
 ## C14. Builtin contracts, primitive operations, and foreign calls
 
-- The single typed role catalog and intrinsic identities, Builtin signature validation,
-  and structural package materialization in interpretation and lowering.
-- Fixed-representation types versus provider-owned capabilities; returning and continuation-selecting operation shapes.
-- Primitive arithmetic semantics and backend instruction selection.
-  Link C8's normalization rules rather than duplicating primitive-call rewrites.
-- Resource tables, text/byte representation adapters, error-kind mapping, and shared observable I/O behavior.
-- Validated `ForeignSignature` plans, argument flattening, Unix libffi loading, AMD64 marshalling and return bridges,
-  and Wasm rejection.
-- A maintainer's map for adding a primitive across the contract, checker, interpreter, lowering, runtime,
-  both Wasm emitters/host, and conformance tests.
+The [syntax role catalog](../../lang/syntax/src/lib.rs) identifies intrinsics and operations with domain types.
+[Static Builtin validation](../../lang/statics/src/builtin.rs) checks the authored
+[Builtin signature](../../lib/std/builtin.zy) against those roles.
+Interpreter linking and [SPS Builtin lowering](../../lang/stackir/src/builtin.rs) materialize
+the validated structural plan.
+Neither backend recovers an operation's meaning by parsing a field name.
 
-Use [syntax and roles](../../lang/syntax/src/lib.rs), [Builtin validation](../../lang/statics/src/builtin.rs),
-[foreign signature validation](../../lang/statics/src/foreign.rs),
-[Builtin lowering](../../lang/stackir/src/builtin.rs), [interpreter FFI](../../lang/dynamics/src/foreign.rs),
-and [the public contract](../../lib/std/builtin.zy).
-Use the [package identity rationale](../proposals/package-modularization.md#primitive-identity-and-package-boundaries)
-for design context.
-Extract implementation details from [bytes](../proposals/bytes.md),
-[filesystem](../proposals/filesystem.md), and [C FFI](../proposals/c-ffi.md).
-L13–L14 own their source and trust contracts; C11–C13 own target-specific layouts.
+Canonical representation types have shared intrinsic identities;
+provider-owned resource capabilities acquire witnesses through their package opening.
+Named structural routes and static fields erase before backend layout.
+[L13](language.md#13-primitive-values-and-capabilities) owns source observations,
+and [package rationale](../proposals/package-modularization.md#primitive-identity-and-package-boundaries)
+explains dependency choices.
+Returning and continuation-selecting operations have distinct host call plans.
+C8 owns arithmetic exposure and folding; C11–C13 own the resulting target words and calls.
+
+Host resource tables implement alias-visible handles and error paths.
+Strings are immutable UTF-8 text and bytes are immutable octets; Rust-owned host storage
+and target adapters realize those interfaces independently of the source witness identities.
+Filesystem adapters preserve the distinctions among EOF, empty data, invalid text, I/O errors, and closed resources.
+The [byte](../proposals/bytes.md) and [filesystem](../proposals/filesystem.md) records retain API
+and storage design decisions.
+
+### Foreign calls
+
+[ForeignSignature](../../lang/statics/src/foreign.rs) is a checked call plan for a returning C thunk.
+Arguments are `UInt64` or `Bytes`; a byte buffer flattens into borrowed pointer and length,
+with at most six flattened arguments and a `Ret UInt64` result.
+Checking validates the declared shape, not the external symbol's actual ABI.
+The trust and borrowing obligations belong to [L14](language.md#14-foreign-interfaces).
+
+The Unix [interpreter adapter](../../lang/dynamics/src/foreign.rs) loads libraries and symbols and calls through libffi.
+AMD64 marshals the retained source arguments into a temporary raw C frame, loads the SysV argument registers,
+and discards that frame before encoding a result that may allocate.
+The full-width result survives collection in a preserved register and resumes the ordinary return continuation.
+Marshalling helpers do not collect.
+Native linking uses the library's linker name; interpreter loading uses platform shared-library names.
+Native foreign imports are unsupported in Wasm and the ZASM interpreter.
+
+[Foreign signature tests](../../lang/statics/tests/foreign.rs)
+and [FFI integration tests](../../lang/tests/tests/ffi.rs) pair valid shapes with unsupported arities,
+argument sorts, results, loader failures, and borrowing cases.
+[C-to-Zydeco exports and callbacks](../proposals/c-ffi.md#following-boundary) still need their own runtime-entry,
+ownership, and reentry design.
 
 ## C15. Diagnostics, formatting, documentation, and interactive tooling
 
-- Structured diagnostic codes, semantic relationships, source snapshots, suppression of consequential errors,
-  nominal-identity explanations, and frontend rendering.
-- Textual formatting with retained trivia and intentions; formatter laws and directives;
-  scoped debug printing versus elaborated type rendering.
-- Recovering completion, exact cursor identity, lexical scope, type compatibility, ranking, import-path candidates,
-  and stale-revision rejection.
-- Cajun analysis and configuration, hover, semantic tokens, definition/reference/rename,
-  and byte-to-client position conversion.
-- Documentation attachments, semantic provenance, public exposure paths, links and search, generated references,
-  and bounded example checking.
-- The TUI engine, numbered submissions, retry behavior, inspection/evaluation selection,
-  and captured output; Tree-sitter and editor-client integration boundaries.
+Tooling uses the facts established by ordinary source phases and associates results with their source revision.
+[Session queries](../../lang/session/src/source/query.rs) supply semantic identities;
+[Cajun](../../editor/cajun/src/analysis.rs) adapts them to LSP and discards superseded results.
+Rendered labels must not become keys for semantic lookup.
 
-Use [session tooling](../../lang/session/src/source), [Cajun](../../editor/cajun/src),
-[TUI](../../tui/src), and [CLI documentation](../../cli/src/documentation.rs).
-Consolidate [completion](../proposals/completion.md), [formatting](../proposals/formatting.md),
-[typed rendering](../proposals/typed-type-rendering.md), [documentation](../proposals/documentation.md),
-and [REPL](../proposals/repl.md) implementation accounts.
-Keep user-facing authoring and configuration workflows in their existing guides.
+[Type diagnostics](../../lang/statics/src/check/error.rs) carry stable codes and structured relationships;
+[report construction](../../lang/session/src/source/report.rs) resolves their source sites and explanatory context.
+CLI, TUI, and LSP render those reports for their surfaces.
+Retained rejected facts can support useful tooling, while later errors caused solely
+by an earlier failure should not manufacture independent evidence.
+Definition, reference, rename, hover, and semantic-token operations use current provenance and lexical identity.
+UTF-16 conversion happens when reading or writing client positions.
+
+### Formatting and typed rendering
+
+The [textual formatter](../../lang/surface/src/textual/pretty.rs) owns source layout through grammar contexts,
+punning, anchored trivia, retained intentions, and boundary composition.
+Its laws are semantic preservation, comment retention, canonical convergence, and the selected layout lower bound.
+`@[format(...)]` supplies policy to CLI and editor alike; frontend settings must not define another formatter.
+[Formatting design](../proposals/formatting.md) owns the detailed layout algebra and families.
+
+The [scoped formatter](../../lang/surface/src/scoped/fmt.rs) is for debug output.
+The [statics formatter](../../lang/statics/src/fmt.rs) renders elaborated types for hovers,
+diagnostics, and IR inspection.
+It uses precedence-aware parentheses, declaration hints for abstract witnesses, and source-shaped manifest entries.
+Synthesized projection types cannot generally be recovered by slicing source text.
+Typed rendering has no retained trivia and follows the layout rules with ignored source intentions.
+
+The typed renderer remains separate because diagnostics need elaborated distinctions
+and some typed entities have no faithful source spelling.
+Primitive names and witness hints can be readable without forming a reparseable annotation.
+A typed-to-textual reifier or shared precedence vocabulary would introduce another translation contract;
+[rendering design choices](../proposals/formatting.md#elaborated-type-rendering) record
+when that cost becomes justified.
+Interactive type links require semantic anchors from the renderer, never reparsing its text.
+
+### Completion and documentation
+
+[Completion queries](../../lang/session/src/source/query/completion.rs) track the exact cursor hole
+through recovery, resolution, and checking.
+Resolver scope supplies candidates; incoming analytic annotations supply expectations.
+A synthesized placeholder is not an expectation. Multiple visits retain all analytic constraints.
+Compatibility is `Equal`, `Unknown`, or `Mismatch`: only proven mismatches are omitted,
+and candidates requiring inference remain unknown.
+Disposable compatibility checks must not mutate source facts or depend on enumeration order.
+Cajun then applies prefix, compatibility, scope-proximity, and deterministic label ordering.
+[Completion design](../proposals/completion.md) owns recovery guarantees and further candidate families.
+
+[Documentation analysis](../../lang/session/src/source/documentation.rs) connects authored attachment,
+typed subject, origin, contract, and use context.
+Exposure paths preserve public interface selection and abstraction; renaming a field
+or re-exporting a value does not justify inventing a new documentation origin.
+Generated references, search, and editor panels share the same semantic index.
+[The authoring guide](../documentation.md) owns user syntax;
+the [documentation design](../proposals/documentation.md) retains publication and recovery decisions.
+
+[Example checking](../../lang/session/src/source/documentation/examples.rs) constructs isolated source requests
+with paths relative to the owning document.
+Worker execution is bounded by time and request/result size.
+Checked/rejected fences verify static outcomes and specified diagnostic positions; they do not execute examples.
+Executable examples use the ordinary frontend capability boundary,
+and revision-sensitive editor actions must reject stale IDs.
+
+### Interactive engine
+
+The [TUI engine](../../tui/src/engine.rs) stores complete submissions as numbered source inputs.
+It uses session analysis to inspect static terms, evaluate values or returning computations,
+or explicitly launch an executable.
+The transcript captures output and errors; definitions do not leak into a hidden global source context.
+Command syntax and key bindings stay in [CONTRIBUTING](../../CONTRIBUTING.md#use-the-interactive-repl).
+[REPL design](../proposals/repl.md) retains history identity, persistence, and replay questions.
 
 ## C16. Validation, debugging, and extending the implementation
 
-- The evidence layers: lexer/parser laws, typed source acceptance and rejection, arena linting,
-  IR invariant checkers, interpreter observations, backend parity, and focused native layout/GC/FFI tests.
-- Data-driven cases versus Rust tests inspecting internal facts; exact diagnostic and failure assertions;
-  whole-program examples and their declared backend coverage.
-- Tracing one bug through source provenance and intermediate representations.
-  Document how to choose a focused test before broadening verification.
-- Change maps for a syntax form, typing rule, primitive, optimization, and backend representation: owners,
-  downstream consumers, required reference updates, and regression locations.
-- Reproducible performance investigations: revision, workload, compiler and runtime profiles, host/target,
-  measured quantity, and default versus experimental representation.
-- Documentation maintenance and reference examples, including checked/rejected fences and runtime fixtures.
+Choose the first boundary that can state the property being changed,
+then assert the observable consequence at the necessary downstream boundary.
+A correct interpreter result does not prove IR ownership or native root preservation;
+an IR snapshot alone does not prove effect order.
 
-Use [the test harness](../../lang/tests/src/lib.rs), [case directives](../../lang/tests/cases/README.md),
-[data-driven cases](../proposals/data-driven-cases.md), and [CONTRIBUTING.md](../../CONTRIBUTING.md#run-tests).
-Link [runtime evaluation](../ideas/cbpv-runtime-evaluation.md) for historical experiments and methods;
-its exploratory alternatives are not additional phase requirements.
-The full workspace suite remains an explicitly requested verification pass.
+| Change | Focused evidence |
+| --- | --- |
+| Grammar or formatting | Surface parser agreement, recovery contracts, semantic/comment preservation, idempotence |
+| Typing, scope, or a source rejection | [Source fixtures](../../lang/tests/cases) or the relevant Rust integration target, with exact diagnostic codes |
+| Typed-arena invariant | A seeded mutation and a clean counterpart in [type-lint tests](../../lang/tests/tests/tyck_lint.rs) |
+| SPS reduction or representation | High/low invariant checks, blocked-rewrite cases, and runtime observations |
+| Native layout or allocation | Preparation/model unit tests and targeted native-model or GC integration tests |
+| Host or FFI operation | Signature rejection tests, adapter tests, declared I/O, and target-specific execution |
+| Tooling | Current and failed revisions, exact cursor/site identity, and stale-result rejection |
 
-## Appendices
+### Source fixtures and runtime oracles
 
-- Crate, module, phase-entry, and program-type index.
-- Source construct to typed form, residual form, and lowering route.
-- Invariant index with its establishing phase, consumers, verifier, and regression tests.
-- Native and Wasm ABI tables derived from their owning declarations.
-- Diagnostic and debug-output guide, with stable codes distinguished from incidental wording.
-- Paper and design-record correspondence, including retained open questions and historical evidence.
+The [case harness](../../lang/tests/tests/cases.rs) uses `libtest-mimic` to discover one trial per `.zy` file.
+Files are source fragments wrapped with the same prelude as `SourceCase`.
+Leading ordinary comments select stage, prelude, and expectation;
+the [case guide](../../lang/tests/cases/README.md) is the directive reference.
+Unknown, duplicated, or inapplicable directives fail a trial instead of weakening its expectation.
+Diagnostic spellings are parsed beside their stable compiler codes and round-trip through that shared catalog.
+Fixtures also enter the parser/formatter corpus,
+so a source edit needs neither manual registration nor a Rust recompilation.
 
-These are navigation and audit views of the chapter contracts.
-They should point to one owner for each invariant, including shared typing, erasure, frame lifetime,
-host transfer, and product representation rules.
+Topic paths name the regression; directives name its phase and expected outcome.
+This avoids renaming tests when their stage changes and avoids coupling semantic assertions to rendered error prose.
+Using the trial runner directly keeps naming and directive validation explicit.
+Rendered-diagnostic snapshots can be added for a distinct presentation contract.
+Multi-file imports, arena mutation, desugared-variant assertions, emitted-code structure,
+process arguments, and I/O remain Rust tests or whole-program fixtures
+because a single-fragment expectation cannot express those relationships.
+
+[The shared harness](../../lang/tests/src/lib.rs) supplies check, runtime, and end-to-end registrations.
+Whole-program tests declare their backends, input, arguments, expected output,
+and exit behavior; undeclared stdin is EOF and output is captured.
+Native FFI and toolchain-dependent cases can require explicit opt-in.
+A regression must preserve both the accepted use and the rejected or non-optimizable counterpart relevant
+to its invariant.
+
+### Following a change
+
+For a source feature, follow textual syntax and metadata through bitter/scoped forms, typing,
+static elaboration, interpreter linking, high lowering, and every consuming backend.
+For an optimization, identify its required input invariant and every representation or root map it changes.
+For a primitive, update the role catalog, checked signature, materializers, interpreter,
+native runtime/emitter, Wasm emitters/host, and conformance cases.
+Prefer existing domain types and shared declarations at each common boundary.
+
+Diagnostic investigation starts from the saved source site and the earliest representation whose invariant fails.
+The textual, scoped, statics, SPS, and assembly debug printers expose successive views;
+use the relevant phase's verifier before interpreting a downstream crash as a source-language failure.
+Keep commands in [CONTRIBUTING](../../CONTRIBUTING.md#run-tests).
+Automated work reserves the full workspace suite for an explicit request.
+
+Performance evidence records the revision, workload, build profiles, host/target,
+measured quantity, and default or experimental representation.
+Allocation counts, reserved capacity, peak RSS, and elapsed time answer different questions.
+[Runtime evaluations](../ideas/cbpv-runtime-evaluation.md) retain historical comparisons;
+repeat them before selecting a new default or claiming a current improvement.
+Reference examples and local links are checked separately from runtime tests,
+and documentation drift belongs in [the todo records](../todos/README.md).
+
+## Navigation indexes
+
+| Source mechanism | Typed boundary | Execution route |
+| --- | --- | --- |
+| A named field | Resolved structural route and typed payload | Tuple access/patterns; names erase |
+| An existential witness | Scoped abstract identity or manifest equation | Static evidence erases; payload remains |
+| `val` or a view | `ValPi` and static application/pattern | C6 removes it before executable lowering |
+| `@[typeof]` | Reused classifier identity | Operand has no runtime query node |
+| A thunk | Checked computation capture | Interpreter closure or SPS closure conversion |
+| `ret` and `do` | Computation and its consuming continuation | SPS return/binding, then target control representation |
+| A literal pattern | Typed integer and opaque coverage observation | Equality branch during high lowering |
+| A monadic block | Retained checked payload and translated algebra structure | Ordinary residualization and backend pipeline |
+| A foreign thunk | Validated `ForeignSignature` | libffi or native returning-call bridge |
+
+| Invariant | Establishing/checking boundary | Principal consumers |
+| --- | --- | --- |
+| Hygienic source and binder identities | C2–C4 | Checking and editor provenance |
+| Closed inference and stable normalized types | C5 | C6, linking, and all lowering |
+| Representable executable residual | C6 and executable selection | C7–C14 |
+| Lexical single occurrence and branch joins | High/low validators, C8–C9 | Normalization, capture analysis, local unboxing |
+| Native activation and initialization contracts | C11 preparation | Emitter, frame model, collector |
+| Tagged words and shared record layouts | C12 model and C13 ABI | Host adapters, generated code, runtime |
+| Complete mutable roots at collection | C11 maps and C12 publication | Native moving collector |
+| Revision-correct semantic identity | C3 and C15 | Editor results and interactive actions |
+
+The phase table in C1 is the entry-point index; chapter links lead to the owning modules and focused regressions.

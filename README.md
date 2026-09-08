@@ -110,7 +110,7 @@ The [editor guide](editor/README.md) describes shared behavior and runtime confi
 ## Documentation and Examples
 
 - [Language guide](docs/tutorial/zydeco-guide.md): a source-level walkthrough.
-- [References](docs/references/README.md): language reference draft and compiler implementation outline.
+- [References](docs/references/README.md): language and compiler implementation references.
 - [Documentation todos](docs/todos/README.md): drift findings and the reference consolidation plan.
 - [Project documentation](docs/documentation.md): `@[doc]`, editor interaction, references, and verified examples.
 - [DESIGN.md](DESIGN.md): semantics, implementation boundaries, and current limitations.

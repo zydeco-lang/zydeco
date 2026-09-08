@@ -381,8 +381,11 @@ The same erasure permits classifier queries in `val pi`, `sigma`, and kind-arrow
 An existential `exists (X : K) . A` hides a type witness used by its payload.
 The telescope may mix abstract witnesses, manifest equations `(X as T : K)`,
 and manifest kind entries such as `(VType as @(intrinsic(vtype)))`.
-Later entries may refer to earlier ones.
-Naming and punning compose with these binder forms.
+Later entries may refer to earlier ones. Naming and punning compose with these binder forms.
+Static and value entries may be interleaved through nested existentials and products;
+package formation does not require all existentials to precede all products.
+A manifest binder may omit its classifier when its definition synthesizes it, including a kind classified by `Set`.
+An explicit classifier checks that same definition.
 
 Against an expected existential, `(T, v)` supplies the witness and payload.
 `pack` synthesizes a package type from explicit evidence:
@@ -410,6 +413,12 @@ A package-dependent function binder can retain them in its result classifier: `p
 Application requires corresponding witness evidence available in the caller's static scope.
 The runtime implementation may be an unknown thunk; its signature carries the dependency.
 Opening a manifest entry substitutes the disclosed equation and creates no fresh witness.
+Introduction checks the supplied witness against that equation.
+Manifest entries erase and contribute no abstract witnesses to a package-dependent arrow.
+Disclosed equations substitute transparent provider-local names;
+normalization cannot recover an equation hidden by sealing.
+At computation application, witness instantiation currently traverses a leading existential prefix;
+it does not recover abstract components beneath preceding value products.
 An ordinary value `sigma` introduces no witness telescope, so witnesses opened by its pattern must be absent
 from the resulting component type, even when mentioned only through `typeof`.
 

@@ -1,20 +1,21 @@
 # Documentation
 
 Start with [the language guide](tutorial/zydeco-guide.md) for a source-level walkthrough
-and [DESIGN.md](../DESIGN.md) for the current language and implementation account.
+and [DESIGN.md](../DESIGN.md) for the project design and repository map.
 [CONTRIBUTING.md](../CONTRIBUTING.md) covers building, testing, formatting, and documentation workflows.
 
-Two references are being compiled for expert programmers and compiler maintainers:
+Two concise references serve expert programmers and compiler maintainers:
 
-- [Language reference](references/language.md): a concise draft of syntax, typing, computation, static composition,
-  packages, host interfaces, and execution profiles.
-- [Compiler implementation reference outline](references/compiler.md): phase contracts, representations,
-  checking, lowering, runtimes, tooling, and validation.
+- [Language reference](references/language.md): syntax, typing, computation, static composition, packages,
+  host interfaces, and execution profiles.
+- [Compiler implementation reference](references/compiler.md): phase contracts, representations, checking,
+  lowering, runtimes, tooling, and validation.
 - [Documentation todos](todos/README.md): drift findings, proposed repairs, source inventory, ownership,
   and the consolidation sequence.
 
-The language draft is under review; the compiler document remains an outline.
-Existing DESIGN sections and owning proposals remain authoritative until consolidation is approved.
+The references own the rules and implementation accounts transferred
+through the [completed consolidations](todos/reference-plan.md#completed-proposal-retirements).
+Remaining proposals retain independent rationale and open design questions.
 
 Other documentation serves distinct purposes:
 

@@ -6,7 +6,7 @@ The material exists across DESIGN, proposals, component guides, formal notes, li
 The writing task is to establish a coherent account with one home for each rule,
 while preserving the rationale and unresolved questions that deserve separate design records.
 
-The language reference is now a concise draft; the compiler reference remains an outline:
+Both references now have concise drafts covering their planned chapters:
 
 | Reference | Reader's question | Document |
 | --- | --- | --- |
@@ -18,9 +18,10 @@ The outlines draw on repository documentation, implementation entry points,
 syntax and representation definitions, and regression tests.
 This was a source inspection, not an exhaustive execution or conformance audit.
 The language draft was subsequently checked against `289f2a14`; its opted-in examples use the documentation checker.
-L1–L15 refer to the language reference's numbered chapters; C1–C16 are the compiler outline's planning identifiers.
+The compiler reference and this consolidation were inspected against `fdc4eeee`.
+L1–L15 and C1–C16 identify the language and compiler chapters, respectively.
 
-## Findings that shape the outlines
+## Findings that shape the references
 
 [DESIGN.md](../../DESIGN.md) already has substantial coverage, but combines source rules,
 compiler storage invariants, runtime ABIs, frontend behavior, and limitations in one document.
@@ -53,22 +54,30 @@ Keep that editorial work separate from the reference text.
 
 ## Completed proposal retirements
 
-The first two batches were accepted for consolidation on 2026-09-08.
-The seven standalone proposals were removed after their durable material and incoming links were transferred:
+The language-reference batches and compiler-reference consolidation were requested on 2026-09-08.
+Twelve standalone proposals have been removed after transferring their durable material and incoming links:
 
 | Retired proposal | Current homes | Preserved material |
 | --- | --- | --- |
 | `syntax.md` | [Language syntax](../references/language.md#2-lexical-structure-and-syntax), [values](../references/language.md#5-values-products-and-data), [computations](../references/language.md#6-computations-and-control); [style rationale](../proposals/style.md#reading-the-surface-syntax) | Accepted forms and grouping; the reasons for classifier-directed spines, arrows, and delimiters |
 | `primitive-packages.md` | [Primitive identity](../references/language.md#13-primitive-values-and-capabilities); [package rationale](../proposals/package-modularization.md#primitive-identity-and-package-boundaries); [Builtin guide](../../lib/std/README.md#builtin-packages) | Canonical versus provider-owned identities, public carrier names, dependency boundaries, and current package use |
 | `numeric-capabilities.md` | [Numeric library guide](../../lib/std/README.md#numeric-capabilities-and-explicit-instances) and its linked interface definitions | Dictionary composition, law boundaries, explicit selection, and checked manifest-instance examples |
-| `local-inference.md` | [Classification and inference](../references/language.md#4-classification-and-inference), [source boundaries](../references/language.md#12-sources-imports-and-entry); [solver invariants](../../lang/statics/src/check/README.md#inference-regions-and-solver-invariants) | Binder defaulting, order-independent constraints, shape refinement, source closure, scope intersection, rollback, and diagnostic provenance |
-| `typeof.md` | [Classification and inference](../references/language.md#4-classification-and-inference), [binder dependencies](../references/language.md#9-polymorphism-and-packages), [imports and signatures](../references/language.md#12-sources-imports-and-entry); [checked-term reuse](../../lang/statics/src/check/README.md#classifier-extraction-and-checked-term-reuse) | Classifier identity, staging, erasure, witness scope, import cycles, and canonical synthesis under context extension |
-| `integer-literal-patterns.md` | [Pattern rules](../references/language.md#7-patterns-and-coverage), [numeric representations](../references/language.md#13-primitive-values-and-capabilities); [pattern implementation](../proposals/exhaustiveness.md#literal-and-alias-patterns) and [remaining decisions](../proposals/exhaustiveness.md#current-boundary) | Range and refutability boundaries, conservative coverage, equality-branch lowering, float equality, and redundancy questions |
-| `aliasing.md` | [Pattern rules](../references/language.md#7-patterns-and-coverage); [syntax rationale](../proposals/style.md#pattern-alias-syntax); [pattern implementation](../proposals/exhaustiveness.md#literal-and-alias-patterns) and [remaining decisions](../proposals/exhaustiveness.md#current-boundary) | Shared bindees, ordered scope, composable syntax and alternatives, runtime sharing, and refutable-conjunction questions |
+| `local-inference.md` | [Classification and inference](../references/language.md#4-classification-and-inference), [source boundaries](../references/language.md#12-sources-imports-and-entry); [solver invariants](../references/compiler.md#inference-and-reuse) | Binder defaulting, order-independent constraints, shape refinement, source closure, scope intersection, rollback, and diagnostic provenance |
+| `typeof.md` | [Classification and inference](../references/language.md#4-classification-and-inference), [binder dependencies](../references/language.md#9-polymorphism-and-packages), [imports and signatures](../references/language.md#12-sources-imports-and-entry); [checked-term reuse](../references/compiler.md#inference-and-reuse) | Classifier identity, staging, erasure, witness scope, import cycles, and canonical synthesis under context extension |
+| `integer-literal-patterns.md` | [Pattern rules](../references/language.md#7-patterns-and-coverage), [numeric representations](../references/language.md#13-primitive-values-and-capabilities); [pattern implementation](../references/compiler.md#pattern-decisions-and-validation) and [remaining decisions](../proposals/exhaustiveness.md) | Range and refutability boundaries, conservative coverage, equality-branch lowering, float equality, and redundancy questions |
+| `aliasing.md` | [Pattern rules](../references/language.md#7-patterns-and-coverage); [syntax rationale](../proposals/style.md#pattern-alias-syntax); [pattern implementation](../references/compiler.md#pattern-decisions-and-validation) and [remaining decisions](../proposals/exhaustiveness.md) | Shared bindees, ordered scope, composable syntax and alternatives, runtime sharing, and refutable-conjunction questions |
+| `normalization.md` | [Package rules](../references/language.md#9-polymorphism-and-packages), [static elimination](../references/language.md#10-static-elimination); [finalization](../references/compiler.md#finalization), [static elaboration](../references/compiler.md#static-elimination), [SPS normalization](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand) | Manifest formation and erasure, residual acceptance, shared graph normalization, and reductions preserving sharing and traps |
+| `demand-analysis.md` | [Consumer demands](../references/compiler.md#consumer-demands) and the surrounding normalizer contract | Demand lattice, lexical propagation, physical suffixes, aliases, opaque consumers, and suspended captures |
+| `query-owned-statics.md` | [Query/checker ownership](../references/compiler.md#query-and-checker-ownership); [memory design](../proposals/arena-gc.md) | Achieved producer boundary, stateful solver constraints, alternatives, and qualified historical cost evidence |
+| `typed-type-rendering.md` | [Tooling implementation](../references/compiler.md#formatting-and-typed-rendering); [formatting choices](../proposals/formatting.md#elaborated-type-rendering) | Printer responsibilities, witness hints, source-shaped types, reification alternatives, and unresolved layout questions |
+| `data-driven-cases.md` | [Fixture architecture](../references/compiler.md#source-fixtures-and-runtime-oracles); [case guide](../../lang/tests/cases/README.md) | Discovery, structured assertions, runner rationale, Rust-only relationships, and possible directive extensions |
 
-These destinations own the transferred material.
-Discarded layout and implementation claims are recorded in the [drift list](reference-drift.md);
-no compatibility proposal stubs remain.
+These destinations own the transferred material. Discarded layout and implementation claims are recorded
+in the [drift list](reference-drift.md); no compatibility proposal stubs remain.
+The arena-retention, coverage, and typed-lint proposals now retain their design criteria
+and open questions; the checker guide retains its module map.
+Their current algorithms live in C3/C5/C6/C8/C16.
+DESIGN's implementation overview links to those owners.
 
 ## Deferred questions from retired proposals
 
@@ -80,7 +89,7 @@ no compatibility proposal stubs remain.
   Their classification and scope need a separate decision if the feature is pursued;
   the value-pattern usefulness work does not implicitly authorize them.
 
-## Proposed ownership after migration
+## Reference ownership after migration
 
 For topics outside the completed transfers, the current DESIGN sections and owning proposals remain authoritative
 while the reference draft is under review.
@@ -123,23 +132,20 @@ An implemented proposal should not retain a second full reference account.
 | --- | --- | --- |
 | [DESIGN](../../DESIGN.md) | Language model and mechanisms to L1–L14; architecture/runtime/tooling to C1–C15 | A concise project design overview and navigation to the two references |
 | [term](../proposals/term.md) | L3–L4, L7, L12; C4–C5 | Binding and scope rationale where it explains actual tradeoffs |
-| [Checker guide](../../lang/statics/src/check/README.md) | C5 | Local module ownership, linked to the accepted language rules |
+| [Checker guide](../../lang/statics/src/check/README.md) | C5; current account transferred | Local module ownership and links to shared contracts |
 | [value-pi](../proposals/value-pi.md) | L8; C5–C6 | Deferred syntax and residual-code sharing questions |
 | [field projection](../proposals/field-projection.md), [package modularization](../proposals/package-modularization.md) | L9, L12–L13; C5–C6 | Independently reviewable package-interface questions; remove repeated shared rules |
-| [normalization](../proposals/normalization.md) | Equality to L4, packages to L9, phase contract to L10, algorithms to C5/C6/C8 | Unresolved reduction and implementation-strategy questions |
-| [exhaustiveness](../proposals/exhaustiveness.md), [type lint](../proposals/tyck-lint.md) | L7; C6/C16 | Coverage limits and remaining verifier work |
+| [Coverage extensions](../proposals/exhaustiveness.md), [type lint](../proposals/tyck-lint.md) | C6/C8/C16; current account transferred | Usefulness, refutable patterns, dependent copatterns, and stronger verification evidence |
 | [bytes](../proposals/bytes.md), [filesystem](../proposals/filesystem.md), [C FFI](../proposals/c-ffi.md) | L13–L15; C12–C14 | Builders, stream extensions, foreign exports/callbacks, and other unimplemented boundaries |
-| [query-owned statics](../proposals/query-owned-statics.md), [arena reclamation](../proposals/arena-gc.md) | C2–C3/C5 | Reasons for the achieved query boundary and measured retention decisions |
-| [demand analysis](../proposals/demand-analysis.md) | C8 | Any independent future demand-propagation question |
+| [Arena retention](../proposals/arena-gc.md) | C3; current account transferred | Memo reclamation, compact facts, normalization strategies, and historical measurement limits |
 | [escape analysis](../proposals/escape-unboxing.md) | C10 | Stack products and interprocedural escape constraints |
 | [native frames](../proposals/native-frames.md) | C11–C12; profile summary in L15 | Experimental environment designs and pending evaluation decisions |
 | [Wasm strategies](../proposals/wasm-backends.md) | C13; profile summary in L15 | Default-target choice, alternatives, and historical comparison evidence |
-| [completion](../proposals/completion.md), [typed rendering](../proposals/typed-type-rendering.md) | C15 | Incomplete recovery/ranking and source-rendering design questions |
+| [Completion](../proposals/completion.md), [formatting](../proposals/formatting.md#elaborated-type-rendering) | C15 | Recovery/ranking guarantees and source-rendering design questions |
 | [formatting](../proposals/formatting.md) | L2 metadata index; C4/C15 | Independent layout-policy rationale; formatting workflow stays in CONTRIBUTING |
 | [documentation](../proposals/documentation.md) | C15–C16 | Unresolved authoring/verification mechanisms; [authoring guide](../documentation.md) remains user-facing |
 | [REPL](../proposals/repl.md) | L12; C3/C7/C15 | Future interaction design; command and key reference stays in CONTRIBUTING |
 | [style](../proposals/style.md) | Links from L2 and the tutorial | A user-facing style guide, separate from accepted syntax and semantics |
-| [data-driven cases](../proposals/data-driven-cases.md) | C16 | Harness design rationale; [case directives](../../lang/tests/cases/README.md) retain their local home |
 | [source-map idea](../ideas/span-source-map.md) | C2 | Useful alternatives after removing the obsolete implementation account |
 | [runtime evaluation](../ideas/cbpv-runtime-evaluation.md) | Evidence links in C11–C13/C16 | Reproducible studies and open comparisons with their original scope and revisions |
 | [delimited-control idea](../ideas/delimited-continuations.md) | Context for L11 | Historical motivation; establish current behavior from library code and tests |
@@ -151,28 +157,30 @@ The project-documentation proposal describes Zydeco's `@[doc]`, exposure,
 and verification feature; its implementation belongs to C15.
 Start with repository Markdown and the existing example-checking tools.
 
-## Writing and migration sequence
+## Remaining consolidation
 
-The concise language draft covers L1–L15, and the first two proposal batches are retired as recorded above.
-Compiler drafting and the remaining consolidation are still to be done.
-Record drift and proposed repairs separately; retain existing owners for topics that have not been transferred.
-The sequence below applies to those follow-ups.
+The language and compiler drafts cover L1–L15 and C1–C16.
+Drift and proposed repairs stay in the [separate list](reference-drift.md);
+recording a mismatch does not authorize a language or compiler behavior change.
 
-1. **Establish the semantic spine.** Write L1/L3/L4/L6/L10/L12 and C1–C3 first.
-   Resolve source-synthesis, identity, recursion, and phase discrepancies before dependent chapters reuse those rules.
-2. **Complete the construct reference.** Write L2/L5/L7–L9/L11 and C4–C7.
-   Audit the complete grammar and typed variants; update the formal calculus and link every rejection boundary
-   to evidence.
-3. **Document systems behavior and lowering.** Write L13–L15 and C8–C14.
-   Verify each profile, ABI, allocation claim, and experiment against its actual implementation.
-4. **Finish tooling and maintenance lookup.** Write C15–C16 and the appendices; connect existing authoring,
-   library, editor, style, and contribution guides.
-5. **Complete consolidation as chapters land.** Replace superseded rules with links, remove empty records,
-   repair incoming references and stale examples, and shorten DESIGN into the agreed overview.
-   Update AGENTS' project-reference and rule-ownership guidance when the references become authoritative.
+1. Review the remaining term, package, value-function, and projection proposals for duplicated construct rules.
+   Preserve their independently reviewable scope and composition questions.
+2. Consolidate the broader DESIGN language, runtime, and tooling sections into a shorter overview
+   as their detailed owners are reviewed.
+   Native frame alternatives, Wasm strategy comparisons,
+   and tooling designs retain useful independent content beyond the reference summaries.
+3. Reconcile the tutorial and formal calculus with the source accounts,
+   including product shape and recursion boundaries.
+   Keep mathematical rules in one companion rather than copying a second calculus into the references.
+4. Audit historical measurements and remaining scratch records for durable evidence,
+   then move that evidence to its owner.
+   Reproduce claims used to select a default before presenting them as current results.
 
-When a replacement is accepted, migrate its source material and incoming links in the same change.
-Keep the current owners until then.
+Deferred optimization ideas from the retired records include avoiding temporary construction
+of unused high-SPS nodes and normalizing only consumer-requested closed types.
+Either needs a measured compiler workload; the latter also belongs
+to the [memory design](../proposals/arena-gc.md#open-questions).
+Fixture argument/exit directives and typed-renderer reification remain in their receiving guides.
 
 ## Chapter acceptance criteria
 

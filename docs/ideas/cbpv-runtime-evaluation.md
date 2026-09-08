@@ -113,8 +113,7 @@ Rust-owned host strings and bytes have a separate reclamation problem.
    through the relevant IR boundaries and eliminate suspension bookkeeping
    when the transfer cannot reuse the environment.
    Pair local cases with host callbacks and indirect returns that must retain the full protocol.
-   [Primitive call normalization](../proposals/normalization.md#residual-primitive-calls)
-   is the implemented starting point.
+   [Primitive call normalization](../references/compiler.md#primitive-calls) is the implemented starting point.
 3. **Compare shared captures with selective frame retention.** Try an activation-level union
    of saved bindings or retention for dense, overlapping captures.
    Check that older values survive inner resumptions and slot reuse.

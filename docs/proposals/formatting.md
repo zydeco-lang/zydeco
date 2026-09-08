@@ -54,16 +54,19 @@ A delimited region instead hugs the line it lands on: the opener stays put,
 the contents nest one level inside, and the closer returns to the opener's line.
 A singleton group therefore keeps its delimiters whenever its contents span more than one line.
 
-The meta-rules are laws about rendered documents rather than about the textual arena, so they govern
-every printer that gives Zydeco syntax a canonical layout, and each printer instantiates the same
-boundary discipline at its own policy. The surface printer developed in this document is the full
-instance: its boundaries consult retained intentions, carry trivia, and honor `@[format(...)]` directives.
-The statics formatter is the `layout(ignore)` instance. Elaborated entities have no source node, so no
-boundary is backed by a span, no trivia attach, and width alone decides where a permitted boundary
-breaks; operand grouping stays minimal, chosen by precedence class. Its spelling policy and the decision
-to keep grammar classes per-representation are recorded in `typed-type-rendering.md`.
-What the printers share is the boundary discipline itself. The scoped formatter is a debug renderer,
-and the dynamics printers render linked IR; neither defines canonical source layout.
+The meta-rules are laws about rendered documents rather than about the textual arena,
+so they govern every printer that gives Zydeco syntax a canonical layout,
+and each printer instantiates the same boundary discipline at its own policy.
+The surface printer developed in this document is the full instance: its boundaries consult retained intentions,
+carry trivia, and honor `@[format(...)]` directives.
+The statics formatter is the `layout(ignore)` instance.
+Elaborated entities have no source node, so no boundary is backed by a span, no trivia attach,
+and width alone decides where a permitted boundary breaks; operand grouping stays minimal, chosen by precedence class.
+The [compiler reference](../references/compiler.md#formatting-and-typed-rendering) describes its spelling policy;
+the [rendering choices below](#elaborated-type-rendering) explain why grammar classes remain per-representation.
+What the printers share is the boundary discipline itself.
+The scoped formatter is a debug renderer, and the dynamics printers render linked IR;
+neither defines canonical source layout.
 
 ## Retained Source Information
 
@@ -148,8 +151,7 @@ to either child in isolation.
 - `Between` lies between consecutive entities.
 - `AfterStart` lies between an enclosing construct and its first child.
 - `AfterArmPrefix` lies between an arm header and its payload.
-- `AfterExistentialOpen` lies just inside a grammar-owned parameter delimiter,
-  between the `(` and its binder.
+- `AfterExistentialOpen` lies just inside a grammar-owned parameter delimiter, between the `(` and its binder.
 - `BeforeExistentialParameter` lies before a grammar-owned parameter delimiter that is not part of its binder.
 - `BeforeEnd` lies between the final child and its closing delimiter.
 
@@ -197,9 +199,9 @@ Most constructs use one of these families:
 Each grammatical group makes one width decision for the boundaries it owns.
 If a delimited row overflows, the delimiters and item separators enter their expanded layout together;
 boundaries inside each item remain independent.
-A grammar-owned parameter delimiter carries no syntax entity of its own, so a delimited group whose
-content anchor is its own entity spans no source gap after its opener: the group reads its retained
-break from the recorded `AfterExistentialOpen` boundary instead of an anchor pair.
+A grammar-owned parameter delimiter carries no syntax entity of its own,
+so a delimited group whose content anchor is its own entity spans no source gap after its opener:
+the group reads its retained break from the recorded `AfterExistentialOpen` boundary instead of an anchor pair.
 A comment written before the `(` anchors at the parameter boundary and stays outside the delimiters,
 while a comment after the `(` belongs to the binder payload and keeps its line for that boundary.
 Staged bindings follow one nesting discipline. A joined stage boundary never nests its continuation:
@@ -258,11 +260,12 @@ by field and the innermost directive wins.
 A malformed `format` annotation is inert: the printer renders it as ordinary metadata and applies no options,
 leaving the misspelled directive visible in the output.
 
-Metadata calls are structured delimiter groups rather than opaque rendered strings. A fitting call stays compact;
-an overflowing call expands its immediate argument list, while nested calls make their own width decisions.
+Metadata calls are structured delimiter groups rather than opaque rendered strings.
+A fitting call stays compact; an overflowing call expands its immediate argument list,
+while nested calls make their own width decisions.
 This choice is local to the annotation, so the length of its following payload cannot force short metadata to wrap.
-Under `Preserve`, argument rows authored on separate lines remain separate, and comments anchored to nested metadata
-arguments remain in the group.
+Under `Preserve`, argument rows authored on separate lines remain separate, and comments anchored
+to nested metadata arguments remain in the group.
 
 Structural options (indentation, layout intentions, parenthesis treatment) shape the payload document directly.
 A width change instead pre-renders the payload at its own width and embeds the result below the annotation,
@@ -313,3 +316,34 @@ after the standard library is migrated.
 Comments use entity anchors, typed arm and delimiter boundaries, and exclusion ranges.
 If future syntax permits truly floating comments, the model should add another typed trivia boundary instead
 of retaining raw whitespace or a second token tree.
+
+## Elaborated type rendering
+
+Hover and diagnostics display synthesized types with no source node to recover,
+including instantiated projection results and witnesses created by package opening.
+The [compiler reference](../references/compiler.md#formatting-and-typed-rendering) maps the three printers
+and the statics renderer's current source-shaped spelling.
+The design question is how much formatting machinery typed data should share with parser-produced textual syntax.
+
+Polishing the statics formatter keeps typed-only constructs explicit and preserves detail useful in diagnostics.
+Its cost is duplicated knowledge of source precedence: grammar changes must audit both printers.
+Reifying typed data into the textual arena and calling `render_term` would share canonical layout
+and could support reparseable output.
+It would also introduce a new textual-AST producer, synthesized spans, and a policy for fills, nameless witnesses,
+intrinsic spellings, and other entities without faithful source syntax.
+IR and diagnostic inspection would still need a direct typed renderer.
+
+Sharing only precedence classes is a smaller alternative, but the two representations classify nodes differently;
+a third shared vocabulary must save enough duplicated policy to justify its own maintenance.
+The current choice is separate grammar classes governed by the common layout laws above.
+A typed-to-textual bridge becomes worth reassessing when a second source-faithful consumer appears,
+such as an action inserting an elaborated type annotation or a test requiring rendered output to reparse.
+
+Remaining layout questions concern quantifier telescopes that currently form unbreakable heads,
+folding adjacent same-form quantifiers, and source-shaped term labels beyond type operands.
+Long binder lists can exceed a width budget even though ordinary application operands break correctly.
+Primitive names such as `Int64` are useful display spellings but do not
+by themselves reproduce the intrinsic source form.
+A diagnostic survey could also establish which surfaces need elaborated identities
+and which would benefit from a source-shaped view.
+These choices should be explicit before adding a round-trip guarantee to typed rendering.

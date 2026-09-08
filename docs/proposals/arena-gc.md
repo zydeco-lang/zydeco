@@ -1,123 +1,62 @@
-# Deterministic Arena Reclamation
+# Compiler memory retention
 
-## Problem
+A checked root can elaborate into many more nodes than its source contains.
+Keeping every complete typed arena in a long-lived session therefore makes memory depend
+on the history of roots, even when an editor only needs a small set of current facts.
+The [compiler reference](../references/compiler.md#analysis-facts-and-materialization) owns the implemented split
+between retained keyed facts, shared full materializations, and query memo lifetimes.
+This record concerns the remaining choices about what to retain and when to recompute it.
 
-One type-checked root materializes a `StaticsArena` whose size is bounded by the
-*elaboration* of the program, not by its source. Checking the standard library alone
-(`std/std.zy`, 65K scoped terms) materializes 2.06M `types_pre` nodes plus per-node annotations,
-environments, and a normalized copy — a 32x amplification over the scoped program, dominated
-by tiny structural nodes (46% `App`, 25% `Arrow`, 13% `Label`, 11% `Prod`).
-A long-lived session that analyzes many roots accumulates these arenas without bound,
-which was the original cause of the test-suite OOM (a shared session reached ~29GB before
-the `SessionPool` workaround capped it) and would be the editor's fate as well.
+## Retention criteria
 
-salsa 0.26 offers no per-query eviction (`Database::evict_lru` resets revisions only; the
-storage is freed when the whole database drops). Reclamation therefore lives at the arena
-layer, with deterministic rules.
+Retain a fact when consumers need random access by semantic identity and recovering it would require a regional recheck.
+Retain occurrence payload only while a consumer needs a full traversal, unless measurements justify caching it longer.
+Deterministic allocation permits the same inputs to reproduce identities;
+it does not make every intermediate solver state a pure function of an allocation site.
+The [query/checker boundary](../references/compiler.md#query-and-checker-ownership) explains that distinction.
 
-## Principle: Recomputation
+The current coarse check and fine-grained judgment memos have different costs and lifetimes.
+A one-entry arena LRU can release a large materialization while leaving the database's interned inputs
+and judgment memos.
+Database generations give the test pool a deterministic reclamation boundary;
+a general interactive-session policy must also account for active projects,
+overlays, and outstanding analysis snapshots.
+Any replacement should preserve keyed facts after arena eviction and pair materialization
+with the correct source revision.
 
-The judgment layer makes the arena a *cache* (see
-[query-owned statics](query-owned-statics.md)). Every node's identifier is derived
-deterministically from its site, and every node's content is the value of a small memoized
-judgment query keyed by that site. Re-executing a query reproduces the same identifiers, so
-a dropped arena node can be rebuilt exactly, provided the query's inputs (the scoped program
-and the salsa database) survive. The salsa judgment memos are the durable, recomputable layer;
-the arena is its materialization.
+## Historical measurements and alternatives
 
-Recomputation is therefore the budget question: a table is worth retaining exactly to the
-extent that (a) it cannot be re-derived locally, or (b) its absence would force re-running the
-checker over a region rather than replaying a judgment.
+Earlier investigations recorded the following measurements.
+Their original notes do not identify every compared revision, build profile, and host;
+they explain the decisions investigated and are not current performance guarantees.
+Repeat the workloads under [C16's measurement contract](../references/compiler.md#following-a-change)
+before using them to select a new policy.
 
-## Criterion: Keyed Index vs Occurrence Payload
+| Observation | Recorded result | Design implication |
+| --- | --- | --- |
+| Full standard-library elaboration | About 65K scoped terms and 2.06M `types_pre` nodes; 46% `App`, 25% `Arrow`, 13% `Label`, 11% `Prod` | Optimize elaboration retention as well as source storage. |
+| Shared test-session growth | About 29 GB before the session-pool cap | A live database needs an explicit lifetime policy. |
+| Session-suite peak after the generation split and LRU work | 18.0 GB to 6.32 GB | Full-arena retention was a major contributor; this does not establish bounded fine-grained memos. |
+| One standard-library check across successive changes | Peak RSS 7.5 GB, then 2.42 GB, then about 914 MB; warm checks about 1.2 s | Shared phase products and compact storage warranted investigation. |
+| Type-content census | 69.8% content-unique | Hash-consing could save at most about 30% of that table before index overhead. |
+| Producer-query migration, measured 2026-08-14 | Reported about 30% end-to-end checking overhead against the earlier binary | Re-measure bookkeeping costs before moving more solver work into queries. |
 
-The checker and the linkers read the arena in two fundamentally different ways:
+Per-node normalized-type replay was explored, but the identified tooling consumers requested top annotation types.
+Keyed `type_sites` and `term_norms` therefore served those consumers without replaying arbitrary inner nodes.
+An inner-node consumer would change that tradeoff.
+Hash-consing remains an alternative if a new census shows enough structural duplication
+to outweigh the additional index; the old census alone does not decide future representations.
 
-- **Random access by key.** `annotations_var[def]`, `solus[fill]`,
-  `codatas[id].get(&dtor)`, `type_definitions[def]` — lookups indexed by a *declared* name, a
-  hole, or an abstract identity. Nothing in the neighborhood of the read site determines these
-  entries; they are the global context that the checker extends and the linkers follow.
-- **Traversal by occurrence.** The typed tree (`values`, `compus`, `types_pre`) is reached by
-  walking from roots along the child references embedded in each node. Every node along such a
-  walk is the judgment value at an occurrence site and can be replayed.
+## Open questions
 
-This splits the arena into two generations:
-
-- **L (long-lived): keyed indexes**, bounded by the source's *declaration* count (thousands),
-  kept across roots. They are the entry points from which everything else is reachable and
-  the context against which later checks run.
-- **S (short-lived): occurrence payload**, bounded by the *elaboration* size (millions), valid
-  while one root's consumers traverse it, then discarded.
-
-## Table Classification
-
-| Retain (L) | Rationale |
-| --- | --- |
-| `annotations_var` | the name table; editor facts and env lookups index by `DefId` |
-| `solus` / `fills` / `fill_scopes` / `fill_hints` | hole solutions; editor displays them |
-| `datas` / `codatas` | arm tables keyed by `CtorName` / `DtorName`; stackir reads them |
-| `type_definitions` / `inlinables` | definition-body entry points for unfolding and inlining |
-| `value_aliases` / `package_aliases` | alias entry points for package resolution |
-| `seals` / `absts` / `abst_hints` | abstract identities and their representatives |
-| `existential_skolems` | skolem markers opened with packages |
-| `terms` / hints | the scoped-entity-to-typed-id site index that makes S replayable |
-| `intrinsics` / `builtin_roles` | query-owned singletons and role attachments |
-| `term_norms` / `type_sites` | normalized annotation type per term, keyed by term site |
-
-| Discard (S) | Rationale |
-| --- | --- |
-| `types_pre` / `kinds_pre` | occurrence payload; 2.06M nodes for std |
-| `values` / `compus` / `vpats` / `tpats` / `kpats` | the typed tree; traversal target of the linkers |
-| `annotations_type` / `annotations_compu` / `annotations_value` | per-node annotations ride along with their node |
-| `kinds_normalized` / `types_normalized` | derived columns of the same nodes |
-
-## As Built
-
-The generation split is the policy in force; replay replaced it where measurement
-showed keyed indexes answer the actual demand.
-
-- `analyze_source` runs the check through the memo, then strips the occurrence payload
-  (`StaticsArena::strip_occurrence_payload`) before constructing the `ProgramAnalysis`.
-  An analysis therefore retains only the L tier. `CompilerSession::materialize_arena`,
-  `checked_program`, and `executable_program` re-materialize the full arena from the
-  memoized check on demand. Consumers (CLI, REPL engine, cajun, integration tests) obtain
-  the typed arena through the session; cajun's `ProjectState` is a live root consumer and
-  holds its materialization for the project's lifetime.
-- `check_source` returns its arena behind an `Arc`. Fact queries and lowerers share it in O(1);
-  later phases keep synthesized metadata in phase-local deltas instead of cloning or extending
-  the static and scoped arenas.
-- The three S-reading fact queries (`normalized_type_at`, `coverage_facts`,
-  `term_annotation_at`) answer entirely from L: `normalized_type_at` reads the keyed
-  `type_sites` and `term_norms` tables, so every editor fact survives arena-memo eviction.
-  Per-node normalized-type replay (a recursive `normalize_type` query over the judgment
-  layer) was measured to have no consumer — the only callers ask for top annotation types —
-  so the keyed index is the delivered form and replay remains available for a future
-  consumer that needs arbitrary inner nodes.
-- `check_source` memoizes with salsa's `lru = 1` and the test pool triggers eviction per
-  analysis. The entry-counted LRU cannot express root-scoped eviction for the millions of
-  fine-grained judgment entries, so the pool generation remains their policy.
-- Retention was additionally reduced by shrinking the dominant node enum, paging the derived
-  type-ID key space with bounded growth slack, sharing phase products instead of cloning
-  query results, isolating typed elaboration's definition delta, and packing source
-  positions into one word.
-
-### Measurements
-
-- Session suite peak RSS fell from 18.0GB (pool cap) to 6.32GB through the LRU step and the
-  generation split; a long-running session no longer grows per root.
-- One full-std check retains ~914MB peak RSS (down from 2.42GB after the earlier phase merge
-  and delta work, and from 7.5GB before them); warm re-checks run in ~1.2s.
-- Value hash-consing was measured and rejected: 69.8% of std's types are content-unique, so
-  deduplication saves at most ~30% of one table — not worth an interning layer.
-
-## Open Questions
-
-- Can salsa 0.26 remove one root's inputs and memos without dropping the whole database? This
-  decides whether the memo policy lives inside one database or across generations of databases.
-- The retained `Vec<TermFacts>` (63,574 records) could compact its classifiers: every value and
-  computation fact's classifier matches its stored annotation, while 9,309 of 54,400 type facts
-  report a kind that differs from the co-located one, so a compact encoding needs an explicit
-  override path rather than plain erasure. A census of equality, not just identifier
-  cardinality, is the prerequisite.
-- The parsed-source lifetime group (spans, textual syntax, tokens, line-intention maps) should
-  be audited together for repeated location structure.
+- Can a database release one root's inputs and fine-grained memos while keeping shared providers and live snapshots?
+  Compare root-aware reclamation with bounded generations using repeated edits and many distinct roots.
+- Can retained `TermFacts` classifiers share their annotations?
+  An earlier census found identical value/computation classifiers, but 9,309 of 54,400 type facts had a different kind.
+  A compact encoding needs an explicit override unless a new equality census establishes a stronger invariant.
+- Can parsed-source lifetimes share repeated location structure across spans,
+  textual syntax, tokens, and intention maps?
+  Audit them as one lifetime group so a smaller local table does not retain a larger owner.
+- Would consumer-driven normalization of closed types save more than the shared eager finalizer?
+  A replacement must preserve finalized identity lookups and diagnostics and account for the stateful solver boundary;
+  moving normalization behind a query is insufficient by itself.

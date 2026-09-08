@@ -27,8 +27,7 @@ The resulting runtime data construction may depend on runtime inputs, but the va
 and application themselves have no runtime representation.
 The same transformation is available inside patterns without introducing a separate class of named views.
 
-The implementation follows the shared
-[static elimination contract](normalization.md#static-elimination-and-residual-code).
+The implementation follows the shared [static elimination contract](../references/language.md#10-static-elimination).
 The remaining implementation work is recorded under [Implementation Boundary](#implementation-boundary).
 
 ## One Classifier
@@ -337,8 +336,8 @@ interfaces available at that boundary, including package-dependent `pi` and its 
 
 ## Static Elimination
 
-The shared [static elimination contract](normalization.md#static-elimination-and-residual-code) governs
-higher-order `ValPi` composition, lexical capture, and residual runtime data.
+The shared [static elimination contract](../references/language.md#10-static-elimination)
+governs higher-order `ValPi` composition, lexical capture, and residual runtime data.
 For value functions, this admits transport through intermediate products, constructors,
 named components, and packages, as well as function-valued parameters and results.
 For example, this composition is accepted:
@@ -381,8 +380,8 @@ let std = builtin |> make_std in
 Inlining duplicates a body at each application, so emitted size and compiler recursion depth grow
 with the unfolded program; the workspace test configuration raises its minimum stack accordingly.
 Static elimination exposes the callee's residual body and lexical argument bindings. After lowering,
-[high-SPS normalization with demand analysis](normalization.md#residual-sps-normalization) removes unused components
-of the instantiated package.
+[high-SPS normalization with demand analysis](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand)
+removes unused components of the instantiated package.
 Factoring repeated residual code into direct blocks remains a backend optimization after static elimination.
 It must preserve specialization by static arguments and cannot reintroduce runtime `ValPi` values.
 
@@ -400,7 +399,7 @@ dependency graph, expansion plan, or view-specific source loading.
 `val` and `let val` produce ordinary values. Pipelines elaborate to ordinary `ValPi` application.
 The `f ~> p` pattern retains only the machinery described under [Value Views](#value-views).
 
-The shared [static elaborator](normalization.md#implementation-status) handles higher-order functions,
+The shared [static elaborator](../references/compiler.md#static-elimination) handles higher-order functions,
 partial applications, lexical captures, products, constructors, named components, packages, and views.
 SPS no longer resolves value-function definitions; a surviving value function there is an internal invariant failure.
 
