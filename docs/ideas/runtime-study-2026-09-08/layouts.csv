@@ -1,0 +1,6 @@
+scenario,captures,frame_words,depth,result,retained_high_water_words,suspended_root_slots,heap_control_words,heap_capture_cell_words,flat_control_words,copied_value_words
+empty,0,256,32,ok,8448,0,64,0,32,0
+compact,4,8,32,ok,264,128,64,192,160,256
+sparse,4,256,32,ok,8448,128,64,192,160,256
+capacity-fits,4,1024,127,ok,131072,508,254,762,635,1016
+capacity-exceeded,4,1024,128,capacity-rejected,131072,,,,,

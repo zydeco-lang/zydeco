@@ -783,6 +783,7 @@ class WasmProgram {
     const host = new ZydecoHost(arguments_, stdin);
     const module = await WebAssembly.compile(fs.readFileSync(modulePath));
     host.instance = await WebAssembly.instantiate(module, host.imports());
+    const initialLinearBytes = host.memory().buffer.byteLength;
     try {
       host.instance.exports.entry();
       throw new Error("Zydeco WASM entry returned without calling process/exit");
@@ -791,6 +792,16 @@ class WasmProgram {
         return error.code;
       }
       throw error;
+    } finally {
+      if (process.env.ZYDECO_WASM_MEMORY_REPORT === "1") {
+        console.error(JSON.stringify({
+          zydeco_wasm_memory: {
+            initial_linear_bytes: initialLinearBytes,
+            final_linear_bytes: host.memory().buffer.byteLength,
+            retained_host_values: host.values.values.size,
+          },
+        }));
+      }
     }
   }
 }

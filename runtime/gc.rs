@@ -212,6 +212,18 @@ pub(crate) struct Roots<'a> {
     pub slots: &'a mut [*mut Word],
 }
 
+/// Publish a complete root set only when collection needs to inspect it.
+/// A provider may allocate temporary address metadata before invoking `trace`.
+pub(crate) trait RootSource {
+    fn with_roots<T>(self, trace: impl FnOnce(Roots<'_>) -> T) -> T;
+}
+
+impl RootSource for Roots<'_> {
+    fn with_roots<T>(self, trace: impl FnOnce(Roots<'_>) -> T) -> T {
+        trace(self)
+    }
+}
+
 /// Two fixed semispaces and the cursor in the currently active one.
 ///
 /// `BYTES` includes block headers. Each space additionally reserves two index
@@ -240,16 +252,17 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
 
     /// Allocate a block, collecting first when the active semispace is full.
     ///
-    /// `roots.stack` is the live control-stack range. `roots.slots` contains
-    /// addresses selected from activation frames and registered Rust-side roots.
-    /// All referenced words are updated in place.
+    /// The root source is invoked exactly once if collection is needed, and never
+    /// on the allocation fast path or for requests larger than one semispace.
+    /// Its stack range and sparse slot addresses are updated in place.
     ///
     /// # Safety
     ///
-    /// The stack range and every nonnull slot address must be valid, word-aligned,
-    /// writable, and exclusive to the current runtime thread during this call.
+    /// The source must publish every live root. Its stack range and every nonnull
+    /// slot address must be valid, word-aligned, writable, and exclusive to the
+    /// current runtime thread while its trace callback runs.
     pub unsafe fn allocate(
-        &mut self, size_words: usize, tag: AllocationKind, roots: Roots<'_>,
+        &mut self, size_words: usize, tag: AllocationKind, roots: impl RootSource,
     ) -> Result<*mut u8, OutOfMemory> {
         let cell_bytes = Self::cell_bytes(size_words).ok_or_else(|| self.oom(size_words))?;
         if cell_bytes > BYTES {
@@ -257,7 +270,7 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
         }
 
         if self.used + cell_bytes > BYTES {
-            unsafe { self.collect(roots) };
+            roots.with_roots(|roots| unsafe { self.collect(roots) });
         }
         if self.used + cell_bytes > BYTES {
             return Err(self.oom(size_words));

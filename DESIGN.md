@@ -528,9 +528,10 @@ flowchart TD
     builtin --> sps[High SPS]
     sps --> low[First-order SPSLow]
     low --> structured[Structured WebAssembly]
-    low --> zasm[ZASM lowering and analysis]
-    zasm --> amd64[AMD64]
+    low --> zasm[Portable ZASM lowering and analysis]
     zasm --> machine[Abstract-machine WebAssembly]
+    low --> native[Native ZASM and frame planning]
+    native --> amd64[AMD64]
 ```
 
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
@@ -899,6 +900,14 @@ of memory when collection cannot make enough room.
 Collection updates the control stack, live slots in active and suspended frames, and registered host roots,
 preserving sharing, cycles, and word-aligned interior pointers into payloads.
 Frame slot maps exclude reserved, uninitialized, and dead slots; word tags then identify immediate values.
+
+Allocation receives a deferred root source.
+If a cell fits, it advances the allocation cursor without enumerating frame or host roots.
+If collection is needed, the source publishes the complete root set once,
+and the collector updates those locations before allocation continues.
+An oversized request rejected before collection does not enumerate roots;
+a request rejected after collection still preserves the relocated live graph.
+The native frame model continues to own which slots are live, independently of when they are enumerated.
 
 Each semispace has a block-start index that locates the owning header with one index-region read and one header read.
 For each 512-byte region, a bitmap records header starts at word granularity,

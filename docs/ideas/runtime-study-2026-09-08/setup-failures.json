@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-08",
+  "scope": "setup failures; no successful timing samples were obtained in the failing pilot",
+  "records": [
+    {
+      "stage": "compiler build",
+      "cause": "reused Cargo target across historical workspaces",
+      "outcome": "current assembly crate resolved a stale machine crate without frames; rebuilt in an isolated target directory"
+    },
+    {
+      "stage": "optimized native pilot",
+      "failed_builds": 12,
+      "cause": "assembly-facing runtime exports missing with local ThinLTO",
+      "resolution": "set CARGO_PROFILE_DEV_LTO=off equally for all variants; production dev/release profiles now disable local ThinLTO",
+      "representative_command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/pilot/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/pilot/native/optimized/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "representative_stderr": "cargo exited with exit status: 101:\n    Updating crates.io index\n     Locking 8 packages to latest Rust 1.97 compatible versions\n   Compiling libc v0.2.189\n   Compiling getrandom v0.4.3\n   Compiling rand_core v0.10.1\n   Compiling cfg-if v1.0.4\n   Compiling zydeco-machine v0.3.0 (${REPO}/build/runtime-study/pilot/native/optimized/captures/machine)\n   Compiling cpufeatures v0.3.1\n   Compiling zydeco-runtime v0.0.0 (${REPO}/build/runtime-study/pilot/native/optimized/captures)\n   Compiling chacha20 v0.10.2\n   Compiling rand v0.10.2\nerror: linking with `cc` failed: exit status: 1\n  |\n  = note:  \"cc\" \"${REPO}/build/runtime-study/pilot/native/optimized/captures/target/x86_64-apple-darwin/debug/deps/rustcqhc7Zi/symbols.o\" \"<39 object files omitted>\" \"-lzyretained-closure\" \"<sysroot>/lib/rustlib/x86_64-apple-darwin/lib/libpanic_abort-*.rlib\" \"${REPO}/build/runtime-study/pilot/native/optimized/captures/target/x86_64-apple-darwin/debug/deps/{librand-21bde5307bd8862e,libgetrandom-56953496efe8b196,liblibc-61f8018f465f74e3,libchacha20-3dbb33e11b4ceba3,libcpufeatures-430999e25110f303,libcfg_if-b218d98d9d46d3a5,librand_core-3b8b8c91ae73f27b,libzydeco_machine-db14e216e8ff4f74}.rlib\" \"<sysroot>/lib/rustlib/x86_64-apple-darwin/lib/{libstd-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib\" \"-lc\" \"-lm\" \"-liconv\" \"-lSystem\" \"-lc\" \"-lm\" \"-arch\" \"x86_64\" \"-mmacosx-version-min=10.12.0\" \"-L\" \".\" \"-o\" \"${REPO}/build/runtime-study/pilot/native/optimized/captures/target/x86_64-apple-darwin/debug/deps/main-3ba9ce3bc0b8694e\" \"-Wl,-dead_strip\" \"-nodefaultlibs\"\n  = note: some arguments are omitted. use `--verbose` to show all linker arguments\n  = note: ld: warning: ignoring duplicate libraries: '-lc', '-lm'\n          ld: warning: no platform load command found in '${REPO}/build/runtime-study/pilot/native/optimized/captures/libzyretained-closure.a[2](retained-closure.o)', assuming: macOS\n          Undefined symbols for architecture x86_64:\n            \"zydeco_alloc_opaque\", referenced from:\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n            \"zydeco_alloc_scanned\", referenced from:\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                ...\n            \"zydeco_arg_fold_resume\", referenced from:\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n            \"zydeco_exit\", referenced from:\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n            \"zydeco_int64_add\", referenced from:\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n            \"zydeco_int64_eq_branch\", referenced from:\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n            \"zydeco_int64_sub\", referenced from:\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n                rust_resume_zydeco_0 in libzyretained-closure.a[2](retained-closure.o)\n          ld: symbol(s) not found for architecture x86_64\n          clang: error: linker command failed with exit code 1 (use -v to see invocation)\n          \n\nerror: could not compile `zydeco-runtime` (bin \"main\") due to 1 previous error\n\n"
+    },
+    {
+      "stage": "draft mixed-protocol fixture",
+      "failed_builds": 3,
+      "cause": "recursive local type declaration was not in scope",
+      "resolution": "use a finite two-observation codata protocol; final source checks and executions pass"
+    },
+    {
+      "stage": "Wasm artifact lookup",
+      "failed_checks": 6,
+      "cause": "runner expected .wasm-am.wasm and .wasm-sps.wasm instead of .am.wasm and .sps.wasm",
+      "resolution": "correct artifact naming; all six compiler invocations had succeeded"
+    },
+    {
+      "stage": "arithmetic oracle audit",
+      "cause": "an arbitrary arithmetic difference passed directly to process exit would be truncated to eight bits",
+      "resolution": "compare the full-width result before exit; paired negative expected-answer checks now reject an error of 256; earlier pilot timings excluded"
+    }
+  ]
+}

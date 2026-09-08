@@ -1,0 +1,2077 @@
+{
+  "metadata": {
+    "schema": 1,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "host_machine": "arm64",
+    "native_target": "x86_64",
+    "translation_expected": true,
+    "optimized_runtime_environment": {
+      "CARGO_PROFILE_DEV_OPT_LEVEL": "3",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "false",
+      "CARGO_PROFILE_DEV_OVERFLOW_CHECKS": "false",
+      "CARGO_PROFILE_DEV_LTO": "off"
+    },
+    "options": {
+      "capture_compiler": "${REPO}/build/runtime-study/bin/zydeco-captures",
+      "capture_runtime": "${REPO}/build/runtime-study/baseline/runtime",
+      "frame_compiler": "${REPO}/build/runtime-study/bin/zydeco-frames",
+      "eager_runtime": "${REPO}/build/runtime-study/retained/runtime",
+      "deferred_runtime": "${REPO}/runtime",
+      "output": "${REPO}/build/runtime-study/debug",
+      "profiles": [
+        "debug"
+      ],
+      "samples": 3,
+      "scale": 1.0,
+      "timeout": 30.0,
+      "build_timeout": 300,
+      "wasm_only": false
+    },
+    "tools": {
+      "rustc": {
+        "command": [
+          "rustc",
+          "--version",
+          "--verbose"
+        ],
+        "seconds": 0.018061916,
+        "exit": 0,
+        "stdout": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cargo": {
+        "command": [
+          "cargo",
+          "--version"
+        ],
+        "seconds": 0.01342225,
+        "exit": 0,
+        "stdout": "cargo 1.98.0 (797e8a9bc 2026-08-05)\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "node": {
+        "command": [
+          "node",
+          "--version"
+        ],
+        "seconds": 0.009858458,
+        "exit": 0,
+        "stdout": "v24.15.0\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "nasm": {
+        "command": [
+          "nasm",
+          "--version"
+        ],
+        "seconds": 0.002557,
+        "exit": 0,
+        "stdout": "NASM version 3.02 compiled on Jun 29 2026\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "revision": {
+        "command": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "seconds": 0.009311458,
+        "exit": 0,
+        "stdout": "062d5ce7b0663d97c0d54b274cc5341bb6f3ba36\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "working_tree": {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "seconds": 0.014453791,
+        "exit": 0,
+        "stdout": " M CONTRIBUTING.md\n M DESIGN.md\n M docs/proposals/native-frames.md\n M docs/proposals/wasm-backends.md\n M lang/tests/tests/native_gc.rs\n M lang/tests/tests/native_model.rs\n M lang/tests/wasm-host.mjs\n M runtime/Cargo.toml\n M runtime/gc.rs\n M runtime/stub.rs\n?? docs/ideas/cbpv-runtime-evaluation.md\n?? lang/machine/examples/\n?? lang/tests/runtime-study.py\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cpu": {
+        "command": [
+          "sysctl",
+          "-n",
+          "machdep.cpu.brand_string"
+        ],
+        "seconds": 0.002115625,
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n",
+        "timed_out": false
+      }
+    },
+    "input_hashes": {
+      "${REPO}/build/runtime-study/bin/zydeco-captures": "bd623ee4b978dec803c86587ee616809ae54c240be3b11f5bf751d5d532f9b14",
+      "${REPO}/build/runtime-study/bin/zydeco-frames": "3499cde65a2cacfcba6331b39d2b1fcf665b509e0872d10fd1797c3db46bb531",
+      "${REPO}/build/runtime-study/baseline/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study/baseline/runtime/gc.rs": "1d272e5f585517e84b75e53f9766b91c074cfeed4105279530513f5ec6620c43",
+      "${REPO}/build/runtime-study/baseline/runtime/stub.rs": "bb735a335464b72d9f1a56b95a412d4cdcc25564603879a3377bbb59721026fa",
+      "${REPO}/build/runtime-study/baseline/runtime/Cargo.toml": "5779eee80be85a746253152911bffc7384cfb9de222bf77f523abf732701f317",
+      "${REPO}/build/runtime-study/retained/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study/retained/runtime/gc.rs": "884c64043e547523c389981d2bcd7fe9a4cf9f284d460c6a9109bac4765c2882",
+      "${REPO}/build/runtime-study/retained/runtime/stub.rs": "b318221c7e34ee7574b0a2715671f7c66ccc7ef37f59d8139dd99031a15feb30",
+      "${REPO}/build/runtime-study/retained/runtime/Cargo.toml": "5779eee80be85a746253152911bffc7384cfb9de222bf77f523abf732701f317",
+      "${REPO}/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/runtime/stub.rs": "371c61375becd7a736b9cec236cf2ef092bcc2b876e49638056abdee49b56354",
+      "${REPO}/runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/lang/machine/src/closure.rs": "b0382c39a8440ee60d686d6dbf9f5a7df0e5c7d1d3cfe0536be4fec94364f1ad",
+      "${REPO}/lang/machine/src/frames.rs": "79aa2ec71973bd92e57e67bb6c8affaf5c6c7ae89d2cf3d16b448f3dae471d37",
+      "${REPO}/lang/machine/src/lib.rs": "abe1826ea08df96306f8121573f426df246f03980f76f5bf1fee29323a86f9a8",
+      "${REPO}/lang/machine/src/native.rs": "b5aff3ec2af8ff3bd61b031cec504c9cb1aa3f8d62e9d56de2c9f45c44f734e8",
+      "${REPO}/lang/machine/src/word.rs": "569d7f8324cb4361bede8e0d987788b2e130d07d70f54303e8814ce69c1d509a",
+      "builtin.zy": "58fe4840c1afc416f80c98a35d2f79913f09a976014bc045a9025773fae59610",
+      "runtime-study.py": "fe53c3e0165bc4daeb11ef3f8695ba84fc645dff5a8e5986d05ce08324fe09e6",
+      "wasm-host.mjs": "2710b37125e8739aa1d5238b90d359d3e0726ffba5575e98a42fec587194962a"
+    }
+  },
+  "records": [
+    {
+      "kind": "source",
+      "workload": "retained-closure",
+      "path": "${REPO}/build/runtime-study/debug/sources/retained-closure.zy",
+      "sha256": "a6488dd71f86e600faec737a82cba80b84a365730e2c8d496c52f729c64b5313"
+    },
+    {
+      "kind": "source",
+      "workload": "zero-captures",
+      "path": "${REPO}/build/runtime-study/debug/sources/zero-captures.zy",
+      "sha256": "1ef47c58dcd80a3b96e49d872a964d0736fdac60a68f9b6eb0b0949a08142b8a"
+    },
+    {
+      "kind": "source",
+      "workload": "shallow-captures",
+      "path": "${REPO}/build/runtime-study/debug/sources/shallow-captures.zy",
+      "sha256": "4d53411d683e0d0c987efcceb1ab6b5e02b811f802ee0feedc5a6ccaf8d3a6ea"
+    },
+    {
+      "kind": "source",
+      "workload": "deep-captures",
+      "path": "${REPO}/build/runtime-study/debug/sources/deep-captures.zy",
+      "sha256": "e83befd126a91845ad18d4d4c561bb5c0db19f5f670e931c024c15c02dfa207f"
+    },
+    {
+      "kind": "source",
+      "workload": "mixed-protocol",
+      "path": "${REPO}/build/runtime-study/debug/sources/mixed-protocol.zy",
+      "sha256": "12a2cee5c455b3bac7693d0bdf697f3e1e467f97b6a958933e6af66d9b90f439"
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "432af4c90f38e329e0a77bb6e2afaef9ed4cb76ad9f7a7646342b72df1ab5ec1",
+      "assembly_bytes": 26592,
+      "executable_bytes": 550176,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "seconds": 1.62145025,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "0392c5a4398c61061520239a7fff6cb3cda992abc83b0aa49cd7a3942f495154",
+      "assembly_bytes": 30347,
+      "executable_bytes": 550176,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "seconds": 0.637654833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "4968e99e20512eea50f19edf1f2fad90a3ab2e6935f8dfa0a8bd3e46dc57630f",
+      "assembly_bytes": 54285,
+      "executable_bytes": 550552,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "seconds": 0.663373875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "d4b70643e486f078d3e0647be84597b7928305f5728490485c1357e2ab9855bc",
+      "assembly_bytes": 181392,
+      "executable_bytes": 559896,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "seconds": 0.6741585,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "6655d173d8ac55d8c20fe2a4d19f893b15a810b19961ec5797878e52ce102419",
+      "assembly_bytes": 30341,
+      "executable_bytes": 550152,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "seconds": 0.64125425,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "de16d8798ab8ac21724160bf57df4103d0bd867d39a139fea294e36ad7f596a1",
+      "assembly_bytes": 32296,
+      "executable_bytes": 674240,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/retained/runtime"
+      ],
+      "seconds": 1.470018083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "078f15af9e35b54692189b2d9ec6554876e7c7d3dd0d216ec617a5f8aa77e316",
+      "assembly_bytes": 35671,
+      "executable_bytes": 674304,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/retained/runtime"
+      ],
+      "seconds": 0.674316334,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "929ee609f415b7d45a2df1535353af82f9a307a12253a229bf63f539b34aadb1",
+      "assembly_bytes": 54280,
+      "executable_bytes": 679624,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/retained/runtime"
+      ],
+      "seconds": 0.691233208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "5d98c8deadb960568810418cc2df0f21c67519506a673422b04c0ba5c50a8e42",
+      "assembly_bytes": 112853,
+      "executable_bytes": 691520,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/retained/runtime"
+      ],
+      "seconds": 0.705344875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "ee589542ddf05647c5bf6e7a365214ed6cf79494b22c8aeaec0318699291bd1e",
+      "assembly_bytes": 33324,
+      "executable_bytes": 674240,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/retained/runtime"
+      ],
+      "seconds": 0.682178209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "de16d8798ab8ac21724160bf57df4103d0bd867d39a139fea294e36ad7f596a1",
+      "assembly_bytes": 32296,
+      "executable_bytes": 675488,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 1.315474333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "078f15af9e35b54692189b2d9ec6554876e7c7d3dd0d216ec617a5f8aa77e316",
+      "assembly_bytes": 35671,
+      "executable_bytes": 675552,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.692297458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "929ee609f415b7d45a2df1535353af82f9a307a12253a229bf63f539b34aadb1",
+      "assembly_bytes": 54280,
+      "executable_bytes": 680872,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.675993959,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "5d98c8deadb960568810418cc2df0f21c67519506a673422b04c0ba5c50a8e42",
+      "assembly_bytes": 112853,
+      "executable_bytes": 692760,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.713583833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "ee589542ddf05647c5bf6e7a365214ed6cf79494b22c8aeaec0318699291bd1e",
+      "assembly_bytes": 33324,
+      "executable_bytes": 675488,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.712940667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/retained-closure.exe"
+      ],
+      "seconds": 0.320072666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/zero-captures.exe"
+      ],
+      "seconds": 0.3150565,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/shallow-captures.exe"
+      ],
+      "seconds": 0.296289417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/deep-captures.exe"
+      ],
+      "seconds": 0.281889667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/mixed-protocol.exe"
+      ],
+      "seconds": 0.295372208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/retained-closure.exe"
+      ],
+      "seconds": 1.2873945,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/zero-captures.exe"
+      ],
+      "seconds": 0.716734333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/shallow-captures.exe"
+      ],
+      "seconds": 2.070806625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/deep-captures.exe"
+      ],
+      "seconds": 24.094456375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/mixed-protocol.exe"
+      ],
+      "seconds": 0.712325375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/retained-closure.exe"
+      ],
+      "seconds": 0.363605083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/zero-captures.exe"
+      ],
+      "seconds": 0.327625042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/shallow-captures.exe"
+      ],
+      "seconds": 0.318931958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/deep-captures.exe"
+      ],
+      "seconds": 0.302077084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/mixed-protocol.exe"
+      ],
+      "seconds": 0.317339166,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/retained-closure.exe"
+      ],
+      "seconds": 0.046719541,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/retained-closure.exe"
+      ],
+      "seconds": 1.022461625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/retained-closure.exe"
+      ],
+      "seconds": 0.072148292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/zero-captures.exe"
+      ],
+      "seconds": 0.025391417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/zero-captures.exe"
+      ],
+      "seconds": 0.432384292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/zero-captures.exe"
+      ],
+      "seconds": 0.038930666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/shallow-captures.exe"
+      ],
+      "seconds": 0.030068167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/shallow-captures.exe"
+      ],
+      "seconds": 1.748720667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/shallow-captures.exe"
+      ],
+      "seconds": 0.0492875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/deep-captures.exe"
+      ],
+      "seconds": 0.014450375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/deep-captures.exe"
+      ],
+      "seconds": 23.813564125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/deep-captures.exe"
+      ],
+      "seconds": 0.022088083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/mixed-protocol.exe"
+      ],
+      "seconds": 0.0283165,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/mixed-protocol.exe"
+      ],
+      "seconds": 0.429083084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/mixed-protocol.exe"
+      ],
+      "seconds": 0.047130041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/mixed-protocol.exe"
+      ],
+      "seconds": 0.428521042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/mixed-protocol.exe"
+      ],
+      "seconds": 0.046933584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/mixed-protocol.exe"
+      ],
+      "seconds": 0.027348,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/deep-captures.exe"
+      ],
+      "seconds": 23.759314625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/deep-captures.exe"
+      ],
+      "seconds": 0.022535833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/deep-captures.exe"
+      ],
+      "seconds": 0.014583167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/shallow-captures.exe"
+      ],
+      "seconds": 1.757089916,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/shallow-captures.exe"
+      ],
+      "seconds": 0.049296292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/shallow-captures.exe"
+      ],
+      "seconds": 0.030993875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/zero-captures.exe"
+      ],
+      "seconds": 0.438692,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/zero-captures.exe"
+      ],
+      "seconds": 0.040169083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/zero-captures.exe"
+      ],
+      "seconds": 0.026072875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/retained-closure.exe"
+      ],
+      "seconds": 1.033790458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/retained-closure.exe"
+      ],
+      "seconds": 0.07252575,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/retained-closure.exe"
+      ],
+      "seconds": 0.04696725,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/retained-closure.exe"
+      ],
+      "seconds": 0.072772375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/retained-closure.exe"
+      ],
+      "seconds": 0.046655833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/retained-closure.exe"
+      ],
+      "seconds": 1.032445041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/zero-captures.exe"
+      ],
+      "seconds": 0.039471875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/zero-captures.exe"
+      ],
+      "seconds": 0.025340042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/zero-captures.exe"
+      ],
+      "seconds": 0.43680625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/shallow-captures.exe"
+      ],
+      "seconds": 0.049248333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/shallow-captures.exe"
+      ],
+      "seconds": 0.031365958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/shallow-captures.exe"
+      ],
+      "seconds": 1.753102583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/deep-captures.exe"
+      ],
+      "seconds": 0.022117167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/deep-captures.exe"
+      ],
+      "seconds": 0.01456275,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/deep-captures.exe"
+      ],
+      "seconds": 23.962461583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-deferred/mixed-protocol.exe"
+      ],
+      "seconds": 0.051548167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/captures/mixed-protocol.exe"
+      ],
+      "seconds": 0.030269209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/debug/native/debug/frames-eager/mixed-protocol.exe"
+      ],
+      "seconds": 0.451777875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "retained-closure",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.046719541,
+      "min_seconds": 0.046655833,
+      "max_seconds": 0.04696725
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "zero-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.025391417,
+      "min_seconds": 0.025340042,
+      "max_seconds": 0.026072875
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "shallow-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.030993875,
+      "min_seconds": 0.030068167,
+      "max_seconds": 0.031365958
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "deep-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.01456275,
+      "min_seconds": 0.014450375,
+      "max_seconds": 0.014583167
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "captures",
+      "workload": "mixed-protocol",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.0283165,
+      "min_seconds": 0.027348,
+      "max_seconds": 0.030269209
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "retained-closure",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 1.032445041,
+      "min_seconds": 1.022461625,
+      "max_seconds": 1.033790458
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "zero-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.43680625,
+      "min_seconds": 0.432384292,
+      "max_seconds": 0.438692
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "shallow-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 1.753102583,
+      "min_seconds": 1.748720667,
+      "max_seconds": 1.757089916
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "deep-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 23.813564125,
+      "min_seconds": 23.759314625,
+      "max_seconds": 23.962461583
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-eager",
+      "workload": "mixed-protocol",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.429083084,
+      "min_seconds": 0.428521042,
+      "max_seconds": 0.451777875
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "retained-closure",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.07252575,
+      "min_seconds": 0.072148292,
+      "max_seconds": 0.072772375
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "zero-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.039471875,
+      "min_seconds": 0.038930666,
+      "max_seconds": 0.040169083
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "shallow-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.0492875,
+      "min_seconds": 0.049248333,
+      "max_seconds": 0.049296292
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "deep-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.022117167,
+      "min_seconds": 0.022088083,
+      "max_seconds": 0.022535833
+    },
+    {
+      "kind": "summary",
+      "profile": "debug",
+      "variant": "frames-deferred",
+      "workload": "mixed-protocol",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.047130041,
+      "min_seconds": 0.046933584,
+      "max_seconds": 0.051548167
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-100",
+      "path": "${REPO}/build/runtime-study/debug/sources/wasm-churn-100.zy",
+      "sha256": "7ac4e3dfc0fe588db8cf35b32c6b6e71cf1fed46925a28230ba808f256d385d7"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-100.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-am"
+      ],
+      "seconds": 0.015682375,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-100.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 12201,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 1179648,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-100.am.wasm"
+      ],
+      "seconds": 0.025373458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":1179648,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-100.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-sps"
+      ],
+      "seconds": 0.015315209,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-100.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 9500,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 131072,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-100.sps.wasm"
+      ],
+      "seconds": 0.025055167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":131072,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-10000",
+      "path": "${REPO}/build/runtime-study/debug/sources/wasm-churn-10000.zy",
+      "sha256": "1baf44b481c39952917f11680bf6378ccaa9123774a1e22d861f008d174407f1"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-10000.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-am"
+      ],
+      "seconds": 0.015094791,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-10000.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-am",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 12203,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 2359296,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-10000.am.wasm"
+      ],
+      "seconds": 0.040821875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":2359296,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-10000.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-sps"
+      ],
+      "seconds": 0.015195291,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-10000.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-sps",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 9502,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 4194304,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-10000.sps.wasm"
+      ],
+      "seconds": 0.035389458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":4194304,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-100000",
+      "path": "${REPO}/build/runtime-study/debug/sources/wasm-churn-100000.zy",
+      "sha256": "7a4dff0af273ac2a590129ac2bca6e8e250457351fad1f4126c7b44adad592e6"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-100000.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-am"
+      ],
+      "seconds": 0.015174792,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-100000.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-am",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 12203,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 13893632,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-100000.am.wasm"
+      ],
+      "seconds": 0.146440208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":13893632,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-100000.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-sps"
+      ],
+      "seconds": 0.015240292,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-100000.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-sps",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 9502,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 41615360,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-100000.sps.wasm"
+      ],
+      "seconds": 0.079244709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":41615360,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-100-reject-256",
+      "path": "${REPO}/build/runtime-study/debug/sources/wasm-churn-100-reject-256.zy",
+      "sha256": "2fa46a3e19fb8edb577ec2782baef283f277730a630ddbb9ca45aeccacb9a562"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-100-reject-256.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-am"
+      ],
+      "seconds": 0.01524975,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-100-reject-256.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-oracle",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "module_bytes": 12201,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 1179648,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-am/wasm-churn-100-reject-256.am.wasm"
+      ],
+      "seconds": 0.024066416,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":1179648,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/debug/sources/wasm-churn-100-reject-256.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/debug/wasm-sps"
+      ],
+      "seconds": 0.015330333,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-100-reject-256.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-oracle",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "module_bytes": 9500,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 131072,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/debug/wasm-sps/wasm-churn-100-reject-256.sps.wasm"
+      ],
+      "seconds": 0.023791917,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":131072,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    }
+  ]
+}

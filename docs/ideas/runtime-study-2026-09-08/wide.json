@@ -1,0 +1,1537 @@
+{
+  "metadata": {
+    "schema": 1,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "host_machine": "arm64",
+    "native_target": "x86_64",
+    "translation_expected": true,
+    "optimized_runtime_environment": {
+      "CARGO_PROFILE_DEV_OPT_LEVEL": "3",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "false",
+      "CARGO_PROFILE_DEV_OVERFLOW_CHECKS": "false",
+      "CARGO_PROFILE_DEV_LTO": "off"
+    },
+    "options": {
+      "capture_compiler": "${REPO}/build/runtime-study/bin/zydeco-captures",
+      "capture_runtime": "${REPO}/build/runtime-study/baseline/runtime",
+      "frame_compiler": "${REPO}/build/runtime-study/bin/zydeco-frames",
+      "eager_runtime": "${REPO}/build/runtime-study/retained/runtime",
+      "deferred_runtime": "${REPO}/runtime",
+      "output": "${REPO}/build/runtime-study/wide",
+      "profiles": [
+        "optimized"
+      ],
+      "samples": 7,
+      "scale": 10.0,
+      "timeout": 30.0,
+      "build_timeout": 300,
+      "wasm_only": false,
+      "workloads": [
+        "repeated-16",
+        "repeated-64"
+      ]
+    },
+    "tools": {
+      "rustc": {
+        "command": [
+          "rustc",
+          "--version",
+          "--verbose"
+        ],
+        "seconds": 0.02059225,
+        "exit": 0,
+        "stdout": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cargo": {
+        "command": [
+          "cargo",
+          "--version"
+        ],
+        "seconds": 0.0174135,
+        "exit": 0,
+        "stdout": "cargo 1.98.0 (797e8a9bc 2026-08-05)\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "node": {
+        "command": [
+          "node",
+          "--version"
+        ],
+        "seconds": 0.0124355,
+        "exit": 0,
+        "stdout": "v24.15.0\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "nasm": {
+        "command": [
+          "nasm",
+          "--version"
+        ],
+        "seconds": 0.003511084,
+        "exit": 0,
+        "stdout": "NASM version 3.02 compiled on Jun 29 2026\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "revision": {
+        "command": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "seconds": 0.011800167,
+        "exit": 0,
+        "stdout": "062d5ce7b0663d97c0d54b274cc5341bb6f3ba36\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "working_tree": {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "seconds": 0.0180295,
+        "exit": 0,
+        "stdout": " M CONTRIBUTING.md\n M DESIGN.md\n M docs/proposals/native-frames.md\n M docs/proposals/wasm-backends.md\n M lang/tests/tests/native_gc.rs\n M lang/tests/tests/native_model.rs\n M lang/tests/wasm-host.mjs\n M runtime/Cargo.toml\n M runtime/gc.rs\n M runtime/stub.rs\n?? docs/ideas/cbpv-runtime-evaluation.md\n?? lang/machine/examples/\n?? lang/tests/runtime-study.py\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cpu": {
+        "command": [
+          "sysctl",
+          "-n",
+          "machdep.cpu.brand_string"
+        ],
+        "seconds": 0.002839417,
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n",
+        "timed_out": false
+      }
+    },
+    "input_hashes": {
+      "${REPO}/build/runtime-study/bin/zydeco-captures": "bd623ee4b978dec803c86587ee616809ae54c240be3b11f5bf751d5d532f9b14",
+      "${REPO}/build/runtime-study/bin/zydeco-frames": "3499cde65a2cacfcba6331b39d2b1fcf665b509e0872d10fd1797c3db46bb531",
+      "${REPO}/build/runtime-study/baseline/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study/baseline/runtime/gc.rs": "1d272e5f585517e84b75e53f9766b91c074cfeed4105279530513f5ec6620c43",
+      "${REPO}/build/runtime-study/baseline/runtime/stub.rs": "bb735a335464b72d9f1a56b95a412d4cdcc25564603879a3377bbb59721026fa",
+      "${REPO}/build/runtime-study/baseline/runtime/Cargo.toml": "5779eee80be85a746253152911bffc7384cfb9de222bf77f523abf732701f317",
+      "${REPO}/build/runtime-study/retained/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study/retained/runtime/gc.rs": "884c64043e547523c389981d2bcd7fe9a4cf9f284d460c6a9109bac4765c2882",
+      "${REPO}/build/runtime-study/retained/runtime/stub.rs": "b318221c7e34ee7574b0a2715671f7c66ccc7ef37f59d8139dd99031a15feb30",
+      "${REPO}/build/runtime-study/retained/runtime/Cargo.toml": "5779eee80be85a746253152911bffc7384cfb9de222bf77f523abf732701f317",
+      "${REPO}/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/runtime/stub.rs": "371c61375becd7a736b9cec236cf2ef092bcc2b876e49638056abdee49b56354",
+      "${REPO}/runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/lang/machine/src/closure.rs": "b0382c39a8440ee60d686d6dbf9f5a7df0e5c7d1d3cfe0536be4fec94364f1ad",
+      "${REPO}/lang/machine/src/frames.rs": "79aa2ec71973bd92e57e67bb6c8affaf5c6c7ae89d2cf3d16b448f3dae471d37",
+      "${REPO}/lang/machine/src/lib.rs": "abe1826ea08df96306f8121573f426df246f03980f76f5bf1fee29323a86f9a8",
+      "${REPO}/lang/machine/src/native.rs": "b5aff3ec2af8ff3bd61b031cec504c9cb1aa3f8d62e9d56de2c9f45c44f734e8",
+      "${REPO}/lang/machine/src/word.rs": "569d7f8324cb4361bede8e0d987788b2e130d07d70f54303e8814ce69c1d509a",
+      "builtin.zy": "58fe4840c1afc416f80c98a35d2f79913f09a976014bc045a9025773fae59610",
+      "runtime-study.py": "670d857c31d40a55e84ff3bf9011b2d72730b09b497e61f5340f139bf2f07fd6",
+      "wasm-host.mjs": "2710b37125e8739aa1d5238b90d359d3e0726ffba5575e98a42fec587194962a"
+    },
+    "hardware": [
+      {
+        "chip_type": "Apple M5 Pro",
+        "machine_model": "Mac17,8",
+        "number_processors": "proc 18:6:0:12",
+        "physical_memory": "48 GB"
+      }
+    ]
+  },
+  "records": [
+    {
+      "kind": "source",
+      "workload": "repeated-16",
+      "path": "${REPO}/build/runtime-study/wide/sources/repeated-16.zy",
+      "sha256": "202791a4bfe941640a3f68ef4770a5f40d9c99c762e752cb5274ba7aaa5064e6"
+    },
+    {
+      "kind": "source",
+      "workload": "repeated-64",
+      "path": "${REPO}/build/runtime-study/wide/sources/repeated-64.zy",
+      "sha256": "98ea44cd28d94a7ff8e6df6f8ffc1ce5b891ea5849de593a447c4d1bc21508b9"
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "380839d0b05432052d1c991bd1321b8c9e75f88f3d5765fd2f3c5f7b1af69cb9",
+      "assembly_bytes": 190841,
+      "executable_bytes": 443664,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/native/optimized/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "seconds": 2.400988709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "cf1591c4001edce7c773140317bbec655ae3e8f2240dee35325834052602cd16",
+      "assembly_bytes": 1555662,
+      "executable_bytes": 579408,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-captures",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/native/optimized/captures",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/baseline/runtime"
+      ],
+      "seconds": 1.010196417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "0d408c05d9f62611f8586372bb38a1d6a2cef1688747e8999e6792e664266923",
+      "assembly_bytes": 112964,
+      "executable_bytes": 467208,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/retained/runtime"
+      ],
+      "seconds": 1.575971417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "0ef6fb4a3fa39d418a84aba055f245a18ff91856ca34c546deb4ef2592e03e9e",
+      "assembly_bytes": 376219,
+      "executable_bytes": 543848,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study/retained/runtime"
+      ],
+      "seconds": 0.917405125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "0d408c05d9f62611f8586372bb38a1d6a2cef1688747e8999e6792e664266923",
+      "assembly_bytes": 112964,
+      "executable_bytes": 467424,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 1.421942666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "0ef6fb4a3fa39d418a84aba055f245a18ff91856ca34c546deb4ef2592e03e9e",
+      "assembly_bytes": 376219,
+      "executable_bytes": 544072,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.919529709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.405993125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.468708791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 1.030075875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.388796625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.373823167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.410499958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.097377667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 0.736749125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.091381334,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.179208792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.088655666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.11522575,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.091099875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.114960334,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.181465166,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 0.734752125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.089492584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.097863875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.089639084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.098561875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 0.740111541,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.114252958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.179861542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.087221416,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.179813583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.09754375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.115092958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.099122,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 0.730885833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.090805083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 0.747704625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.091475708,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.098813834,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.086168459,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.11374075,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.179464167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.115479667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.180928917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.087769875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.091094583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.097899,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 0.732834583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-16.exe"
+      ],
+      "seconds": 0.097902792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-16.exe"
+      ],
+      "seconds": 0.742720125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-16.exe"
+      ],
+      "seconds": 0.090931791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/captures/repeated-64.exe"
+      ],
+      "seconds": 0.181750209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-eager/repeated-64.exe"
+      ],
+      "seconds": 1.084324292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/wide/native/optimized/frames-deferred/repeated-64.exe"
+      ],
+      "seconds": 0.114245917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-16",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.097902792,
+      "min_seconds": 0.097377667,
+      "max_seconds": 0.099122
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "captures",
+      "workload": "repeated-64",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.179861542,
+      "min_seconds": 0.179208792,
+      "max_seconds": 0.181750209
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-16",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.736749125,
+      "min_seconds": 0.730885833,
+      "max_seconds": 0.747704625
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "frames-eager",
+      "workload": "repeated-64",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 1.087769875,
+      "min_seconds": 1.084324292,
+      "max_seconds": 1.09754375
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-16",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.090931791,
+      "min_seconds": 0.089492584,
+      "max_seconds": 0.091475708
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "frames-deferred",
+      "workload": "repeated-64",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.114960334,
+      "min_seconds": 0.11374075,
+      "max_seconds": 0.115479667
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-100",
+      "path": "${REPO}/build/runtime-study/wide/sources/wasm-churn-100.zy",
+      "sha256": "7ac4e3dfc0fe588db8cf35b32c6b6e71cf1fed46925a28230ba808f256d385d7"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-100.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-am"
+      ],
+      "seconds": 0.0152205,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-100.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 12201,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 1179648,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-100.am.wasm"
+      ],
+      "seconds": 0.024695292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":1179648,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-100.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-sps"
+      ],
+      "seconds": 0.01513625,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-100.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 9500,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 131072,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-100.sps.wasm"
+      ],
+      "seconds": 0.02400575,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":131072,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-10000",
+      "path": "${REPO}/build/runtime-study/wide/sources/wasm-churn-10000.zy",
+      "sha256": "1baf44b481c39952917f11680bf6378ccaa9123774a1e22d861f008d174407f1"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-10000.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-am"
+      ],
+      "seconds": 0.014976792,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-10000.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-am",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 12203,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 2359296,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-10000.am.wasm"
+      ],
+      "seconds": 0.041891083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":2359296,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-10000.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-sps"
+      ],
+      "seconds": 0.015488292,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-10000.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-sps",
+      "iterations": 10000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 9502,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 4194304,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-10000.sps.wasm"
+      ],
+      "seconds": 0.034701666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":4194304,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-100000",
+      "path": "${REPO}/build/runtime-study/wide/sources/wasm-churn-100000.zy",
+      "sha256": "7a4dff0af273ac2a590129ac2bca6e8e250457351fad1f4126c7b44adad592e6"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-100000.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-am"
+      ],
+      "seconds": 0.015642917,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-100000.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-am",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 12203,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 13893632,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-100000.am.wasm"
+      ],
+      "seconds": 0.137105333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":13893632,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-100000.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-sps"
+      ],
+      "seconds": 0.015339875,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-100000.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-memory",
+      "backend": "wasm-sps",
+      "iterations": 100000,
+      "expected_exit": 0,
+      "success": true,
+      "module_bytes": 9502,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 41615360,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-100000.sps.wasm"
+      ],
+      "seconds": 0.078649458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":41615360,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "source",
+      "workload": "wasm-churn-100-reject-256",
+      "path": "${REPO}/build/runtime-study/wide/sources/wasm-churn-100-reject-256.zy",
+      "sha256": "2fa46a3e19fb8edb577ec2782baef283f277730a630ddbb9ca45aeccacb9a562"
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-100-reject-256.zy",
+        "--target",
+        "wasm-am",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-am"
+      ],
+      "seconds": 0.015152625,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-100-reject-256.am.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-oracle",
+      "backend": "wasm-am",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "module_bytes": 12201,
+      "memory": {
+        "initial_linear_bytes": 1179648,
+        "final_linear_bytes": 1179648,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-am/wasm-churn-100-reject-256.am.wasm"
+      ],
+      "seconds": 0.025010833,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":1179648,\"final_linear_bytes\":1179648,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-build",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study/bin/zydeco-frames",
+        "build",
+        "${REPO}/build/runtime-study/wide/sources/wasm-churn-100-reject-256.zy",
+        "--target",
+        "wasm-sps",
+        "--build-dir",
+        "${REPO}/build/runtime-study/wide/wasm-sps"
+      ],
+      "seconds": 0.015252208,
+      "exit": 0,
+      "stdout": "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-100-reject-256.sps.wasm\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "wasm-oracle",
+      "backend": "wasm-sps",
+      "iterations": 100,
+      "expected_exit": 1,
+      "success": true,
+      "module_bytes": 9500,
+      "memory": {
+        "initial_linear_bytes": 131072,
+        "final_linear_bytes": 131072,
+        "retained_host_values": 0
+      },
+      "command": [
+        "node",
+        "${REPO}/lang/tests/wasm-host.mjs",
+        "${REPO}/build/runtime-study/wide/wasm-sps/wasm-churn-100-reject-256.sps.wasm"
+      ],
+      "seconds": 0.025543875,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "{\"zydeco_wasm_memory\":{\"initial_linear_bytes\":131072,\"final_linear_bytes\":131072,\"retained_host_values\":0}}\n",
+      "timed_out": false
+    }
+  ]
+}

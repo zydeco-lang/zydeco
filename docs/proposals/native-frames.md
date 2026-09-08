@@ -272,7 +272,9 @@ At `k`, the prologue removes the token while preserving `result :: S`, invokes R
 restores `rbp`, and executes the returned-value pattern.
 The model restores the allocation frontier as well as the base.
 Before a managed allocation, generated code passes its active Roots descriptor and the control-stack cursor;
-the stub adds registered host roots and invokes the existing collector.
+the stub supplies a deferred root source to the collector.
+[Root publication](../../DESIGN.md#native-garbage-collection) adds registered host roots
+and enumerates frame slots when collection actually needs them.
 
 The [shared model packaging](../../DESIGN.md#shared-rust-runtime-model) pairs these definitions
 with their emitter through a source fingerprint in the entry symbol.
@@ -340,7 +342,8 @@ environment and control-stack high-water usage, peak live heap, and generated co
 Useful workloads include repeated non-tail calls with many live locals, nested recursion, long tail-call chains,
 returning callbacks, escaping closures, and calls retaining one small value beside a large dead value.
 Report the compiler settings and hardware, and separate empty captures from calls with substantial saved state.
-No performance result is asserted here.
+The [runtime evaluation](../ideas/cbpv-runtime-evaluation.md) records bounded experiments,
+including root-enumeration timing and reserved-space accounting; it does not establish a universal winner.
 
 ## Literature pointers
 

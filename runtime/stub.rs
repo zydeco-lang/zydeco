@@ -1,6 +1,6 @@
 mod gc;
 
-use gc::{CheneyHeap, OutOfMemory, RootRange, Roots};
+use gc::{CheneyHeap, OutOfMemory, RootRange, RootSource, Roots};
 use std::{
     cell::{RefCell, UnsafeCell},
     collections::HashMap,
@@ -516,18 +516,31 @@ impl RuntimeFailure {
 
 struct ManagedHeap;
 
+struct GeneratedRoots {
+    stack: RootRange,
+    action: &'static Action<Word>,
+}
+
+impl RootSource for GeneratedRoots {
+    fn with_roots<T>(self, trace: impl FnOnce(Roots<'_>) -> T) -> T {
+        let mut slots = unsafe { self.action.root_slots(&mut *FRAMES.get()) }
+            .unwrap_or_else(|error| out_of_frames(error));
+        slots.extend(unsafe { &*HOST_ROOTS.get() }.slots.iter().copied());
+        trace(Roots { stack: self.stack, slots: &mut slots })
+    }
+}
+
 impl ManagedHeap {
     fn allocate(
         size_words: usize, tag: AllocationKind, stack_start: *mut Word,
         roots: &'static Action<Word>,
     ) -> *mut u8 {
         let stack_end = unsafe { *STACK_END.get() };
-        let mut slots = unsafe { roots.root_slots(&mut *FRAMES.get()) }
-            .unwrap_or_else(|error| out_of_frames(error));
-        slots.extend(unsafe { &*HOST_ROOTS.get() }.slots.iter().copied());
         let heap = unsafe { &mut *HEAP.get() };
-        let roots =
-            Roots { stack: RootRange { start: stack_start, end: stack_end }, slots: &mut slots };
+        let roots = GeneratedRoots {
+            stack: RootRange { start: stack_start, end: stack_end },
+            action: roots,
+        };
         // SAFETY: the compiler supplies live initialized slots; pending frames add
         // their own slot sets. The control cursor precedes temporary host-call padding.
         unsafe { heap.allocate(size_words, tag, roots) }

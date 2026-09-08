@@ -3,6 +3,61 @@
 #[path = "../../../runtime/gc.rs"]
 mod gc;
 
+struct CountedRoots<'a> {
+    calls: &'a std::cell::Cell<usize>,
+    roots: gc::Roots<'a>,
+}
+
+impl gc::RootSource for CountedRoots<'_> {
+    fn with_roots<T>(self, trace: impl FnOnce(gc::Roots<'_>) -> T) -> T {
+        self.calls.set(self.calls.get() + 1);
+        trace(self.roots)
+    }
+}
+
+#[test]
+fn allocation_publishes_roots_only_when_collection_needs_them() {
+    use gc::{CheneyHeap, RootRange, Roots};
+    use zydeco_machine::native::{AllocationKind, Word};
+    let mut heap = CheneyHeap::<64, 1>::new();
+    let calls = std::cell::Cell::new(0);
+    let empty = RootRange { start: std::ptr::null_mut(), end: std::ptr::null_mut() };
+    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut [] } };
+    let retained = unsafe { heap.allocate(2, AllocationKind::Opaque, roots).unwrap() };
+    unsafe {
+        retained.cast::<Word>().write(71);
+    }
+    assert_eq!(calls.get(), 0);
+    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut [] } };
+    unsafe {
+        heap.allocate(2, AllocationKind::Opaque, roots).unwrap();
+    }
+    assert_eq!(calls.get(), 0);
+
+    let mut live = retained as Word;
+    let mut slots = [&mut live as *mut Word];
+    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut slots } };
+    unsafe {
+        heap.allocate(2, AllocationKind::Opaque, roots).unwrap();
+    }
+    assert_eq!(calls.get(), 1);
+    assert_ne!(live, retained as Word);
+    assert_eq!(unsafe { (live as *const Word).read() }, 71);
+
+    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut slots } };
+    let error = unsafe { heap.allocate(usize::MAX, AllocationKind::Opaque, roots) }.unwrap_err();
+    assert_eq!(error.requested_words, usize::MAX);
+    assert_eq!(calls.get(), 1);
+
+    // One live 32-byte cell leaves insufficient space for this 40-byte request.
+    let roots = CountedRoots { calls: &calls, roots: Roots { stack: empty, slots: &mut slots } };
+    let error = unsafe { heap.allocate(3, AllocationKind::Opaque, roots) }.unwrap_err();
+    assert_eq!(error.requested_words, 3);
+    assert_eq!(error.live_bytes, 32);
+    assert_eq!(calls.get(), 2);
+    assert_eq!(unsafe { (live as *const Word).read() }, 71);
+}
+
 #[test]
 fn collection_updates_suspended_slots_without_retaining_dead_frame_slots() {
     use gc::{CheneyHeap, RootRange, Roots};
