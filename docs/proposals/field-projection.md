@@ -80,8 +80,8 @@ As with named-field punning, the parser performs this expansion directly
 and the later language phases only see the ordinary projection pattern.
 
 A projection pattern is intended to be one pattern terminal.
-Multiple observations of the same bindee are formed by the semicolon construct described
-in [Pattern Aliasing](aliasing.md):
+Multiple observations of the same bindee use the semicolon construct specified
+in the [language reference](../references/language.md#7-patterns-and-coverage):
 
 ```zydeco
 let (/x; /z; whole) = nested in body

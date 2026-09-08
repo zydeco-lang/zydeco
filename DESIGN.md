@@ -113,8 +113,9 @@ recursive type components retain an explicit `RecGroup` so the checker introduce
 The scoped elaboration uses `Abs`, `ValAbs`, `Let`, and `Sealed` for the corresponding ordinary judgments.
 Lexical `in` forms elaborate directly, while runtime recursion remains explicit through `fix`.
 The [term design](docs/proposals/term.md) specifies the binding and scheduling rules.
-The [surface syntax principles](docs/proposals/syntax.md) explain classifier arrows, term bodies,
-constructor and destructor spines, and grouping.
+The [language reference](docs/references/language.md#2-lexical-structure-and-syntax) specifies surface syntax;
+the [style guide](docs/proposals/style.md#reading-the-surface-syntax) explains how classifier arrows,
+term bodies, and constructor and destructor spines guide the reader.
 
 ## Products and Existential Packages
 
@@ -451,23 +452,15 @@ includes the adapters and the distinction between polymorphism and a provider's 
 
 ## Classifier Extraction
 
-`@[typeof] e` synthesizes `e` and elaborates to its existing classifier.
-A value or computation produces its type; a type produces its kind.
-Kinds cannot be queried because their classifier, `Set`, has no source term form.
-The operand receives no expected classifier from the query's context,
-and the result preserves the original semantic identities, including nominal seals,
-existential witnesses, and unresolved local inference variables.
-The query creates no inference boundary and never runs its operand, although ordinary static errors
-and source dependencies still apply.
+`@[typeof] e` makes an existing synthesized classifier available to source annotations and static definitions.
+It preserves the operand's semantic identities while erasing its execution.
+The [language reference](docs/references/language.md#4-classification-and-inference) owns classifier extraction,
+staging, and inference;
+its [source-boundary account](docs/references/language.md#12-sources-imports-and-entry) covers imports and signatures.
 
-Classifier queries use the same checked-term repository as source providers and monadic elaboration.
-Their distinct desugared node prevents annotation and seal discovery from treating the operand as the query's result.
-A value may occur inside a query in a type-forming binder: for example,
-`pi (value : Int64) . (@[typeof] ret value)` elaborates to `Int64 -> Ret Int64`.
-Dependency restrictions apply to the resulting sorted core, with the existing witness-scope checks,
-rather than to the occurrence of a name in surface syntax.
-The [classifier extraction proposal](docs/proposals/typeof.md) records the inference,
-erasure, and import rules and their acceptance and rejection cases.
+Classifier queries share the checked-term repository with source providers and monadic elaboration.
+The [checker guide](lang/statics/src/check/README.md#classifier-extraction-and-checked-term-reuse) owns
+the synthesize-once protocol, context extension, and separation from ordinary metadata forwarding.
 
 ## Standard Library and Host Boundary
 
@@ -479,7 +472,10 @@ so a source selects `(/stdio; /process)` without naming the enclosing group.
 Fixed-width numbers, `Char`, `String`, and `Bytes` are compiler-canonical types.
 `Reader`, `Writer`, and `OS` are abstract provider capabilities whose uses share one generative opening.
 This separates stable data representations from runtime ownership.
-The [primitive package design](docs/proposals/primitive-packages.md) explains that identity boundary.
+The [language reference](docs/references/language.md#13-primitive-values-and-capabilities) defines
+that identity boundary;
+the [package design](docs/proposals/package-modularization.md#primitive-identity-and-package-boundaries)
+explains the resulting organization.
 
 `lib/std/std.zy` is a value function that assembles the public library from a Builtin argument.
 The `data`, `numeric`, `text`, and `system` topic packages are also value functions;

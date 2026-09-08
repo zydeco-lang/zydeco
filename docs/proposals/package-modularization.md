@@ -161,6 +161,34 @@ Manifest fields preserve their disclosed equations in the usual way.
 All members that must share an opening belong in the same semicolon group.
 Repeating elimination on independently produced package values retains the ordinary generative existential semantics.
 
+## Primitive identity and package boundaries
+
+Independently assembled libraries need to agree on fixed data representations,
+while operations on a resource need to agree on the provider that owns it.
+The [primitive identity rules](../references/language.md#13-primitive-values-and-capabilities) express that boundary.
+Compiler-canonical types let a numeric or text leaf state its contract independently; provider-owned `Reader`,
+`Writer`, and `OS` witnesses keep related system operations connected to one opening.
+Treating fixed representations as fresh provider witnesses would force consumers to reconcile identities even
+when both sides already mean the same machine representation.
+
+The package layout follows those dependencies.
+A source can select `String` for storage without acquiring text operations,
+or select a width-specific arithmetic module without depending on I/O.
+System operations stay beside the shared capabilities used by file opening, stream access, and standard I/O.
+This separation permits operation modules to evolve independently while their carrier identities stay fixed.
+
+Manifest fields use the public type names, such as `Int64` and `Float64`.
+A single generic label such as `Scalar` would make concrete consumers rename it at every opening;
+using the established names gives the ordinary `/Int64` pun a useful meaning.
+Generic code receives its carrier and operations explicitly,
+as in the [numeric dictionary interfaces](../../lib/std/README.md#numeric-capabilities-and-explicit-instances).
+
+These boundaries use the existing package and product representation.
+The shared [erasure contract](normalization.md#static-elimination-and-residual-code) removes manifest fields;
+runtime operation fields use ordinary products and thunks.
+No dynamic field table or separate module object is needed.
+The [Builtin contract](../../lib/std/builtin.zy) supplies the complete shape used by the launcher.
+
 ## Standard-library organization
 
 Builtin puts every public static name on its leading telescope and groups only runtime operations:
@@ -179,7 +207,7 @@ types, operations, and capabilities alike.
 Each numeric child is a plain operation module over the surface's carrier types.
 Text owns operations crossing `Char`, `String`, `Bytes`, and `Int64`;
 system re-exposes the generative capabilities beside their operations in one opening.
-The full rationale is in [Modular primitive packages](primitive-packages.md).
+The [identity rationale](#primitive-identity-and-package-boundaries) explains this separation.
 
 The source tree mirrors those semantic boundaries:
 
@@ -218,8 +246,8 @@ through explicitly annotated `forall` parameters.
 Their result types retain the input `Bool`, scalar, and `String` identities,
 and the numeric assembly returns each width's operation module beside its capability dictionary,
 grouped once more under `dictionaries` for explicitly passing those dictionaries around.
-The [numeric capability proposal](numeric-capabilities.md) describes dictionary composition, explicit selection,
-and manifest wrappers for carrying a disclosed representation with its operations.
+The [numeric library guide](../../lib/std/README.md#numeric-capabilities-and-explicit-instances) describes dictionary
+composition, explicit selection, and manifest wrappers for carrying a disclosed representation with its operations.
 The public system implementation remains one assembly package because `Reader`, `Writer`,
 and `OS` are abstract provider identities shared by `io`, `fs`, and `stdio`.
 Its host-facing operation contracts are nevertheless split into topic leaves,

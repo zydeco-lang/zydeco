@@ -112,7 +112,9 @@ operations, and capabilities alike, and every selection shares the contract's id
 Fixed representations are compiler-canonical intrinsics, so independent selections share one `Int64` identity.
 Only the runtime-owned system capabilities are generative existential types.
 A composition root that must pass the dependency onward keeps the whole-alias `builtin` beside its selections.
-See [Modular primitive packages](../../docs/proposals/primitive-packages.md) for the design and usage examples.
+The [language reference](../../docs/references/language.md#13-primitive-values-and-capabilities) defines primitive
+identity; the [package design](../../docs/proposals/package-modularization.md#primitive-identity-and-package-boundaries)
+explains how it determines these boundaries.
 Compiler intrinsics are spliced inline as `@(intrinsic(name))` wherever a contract needs the canonical term,
 so no one-line indirection files sit between type expressions and the compiler metadata they name.
 Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file,
@@ -188,16 +190,78 @@ The exact spelling follows the shared [numeric representation rules](../../DESIG
 Division by zero, infinities, signed zero, and NaN follow IEEE-754 behavior.
 In particular, every ordered comparison with NaN is false, while `float32/ne` and `float64/ne` report true.
 
-The `dictionaries` module contains one explicit capability dictionary for each fixed-width numeric representation,
-naming it after its width, such as `int64_dictionary`.
-Each dictionary nests additive, multiplicative, equality, and ordering capabilities.
-Generic functions accept these dictionaries as ordinary arguments;
-the standard library does not perform implicit instance search.
-
 The exact host-facing operations live directly in the Builtin contract's `numeric` group, one module per width.
 Their comparisons select one of two computation continuations directly,
 avoiding a dependency on the library's `Bool` representation.
 The width-specific modules in the public package reify those branches as `Bool` and add derived helpers.
+
+## Numeric capabilities and explicit instances
+
+Generic numeric functions receive the operations they need as ordinary arguments.
+The public package exports five capability type constructors; their linked definitions give the exact field types:
+
+| Interface | Fields |
+| --- | --- |
+| [Additive A](numeric/additive.type.zy) | `zero`, `add`, `sub`, `negate` |
+| [Multiplicative A](numeric/multiplicative.type.zy) | `one`, `mul` |
+| [PartialEquality Bool A](numeric/partial-equality.type.zy) | `eq`, `ne`, returning the supplied `Bool` |
+| [PartialOrder Bool A](numeric/partial-order.type.zy) | `equality`, `lt`, `le`, `gt`, `ge` |
+| [Numeric Bool A](numeric/numeric.type.zy) | `additive`, `multiplicative`, `order` |
+
+Larger dictionaries contain smaller ones as named fields.
+This preserves paths such as `dictionary/additive/add` and `dictionary/order/equality/eq`,
+and lets a consumer receive just `Additive A` when it only needs addition.
+The `dictionaries` module contains one dictionary per fixed-width representation,
+from `int8_dictionary` through `float64_dictionary`.
+Generic code explicitly selects and passes one:
+
+```zydeco check
+param (/VType; /Ret; /Int64; builtin) : @(import("builtin.zy")) in
+let make_std = @(import("std.zy")) in
+let (/Additive; /dictionaries) = builtin |> make_std in
+let ! twice (A : VType) (operations : Additive A) (value : A) : Ret A =
+  ! operations/add value value
+in
+! twice Int64 (dictionaries/int64_dictionary/additive) 21
+```
+
+These interfaces describe operations rather than proving algebraic laws.
+For example, IEEE equality is not reflexive on NaN, which motivates `PartialEquality`.
+Division, integer remainder, rendering, extrema,
+and other representation-specific operations stay in the width modules. The numeric layer inherits the
+[literal and conversion rules](../../docs/references/language.md#13-primitive-values-and-capabilities).
+
+A library can also expose the selected carrier together with its dictionary in a manifest package.
+The following complete example names the disclosed type `Int64`, renames it to `Carrier` when opening,
+and checks that the operations use that same carrier:
+
+```zydeco check
+param (/VType; builtin) : @(import("builtin.zy")) in
+let make_std = @(import("std.zy")) in
+let (/Bool; /Numeric; /dictionaries) = builtin |> make_std in
+let int64_instance =
+  pack (= Int64 as @(intrinsic(i64)) : VType)
+  where #operations = dictionaries/int64_dictionary end
+in
+let (/Int64 = Carrier; /operations) = int64_instance in
+let _ : Numeric Bool Carrier = operations in
+! operations/additive/add (21 : Carrier) 21
+```
+
+The [manifest type rules](../../docs/proposals/normalization.md#manifest-types) supply the disclosed equation;
+[package selection](../../docs/proposals/field-projection.md#existential-package-selection) governs the shared opening.
+Naming a manifest field after its carrier avoids imposing a generic role label on each consumer.
+When exporting several instances, use distinctive value names such as `int64_instance` and `float32_instance`
+so their selection is unambiguous.
+
+Selection remains explicit value flow: lexical bindings and arguments determine which dictionary is used.
+Several implementations for one carrier can coexist without global instance search or coherence checking.
+A wrapper can carry additional abstract
+or manifest type fields under the same package scope rules. Its static components obey the
+[static elimination contract](../../docs/proposals/normalization.md#static-elimination-and-residual-code);
+ordinary dictionary thunks may remain at runtime.
+The [runtime contract design](../../docs/proposals/package-modularization.md#explicit-runtime-contracts)
+describes adapters when operations must be dynamically selectable.
 
 ## Public modules
 

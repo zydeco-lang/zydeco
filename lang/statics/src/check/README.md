@@ -26,6 +26,61 @@ Coverage validates data matches and codata observations.
 Static elaboration then supplies the residual root used by interpreter linking and SPS lowering.
 The phase rules are specified in [Compile-Time Normalization](../../../../docs/proposals/normalization.md).
 
+## Inference regions and solver invariants
+
+Local inference lets later uses constrain a synthesizing binder while keeping each completed source self-contained.
+The [language reference](../../../../docs/references/language.md#4-classification-and-inference) owns defaulting,
+admitted pattern shapes, and the closure rules.
+`InferenceRegion` in [source.rs](source.rs) records inherited fills when a block or source check begins;
+closing it rejects newly introduced pattern fills whose solutions remain incomplete.
+An imported source closes its own region before `CheckedTerm::reconcile_k` compares the use-site expectation.
+
+The [compatibility judgment](lub.rs) combines body and call-site constraints.
+[Shape refinement](../normalize/inference.rs) creates component fills of the required CBPV sorts
+and retains the originating inference site for diagnostics.
+The solver maintains these invariants:
+
+- A solution must pass the occurs check and mention only skolems visible in the fill's admissible scope.
+- Sharing a flexible type across occurrences intersects their admissible scopes;
+  subsequent solutions must satisfy the intersection.
+  [Scope traversal](../normalize/scope.rs) propagates this limit through unresolved components.
+- A failed speculative fill restores both solutions and admissible scopes;
+  a rejected compatibility attempt must not constrain a later attempt through a partial fill.
+- Diagnostics retain the binder's inference site and the body or call sites supplying conflicting constraints.
+
+The [inference regressions](../../../tests/tests/inference.rs) exercise compatible
+and conflicting uses, shape refinement, scope, and closure.
+The [formal calculus](../../type-system.typ) records the corresponding judgments.
+
+## Classifier extraction and checked-term reuse
+
+A classifier query exposes a judgment the checker already performed.
+Desugaring retains a distinct `TypeOf` node through resolution so expectation forwarding,
+annotation discovery, and seal discovery stop at the query boundary.
+[Boundary checking](term/boundary.rs) synthesizes the operand in its lexical environment, extracts its classifier,
+constrains that classifier to the visible witness scope, and only then reconciles the query's expected classifier.
+
+`CheckedTermRepository` in [source.rs](source.rs) retains one canonical result per resolved term.
+Source providers, classifier queries, and monadic elaboration share this mechanism.
+Reuse requires the requesting environment to extend the recorded environment
+while preserving every original binding and witness.
+This is weakening of a checked derivation: revisiting a recursive type's kind annotation
+after installing its recursive bindings must reuse the query result without synthesizing its operand again.
+Nested requests completing the same resolved term must agree on the canonical arena root.
+
+Classifier extraction reuses `TermAnnId`, `TypeId`, and `KindId` directly.
+A value or computation yields its existing type; a type yields its kind; a kind has no extractable source classifier.
+In particular, the `ret` judgment records `Ret A : CType`.
+No runtime query node remains, and dependency and witness checks still apply to the checked operand.
+The [source rules](../../../../docs/references/language.md#4-classification-and-inference) specify staging,
+inference, and abstraction; this reuse protocol preserves their semantic identities.
+
+Repository tests in `source.rs` check reuse after context extension.
+[Classifier-query regressions](../../../tests/tests/typeof.rs) pair accepted programs with sort,
+inference, coverage, abstraction, and import-cycle rejections.
+The [erasure fixture](../../../../lib/tests/typeof/erasure.zy) checks that exit actions
+and divergence inside queries do not execute on the interpreter or either WebAssembly backend.
+
 ## Checking modules
 
 | Module | Responsibility |

@@ -194,7 +194,8 @@ An irrefutable pattern matches every value of its checked type.
 Variables, holes, unit, named wrappers, products, and existential unpacking are irrefutable
 when their component patterns are irrefutable.
 A constructor pattern is irrefutable when its data type has exactly one constructor and its payload is irrefutable.
-Integer literals and selections from a data type with multiple constructors are refutable.
+The [literal and alias rules](../references/language.md#7-patterns-and-coverage) make integer literals refutable;
+selections from a data type with multiple constructors are also refutable.
 Alias groups and field-projection payloads use this same definition.
 
 This requirement applies to computation parameters and the patterns introduced by `let`,

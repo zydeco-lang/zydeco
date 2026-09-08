@@ -44,11 +44,13 @@ it can treat every row as well typed and assume that all concrete heads in one c
 
 ## The Internal Pattern Language
 
-Bindings do not affect which values a pattern accepts, so variables and holes both become wildcards.
+Bindings do not affect which values a pattern accepts, so variables, holes,
+and irrefutable alias groups become wildcards.
 The checker otherwise preserves the eliminable structure of a typed value pattern:
 
 ```text
-p ::= _                    wildcard, variable, or hole
+p ::= _                    wildcard, variable, hole, or irrefutable alias
+    | opaque               observation that contributes no structural coverage
     | +K p                 data constructor and its payload
     | ()                   unit
     | (p1, ..., pn)        product
@@ -56,7 +58,7 @@ p ::= _                    wildcard, variable, or hole
     | (_, p)               existential package and its dynamic payload
 ```
 
-Every non-wildcard pattern has a finite *head space*.
+Each structural pattern has a finite *head space*; wildcards and opaque observations have no head.
 A head space says which constructors can occur at the next layer and how many fields appear when one of them is removed:
 
 | Head space | Possible heads | Head arity |
@@ -73,13 +75,46 @@ with several source arguments has a product payload.
 Keeping this representation uniform lets the matrix algorithm handle constructor arguments with the same rules
 as every other nested pattern.
 
-Typed `VCons` patterns are converted to a right-associated binary product spine.
-Consequently, `(a, b, c)` and `(a, (b, c))` have the same coverage shape even
-though earlier compiler phases may preserve their distinct source grouping.
+Typed `VCons` patterns retain their component vector as a matrix product.
+Its head arity is that vector's length, so `(a, b, c)` and `(a, (b, c))` retain distinct coverage shapes.
 Static fields of an existential package are erased from coverage;
 only its dynamic payload can distinguish runtime cases.
 Named values and packages each have one possible head, but retaining those heads allows a missing witness
 to be printed in source-like form.
+
+## Literal and alias patterns
+
+The [language reference](../references/language.md#7-patterns-and-coverage) owns the source forms,
+refutability restrictions, and integer catch-all requirement.
+Their implementation uses the same typed matching boundary as constructor patterns.
+
+The [pattern checker](../../lang/statics/src/check/pattern/data.rs) checks an integer literal
+against the expected primitive integer representation after resolving wrappers and fills.
+`IntegerLiteral::with_type` performs the same range check as a literal term.
+The matrix conversion represents a literal as `Opaque`:
+it contributes neither a finite structural head nor a wildcard to the default matrix.
+Opaque view observations use this same coverage boundary.
+An alias becomes `Wildcard` because checking has already established that every member is irrefutable;
+it does not distribute the members across product columns.
+
+Integer matching adds numeric dispatch without a value-level elimination or a new backend instruction.
+The [interpreter](../../lang/dynamics/src/eval.rs) compares its evaluated scrutinee with the literal.
+When [high lowering](../../lang/stackir/src/high/lower.rs) expands a literal match plan,
+it forces the raw host equality branch identified by `BuiltinValueRole::Integer(t, Eq)`
+with the scrutinee, literal, and success and failure continuations.
+The structural Stack IR pattern language therefore needs no literal node.
+The comparison observes the scrutinee as a whole value.
+
+Alias matching preserves one original bindee and visits members in source order.
+The interpreter retains an alias pattern; high SPS and closure conversion likewise retain structural aliases.
+Their [consumer demands](demand-analysis.md#physical-positions-and-pattern-aliases) join on the same positions.
+[Assembly lowering](../../lang/assembly/src/lower.rs) saves the bindee in a temporary and reloads it for each member;
+the [direct SPS WebAssembly emitter](../../lang/wasm-sps/src/emit.rs) uses a saved local for the same purpose.
+Shared aliases cannot justify duplicating or moving a closure body as though it had one exclusive use.
+
+The [literal fixtures](../../lang/tests/cases/literal-pattern)
+and [alias fixtures](../../lang/tests/cases/pattern-alias) retain checking and rejection boundaries;
+literal fixtures also exercise compiled lowering.
 
 ## Matrices Preserve Correlations
 
@@ -282,6 +317,19 @@ and whether every generalized comatch observation is defined.
 It does not yet report redundant or unreachable pattern rows.
 Redundancy can be added with the dual *usefulness* query over the same matrix operations:
 a row is redundant when it covers no value that preceding rows leave uncovered.
+This includes repeated integer literals: a later equal arm remains accepted today.
+
+Refutable alias conjunctions require an acceptance and fallthrough design before the wildcard conversion can change.
+Several constructor members may refine the same payload or make the conjunction impossible;
+failure of a later member must have a defined relationship to the following match arm.
+These cases should be reviewed together with usefulness checking.
+An unrestricted binary as-pattern remains an alternative
+when only a whole-value alias and one refutable member are needed;
+the [syntax rationale](style.md#pattern-alias-syntax) explains the current semicolon choice.
+
+Float literal patterns remain excluded pending a choice between IEEE equality
+and bitwise matching, especially for NaN and signed zero.
+Supporting a new literal form also requires a corresponding coverage and redundancy policy.
 
 Package-dependent arrows currently accept one copattern clause because their result type can depend
 on existential witnesses opened by the argument pattern.

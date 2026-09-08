@@ -7,7 +7,45 @@ In particular, the source should reveal where a name is available, whether its d
 and where computation is sequenced.
 
 The conventions below favor Zydeco's direct forms and use annotations where they clarify a type-system boundary.
-The [surface syntax principles](syntax.md) explain the language-design choices behind the notation itself.
+The [language reference](../references/language.md#2-lexical-structure-and-syntax) specifies accepted syntax
+and grouping.
+
+## Reading the Surface Syntax
+
+Juxtaposition makes the classifier's structure visible without assigning an argument list to each head.
+In `+Some +Pair(left, right)`, the outer constructor has one payload headed by another constructor.
+In a copattern such as `.route +First(value) .left`, `.route` exposes an argument type,
+`+First(value)` matches that argument, and `.left` observes the remaining codata computation.
+Spaces separate those steps; the [computation rules](../references/language.md#6-computations-and-control)
+explain how each step follows the residual classifier.
+
+Keep that path visible when laying out longer arms.
+Align related observations and indent their bodies.
+Parentheses mark actual grouping, such as a product payload or an annotated parameter;
+newlines and alignment help the reader follow the path without changing its parse.
+
+The distinction between `->` and `=>` helps readers find the boundary between a classifier and a body.
+For example, in `fn (f : Thk (A -> B)) x => ! f x`, the annotation's arrow stays inside the header,
+while the fat arrow introduces the body.
+The same visual boundary applies to `fix`, match arms, and comatch arms.
+The leading `|` already separates a match scrutinee from its arms, so an additional `with` would repeat that boundary.
+`end` closes the delimited region, while braces identify suspended computations.
+
+### Pattern alias syntax
+
+Use `(p; q; ...)` to show several observations of one input, such as `((left, right); whole)` or `(/x; /y; whole)`.
+The [pattern rules](../references/language.md#7-patterns-and-coverage) define its scope and admissibility.
+Commas expose product components; semicolons keep every observation attached to the same bindee.
+Parentheses make the complete group a composable pattern terminal, including inside constructor payloads.
+The matching relation is symmetric, while source order makes the availability of earlier bindings visible.
+
+A directional binary as-pattern would emphasize one whole-value alias over one refining pattern.
+The alternatives `(let aliased) = pattern` and `(let aliased = pattern)` borrow binding syntax:
+the first collides with the enclosing binding delimiter, and the second makes multiple aliases nest.
+`aliased => pattern` reuses the header/body separator and suggests control flow.
+The semicolon form accommodates several field selections uniformly and preserves source order
+if later pattern designs introduce sequential observations.
+The [coverage proposal](exhaustiveness.md#current-boundary) retains the unresolved refutable-conjunction questions.
 
 ## The Shape of a Source File
 
