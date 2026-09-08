@@ -501,12 +501,9 @@ Their results do not establish that the proposed Zydeco representation is correc
 
 ## Remaining decisions
 
-- Should very large environments switch from geometric growth to segments, or release cached capacity after deep calls?
-- Can smaller resumption extents or suspension regions save more space than the current static packing?
-- When should compact captures win over retaining a large frame, and how should that decision preserve space behavior?
-- Can root enumeration avoid rebuilding and sorting a sparse address vector on each collection?
-- Which frame operations should code generation inline while preserving the shared transition contract?
-- What is the smallest experiment that fairly compares the previous scheme, flattened captures, and retained frames?
+The [runtime evaluation's further work](../ideas/cbpv-runtime-evaluation.md#further-work) consolidates the
+remaining questions about local transfers, shared captures, storage reclamation, and moving environments,
+together with the evidence needed to choose a new default.
 
 ## Implementation references
 
