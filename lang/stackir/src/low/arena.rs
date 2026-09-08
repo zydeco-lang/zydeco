@@ -2,7 +2,7 @@
 
 use super::syntax::*;
 use crate::{
-    arena::{AdminArena as HighAdminArena, DefinitionNames, StackirScope},
+    high::arena::{AdminArena as HighAdminArena, StackirScope},
     static_syntax as ss,
 };
 use derive_more::{AsMut, AsRef};
@@ -111,11 +111,6 @@ pub struct SpsLowArena {
     #[as_ref]
     #[as_mut]
     pub inner: SpsLowInnerArena,
-}
-
-pub trait Construct<S, T, Arena>: Sized + Into<S> {
-    type Site;
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> T;
 }
 
 impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U

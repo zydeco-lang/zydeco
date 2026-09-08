@@ -1,13 +1,9 @@
 //! Syntax of the paper's first-order `SPS_l` target, extended with Zydeco primitives.
 
 pub use super::arena::*;
-pub use crate::{
-    builtin::*,
-    syntax::{Bullet, CtorIdx, DefId, DtorIdx, ExternalFunction, ProductLayout, VCons},
-};
-pub use zydeco_syntax::*;
-pub use zydeco_utils::arena::*;
+pub use crate::syntax::*;
 
+use crate::syntax as common;
 use derive_more::From;
 
 zydeco_utils::new_key_type! {
@@ -24,17 +20,15 @@ pub enum TermId {
     Stack(StackId),
 }
 
-/* -------------------------------- Patterns ------------------------------- */
-
-#[derive(From, Clone, Debug)]
-pub enum ValuePattern {
-    Hole(Hole),
-    Var(DefId),
-    Ctor(Ctor<CtorIdx, VPatId>),
-    Alias(Alias<VPatId>),
-    Triv(Triv),
-    VCons(VCons<VPatId>),
-}
+pub type ValuePattern = common::ValuePattern<VPatId>;
+pub type Complex = common::Complex<ValueId>;
+pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
+pub type SCoprodMatch = common::SCoprodMatch<ValueId, VPatId, CompuId>;
+pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, Bullet>, CompuId>;
+pub type ExternCall = common::ExternCall<StackId>;
+pub type LetValue = Let<VPatId, ValueId, CompuId>;
+pub type LetStack = Let<Bullet, StackId, CompuId>;
+pub type LetArg = Let<Cons<VPatId, Bullet>, StackId, CompuId>;
 
 /* ---------------------------------- Values -------------------------------- */
 
@@ -50,12 +44,6 @@ pub struct Block {
 pub struct ClosurePackage {
     pub environment: ValueId,
     pub code: ValueId,
-}
-
-#[derive(Clone, Debug)]
-pub struct Complex {
-    pub operator: String,
-    pub operands: Vec<ValueId>,
 }
 
 #[derive(From, Clone, Debug)]
@@ -91,51 +79,9 @@ pub enum Stack {
 /* ------------------------------- Computations ----------------------------- */
 
 #[derive(Clone, Debug)]
-pub struct SHole(pub StackId);
-
-#[derive(Clone, Debug)]
 pub struct Jump {
     pub target: ValueId,
     pub stack: StackId,
-}
-
-#[derive(Clone, Debug)]
-pub struct SProductMatch {
-    pub scrut: ValueId,
-    pub binder: VPatId,
-    pub body: CompuId,
-}
-
-#[derive(Clone, Debug)]
-pub struct SCoprodMatch {
-    pub scrut: ValueId,
-    pub arms: Vec<Matcher<VPatId, CompuId>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct SCoMatch {
-    pub scrut: StackId,
-    pub arms: Vec<CoMatcher<Cons<DtorIdx, Bullet>, CompuId>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct LetValue {
-    pub binder: VPatId,
-    pub bindee: ValueId,
-    pub body: CompuId,
-}
-
-#[derive(Clone, Debug)]
-pub struct LetStack {
-    pub bindee: StackId,
-    pub body: CompuId,
-}
-
-#[derive(Clone, Debug)]
-pub struct LetArg {
-    pub binder: VPatId,
-    pub bindee: StackId,
-    pub body: CompuId,
 }
 
 /// Eliminate a closure's value-existential package.
@@ -157,15 +103,9 @@ pub struct OpenContinuation {
     pub body: CompuId,
 }
 
-#[derive(Clone, Debug)]
-pub struct ExternCall {
-    pub function: ExternalFunction,
-    pub stack: StackId,
-}
-
 #[derive(From, Clone, Debug)]
 pub enum Computation {
-    Hole(SHole),
+    Hole(SHole<StackId>),
     Jump(Jump),
     ProductMatch(SProductMatch),
     CoprodMatch(SCoprodMatch),

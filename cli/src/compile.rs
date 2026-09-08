@@ -243,7 +243,7 @@ impl BackendProgram {
     }
 
     pub fn render_sps_low(&self) -> String {
-        use zydeco_stackir::sps_low::fmt::*;
+        use zydeco_stackir::low::fmt::*;
         let arena = self.sps_low.arena();
         let formatter = Formatter::new(&arena.admin, &arena.inner, &self.scoped, &self.statics);
         let mut output = String::new();

@@ -13,7 +13,7 @@
 //! WebAssembly function for each assembly instruction.
 //!
 //! [`SpsLowProgram`]: zydeco_stackir::SpsLowProgram
-//! [`Block`]: zydeco_stackir::sps_low::syntax::Block
+//! [`Block`]: zydeco_stackir::low::syntax::Block
 
 mod emit;
 

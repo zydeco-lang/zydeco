@@ -83,13 +83,13 @@ impl FreeVars for CompuId {
                         .map(|Matcher { binder, tail }| tail.free_vars(arena) - binder.vars(arena))
                         .fold(CoContext::new(), |vars, arm| vars + arm)
             }
-            | Computation::LetValue(LetValue { binder, bindee, body }) => {
+            | Computation::LetValue(LetValue { binder, bindee, tail: body }) => {
                 bindee.free_vars(arena) + (body.free_vars(arena) - binder.vars(arena))
             }
-            | Computation::LetStack(LetStack { bindee, body }) => {
+            | Computation::LetStack(LetStack { binder: Bullet, bindee, tail: body }) => {
                 bindee.free_vars(arena) + body.free_vars(arena)
             }
-            | Computation::LetArg(LetArg { binder, bindee, body }) => {
+            | Computation::LetArg(LetArg { binder: Cons(binder, Bullet), bindee, tail: body }) => {
                 bindee.free_vars(arena) + (body.free_vars(arena) - binder.vars(arena))
             }
             | Computation::CoCase(SCoMatch { scrut, arms }) => {

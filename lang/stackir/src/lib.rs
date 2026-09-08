@@ -2,9 +2,9 @@
 
 use zydeco_statics::syntax as static_syntax;
 
-/// Stack IR syntax and identifiers.
+/// Syntax shared by high and low Stack IR.
 pub mod syntax;
-/// Arenas and builders for stack IR nodes.
+/// Shared builders and definition-name lookup for Stack IR.
 pub mod arena;
 /// Builtin definitions for externs in stack IR.
 pub mod builtin;
@@ -14,30 +14,13 @@ mod pipeline;
 pub use pipeline::SpsLowPipeline;
 
 /// First-order stack-passing IR with blocks, jumps, and explicit packages.
-pub mod sps_low;
-pub use sps_low::{SpsLowConverter, SpsLowError, SpsLowProgram};
+pub mod low;
+pub use low::{SpsLowConverter, SpsLowError, SpsLowProgram};
 
-/// Passes and utilities specific to stack IR.
-pub mod sps {
-    /// Specific syntax and identifiers for stack IR
-    pub mod syntax;
-    /// Arenas and builders for stack IR nodes.
-    pub mod arena;
-    /// Pretty/ugly formatters for stack IR.
-    pub mod fmt;
-    /// Lowering from typed syntax into stack IR.
-    pub mod lower;
-    /// Demand analysis that decides which checked bindings survive lowering.
-    pub mod demand;
-    /// Normalize known primitive thunks before allocating closures.
-    pub mod normalize;
-    /// Double check the stack IR is well-formed. For debugging purposes only.
-    pub mod check;
-    /// Free-variable analysis for stack IR.
-    pub mod variables;
-}
+/// Lexical stack-passing IR with closures and continuations.
+pub mod high;
 
-pub use sps::{
+pub use high::{
     arena::*,
     check::{BranchJoinError, BranchJoinProgram},
     lower::{BuiltinRootLowerError, BuiltinRootLowerer, Lowerer, RootLowerer, SpsLowerError},

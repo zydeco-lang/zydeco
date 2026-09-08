@@ -1480,7 +1480,7 @@ fn a_zero_dependency_source_program_lowers_directly_to_stack_ir() {
     let SourceStack { stackir, scoped, statics, .. } = checked.stackir().unwrap();
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-    zydeco_stackir::sps::check::check(stackir, &scoped, &statics);
+    zydeco_stackir::high::check::check(stackir, &scoped, &statics);
 }
 
 #[test]
@@ -1793,7 +1793,7 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
 
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-    zydeco_stackir::sps::check::check(stackir, &scoped, &statics);
+    zydeco_stackir::high::check::check(stackir, &scoped, &statics);
 }
 
 #[test]
@@ -2775,5 +2775,5 @@ fn checked_computation_roots_lower_directly_to_stack_ir() {
 
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-    zydeco_stackir::sps::check::check(stackir, &scoped, &statics);
+    zydeco_stackir::high::check::check(stackir, &scoped, &statics);
 }

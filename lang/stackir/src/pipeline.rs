@@ -14,9 +14,9 @@ impl<'a> SpsLowPipeline<'a> {
     }
 
     pub fn run(self, stackir: BranchJoinProgram) -> SpsLowProgram {
-        crate::sps::check::check(stackir.as_program(), self.scoped, self.statics);
-        let stackir = crate::sps::normalize::Normalizer::new(stackir).run();
-        crate::sps::check::check(stackir.as_program(), self.scoped, self.statics);
+        crate::high::check::check(stackir.as_program(), self.scoped, self.statics);
+        let stackir = crate::high::normalize::Normalizer::new(stackir).run();
+        crate::high::check::check(stackir.as_program(), self.scoped, self.statics);
         SpsLowConverter::new(stackir, self.scoped, self.statics).convert()
     }
 }
@@ -24,7 +24,7 @@ impl<'a> SpsLowPipeline<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{sps::syntax::*, sps_low::syntax as low};
+    use crate::{high::syntax::*, low::syntax as low};
 
     #[derive(Default)]
     struct PrimitiveFixture {
@@ -219,7 +219,10 @@ mod tests {
         let low::Value::Block(low::Block { body, .. }) = arena.values[&code] else {
             panic!("the return continuation must supply code")
         };
-        let low::Computation::LetArg(low::LetArg { binder, .. }) = arena.compus[&body] else {
+        let low::Computation::LetArg(low::LetArg {
+            binder: low::Cons(binder, low::Bullet), ..
+        }) = arena.compus[&body]
+        else {
             panic!("the continuation must bind the returned result")
         };
         let low::ValuePattern::Var(returned) = arena.vpats[&binder] else {
@@ -264,7 +267,7 @@ mod tests {
         let program = fixture.compile(root);
         let arena = &program.arena().inner;
 
-        let low::Computation::LetValue(low::LetValue { bindee, body, .. }) =
+        let low::Computation::LetValue(low::LetValue { bindee, tail: body, .. }) =
             arena.compus[&program.root()]
         else {
             panic!("the escaping addition needs a retained value binding")

@@ -538,6 +538,17 @@ High SPS uses lexical branch-join syntax. Normalization simplifies known produce
 and consumers before closure conversion produces first-order SPSLow with code labels.
 ZASM makes the control-flow graph explicit for assembly-derived backends.
 
+Within `zydeco-stackir`, `high` owns lexical closures and continuations,
+while `low` owns blocks, jumps, and explicit packages.
+The common `syntax` module defines value patterns, products, primitive operators,
+external calls, and data eliminations, parameterized by the relevant node IDs.
+Both phases use the same `Let` form for value, stack, and argument bindings,
+including the explicit ambient-stack binder.
+Their syntax modules instantiate the shared forms with their own IDs; their separate value, stack,
+and computation enums determine which control-flow forms each phase admits.
+The shared `arena` module provides construction and definition-name lookup traits, while each phase owns its allocation
+and provenance storage under the [arena and ID invariants](#arena-and-id-invariants).
+
 [Residual SPS normalization](docs/proposals/normalization.md#residual-sps-normalization) combines local β/η-reductions
 with [field-sensitive demand analysis](docs/proposals/demand-analysis.md).
 Known closures, argument frames, returns, and data eliminations reduce while preserving shared bodies,
@@ -558,7 +569,7 @@ Dynamically selected and escaping operations retain their thunk interface.
 | Parsing, desugaring, and resolution | `lang/surface/src/{textual,bitter,scoped}` |
 | Typing, normalization, elaboration, and validation | `lang/statics/src` |
 | Linking and interpretation | `lang/dynamics/src` |
-| High SPS, normalization with demand analysis, and closure conversion | `lang/stackir/src/{sps,sps_low}` |
+| High SPS, normalization with demand analysis, and closure conversion | `lang/stackir/src/{high,low}` |
 | ZASM lowering and allocation analysis | `lang/assembly/src` |
 | Code emission | `lang/{amd64,wasm-am,wasm-sps}/src` |
 

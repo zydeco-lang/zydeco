@@ -1,9 +1,77 @@
-//! Arenas and [`Construct`] trait for the stack-passing style ZIR.
+//! Owning arenas and constructors for high Stack IR.
 
 use super::syntax::*;
 use crate::static_syntax as ss;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
+use zydeco_surface::scoped::arena::ScopedScope;
+
+/// Allocation scope for high Stack IR nodes and synthetic scoped definitions.
+#[derive(Debug)]
+pub enum StackirScope {}
+
+impl Allocates<VPatId> for StackirScope {}
+impl Allocates<ValueId> for StackirScope {}
+impl Allocates<StackId> for StackirScope {}
+impl Allocates<CompuId> for StackirScope {}
+impl Allocates<DefId> for StackirScope {}
+
+/// Builtins, generated definition names, and typed-source provenance for high Stack IR.
+#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+pub struct AdminArena {
+    /// ID allocator shared by all stack-IR node categories.
+    pub(crate) allocator: IdAllocator<StackirScope>,
+
+    /// Names introduced by Stack IR lowering. Source and typed-elaboration
+    /// names stay in their immutable phase arenas.
+    pub defs: ArenaSparse<ScopedScope, DefId>,
+
+    /// builtin operators and functions
+    pub builtins: BuiltinMap,
+
+    /// One source pattern may originate multiple generated ZIR patterns; every
+    /// generated pattern has at most one source pattern.
+    pub pats: ArenaForth<ss::PatId, VPatId>,
+    /// One source term may originate multiple generated ZIR nodes; every
+    /// generated node has at most one source term.
+    pub terms: ArenaForth<ss::TermId, TermId>,
+}
+
+impl AdminArena {
+    pub fn new() -> Self {
+        Self {
+            allocator: IdAllocator::new(),
+            defs: ArenaSparse::default(),
+            builtins: Builtin::all(),
+            pats: ArenaForth::new(),
+            terms: ArenaForth::new(),
+        }
+    }
+
+    pub(crate) fn fresh<Id>(&mut self) -> Id
+    where
+        Id: ArenaId,
+        StackirScope: Allocates<Id>,
+    {
+        self.allocator.alloc()
+    }
+
+    pub(crate) fn insert_def(&mut self, id: DefId, name: VarName) {
+        self.defs.insert_new(id, name);
+    }
+}
+
+impl DefinitionNames for AdminArena {
+    fn generated_defs(&self) -> &ArenaSparse<ScopedScope, DefId> {
+        &self.defs
+    }
+}
+
+impl Default for AdminArena {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ArenaSchema<VPatId> for StackirScope {
     type Item = ValuePattern;
@@ -87,13 +155,6 @@ impl StackirProgram {
             root,
         }
     }
-}
-
-/// Build a stack IR node and optionally record its source site mapping.
-pub trait Construct<S, T, Arena>: Sized + Into<S> {
-    type Site;
-    /// Allocate the node in the arena, recording a typed-site mapping if provided.
-    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> T;
 }
 
 impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U

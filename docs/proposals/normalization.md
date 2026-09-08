@@ -152,7 +152,7 @@ the construct-specific regression cases and remaining optimizations.
 Static elaboration leaves computation application, forcing, returns, and runtime packages explicit.
 Those interfaces support abstraction in source code, but a known producer followed
 by its consumer can often execute locally without allocating the corresponding runtime package.
-`sps::normalize` performs these optional reductions on high SPS before closure conversion.
+`high::normalize` performs these optional reductions on high SPS before closure conversion.
 The reference interpreter continues to execute the checked residual program directly.
 
 The pass combines lexical producer facts with [consumer demands](demand-analysis.md).

@@ -7,7 +7,7 @@ use wasm_encoder::{
 };
 use zydeco_stackir::{
     SpsLowProgram,
-    sps_low::syntax::{
+    low::syntax::{
         self as sps, Block, CompuId, Computation, DefId, HostCallMode, ProductLayout, StackId,
         VPatId, ValueId, ValuePattern,
     },
@@ -547,17 +547,25 @@ impl<'a> CaseEncoder<'a> {
                     self.emit_coprod_match(scrut, arms)?;
                     break;
                 }
-                | Computation::LetValue(sps::LetValue { binder, bindee, body }) => {
+                | Computation::LetValue(sps::LetValue { binder, bindee, tail: body }) => {
                     self.emit_value(bindee)?;
                     self.emit_pattern(binder)?;
                     id = body;
                 }
-                | Computation::LetStack(sps::LetStack { bindee, body }) => {
+                | Computation::LetStack(sps::LetStack {
+                    binder: sps::Bullet,
+                    bindee,
+                    tail: body,
+                }) => {
                     self.emit_stack(bindee)?;
                     self.function.instruction(&WasmInstruction::LocalSet(0));
                     id = body;
                 }
-                | Computation::LetArg(sps::LetArg { binder, bindee, body }) => {
+                | Computation::LetArg(sps::LetArg {
+                    binder: sps::Cons(binder, sps::Bullet),
+                    bindee,
+                    tail: body,
+                }) => {
                     self.emit_stack(bindee)?;
                     self.function
                         .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
@@ -1017,7 +1025,7 @@ impl<'a> CaseEncoder<'a> {
 mod tests {
     use super::*;
     use wasmparser::{Parser, Payload, Validator};
-    use zydeco_stackir::sps_low::{SpsLowArena, arena::Construct as _};
+    use zydeco_stackir::{arena::Construct as _, low::SpsLowArena};
     use zydeco_syntax::IntegerLiteral;
 
     struct Fixture {
@@ -1039,7 +1047,7 @@ mod tests {
             for _ in 0..bindings {
                 let bindee = sps::Triv.build(&mut self.arena, None);
                 let binder = sps::Hole.build(&mut self.arena, None);
-                body = sps::LetValue { binder, bindee, body }.build(&mut self.arena, None);
+                body = sps::LetValue { binder, bindee, tail: body }.build(&mut self.arena, None);
             }
             SpsLowProgram::try_new(self.arena, body).unwrap()
         }
@@ -1059,7 +1067,7 @@ mod tests {
         let bindee =
             Literal::Integer(IntegerLiteral::Int64(i64::MAX)).build(&mut fixture.arena, None);
         let binder = sps::Hole.build(&mut fixture.arena, None);
-        let root = sps::LetValue { binder, bindee, body }.build(&mut fixture.arena, None);
+        let root = sps::LetValue { binder, bindee, tail: body }.build(&mut fixture.arena, None);
         let program = SpsLowProgram::try_new(fixture.arena, root).unwrap();
         let module = Emitter::new(&program).run().unwrap();
 

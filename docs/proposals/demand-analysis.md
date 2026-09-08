@@ -6,8 +6,8 @@ Demand analysis asks how the surviving consumer uses each value, so unused opera
 and their dependencies can disappear before closure conversion allocates environments or emits code.
 
 The analysis is part of [residual SPS normalization](normalization.md#residual-sps-normalization).
-`lang/stackir/src/sps/demand.rs` defines consumer demands and their translation through patterns;
-`sps::normalize` uses those demands while rebuilding high SPS.
+`lang/stackir/src/high/demand.rs` defines consumer demands and their translation through patterns;
+`high::normalize` uses those demands while rebuilding high SPS.
 The checked residual program lowers structurally, including the complete Builtin package plan.
 Host package fields and user product fields then follow the same elimination rules.
 The interpreter retains its reference semantics, and the editor retains the full checked program.

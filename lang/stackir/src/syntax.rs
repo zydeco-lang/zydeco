@@ -1,3 +1,8 @@
+//! Syntax shared by high and low Stack IR, parameterized by each phase's node IDs.
+//!
+//! The phase modules own their identifiers and control-flow variants. Patterns,
+//! products, primitive calls, bindings, and data eliminations use these common forms.
+
 pub use super::{arena::*, builtin::*};
 pub use zydeco_syntax::{fmt, *};
 pub use zydeco_utils::{
@@ -9,21 +14,6 @@ use crate::static_syntax as ss;
 use derive_more::From;
 
 pub type DefId = ss::DefId;
-
-zydeco_utils::new_key_type! {
-    pub struct VPatId;
-    pub struct ValueId;
-    pub struct CompuId;
-    pub struct StackId;
-}
-
-/// Dispatcher for stack terms (value, computation, or stack).
-#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum TermId {
-    Value(ValueId),
-    Compu(CompuId),
-    Stack(StackId),
-}
 
 #[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct CtorIdx {
@@ -61,40 +51,20 @@ impl<T> VCons<T> {
 }
 
 #[derive(From, Clone, Debug)]
-pub enum ValuePattern {
+pub enum ValuePattern<Pat> {
     Hole(Hole),
     Var(DefId),
-    Ctor(Ctor<CtorIdx, VPatId>),
-    Alias(Alias<VPatId>),
+    Ctor(Ctor<CtorIdx, Pat>),
+    Alias(Alias<Pat>),
     Triv(Triv),
-    VCons(VCons<VPatId>),
-}
-
-/// A closure that captures minimal environment.
-/// The capture list is implicit and computed during closure conversion.
-#[derive(Clone, Debug)]
-pub struct Closure {
-    pub stack: Bullet,
-    pub body: CompuId,
+    VCons(VCons<Pat>),
 }
 
 #[derive(Clone, Debug)]
-pub struct Complex {
+pub struct Complex<V> {
     /// Operator name; can be found in builtins map
     pub operator: String,
-    pub operands: Vec<ValueId>,
-}
-
-#[derive(From, Clone, Debug)]
-pub enum Value {
-    Hole(Hole),
-    Var(DefId),
-    Closure(Closure),
-    Ctor(Ctor<CtorIdx, ValueId>),
-    Triv(Triv),
-    VCons(VCons<ValueId>),
-    Literal(Literal),
-    Complex(Complex),
+    pub operands: Vec<V>,
 }
 
 /* ---------------------------------- Stack --------------------------------- */
@@ -103,59 +73,24 @@ pub enum Value {
 #[derive(From, Clone, Debug)]
 pub struct Bullet;
 
-/// A continuation that waits for a value and resumes the computation.
-#[derive(From, Clone, Debug)]
-pub struct Kont {
-    pub binder: VPatId,
-    pub body: CompuId,
-}
-
-/// Stack cells used by continuations.
-#[derive(From, Clone, Debug)]
-pub enum Stack {
-    Kont(Kont),
-    Var(Bullet),
-    Arg(Cons<ValueId, StackId>),
-    Tag(Cons<DtorIdx, StackId>),
-}
-
 /* ------------------------------- Computation ------------------------------ */
 
 #[derive(Clone, Debug)]
-pub struct SHole(pub StackId);
-
-#[derive(Clone, Debug)]
-pub struct SForce {
-    pub thunk: ValueId,
-    pub stack: StackId,
-}
-
-#[derive(Clone, Debug)]
-pub struct SReturn {
-    pub stack: StackId,
-    pub value: ValueId,
-}
-
-#[derive(Clone, Debug)]
-pub struct SFix {
-    pub param: DefId,
-    pub stack: StackId,
-    pub body: CompuId,
-}
+pub struct SHole<S>(pub S);
 
 /// Elimination of one irrefutable product-like value pattern.
 #[derive(Clone, Debug)]
-pub struct SProductMatch {
-    pub scrut: ValueId,
-    pub binder: VPatId,
-    pub body: CompuId,
+pub struct SProductMatch<V, Pat, C> {
+    pub scrut: V,
+    pub binder: Pat,
+    pub body: C,
 }
 
 /// Branching elimination of a value coproduct.
 #[derive(Clone, Debug)]
-pub struct SCoprodMatch {
-    pub scrut: ValueId,
-    pub arms: Vec<Matcher<VPatId, CompuId>>,
+pub struct SCoprodMatch<V, Pat, C> {
+    pub scrut: V,
+    pub arms: Vec<Matcher<Pat, C>>,
 }
 
 #[derive(Clone, Debug)]
@@ -165,9 +100,9 @@ pub struct SCoMatch<Sc, Br, Tail> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExternCall {
+pub struct ExternCall<S> {
     pub function: ExternalFunction,
-    pub stack: StackId,
+    pub stack: S,
 }
 
 /// A call through either the Zydeco host ABI or a source-declared foreign ABI.
@@ -175,19 +110,4 @@ pub struct ExternCall {
 pub enum ExternalFunction {
     Host(String),
     Foreign(ForeignImport),
-}
-
-#[derive(From, Clone, Debug)]
-pub enum Computation<Join> {
-    Hole(SHole),
-    Force(SForce),
-    Ret(SReturn),
-    Fix(SFix),
-    ProductMatch(SProductMatch),
-    CoprodMatch(SCoprodMatch),
-    #[from(ignore)]
-    Join(Join),
-    LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
-    CoCase(SCoMatch<StackId, Cons<DtorIdx, Bullet>, CompuId>),
-    ExternCall(ExternCall),
 }

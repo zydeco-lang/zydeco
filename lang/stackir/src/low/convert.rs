@@ -1,8 +1,8 @@
 //! Closure conversion from lexical high SPS to first-order SPSLow.
 
-use super::{arena::Construct as _, check::SpsLowProgram, syntax as low};
-use crate::arena::DefinitionNames as _;
-use crate::sps::{
+use super::{check::SpsLowProgram, syntax as low};
+use crate::arena::{Construct as _, DefinitionNames as _};
+use crate::high::{
     check::BranchJoinProgram,
     syntax as high,
     variables::{FreeVars as _, Vars as _},
@@ -270,8 +270,12 @@ impl<'a> SpsLowConverter<'a> {
         let body = self.translate_compu(body, body_env);
         let environment_pattern = self.captured_pattern(&capture_bindings);
         let incoming = low::Bullet.build(self, site);
-        let body =
-            low::LetArg { binder: environment_pattern, bindee: incoming, body }.build(self, site);
+        let body = low::LetArg {
+            binder: low::Cons(environment_pattern, low::Bullet),
+            bindee: incoming,
+            tail: body,
+        }
+        .build(self, site);
         let label = self.alloc_label("closure");
         let code = low::Block { label, body }.build(self, site);
         let environment = self.captured_value_outside(&captures, env, site);
@@ -311,10 +315,19 @@ impl<'a> SpsLowConverter<'a> {
 
         let environment_pattern = self.captured_pattern(&capture_bindings);
         let incoming_environment = low::Bullet.build(self, site);
-        let body = low::LetArg { binder: environment_pattern, bindee: incoming_environment, body }
-            .build(self, site);
+        let body = low::LetArg {
+            binder: low::Cons(environment_pattern, low::Bullet),
+            bindee: incoming_environment,
+            tail: body,
+        }
+        .build(self, site);
         let incoming_value = low::Bullet.build(self, site);
-        let body = low::LetArg { binder, bindee: incoming_value, body }.build(self, site);
+        let body = low::LetArg {
+            binder: low::Cons(binder, low::Bullet),
+            bindee: incoming_value,
+            tail: body,
+        }
+        .build(self, site);
         let label = self.alloc_label("continuation");
         let code = low::Block { label, body }.build(self, site);
 
@@ -361,7 +374,7 @@ impl<'a> SpsLowConverter<'a> {
                     self.translate_pattern(binder);
                 let body_env = self.extend_env(env, bindings);
                 let body = self.translate_compu(tail, body_env);
-                low::LetValue { binder, bindee, body }.build(self, site)
+                low::LetValue { binder, bindee, tail: body }.build(self, site)
             }
             | high::Computation::Join(high::LetJoin::Stack(high::Let {
                 binder: high::Bullet,
@@ -370,7 +383,7 @@ impl<'a> SpsLowConverter<'a> {
             })) => {
                 let bindee = self.translate_stack(bindee, env);
                 let body = self.translate_compu(tail, env);
-                low::LetStack { bindee, body }.build(self, site)
+                low::LetStack { binder: low::Bullet, bindee, tail: body }.build(self, site)
             }
             | high::Computation::LetArg(high::Let {
                 binder: high::Cons(binder, high::Bullet),
@@ -382,7 +395,8 @@ impl<'a> SpsLowConverter<'a> {
                     self.translate_pattern(binder);
                 let body_env = self.extend_env(env, bindings);
                 let body = self.translate_compu(tail, body_env);
-                low::LetArg { binder, bindee, body }.build(self, site)
+                low::LetArg { binder: low::Cons(binder, low::Bullet), bindee, tail: body }
+                    .build(self, site)
             }
             | high::Computation::CoCase(high::SCoMatch { scrut, arms }) => {
                 let scrut = self.translate_stack(scrut, env);
@@ -451,12 +465,16 @@ impl<'a> SpsLowConverter<'a> {
         let closure = low::ClosurePackage { environment: environment_inside, code: code_inside }
             .build(self, site);
         let closure_pattern: low::VPatId = recursive_closure.build(self, None);
-        let body =
-            low::LetValue { binder: closure_pattern, bindee: closure, body }.build(self, site);
+        let body = low::LetValue { binder: closure_pattern, bindee: closure, tail: body }
+            .build(self, site);
         let environment_pattern = self.captured_pattern(&capture_bindings);
         let incoming = low::Bullet.build(self, site);
-        let body =
-            low::LetArg { binder: environment_pattern, bindee: incoming, body }.build(self, site);
+        let body = low::LetArg {
+            binder: low::Cons(environment_pattern, low::Bullet),
+            bindee: incoming,
+            tail: body,
+        }
+        .build(self, site);
         let block = low::Block { label, body }.build(self, site);
 
         let environment = self.captured_value_outside(&captures, env, site);
@@ -477,7 +495,7 @@ impl CompilerPass for SpsLowConverter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sps::arena::Construct as HighConstruct;
+    use crate::arena::Construct;
 
     struct Fixture {
         arena: high::StackirArena,
@@ -497,9 +515,9 @@ mod tests {
 
         fn build<U, S, T>(&mut self, node: U) -> T
         where
-            U: HighConstruct<S, T, high::StackirArena>,
+            U: Construct<S, T, high::StackirArena>,
         {
-            HighConstruct::build(node, &mut self.arena, None)
+            node.build(&mut self.arena, None)
         }
 
         fn convert(self, root: high::CompuId) -> SpsLowProgram {

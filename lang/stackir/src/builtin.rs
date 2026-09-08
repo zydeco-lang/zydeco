@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::sps::syntax::*;
+use crate::high::syntax::*;
 use std::collections::HashMap;
 use zydeco_statics::surface_syntax::ScopedArena;
 use zydeco_syntax::{BuiltinValueRole, FloatOperation, IntegerOperation};

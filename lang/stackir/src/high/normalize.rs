@@ -692,7 +692,7 @@ impl Normalizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sps::variables::FreeVars as _;
+    use crate::high::variables::FreeVars as _;
 
     #[derive(Default)]
     struct Fixture {

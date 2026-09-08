@@ -111,19 +111,19 @@ impl<'a> SpsLowValidator<'a> {
                     self.compu(tail, false)
                 })
             }
-            | Computation::LetValue(LetValue { binder, bindee, body }) => {
+            | Computation::LetValue(LetValue { binder, bindee, tail: body }) => {
                 self.value(bindee)?;
                 self.pattern(binder)?;
                 self.compu(body, false)
             }
-            | Computation::LetStack(LetStack { bindee, body }) => {
+            | Computation::LetStack(LetStack { binder: Bullet, bindee, tail: body }) => {
                 self.stack(bindee)?;
                 if !matches!(self.arena.compus[&body], Computation::CoprodMatch(_)) {
                     return Err(SpsLowError::NonBranchStackLet { compu: id, body });
                 }
                 self.compu(body, true)
             }
-            | Computation::LetArg(LetArg { binder, bindee, body }) => {
+            | Computation::LetArg(LetArg { binder: Cons(binder, Bullet), bindee, tail: body }) => {
                 self.stack(bindee)?;
                 self.pattern(binder)?;
                 self.compu(body, false)
@@ -220,7 +220,6 @@ impl<'a> SpsLowValidator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sps_low::arena::Construct as _;
 
     #[test]
     fn low_program_rejects_implicit_arena_sharing() {

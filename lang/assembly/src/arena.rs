@@ -1,6 +1,6 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use zydeco_stackir::sps_low::syntax as sk;
+use zydeco_stackir::low::syntax as sk;
 use zydeco_utils::graph::DepGraph;
 
 /// Allocation and owning storage scope for assembly nodes.

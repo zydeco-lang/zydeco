@@ -10,7 +10,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use zydeco_stackir::{SpsLowProgram, sps_low::syntax as sk};
+use zydeco_stackir::{SpsLowProgram, low::syntax as sk};
 
 /// Values, patterns, and variables that the assembly lowerer may represent
 /// without a region-allocated cell.
@@ -56,18 +56,26 @@ impl Collector<'_> {
                     self.compu(tail);
                 }
             }
-            | sk::Computation::LetValue(sk::LetValue { binder, bindee, body }) => {
+            | sk::Computation::LetValue(sk::LetValue { binder, bindee, tail: body }) => {
                 self.mark_product_pair(bindee, binder);
                 self.try_unbox_variable(binder, bindee, body);
                 self.value(bindee);
                 self.pattern(binder);
                 self.compu(body);
             }
-            | sk::Computation::LetStack(sk::LetStack { bindee, body }) => {
+            | sk::Computation::LetStack(sk::LetStack {
+                binder: sk::Bullet,
+                bindee,
+                tail: body,
+            }) => {
                 self.stack(bindee);
                 self.compu(body);
             }
-            | sk::Computation::LetArg(sk::LetArg { binder, bindee, body }) => {
+            | sk::Computation::LetArg(sk::LetArg {
+                binder: sk::Cons(binder, sk::Bullet),
+                bindee,
+                tail: body,
+            }) => {
                 self.stack(bindee);
                 self.pattern(binder);
                 self.compu(body);
@@ -257,15 +265,23 @@ impl VarVisitor<'_> {
                     self.compu(tail);
                 }
             }
-            | sk::Computation::LetValue(sk::LetValue { binder, bindee, body }) => {
+            | sk::Computation::LetValue(sk::LetValue { binder, bindee, tail: body }) => {
                 self.value_in_projection(bindee, Some(binder));
                 self.compu(body);
             }
-            | sk::Computation::LetStack(sk::LetStack { bindee, body }) => {
+            | sk::Computation::LetStack(sk::LetStack {
+                binder: sk::Bullet,
+                bindee,
+                tail: body,
+            }) => {
                 self.stack(bindee);
                 self.compu(body);
             }
-            | sk::Computation::LetArg(sk::LetArg { binder: _, bindee, body }) => {
+            | sk::Computation::LetArg(sk::LetArg {
+                binder: sk::Cons(_, sk::Bullet),
+                bindee,
+                tail: body,
+            }) => {
                 self.stack(bindee);
                 self.compu(body);
             }
@@ -368,7 +384,7 @@ impl VarVisitor<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zydeco_stackir::sps_low::arena::Construct as _;
+    use zydeco_stackir::arena::Construct as _;
 
     #[test]
     fn local_vcons_pair_is_unboxed() {
@@ -387,7 +403,7 @@ mod tests {
         let stack: sk::StackId = sk::Bullet.build(&mut arena, None);
         let body: sk::CompuId = sk::SHole(stack).build(&mut arena, None);
         let root: sk::CompuId =
-            sk::LetValue { binder: pattern, bindee: value, body }.build(&mut arena, None);
+            sk::LetValue { binder: pattern, bindee: value, tail: body }.build(&mut arena, None);
         let program = SpsLowProgram::try_new(arena, root).unwrap();
 
         let unboxing = LocalUnboxing::collect(&program);
@@ -408,7 +424,7 @@ mod tests {
         let stack: sk::StackId = sk::Bullet.build(&mut arena, None);
         let body: sk::CompuId = sk::SHole(stack).build(&mut arena, None);
         let root: sk::CompuId =
-            sk::LetValue { binder, bindee: value, body }.build(&mut arena, None);
+            sk::LetValue { binder, bindee: value, tail: body }.build(&mut arena, None);
         let program = SpsLowProgram::try_new(arena, root).unwrap();
 
         let unboxing = LocalUnboxing::collect(&program);

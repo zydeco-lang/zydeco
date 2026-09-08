@@ -1,4 +1,4 @@
-//! Lower from [`zydeco_stackir::sps_low::SpsLowArena`] to [`AssemblyArena`].
+//! Lower from [`zydeco_stackir::low::SpsLowArena`] to [`AssemblyArena`].
 //!
 //! - All global variables and all values are
 //!   compiled into programs that pushes the value onto the stack.
@@ -10,7 +10,7 @@ use super::{
 };
 use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
-use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, sps_low::syntax as sk};
+use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, low::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::with::With;
@@ -525,7 +525,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::LetValue(sk::LetValue { binder, bindee, body }) => {
+            | Compu::LetValue(sk::LetValue { binder, bindee, tail: body }) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,
@@ -541,11 +541,15 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::LetStack(sk::LetStack { bindee, body }) => {
+            | Compu::LetStack(sk::LetStack { binder: sk::Bullet, bindee, tail: body }) => {
                 // Lower the bindee
                 bindee.lower(lo, With::new(cx, Box::new(move |lo, cx| body.lower(lo, cx))))
             }
-            | Compu::LetArg(sk::LetArg { binder: param, bindee, body }) => {
+            | Compu::LetArg(sk::LetArg {
+                binder: sk::Cons(param, sk::Bullet),
+                bindee,
+                tail: body,
+            }) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,

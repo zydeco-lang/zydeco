@@ -1,7 +1,6 @@
 //! Pretty-printing for first-order SPS.
 
 use super::{check::SpsLowProgram, syntax::*};
-use crate::arena::DefinitionNames as _;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
 
@@ -202,7 +201,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::line(),
                 RcDoc::text("end"),
             ]),
-            | Computation::LetValue(LetValue { binder, bindee, body }) => RcDoc::concat([
+            | Computation::LetValue(LetValue { binder, bindee, tail: body }) => RcDoc::concat([
                 RcDoc::text("let "),
                 binder.pretty(f),
                 RcDoc::text(" = "),
@@ -210,20 +209,24 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::text(" in"),
                 RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
             ]),
-            | Computation::LetStack(LetStack { bindee, body }) => RcDoc::concat([
-                RcDoc::text("let • = "),
-                bindee.pretty(f),
-                RcDoc::text(" in"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-            ]),
-            | Computation::LetArg(LetArg { binder, bindee, body }) => RcDoc::concat([
-                RcDoc::text("let arg("),
-                binder.pretty(f),
-                RcDoc::text(") :: • = "),
-                bindee.pretty(f),
-                RcDoc::text(" in"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-            ]),
+            | Computation::LetStack(LetStack { binder: Bullet, bindee, tail: body }) => {
+                RcDoc::concat([
+                    RcDoc::text("let • = "),
+                    bindee.pretty(f),
+                    RcDoc::text(" in"),
+                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                ])
+            }
+            | Computation::LetArg(LetArg { binder: Cons(binder, Bullet), bindee, tail: body }) => {
+                RcDoc::concat([
+                    RcDoc::text("let arg("),
+                    binder.pretty(f),
+                    RcDoc::text(") :: • = "),
+                    bindee.pretty(f),
+                    RcDoc::text(" in"),
+                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                ])
+            }
             | Computation::CoCase(SCoMatch { scrut, arms }) => {
                 let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([

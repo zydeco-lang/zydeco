@@ -1,6 +1,6 @@
 //! Sanity checks for the stack-passing style ZIR.
 //!
-//! The closed-root check is intended for debugging. [`BranchJoinProgram`]
+//! The closed-root check is intended for debugging. [`BranchJoinProgram`](crate::high::check::BranchJoinProgram)
 //! additionally exposes the paper's stack-join placement as a checked boundary.
 
 use super::syntax::*;
