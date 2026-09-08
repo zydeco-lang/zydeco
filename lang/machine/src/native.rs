@@ -1,5 +1,5 @@
-//! The current AMD64 scheme: a reusable environment, machine control stack, and
-//! heap captures. Layouts use explicit 64-bit words when inspected by a compiler
+//! The AMD64 scheme: retained activation frames, a machine control stack, and
+//! heap captures for closures. Layouts use explicit 64-bit words when inspected by a compiler
 //! on another host. The stub instantiates the same records with native words.
 
 pub use crate::closure::{Closure, ClosureField};

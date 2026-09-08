@@ -182,8 +182,11 @@ Uses of the variable push those slots back in the same order as an unboxed `VCon
 
 The proposed `rep(v) = S` representation keeps a single pointer but allocates the cell
 in the current stack frame instead of calling `zydeco_alloc_scanned`.
-This representation requires an explicit frame lifetime and reclamation discipline,
+This representation requires the explicit lifetime and reclamation discipline described
+in [native activation frames](native-frames.md#frame-lifetime-and-entry-invariants),
 including proof that references cannot survive the owning frame.
+That proposal separately considers retaining caller environments across return continuations;
+choosing storage for an individual product remains a decision here.
 It is not implemented; current lowering uses unboxed fields or a heap cell.
 
 ## Worked Example
@@ -294,9 +297,14 @@ avoiding duplicated representations.
   The current implementation marks all extern arguments as `R`.
 - How much of the analysis must cross recursive `Fix` blocks before the results are useful?
 - How much fixed environment space should one function activation be allowed to use?
-  Tail calls reuse the environment buffer, so only the largest live frame determines this pressure.
+  The current backend reuses the environment buffer on every block transfer,
+  so the largest local context determines this pressure.
+  The [retained-frame alternative](native-frames.md#collection-and-space-behavior) must also account
+  for suspended activations and their live data.
 
 ## Related Documents
 
 - The Stack IR phase boundaries in [`DESIGN.md`](../../DESIGN.md) record the SPSLow invariants this analysis builds on.
+- [Native activation frames](native-frames.md) owns the implemented activation lifetime, entry, reclamation,
+  and suspended-root invariants used by stack allocation.
 - `docs/legacy/ideas/products.md` explains the canonical product layouts that unboxing must respect.

@@ -276,12 +276,14 @@ impl BackendProgram {
     }
 
     pub fn emit_amd64(&self, operating_system: TargetOs) -> String {
-        let assembly = self.assembly();
+        let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low)
+            .run_native()
+            .expect("native lowering must establish valid frame entry contexts");
         let format = match operating_system {
             | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
             | TargetOs::Macos => zydeco_amd64::TargetFormat::MachO,
         };
-        match zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, assembly, format)
+        match zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, &native, format)
             .run()
         {
             | Ok(assembly) => assembly.to_string(),

@@ -119,6 +119,13 @@ Changing the model requires rebuilding the compiler before generating new native
 The [shared model contract](DESIGN.md#shared-rust-runtime-model) explains how native entry symbols reject
 artifacts compiled against different model sources.
 
+Native builds use retained activation frames and static frame action descriptors from `zydeco-machine`.
+The environment region is fixed at 1 MiB; exhausting it reports an environment stack overflow
+before overwriting retained storage.
+Changing that capacity also changes the model identity and requires rebuilding the compiler.
+`--target zasm` displays the portable capture-based lowering; `--target asm` uses checked native frame preparation.
+The [frame proposal](docs/proposals/native-frames.md) describes this boundary and its focused regression targets.
+
 Build both WebAssembly variants with:
 
 ```sh

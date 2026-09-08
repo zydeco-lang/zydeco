@@ -8,6 +8,7 @@ pub mod lower;
 pub mod analyze;
 pub mod interp;
 pub mod unbox;
+pub mod frames;
 
 mod pipeline;
 pub use pipeline::LoweringPipeline;

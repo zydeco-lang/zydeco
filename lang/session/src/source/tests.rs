@@ -32,9 +32,6 @@ struct SourceSpsLow {
 }
 
 struct SourceAssembly {
-    spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
-    scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
-    statics: Arc<zydeco_statics::arena::StaticsArena>,
     sps_low: zydeco_stackir::SpsLowProgram,
     assembly: zydeco_assembly::syntax::AssemblyProgram,
 }
@@ -56,6 +53,8 @@ enum TestPipelineError {
     Dynamic(zydeco_dynamics::BuiltinPackageError),
     #[error(transparent)]
     Stack(zydeco_stackir::BuiltinRootLowerError),
+    #[error(transparent)]
+    Frame(zydeco_assembly::frames::FramePlanError),
 }
 
 impl ScopedProgram {
@@ -169,7 +168,7 @@ impl SourceSpsLow {
         let Self { spans, scoped, statics, sps_low } = self;
         let assembly =
             zydeco_assembly::LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run();
-        SourceAssembly { spans, scoped, statics, sps_low, assembly }
+        SourceAssembly { sps_low, assembly }
     }
 }
 
@@ -239,11 +238,19 @@ impl TestPipeline {
     /// Emit amd64 assembly from an already-checked program without
     /// re-analyzing it.
     fn amd64_from_checked(
-        path: impl AsRef<Path>, checked: SourceChecked, verbosity: crate::TestOutput,
+        path: impl AsRef<Path>, checked: SourceChecked, _: crate::TestOutput,
     ) -> Result<NativePackage, TestPipelineError> {
         let path = path.as_ref();
         let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap().to_owned();
-        let lowered = Self::zasm_from_checked(checked, verbosity)?;
+        let lowered = checked.stackir_with_builtin()?.convert();
+        let native = zydeco_assembly::LoweringPipeline::new(
+            &lowered.spans,
+            &lowered.scoped,
+            &lowered.statics,
+            &lowered.sps_low,
+        )
+        .run_native()
+        .map_err(TestPipelineError::Frame)?;
         let target = if cfg!(target_os = "macos") {
             zydeco_amd64::TargetFormat::MachO
         } else {
@@ -253,7 +260,7 @@ impl TestPipeline {
             &lowered.spans,
             &lowered.scoped,
             &lowered.statics,
-            &lowered.assembly,
+            &native,
             target,
         )
         .run()
@@ -274,26 +281,7 @@ impl TestPipeline {
         path: impl AsRef<Path>, _: crate::TestBuildOptions, verbosity: crate::TestOutput,
     ) -> Result<NativePackage, TestPipelineError> {
         let path = path.as_ref();
-        let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap().to_owned();
-        let lowered = Self::zasm(path, verbosity)?;
-        let target = if cfg!(target_os = "macos") {
-            zydeco_amd64::TargetFormat::MachO
-        } else {
-            zydeco_amd64::TargetFormat::Elf
-        };
-        let assembly = match zydeco_amd64::Emitter::new(
-            &lowered.spans,
-            &lowered.scoped,
-            &lowered.statics,
-            &lowered.assembly,
-            target,
-        )
-        .run()
-        {
-            | Ok(assembly) => assembly.to_string(),
-            | Err(never) => match never {},
-        };
-        Ok(NativePackage { name, assembly })
+        Self::amd64_from_checked(path, Self::check(path)?, verbosity)
     }
 }
 

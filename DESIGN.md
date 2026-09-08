@@ -833,7 +833,8 @@ Aligned Rust-owned pointers, such as host strings, are outside both semispaces a
 [`zydeco-machine`](lang/machine/src/lib.rs) is a dependency-free `no_std` crate consumed
 by compiler phases and the standalone native runtime.
 It owns the tagged-word operations described above, the closure field order used by ZASM,
-and the current AMD64 host-transfer representation.
+the AMD64 host-transfer representation, and retained activation transitions.
+The frame model uses Rust's `alloc` for control metadata and one fixed environment allocation.
 Compiler-specific literal resolution stays in `zydeco-syntax`.
 
 Closure records are parameterized by their word carrier.
@@ -842,6 +843,7 @@ so an ARM or 32-bit compiler host cannot change the AMD64 layout accidentally.
 The native stub uses the same records with `usize` words; target-side assertions check their sizes,
 alignment, and offsets against the 64-bit layouts.
 The closure declaration also generates the field traversal used by ZASM packing and opening.
+Likewise, the frame action declaration generates both the runtime record and its emitter traversal.
 
 The host-control protocol is represented by `HostArguments` and a shared resumption catalog.
 A host operation returns a pointer to a `HostTransfer` containing a bridge address, a closure, and up to two arguments.
@@ -861,22 +863,42 @@ It checks artifact pairing, while the shared definitions remove duplicated layou
 it does not prove the correctness of handwritten instruction selection or host implementations.
 See [native build packaging](CONTRIBUTING.md#compile-programs) for the build-directory contract.
 
-This first model describes the existing runtime scheme.
-Register assignment, stack alignment, continuation lowering, root-range construction,
-and individual builtin signatures still have their existing implementations.
+The frame model implements entry, suspension, resumption, and sparse root discovery.
+Native preparation checks activation ownership, initialized bindings, and continuation slot aliases before emission;
+the emitter supplies static action descriptors consumed by the same model in the stub.
+The [native frame contract](docs/proposals/native-frames.md#boundary-with-compiler-and-runtime) owns the phase boundary
+and the transition invariants.
+Register assignment, stack alignment, control-stack instruction selection,
+and individual builtin signatures remain outside the model.
 The collector owns its private headers and forwarding algorithm,
 while the model supplies allocation kinds and the immediate tag.
-A future scheme can introduce its own state and transition types in this crate;
-there is no universal runtime trait or retained-frame implementation yet.
+A future scheme can introduce its own state and transition types in this crate; there is no universal runtime trait.
 Shared abstractions should follow a second concrete implementation with demonstrated common requirements.
+
+### Native Environments and Control Stack
+
+The AMD64 backend uses the machine stack for arguments, destructor tags, continuations, and temporary values.
+The variable environment uses activation frames in a separate fixed 1 MiB region.
+Generated closure entries establish an active frame and load its base into `rbp`;
+local branches preserve it, and return entries restore the retained caller's base.
+Bindings use static offsets within their activation, including bindings introduced by its continuations.
+
+Portable SPSLow and ZASM retain explicit capture products.
+Native preparation uses checked continuation provenance to replace a return continuation's capture product
+with a frame token.
+Resumption reads the retained slots directly and binds the returned value.
+Ordinary closures continue to own explicit capture environments, which can outlive their creating activation.
+The [native activation frame proposal](docs/proposals/native-frames.md) owns the implemented lifetime,
+entry, reclamation, root, and bounded tail-space invariants, together with the remaining optimization questions.
 
 ### Native Garbage Collection
 
 The native runtime uses Cheney copying collection with two fixed 1 MiB semispaces.
 The live graph must fit in one semispace, including block headers; allocation reports out
 of memory when collection cannot make enough room.
-Collection updates the control stack, current environment, and registered host roots, preserving sharing,
-cycles, and word-aligned interior pointers into payloads.
+Collection updates the control stack, live slots in active and suspended frames, and registered host roots,
+preserving sharing, cycles, and word-aligned interior pointers into payloads.
+Frame slot maps exclude reserved, uninitialized, and dead slots; word tags then identify immediate values.
 
 Each semispace has a block-start index that locates the owning header with one index-region read and one header read.
 For each 512-byte region, a bitmap records header starts at word granularity,

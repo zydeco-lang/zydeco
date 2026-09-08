@@ -27,4 +27,14 @@ impl<'a> LoweringPipeline<'a> {
             | Err(never) => match never {},
         }
     }
+
+    pub fn run_native(self) -> Result<crate::frames::NativeProgram, crate::frames::FramePlanError> {
+        let mut assembly = Lowerer::new(self.spans, self.scoped, self.statics, self.sps_low)
+            .with_native_frames()
+            .run();
+        match StackAnalyzer::new(&mut assembly).run() {
+            | Ok(_) => crate::frames::NativeProgram::prepare(assembly),
+            | Err(never) => match never {},
+        }
+    }
 }

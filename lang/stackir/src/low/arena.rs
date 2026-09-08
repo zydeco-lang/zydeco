@@ -97,6 +97,9 @@ impl Default for SpsLowAdminArena {
 
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SpsLowInnerArena {
+    /// Capture ownership before conversion erased it into products and code.
+    /// These references describe existing nodes; they do not add executable occurrences.
+    pub continuations: ArenaAssoc<StackId, ContinuationEntry>,
     pub vpats: ArenaSparse<SpsLowScope, VPatId>,
     pub values: ArenaSparse<SpsLowScope, ValueId>,
     pub stacks: ArenaSparse<SpsLowScope, StackId>,

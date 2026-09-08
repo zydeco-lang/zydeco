@@ -492,6 +492,7 @@ impl<'a> ModuleEncoder<'a> {
                 | Instruction::PushTag(_) => "tag",
                 | Instruction::Intrinsic(_) => "intrinsic",
                 | Instruction::Clear(_) => "clear",
+                | Instruction::RetainFrame(_) => "retain_frame",
             },
             | Program::Terminator(terminator) => match terminator {
                 | Terminator::Jump(_) => "jump",
@@ -534,6 +535,9 @@ impl<'a> CaseEncoder<'a> {
             | Instruction::PackProduct(zasm::Pack(layout)) => self.emit_pack(*layout)?,
             | Instruction::UnpackProduct(zasm::Unpack(layout)) => self.emit_unpack(*layout)?,
             | Instruction::AllocContext(_) => {}
+            | Instruction::RetainFrame(_) => {
+                unreachable!("native frame plans are not portable ZASM")
+            }
             | Instruction::PushArg(zasm::Push(atom)) => self.emit_atom(atom)?,
             | Instruction::PopArg(zasm::Pop(variable)) => {
                 let address = self.plan.variable_address(*variable)?;

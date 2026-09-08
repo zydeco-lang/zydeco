@@ -40,6 +40,7 @@ pub struct Lowerer<'a> {
     unboxing: crate::unbox::LocalUnboxing,
     unboxed_var_slots: HashMap<sk::DefId, Vec<VarId>>,
     pending: Vec<PendingInstruction<'a>>,
+    native_frames: bool,
 }
 
 impl<'a> Lowerer<'a> {
@@ -64,7 +65,13 @@ impl<'a> Lowerer<'a> {
             unboxing,
             unboxed_var_slots: HashMap::new(),
             pending: Vec::new(),
+            native_frames: false,
         }
+    }
+
+    pub(crate) fn with_native_frames(mut self) -> Self {
+        self.native_frames = true;
+        self
     }
 
     pub(crate) fn run(mut self) -> AssemblyBuild {
@@ -78,6 +85,9 @@ impl<'a> Lowerer<'a> {
 
         let sps_low_root = self.root;
         let root = sps_low_root.lower(&mut self, Context::new());
+        if self.native_frames {
+            self.arena.frame_entries.insert(root, crate::frames::Entry::Fresh);
+        }
         self.finish_pending();
         AssemblyBuild { arena: self.arena, root }
     }
@@ -243,6 +253,9 @@ impl<'a> Lower<'a> for sk::ValueId {
                     lo.sps_low.admin.def_name(lo.scoped, lo.statics, &label).plain().to_string();
                 let sym = Undefined.build(lo, (Some(name.clone()), Some(label)));
                 let body = body.lower(lo, Context::new());
+                if lo.native_frames {
+                    lo.arena.frame_entries.insert(body, crate::frames::Entry::Fresh);
+                }
                 lo.arena
                     .symbols
                     .replace_existing(sym, NamedSymbol { name, inner: Symbol::Prog(body) });
@@ -353,6 +366,47 @@ impl<'a> Lower<'a> for sk::StackId {
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
         let stack = lo.sps_low.inner.stacks[self].clone();
+        if lo.native_frames
+            && let Some(entry) = lo.sps_low.inner.continuations.get(self).cloned()
+        {
+            let sk::Stack::ContinuationPackage(sk::ContinuationPackage { code, .. }) = stack else {
+                unreachable!()
+            };
+            let sk::Value::Block(sk::Block { label, .. }) = lo.sps_low.inner.values[&code] else {
+                unreachable!()
+            };
+            let bindings = entry
+                .captures
+                .into_iter()
+                .map(|capture| {
+                    let DefId::Var(source) = lo.arena.defs[&capture.source] else {
+                        panic!("capture must have an activation slot")
+                    };
+                    let name =
+                        lo.sps_low.admin.def_name(lo.scoped, lo.statics, &capture.binding).clone();
+                    let binding = name.build(lo, Some(capture.binding));
+                    (binding, source)
+                })
+                .collect::<Vec<_>>();
+            let entry_context = bindings.iter().map(|(binding, _)| *binding).collect();
+            let body = entry.body;
+            let resume = entry
+                .result
+                .lower(lo, With::new(entry_context, Box::new(move |lo, cx| body.lower(lo, cx))));
+            let name = lo.sps_low.admin.def_name(lo.scoped, lo.statics, &label).plain().to_string();
+            let symbol = resume.build(lo, (Some(name), Some(label)));
+            let captures = bindings.iter().map(|(_, source)| *source).collect();
+            lo.arena.frame_entries.insert(resume, crate::frames::Entry::Resume { bindings });
+            return RetainFrame { entry: resume, captures }.build(
+                lo,
+                With::new(
+                    cx,
+                    CxKont::same(Box::new(move |lo, cx| {
+                        Push(Atom::Sym(symbol)).build(lo, With::new(cx, CxKont::same(kont)))
+                    })),
+                ),
+            );
+        }
         use sk::Stack;
         match stack {
             | Stack::Var(sk::Bullet) => {

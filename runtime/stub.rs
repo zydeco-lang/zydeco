@@ -7,9 +7,10 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
+use zydeco_machine::frames::{Action, FrameError, Frames};
 use zydeco_machine::native::{
     AllocationKind, Closure, ENVIRONMENT_BYTES, HostArguments, HostTransfer, IMMEDIATE_TAG,
-    Immediate, Word, entry,
+    Immediate, WORD_BYTES, Word, entry,
 };
 
 /// One full-width scalar payload in an opaque managed block.
@@ -103,8 +104,8 @@ impl RuntimeInteger for u64 {
 /// Interior mutability for the runtime's process-wide, single-threaded state.
 ///
 /// Generated Zydeco code and all callbacks run on the entry thread. Keeping the
-/// buffers here, rather than behind `Box` or `std::alloc`, puts both semispaces and
-/// the environment in the executable's fixed static storage.
+/// heap buffers here puts both semispaces in the executable's fixed static storage.
+/// The frame model owns a separate fixed word allocation and growable metadata.
 struct RuntimeCell<T>(UnsafeCell<T>);
 
 impl<T> RuntimeCell<T> {
@@ -517,22 +518,18 @@ struct ManagedHeap;
 
 impl ManagedHeap {
     fn allocate(
-        size_words: usize, tag: AllocationKind, stack_start: *mut Word, environment: *mut Word,
-        environment_words: usize,
+        size_words: usize, tag: AllocationKind, stack_start: *mut Word,
+        roots: &'static Action<Word>,
     ) -> *mut u8 {
         let stack_end = unsafe { *STACK_END.get() };
+        let mut slots = unsafe { roots.root_slots(&mut *FRAMES.get()) }
+            .unwrap_or_else(|error| out_of_frames(error));
+        slots.extend(unsafe { &*HOST_ROOTS.get() }.slots.iter().copied());
         let heap = unsafe { &mut *HEAP.get() };
-        let host_roots = unsafe { &mut *HOST_ROOTS.get() };
-        let roots = Roots {
-            stack: RootRange { start: stack_start, end: stack_end },
-            environment: RootRange {
-                start: environment,
-                end: unsafe { environment.add(environment_words) },
-            },
-            host: &mut host_roots.slots,
-        };
-        // SAFETY: the emitter passes the live Zydeco control-stack cursor and current
-        // environment frame. `main` records the upper stack boundary before entry.
+        let roots =
+            Roots { stack: RootRange { start: stack_start, end: stack_end }, slots: &mut slots };
+        // SAFETY: the compiler supplies live initialized slots; pending frames add
+        // their own slot sets. The control cursor precedes temporary host-call padding.
         unsafe { heap.allocate(size_words, tag, roots) }
             .unwrap_or_else(|error| out_of_memory(error))
     }
@@ -540,28 +537,22 @@ impl ManagedHeap {
 
 #[unsafe(export_name = "\x01zydeco_alloc_scanned")]
 extern "sysv64" fn zydeco_alloc_scanned(
-    size_words: usize, stack_start: *mut Word, environment: *mut Word, environment_words: usize,
+    size_words: usize, stack_start: *mut Word, roots: &'static Action<Word>,
 ) -> *mut u8 {
-    ManagedHeap::allocate(
-        size_words,
-        AllocationKind::Scanned,
-        stack_start,
-        environment,
-        environment_words,
-    )
+    ManagedHeap::allocate(size_words, AllocationKind::Scanned, stack_start, roots)
 }
 
 #[unsafe(export_name = "\x01zydeco_alloc_opaque")]
 extern "sysv64" fn zydeco_alloc_opaque(
-    size_words: usize, stack_start: *mut Word, environment: *mut Word, environment_words: usize,
+    size_words: usize, stack_start: *mut Word, roots: &'static Action<Word>,
 ) -> *mut u8 {
-    ManagedHeap::allocate(
-        size_words,
-        AllocationKind::Opaque,
-        stack_start,
-        environment,
-        environment_words,
-    )
+    ManagedHeap::allocate(size_words, AllocationKind::Opaque, stack_start, roots)
+}
+
+#[unsafe(export_name = "\x01zydeco_frame_step")]
+extern "sysv64" fn zydeco_frame_step(action: &'static Action<Word>, token: Word) -> Word {
+    // SAFETY: action and trailing indices are static descriptors from matched codegen.
+    unsafe { action.apply(&mut *FRAMES.get(), token) }.unwrap_or_else(|error| out_of_frames(error))
 }
 
 #[unsafe(export_name = "\x01zydeco_ffi_borrow_bytes")]
@@ -1347,15 +1338,6 @@ const HEAP_SPACE_BYTES: usize = 1024 * 1024;
 const HEAP_INDEX_REGIONS: usize = HEAP_SPACE_BYTES.div_ceil(gc::INDEX_REGION_BYTES);
 const HOST_ROOT_CAPACITY: usize = 256;
 
-#[repr(align(8))]
-struct Environment([u8; ENVIRONMENT_BYTES]);
-
-impl Environment {
-    const fn new() -> Self {
-        Self([0; ENVIRONMENT_BYTES])
-    }
-}
-
 struct HostRoots {
     slots: [*mut Word; HOST_ROOT_CAPACITY],
 }
@@ -1398,6 +1380,11 @@ fn out_of_memory(error: OutOfMemory) -> ! {
     std::process::exit(1)
 }
 
+fn out_of_frames(error: FrameError) -> ! {
+    let _ = writeln!(std::io::stderr().lock(), "Zydeco runtime: {error}");
+    std::process::exit(1)
+}
+
 fn out_of_host_roots(_error: HostRootOverflow) -> ! {
     let _ = writeln!(
         std::io::stderr().lock(),
@@ -1408,7 +1395,8 @@ fn out_of_host_roots(_error: HostRootOverflow) -> ! {
 
 static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>> =
     RuntimeCell::new(CheneyHeap::new());
-static ENVIRONMENT: RuntimeCell<Environment> = RuntimeCell::new(Environment::new());
+static FRAMES: RuntimeCell<Frames<{ ENVIRONMENT_BYTES / WORD_BYTES }>> =
+    RuntimeCell::new(Frames::EMPTY);
 static STACK_END: RuntimeCell<*mut Word> = RuntimeCell::new(std::ptr::null_mut());
 static HOST_ROOTS: RuntimeCell<HostRoots> = RuntimeCell::new(HostRoots::new());
 static CONTROL_TRANSFER: RuntimeCell<HostTransfer<Word>> =
@@ -1422,7 +1410,6 @@ fn main() {
     let stack_anchor: Word = 0;
     unsafe {
         *STACK_END.get() = std::ptr::addr_of!(stack_anchor).add(1).cast_mut();
-        let environment = (&mut *ENVIRONMENT.get()).0.as_mut_ptr();
-        entry(environment);
+        entry();
     }
 }

@@ -1,7 +1,7 @@
 //! Structural validation for first-order SPS.
 
 use super::syntax::*;
-use super::variables::FreeVars as _;
+use super::variables::{FreeVars as _, Vars as _};
 use std::collections::HashSet;
 
 /// A lexical first-order SPS tree whose joins remain attached to coproduct branches.
@@ -31,6 +31,8 @@ pub enum SpsLowError {
     ImplicitBlockCapture { label: DefId, captures: Vec<DefId> },
     #[error("SPSLow root still has free value variables: {variables:?}")]
     OpenRoot { variables: Vec<DefId> },
+    #[error("continuation {stack:?} has an invalid capture or entry context")]
+    ContinuationContext { stack: StackId },
 }
 
 impl SpsLowProgram {
@@ -72,6 +74,61 @@ struct SpsLowValidator<'a> {
     labels: HashSet<DefId>,
 }
 
+impl ContinuationEntry {
+    fn matches_package(&self, arena: &SpsLowInnerArena, stack: StackId) -> bool {
+        let Some(Stack::ContinuationPackage(ContinuationPackage { code, residual })) =
+            arena.stacks.get(&stack)
+        else {
+            return false;
+        };
+        let Some(Value::Block(Block { label, body })) = arena.values.get(code) else {
+            return false;
+        };
+        let Computation::LetArg(LetArg { binder: Cons(result, Bullet), bindee, tail }) =
+            arena.compus[body]
+        else {
+            return false;
+        };
+        if result != self.result || !matches!(arena.stacks[&bindee], Stack::Var(Bullet)) {
+            return false;
+        }
+        let Computation::LetArg(LetArg { binder: Cons(environment, Bullet), bindee, tail }) =
+            arena.compus[&tail]
+        else {
+            return false;
+        };
+        if tail != self.body || !matches!(arena.stacks[&bindee], Stack::Var(Bullet)) {
+            return false;
+        }
+        let Stack::Arg(Cons(value, ambient)) = arena.stacks[residual] else { return false };
+        if !matches!(arena.stacks[&ambient], Stack::Var(Bullet)) {
+            return false;
+        }
+        let (values, patterns) = match (&arena.values[&value], &arena.vpats[&environment]) {
+            | (Value::Triv(_), ValuePattern::Triv(_)) => (&[][..], &[][..]),
+            | (Value::VCons(values), ValuePattern::VCons(patterns))
+                if values.layout.arity == values.items.len()
+                    && patterns.layout.arity == patterns.items.len() =>
+            {
+                (values.items.as_slice(), patterns.items.as_slice())
+            }
+            | _ => return false,
+        };
+        if values.len() != self.captures.len() || patterns.len() != self.captures.len() {
+            return false;
+        }
+        if !values.iter().zip(patterns).zip(&self.captures).all(|((value, pattern), capture)| {
+            matches!(arena.values[value], Value::Var(source) if source == capture.source)
+                && matches!(arena.vpats[pattern], ValuePattern::Var(binding) if binding == capture.binding)
+        }) { return false; }
+        let bindings = self.captures.iter().map(|capture| capture.binding).collect::<HashSet<_>>();
+        let free = self.body.free_vars(arena) - self.result.vars(arena);
+        bindings.len() == self.captures.len()
+            && !free.iter().any(|variable| variable == label)
+            && free.iter().all(|variable| bindings.contains(variable))
+    }
+}
+
 impl<'a> SpsLowValidator<'a> {
     fn validate(arena: &'a SpsLowInnerArena, root: CompuId) -> Result<(), SpsLowError> {
         let mut validator = Self {
@@ -82,7 +139,13 @@ impl<'a> SpsLowValidator<'a> {
             patterns: HashSet::new(),
             labels: HashSet::new(),
         };
-        validator.compu(root, false)
+        validator.compu(root, false)?;
+        for (stack, entry) in &arena.continuations {
+            if !validator.stacks.contains(stack) || !entry.matches_package(arena, *stack) {
+                return Err(SpsLowError::ContinuationContext { stack: *stack });
+            }
+        }
+        Ok(())
     }
 
     fn compu(&mut self, id: CompuId, guarded: bool) -> Result<(), SpsLowError> {

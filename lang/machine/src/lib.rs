@@ -1,13 +1,18 @@
 //! Runtime contracts without dependencies on compiler syntax or backend instructions.
 //!
 //! [`word`] owns the common scalar representation. [`native`] describes the current
-//! AMD64 runtime; future runtime schemes can have their own state and protocols.
+//! AMD64 boundary; [`frames`] implements its activation transitions and root discovery.
+//! Frame metadata uses `alloc`; frame words stay in one fixed allocation.
+//! Future runtime schemes can have their own state and protocols.
 //! The `runtime` feature enables target-side bindings. The `bundle` feature embeds
 //! these sources so a compiler can supply its exact model to a standalone stub build.
 
 #![no_std]
 
+extern crate alloc;
+
 pub mod closure;
+pub mod frames;
 pub mod native;
 pub mod word;
 

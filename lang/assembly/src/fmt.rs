@@ -176,6 +176,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::PushTag(push) => push.pretty(f),
             | Instruction::Intrinsic(builtin) => builtin.pretty(f),
             | Instruction::Clear(context) => context.pretty(f),
+            | Instruction::RetainFrame(retain) => {
+                RcDoc::text(format!("retain-frame {:?}", retain.captures))
+            }
         }
     }
 }

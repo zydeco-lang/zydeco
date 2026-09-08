@@ -23,6 +23,7 @@ impl ArenaSchema<ProgId> for AssemblyScope {
 
 #[derive(Default, AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
+    pub(crate) frame_entries: std::collections::BTreeMap<ProgId, crate::frames::Entry>,
     /// All programs are attached with a ProgId.
     pub programs: ArenaSparse<AssemblyScope, ProgId>,
     /// All variables are named.

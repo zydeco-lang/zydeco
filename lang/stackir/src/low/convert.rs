@@ -313,6 +313,18 @@ impl<'a> SpsLowConverter<'a> {
         let body_env = self.extend_env(capture_env, binder_bindings);
         let body = self.translate_compu(body, body_env);
 
+        let entry = low::ContinuationEntry {
+            result: binder,
+            body,
+            captures: capture_bindings
+                .iter()
+                .map(|&(source, binding)| low::CaptureBinding {
+                    source: self.renamed_def(env, source),
+                    binding,
+                })
+                .collect(),
+        };
+
         let environment_pattern = self.captured_pattern(&capture_bindings);
         let incoming_environment = low::Bullet.build(self, site);
         let body = low::LetArg {
@@ -334,7 +346,9 @@ impl<'a> SpsLowConverter<'a> {
         let environment = self.captured_value_outside(&captures, env, site);
         let ambient = low::Bullet.build(self, site);
         let residual = low::Cons(environment, ambient).build(self, site);
-        low::ContinuationPackage { code, residual }.build(self, site)
+        let package = low::ContinuationPackage { code, residual }.build(self, site);
+        self.arena.inner.continuations.insert_new(package, entry);
+        package
     }
 
     fn translate_compu(&mut self, id: high::CompuId, env: RenameEnvId) -> low::CompuId {
@@ -496,6 +510,7 @@ impl CompilerPass for SpsLowConverter<'_> {
 mod tests {
     use super::*;
     use crate::arena::Construct;
+    use zydeco_utils::arena::ArenaAccess;
 
     struct Fixture {
         arena: high::StackirArena,
@@ -585,6 +600,13 @@ mod tests {
             program.arena().inner.stacks[package],
             low::Stack::ContinuationPackage(_)
         ));
+        let package = *package;
+        assert!(program.arena().inner.continuations.get(&package).is_some());
+        let (mut arena, root) = program.into_parts();
+        let wrong_result = low::Hole.build(&mut arena, None);
+        arena.inner.continuations[&package].result = wrong_result;
+        assert!(matches!(SpsLowProgram::try_new(arena, root),
+            Err(crate::low::check::SpsLowError::ContinuationContext { stack }) if stack == package));
     }
 
     #[test]

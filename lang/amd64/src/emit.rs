@@ -1,10 +1,12 @@
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use zydeco_assembly::frames::{Entry, FramePlan, NativeProgram};
 use zydeco_assembly::{
-    arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
+    arena::{AssemblyArena, AssemblyArenaRefLike},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
+use zydeco_machine::frames::{Action, STEP_SYMBOL};
 use zydeco_machine::native::{
     AllocationKind, ClosureField, ENTRY_SYMBOL, ResumeArity, TransferField, WORD_BYTES,
 };
@@ -60,6 +62,8 @@ pub struct Emitter<'e> {
     pub statics: &'e StaticsArena,
     pub assembly: &'e AssemblyArena,
     pub root: ProgId,
+    pub frames: &'e FramePlan,
+    frame_data: BTreeMap<String, Vec<u64>>,
 
     #[as_ref]
     #[as_mut]
@@ -76,17 +80,20 @@ pub struct Emitter<'e> {
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        assembly: &'e AssemblyProgram, target_format: TargetFormat,
+        native: &'e NativeProgram, target_format: TargetFormat,
     ) -> Self {
+        let assembly = native.assembly();
         let arena = assembly.arena();
         let root = assembly.root();
-        let entry_parities = Self::compute_entry_parities(arena, root);
+        let entry_parities = Self::compute_entry_parities(arena, root, native.frames());
         let dynamic_entries = Self::compute_dynamic_entries(arena);
         Self {
             spans,
             scoped,
             statics,
             assembly: arena,
+            frames: native.frames(),
+            frame_data: BTreeMap::new(),
             root,
             asm: AsmFile::default(),
             target_format,
@@ -106,7 +113,7 @@ impl<'e> Emitter<'e> {
     /// that are only reachable through dynamic continuations have no single
     /// statically known entry parity and stay [`StackParity::Unknown`].
     fn compute_entry_parities(
-        assembly: &AssemblyArena, root: ProgId,
+        assembly: &AssemblyArena, root: ProgId, frames: &FramePlan,
     ) -> HashMap<ProgId, StackParity> {
         const ODD: u8 = 0b01;
         const EVEN: u8 = 0b10;
@@ -132,6 +139,11 @@ impl<'e> Emitter<'e> {
 
         while let Some(prog_id) = queue.pop_front() {
             let Some(&mask) = parities.get(&prog_id) else { continue };
+            let mask = if matches!(frames.entries.get(&prog_id), Some(Entry::Resume { .. })) {
+                flip_mask(mask)
+            } else {
+                mask
+            };
             match &assembly.programs[&prog_id] {
                 | Program::Instruction(instruction, next) => {
                     let mask = if Self::instruction_flips_stack(instruction) {
@@ -173,7 +185,10 @@ impl<'e> Emitter<'e> {
         match instruction {
             | Instruction::PackProduct(sa::Pack(layout))
             | Instruction::UnpackProduct(sa::Unpack(layout)) => layout.elements % 2 == 0,
-            | Instruction::PushArg(_) | Instruction::PushTag(_) | Instruction::PopArg(_) => true,
+            | Instruction::PushArg(_)
+            | Instruction::PushTag(_)
+            | Instruction::PopArg(_)
+            | Instruction::RetainFrame(_) => true,
             | Instruction::Intrinsic(Intrinsic { arity, .. }) => arity % 2 == 0,
             | Instruction::AllocContext(_) | Instruction::Clear(_) => false,
         }
@@ -274,12 +289,63 @@ impl<'e> Emitter<'e> {
         }
     }
 
+    fn frame_descriptor(&mut self, label: String, action: Action<u64>, slots: &[usize]) -> String {
+        let words =
+            action.into_words().into_iter().chain(slots.iter().map(|slot| *slot as u64)).collect();
+        self.frame_data.insert(label.clone(), words);
+        label
+    }
+
+    fn emit_frame_call(&mut self, descriptor: String) {
+        self.asm.text.push(Instr::Lea(
+            Reg::Rdi,
+            LeaArgs::RelLabel(RelLabel { label: descriptor, offset: None }),
+        ));
+        self.emit_aligned_call(JmpArgs::Label(STEP_SYMBOL.to_string()));
+    }
+
+    fn emit_frame_entry(&mut self, id: ProgId) {
+        let Some(entry) = self.frames.entries.get(&id) else { return };
+        let layout = self.frames.layouts[self.frames.owners[&id].0];
+        let action = match entry {
+            | Entry::Fresh => Action::enter(layout),
+            | Entry::Resume { .. } => {
+                // Remove the saved token while keeping the result on the control stack.
+                self.asm.text.extend([
+                    Instr::Mov(MovArgs::ToReg(
+                        Reg::Rsi,
+                        Arg64::Mem(MemRef { reg: Reg::Rsp, offset: 8 }),
+                    )),
+                    Instr::Pop(Loc::Reg(Reg::Rax)),
+                    Instr::Mov(MovArgs::ToMem(
+                        MemRef { reg: Reg::Rsp, offset: 0 },
+                        Reg32::Reg(Reg::Rax),
+                    )),
+                ]);
+                self.shift_stack_parity(-1);
+                Action::resume(layout.id)
+            }
+        };
+        let descriptor = self.frame_descriptor(
+            format!("frame_entry_{}", id.concise_inner().replace('#', "_")),
+            action,
+            &[],
+        );
+        self.emit_frame_call(descriptor);
+        self.asm.text.push(Instr::Mov(MovArgs::ToReg(ENV_REG, Arg64::Reg(Reg::Rax))));
+    }
+
     /// Allocate one block from the runtime's fixed two-space heap.
     ///
     /// The collector is otherwise runtime-only: it updates the live control-stack
-    /// words and the current environment frame passed here. Tagged immediates make
-    /// pointer recognition precise without stack maps.
-    fn emit_alloc_call(&mut self, size_words: usize, kind: AllocationKind, context_words: usize) {
+    /// words and the frame slots selected by this descriptor and pending
+    /// suspensions. Slot maps establish liveness; word tags identify immediates.
+    fn emit_alloc_call(&mut self, size_words: usize, kind: AllocationKind, id: ProgId) {
+        let roots = self.frame_descriptor(
+            format!("frame_roots_{}", id.concise_inner().replace('#', "_")),
+            Action::roots(self.frames.owners[&id], self.frames.live[&id].len()),
+            &self.frames.live[&id].clone(),
+        );
         self.asm.text.extend([
             Instr::Comment(format!(
                 "allocate {} block in the copying heap",
@@ -295,19 +361,13 @@ impl<'e> Emitter<'e> {
             // Capture the root cursor before `emit_aligned_call` adds any temporary
             // ABI padding beneath it.
             Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rsp))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(ENV_REG))),
-            Instr::Mov(MovArgs::ToReg(
-                Reg::Rcx,
-                Arg64::Unsigned(
-                    u64::try_from(context_words).expect("environment root count overflow"),
-                ),
-            )),
+            Instr::Lea(Reg::Rdx, LeaArgs::RelLabel(RelLabel { label: roots, offset: None })),
         ]);
         self.emit_aligned_call(JmpArgs::Label(kind.symbol().to_string()));
     }
 
-    fn emit_boxed_bits(&mut self, bits: u64, context_words: usize) {
-        self.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+    fn emit_boxed_bits(&mut self, bits: u64, id: ProgId) {
+        self.emit_alloc_call(1, AllocationKind::Opaque, id);
         self.asm.text.extend([
             Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Unsigned(bits))),
             Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rax, offset: 0 }, Reg32::Reg(Reg::Rcx))),
@@ -388,8 +448,7 @@ impl<'e> Emitter<'e> {
             )));
             self.shift_stack_parity(-(consumed_words as i64));
         }
-        let context_words = self.assembly.contexts[&id].iter().len();
-        self.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+        self.emit_alloc_call(1, AllocationKind::Opaque, id);
         self.asm.text.extend([
             Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))),
             Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
@@ -411,6 +470,7 @@ impl<'e> CompilerPass for Emitter<'e> {
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<Self::Out, Self::Error> {
         self.asm.text.extend([
+            Instr::Extern(STEP_SYMBOL.to_string()),
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
             // fixed-heap allocation entry points
@@ -511,9 +571,6 @@ impl<'e> CompilerPass for Emitter<'e> {
         self.asm.text.extend([
             Instr::Global(ENTRY_SYMBOL.to_string()),
             Instr::Label(ENTRY_SYMBOL.to_string()),
-            Instr::Comment("initialize environment".to_string()),
-            // initialize the environment
-            Instr::Mov(MovArgs::ToReg(ENV_REG, Arg64::Reg(Reg::Rdi))),
         ]);
 
         let root = self.root;
@@ -530,6 +587,11 @@ impl<'e> CompilerPass for Emitter<'e> {
                 self.asm.text.push(Instr::Label(label));
                 prog_id.emit((), &mut self);
             }
+        }
+
+        for (label, words) in &self.frame_data {
+            self.asm.rodata.push(Instr::Label(label.clone()));
+            self.asm.rodata.extend(words.iter().map(|word| Instr::Dq(word.to_string())));
         }
 
         // Emit the jump tables
@@ -618,6 +680,8 @@ impl<'a> Emit<'a> for ProgId {
         // Avoid infinite loops
         assert!(!em.visited.contains(self), "infinite loop detected");
         em.visited.insert(*self);
+
+        em.emit_frame_entry(*self);
 
         // Emit the program
         match &em.assembly.programs[self] {
@@ -723,8 +787,7 @@ impl<'a> Emit<'a> for Terminator {
                 let spare_box = role.spare_box();
                 match spare_box {
                     | Some(SpareBox::Opaque) => {
-                        let context_words = em.assembly.contexts[&id].iter().len();
-                        em.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+                        em.emit_alloc_call(1, AllocationKind::Opaque, id);
                         em.asm
                             .text
                             .push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rax))));
@@ -810,8 +873,7 @@ impl<'a> Emit<'a> for Instruction {
                     "pack_product {}/{}",
                     layout.elements, layout.arity
                 )));
-                let context_words = em.assembly.contexts[&id].iter().len();
-                em.emit_alloc_call(layout.arity, AllocationKind::Scanned, context_words);
+                em.emit_alloc_call(layout.arity, AllocationKind::Scanned, id);
                 for index in 0..layout.elements {
                     let destination = i32::try_from(index * 8).expect("product offset overflow");
                     if index + 1 == layout.elements && layout.elements < layout.arity {
@@ -892,11 +954,22 @@ impl<'a> Emit<'a> for Instruction {
                 );
             }
             | Instruction::AllocContext(sa::Alloc(sa::ContextMarker)) => {
-                // Calls are tail calls: everything needed by the callee has already
-                // moved to the control stack, so the next environment can reuse the
-                // fixed buffer from offset zero. Keeping Rbp unchanged also prevents
-                // recursive programs from exhausting a separate environment arena.
-                em.asm.text.push(Instr::Comment("reuse environment for tail call".to_string()));
+                // Outgoing values are staged; the destination entry chooses reuse or restoration.
+                em.asm.text.push(Instr::Comment("leave local context for transfer".to_string()));
+            }
+            | Instruction::RetainFrame(retain) => {
+                let slots =
+                    retain.captures.iter().map(|var| em.frames.slots[var]).collect::<Vec<_>>();
+                let owner = em.frames.owners[&id];
+                let descriptor = em.frame_descriptor(
+                    format!("frame_suspend_{}", id.concise_inner().replace('#', "_")),
+                    Action::suspend(owner, slots.len()),
+                    &slots,
+                );
+                em.asm.text.push(Instr::Comment("retain activation slots for return".to_string()));
+                em.emit_frame_call(descriptor);
+                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
+                em.shift_stack_parity(1);
             }
             | Instruction::PushArg(sa::Push(atom)) => {
                 // Push argument onto stack
@@ -905,7 +978,7 @@ impl<'a> Emit<'a> for Instruction {
             | Instruction::PopArg(sa::Pop(var_id)) => {
                 // Pop argument from stack into variable
                 let var_name = &em.assembly.variables[var_id];
-                let idx = em.assembly.contexts[&id].iter().len() as i32;
+                let idx = i32::try_from(em.frames.slots[var_id]).expect("frame slot overflow");
                 em.asm.text.extend([
                     Instr::Comment(format!("pop_arg {}{}", var_name.plain(), var_id.concise())),
                     // pop from stack
@@ -937,10 +1010,8 @@ impl<'a> Emit<'a> for Instruction {
                 intrinsic.emit(id, em);
             }
             | Instruction::Clear(_) => {
-                // Clear variables from context
-                em.asm.text.push(Instr::Comment("clear".to_string()));
-                // TODO: Implement context clearing
-                todo!()
+                // Slot maps exclude dead bindings from collection. A pending continuation
+                // may still retain the same physical slot, so do not overwrite it here.
             }
         }
     }
@@ -957,10 +1028,7 @@ impl<'a> Emit<'a> for Atom {
                     var_name.plain(),
                     var_id.concise()
                 )));
-                let idx = em.assembly.contexts[&id]
-                    .iter()
-                    .position(|var| var == var_id)
-                    .expect("variable not found") as i32;
+                let idx = i32::try_from(em.frames.slots[var_id]).expect("frame slot overflow");
                 // load [rbp + 8 * idx] and push
                 em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(
@@ -1039,8 +1107,7 @@ impl<'a> Emit<'a> for Atom {
                             em.shift_stack_parity(1);
                         }
                         | EncodedScalar::Boxed(bits) => {
-                            let context_words = em.assembly.contexts[&id].iter().len();
-                            em.emit_boxed_bits(bits, context_words);
+                            em.emit_boxed_bits(bits, id);
                         }
                     }
                 }
@@ -1055,8 +1122,7 @@ impl<'a> Emit<'a> for Atom {
                             em.shift_stack_parity(1);
                         }
                         | EncodedScalar::Boxed(bits) => {
-                            let context_words = em.assembly.contexts[&id].iter().len();
-                            em.emit_boxed_bits(bits, context_words);
+                            em.emit_boxed_bits(bits, id);
                         }
                     }
                 }
@@ -1097,8 +1163,7 @@ impl<'a> Emit<'a> for Intrinsic {
                 // Keep the tagged constructor index rooted while allocation may collect.
                 em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
                 em.shift_stack_parity(1);
-                let context_words = em.assembly.contexts[&id].iter().len();
-                em.emit_alloc_call(2, AllocationKind::Scanned, context_words);
+                em.emit_alloc_call(2, AllocationKind::Scanned, id);
                 em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
                     Instr::Pop(Loc::Reg(Reg::Rcx)),
@@ -1129,8 +1194,7 @@ impl<'a> Emit<'a> for Intrinsic {
                         unimplemented!("intrinsic {} with arity {} not implemented", name, arity)
                     }
                 };
-                let context_words = em.assembly.contexts[&id].iter().len();
-                em.emit_alloc_call(1, AllocationKind::Opaque, context_words);
+                em.emit_alloc_call(1, AllocationKind::Opaque, id);
                 em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rax))),
                     Instr::Pop(Loc::Reg(Reg::Rdi)),

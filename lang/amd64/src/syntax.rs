@@ -318,7 +318,8 @@ impl fmt::Display for AsmFile {
         }
 
         if !self.rodata.is_empty() {
-            writeln!(f, "section .rodata")?;
+            // Native runtime descriptors contain aligned 64-bit Rust fields.
+            writeln!(f, "section .rodata align=8")?;
             for instr in &self.rodata {
                 writeln!(f, "{}", instr)?;
             }

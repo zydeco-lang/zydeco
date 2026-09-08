@@ -14,7 +14,8 @@
 //! Values use the same one-bit convention as OCaml: odd words are immediate values,
 //! while managed pointers are aligned and therefore even. Full-width scalars that
 //! cannot surrender a tag bit live in opaque one-word blocks. The collector can
-//! consequently recognize managed pointers precisely without stack maps.
+//! consequently distinguish immediates from pointer-shaped live words. The caller
+//! supplies slot liveness separately through root ranges and sparse addresses.
 
 use std::{mem::size_of, ptr};
 
@@ -208,8 +209,7 @@ pub(crate) struct RootRange {
 
 pub(crate) struct Roots<'a> {
     pub stack: RootRange,
-    pub environment: RootRange,
-    pub host: &'a mut [*mut Word],
+    pub slots: &'a mut [*mut Word],
 }
 
 /// Two fixed semispaces and the cursor in the currently active one.
@@ -240,14 +240,14 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
 
     /// Allocate a block, collecting first when the active semispace is full.
     ///
-    /// `roots.stack` and `roots.environment` are mutable root slots. `roots.host`
-    /// contains addresses of the few roots kept by long-lived Rust-side runtime
-    /// objects. All ranges are updated in place.
+    /// `roots.stack` is the live control-stack range. `roots.slots` contains
+    /// addresses selected from activation frames and registered Rust-side roots.
+    /// All referenced words are updated in place.
     ///
     /// # Safety
     ///
-    /// Every nonempty root range must be valid, word-aligned, writable, and belong
-    /// exclusively to the current runtime thread for the duration of this call.
+    /// The stack range and every nonnull slot address must be valid, word-aligned,
+    /// writable, and exclusive to the current runtime thread during this call.
     pub unsafe fn allocate(
         &mut self, size_words: usize, tag: AllocationKind, roots: Roots<'_>,
     ) -> Result<*mut u8, OutOfMemory> {
@@ -285,7 +285,7 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
 
     /// Swap semispaces and copy the transitive closure of the roots.
     unsafe fn collect(&mut self, roots: Roots<'_>) {
-        let Roots { stack, environment, host } = roots;
+        let Roots { stack, slots } = roots;
         let from_index = self.active;
         let to_index = 1 - from_index;
         let from_base = self.spaces[from_index].base();
@@ -296,19 +296,7 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
         unsafe {
             self.forward_range(stack.start, stack.end, from_base, from_used, to_base, &mut to_used)
         };
-        if environment.start != environment.end {
-            unsafe {
-                self.forward_range(
-                    environment.start,
-                    environment.end,
-                    from_base,
-                    from_used,
-                    to_base,
-                    &mut to_used,
-                )
-            };
-        }
-        for root in host.iter_mut().filter(|root| !root.is_null()) {
+        for root in slots.iter_mut().filter(|root| !root.is_null()) {
             let value = unsafe { **root };
             unsafe { **root = self.forward(value, from_base, from_used, to_base, &mut to_used) };
         }
@@ -412,11 +400,7 @@ mod tests {
 
         fn roots(&mut self) -> Roots<'_> {
             let start = self.words.as_mut_ptr();
-            Roots {
-                stack: RootRange { start, end: unsafe { start.add(N) } },
-                environment: RootRange { start: ptr::null_mut(), end: ptr::null_mut() },
-                host: &mut [],
-            }
+            Roots { stack: RootRange { start, end: unsafe { start.add(N) } }, slots: &mut [] }
         }
 
         unsafe fn allocate<const BYTES: usize, const REGIONS: usize>(
@@ -745,11 +729,8 @@ mod tests {
         unsafe { write_words(garbage, &[immediate(1), immediate(2)]) };
         let mut host_slots = [std::ptr::addr_of_mut!(host_value)];
         let empty = ptr::null_mut();
-        let root_set = Roots {
-            stack: RootRange { start: empty, end: empty },
-            environment: RootRange { start: empty, end: empty },
-            host: &mut host_slots,
-        };
+        let root_set =
+            Roots { stack: RootRange { start: empty, end: empty }, slots: &mut host_slots };
         let fresh = unsafe { heap.allocate(2, AllocationKind::Scanned, root_set) }
             .expect("collection succeeds");
         unsafe { write_words(fresh, &[immediate(3), immediate(4)]) };

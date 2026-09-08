@@ -197,6 +197,9 @@ impl Eval for Instruction {
                 }
                 Ok(())
             }
+            | Instruction::RetainFrame(_) => {
+                unreachable!("native frames require the AMD64 backend")
+            }
         }
     }
 }

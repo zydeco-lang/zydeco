@@ -68,6 +68,21 @@ pub struct ContinuationPackage {
     pub residual: StackId,
 }
 
+/// Checked provenance retained by closure conversion for native frame lowering.
+/// The executable SPSLow tree still contains the portable capture package.
+#[derive(Clone, Debug)]
+pub struct ContinuationEntry {
+    pub result: VPatId,
+    pub body: CompuId,
+    pub captures: Vec<CaptureBinding>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CaptureBinding {
+    pub source: DefId,
+    pub binding: DefId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Stack {
     Var(Bullet),
