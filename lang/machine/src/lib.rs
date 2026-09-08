@@ -2,7 +2,7 @@
 //!
 //! [`word`] owns the common scalar representation. [`native`] describes the current
 //! AMD64 boundary; [`frames`] implements its activation transitions and root discovery.
-//! Frame metadata uses `alloc`; frame words stay in one fixed allocation.
+//! Frame metadata and word storage use `alloc`; entry may grow and relocate words.
 //! Future runtime schemes can have their own state and protocols.
 //! The `runtime` feature enables target-side bindings. The `bundle` feature embeds
 //! these sources so a compiler can supply its exact model to a standalone stub build.

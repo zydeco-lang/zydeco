@@ -1,9 +1,13 @@
-//! Retained activation frames. Storage never moves while generated code addresses it.
+//! Retained activation frames. Entry returns a fresh base after any storage growth.
 //! Transitions do not collect the managed heap. Suspensions are consumed in nesting
 //! order, and their slot sets supply precise roots independently of reserved capacity.
 
 use crate::{native::Word, word::RuntimeWord};
 use alloc::vec::Vec;
+
+pub mod storage;
+pub mod moving;
+use storage::Storage;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LayoutId(pub usize);
@@ -29,6 +33,7 @@ impl Token {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FrameError {
     Capacity { requested: usize, available: usize },
+    Allocation { words: usize },
     MissingActivation,
     WrongLayout { expected: LayoutId, actual: LayoutId },
     InvalidSlot { slot: usize, words: usize },
@@ -45,6 +50,7 @@ impl core::fmt::Display for FrameError {
                 "environment stack overflow: requested {requested} words, {available} available"
             ),
             | Self::MissingActivation => f.write_str("missing active environment frame"),
+            | Self::Allocation { words } => write!(f, "cannot allocate {words} environment words"),
             | Self::WrongLayout { expected, actual } => {
                 write!(f, "frame layout mismatch: expected {}, found {}", expected.0, actual.0)
             }
@@ -73,22 +79,23 @@ struct Suspension {
     slots: &'static [Word],
 }
 
-/// A fixed nonmoving environment with separately growable control metadata.
+/// A nested environment with independently chosen word storage.
 /// Saved references are checked tokens, never pointers into the metadata vectors.
-/// The word allocation is established on first entry and never resized afterwards.
-/// Moving this owner does not move its slots. Access through Vec's raw-pointer API
-/// avoids creating overlapping Rust references to words addressed by generated code.
-pub struct Frames<const WORDS: usize> {
-    storage: Vec<Word>,
+/// Enter may relocate words; callers must use its returned base and discard all
+/// earlier slot addresses. Suspend and Roots never relocate words. Managed values
+/// cannot contain pointers into these frames. Root addresses are temporary, and
+/// cannot survive another entry. Moving the Rust owner does not move its words.
+pub struct Frames<S: Storage> {
+    storage: S,
     activations: Vec<Activation>,
     suspensions: Vec<Suspension>,
     next_token: u64,
     high_water: usize,
 }
 
-impl<const WORDS: usize> Frames<WORDS> {
+impl<S: Storage> Frames<S> {
     pub const EMPTY: Self = Self {
-        storage: Vec::new(),
+        storage: S::EMPTY,
         activations: Vec::new(),
         suspensions: Vec::new(),
         next_token: 0,
@@ -102,25 +109,23 @@ impl<const WORDS: usize> Frames<WORDS> {
         self.activations.last().map_or(0, |frame| frame.end)
     }
 
+    pub fn reserved_words(&self) -> usize {
+        self.storage.reserved_words()
+    }
+
     /// Establish a closure activation, reusing an unretained active frame.
     /// All validation precedes mutation, including failure during tail replacement.
     pub fn enter(&mut self, layout: Layout) -> Result<*mut Word, FrameError> {
         let replace = self.activations.last().is_some_and(|frame| frame.retained == 0);
         let base = if replace { self.activations.last().unwrap().base } else { self.used_words() };
-        let available = WORDS - base;
-        if layout.words > available {
-            return Err(FrameError::Capacity { requested: layout.words, available });
-        }
-        if self.storage.is_empty() {
-            self.storage.resize(WORDS, 0);
-        }
+        self.storage.reserve(base, layout.words)?;
         if replace {
             self.activations.pop();
         }
         let end = base + layout.words;
         self.activations.push(Activation { layout, base, end, retained: 0 });
         self.high_water = self.high_water.max(end);
-        Ok(self.storage.as_mut_ptr().wrapping_add(base))
+        Ok(self.storage.base().wrapping_add(base))
     }
 
     fn active(&self, layout: LayoutId) -> Result<Activation, FrameError> {
@@ -174,7 +179,7 @@ impl<const WORDS: usize> Frames<WORDS> {
         self.suspensions.pop();
         self.activations.truncate(index + 1);
         self.activations[index].retained -= 1;
-        Ok(self.storage.as_mut_ptr().wrapping_add(frame.base))
+        Ok(self.storage.base().wrapping_add(frame.base))
     }
 
     /// Addresses of active live slots and the union of pending suspensions' slots.
@@ -194,7 +199,7 @@ impl<const WORDS: usize> Frames<WORDS> {
             .collect::<Vec<_>>();
         indices.sort_unstable();
         indices.dedup();
-        let base = self.storage.as_mut_ptr();
+        let base = self.storage.base();
         Ok(indices.into_iter().map(|index| base.wrapping_add(index)).collect())
     }
 }
@@ -249,8 +254,8 @@ impl Action<Word> {
     /// # Safety
     /// The descriptor and its `words` trailing slot indices must be valid static
     /// storage emitted by the matching compiler. Enter/Resume have no trailing slots.
-    pub unsafe fn apply<const WORDS: usize>(
-        &'static self, frames: &mut Frames<WORDS>, token: Word,
+    pub unsafe fn apply<S: Storage>(
+        &'static self, frames: &mut Frames<S>, token: Word,
     ) -> Result<Word, FrameError> {
         let layout = LayoutId(self.layout);
         match self.kind as u64 {
@@ -273,8 +278,8 @@ impl Action<Word> {
 
     /// # Safety
     /// The descriptor must be followed by `words` static slot indices.
-    pub unsafe fn root_slots<const WORDS: usize>(
-        &'static self, frames: &mut Frames<WORDS>,
+    pub unsafe fn root_slots<S: Storage>(
+        &'static self, frames: &mut Frames<S>,
     ) -> Result<Vec<*mut Word>, FrameError> {
         if self.kind as u64 != ActionKind::Roots as u64 {
             return Err(FrameError::InvalidAction);
@@ -311,7 +316,7 @@ mod tests {
 
     #[test]
     fn emitted_descriptors_drive_the_runtime_transitions_and_roots() {
-        let mut frames = Frames::<8>::EMPTY;
+        let mut frames = Frames::<storage::Fixed<8>>::EMPTY;
         let enter = Descriptor::serialize(Action::enter(CALLER), &[]);
         let caller = unsafe { enter.apply(&mut frames, 0).unwrap() } as *mut Word;
         unsafe {
@@ -334,7 +339,7 @@ mod tests {
 
     #[test]
     fn nested_resumptions_preserve_slots_and_reclaim_younger_storage() {
-        let mut frames = Frames::<8>::EMPTY;
+        let mut frames = Frames::<storage::Fixed<8>>::EMPTY;
         let caller = frames.enter(CALLER).unwrap();
         unsafe {
             caller.write(11);
@@ -365,7 +370,7 @@ mod tests {
 
     #[test]
     fn a_tail_chain_under_a_retained_caller_has_bounded_storage() {
-        let mut frames = Frames::<8>::EMPTY;
+        let mut frames = Frames::<storage::Fixed<8>>::EMPTY;
         let caller = frames.enter(CALLER).unwrap();
         unsafe {
             caller.write(71);
@@ -387,7 +392,7 @@ mod tests {
 
     #[test]
     fn invalid_slots_and_overflow_leave_the_existing_activation_usable() {
-        let mut frames = Frames::<8>::EMPTY;
+        let mut frames = Frames::<storage::Fixed<8>>::EMPTY;
         assert_eq!(frames.suspend(CALLER.id, &[]), Err(FrameError::MissingActivation));
         let caller = frames.enter(CALLER).unwrap();
         unsafe {
@@ -415,6 +420,51 @@ mod tests {
         );
         frames.enter(CALLEE).unwrap();
         assert_eq!(frames.resume(CALLER.id, saved).unwrap(), caller);
+    }
+
+    #[test]
+    fn growth_preserves_offsets_and_tokens_beyond_the_old_fixed_capacity() {
+        let mut frames = Frames::<storage::Growable>::EMPTY;
+        let first = frames.enter(CALLER).unwrap();
+        unsafe { first.write(71) };
+        let outer = frames.suspend(CALLER.id, &[0]).unwrap();
+        let inner = frames.suspend(CALLER.id, &[0]).unwrap();
+        let large = Layout { id: CALLEE.id, words: 200_000 };
+        let active = frames.enter(large).unwrap();
+        // Only the new base and checked tokens may be used after entry. Never
+        // dereference `first`: the allocator is allowed to have moved its words.
+        assert_eq!(frames.used_words(), 200_003);
+        assert_eq!(unsafe { frames.roots(large.id, &[]).unwrap()[0].read() }, 71);
+        let reserved = frames.reserved_words();
+        for _ in 0..10_000 {
+            assert_eq!(frames.enter(large).unwrap(), active);
+        }
+        assert_eq!(frames.reserved_words(), reserved);
+        assert_eq!(frames.resume(CALLER.id, outer), Err(FrameError::InvalidResumption));
+        let restored = frames.resume(CALLER.id, inner).unwrap();
+        assert_eq!(unsafe { restored.read() }, 71);
+        assert_eq!(frames.roots(CALLER.id, &[0]).unwrap(), [restored]);
+        frames.resume(CALLER.id, outer).unwrap();
+        assert_eq!(frames.used_words(), CALLER.words);
+    }
+
+    #[test]
+    fn failed_growth_preserves_the_active_base_and_pending_roots() {
+        let mut frames = Frames::<storage::Growable<8>>::EMPTY;
+        let base = frames.enter(CALLER).unwrap();
+        unsafe { base.write(71) };
+        let token = frames.suspend(CALLER.id, &[0]).unwrap();
+        assert_eq!(
+            frames.enter(Layout { id: CALLEE.id, words: 6 }),
+            Err(FrameError::Capacity { requested: 6, available: 5 })
+        );
+        assert_eq!(frames.roots(CALLER.id, &[]).unwrap(), [base]);
+        assert_eq!(frames.resume(CALLER.id, token).unwrap(), base);
+        assert_eq!(unsafe { base.read() }, 71);
+        let mut impossible = Frames::<storage::Fixed<{ usize::MAX }>>::EMPTY;
+        assert_eq!(impossible.enter(CALLER), Err(FrameError::Allocation { words: usize::MAX }));
+        assert_eq!(impossible.used_words(), 0);
+        assert_eq!(impossible.reserved_words(), 0);
     }
 }
 

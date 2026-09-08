@@ -23,7 +23,7 @@ impl Scenario {
     }
 
     fn run(&self) {
-        let mut frames = Frames::<CAPACITY>::EMPTY;
+        let mut frames = Frames::<zydeco_machine::frames::storage::Fixed<CAPACITY>>::EMPTY;
         let mut base = frames.enter(self.layout(0)).unwrap();
         let mut saved = Vec::new();
         for depth in 0..self.depth {

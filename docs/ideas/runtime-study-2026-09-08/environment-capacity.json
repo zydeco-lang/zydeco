@@ -1,0 +1,285 @@
+{
+  "metadata": {
+    "schema": 1,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "host_machine": "arm64",
+    "native_target": "x86_64",
+    "translation_expected": true,
+    "optimized_runtime_environment": {
+      "CARGO_PROFILE_DEV_OPT_LEVEL": "3",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "false",
+      "CARGO_PROFILE_DEV_OVERFLOW_CHECKS": "false",
+      "CARGO_PROFILE_DEV_LTO": "off"
+    },
+    "options": {
+      "variant": [
+        [
+          "original-fixed",
+          "build/runtime-study-v2/baseline/zydeco",
+          "build/runtime-study-v2/baseline/runtime"
+        ],
+        [
+          "packed-fixed",
+          "build/runtime-study-v2/zydeco-inline",
+          "build/runtime-study-v2/fixed-runtime"
+        ],
+        [
+          "packed-growable",
+          "build/runtime-study-v2/zydeco-inline",
+          "runtime"
+        ]
+      ],
+      "output": "build/runtime-study-v2/capacity",
+      "profiles": [
+        "optimized"
+      ],
+      "samples": 5,
+      "scale": 10,
+      "timeout": 30,
+      "build_timeout": 300,
+      "capacity_only": true,
+      "growable_variant": [
+        "packed-growable"
+      ],
+      "workloads": null
+    },
+    "tools": {
+      "rustc": {
+        "command": [
+          "rustc",
+          "--version",
+          "--verbose"
+        ],
+        "seconds": 0.018162417,
+        "exit": 0,
+        "stdout": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cargo": {
+        "command": [
+          "cargo",
+          "--version"
+        ],
+        "seconds": 0.013116375,
+        "exit": 0,
+        "stdout": "cargo 1.98.0 (797e8a9bc 2026-08-05)\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "node": {
+        "command": [
+          "node",
+          "--version"
+        ],
+        "seconds": 0.0100495,
+        "exit": 0,
+        "stdout": "v24.15.0\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "nasm": {
+        "command": [
+          "nasm",
+          "--version"
+        ],
+        "seconds": 0.002731959,
+        "exit": 0,
+        "stdout": "NASM version 3.02 compiled on Jun 29 2026\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "revision": {
+        "command": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "seconds": 0.009508292,
+        "exit": 0,
+        "stdout": "88329154a44a579a7a29eb7d8972f7e22eab2f2a\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "working_tree": {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "seconds": 0.015916291,
+        "exit": 0,
+        "stdout": " M CONTRIBUTING.md\n M DESIGN.md\n M docs/proposals/native-frames.md\n M lang/assembly/src/frames.rs\n M lang/machine/examples/frame_layouts.rs\n M lang/machine/src/frames.rs\n M lang/machine/src/lib.rs\n M lang/tests/runtime-study.py\n M lang/tests/tests/native_gc.rs\n M runtime/stub.rs\n?? lang/machine/src/frames/\n?? lang/tests/environment-study.py\n?? lang/tests/examples/\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cpu": {
+        "command": [
+          "sysctl",
+          "-n",
+          "machdep.cpu.brand_string"
+        ],
+        "seconds": 0.002386666,
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n",
+        "timed_out": false
+      }
+    },
+    "input_hashes": {
+      "${REPO}/build/runtime-study-v2/baseline/zydeco": "3499cde65a2cacfcba6331b39d2b1fcf665b509e0872d10fd1797c3db46bb531",
+      "${REPO}/build/runtime-study-v2/zydeco-inline": "353fe55ac4644e63d1ba448573e339901c140631bc74f9e479a5b39d704ba331",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/stub.rs": "371c61375becd7a736b9cec236cf2ef092bcc2b876e49638056abdee49b56354",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/stub.rs": "f469806ed9db8ee481354ac1b71f120d0467f6d9ccb12679e948cea619cc316d",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/runtime/stub.rs": "e0d29fc8ffa36e6ae500507b32871db16df2eb4f13e906f03bfce424e17f6d5b",
+      "${REPO}/runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/lang/machine/src/closure.rs": "b0382c39a8440ee60d686d6dbf9f5a7df0e5c7d1d3cfe0536be4fec94364f1ad",
+      "${REPO}/lang/machine/src/frames/moving.rs": "0291a92d54e2ac25899898b7abb36a958ebb886ca9c07fa5fb97686f46973eee",
+      "${REPO}/lang/machine/src/frames/storage.rs": "56a615dfce199847874b1a6e4d9258d20ad8fabc7c7975f99f29e63ea53d4734",
+      "${REPO}/lang/machine/src/frames.rs": "7b6542d2d9486e6864a1dad37a62e0f7477db6a78babb2f7c1cecbe86763a832",
+      "${REPO}/lang/machine/src/lib.rs": "21f02e3b32fe070bd6b2beb05b271d18431d3057bd56527dd3f3bb333cad8858",
+      "${REPO}/lang/machine/src/native.rs": "b5aff3ec2af8ff3bd61b031cec504c9cb1aa3f8d62e9d56de2c9f45c44f734e8",
+      "${REPO}/lang/machine/src/word.rs": "569d7f8324cb4361bede8e0d987788b2e130d07d70f54303e8814ce69c1d509a",
+      "builtin.zy": "58fe4840c1afc416f80c98a35d2f79913f09a976014bc045a9025773fae59610",
+      "runtime-study.py": "1a2dff7f739724dd83ae840ea2a5b8db9ddc570364792dadd895178b86a31b70",
+      "wasm-host.mjs": "2710b37125e8739aa1d5238b90d359d3e0726ffba5575e98a42fec587194962a",
+      "environment-study.py": "f49b3c3e30cb04e8aac3fe6fa0c906a1ddc30db09b2b2ed77a4b7ba813c2d913"
+    },
+    "hardware": [
+      {
+        "chip_type": "Apple M5 Pro",
+        "machine_model": "Mac17,8",
+        "number_processors": "proc 18:6:0:12",
+        "physical_memory": "48 GB"
+      }
+    ]
+  },
+  "records": [
+    {
+      "kind": "source",
+      "workload": "deep-frame-growth",
+      "path": "${REPO}/build/runtime-study-v2/capacity/sources/deep-frame-growth.zy",
+      "sha256": "6405f863d4eea6d8b507f1214cab709f30762c64167d10177c20064f7e2b0855"
+    },
+    {
+      "kind": "capacity-build",
+      "variant": "original-fixed",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/capacity/sources/deep-frame-growth.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/capacity/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 1.577965084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "capacity",
+      "variant": "original-fixed",
+      "expected": "capacity-rejected",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/capacity/original-fixed/deep-frame-growth.exe"
+      ],
+      "seconds": 0.299660083,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Zydeco runtime: environment stack overflow: requested 20 words, 7 available\n",
+      "timed_out": false
+    },
+    {
+      "kind": "capacity-build",
+      "variant": "packed-fixed",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/capacity/sources/deep-frame-growth.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/capacity/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 1.45475925,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "capacity",
+      "variant": "packed-fixed",
+      "expected": "capacity-rejected",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/capacity/packed-fixed/deep-frame-growth.exe"
+      ],
+      "seconds": 0.286849917,
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Zydeco runtime: environment stack overflow: requested 19 words, 11 available\n",
+      "timed_out": false
+    },
+    {
+      "kind": "capacity-build",
+      "variant": "packed-growable",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/capacity/sources/deep-frame-growth.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/capacity/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 1.337457541,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "capacity",
+      "variant": "packed-growable",
+      "expected": "success",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/capacity/packed-growable/deep-frame-growth.exe"
+      ],
+      "seconds": 0.308189417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    }
+  ]
+}

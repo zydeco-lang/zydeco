@@ -1,0 +1,18 @@
+{
+  "data_sha256": {
+    "environment-pilot.json": "c17891cd517107b721a04603e153e018d0c41fd3fe3cdc2aac941c2f2c6860bf",
+    "environment-factorial.json": "5dd8346972f19a63f248198660012e56da44c68c4ecbd7efbc2b19ffe1536d82",
+    "environment-inlined.json": "3e6545974a364b187eda938541738f97f80605018b46bc949c017c382c7bb6d8",
+    "environment-capacity.json": "76b0db3ce2e7bca8354ce0a1bf9b6b4c9eda350bee2ba0f28c3fa2388e7524fb",
+    "environment-layouts.csv": "00172b9188793c493a4f81e22bb6d8550affe8f8406b10739da1b3a8b4e675f3"
+  },
+  "trace_sources_sha256": {
+    "lang/tests/examples/environment_layouts.rs": "19c71f72fecc9cd4b1a52dabeff81d0208be6fd2188577d67426aa661bde2d76",
+    "runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+    "lang/machine/src/frames/moving.rs": "0291a92d54e2ac25899898b7abb36a958ebb886ca9c07fa5fb97686f46973eee",
+    "lang/machine/src/frames/storage.rs": "56a615dfce199847874b1a6e4d9258d20ad8fabc7c7975f99f29e63ea53d4734",
+    "lang/tests/environment-study.py": "f49b3c3e30cb04e8aac3fe6fa0c906a1ddc30db09b2b2ed77a4b7ba813c2d913"
+  },
+  "trace_command": "cargo run --release -p zydeco-tests --example environment_layouts",
+  "trace_exit": 0
+}

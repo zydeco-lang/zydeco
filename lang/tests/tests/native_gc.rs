@@ -15,6 +15,96 @@ impl gc::RootSource for CountedRoots<'_> {
     }
 }
 
+struct HeapFrameRoots<'a> {
+    frames: Vec<zydeco_machine::frames::moving::LiveFrame<'a>>,
+}
+
+impl gc::RootSource for HeapFrameRoots<'_> {
+    fn with_roots<T>(self, trace: impl FnOnce(gc::Roots<'_>) -> T) -> T {
+        unsafe {
+            zydeco_machine::frames::moving::MovingRoots::with_roots(self.frames, |slots| {
+                trace(gc::Roots {
+                    stack: gc::RootRange { start: std::ptr::null_mut(), end: std::ptr::null_mut() },
+                    slots,
+                })
+            })
+            .unwrap()
+        }
+    }
+}
+
+#[test]
+fn managed_frames_restore_shared_live_fields_after_movement_and_collecting_failure() {
+    use gc::{CheneyHeap, RootRange, Roots};
+    use zydeco_machine::{
+        frames::{
+            Layout, LayoutId,
+            moving::{ALLOCATION_KIND, LiveFrame},
+        },
+        native::{AllocationKind, Word},
+    };
+    let mut heap = CheneyHeap::<256, 1>::new();
+    let empty = RootRange { start: std::ptr::null_mut(), end: std::ptr::null_mut() };
+    // All three initial cells fit, so these allocation calls cannot collect.
+    let value = unsafe {
+        heap.allocate(1, AllocationKind::Opaque, Roots { stack: empty, slots: &mut [] }).unwrap()
+    };
+    let frame = unsafe {
+        heap.allocate(3, ALLOCATION_KIND, Roots { stack: empty, slots: &mut [] }).unwrap()
+    };
+    let dead = unsafe {
+        heap.allocate(12, AllocationKind::Opaque, Roots { stack: empty, slots: &mut [] }).unwrap()
+    };
+    unsafe {
+        value.cast::<Word>().write(71);
+        frame.cast::<Word>().write(value as Word);
+        frame.cast::<Word>().add(1).write(dead as Word);
+        frame.cast::<Word>().add(2).write(value as Word);
+    }
+    let layout = Layout { id: LayoutId(0), words: 3 };
+    let mut handle = frame as Word;
+    let roots =
+        HeapFrameRoots { frames: vec![LiveFrame { layout, handle: &mut handle, slots: &[0, 2] }] };
+    // This fits only if the dead field is excluded. Two live fields share one object.
+    unsafe { heap.allocate(9, AllocationKind::Opaque, roots).unwrap() };
+    assert_ne!(handle, frame as Word);
+    let relocated = unsafe { (handle as *const Word).read() };
+    assert_ne!(relocated, value as Word);
+    assert_eq!(unsafe { (handle as *const Word).add(2).read() }, relocated);
+    assert_eq!(unsafe { (relocated as *const Word).read() }, 71);
+    let previous_handle = handle;
+    let roots =
+        HeapFrameRoots { frames: vec![LiveFrame { layout, handle: &mut handle, slots: &[0, 2] }] };
+    // Collection succeeds, allocation fails, and both the base and live fields
+    // still need repair before a caller can inspect its previous environment.
+    let error = unsafe { heap.allocate(24, AllocationKind::Opaque, roots).unwrap_err() };
+    assert_eq!(error.live_bytes, 64);
+    assert_ne!(handle, previous_handle);
+    let value = unsafe { (handle as *const Word).read() };
+    assert_eq!(unsafe { (value as *const Word).read() }, 71);
+    assert_eq!(unsafe { (handle as *const Word).add(2).read() }, value);
+}
+
+#[test]
+fn managed_root_publication_rejects_an_invalid_map_before_running_the_collector() {
+    use zydeco_machine::frames::{
+        FrameError, Layout, LayoutId,
+        moving::{LiveFrame, MovingRoots},
+    };
+    let mut words = [71];
+    let mut handle = words.as_mut_ptr() as usize;
+    let frames = vec![LiveFrame {
+        layout: Layout { id: LayoutId(0), words: 1 },
+        handle: &mut handle,
+        slots: &[1],
+    }];
+    let result =
+        unsafe { MovingRoots::with_roots(frames, |_| panic!("invalid map was published")) };
+    assert_eq!(result, Err::<(), _>(FrameError::InvalidSlot { slot: 1, words: 1 }));
+    assert_eq!(handle, words.as_mut_ptr() as usize);
+    assert_eq!(words, [71]);
+}
+
 #[test]
 fn allocation_publishes_roots_only_when_collection_needs_them() {
     use gc::{CheneyHeap, RootRange, Roots};
@@ -66,7 +156,7 @@ fn collection_updates_suspended_slots_without_retaining_dead_frame_slots() {
         native::{AllocationKind, Word},
     };
     let mut heap = CheneyHeap::<128, 1>::new();
-    let mut frames = Frames::<8>::EMPTY;
+    let mut frames = Frames::<zydeco_machine::frames::storage::Fixed<8>>::EMPTY;
     let owner = Layout { id: LayoutId(0), words: 2 };
     let callee = Layout { id: LayoutId(1), words: 1 };
     let base = frames.enter(owner).unwrap();

@@ -835,7 +835,7 @@ Aligned Rust-owned pointers, such as host strings, are outside both semispaces a
 by compiler phases and the standalone native runtime.
 It owns the tagged-word operations described above, the closure field order used by ZASM,
 the AMD64 host-transfer representation, and retained activation transitions.
-The frame model uses Rust's `alloc` for control metadata and one fixed environment allocation.
+The frame model uses Rust's `alloc` for control metadata and growable environment storage.
 Compiler-specific literal resolution stays in `zydeco-syntax`.
 
 Closure records are parameterized by their word carrier.
@@ -874,15 +874,20 @@ and individual builtin signatures remain outside the model.
 The collector owns its private headers and forwarding algorithm,
 while the model supplies allocation kinds and the immediate tag.
 A future scheme can introduce its own state and transition types in this crate; there is no universal runtime trait.
-Shared abstractions should follow a second concrete implementation with demonstrated common requirements.
+The fixed and growable environment stores now share the narrow `frames::storage::Storage` contract.
+The experimental moving-heap root adapter has its own contract: managed collection can relocate those frames,
+which is outside the entry-only relocation capability of `Storage`.
 
 ### Native Environments and Control Stack
 
 The AMD64 backend uses the machine stack for arguments, destructor tags, continuations, and temporary values.
-The variable environment uses activation frames in a separate fixed 1 MiB region.
+The variable environment uses activation frames in a separate, geometrically growing Rust allocation.
 Generated closure entries establish an active frame and load its base into `rbp`;
 local branches preserve it, and return entries restore the retained caller's base.
-Bindings use static offsets within their activation, including bindings introduced by its continuations.
+Bindings use statically packed offsets within their activation, including bindings introduced by its continuations.
+Packing accounts for both current execution and every possibly pending continuation.
+Entry can relocate the backing allocation; saved frame offsets remain valid and the returned base replaces `rbp`.
+Managed collection does not move this allocation.
 
 Portable SPSLow and ZASM retain explicit capture products.
 Native preparation uses checked continuation provenance to replace a return continuation's capture product

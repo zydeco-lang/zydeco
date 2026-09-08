@@ -128,9 +128,11 @@ Keep that setting in custom runtime manifests.
 The `native_model` integration target checks both default and release runtime linking and execution.
 
 Native builds use retained activation frames and static frame action descriptors from `zydeco-machine`.
-The environment region is fixed at 1 MiB; exhausting it reports an environment stack overflow
-before overwriting retained storage.
-Changing that capacity also changes the model identity and requires rebuilding the compiler.
+The environment grows on demand through the shared model; it has no fixed 1 MiB limit.
+Frame sizes and slot reuse are planned statically.
+Allocation failure preserves the existing frame state before the runtime reports the failure.
+The fixed-capacity store remains available in the model for controlled representation experiments.
+The managed-value heap still has its separate semispace capacity.
 `--target zasm` displays the portable capture-based lowering; `--target asm` uses checked native frame preparation.
 The [frame proposal](docs/proposals/native-frames.md) describes this boundary and its focused regression targets.
 

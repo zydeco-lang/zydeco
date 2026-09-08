@@ -6,10 +6,11 @@ This proposal describes an alternative AMD64 environment representation: preserv
 by a return continuation in an activation frame while another computation runs.
 The continuation resumes against that frame, avoiding a separate heap capture tuple
 and the reconstruction of its local environment.
-The first candidate is implemented for AMD64 through the shared `zydeco-machine` model.
+The candidate is implemented for AMD64 through the shared `zydeco-machine` model,
+with statically packed slots and growable environment storage.
 It replaces native continuation capture tuples with retained slots; portable ZASM
 and WebAssembly keep their existing capture-based lowering.
-Performance comparison remains future work.
+The [runtime evaluation](../ideas/cbpv-runtime-evaluation.md) records the measured space and execution tradeoffs.
 
 The independently reviewable question is the lifetime of an activation and the context available
 when its continuation resumes.
@@ -129,11 +130,14 @@ Preservation and root tracking must account for all pending uses,
 rather than assuming one saved frame reference per activation.
 Resuming an inner continuation cannot invalidate an outer continuation's slots.
 
-Frame references must remain valid while frames are retained.
-A nonmoving allocation strategy, such as stable segments, can supply that property directly.
-Moving a contiguous environment allocation would instead require relocatable references
-or updating every saved reference.
-An unchecked growable buffer with interior raw pointers does not satisfy the contract.
+Logical frame references must remain valid while frames are retained.
+The current implementation saves word offsets in activation metadata and indices in suspension records.
+Entry may relocate the contiguous allocation; it returns the new active base,
+which generated code loads into `rbp` before accessing any environment slot.
+Earlier raw bases and root-slot addresses expire at entry.
+No managed value, escaping closure, foreign borrow, or saved continuation can contain an environment-slot pointer.
+Suspend, Resume, root enumeration, and managed collection do not relocate this storage.
+A nonmoving store satisfies the same protocol with a stronger physical-address guarantee.
 
 ### Return and reclamation
 
@@ -225,12 +229,30 @@ The native frame analysis follows local control edges and suspension-to-resumpti
 It verifies initialized bindings by forward dataflow, independently of ZASM's context annotations,
 and requires suspension captures to agree with the corresponding resumption aliases.
 
-Every distinct local definition reserves one slot within its activation.
-Captured aliases resolve to the original definition's slot, including through several nested continuations.
-Backward liveness supplies the active slot set at each allocation;
-suspension descriptors supply the slots required by pending continuations.
+Captured aliases resolve to their original definitions, including through several nested continuations.
+Backward liveness supplies the values needed by current execution at each program point.
+A separate forward may-analysis tracks values retained by pending continuations within each activation.
+An ordinary successor inherits that pending set; suspension adds its canonical captures.
+The suspension-to-resumption edge carries the incoming set, because that resumption consumes its own suspension
+while older suspensions remain pending.
+Joins take a union, conservatively preserving every possible pending use.
+
+Two canonical definitions interfere when they are simultaneously live or pending at a program point.
+A definition also interferes with every value preserved across its write, even if its own result is dead.
+The planner colors this interference graph with a deterministic greedy order, independently for each activation.
+Aliases inherit their source's slot.
+A frame with no definitions needs zero words; otherwise its size is one plus its largest assigned slot.
+This is a static safe bound, not a claim of optimal graph coloring or a whole-program recursion bound.
+The compiler emits the same packed offsets in accesses, suspension maps, and active root maps.
+The runtime still discovers the precise union for the suspensions actually pending at collection time.
 A checked, immutable `NativeProgram` is the AMD64 emitter's input.
-The first layout deliberately avoids packing or reusing different locals' slots within one activation.
+
+For example, after `x` is used for the last time a later result can occupy its slot.
+If an outer continuation still captures `x`, an inner continuation's result must occupy another slot,
+even when the inner code never reads `x`.
+Merely coloring ordinary backward liveness would allow that overwrite.
+Static size is therefore useful together with a preservation analysis; knowing how many names are
+in scope does not establish which storage may be reused.
 
 The lifetime justification comes from the lowered machine-stack operations.
 SPSLow values cannot contain a residual machine stack, and the checked continuation code cannot refer
@@ -252,18 +274,26 @@ The following actions invoke the model's transition methods:
 
 | Action | Model behavior |
 | --- | --- |
-| Enter | Check capacity, then replace an unretained active frame or append above a retained one; return its base. |
+| Enter | Reserve storage, then replace an unretained active frame or append above a retained one; return its possibly relocated base. |
 | Suspend | Validate the layout and slots, retain the active frame, and return a fresh tagged token. |
 | Resume | Validate the most recent token and owner layout, release that suspension, reclaim younger frames, and return the restored base. |
 | Roots | Validate the active slot map and return addresses for its union with every pending suspension's slot map. |
 
-The stub owns `Frames`, which allocates its fixed, nonmoving 1 MiB word region on first entry.
-That allocation never resizes, and moving the Rust owner cannot move its words.
+The stub owns `Frames<Growable>`.
+`frames::storage::Storage` isolates the reservation policy from the common nested transitions,
+with concrete fixed and geometrically growing implementations.
+The growable store allocates on demand at entry and caches capacity at its historical high-water mark.
+It doubles capacity when that suffices, or grows directly to a larger requested extent.
+The fixed store is an experimental comparison using the same actions, not a second continuation convention.
+Moving the Rust owner cannot move its words; successful entry is the only operation permitted to relocate them.
 Slot access uses raw pointers without constructing Rust references over words addressed by generated code.
 Activation and suspension metadata use separate Rust vectors; saved references are indices and checked tokens,
 so metadata growth cannot invalidate frame references.
-Frame overflow is checked before changing existing state.
-Slots need no physical clearing: the compiler proves initialization, and sparse maps select the live roots.
+Size limits and fallible word reservation are checked before changing activation or suspension state.
+Failure leaves existing words, bases, and tokens usable.
+Rust metadata allocation retains the allocator's ordinary failure behavior;
+this is not a general recovery protocol for host allocation failure.
+Slots need no clearing on reuse: the compiler proves initialization, and sparse maps select the live roots.
 The backing storage's initial zeroes do not count as initialized source bindings.
 
 Frame transitions may allocate Rust metadata but never collect the managed heap.
@@ -283,6 +313,28 @@ instruction selection and SysV register placement still need integration checks.
 Returning host and C calls preserve the continuation already on the control stack
 and reach the same resumption prologue.
 The [C import contract](c-ffi.md) continues to own borrowing, unwinding, and reentry restrictions.
+
+### Experimental managed environments
+
+[`frames::moving`](../../lang/machine/src/frames/moving.rs) supplies a collector-integrated experimental contract
+for environments stored as opaque managed cells.
+Each registered live frame has a mutable handle and a slot map covering all its live uses.
+Before collection, `MovingRoots` lifts those values into stable temporary root storage
+and publishes the frame handles alongside them.
+After collection it restores the updated values through the relocated handles.
+Restoration also occurs when the collecting allocation returns an error.
+Dead fields remain untraced, while the collector still copies each retained frame's complete cell.
+
+This capability is outside `Storage`: a managed allocation can move the active environment,
+so generated code would need to reload its base after every potentially collecting operation.
+Entering a managed frame would also require publishing the caller, staged arguments,
+and intermediate results before that entry can allocate.
+The current native Enter action does not provide such a collecting boundary.
+The executable trace and collector regressions exercise the root contract;
+they do not implement a second native backend.
+The explicit handle table covers registered environments, not arbitrary frame references hidden in escaping closures.
+Supporting those references, detached control,
+or shared immutable continuation environments requires its own reachability and ownership account.
 
 ## Alternatives to compare
 
@@ -363,6 +415,11 @@ Their results do not establish that the proposed Zydeco representation is correc
   Uses compile-time control and data flow to choose closure representations while preserving space behavior.
   This is relevant to choosing compact captures versus shared retained storage and to the danger
   of keeping dead data reachable through an environment.
+- Kavon Farvardin and John Reppy, *From Folklore to Fact: Comparing Implementations of Stacks and Continuations*,
+  PLDI 2020 ([author-hosted paper](https://kavon.farvard.in/papers/pldi20-stacks.pdf)).
+  Compares fixed, resizing, segmented, hybrid, linked, and immutable CPS strategies in one compiler and runtime.
+  Its methodology motivates controlling layout, allocator, and calling convention separately.
+  Its call-stack and concurrency measurements do not directly predict Zydeco's separate environment/control stacks.
 - Josh Berdine, Peter W. O'Hearn, Uday S. Reddy, and Hayo Thielecke, *Linearly Used Continuations*,
   CW 2001 ([paper](https://www.microsoft.com/en-us/research/wp-content/uploads/2000/12/linuc.pdf)).
   Gives target-language accounts of structured continuation use, including call/return.
@@ -383,10 +440,10 @@ Their results do not establish that the proposed Zydeco representation is correc
 
 ## Remaining decisions
 
-- Should the fixed region grow through stable segments, or should frame references become relocatable?
-- How much reserved space can slot packing and smaller resumption extents save without disturbing pending aliases?
+- Should very large environments switch from geometric growth to segments, or release cached capacity after deep calls?
+- Can smaller resumption extents or suspension regions save more space than the current static packing?
 - When should compact captures win over retaining a large frame, and how should that decision preserve space behavior?
-- Can root enumeration avoid rebuilding and sorting a sparse address vector at every managed allocation?
+- Can root enumeration avoid rebuilding and sorting a sparse address vector on each collection?
 - Which frame operations should code generation inline while preserving the shared transition contract?
 - What is the smallest experiment that fairly compares the previous scheme, flattened captures, and retained frames?
 

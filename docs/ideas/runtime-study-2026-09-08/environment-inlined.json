@@ -1,0 +1,5735 @@
+{
+  "metadata": {
+    "schema": 1,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "host_machine": "arm64",
+    "native_target": "x86_64",
+    "translation_expected": true,
+    "optimized_runtime_environment": {
+      "CARGO_PROFILE_DEV_OPT_LEVEL": "3",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "false",
+      "CARGO_PROFILE_DEV_OVERFLOW_CHECKS": "false",
+      "CARGO_PROFILE_DEV_LTO": "off"
+    },
+    "options": {
+      "variant": [
+        [
+          "original-fixed",
+          "build/runtime-study-v2/baseline/zydeco",
+          "build/runtime-study-v2/baseline/runtime"
+        ],
+        [
+          "packed-fixed",
+          "build/runtime-study-v2/zydeco-inline",
+          "build/runtime-study-v2/fixed-runtime"
+        ],
+        [
+          "packed-growable",
+          "build/runtime-study-v2/zydeco-inline",
+          "runtime"
+        ]
+      ],
+      "output": "build/runtime-study-v2/inlined",
+      "profiles": [
+        "optimized"
+      ],
+      "samples": 7,
+      "scale": 10.0,
+      "timeout": 30,
+      "build_timeout": 300,
+      "workloads": null
+    },
+    "tools": {
+      "rustc": {
+        "command": [
+          "rustc",
+          "--version",
+          "--verbose"
+        ],
+        "seconds": 0.017983041,
+        "exit": 0,
+        "stdout": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cargo": {
+        "command": [
+          "cargo",
+          "--version"
+        ],
+        "seconds": 0.014254,
+        "exit": 0,
+        "stdout": "cargo 1.98.0 (797e8a9bc 2026-08-05)\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "node": {
+        "command": [
+          "node",
+          "--version"
+        ],
+        "seconds": 0.011740875,
+        "exit": 0,
+        "stdout": "v24.15.0\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "nasm": {
+        "command": [
+          "nasm",
+          "--version"
+        ],
+        "seconds": 0.002785,
+        "exit": 0,
+        "stdout": "NASM version 3.02 compiled on Jun 29 2026\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "revision": {
+        "command": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "seconds": 0.009945458,
+        "exit": 0,
+        "stdout": "88329154a44a579a7a29eb7d8972f7e22eab2f2a\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "working_tree": {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "seconds": 0.014709416,
+        "exit": 0,
+        "stdout": " M CONTRIBUTING.md\n M DESIGN.md\n M docs/proposals/native-frames.md\n M lang/assembly/src/frames.rs\n M lang/machine/examples/frame_layouts.rs\n M lang/machine/src/frames.rs\n M lang/machine/src/lib.rs\n M lang/tests/runtime-study.py\n M lang/tests/tests/native_gc.rs\n M runtime/stub.rs\n?? lang/machine/src/frames/\n?? lang/tests/environment-study.py\n?? lang/tests/examples/\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cpu": {
+        "command": [
+          "sysctl",
+          "-n",
+          "machdep.cpu.brand_string"
+        ],
+        "seconds": 0.0025585,
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n",
+        "timed_out": false
+      }
+    },
+    "input_hashes": {
+      "${REPO}/build/runtime-study-v2/baseline/zydeco": "3499cde65a2cacfcba6331b39d2b1fcf665b509e0872d10fd1797c3db46bb531",
+      "${REPO}/build/runtime-study-v2/zydeco-inline": "353fe55ac4644e63d1ba448573e339901c140631bc74f9e479a5b39d704ba331",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/stub.rs": "371c61375becd7a736b9cec236cf2ef092bcc2b876e49638056abdee49b56354",
+      "${REPO}/build/runtime-study-v2/baseline/runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/stub.rs": "f469806ed9db8ee481354ac1b71f120d0467f6d9ccb12679e948cea619cc316d",
+      "${REPO}/build/runtime-study-v2/fixed-runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/runtime/stub.rs": "e0d29fc8ffa36e6ae500507b32871db16df2eb4f13e906f03bfce424e17f6d5b",
+      "${REPO}/runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/lang/machine/src/closure.rs": "b0382c39a8440ee60d686d6dbf9f5a7df0e5c7d1d3cfe0536be4fec94364f1ad",
+      "${REPO}/lang/machine/src/frames/moving.rs": "0291a92d54e2ac25899898b7abb36a958ebb886ca9c07fa5fb97686f46973eee",
+      "${REPO}/lang/machine/src/frames/storage.rs": "56a615dfce199847874b1a6e4d9258d20ad8fabc7c7975f99f29e63ea53d4734",
+      "${REPO}/lang/machine/src/frames.rs": "7b6542d2d9486e6864a1dad37a62e0f7477db6a78babb2f7c1cecbe86763a832",
+      "${REPO}/lang/machine/src/lib.rs": "21f02e3b32fe070bd6b2beb05b271d18431d3057bd56527dd3f3bb333cad8858",
+      "${REPO}/lang/machine/src/native.rs": "b5aff3ec2af8ff3bd61b031cec504c9cb1aa3f8d62e9d56de2c9f45c44f734e8",
+      "${REPO}/lang/machine/src/word.rs": "569d7f8324cb4361bede8e0d987788b2e130d07d70f54303e8814ce69c1d509a",
+      "builtin.zy": "58fe4840c1afc416f80c98a35d2f79913f09a976014bc045a9025773fae59610",
+      "runtime-study.py": "1a2dff7f739724dd83ae840ea2a5b8db9ddc570364792dadd895178b86a31b70",
+      "wasm-host.mjs": "2710b37125e8739aa1d5238b90d359d3e0726ffba5575e98a42fec587194962a",
+      "environment-study.py": "0868feeb657821b0f9d3e4bb139b3648bd8c288f670d10ae328aaf380e64aca7"
+    },
+    "hardware": [
+      {
+        "chip_type": "Apple M5 Pro",
+        "machine_model": "Mac17,8",
+        "number_processors": "proc 18:6:0:12",
+        "physical_memory": "48 GB"
+      }
+    ]
+  },
+  "records": [
+    {
+      "kind": "source",
+      "workload": "retained-closure",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/retained-closure.zy",
+      "sha256": "f7afc194399c19fdde6190583104baa2b3a237f53c43bd8e95a5a32d52aa8fff"
+    },
+    {
+      "kind": "source",
+      "workload": "zero-captures",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/zero-captures.zy",
+      "sha256": "b654bc0af7dd8c45983540a3fe52489213fc98b100d40eaf103f7d8cc1d0b896"
+    },
+    {
+      "kind": "source",
+      "workload": "shallow-captures",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/shallow-captures.zy",
+      "sha256": "f682f5d7afead33f59f6f29cfa2402d5574cdf7cb6ef3044fb2339a7fd238b32"
+    },
+    {
+      "kind": "source",
+      "workload": "deep-captures",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/deep-captures.zy",
+      "sha256": "871137b3dcf9bc7b8102b9c95d9f6e10b2807b280cff11c3d25159b4772817e7"
+    },
+    {
+      "kind": "source",
+      "workload": "mixed-protocol",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/mixed-protocol.zy",
+      "sha256": "393fea397eaf9682fca05a3943dd5ad992240923cb216214c7e274640cd82634"
+    },
+    {
+      "kind": "source",
+      "workload": "repeated-16",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/repeated-16.zy",
+      "sha256": "202791a4bfe941640a3f68ef4770a5f40d9c99c762e752cb5274ba7aaa5064e6"
+    },
+    {
+      "kind": "source",
+      "workload": "repeated-64",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/repeated-64.zy",
+      "sha256": "98ea44cd28d94a7ff8e6df6f8ffc1ce5b891ea5849de593a447c4d1bc21508b9"
+    },
+    {
+      "kind": "source",
+      "workload": "sequential-locals",
+      "path": "${REPO}/build/runtime-study-v2/inlined/sources/sequential-locals.zy",
+      "sha256": "05540bd4eb821c008a9ab18577e890973b894c60c72bea483ebc80a7df0fb29b"
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "3793f6645d38514c65aab3bd84612dba86bd492cf260eb8c7257cbede7026d59",
+      "assembly_bytes": 32297,
+      "executable_bytes": 449840,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 1.755835167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "88b58e4a50a8ccc28d463f644da630c668131cd6d34935680411a5e34b6527b6",
+      "assembly_bytes": 35673,
+      "executable_bytes": 449904,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 0.677524667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "48335449cff499ca19ebda76cf4749bdd826f661812d6856b6da1a87719c99dd",
+      "assembly_bytes": 54282,
+      "executable_bytes": 455224,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 0.673871541,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "8749ad4e2a4bd77108975561e225aa69f088d556f7d35e11f1d4593dd9df42d3",
+      "assembly_bytes": 112855,
+      "executable_bytes": 467112,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 0.702223917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "fd4b415d4ec5edba0bdc9a5f897c6f75183bc71bcbb523275a110b88e74410d3",
+      "assembly_bytes": 33326,
+      "executable_bytes": 449840,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 0.68385025,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "0d408c05d9f62611f8586372bb38a1d6a2cef1688747e8999e6792e664266923",
+      "assembly_bytes": 112964,
+      "executable_bytes": 467424,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 0.700727458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "0ef6fb4a3fa39d418a84aba055f245a18ff91856ca34c546deb4ef2592e03e9e",
+      "assembly_bytes": 376219,
+      "executable_bytes": 544072,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 0.87054425,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "assembly_sha256": "f159a217232ba3deca05094ec85af527e909a04171339119c714f3e39d3afe2d",
+      "assembly_bytes": 303974,
+      "executable_bytes": 506152,
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/baseline/runtime"
+      ],
+      "seconds": 0.731620667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "0c57054948c4e80509285caa53d2fcb68167195a4ac4fdda165015ff658aa758",
+      "assembly_bytes": 32208,
+      "executable_bytes": 450248,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 1.730552083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "158fcb63ad4cc6c1b4cd53be0394ce1608cca5a777d41df63c905d0ed1a8ab63",
+      "assembly_bytes": 35603,
+      "executable_bytes": 450312,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 0.663262791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "c870442177f7a91eaca69ae4cb1764f4524305d354d7fd8a5cf6a8de964fa44b",
+      "assembly_bytes": 54209,
+      "executable_bytes": 455632,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 0.686830666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "5dfbaff8428950d7f566df04c1f91b7008869bdfbf541be50d4733615e2e7c63",
+      "assembly_bytes": 112662,
+      "executable_bytes": 467528,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 0.730163625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "e4d651ebd81913e1fbf61319d47f8d0f5178fcb49830be085393d76d53677554",
+      "assembly_bytes": 33268,
+      "executable_bytes": 450248,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 0.687281834,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "42350912d7411532ca5f461c69267b69df44612aab811e400f6753f7a42698e8",
+      "assembly_bytes": 112855,
+      "executable_bytes": 467832,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 0.694175583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "4f1d71b021566b5528aea93d8d2b3278d9e73d2f8025bdec25e35994bb039afc",
+      "assembly_bytes": 376086,
+      "executable_bytes": 544472,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 0.872715875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "assembly_sha256": "c73d063cbe7457e26eca6eb3595b89c0eea4ef221ddfe592e5c6a8ffd3a2e1c5",
+      "assembly_bytes": 303649,
+      "executable_bytes": 506552,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/fixed-runtime"
+      ],
+      "seconds": 0.740437875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "0c57054948c4e80509285caa53d2fcb68167195a4ac4fdda165015ff658aa758",
+      "assembly_bytes": 32208,
+      "executable_bytes": 450352,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 1.32750875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "158fcb63ad4cc6c1b4cd53be0394ce1608cca5a777d41df63c905d0ed1a8ab63",
+      "assembly_bytes": 35603,
+      "executable_bytes": 450416,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.682435458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "c870442177f7a91eaca69ae4cb1764f4524305d354d7fd8a5cf6a8de964fa44b",
+      "assembly_bytes": 54209,
+      "executable_bytes": 455736,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.69542875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "5dfbaff8428950d7f566df04c1f91b7008869bdfbf541be50d4733615e2e7c63",
+      "assembly_bytes": 112662,
+      "executable_bytes": 467632,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.702885958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "e4d651ebd81913e1fbf61319d47f8d0f5178fcb49830be085393d76d53677554",
+      "assembly_bytes": 33268,
+      "executable_bytes": 450352,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.68220175,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "42350912d7411532ca5f461c69267b69df44612aab811e400f6753f7a42698e8",
+      "assembly_bytes": 112855,
+      "executable_bytes": 467936,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.696120167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "4f1d71b021566b5528aea93d8d2b3278d9e73d2f8025bdec25e35994bb039afc",
+      "assembly_bytes": 376086,
+      "executable_bytes": 544576,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.869425167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "success": true,
+      "assembly_sha256": "c73d063cbe7457e26eca6eb3595b89c0eea4ef221ddfe592e5c6a8ffd3a2e1c5",
+      "assembly_bytes": 303649,
+      "executable_bytes": 506656,
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.734053958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.382165583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.321849958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.328972625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.30273475,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.31267375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.358623667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.401380375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.339627041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.361614625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.324378459,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.358375625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.302934625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.314668792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.365859,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.39053375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.337003958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.367901041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.319039833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.309722042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.3035495,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.302342333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.364418208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.39454375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.337721459,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.0792795,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.081916458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.080608792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.0390165,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.038892,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.039313584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.050012459,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.052855625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.051159417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.019169625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018917042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.019274125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045017542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045281291,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.045081958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.087828542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.087452333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.08702425,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.108717375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.110017125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.110496458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052478041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052266416,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.053542625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.053170833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.052368875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052274708,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.110214667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.111840666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.110268708,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.089166667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.08807025,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.08771175,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.044525667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.044917125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.044493875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018995708,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.018946209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.019185458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.053590208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.051612291,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.050286166,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.039776542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.039835792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.039363125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.082796167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.082246916,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.080597375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.082777458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.079728333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.081454583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.03991425,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.038773542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.038907625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.050397792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.049961875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.052745958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.020600917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.019099333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.01889225,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.044774125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045849792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045399417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.086909917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.086834042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.087802084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.110179959,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.110138791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.109266791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.052175583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.051982,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052547958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.053148667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.053277041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.052056083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.108774875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.110025375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.109955333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.0874115,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.087096625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.086564042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.044807958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045347625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.045139667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018746167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018707458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.01936575,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.048709875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.053096209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.051129042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.039002583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.039181292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.039825042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.079278125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.082345792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "sample": 3,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.083237875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.082309084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.083594958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.080074083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.040480917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.04020425,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.039158041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.051882625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.050475709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.050415625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.019542583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.020511834,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018584167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045300291,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.0450415,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045393917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.087741917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.088624875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.087555167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.109984292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.10938375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.109771208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052665417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.052596959,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "sample": 4,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052746292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.052257125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.053773791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.053268208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.110869417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.1099515,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.1104835,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.087975917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.086698,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.086853292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.044779333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045241,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.04570025,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.01907875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018863875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018736041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.050306791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.050208334,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.052308375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.040088375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.0388065,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.039924125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.082378791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.079282542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "sample": 5,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.081587417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.079346083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.082510291,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.080824292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.038999458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.038871208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.038613875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.04963225,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.052213333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.050224375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018707875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.018886125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.019161125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.046881959,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.045934333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.045355041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.086650166,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.08795375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.088179083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.110304625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.110585709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.110672333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052983583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.052166459,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "sample": 6,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/native/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.0518315,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.079346083,
+      "min_seconds": 0.079278125,
+      "max_seconds": 0.080597375
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.039002583,
+      "min_seconds": 0.038773542,
+      "max_seconds": 0.039363125
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.050012459,
+      "min_seconds": 0.048709875,
+      "max_seconds": 0.050415625
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.018863875,
+      "min_seconds": 0.018584167,
+      "max_seconds": 0.019185458
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.045241,
+      "min_seconds": 0.044493875,
+      "max_seconds": 0.046881959
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.0874115,
+      "min_seconds": 0.086650166,
+      "max_seconds": 0.087828542
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.1099515,
+      "min_seconds": 0.108717375,
+      "max_seconds": 0.110304625
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.052746292,
+      "min_seconds": 0.051982,
+      "max_seconds": 0.053773791
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.082309084,
+      "min_seconds": 0.081454583,
+      "max_seconds": 0.082796167
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.039181292,
+      "min_seconds": 0.038871208,
+      "max_seconds": 0.040480917
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.052745958,
+      "min_seconds": 0.051882625,
+      "max_seconds": 0.053590208
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.01889225,
+      "min_seconds": 0.018707458,
+      "max_seconds": 0.019542583
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.045347625,
+      "min_seconds": 0.044525667,
+      "max_seconds": 0.045934333
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.087741917,
+      "min_seconds": 0.086853292,
+      "max_seconds": 0.089166667
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.110025375,
+      "min_seconds": 0.109266791,
+      "max_seconds": 0.110585709
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.052665417,
+      "min_seconds": 0.052166459,
+      "max_seconds": 0.053277041
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.082378791,
+      "min_seconds": 0.080608792,
+      "max_seconds": 0.083594958
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.039835792,
+      "min_seconds": 0.038613875,
+      "max_seconds": 0.04020425
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.050475709,
+      "min_seconds": 0.050224375,
+      "max_seconds": 0.051612291
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.019274125,
+      "min_seconds": 0.018946209,
+      "max_seconds": 0.020600917
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.0450415,
+      "min_seconds": 0.044774125,
+      "max_seconds": 0.045355041
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.087975917,
+      "min_seconds": 0.086564042,
+      "max_seconds": 0.088624875
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.110496458,
+      "min_seconds": 0.10938375,
+      "max_seconds": 0.111840666
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "successful_samples": 7,
+      "requested_samples": 7,
+      "median_seconds": 0.052257125,
+      "min_seconds": 0.0518315,
+      "max_seconds": 0.053542625
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "words_by_layout": {
+        "6": 2,
+        "7": 2,
+        "2": 2,
+        "0": 8,
+        "3": 3,
+        "4": 5,
+        "5": 2,
+        "1": 4
+      },
+      "total_static_words": 28,
+      "maximum_frame_words": 8
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "words_by_layout": {
+        "1": 4,
+        "7": 2,
+        "8": 2,
+        "2": 6,
+        "0": 3,
+        "3": 1,
+        "4": 4,
+        "5": 7,
+        "6": 2
+      },
+      "total_static_words": 31,
+      "maximum_frame_words": 7
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "words_by_layout": {
+        "1": 8,
+        "5": 7,
+        "6": 2,
+        "7": 2,
+        "8": 2,
+        "0": 3,
+        "2": 14,
+        "3": 1,
+        "4": 4
+      },
+      "total_static_words": 43,
+      "maximum_frame_words": 14
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "words_by_layout": {
+        "1": 20,
+        "0": 3,
+        "2": 38,
+        "3": 1,
+        "4": 4,
+        "5": 7,
+        "6": 2,
+        "7": 2,
+        "8": 2
+      },
+      "total_static_words": 79,
+      "maximum_frame_words": 38
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "words_by_layout": {
+        "1": 4,
+        "4": 2,
+        "5": 2,
+        "2": 10,
+        "0": 3,
+        "3": 2
+      },
+      "total_static_words": 23,
+      "maximum_frame_words": 10
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "words_by_layout": {
+        "1": 4,
+        "2": 40,
+        "0": 3,
+        "3": 2,
+        "4": 4,
+        "5": 7,
+        "6": 2,
+        "7": 2,
+        "8": 2
+      },
+      "total_static_words": 66,
+      "maximum_frame_words": 40
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "words_by_layout": {
+        "1": 4,
+        "2": 136,
+        "4": 4,
+        "5": 7,
+        "6": 2,
+        "0": 3,
+        "3": 2,
+        "7": 2,
+        "8": 2
+      },
+      "total_static_words": 162,
+      "maximum_frame_words": 136
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "words_by_layout": {
+        "1": 4,
+        "4": 2,
+        "5": 2,
+        "2": 135,
+        "0": 3,
+        "3": 2
+      },
+      "total_static_words": 148,
+      "maximum_frame_words": 135
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "words_by_layout": {
+        "6": 1,
+        "7": 1,
+        "2": 2,
+        "0": 3,
+        "3": 2,
+        "4": 3,
+        "5": 1,
+        "1": 2
+      },
+      "total_static_words": 15,
+      "maximum_frame_words": 3
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "words_by_layout": {
+        "1": 3,
+        "7": 1,
+        "8": 1,
+        "2": 4,
+        "0": 1,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2
+      },
+      "total_static_words": 20,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "words_by_layout": {
+        "1": 7,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1,
+        "0": 1,
+        "2": 8,
+        "3": 1,
+        "4": 3
+      },
+      "total_static_words": 28,
+      "maximum_frame_words": 8
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "words_by_layout": {
+        "1": 19,
+        "0": 1,
+        "2": 20,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 52,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "words_by_layout": {
+        "1": 3,
+        "2": 20,
+        "0": 1,
+        "3": 2,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 37,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "words_by_layout": {
+        "1": 3,
+        "2": 68,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "0": 1,
+        "3": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 85,
+      "maximum_frame_words": 68
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "words_by_layout": {
+        "6": 1,
+        "7": 1,
+        "2": 2,
+        "0": 3,
+        "3": 2,
+        "4": 3,
+        "5": 1,
+        "1": 2
+      },
+      "total_static_words": 15,
+      "maximum_frame_words": 3
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "words_by_layout": {
+        "1": 3,
+        "7": 1,
+        "8": 1,
+        "2": 4,
+        "0": 1,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2
+      },
+      "total_static_words": 20,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "words_by_layout": {
+        "1": 7,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1,
+        "0": 1,
+        "2": 8,
+        "3": 1,
+        "4": 3
+      },
+      "total_static_words": 28,
+      "maximum_frame_words": 8
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "words_by_layout": {
+        "1": 19,
+        "0": 1,
+        "2": 20,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 52,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "words_by_layout": {
+        "1": 3,
+        "2": 20,
+        "0": 1,
+        "3": 2,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 37,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "words_by_layout": {
+        "1": 3,
+        "2": 68,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "0": 1,
+        "3": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 85,
+      "maximum_frame_words": 68
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 1.757817,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "metrics": {
+        "final_words": 8,
+        "high_water_words": 13,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.349878667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 8 13 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 0.693441875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 10,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.315251833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 10 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 0.675747083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 123,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.328412458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 123 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 0.686669209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 4887,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.293732458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 4887 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 0.675119,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 13,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.313943458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 13 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 0.686181333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 50,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.369856125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 50 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 0.852322792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 146,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.376793875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 146 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "runtime_sha256": "d11eb5ac1bbe26d90b6f79f2bed8edae437e0d4f224fedab5d11e4c067eef832",
+      "command": [
+        "${REPO}/build/runtime-study-v2/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/original-fixed"
+      ],
+      "seconds": 0.731208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "original-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 138,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/original-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.331175292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 138 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 1.448433833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "retained-closure",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 6,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/retained-closure.exe"
+      ],
+      "seconds": 0.37567725,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 6 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 0.690614542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "zero-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/zero-captures.exe"
+      ],
+      "seconds": 0.313378459,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 0.687523125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "shallow-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 72,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/shallow-captures.exe"
+      ],
+      "seconds": 0.327356791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 72 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 0.697925417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "deep-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 2580,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/deep-captures.exe"
+      ],
+      "seconds": 0.296286125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 2580 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 0.677975417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "mixed-protocol",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/mixed-protocol.exe"
+      ],
+      "seconds": 0.32201725,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 0.710131,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-16",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 25,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/repeated-16.exe"
+      ],
+      "seconds": 0.37244175,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 25 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 0.863635833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "repeated-64",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 73,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/repeated-64.exe"
+      ],
+      "seconds": 0.389720042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 73 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "runtime_sha256": "28984dcf49c447d4e94f9e81e6ba1620eea5b27eae56f365e25351cff008bfa1",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-fixed"
+      ],
+      "seconds": 0.750961917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-fixed",
+      "workload": "sequential-locals",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 131072
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-fixed/sequential-locals.exe"
+      ],
+      "seconds": 0.328071791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 131072\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 1.457506833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "retained-closure",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 6,
+        "reserved_words": 6
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/retained-closure.exe"
+      ],
+      "seconds": 0.349206208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 6 6\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 0.687937875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "zero-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/zero-captures.exe"
+      ],
+      "seconds": 0.320191041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 0.689767791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "shallow-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 72,
+        "reserved_words": 128
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/shallow-captures.exe"
+      ],
+      "seconds": 0.32010775,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 72 128\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 0.709062542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "deep-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 2580,
+        "reserved_words": 5120
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/deep-captures.exe"
+      ],
+      "seconds": 0.298944375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 2580 5120\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 0.677262291,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "mixed-protocol",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/mixed-protocol.exe"
+      ],
+      "seconds": 0.319923292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 0.70093625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-16",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 25,
+        "reserved_words": 42
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/repeated-16.exe"
+      ],
+      "seconds": 0.360047584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 25 42\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 0.8712265,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "repeated-64",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 73,
+        "reserved_words": 138
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/repeated-64.exe"
+      ],
+      "seconds": 0.384891292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 73 138\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v2/zydeco-inline",
+        "build",
+        "${REPO}/build/runtime-study-v2/inlined/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v2/inlined/probe-runtimes/optimized/packed-growable"
+      ],
+      "seconds": 0.737577084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "packed-growable",
+      "workload": "sequential-locals",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v2/inlined/probes/optimized/packed-growable/sequential-locals.exe"
+      ],
+      "seconds": 0.330466417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    }
+  ]
+}

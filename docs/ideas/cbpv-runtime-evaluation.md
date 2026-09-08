@@ -6,7 +6,7 @@
 - Origin Mode: engineering experiment plan and evaluation
 - Origin Date: 2026-09-08
 - Verification Status: VERIFIED for the bounded experiments and source audits recorded below
-- Version Label: runtime_study_v1
+- Version Label: runtime_study_v2
 
 ## Question and scope
 
@@ -14,6 +14,8 @@ Which runtime representations let Zydeco express its computation protocols direc
 while controlling allocation, copying, root discovery, and retained space?
 The goal is to compare concrete mechanisms, including the newly implemented retained frames,
 without choosing a winner from the word “stack”.
+The [second round](#second-round-static-layouts-and-heap-environments) extends the initial comparison
+with static slot packing, growable storage, and a collector-integrated managed-frame prototype.
 
 The semantic starting point is
 [computation types as stack protocols](../../DESIGN.md#computation-types-as-stack-protocols).
@@ -64,7 +66,7 @@ An escaping closure and a return continuation may therefore deserve different re
 | Retained environment frames | Zydeco `062d5ce7` | Existing caller slots survive without capture copying | Reserved frame extent, metadata, precise suspended roots |
 | Retained frames with deferred root enumeration | Experimental change to the current collector boundary | Root discovery is paid when collection actually needs it | Publish the same complete roots at every collection |
 | Flattened captures on the control stack | Synthetic layout accounting | Removes the tuple allocation while retaining compact captures | Copies values at suspension and resumption; changes continuation entry shape |
-| Heap activation frames | Closure-representation literature; not implemented here | Shared environments can survive detached lifetimes | Reclamation, precise field liveness, and frame retention |
+| Heap activation frames | Collector-integrated prototype in the second round; no native backend | Potential for independently retained environments | Reclamation, precise field liveness, and frame retention |
 | Persistent linked stacks and lexical locals | Zydeco `wasm-sps` | Explicit residual stacks and structured block code | Per-push nodes; current bump allocator never reclaims them |
 | Contiguous abstract-machine stack and reusable environment | Zydeco `wasm-am` | Direct operational reference; bounded stack | Per-instruction dispatch and capture products |
 | Segmented or copied resumable stacks | OCaml/MLton literature and implementation survey | Storage for detached or later-reentered continuations | Ownership or copying on capture/resumption; GC and FFI integration |
@@ -435,7 +437,7 @@ and Rust activation/suspension vector storage.
 Their reusable active environment is also excluded, so the counts must not be added
 into a supposed whole-process memory ranking.
 
-The current retained model allocates and zero-initializes the entire fixed 1 MiB word buffer on first entry.
+The first-round retained model allocates and zero-initializes the entire fixed 1 MiB word buffer on first entry.
 Its high-water counter measures consumption of that capacity, not how many bytes the allocator reserves.
 Precise liveness prevents dead slots from retaining managed objects,
 but does not reduce this reservation or the frame extent that counts against the limit.
@@ -471,17 +473,18 @@ Ordinary source arguments and default output remain unchanged.
 The native and WebAssembly proposals remain authoritative for implementation rules;
 this document owns the exploratory comparisons and their evidence limits.
 
-### Next experiments and decision boundaries
+### First-round follow-ups
 
-Keep retained native frames with deferred root enumeration as the current implementation,
+The first round justified retaining native frames with deferred root enumeration,
 while treating performance as an open comparison.
-The next native experiments should compare frame slot packing, treatment of empty suspension maps,
+Its suggested native experiments were frame slot packing, treatment of empty suspension maps,
 and a flat-capture model on the same source workloads.
 Flat captures can isolate capture allocation from copying; they need a shared entry-shape
 and root-layout contract before code emission.
 Slot packing must preserve every pending continuation's live bindings,
 including overlapping suspensions of one activation.
 Changing only frame size estimates would be insufficient.
+The second round below implements packing and compares two storage policies; flat captures remain unimplemented.
 
 For WebAssembly, keep the backend choice explicit and prioritize a bounded or reclaiming allocation scheme.
 Rust-generated module layout and the JavaScript embedding are currently a different sharing boundary
@@ -557,3 +560,314 @@ The model accounting example also passed.
 `cargo fmt --all`, standalone runtime formatting, `cargo clippy-all -- -D warnings`,
 and standalone-runtime Clippy for `x86_64-apple-darwin` passed.
 The CPU-intensive full workspace test suite was not run.
+
+
+## Second round: static layouts and heap environments
+
+### Goal and distinctions
+
+This round asks how far static knowledge and different environment allocators can be combined,
+while preserving CBPV's explicit argument, observation, and return protocols.
+The requested directions were heap-resident environments and statically allocated local frames.
+The investigation separates three interpretations:
+
+1. The previous environment was already a `Vec` allocated on Rust's heap, with a fixed 1 MiB extent.
+   Moving the allocation there again would change nothing.
+2. Its owner layouts were already statically sized.
+   The missing optimization was reusing storage across definitions whose lifetimes do not overlap,
+   including lifetimes extended by pending continuations.
+3. Putting environments inside the **managed value heap** changes when their addresses can move,
+   which values collection must retain, and which compiler operations can collect.
+
+The implemented native combination is static slot packing plus a geometrically growing contiguous environment.
+A separate executable prototype puts environment cells through the actual Cheney collector.
+The [native frame proposal](../proposals/native-frames.md#boundary-with-compiler-and-runtime)
+owns the production packing and entry contracts,
+and its [managed-environment section](../proposals/native-frames.md#experimental-managed-environments)
+owns the experimental root boundary.
+This section evaluates their consequences.
+
+Static frame size is compatible with dynamic storage allocation.
+The compiler fixes offsets and the required extent; the runtime reserves that extent when an activation begins.
+Knowing the local size does not determine recursive depth, the number of suspended activations,
+or whether an environment can escape.
+An arrow consumption or observation branch need not establish a new activation.
+These distinctions follow the CBPV transfer protocol and checked ownership, rather than treating every source binder
+or code label as a C function entry.
+
+### Static packing and measured reservations
+
+The new allocator combines ordinary backward liveness with a forward may-analysis of pending captures.
+That second analysis makes an otherwise tempting reuse unsafe: an inner continuation can stop reading `x`
+while an outer continuation still needs its original value.
+The regression constructs exactly that case, as well as a dead write that would clobber a live slot
+and a consumed capture whose storage can safely be reused.
+Aliases keep their source slot; static maps and generated loads/stores all use the resulting assignment.
+
+The added `sequential-locals` workload performs 128 successive additions inside one activation,
+then repeats that computation 10,000 times through returning calls.
+It isolates the difference between the total number of local definitions
+and the maximum storage needed over their lifetimes.
+The other seven workloads and scale-10 parameters are those of the first round.
+All use the full-width arithmetic oracle described above.
+
+| Workload | Largest frame, before → packed | High-water words, before → packed | Growable reservation, bytes |
+| --- | ---: | ---: | ---: |
+| Retained closure | 8 → 3 | 13 → 6 | 48 |
+| Zero extra captures | 7 → 4 | 10 → 5 | 64 |
+| Shallow captures | 14 → 8 | 123 → 72 | 1,024 |
+| Deep captures | 38 → 20 | 4887 → 2580 | 40,960 |
+| Mixed protocol | 10 → 4 | 13 → 5 | 64 |
+| Repeated 16 | 40 → 20 | 50 → 25 | 336 |
+| Repeated 64 | 136 → 68 | 146 → 73 | 1,104 |
+| Sequential locals | 135 → 4 | 138 → 5 | 64 |
+
+The previous fixed store reserves 1,048,576 environment bytes in every row.
+The table measures `Vec` word capacity, excluding allocator rounding, Rust frame/token metadata,
+the machine control stack, and the managed heap.
+It is not RSS or whole-program memory. Packing cuts logical high-water usage roughly in half in several rows;
+geometric capacity rounding means that reservation does not fall by exactly the same ratio.
+The zero-extra-captures case has bounded high-water usage: its source return path allows continuation elimination,
+so its source recursion depth is not its retained frame depth.
+
+A separate source case retains 16 scalar captures through 7,000 recursive levels,
+then checks the complete result on return.
+Both the previous fixed store and the packed fixed store report environment capacity exhaustion;
+the packed growable store completes with exit status zero.
+This is an end-to-end capacity result in addition to the model trace that successfully addresses 200,003 words
+and preserves nested tokens across growth.
+
+The growable store caches capacity after a deep call.
+A tail chain remains bounded by the largest historical reservation,
+but a large completed phase does not automatically return those bytes to the host allocator.
+Shrinking or segmented reclamation remains a separate policy decision.
+
+### Controlled native timing
+
+An initial 120-sample comparison showed a small slowdown despite the space reduction.
+A 280-sample factorial comparison then used the same revised Rust model with both distinct
+and packed slot assignment, each combined with fixed and growable storage.
+It also retained the old fixed implementation as an anchor.
+Packing and growth were close to neutral within that comparison; the shared-storage refactor accounted
+for most of the observed 2–10% regression relative to the old implementation.
+Disassembly showed out-of-line `Storage::reserve` and `Storage::base` calls at the new boundary.
+Adding inline hints to those concrete methods removed most of this overhead without changing their semantics.
+
+The final comparison below uses the inlinable implementations.
+Numbers are median milliseconds from seven samples; all builds precede timing,
+variant order rotates, and separate probe executables measure reservations afterwards.
+The hardware, Rosetta translation, optimized runtime settings,
+and fresh-process timing limitations remain those recorded for the first round.
+In particular, this is not a measurement on a physical AMD64 processor.
+
+| Workload | Previous fixed | Packed fixed | Packed growable |
+| --- | ---: | ---: | ---: |
+| Retained closure | 79.35 | 82.31 | 82.38 |
+| Zero extra captures | 39.00 | 39.18 | 39.84 |
+| Shallow captures | 50.01 | 52.75 | 50.48 |
+| Deep captures | 18.86 | 18.89 | 19.27 |
+| Mixed protocol | 45.24 | 45.35 | 45.04 |
+| Repeated 16 | 87.41 | 87.74 | 87.98 |
+| Repeated 64 | 109.95 | 110.03 | 110.50 |
+| Sequential locals | 52.75 | 52.67 | 52.26 |
+
+Packed growable differs from the previous fixed implementation by approximately −1% to +4% in this run.
+This supports a space and capacity improvement with modest throughput differences, not a general speed claim.
+The packed fixed and growable variants have byte-identical generated assembly within each comparison;
+storage policy changes their Rust runtime.
+The earlier factorial data remains available so the initial regression and the reason
+for adding inline hints are reviewable.
+Compiler preparation time and worst-case growth latency have not been benchmarked systematically.
+
+### Managed heap environments: what actually ran
+
+[`environment_layouts.rs`](../../lang/tests/examples/environment_layouts.rs) exercises three concrete mechanisms:
+the fixed store, the growable store, and opaque environment cells allocated by the production Cheney heap.
+The managed trace registers frame handles and uses the shared `MovingRoots` adapter at collection.
+Captured fields point to managed values; several fields share a value so relocation must preserve aliasing.
+The trace checks every retained value after collection, then drops younger handles and continues allocating.
+This is a collector-integrated model trace, not a second AMD64 backend or a timing comparison with native code.
+
+The sparse and packed cases have the same 32 suspended environments with four live fields each,
+plus one active environment.
+The sparse layout reserves 256 words per frame; the compact synthetic layout uses four.
+This pair isolates layout density and does not claim that every real 256-word owner can be packed to four words.
+The managed cases execute 100,000 one-word heap allocations beneath the retained prefix, reusing the active frame.
+The linear cases execute 100,000 tail entries and check constant storage; they do not instantiate a value heap.
+
+| Trace | Environment payload words | Growable reservation words | Managed collections | Managed frame payload words copied | Live value words lifted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Sparse | 8,448 | 16,384 | 2 | 16,896 | 256 |
+| Packed | 132 | 256 | 2 | 264 | 256 |
+| Empty captures, large frames | 8,448 | 16,384 | 2 | 16,896 | 0 |
+| Packed, depth 128 | 516 | 1,024 | 2 | 1,032 | 1,024 |
+
+These counts expose two different space questions. Precise roots prevent dead fields from retaining values,
+but the copying collector still moves each live frame's entire opaque payload.
+Static compaction reduces that work 64-fold in the sparse/packed pair,
+while the number of published live values is unchanged.
+Lifted values are also written back once after collection; that restoration count equals the lifting count.
+Frame copy counts omit cell headers and the separately copied captured objects.
+Empty capture maps avoid value tracing but still retain frame bytes.
+
+With 1,024-word frames, 127 suspended environments plus an active frame exactly fill the old fixed environment region.
+The managed variant fails when entering the active frame: 1,045,464 bytes already remain live
+in its 1 MiB semispace, including environment cells, headers, and captured values.
+At depth 128 the fixed store rejects the next frame, while the growable store succeeds
+with 132,096 used words and a 262,144-word reservation.
+Managed frame allocation competes with value allocation;
+removing a separate environment buffer is not automatically an improvement under the same semispace budget.
+The managed trace reserves two semispaces and their indices; blank reservation fields in its CSV mean
+that it has no separate environment allocation, not zero total memory.
+
+Allocating the whole environment stack as one managed slab is another possible composition.
+It would reduce per-frame cell headers, but this collector copies complete cells:
+retaining one old frame would still keep the slab's payload extent, even after the logical stack frontier retreats.
+That is an inference from the collector's copying granularity, not an additional native measurement.
+Individual managed cells, which this trace implements, can become unreachable independently after return.
+
+The managed-root regression also forces collection during an allocation that subsequently fails.
+It checks repaired frame handles, repaired live fields, sharing, and the exclusion of a large dead referent.
+An invalid slot-map counterpart is rejected before invoking the collector.
+Together these checks make the root contract executable; they do not establish arbitrary escaping frame references
+or detached continuation semantics.
+A generational collector, frame-specific tracing descriptors,
+and immutable compact continuation environments could change the tradeoffs substantially.
+
+### Further directions and useful combinations
+
+The two implemented changes separate *how much storage an activation needs* from *where that storage lives*.
+Several further directions follow from that separation:
+
+| Direction | What it could improve | Contract or experiment needed next |
+| --- | --- | --- |
+| Active scratch area plus compact suspended fragments | Avoid retaining a large owner for a few saved values | A shared capture/entry map and a policy comparing copy work with retained extent; flattening on the control stack remains a useful baseline |
+| Promotion only when an environment escapes | Keep ordinary nested activations cheap while allowing longer lifetimes | An escape/lifetime proof and a transition that redirects every permitted reference; ordinary `Ret` tokens alone do not prove escape behavior |
+| Small growable regions that switch to segments | Bound large relocation work and release completed deep regions | Frame-to-segment addressing, spare-segment reuse, and peak/valley workloads that detect allocation thrashing |
+| Individually allocated nonmoving frames | Stable bases with independent reclamation | Per-frame addressing and precise value roots; account for allocator metadata and allocation frequency |
+| Reserved virtual address space with incremental commitment | Stable contiguous addressing without copying the high-water buffer | An OS-specific reservation/guard-page contract and separate virtual, committed, and resident measurements |
+| Region allocation from inferred lifetimes | Reclaim groups of environments and related values together | An IR representation of ownership and region capabilities across CBPV transfers, including host borrows and escaping thunks |
+| Representation-aware slots and registers | Avoid uniformly spilling and tagging every local word | Width/alignment and pointer maps shared with the collector, plus spill/root contracts at host calls and safepoints |
+
+A particularly promising next combination is a small reusable active region plus compact immutable suspended fragments,
+allocated in a nursery or retained segment.
+The choice should depend on capture density and lifetime, not simply on whether the allocator is called a heap.
+The sparse trace motivates this experiment, while the native packing result establishes a stronger baseline
+than one slot per definition.
+
+Sharing a mutable, packed heap frame with an escaping closure is a different proposal from moving its bytes.
+The present slot allocator may overwrite a consumed continuation's old slot.
+A closure that still refers to that slot would observe the wrong binding, even if the collector keeps the frame alive.
+Such sharing requires extending the preservation analysis to those references,
+copying the relevant fragment, or making shared storage immutable.
+This is where CBPV's separation between thunk values, returned values,
+and residual computation protocols helps state the right ownership boundary.
+Allocating everything through `malloc` or a collector does not establish it.
+
+The growing-buffer policy can also be combined with a shrink threshold after sufficiently large completed phases.
+That experiment should alternate deep and shallow calls and measure allocation churn as well as resident memory.
+A resize-on-every-return implementation would lose the reuse benefit established by the tail traces.
+No segmented, virtual-memory, region-inference, or new register backend is claimed by this round.
+
+### What this establishes about the Rust contract
+
+There are now two concrete implementations of a narrow common capability:
+contiguous word storage that may relocate at entry.
+`Frames<Storage>` shares ownership, tokens, actions, and root-map interpretation between them.
+The emitter continues to serialize the same `Action` type that the stub consumes.
+Inlineable concrete methods allow that modular boundary without the initial out-of-line-call cost.
+The production stub selects `Growable`; `Fixed` remains a controlled alternative with the same continuation convention.
+
+A moving managed environment does not implement this storage capability.
+It can relocate during ordinary value allocation, and the native entry operation currently cannot collect.
+Its separate `MovingRoots` contract expresses the relocation obligation without pretending
+that selecting an allocator updates code generation automatically.
+Likewise, a segmented store cannot supply the current trait's single contiguous base;
+it needs a different address-resolution boundary.
+Shared Rust types make each chosen contract explicit, while integration tests still check register reloads,
+safepoints, serialized descriptors, and emitted accesses.
+
+This is a feasible modular methodology: share representations and transitions where concrete schemes agree,
+and give a new scheme a new typed boundary when it adds a capability.
+The source fingerprint rejects mismatched model artifacts;
+it does not replace the compiler's initialization/preservation proofs or prove handwritten assembly.
+
+### Literature added in this round
+
+[Farvardin and Reppy, PLDI 2020](https://kavon.farvard.in/papers/pldi20-stacks.pdf) compare six strategies
+within one compiler and runtime, including resizing, segmented, mutable linked frames, and immutable CPS continuations.
+Their distinction between mutable frame reuse and immutable continuation closures is especially useful here.
+Their stack models also include control and call/return behavior that differs from Zydeco's separate environment stack,
+so their performance rankings should guide experiments rather than select a Zydeco winner.
+
+[Appel and Shao](https://www.cs.princeton.edu/~appel/papers/stack2.pdf), especially sections 2–5,
+separate creation, access, copying/sharing, and space safety.
+Their generational-heap assumptions matter: the present two-space trace is not a reproduction
+of their collector or closure optimizer.
+The older paper and the newer controlled comparison should be read together.
+
+[Tofte and Talpin, *Region-Based Memory Management*, 1997](https://researchprofiles.ku.dk/en/publications/region-based-memory-management/)
+provides a region-inference direction. The
+[Capability Calculus](https://www.cs.cornell.edu/talc/papers/capabilities-abstract-tr.html) makes safe reclamation and
+non-lexical region lifetimes explicit in a typed compiler language. The application to CBPV environments above is an
+inference and future design question, not an existing Zydeco region system.
+
+### Evidence and reproduction
+
+The second-round data lives beside the first-round records:
+
+- [Pilot](runtime-study-2026-09-08/environment-pilot.json): 120 timed samples and 24 warmups.
+- [Factorial comparison before inline hints](runtime-study-2026-09-08/environment-factorial.json):
+  280 timed samples, 40 warmups, and 40 separate environment probes.
+- [Final comparison](runtime-study-2026-09-08/environment-inlined.json): 168 timed samples, 24 warmups,
+  and 24 separate environment probes.
+- [Capacity case](runtime-study-2026-09-08/environment-capacity.json): two expected fixed-store rejections
+  and one successful growable execution.
+- [Collector/storage traces](runtime-study-2026-09-08/environment-layouts.csv)
+  and [data/source hashes](runtime-study-2026-09-08/environment-manifest.json).
+
+All 568 timed samples, 88 warmups, 64 probes, and three capacity expectations passed.
+The runners record source, compiler, runtime, and model hashes, exact commands, build failures, and output oracles.
+The pilot runner predates probe support; the final timing runner predates only the capacity-mode addition.
+An unused runtime import was removed after the factorial run; it changes no generated behavior.
+These differences are recorded rather than silently assigning final-file hashes to earlier executions.
+The fixed-runtime copies change only the concrete `Frames` storage selection.
+The original anchor uses the first-round frame compiler and the `88329154` runtime.
+The unpacked factorial control combines the `88329154` compiler sources with the revised machine sources
+before inline hints; packed controls use the working compiler at that same model revision.
+
+To reproduce the final comparison from this revision, build the current compiler and an isolated baseline:
+
+```sh
+mkdir -p build/environment-study/baseline
+git archive 88329154 | tar -x -C build/environment-study/baseline
+CARGO_TARGET_DIR=build/environment-study/current-target cargo build --release --bin zydeco
+CARGO_TARGET_DIR="$PWD/build/environment-study/baseline-target" cargo build --release \
+  --manifest-path build/environment-study/baseline/Cargo.toml --bin zydeco
+```
+
+Copy `runtime` to `build/environment-study/fixed-runtime` without its `target` directory.
+In that copy, replace the `storage::Growable` import with `storage::Fixed`, and replace `Frames<Growable>`
+with `Frames<Fixed<{ zydeco_machine::native::ENVIRONMENT_BYTES / zydeco_machine::native::WORD_BYTES }>>`.
+The compiler supplies the matching machine crate to every build; do not copy a historical model over it.
+Then run:
+
+```sh
+python3 lang/tests/environment-study.py \
+  --variant original-fixed build/environment-study/baseline-target/release/zydeco build/environment-study/baseline/runtime \
+  --variant packed-fixed build/environment-study/current-target/release/zydeco build/environment-study/fixed-runtime \
+  --variant packed-growable build/environment-study/current-target/release/zydeco runtime \
+  --output build/environment-study/results --samples 7 --scale 10
+cargo run --release -p zydeco-tests --example environment_layouts
+```
+
+For the capacity comparison, use the same three `--variant` arguments with a separate output directory
+and add `--capacity-only --growable-variant packed-growable`.
+The historical factorial controls can be reconstructed by omitting the four inline annotations in a copy
+of the new storage module and combining that module with the baseline or packed planner.
+Keep each compiler build's target directory separate.
+
+Focused verification covers the machine and assembly tests, `native_gc`, `native_model`, native builtin/core/control
+and FFI cases, both executable model traces, workspace Clippy, and standalone-runtime Clippy for AMD64.
+The full workspace test suite was not run. The implementation promotes packing and growable storage;
+managed-frame root publication remains an explicitly bounded prototype.

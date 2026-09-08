@@ -204,15 +204,8 @@ impl FramePlan {
                 }
             }
         }
-        let mut slots = BTreeMap::new();
-        for (&variable, &owner) in &variable_owners {
-            if !aliases.contains_key(&variable) {
-                let layout = &mut layouts[owner.0];
-                slots.insert(variable, layout.words);
-                layout.words += 1;
-            }
-        }
-        for &variable in aliases.keys() {
+        let mut sources = BTreeMap::new();
+        for &variable in variable_owners.keys() {
             let mut source = variable;
             let mut seen = BTreeSet::new();
             while let Some(&parent) = aliases.get(&source) {
@@ -224,8 +217,10 @@ impl FramePlan {
             if variable_owners.get(&source) != variable_owners.get(&variable) {
                 return Err(FramePlanError::Alias { variable });
             }
-            let slot = *slots.get(&source).ok_or(FramePlanError::Alias { variable })?;
-            slots.insert(variable, slot);
+            if !variable_owners.contains_key(&source) {
+                return Err(FramePlanError::Alias { variable });
+            }
+            sources.insert(variable, source);
         }
 
         // Backward liveness stops at entry boundaries. Pending suspensions supply
@@ -249,6 +244,75 @@ impl FramePlan {
                 queue.extend(predecessors.get(&program).into_iter().flatten().copied());
             }
         }
+        // A pending continuation keeps its captures alive even while local code
+        // prepares a callee or resumes another continuation in this activation.
+        // The suspension-to-resumption edge consumes that suspension: it carries
+        // the *incoming* pending set, retaining any older suspensions. At joins a
+        // may-union is conservative. These sets describe preservation, whereas
+        // `live` describes the values read by the currently executing code.
+        let mut pending =
+            owners.keys().map(|&id| (id, BTreeSet::new())).collect::<BTreeMap<_, _>>();
+        let mut queue = owners.keys().copied().collect::<VecDeque<_>>();
+        while let Some(program) = queue.pop_front() {
+            let mut outgoing = pending[&program].clone();
+            let mut edges = Vec::new();
+            if let Program::Instruction(Instruction::RetainFrame(retain), _) =
+                &arena.programs[&program]
+            {
+                edges.push((retain.entry, outgoing.clone()));
+                outgoing.extend(retain.captures.iter().map(|var| sources[var]));
+            }
+            edges.extend(
+                Self::successors(arena, program).into_iter().map(|id| (id, outgoing.clone())),
+            );
+            for (next, required) in edges {
+                let previous = pending[&next].len();
+                pending.get_mut(&next).unwrap().extend(required);
+                if pending[&next].len() != previous {
+                    queue.push_back(next);
+                }
+            }
+        }
+
+        // Color the interference graph independently for each activation. Even
+        // a dead definition writes a slot, so it conflicts with every value
+        // preserved across that write. Aliases never introduce a second slot.
+        let mut conflicts =
+            sources.values().map(|&var| (var, BTreeSet::new())).collect::<BTreeMap<_, _>>();
+        for &program in owners.keys() {
+            let mut required = pending[&program].clone();
+            required.extend(live[&program].iter().map(|var| sources[var]));
+            Self::interfere(&mut conflicts, &required);
+            if let Program::Instruction(Instruction::PopArg(Pop(var)), _) =
+                &arena.programs[&program]
+            {
+                let mut across = pending[&program].clone();
+                across.extend(
+                    Self::successors(arena, program)
+                        .into_iter()
+                        .flat_map(|next| live[&next].iter().map(|var| sources[var])),
+                );
+                across.insert(sources[var]);
+                Self::interfere(&mut conflicts, &across);
+            }
+        }
+        let mut order = conflicts.keys().copied().collect::<Vec<_>>();
+        // Largest degree first, with stable IDs breaking ties for reproducibility.
+        order.sort_by_key(|var| (std::cmp::Reverse(conflicts[var].len()), *var));
+        let mut slots = BTreeMap::new();
+        for variable in order {
+            let occupied = conflicts[&variable]
+                .iter()
+                .filter_map(|var| slots.get(var).copied())
+                .collect::<BTreeSet<_>>();
+            let slot = (0..).find(|slot| !occupied.contains(slot)).unwrap();
+            slots.insert(variable, slot);
+            let layout = &mut layouts[variable_owners[&variable].0];
+            layout.words = layout.words.max(slot + 1);
+        }
+        for (&variable, &source) in &sources {
+            slots.insert(variable, slots[&source]);
+        }
         let live = live
             .into_iter()
             .map(|(program, variables)| {
@@ -258,11 +322,131 @@ impl FramePlan {
             .collect();
         Ok(Self { entries: arena.frame_entries.clone(), layouts, owners, slots, live })
     }
+
+    fn interfere(conflicts: &mut BTreeMap<VarId, BTreeSet<VarId>>, variables: &BTreeSet<VarId>) {
+        for &variable in variables {
+            conflicts
+                .get_mut(&variable)
+                .unwrap()
+                .extend(variables.iter().copied().filter(|other| *other != variable));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Graph {
+        ids: IdAllocator<AssemblyScope>,
+        arena: AssemblyArena,
+    }
+
+    impl Default for Graph {
+        fn default() -> Self {
+            Self { ids: IdAllocator::new(), arena: AssemblyArena::default() }
+        }
+    }
+
+    impl Graph {
+        fn variable(&mut self, name: &str) -> VarId {
+            let id = self.ids.alloc();
+            self.arena.variables.insert_new(id, VarName::from(name));
+            id
+        }
+        fn instruction(&mut self, instruction: impl Into<Instruction>, next: ProgId) -> ProgId {
+            let id = self.ids.alloc();
+            self.arena.insert_program(
+                id,
+                Program::Instruction(instruction.into(), next),
+                Context::new(),
+            );
+            id
+        }
+        fn end(&mut self) -> ProgId {
+            let id = self.ids.alloc();
+            self.arena.insert_program(id, Program::Terminator(Abort.into()), Context::new());
+            id
+        }
+        fn plan(mut self, root: ProgId) -> FramePlan {
+            self.arena.frame_entries.insert(root, Entry::Fresh);
+            FramePlan::analyze(&self.arena, root).unwrap()
+        }
+    }
+
+    #[test]
+    fn sequential_values_share_slots_but_a_dead_write_cannot_clobber_a_live_value() {
+        let mut graph = Graph::default();
+        let first = graph.variable("first");
+        let dead = graph.variable("dead");
+        let second = graph.variable("second");
+        let end = graph.end();
+        let read_second = graph.instruction(Push(Atom::Var(second)), end);
+        let write_second = graph.instruction(Pop(second), read_second);
+        let read_first = graph.instruction(Push(Atom::Var(first)), write_second);
+        let write_dead = graph.instruction(Pop(dead), read_first);
+        let root = graph.instruction(Pop(first), write_dead);
+        let plan = graph.plan(root);
+        assert_eq!(plan.layouts[0].words, 2);
+        assert_eq!(plan.slots[&first], plan.slots[&second]);
+        assert_ne!(plan.slots[&first], plan.slots[&dead]);
+        assert_eq!(plan.live[&read_second], [plan.slots[&second]]);
+    }
+
+    #[test]
+    fn pending_captures_survive_preparation_and_an_inner_resumption() {
+        let mut graph = Graph::default();
+        let x = graph.variable("outer");
+        let y = graph.variable("inner");
+        let alias_x = graph.variable("outer_alias");
+        let alias_y = graph.variable("inner_alias");
+        let scratch = graph.variable("scratch");
+        let later = graph.variable("later");
+        let end = graph.end();
+        let outer = graph.instruction(Push(Atom::Var(alias_x)), end);
+        graph.arena.frame_entries.insert(outer, Entry::Resume { bindings: vec![(alias_x, x)] });
+        let inner_end = graph.end();
+        let read_later = graph.instruction(Push(Atom::Var(later)), inner_end);
+        let write_later = graph.instruction(Pop(later), read_later);
+        let inner = graph.instruction(Push(Atom::Var(alias_y)), write_later);
+        graph.arena.frame_entries.insert(inner, Entry::Resume { bindings: vec![(alias_y, y)] });
+        let call = graph.end();
+        let prepare = graph.instruction(Pop(scratch), call);
+        let retain_inner =
+            graph.instruction(RetainFrame { entry: inner, captures: vec![y] }, prepare);
+        let retain_outer =
+            graph.instruction(RetainFrame { entry: outer, captures: vec![x] }, retain_inner);
+        let write_y = graph.instruction(Pop(y), retain_outer);
+        let root = graph.instruction(Pop(x), write_y);
+        let plan = graph.plan(root);
+        assert_eq!(plan.layouts[0].words, 3);
+        assert_ne!(plan.slots[&x], plan.slots[&y]);
+        assert_ne!(plan.slots[&scratch], plan.slots[&x]);
+        assert_ne!(plan.slots[&scratch], plan.slots[&y]);
+        assert_ne!(plan.slots[&later], plan.slots[&x]);
+        assert_eq!(plan.slots[&alias_x], plan.slots[&x]);
+        assert_eq!(plan.slots[&alias_y], plan.slots[&y]);
+    }
+
+    #[test]
+    fn a_consumed_capture_can_share_storage_with_a_later_result() {
+        let mut graph = Graph::default();
+        let source = graph.variable("source");
+        let alias = graph.variable("alias");
+        let result = graph.variable("result");
+        let end = graph.end();
+        let read = graph.instruction(Push(Atom::Var(result)), end);
+        let write = graph.instruction(Pop(result), read);
+        let resume = graph.instruction(Push(Atom::Var(alias)), write);
+        graph.arena.frame_entries.insert(resume, Entry::Resume { bindings: vec![(alias, source)] });
+        let call = graph.end();
+        let retain = graph.instruction(RetainFrame { entry: resume, captures: vec![source] }, call);
+        let root = graph.instruction(Pop(source), retain);
+        let plan = graph.plan(root);
+        assert_eq!(plan.layouts[0].words, 1);
+        assert_eq!(plan.slots[&source], plan.slots[&result]);
+        assert_eq!(plan.slots[&alias], plan.slots[&result]);
+    }
 
     #[test]
     fn initialization_is_checked_even_if_a_context_claims_a_binding_exists() {

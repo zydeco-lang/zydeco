@@ -114,10 +114,10 @@ class Study:
                     }}
                     for item in json.loads(hardware["stdout"]).get("SPHardwareDataType", [])
                 ]
-        for path in [self.args.capture_compiler, self.args.frame_compiler]:
+        for path in dict.fromkeys(compiler for compiler, _ in self.variants().values()):
             self.metadata["input_hashes"][str(path)] = self.sha256(path)
-        for directory in [self.args.capture_runtime, self.args.eager_runtime,
-                          self.args.deferred_runtime, ROOT / "lang/machine/src"]:
+        for directory in dict.fromkeys([runtime for _, runtime in self.variants().values()]
+                                       + [ROOT / "lang/machine/src"]):
             for path in sorted(directory.rglob("*.rs")) + [directory / "Cargo.toml"]:
                 if not path.exists():
                     continue
@@ -256,12 +256,15 @@ class Study:
     def valid(result):
         return result["exit"] == 0 and result["stdout"] == "" and result["stderr"] == ""
 
-    def native(self, workloads):
-        variants = {
+    def variants(self):
+        return {
             "captures": (self.args.capture_compiler, self.args.capture_runtime),
             "frames-eager": (self.args.frame_compiler, self.args.eager_runtime),
             "frames-deferred": (self.args.frame_compiler, self.args.deferred_runtime),
         }
+
+    def native(self, workloads):
+        variants = self.variants()
         ready = {}
         # Finish every build before timing any program.
         for profile in self.args.profiles:

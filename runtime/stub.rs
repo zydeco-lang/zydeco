@@ -7,10 +7,9 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
-use zydeco_machine::frames::{Action, FrameError, Frames};
+use zydeco_machine::frames::{Action, FrameError, Frames, storage::Growable};
 use zydeco_machine::native::{
-    AllocationKind, Closure, ENVIRONMENT_BYTES, HostArguments, HostTransfer, IMMEDIATE_TAG,
-    Immediate, WORD_BYTES, Word, entry,
+    AllocationKind, Closure, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word, entry,
 };
 
 /// One full-width scalar payload in an opaque managed block.
@@ -1408,8 +1407,7 @@ fn out_of_host_roots(_error: HostRootOverflow) -> ! {
 
 static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>> =
     RuntimeCell::new(CheneyHeap::new());
-static FRAMES: RuntimeCell<Frames<{ ENVIRONMENT_BYTES / WORD_BYTES }>> =
-    RuntimeCell::new(Frames::EMPTY);
+static FRAMES: RuntimeCell<Frames<Growable>> = RuntimeCell::new(Frames::EMPTY);
 static STACK_END: RuntimeCell<*mut Word> = RuntimeCell::new(std::ptr::null_mut());
 static HOST_ROOTS: RuntimeCell<HostRoots> = RuntimeCell::new(HostRoots::new());
 static CONTROL_TRANSFER: RuntimeCell<HostTransfer<Word>> =
