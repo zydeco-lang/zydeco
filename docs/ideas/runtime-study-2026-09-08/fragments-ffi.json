@@ -1,0 +1,43 @@
+[
+  {
+    "command": [
+      "cc",
+      "-arch",
+      "x86_64",
+      "-dynamiclib",
+      "-Wl,-install_name,${REPO}/build/runtime-study-v3/ffi-deferred/libzyffi_boundary.dylib",
+      "${REPO}/lib/tests/ffi/boundary.c",
+      "-o",
+      "${REPO}/build/runtime-study-v3/ffi-deferred/libzyffi_boundary.dylib"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "${REPO}/build/runtime-study-v3/zydeco-final",
+      "build",
+      "${REPO}/lib/tests/ffi/boundary.zy",
+      "--target",
+      "exe",
+      "--target-arch",
+      "x86-64",
+      "--build-dir",
+      "${REPO}/build/runtime-study-v3/ffi-deferred",
+      "--runtime-dir",
+      "${REPO}/build/runtime-study-v3/compact-runtime"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "${REPO}/build/runtime-study-v3/ffi-deferred/boundary.exe"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]

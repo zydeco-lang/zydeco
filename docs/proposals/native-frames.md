@@ -120,8 +120,10 @@ it does not introduce a general static fact system or assume that a known frame 
 ### Suspension and preservation
 
 Before entering a callee, construct the return continuation and publish the caller frame state it requires.
-The callee's frame must occupy disjoint storage.
+In the retained engine, the callee's frame must occupy disjoint storage.
 Slots needed by any pending continuation cannot be overwritten or reused while that continuation remains live.
+The [compact alternative](#experimental-compact-environments) preserves those bindings
+in separate snapshots before reusing their original active storage.
 Outgoing arguments and closure captures must also be read before their source storage becomes reusable.
 
 Several continuations can refer to the same activation.
@@ -131,7 +133,7 @@ rather than assuming one saved frame reference per activation.
 Resuming an inner continuation cannot invalidate an outer continuation's slots.
 
 Logical frame references must remain valid while frames are retained.
-The current implementation saves word offsets in activation metadata and indices in suspension records.
+The retained engine saves word offsets in activation metadata and indices in suspension records.
 Entry may relocate the contiguous allocation; it returns the new active base,
 which generated code loads into `rbp` before accessing any environment slot.
 Earlier raw bases and root-slot addresses expire at entry.
@@ -269,8 +271,10 @@ A future IR operation that captures machine stacks must revisit this justificati
 Its sealed `Environment` capability shares action dispatch between the retained engine and compact fragments below.
 It promises nested one-shot resumption, initialized declared captures, no collecting transitions,
 a stable active base during Suspend, and a returned base to reload after Enter or Resume.
-Root addresses expire at the next transition; they refer to values, not necessarily to their active-layout offsets.
+Root addresses expire at the next attempted transition, including a failed reservation;
+they refer to values, not necessarily to their active-layout offsets.
 This capability does not require suspended values to retain their original physical addresses.
+Managed-value collection may rewrite the published words, but cannot relocate the active base or root locations.
 The emitter serializes `Action<u64>` followed, where applicable, by static slot indices.
 One declaration generates both the Rust header and its serialization order;
 AMD64 data sections guarantee word alignment.
@@ -323,26 +327,46 @@ The [C import contract](c-ffi.md) continues to own borrowing, unwinding, and ree
 
 [`frames::fragments::Fragments`](../../lang/machine/src/frames/fragments.rs) implements the same
 `Environment` capability with one reusable active region and a separate contiguous buffer of captured values.
-Suspend copies its declared slots into a compact fragment and saves the layout, slot map, and token.
-Enter reuses the active region after the generated transfer has staged its outgoing arguments.
-Resume consumes the latest fragment, copies its current values back to the declared offsets,
-and reestablishes the owner's layout.
+Suspend records a pending use of active slots.
+A host operation can consume that token through Resume without moving either its environment or its captures.
+Only Enter, which will reuse the active region, materializes the still-active suspensions as compact fragments.
+The generated transfer has already staged its outgoing arguments before this boundary.
+A saved fragment records the layout, slot map, and token; Resume copies its current values back
+to those offsets and reestablishes the owner's layout.
 Slots outside that entry's declared captures are unavailable.
-The existing compiler's preservation analysis remains unchanged, so both engines accept the same generated code.
+The compiler's preservation analysis remains unchanged, so both engines accept the same generated code.
 
-Several suspensions of one activation have independent snapshots, even when their capture maps overlap.
-Active roots point into scratch storage; suspended roots point into the compact buffer.
+Saved suspensions form a prefix of the pending-token vector, followed by a suffix referring to active slots.
+Entry visits only that suffix. A tail entry with no newly pending active suspensions does not walk the saved prefix.
+Consuming an active token performs no capture copy; consuming a saved token restores its fields
+and retracts the compact frontier.
+Older snapshots remain saved after an inner resumption.
+This permits a resumed activation to publish new active suspensions above an older saved prefix.
+
+Several active suspensions share their original slots, and their root locations are deduplicated by address.
+After entry, their independent snapshots can contain copies of overlapping captures.
 The collector must update every physical copy of a live pointer.
 Deduplicating equal pointer values would leave some resumption copies stale; only duplicate addresses can be removed.
-Dead active slots are still excluded by the active root map.
+Roots combines the ordinary active map with the active suspension maps and every materialized snapshot word.
+Dead active slots are still excluded.
+The root source remains deferred until collection actually needs it.
 
 Both buffers use the selected `Storage` policy and cache capacity independently.
 The snapshot frontier follows token nesting; consuming a token reclaims its fragment
 without a heap allocation or free operation per continuation.
-Snapshot growth cannot move the active base during Suspend.
+Enter first reserves and fills an unpublished snapshot suffix, then reserves the destination active extent,
+and finally publishes the new locations.
+If either reservation fails, logical captures, pending tokens, and the current active base remain usable.
+Snapshot reservation may already have increased capacity or moved that buffer on a later active-reservation failure;
+previously returned root addresses expire at the attempted transition, and fresh enumeration resolves the new addresses.
+No managed collection occurs during staging or publication.
+
 Enter may grow the active region, and previously reserved scratch extents remain addressable on Resume.
 With a fixed pending continuation set, tail entries remain bounded by the largest active region plus its snapshots.
+The high-water statistic includes the temporary overlap between outgoing active slots and completed snapshots.
 Whole-buffer reservation can exceed that logical bound because capacities retain earlier peaks and geometric slack.
+The separate metadata statistic includes the Rust owner and allocated control-record capacities; word buffers,
+temporary root vectors, and allocator bookkeeping have distinct accounting boundaries.
 
 The standalone runtime's experimental `compact-environments` Cargo feature selects this engine;
 retained frames remain the default.

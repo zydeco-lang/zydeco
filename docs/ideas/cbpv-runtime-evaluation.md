@@ -948,9 +948,95 @@ None of these ten workloads had multiple pending suspensions of the same dynamic
 This explains why capture density at one selected call is insufficient as a policy.
 A host primitive can resume within the same activation without any fresh Enter in between.
 The eager engine pays copying on those suspensions even though the active region was never reused.
-The next candidate should defer materializing snapshots until Enter actually overwrites active storage.
+The next candidate therefore defers materializing snapshots until Enter actually overwrites active storage.
 That distinction follows the CBPV machine operations: consuming a return continuation
 and establishing another closure activation are separate events.
+
+### Deferring snapshots until entry
+
+The revised engine keeps suspensions in their active slots until a fresh entry needs to reuse that storage.
+It combines retained access for immediate host returns with compact storage for genuinely suspended activations.
+The contract and failure behavior are defined
+in the [compact environment section](../proposals/native-frames.md#experimental-compact-environments).
+The eager implementation is preserved at `26bc3132`; its executable path is replaced by the deferred version.
+
+A first four-way comparison ran 280 samples against the previous commit,
+current retained frames, eager snapshots, and deferred snapshots.
+Deferral removed most copying, but disassembly still showed calls to the compact model's tiny validation
+and usage helpers in the hot transition path.
+Making those helpers inlineable, and removing a high-water update at Suspend now
+that it changes no word extent, removed the remaining helper calls.
+The final comparison below uses 210 samples across the three relevant engines.
+These experiments retain both the implementation costs and their corrections;
+the intermediate result is not presented as the final cost of deferred capture.
+
+Optimized median wall times in milliseconds:
+
+| Workload | Retained | Eager compact | Deferred compact |
+| --- | ---: | ---: | ---: |
+| Retained closure | 80.395 | 88.055 | 79.263 |
+| Zero source captures | 38.575 | 42.955 | 38.973 |
+| Shallow captures | 49.154 | 55.816 | 46.626 |
+| Deep captures | 18.172 | 19.514 | 17.088 |
+| Mixed protocol | 43.788 | 52.977 | 42.284 |
+| Repeated 16 | 85.495 | 101.697 | 84.268 |
+| Repeated 64 | 107.448 | 149.862 | 105.202 |
+| Sequential locals | 50.620 | 57.533 | 49.216 |
+| Sparse repeated 64 | 107.798 | 150.283 | 104.848 |
+| Sparse deep 64 | 18.025 | 19.770 | 17.479 |
+
+Deferred snapshots range from approximately 1% slower to 6% faster than retained frames in these samples.
+The larger eager-copy penalties disappear. These short Rosetta runs support a competitive candidate,
+not a general throughput ranking or a prediction for physical AMD64 hardware.
+The retained and deferred variants emit byte-identical assembly for every workload.
+Their action counts, collection counts, and physical root-visit counts also agree in the final probes.
+
+The probe additionally derives how many capture words cross an Enter before their token is consumed.
+That event count predicts the deferred engine's exact capture/restore copying for this completed action stream;
+it is separate from the eager count of all declared captures, and from root visits actually observed during GC.
+Examples, combining both copy directions:
+
+| Workload | Eager copied words | Deferred copied words |
+| --- | ---: | ---: |
+| Retained closure | 2,000,006 | 4 |
+| Mixed protocol | 5,200,000 | 0 |
+| Repeated 16 | 37,100,000 | 1,900,000 |
+| Repeated 64 | 179,960,000 | 2,680,000 |
+| Sequential locals | 7,760,000 | 0 |
+| Sparse repeated 64 | 177,560,000 | 160,000 |
+| Sparse deep 64 | 1,931,520 | 256 |
+
+The sparse deep case therefore keeps 128 saved values across recursion,
+plus a reusable active region whose largest layout has 67 words.
+Its logical word peak is 195, versus 8,581 for retained frames.
+Deferral also avoids the eager engine's temporary snapshots of the wide local set during primitive returns.
+On `repeated-64`, the logical peak is still larger with snapshots, 135 words versus 73;
+a dense environment must coexist with its copy at entry.
+
+### Counting metadata as well as word buffers
+
+The final model exposes a read-only accounting method for its own Rust state and allocated metadata-vector capacities.
+The probes add that figure to the word-buffer capacities to measure persistent environment storage.
+This excludes allocator rounding/bookkeeping, the separate control stack, managed-value heap,
+host root table, and temporary vectors used during collection.
+It is neither process RSS nor peak total runtime memory.
+The historical eager binary lacks this method, so its metadata field is recorded as unavailable rather than zero.
+
+| Workload | Retained word reservation | Deferred word reservation | Retained / deferred metadata bytes | Retained / deferred persistent environment bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Retained closure | 6 | 4 | 376 / 352 | 424 / 384 |
+| Shallow captures | 128 | 46 | 1,240 / 1,024 | 2,264 / 1,392 |
+| Deep captures | 5,120 | 2,086 | 18,520 / 14,464 | 59,480 / 31,152 |
+| Repeated 64 | 138 | 135 | 376 / 352 | 1,480 / 1,432 |
+| Sparse repeated 64 | 136 | 71 | 376 / 352 | 1,464 / 920 |
+| Sparse deep 64 | 8,704 | 195 | 18,520 / 14,464 | 88,152 / 16,024 |
+
+Including metadata reduces the sparse deep example's apparent saving from about 45-fold
+in word reservation to about 5.5-fold in persistent environment storage.
+Metadata accounts for most of its remaining compact footprint.
+Dense snapshot peaks can also coexist with slightly smaller reservations
+because the two allocation histories have different geometric slack.
+Neither high-water words nor reservation alone proves a space improvement everywhere.
 
 ### Sharing and collection traces
 
@@ -958,6 +1044,7 @@ The executable `environment_fragments` example runs both engines with the produc
 100,000 tail entries, and exact value-survival checks after reverse resumption.
 It varies layout size, capture offsets, nesting depth, and overlapping suspensions of one activation.
 Each trace forces 36 or 37 collections.
+The entered cases have the same word/root results with eager and deferred snapshots.
 Word reservations are observed; the copy counts below are derived exactly from the executed sequence in
 which every suspension is made and consumed once.
 
@@ -976,6 +1063,14 @@ For the eight-word shared owner, root visits across 36 collections rise from 288
 All aliases still point to correctly relocated objects after resumption.
 The regression tests also cover a collecting allocation failure: every live copy is repaired before returning the error.
 
+The final trace adds 32 overlapping suspensions followed by 100,000 immediate host returns in the same activation.
+Retained and deferred engines both keep eight word slots and eight root locations, with no capture copies.
+The extra temporary token grows their metadata vectors once before the bounded loop.
+Deferred metadata nevertheless reserves 3,712 bytes versus 2,296 for retained frames:
+each compact suspension stores its own layout and residence, while retained suspensions refer to a shared activation.
+If a fresh entry is introduced, the shared-owner trace still materializes 32 copies.
+Deferral fixes unnecessary copying before entry; it does not solve sharing between materialized fragments.
+
 ### Evidence and reproduction
 
 - [Pilot](runtime-study-2026-09-08/fragments-pilot.json): 72 samples, 24 warmups, and 24 separate probes.
@@ -983,13 +1078,23 @@ The regression tests also cover a collecting allocation failure: every live copy
   30 warmups, and 30 separate probes including transition counts.
 - [Executable collector traces](runtime-study-2026-09-08/fragments-eager-layouts.csv)
   and [data/source hashes](runtime-study-2026-09-08/fragments-eager-manifest.json).
+- [First deferred comparison](runtime-study-2026-09-08/fragments-deferred.json): 280 samples, 40 warmups,
+  and 40 probes before helper inline hints.
+- [Final comparison](runtime-study-2026-09-08/fragments-final.json): 210 samples, 30 warmups,
+  and 30 probes including metadata accounting.
+- [Final collector/storage traces](runtime-study-2026-09-08/fragments-final-layouts.csv),
+  [compact C-boundary execution](runtime-study-2026-09-08/fragments-ffi.json),
+  and [final data/source hashes](runtime-study-2026-09-08/fragments-final-manifest.json).
 
-All samples, warmups, and probes passed their output oracles.
+All 772 samples, 124 warmups, and 124 probes passed their output oracles.
 Builds precede every timed run; variant order rotates and workload order alternates between samples.
 Probe binaries are built and run separately after timing.
 Their counters do not affect the timed executables.
 The JSON records source/runtime/model hashes, exact commands, output, and failures.
 The pilot predates the sparse workload and transition-probe additions; its recorded runner hash is retained.
+The first deferred comparison predates helper inlining, removal of the now-redundant Suspend high-water update,
+and metadata reporting.
+Intermediate records keep their actual hashes, and the final manifest identifies final trace sources.
 
 Use `lang/tests/environment-study.py --fragments --samples 7` with explicit `--variant NAME COMPILER RUNTIME` arguments
 for each compiler/runtime pair.
@@ -1001,3 +1106,68 @@ workspace Clippy, and standalone AMD64 runtime Clippy.
 The compact integration case compares host-return, GC-stress, escaping-closure,
 callback, and control-library programs against interpreter outputs.
 The full workspace test suite was not run.
+
+For the current retained/deferred comparison, a small explicit runtime copy enables the experimental feature:
+
+```sh
+cargo build --release --bin zydeco
+python3 - <<'PYTHON'
+from pathlib import Path
+import shutil
+runtime = Path("build/compact-runtime")
+runtime.mkdir(parents=True, exist_ok=True)
+for source in Path("runtime").iterdir():
+    if source.suffix == ".rs" or source.name == "Cargo.toml":
+        shutil.copy2(source, runtime / source.name)
+manifest = runtime / "Cargo.toml"
+manifest.write_text(manifest.read_text().replace(
+    "[features]", '[features]\ndefault = ["compact-environments"]'))
+PYTHON
+python3 lang/tests/environment-study.py --fragments --samples 7 \
+  --variant retained target/release/zydeco runtime \
+  --variant deferred target/release/zydeco build/compact-runtime \
+  --output build/compact-study
+```
+
+The final focused checks passed: 15 machine tests, seven assembly tests, 16 collector tests, four native-model tests,
+11 native builtin cases, 45 native core cases, and three native control-library cases.
+The compact feature separately executes the compositional C-boundary fixture with its compiled C library.
+Workspace Clippy and standalone runtime Clippy pass with and without the compact feature.
+No additional full-workspace test run is implied by these focused targets.
+
+### Decision and further directions
+
+Keep retained frames as the default and deferred compact environments as an executable experimental option.
+Deferral is a useful combination: it preserves immediate-return access in place
+and materializes compact state only when another activation needs the space.
+The measured copying reductions follow that distinction directly.
+The ten native workloads are still synthetic, all have at most one pending suspension
+per dynamic owner, and their timing runs use translation.
+The shared-owner traces establish reasons not to claim universal space dominance.
+
+Three follow-ups now have concrete motivation:
+
+- **Compile proven local returns without runtime suspension bookkeeping.** Deferral avoids value copying,
+  but the mixed-protocol and sequential-local cases still execute millions of Suspend/Resume actions.
+  A checked local return could preserve the known entry context directly.
+  The proof must distinguish direct primitive returns from host operations that invoke another closure or callback;
+  an extern name or a source arrow alone does not establish the needed behavior.
+- **Share saved state within an owner, or retain a dense frame selectively.** The overlapping-suspension
+  traces expose duplicated captures, root locations, and layout metadata.
+  An owner-level capture union or a measured density policy could address those costs.
+  It must preserve older snapshots across inner resumptions and slot reuse;
+  retaining an arbitrary mutable heap object is not that proof.
+- **Allocate and reclaim word storage together with its metadata.** The compact sparse trace is now dominated
+  by cached control records.
+  Segments, regions, or a shrink policy should measure both classes of reservation
+  across alternating deep and shallow phases.
+  Optimizing only the word buffer would miss most remaining storage there.
+
+The last direction also sharpens the Rust boundary.
+`Storage` still promises one contiguous base for all its words.
+The new `Environment` capability needs only an active base, nested actions, and mutable root locations;
+a segmented suspended-store engine can satisfy that capability without pretending to implement contiguous storage.
+A managed frame that moves during ordinary collection still needs a different collecting boundary and base-reload rule.
+Sharing the contract is feasible because the common semantic obligations are concrete,
+while the physical representation can vary.
+The identical emitted assemblies and independent GC/failure tests are evidence for that separation here.

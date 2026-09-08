@@ -11,6 +11,12 @@ struct ProbeActivation {
 struct ProbeSuspension {
     activation: ProbeActivation,
     captures: usize,
+    residence: ProbeResidence,
+}
+
+enum ProbeResidence {
+    Active,
+    Saved,
 }
 
 struct EnvironmentProbe {
@@ -21,6 +27,8 @@ struct EnvironmentProbe {
     resumptions: usize,
     captured_words: usize,
     restored_words: usize,
+    entry_capture_words: usize,
+    entry_restore_words: usize,
     suspended_layout_words: usize,
     pending_words: usize,
     peak_pending_words: usize,
@@ -40,6 +48,8 @@ impl EnvironmentProbe {
         resumptions: 0,
         captured_words: 0,
         restored_words: 0,
+        entry_capture_words: 0,
+        entry_restore_words: 0,
         suspended_layout_words: 0,
         pending_words: 0,
         peak_pending_words: 0,
@@ -54,6 +64,12 @@ impl EnvironmentProbe {
         use zydeco_machine::frames::ActionKind;
         match action.kind as u64 {
             | kind if kind == ActionKind::Enter as u64 => {
+                for pending in &mut self.pending {
+                    if matches!(pending.residence, ProbeResidence::Active) {
+                        self.entry_capture_words += pending.captures;
+                        pending.residence = ProbeResidence::Saved;
+                    }
+                }
                 self.entries += 1;
                 self.active = Some(ProbeActivation {
                     id: self.entries,
@@ -66,7 +82,11 @@ impl EnvironmentProbe {
                 assert_eq!(active.layout, action.layout);
                 self.same_owner_suspensions +=
                     usize::from(self.pending.iter().any(|saved| saved.activation.id == active.id));
-                self.pending.push(ProbeSuspension { activation: active, captures: action.words });
+                self.pending.push(ProbeSuspension {
+                    activation: active,
+                    captures: action.words,
+                    residence: ProbeResidence::Active,
+                });
                 self.suspensions += 1;
                 self.captured_words += action.words;
                 self.suspended_layout_words += active.words;
@@ -80,6 +100,9 @@ impl EnvironmentProbe {
                 self.active = Some(saved.activation);
                 self.resumptions += 1;
                 self.restored_words += saved.captures;
+                if matches!(saved.residence, ProbeResidence::Saved) {
+                    self.entry_restore_words += saved.captures;
+                }
                 self.pending_words -= saved.captures;
             }
             | _ => panic!("unexpected environment probe action"),
@@ -92,14 +115,15 @@ impl EnvironmentProbe {
         self.peak_root_slots = self.peak_root_slots.max(slots);
     }
 
-    fn report(&self) {
+    fn report(&self, metadata: Option<usize>) {
         eprintln!(
             concat!(
                 "zydeco_transitions: {{\"entries\":{},\"suspensions\":{},\"resumptions\":{},",
                 "\"captured_words\":{},\"restored_words\":{},\"suspended_layout_words\":{},",
+                "\"entry_capture_words\":{},\"entry_restore_words\":{},",
                 "\"peak_pending_capture_words\":{},\"peak_pending_suspensions\":{},",
                 "\"same_owner_suspensions\":{},\"collections\":{},",
-                "\"root_slots\":{},\"peak_root_slots\":{}}}"
+                "\"root_slots\":{},\"peak_root_slots\":{},\"metadata_reserved_bytes\":{}}}"
             ),
             self.entries,
             self.suspensions,
@@ -107,12 +131,15 @@ impl EnvironmentProbe {
             self.captured_words,
             self.restored_words,
             self.suspended_layout_words,
+            self.entry_capture_words,
+            self.entry_restore_words,
             self.peak_pending_words,
             self.peak_pending,
             self.same_owner_suspensions,
             self.collections,
             self.root_slots,
             self.peak_root_slots,
+            metadata.map_or_else(|| "null".to_owned(), |bytes| bytes.to_string()),
         );
     }
 }

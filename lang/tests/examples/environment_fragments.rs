@@ -21,6 +21,7 @@ struct Scenario {
     captures: &'static [Word],
     owners: usize,
     suspensions_per_owner: usize,
+    enter_leaf: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +29,7 @@ struct Usage {
     used: usize,
     peak: usize,
     reserved: usize,
+    metadata: usize,
 }
 
 #[derive(Default)]
@@ -82,12 +84,21 @@ impl Scenario {
                 tokens.push((layout.id, environment.suspend(layout.id, self.captures).unwrap()));
             }
         }
-        let leaf = self.layout(self.owners);
-        let base = environment.enter(leaf).unwrap();
-        // Every local location is reusable in the leaf, even if a suspended
-        // owner used the same offset. Snapshot and retained engines differ here.
-        for slot in 0..leaf.words {
-            unsafe { base.add(slot).write(3) };
+        let leaf = self.layout(if self.enter_leaf { self.owners } else { self.owners - 1 });
+        let copies = copies && self.enter_leaf;
+        if self.enter_leaf {
+            let base = environment.enter(leaf).unwrap();
+            // Every local location is reusable in the leaf, even if a suspended
+            // owner used the same offset. Snapshot and retained engines differ here.
+            for slot in 0..leaf.words {
+                unsafe { base.add(slot).write(3) };
+            }
+        }
+        if !self.enter_leaf {
+            // Establish space for one transient host-return token before the
+            // bounded loop; metadata vectors may grow on this first use.
+            let token = environment.suspend(leaf.id, &[]).unwrap();
+            environment.resume(leaf.id, token).unwrap();
         }
         let peak = usage(&environment);
         let roots = environment.roots(leaf.id, &[]).unwrap().len();
@@ -95,7 +106,12 @@ impl Scenario {
             self.owners * self.captures.len() * if copies { self.suspensions_per_owner } else { 1 };
         assert_eq!(roots, expected_roots);
         for _ in 0..TAIL_ENTRIES {
-            environment.enter(leaf).unwrap();
+            if self.enter_leaf {
+                environment.enter(leaf).unwrap();
+            } else {
+                let token = environment.suspend(leaf.id, &[]).unwrap();
+                environment.resume(leaf.id, token).unwrap();
+            }
             let roots =
                 Published { environment: &mut environment, layout: leaf.id, work: &mut work };
             unsafe { heap.allocate(1, AllocationKind::Opaque, roots).unwrap() };
@@ -121,7 +137,7 @@ impl Scenario {
             0
         };
         println!(
-            "{},{scheme},{},{},{},{},{},{},{},{},{roots},{},{},{copied}",
+            "{},{scheme},{},{},{},{},{},{},{},{},{roots},{},{},{copied},{}",
             self.name,
             self.owners,
             self.suspensions_per_owner,
@@ -133,13 +149,14 @@ impl Scenario {
             final_usage.reserved,
             work.collections,
             work.root_slots,
+            peak.metadata,
         );
     }
 }
 
 fn main() {
     println!(
-        "scenario,scheme,owners,suspensions_per_owner,frame_words,captures,peak_words,reserved_words,final_words,reserved_after_return,suspended_root_slots,collections,root_slots_visited,copied_value_words"
+        "scenario,scheme,owners,suspensions_per_owner,frame_words,captures,peak_words,reserved_words,final_words,reserved_after_return,suspended_root_slots,collections,root_slots_visited,copied_value_words,metadata_reserved_bytes"
     );
     for scenario in [
         Scenario {
@@ -148,6 +165,7 @@ fn main() {
             captures: &[0, 1, 2, 3],
             owners: 32,
             suspensions_per_owner: 1,
+            enter_leaf: true,
         },
         Scenario {
             name: "sparse-high",
@@ -155,6 +173,7 @@ fn main() {
             captures: &[0, 63, 127, 255],
             owners: 32,
             suspensions_per_owner: 1,
+            enter_leaf: true,
         },
         Scenario {
             name: "dense",
@@ -162,14 +181,23 @@ fn main() {
             captures: &[0, 1, 2, 3],
             owners: 32,
             suspensions_per_owner: 1,
+            enter_leaf: true,
         },
-        Scenario { name: "empty", words: 256, captures: &[], owners: 32, suspensions_per_owner: 1 },
+        Scenario {
+            name: "empty",
+            words: 256,
+            captures: &[],
+            owners: 32,
+            suspensions_per_owner: 1,
+            enter_leaf: true,
+        },
         Scenario {
             name: "shared",
             words: 8,
             captures: &[0, 1, 2, 3, 4, 5, 6, 7],
             owners: 1,
             suspensions_per_owner: 32,
+            enter_leaf: true,
         },
         Scenario {
             name: "shared-sparse",
@@ -177,6 +205,15 @@ fn main() {
             captures: &[0, 63, 127, 255],
             owners: 1,
             suspensions_per_owner: 32,
+            enter_leaf: true,
+        },
+        Scenario {
+            name: "shared-immediate",
+            words: 8,
+            captures: &[0, 1, 2, 3, 4, 5, 6, 7],
+            owners: 1,
+            suspensions_per_owner: 32,
+            enter_leaf: false,
         },
     ] {
         scenario.run(
@@ -186,16 +223,18 @@ fn main() {
                 used: frames.used_words(),
                 peak: frames.high_water_words(),
                 reserved: frames.reserved_words(),
+                metadata: frames.metadata_reserved_bytes(),
             },
             false,
         );
         scenario.run(
-            "compact",
+            "deferred",
             Fragments::<Growable>::EMPTY,
             |frames| Usage {
                 used: frames.used_words(),
                 peak: frames.high_water_words(),
                 reserved: frames.reserved_words(),
+                metadata: frames.metadata_reserved_bytes(),
             },
             true,
         );

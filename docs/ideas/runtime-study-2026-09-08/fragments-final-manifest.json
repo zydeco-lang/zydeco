@@ -1,0 +1,24 @@
+{
+  "data_sha256": {
+    "fragments-deferred.json": "7fef81f18b271613e24882a84243810e3154d5d8da3b31f8e2ed68e94a89232a",
+    "fragments-final.json": "95f731e3e0a176e2161d9b8cc5a356ca52d1a2862546b6e5019ee3e9d85f9051",
+    "fragments-final-layouts.csv": "21bc001af71484957a8b6247ddf1ebb9497fa8e4b4274f5bcb06f28972aacc39",
+    "fragments-ffi.json": "92083a50b1d7cfc4e4ffcd582f351e42d8fa403678a2c2e7b2a8a717582e163f"
+  },
+  "trace_sources_sha256": {
+    "lang/tests/examples/environment_fragments.rs": "f568163d67fabebf4eb3f72d1a60376a221c142b60cba72451fc94e625ff0c02",
+    "lang/tests/environment-study.py": "d16e0919cd8c757409c193a4b9571e9d320f9b734b380251dbd41cbba2ad2d6e",
+    "lang/tests/environment-probe.rs": "a39755fec2a3a0d388a18b4a06428bb135dce6f5241a52970a28cd5814db8a94",
+    "lang/machine/src/frames.rs": "02257201353319d335889867c775b150f8450499ebc7c66fc39d91d39c3282f7",
+    "lang/machine/src/frames/fragments.rs": "90ff2529f9e54e8505c870bba3482a554f4166ab3c54480d6116ed174aac8ef7",
+    "lang/machine/src/frames/storage.rs": "a0b32aad1bf2676c95d37bd98b8d4d3f7036d0185079239fec9c72d8bfb290b3",
+    "runtime/stub.rs": "dc56172e93c53f8abf2f1059c3c8f55f4eb2f47e336984c1cda699a41cecd8b8",
+    "runtime/Cargo.toml": "ac2b6fd7658ca115ea061792747d26e1fcc7a2d58029135692123e487a64f0c5",
+    "runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57"
+  },
+  "trace_command": "cargo run --quiet -p zydeco-tests --example environment_fragments",
+  "trace_exit": 0,
+  "eager_reference_commit": "26bc3132",
+  "emission_comparison": "retained and deferred assembly hashes agree for all ten final workloads",
+  "accounting": "word-buffer capacities plus Rust owner and metadata-vector capacities; excludes allocator overhead, managed heap, control stack and temporary root vectors"
+}

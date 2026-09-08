@@ -150,7 +150,8 @@ class EnvironmentStudy(RUNTIME.Study):
                                         '    eprintln!("zydeco_environment: {} {} {}", frames.used_words(), '
                                         f'frames.high_water_words(), {reserved});')
                 if self.args.fragments:
-                    source = self.instrument_transitions(source)
+                    metadata = "Some(frames.metadata_reserved_bytes())" if "fn metadata_reserved_bytes" in model else "None"
+                    source = self.instrument_transitions(source, metadata)
                 stub.write_text(source)
                 directory = self.output / "probes" / profile / variant
                 for record in list(self.records):
@@ -181,7 +182,7 @@ class EnvironmentStudy(RUNTIME.Study):
                                 success=success, metrics=metrics, transitions=transitions, **result)
 
     @staticmethod
-    def instrument_transitions(source):
+    def instrument_transitions(source, metadata):
         hooks = {
             # Exit prints the word-buffer metrics first, then the independent
             # transition probe. It observes actions without knowing storage layout.
@@ -197,7 +198,7 @@ class EnvironmentStudy(RUNTIME.Study):
         marker = "frames.high_water_words(), "
         start = source.index(marker)
         end = source.index(";", start) + 1
-        source = source[:end] + '\n    unsafe { &*ENVIRONMENT_PROBE.get() }.report();' + source[end:]
+        source = source[:end] + f'\n    unsafe {{ &*ENVIRONMENT_PROBE.get() }}.report({metadata});' + source[end:]
         return source + "\n" + Path(__file__).with_name("environment-probe.rs").read_text()
 
     @classmethod

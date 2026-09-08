@@ -24,7 +24,9 @@ mod sealed {
 ///
 /// Transitions never collect the managed heap. Suspend cannot move the active
 /// base; Enter and Resume return the base generated code must subsequently use.
-/// Roots returns mutable live value locations, valid until any next transition.
+/// Roots returns mutable live value locations, valid until any next attempted
+/// transition, including a failed reservation. Failure preserves logical values,
+/// tokens, and the active base; a snapshot buffer may have reserved more capacity.
 /// Managed values cannot contain pointers into environment storage. Implementations
 /// are sealed because emitted code relies on these obligations, not just signatures.
 pub trait Environment: sealed::Sealed {
@@ -136,6 +138,14 @@ impl<S: Storage> Frames<S> {
 
     pub fn reserved_words(&self) -> usize {
         self.storage.reserved_words()
+    }
+
+    /// Rust owner plus allocated control records, excluding word buffers and
+    /// allocator bookkeeping. Includes unused vector capacity after reclamation.
+    pub fn metadata_reserved_bytes(&self) -> usize {
+        size_of::<Self>()
+            + self.activations.capacity() * size_of::<Activation>()
+            + self.suspensions.capacity() * size_of::<Suspension>()
     }
 
     fn active(&self, layout: LayoutId) -> Result<Activation, FrameError> {
