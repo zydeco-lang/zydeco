@@ -47,7 +47,7 @@ mod tests {
 
         fn primitive(&mut self, role: BuiltinValueRole) -> ValueId {
             let builtin = Builtin::for_role(&self.arena.admin.builtins, role).unwrap();
-            assert_eq!(builtin.sort, BuiltinSort::Function(HostCallMode::Returning));
+            assert_eq!(builtin.mode, HostCallMode::Returning);
             builtin.make_function(&mut self.arena)
         }
 
@@ -84,103 +84,141 @@ mod tests {
             SpsLowPipeline::new(&ScopedArena::default(), &StaticsArena::default()).run(program)
         }
 
-        fn assert_direct_calls(program: &SpsLowProgram, role: BuiltinValueRole, count: usize) {
+        fn parameters(&mut self, params: &[DefId], mut tail: CompuId) -> CompuId {
+            for def in params.iter().rev() {
+                let binder = self.build(*def);
+                let bindee = self.build(Bullet);
+                tail = self.build(Let { binder: Cons(binder, Bullet), bindee, tail });
+            }
+            tail
+        }
+
+        fn assert_no_call_wrappers(program: &SpsLowProgram) {
             let arena = &program.arena().inner;
             assert!(
                 !arena
                     .values
                     .iter()
-                    .any(|(_, value)| matches!(value, low::Value::ClosurePackage(_))),
-                "{role}: known calls must not allocate primitive thunks"
+                    .any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
             );
+            assert!(!arena.compus.iter().any(|(_, compu)| matches!(
+                compu,
+                low::Computation::OpenClosure(_) | low::Computation::ExternCall(_)
+            )));
             assert!(
                 !arena
-                    .compus
+                    .stacks
                     .iter()
-                    .any(|(_, compu)| matches!(compu, low::Computation::OpenClosure(_))),
-                "{role}: known calls must not dispatch through a thunk"
+                    .any(|(_, stack)| matches!(stack, low::Stack::ContinuationPackage(_)))
             );
-            assert_eq!(arena.compus.iter().filter(|(_, compu)| matches!(compu,
-                low::Computation::ExternCall(low::ExternCall { function: ExternalFunction::Host(name), .. })
-                    if *name == role.host_name())).count(), count,
-                "{role}: every invocation must retain its direct primitive call");
         }
 
-        fn assert_arguments(
-            program: &SpsLowProgram, mut stack: low::StackId, expected: [Literal; 2],
-        ) -> low::StackId {
+        fn assert_returned_literal(program: &SpsLowProgram, expected: Literal) {
             let arena = &program.arena().inner;
-            for expected in expected {
-                let low::Stack::Arg(Cons(value, rest)) = arena.stacks[&stack] else {
-                    panic!("primitive arguments must survive thunk elimination")
-                };
-                let low::Value::Literal(actual) = &arena.values[&value] else {
-                    panic!("a literal argument must remain a literal")
-                };
-                assert_eq!(
-                    actual, &expected,
-                    "primitive arguments must retain their type and order"
-                );
-                stack = rest;
-            }
-            stack
+            let low::Computation::OpenContinuation(low::OpenContinuation { body, .. }) =
+                arena.compus[&program.root()]
+            else {
+                panic!("the folded result must return to the ambient continuation")
+            };
+            let low::Computation::Jump(low::Jump { stack, .. }) = arena.compus[&body] else {
+                panic!("return must resume the ambient continuation")
+            };
+            let low::Stack::Arg(Cons(value, _)) = arena.stacks[&stack] else {
+                panic!("return must pass one result")
+            };
+            assert!(
+                matches!(&arena.values[&value], low::Value::Literal(actual) if *actual == expected)
+            );
         }
     }
 
     #[test]
-    fn arithmetic_primitives_compile_without_thunk_packages() {
-        let roles = BuiltinValueRole::all().filter(|role| {
-            matches!(
-                role,
-                BuiltinValueRole::Integer(
-                    _,
-                    IntegerOperation::Add
-                        | IntegerOperation::Sub
-                        | IntegerOperation::Mul
-                        | IntegerOperation::Div
-                        | IntegerOperation::Mod
-                ) | BuiltinValueRole::Float(
-                    _,
-                    FloatOperation::Add
-                        | FloatOperation::Sub
-                        | FloatOperation::Mul
-                        | FloatOperation::Div
-                )
-            )
-        });
-        for role in roles {
+    fn arithmetic_primitives_compile_to_typed_values_without_call_wrappers() {
+        for (role, operation) in BuiltinValueRole::all()
+            .filter_map(|role| PrimitiveOp::from_builtin(role).map(|operation| (role, operation)))
+        {
+            let mut fixture = PrimitiveFixture::default();
+            let params = [fixture.def("first"), fixture.def("second")];
+            let arguments = params.map(|def| fixture.build(def));
+            let thunk = fixture.primitive(role);
+            let ambient = fixture.build(Bullet);
+            let call = fixture.call(thunk, arguments, ambient);
+            let root = fixture.parameters(&params, call);
+            let program = fixture.compile(root);
+            PrimitiveFixture::assert_no_call_wrappers(&program);
+            let primitives = program
+                .arena()
+                .inner
+                .values
+                .iter()
+                .filter_map(|(_, value)| {
+                    if let low::Value::Primitive(primitive) = value {
+                        Some(primitive)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(primitives.len(), 1, "{role}");
+            assert_eq!(primitives[0].operation, operation);
+            let actual = primitives[0].operands.map(|id| match program.arena().inner.values[&id] {
+                | low::Value::Var(def) => def,
+                | _ => panic!("{role}: dynamic operands must remain variables"),
+            });
+            // Closure conversion renames binders; each argument must refer to the corresponding parameter.
+            let mut root = program.root();
+            for argument in actual {
+                let low::Computation::LetArg(low::LetArg {
+                    binder: Cons(pattern, Bullet),
+                    tail,
+                    ..
+                }) = program.arena().inner.compus[&root]
+                else {
+                    panic!("{role}: both parameters must remain bound")
+                };
+                assert!(
+                    matches!(program.arena().inner.vpats[&pattern], low::ValuePattern::Var(def) if def == argument)
+                );
+                root = tail;
+            }
+        }
+    }
+
+    #[test]
+    fn literal_arithmetic_folds_at_every_numeric_width() {
+        for (role, operation) in BuiltinValueRole::all()
+            .filter_map(|role| PrimitiveOp::from_builtin(role).map(|operation| (role, operation)))
+        {
             let mut fixture = PrimitiveFixture::default();
             let thunk = fixture.primitive(role);
             let ambient = fixture.build(Bullet);
             let root = fixture.literal_call(role, thunk, ambient);
             let program = fixture.compile(root);
-
-            PrimitiveFixture::assert_direct_calls(&program, role, 1);
-            let low::Computation::ExternCall(low::ExternCall { stack, .. }) =
-                program.arena().inner.compus[&program.root()]
-            else {
-                panic!("{role}: a direct primitive force must become an external call")
-            };
-            let rest = PrimitiveFixture::assert_arguments(
+            PrimitiveFixture::assert_no_call_wrappers(&program);
+            PrimitiveFixture::assert_returned_literal(
                 &program,
-                stack,
-                [20, 3].map(|value| PrimitiveFixture::literal(role, value)),
+                operation
+                    .evaluate(&[20, 3].map(|value| PrimitiveFixture::literal(role, value)))
+                    .unwrap(),
             );
-            assert!(matches!(program.arena().inner.stacks[&rest], low::Stack::Var(Bullet)));
-            assert_eq!(
-                program.arena().inner.compus.iter().count(),
-                1,
-                "{role}: no wrapper computation should survive"
+            assert!(
+                !program
+                    .arena()
+                    .inner
+                    .values
+                    .iter()
+                    .any(|(_, value)| matches!(value, low::Value::Primitive(_)))
             );
         }
     }
 
     #[test]
-    fn known_addition_aliases_remove_thunks_at_every_call_site() {
+    fn known_addition_aliases_inline_calls_and_their_return_continuation() {
         let role = BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add);
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let alias = fixture.def("alias");
+        let input = fixture.def("input");
         let result = fixture.def("result");
         let operation_value = fixture.build(operation);
         let result_value = fixture.build(result);
@@ -190,74 +228,54 @@ mod tests {
         let binder = fixture.build(result);
         let continuation = fixture.build(Kont { binder, body: second });
         let alias_value = fixture.build(alias);
-        let first = fixture.literal_call(role, alias_value, continuation);
+        let arguments = [fixture.build(input), fixture.build(PrimitiveFixture::literal(role, 3))];
+        let first = fixture.call(alias_value, arguments, continuation);
         let binder: VPatId = fixture.build(alias);
         let bindee: ValueId = fixture.build(operation);
         let tail = fixture.build(Let { binder, bindee, tail: first });
         let binder = fixture.build(operation);
         let bindee = fixture.primitive(role);
-        let root = fixture.build(Let { binder, bindee, tail });
+        let tail = fixture.build(Let { binder, bindee, tail });
+        let root = fixture.parameters(&[input], tail);
         let program = fixture.compile(root);
-
-        PrimitiveFixture::assert_direct_calls(&program, role, 2);
-        let low::Computation::ExternCall(low::ExternCall { stack, .. }) =
-            program.arena().inner.compus[&program.root()]
-        else {
-            panic!("the first addition must be a direct call")
-        };
-        let rest = PrimitiveFixture::assert_arguments(
-            &program,
-            stack,
-            [20, 3].map(|value| PrimitiveFixture::literal(role, value)),
-        );
+        PrimitiveFixture::assert_no_call_wrappers(&program);
         let arena = &program.arena().inner;
-        let low::Stack::ContinuationPackage(low::ContinuationPackage { code, .. }) =
-            arena.stacks[&rest]
-        else {
-            panic!("the second addition needs the first addition's return continuation")
-        };
-        let low::Value::Block(low::Block { body, .. }) = arena.values[&code] else {
-            panic!("the return continuation must supply code")
-        };
-        let low::Computation::LetArg(low::LetArg {
-            binder: low::Cons(binder, low::Bullet), ..
-        }) = arena.compus[&body]
-        else {
-            panic!("the continuation must bind the returned result")
-        };
-        let low::ValuePattern::Var(returned) = arena.vpats[&binder] else {
-            panic!("the returned result needs a variable binding")
-        };
-        let stack = arena
-            .compus
-            .iter()
-            .find_map(|(id, compu)| match compu {
-                | low::Computation::ExternCall(low::ExternCall { stack, .. })
-                    if *id != program.root() =>
-                {
-                    Some(*stack)
-                }
-                | _ => None,
-            })
-            .expect("the second addition must remain");
-        let low::Stack::Arg(Cons(argument, _)) = arena.stacks[&stack] else {
-            panic!("the second addition must receive its argument")
-        };
-        assert!(
-            matches!(arena.values[&argument], low::Value::Var(def) if def == returned),
-            "the returned result must feed the second call"
+        assert_eq!(
+            arena
+                .values
+                .iter()
+                .filter(|(_, value)| matches!(value, low::Value::Primitive(_)))
+                .count(),
+            2
         );
+        let low::Computation::LetArg(low::LetArg { tail, .. }) = arena.compus[&program.root()]
+        else {
+            panic!("input must stay bound")
+        };
+        let low::Computation::LetValue(low::LetValue { binder, bindee, .. }) = arena.compus[&tail]
+        else {
+            panic!("the first result must be bound directly in its consumer")
+        };
+        assert!(matches!(arena.values[&bindee], low::Value::Primitive(_)));
+        let low::ValuePattern::Var(first_result) = arena.vpats[&binder] else {
+            panic!("the first result needs one binding")
+        };
+        assert!(arena.values.iter().any(|(_, value)| matches!(value,
+            low::Value::Primitive(low::Primitive { operands, .. })
+                if matches!(arena.values[&operands[0]], low::Value::Var(def) if def == first_result))));
     }
 
     #[test]
-    fn a_known_addition_call_retains_a_thunk_for_its_escaping_use() {
+    fn an_escaping_primitive_keeps_its_interface_but_its_body_is_inline_arithmetic() {
         let role = BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add);
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
-        let value = fixture.build(operation);
+        let result = fixture.def("result");
+        let values = vec![fixture.build(operation), fixture.build(result)];
+        let value = fixture.build(VCons::new(values, ProductLayout { arity: 2 }));
         let ambient = fixture.build(Bullet);
         let returned = fixture.build(SReturn { stack: ambient, value });
-        let binder = fixture.build(Hole);
+        let binder = fixture.build(result);
         let continuation = fixture.build(Kont { binder, body: returned });
         let thunk = fixture.build(operation);
         let tail = fixture.literal_call(role, thunk, continuation);
@@ -266,19 +284,6 @@ mod tests {
         let root = fixture.build(Let { binder, bindee, tail });
         let program = fixture.compile(root);
         let arena = &program.arena().inner;
-
-        let low::Computation::LetValue(low::LetValue { bindee, tail: body, .. }) =
-            arena.compus[&program.root()]
-        else {
-            panic!("the escaping addition needs a retained value binding")
-        };
-        assert!(matches!(arena.values[&bindee], low::Value::ClosurePackage(_)));
-        assert!(
-            matches!(&arena.compus[&body],
-            low::Computation::ExternCall(low::ExternCall { function: ExternalFunction::Host(name), .. })
-                if *name == role.host_name()),
-            "the known invocation must still be direct"
-        );
         assert_eq!(
             arena
                 .values
@@ -287,12 +292,78 @@ mod tests {
                 .count(),
             1
         );
+        assert_eq!(
+            arena
+                .values
+                .iter()
+                .filter(|(_, value)| matches!(value, low::Value::Primitive(_)))
+                .count(),
+            1
+        );
+        assert!(!arena.compus.iter().any(|(_, compu)| matches!(
+            compu,
+            low::Computation::ExternCall(_) | low::Computation::OpenClosure(_)
+        )));
         assert!(
             !arena
-                .compus
+                .stacks
                 .iter()
-                .any(|(_, compu)| matches!(compu, low::Computation::OpenClosure(_)))
+                .any(|(_, stack)| matches!(stack, low::Stack::ContinuationPackage(_)))
         );
+        assert!(arena.values.iter().any(|(_, value)| matches!(
+            value,
+            low::Value::Literal(Literal::Integer(IntegerLiteral::Int64(23)))
+        )));
+    }
+
+    #[test]
+    fn repeated_uses_share_one_inline_primitive_result() {
+        let role = BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add);
+        let mut fixture = PrimitiveFixture::default();
+        let input = fixture.def("input");
+        let result = fixture.def("result");
+        let items = vec![fixture.build(result), fixture.build(result)];
+        let value = fixture.build(VCons::new(items, ProductLayout { arity: 2 }));
+        let stack = fixture.build(Bullet);
+        let body = fixture.build(SReturn { value, stack });
+        let binder = fixture.build(result);
+        let rest = fixture.build(Kont { binder, body });
+        let thunk = fixture.primitive(role);
+        let arguments = [fixture.build(input), fixture.build(PrimitiveFixture::literal(role, 1))];
+        let call = fixture.call(thunk, arguments, rest);
+        let root = fixture.parameters(&[input], call);
+        let program = fixture.compile(root);
+        PrimitiveFixture::assert_no_call_wrappers(&program);
+        let arena = &program.arena().inner;
+        let primitives = arena
+            .values
+            .iter()
+            .filter(|(_, value)| matches!(value, low::Value::Primitive(_)))
+            .count();
+        assert_eq!(primitives, 1);
+        let low::Computation::LetArg(low::LetArg { tail, .. }) = arena.compus[&program.root()]
+        else {
+            panic!("input must remain bound")
+        };
+        let low::Computation::LetValue(low::LetValue { binder, bindee, .. }) = arena.compus[&tail]
+        else {
+            panic!("a shared result must stay bound once")
+        };
+        let low::ValuePattern::Var(result) = arena.vpats[&binder] else {
+            panic!("the shared result must have a name")
+        };
+        assert!(matches!(arena.values[&bindee], low::Value::Primitive(_)));
+        let pair = arena
+            .values
+            .iter()
+            .find_map(
+                |(_, value)| if let low::Value::VCons(pair) = value { Some(pair) } else { None },
+            )
+            .unwrap();
+        assert_eq!(pair.items.len(), 2);
+        for item in &pair.items {
+            assert!(matches!(arena.values[item], low::Value::Var(def) if def == result));
+        }
     }
 
     #[test]
@@ -321,5 +392,6 @@ mod tests {
             !arena.compus.iter().any(|(_, compu)| matches!(compu, low::Computation::ExternCall(_))),
             "an unknown operation must not be guessed to be addition"
         );
+        assert!(!arena.values.iter().any(|(_, value)| matches!(value, low::Value::Primitive(_))));
     }
 }

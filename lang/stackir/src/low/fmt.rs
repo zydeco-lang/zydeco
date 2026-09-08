@@ -110,8 +110,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::text(literal.ugly(&statics_fmt))
             }
-            | Value::Complex(Complex { operator, operands }) => RcDoc::concat([
-                RcDoc::text(format!("<operator:{operator}>(")),
+            | Value::Primitive(Primitive { operation, operands }) => RcDoc::concat([
+                RcDoc::text(format!("<primitive:{operation}>(")),
                 RcDoc::intersperse(
                     operands.iter().map(|operand| operand.pretty(f)),
                     RcDoc::text(", "),
@@ -298,9 +298,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SpsLowProgram {
         let declarations = builtins
             .iter()
             .map(|(name, builtin)| {
-                let sort =
-                    if builtin.sort == BuiltinSort::Operator { "operator" } else { "function" };
-                RcDoc::text(format!("[{sort}:{name}] {builtin}")).append(RcDoc::line())
+                RcDoc::text(format!("[function:{name}] {builtin}")).append(RcDoc::line())
             })
             .collect::<Vec<_>>();
         RcDoc::concat(declarations)

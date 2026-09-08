@@ -13,9 +13,9 @@ use zydeco_assembly::{
     },
 };
 use zydeco_wasm_common::{
-    AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Intrinsics, Limits,
-    PointerLocal, ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable,
-    WASM_PAGE_BYTES, WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
+    AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Limits, PointerLocal,
+    ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
+    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
 };
 
 pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
@@ -79,10 +79,6 @@ pub enum EmitError {
     DuplicateExtern(String),
     #[error("WebAssembly abstract-machine backend cannot import native foreign symbol `{0}`")]
     UnsupportedForeignImport(String),
-    #[error(
-        "unsupported ZASM intrinsic `{name}/{arity}` in the WebAssembly abstract-machine backend"
-    )]
-    UnsupportedIntrinsic { name: String, arity: usize },
     #[error(transparent)]
     Common(#[from] WasmEmitError),
 }
@@ -490,7 +486,7 @@ impl<'a> ModuleEncoder<'a> {
                 | Instruction::PushArg(_) => "push",
                 | Instruction::PopArg(_) => "pop",
                 | Instruction::PushTag(_) => "tag",
-                | Instruction::Intrinsic(_) => "intrinsic",
+                | Instruction::Primitive(_) => "primitive",
                 | Instruction::Clear(_) => "clear",
                 | Instruction::RetainFrame(_) => "retain_frame",
             },
@@ -548,7 +544,7 @@ impl<'a> CaseEncoder<'a> {
             | Instruction::PushTag(zasm::Push(tag)) => {
                 self.push_constant(RuntimeWord::index(tag.idx)? as i64);
             }
-            | Instruction::Intrinsic(intrinsic) => self.emit_intrinsic(intrinsic)?,
+            | Instruction::Primitive(operation) => self.emit_primitive(*operation),
             | Instruction::Clear(context) => {
                 for variable in context {
                     let address = self.plan.variable_address(*variable)?;
@@ -758,65 +754,17 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::GlobalSet(PROGRAM_COUNTER_GLOBAL));
     }
 
-    fn emit_intrinsic(&mut self, intrinsic: &zasm::Intrinsic) -> Result<(), EmitError> {
-        if intrinsic.arity != 2 {
-            return Err(EmitError::UnsupportedIntrinsic {
-                name: intrinsic.name.clone(),
-                arity: intrinsic.arity,
-            });
-        }
-        let name = intrinsic.name.as_str();
-        self.pop_to(FIRST_ARGUMENT_LOCAL);
-        self.pop_to(FIRST_ARGUMENT_LOCAL + 1);
-        WordEmitter::new(&mut self.function, self.plan.alloc_function())
-            .decode_signed_local(FIRST_ARGUMENT_LOCAL, DECODED_FIRST_LOCAL);
-        WordEmitter::new(&mut self.function, self.plan.alloc_function())
-            .decode_signed_local(FIRST_ARGUMENT_LOCAL + 1, DECODED_SECOND_LOCAL);
-
-        if let Some(operation) = Intrinsics::comparison(name) {
-            self.function.instruction(&WasmInstruction::LocalGet(DECODED_FIRST_LOCAL));
-            self.function.instruction(&WasmInstruction::LocalGet(DECODED_SECOND_LOCAL));
-            self.function.instruction(&operation);
-            self.function.instruction(&WasmInstruction::I64ExtendI32U);
-            self.function.instruction(&WasmInstruction::I64Const(1));
-            self.function.instruction(&WasmInstruction::I64Shl);
-            self.function.instruction(&WasmInstruction::I64Const(1));
-            self.function.instruction(&WasmInstruction::I64Or);
-            self.function.instruction(&WasmInstruction::LocalSet(RESULT_LOCAL));
-            self.function.instruction(&WasmInstruction::I32Const(2));
-            self.function.instruction(&WasmInstruction::Call(self.plan.alloc_function()));
-            self.function.instruction(&WasmInstruction::LocalTee(POINTER_LOCAL));
-            self.function.instruction(&WasmInstruction::LocalGet(RESULT_LOCAL));
-            self.function.instruction(&WasmInstruction::I64Store(ProductFields::word_at_const(0)));
-            self.function.instruction(&WasmInstruction::LocalGet(POINTER_LOCAL));
-            self.function.instruction(&WasmInstruction::I64Const(1));
-            self.function.instruction(&WasmInstruction::I64Store(ProductFields::word_at_const(1)));
-            self.push_pointer(POINTER_LOCAL);
-        } else if let Some(operation) = Intrinsics::arithmetic(name) {
-            self.function.instruction(&WasmInstruction::LocalGet(DECODED_FIRST_LOCAL));
-            self.function.instruction(&WasmInstruction::LocalGet(DECODED_SECOND_LOCAL));
-            self.function.instruction(&operation);
-            self.function.instruction(&WasmInstruction::LocalSet(RESULT_LOCAL));
-            WordEmitter::new(&mut self.function, self.plan.alloc_function())
-                .encode_signed_local(RESULT_LOCAL, POINTER);
-            self.function.instruction(&WasmInstruction::Call(self.plan.push_function()));
-        } else if let Some(remainder) = Intrinsics::division(name) {
-            WordEmitter::new(&mut self.function, self.plan.alloc_function()).wrapping_division(
-                DECODED_FIRST_LOCAL,
-                DECODED_SECOND_LOCAL,
-                RESULT_LOCAL,
-                remainder,
-            );
-            WordEmitter::new(&mut self.function, self.plan.alloc_function())
-                .encode_signed_local(RESULT_LOCAL, POINTER);
-            self.function.instruction(&WasmInstruction::Call(self.plan.push_function()));
-        } else {
-            return Err(EmitError::UnsupportedIntrinsic {
-                name: intrinsic.name.clone(),
-                arity: intrinsic.arity,
-            });
-        }
-        Ok(())
+    fn emit_primitive(&mut self, operation: zydeco_syntax::PrimitiveOp) {
+        self.pop_to(DECODED_FIRST_LOCAL);
+        self.pop_to(DECODED_SECOND_LOCAL);
+        WordEmitter::new(&mut self.function, self.plan.alloc_function()).primitive(
+            operation,
+            DECODED_FIRST_LOCAL,
+            DECODED_SECOND_LOCAL,
+            RESULT_LOCAL,
+            POINTER,
+        );
+        self.function.instruction(&WasmInstruction::Call(self.plan.push_function()));
     }
 
     fn set_program_counter(&mut self, program: ProgId) -> Result<(), EmitError> {

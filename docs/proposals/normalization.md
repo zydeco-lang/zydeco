@@ -189,7 +189,7 @@ This preserves the branch-join placement and single node occurrence invariants c
 A substituted stack may be constructed later than its original occurrence.
 Consequently, these substitutions require movable remaining frames: argument values must be discardable,
 tags recurse into the remaining stack, and continuation bodies remain suspended.
-Frames containing trapping intrinsic values retain their original boundary,
+Frames containing trapping primitive values retain their original boundary,
 so their evaluation cannot move past an intervening effect.
 A popped head argument is bound before the consumer runs.
 
@@ -211,8 +211,12 @@ It preserves definition identities while allocating fresh nodes for the survivin
 Unused bindings and product fields disappear only when constructing the value is discardable.
 Variables, literals, trivial values, and suspended closures are discardable;
 products and constructors inherit that property from their contents.
-Intrinsic value operations and holes remain evaluated because they may trap.
+Typed arithmetic values are discardable when the operation is total and every operand is discardable.
+Integer division and remainder remain evaluated unless literal folding proves a successful result;
+holes also remain because they may trap.
 An executed external call or `Fix` remains even when its result is unused.
+Known arithmetic calls first become primitive values under the rule below,
+so the same discardability criterion applies to their result bindings.
 These rules preserve the order and number of effects and keep escaping computations suspended.
 
 ### Residual Primitive Calls
@@ -229,12 +233,42 @@ force (closure • => extern f •) S  ==>  extern f S
 Producer facts recognize this wrapper through aliases, product projections, and constructor payloads.
 It reduces even when the primitive has several call sites: the rewrite copies only the external operation identity,
 with each site's original argument and continuation stack.
-Escaping operations retain their thunk representation, and dynamically selected callees retain indirect forces.
 
-The result is a direct external operation in SPSLow, shared by all compiled backends. Numeric decoding,
-wrapping, and boxing still follow the [runtime representation](../../DESIGN.md#numeric-representations).
-Removing a primitive thunk does not promise a single machine instruction; instruction selection
-and scalar representation optimization remain backend work.
+For integer and floating-point arithmetic, a typed `PrimitiveOp` identifies the numeric width and arithmetic operation.
+When the first two argument frames are visible, the normalizer exposes a value operation:
+
+```text
+extern add (arg(x) :: arg(y) :: S)               ==>  return PrimitiveAdd(x, y) to S
+extern add (arg(x) :: arg(y) :: (kont z => M))    ==>  let z = PrimitiveAdd(x, y) in M
+```
+
+This is the source-level transformation `do z <- !add x y; M ==> let z = PrimitiveAdd(x, y) in M`.
+The result binding remains shared when `M` uses `z` repeatedly.
+A known return continuation becomes the binding's consumer before demand is computed,
+so it needs neither a continuation package nor an indirect return transfer.
+The operand evaluation order is the order of constructing the supplied argument stack:
+the second operand is evaluated before the first.
+Moving the remaining stack follows the local movement rules above.
+
+Literal operands fold using the [numeric semantics](../../DESIGN.md#numeric-representations),
+including wrapping at the selected integer width and rounding at the selected float width.
+Successful results become producer facts for the consumer, exposing folding along chains of calls.
+A zero divisor remains a runtime operation at its original evaluation position;
+normalization does not report it as a compile-time error or remove it merely because its result is unused.
+
+Escaping arithmetic operations retain their thunk interface, and dynamically selected callees retain indirect forces.
+Their normalized bodies pop two arguments and return an inline primitive value.
+The same form handles a known operation whose argument stack cannot be inspected or moved safely.
+Other known Builtin operations continue to use direct external calls.
+
+High and low SPS share `Primitive { operation, operands: [ValueId; 2] }`.
+ZASM carries the same typed operation as an instruction consuming two words and producing one.
+AMD64 selects integer or scalar SSE instructions, and both WebAssembly backends use typed numeric instructions.
+Arithmetic helpers and spare result boxes are absent from this path: decoding and wrapping happen inline,
+and an opaque result box is allocated only when required by the runtime representation.
+An unknown return continuation still requires its ordinary return transfer.
+Tagged-word decoding, encoding, and conditional boxing can add instructions around the arithmetic opcode;
+further elimination of those instructions requires scalar representation optimization.
 
 The Stack IR tests exercise local reductions beside cases requiring sharing,
 suspension, product shape, and trapping evaluation.
@@ -243,6 +277,11 @@ and continuation packages.
 A combined runtime fixture checks captured arguments, a shared closure body,
 and dependencies removed with a known branch on every backend.
 Builtin tests retain both direct primitive calls and runtime-selected primitive thunks.
+Primitive unit tests cover dynamic operands, literal folding at every width,
+aliases, shared results, and escaping operations.
+Native instruction checks reject arithmetic runtime calls, and execution tests compare all arithmetic operations
+across the interpreter and compiled backends, including overflow, zero divisors, float special values,
+effect ordering, and boxed results surviving native collection.
 
 ## Package Signatures
 

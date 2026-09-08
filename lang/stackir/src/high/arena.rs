@@ -26,7 +26,7 @@ pub struct AdminArena {
     /// names stay in their immutable phase arenas.
     pub defs: ArenaSparse<ScopedScope, DefId>,
 
-    /// builtin operators and functions
+    /// builtin operations and functions
     pub builtins: BuiltinMap,
 
     /// One source pattern may originate multiple generated ZIR patterns; every

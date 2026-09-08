@@ -251,12 +251,9 @@ impl<'a> SpsLowConverter<'a> {
                 low::VCons::new(items, layout).build(self, site)
             }
             | high::Value::Literal(literal) => literal.build(self, site),
-            | high::Value::Complex(high::Complex { operator, operands }) => {
-                let operands = operands
-                    .into_iter()
-                    .map(|operand| self.translate_value(operand, env))
-                    .collect();
-                low::Complex { operator, operands }.build(self, site)
+            | high::Value::Primitive(high::Primitive { operation, operands }) => {
+                let operands = operands.map(|operand| self.translate_value(operand, env));
+                low::Primitive { operation, operands }.build(self, site)
             }
         }
     }

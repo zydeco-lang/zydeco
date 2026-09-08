@@ -126,7 +126,7 @@ impl Collector<'_> {
                     self.value(item);
                 }
             }
-            | sk::Value::Complex(sk::Complex { operator: _, operands }) => {
+            | sk::Value::Primitive(sk::Primitive { operation: _, operands }) => {
                 for operand in operands {
                     self.value(operand);
                 }
@@ -344,7 +344,7 @@ impl VarVisitor<'_> {
                     self.value_escape(item);
                 }
             }
-            | sk::Value::ClosurePackage(_) | sk::Value::Ctor(_) | sk::Value::Complex(_) => {
+            | sk::Value::ClosurePackage(_) | sk::Value::Ctor(_) | sk::Value::Primitive(_) => {
                 self.info.all_projection = false;
                 self.info.escapes = true;
             }

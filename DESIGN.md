@@ -541,7 +541,7 @@ ZASM makes the control-flow graph explicit for assembly-derived backends.
 
 Within `zydeco-stackir`, `high` owns lexical closures and continuations,
 while `low` owns blocks, jumps, and explicit packages.
-The common `syntax` module defines value patterns, products, primitive operators,
+The common `syntax` module defines value patterns, products, typed primitive values,
 external calls, and data eliminations, parameterized by the relevant node IDs.
 Both phases use the same `Let` form for value, stack, and argument bindings,
 including the explicit ambient-stack binder.
@@ -561,8 +561,11 @@ The interpreter retains the complete checked residual program as the reference s
 
 Primitive operations initially retain their thunk representation.
 [Primitive call normalization](docs/proposals/normalization.md#residual-primitive-calls) follows known operations
-through bindings and package projections and replaces their forces with direct external calls.
-Dynamically selected and escaping operations retain their thunk interface.
+through bindings and package projections.
+Arithmetic becomes a typed value operation whose known return continuation becomes an ordinary result binding;
+other known operations become direct external calls.
+Dynamically selected and escaping operations retain their thunk interface with normalized bodies.
+AMD64 and both WebAssembly backends select numeric instructions for the typed arithmetic operations.
 
 | Responsibility | Implementation |
 | --- | --- |
@@ -1024,8 +1027,9 @@ Generated modules import builtins from the `zydeco` namespace through these type
 The additional `string_literal(i32, i32) -> i64` import receives an offset and UTF-8 byte length
 in exported memory and returns the host's opaque string value.
 The mandatory `runtime_error(i32) -> ()` import reports fatal language errors.
-Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`: `1` means pattern-match failure,
-`2` operand/control stack overflow, and `3` stack underflow.
+Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`:
+`1` means pattern-match failure, `2` operand/control stack overflow, `3` stack underflow,
+`4` integer division by zero, and `5` integer remainder by zero.
 The host must report the error and stop execution unsuccessfully.
 Generated code traps if the host returns. Each module exports `entry`, the conventional `_start` alias,
 and `memory`, but the embedding must supply the imports before invoking either function.

@@ -209,7 +209,10 @@ impl Normalizer {
             }
             | Value::Triv(_) => Rc::new(KnownValue::Triv),
             | Value::Literal(literal) => Rc::new(KnownValue::Literal(literal.clone())),
-            | Value::Hole(_) | Value::Complex(_) => Rc::default(),
+            | Value::Primitive(Primitive { operation, operands }) => self
+                .fold_primitive(*operation, operands.map(|node| ScopedValue { node, env }))
+                .map_or_else(Rc::default, |literal| Rc::new(KnownValue::Literal(literal))),
+            | Value::Hole(_) => Rc::default(),
         }
     }
 
@@ -272,8 +275,10 @@ impl Normalizer {
             | Value::Var(_) | Value::Triv(_) | Value::Literal(_) | Value::Closure(_) => true,
             | Value::Ctor(Ctor(_, body)) => self.discardable(*body),
             | Value::VCons(VCons { items, .. }) => items.iter().all(|item| self.discardable(*item)),
-            // An intrinsic value can trap; a dead result must not suppress it.
-            | Value::Hole(_) | Value::Complex(_) => false,
+            | Value::Primitive(Primitive { operation, operands }) => {
+                !operation.may_trap() && operands.iter().all(|operand| self.discardable(*operand))
+            }
+            | Value::Hole(_) => false,
         }
     }
 
@@ -362,18 +367,12 @@ impl Normalizer {
                     demands.into_iter().fold(Demands::default(), Demands::join),
                 )
             }
-            | Value::Complex(Complex { operator, operands }) => {
-                let (operands, demands): (Vec<_>, Vec<_>) = operands
-                    .into_iter()
-                    .map(|operand| {
-                        let value = self.value(operand, env, Demand::Used);
-                        (value.node, value.demands)
-                    })
-                    .unzip();
-                (
-                    Complex { operator, operands }.into(),
-                    demands.into_iter().fold(Demands::default(), Demands::join),
-                )
+            | Value::Primitive(Primitive { operation, operands }) => {
+                return self.primitive_value(
+                    operation,
+                    operands.map(|node| ScopedValue { node, env }),
+                    site,
+                );
             }
             | value => (value, Demands::default()),
         };
@@ -549,6 +548,113 @@ impl Normalizer {
         Residual { node, demands: demands.join(scrut.demands).join(stack.demands) }
     }
 
+    fn fold_primitive(
+        &self, operation: PrimitiveOp, operands: [ScopedValue; 2],
+    ) -> Option<Literal> {
+        let [first, second] = operands.map(|value| self.known(value.node, value.env));
+        let (KnownValue::Literal(first), KnownValue::Literal(second)) =
+            (first.as_ref(), second.as_ref())
+        else {
+            return None;
+        };
+        operation.evaluate(&[first.clone(), second.clone()]).ok()
+    }
+
+    fn primitive_value(
+        &mut self, operation: PrimitiveOp, operands: [ScopedValue; 2], site: Option<ss::TermId>,
+    ) -> Residual<ValueId> {
+        if let Some(literal) = self.fold_primitive(operation, operands) {
+            return Residual { node: literal.build(self, site), demands: Demands::default() };
+        }
+        let [first, second] = operands.map(|value| self.value(value.node, value.env, Demand::Used));
+        let node = Primitive { operation, operands: [first.node, second.node] }.build(self, site);
+        Residual { node, demands: first.demands.join(second.demands) }
+    }
+
+    /// Read arguments through ambient-stack substitutions without moving any trapping frames.
+    fn primitive_arguments(&self, stack: ScopedStack) -> Option<([ScopedValue; 2], ScopedStack)> {
+        let first = self.resolve_stack(stack);
+        let Stack::Arg(Cons(value, rest)) = self.source.inner.stacks[&first.node] else {
+            return None;
+        };
+        let first_value = ScopedValue { node: value, env: first.scope.values };
+        let second = self.resolve_stack(ScopedStack { node: rest, scope: first.scope });
+        let Stack::Arg(Cons(value, rest)) = self.source.inner.stacks[&second.node] else {
+            return None;
+        };
+        let second_value = ScopedValue { node: value, env: second.scope.values };
+        self.movable_stack(rest).then_some((
+            [first_value, second_value],
+            self.resolve_stack(ScopedStack { node: rest, scope: second.scope }),
+        ))
+    }
+
+    fn primitive_call(
+        &mut self, operation: PrimitiveOp, stack: ScopedStack, site: Option<ss::TermId>,
+    ) -> Residual<CompuId> {
+        if let Some((operands, rest)) = self.primitive_arguments(stack.clone()) {
+            if let Stack::Kont(Kont { binder, body }) = self.source.inner.stacks[&rest.node] {
+                let folded = self.fold_primitive(operation, operands);
+                let known = folded
+                    .clone()
+                    .map_or_else(Rc::default, |value| Rc::new(KnownValue::Literal(value)));
+                let values = self.bind(rest.scope.values, binder, known);
+                let mut tail = self.compu(body, Scope { values, ..rest.scope });
+                let bound = binder.vars(&self.source);
+                let discardable = folded.is_some()
+                    || (!operation.may_trap()
+                        && operands.iter().all(|value| self.discardable(value.node)));
+                if discardable && !bound.iter().any(|def| tail.demands.contains(def)) {
+                    return tail;
+                }
+                for def in bound {
+                    tail.demands.remove(&def);
+                }
+                let value = self.primitive_value(operation, operands, site);
+                let binder = self.pattern(binder);
+                let node = Let { binder, bindee: value.node, tail: tail.node }.build(self, site);
+                return Residual { node, demands: value.demands.join(tail.demands) };
+            }
+            let rest = self.stack(rest);
+            let value = self.primitive_value(operation, operands, site);
+            let node = SReturn { stack: rest.node, value: value.node }.build(self, site);
+            return Residual { node, demands: rest.demands.join(value.demands) };
+        }
+
+        // An escaping primitive or an unknown argument stack still executes inline.
+        // Construct the supplied stack first, then pop its arguments in source order.
+        let stack = self.stack(stack);
+        let defs = ["__primitive_first__", "__primitive_second__"].map(|name| {
+            let def = self.arena.admin.fresh();
+            self.arena.admin.insert_def(def, VarName(name.into()));
+            def
+        });
+        let operands = defs.map(|def| def.build(self, site));
+        let value = Primitive { operation, operands }.build(self, site);
+        let ambient = Bullet.build(self, site);
+        let tail = SReturn { stack: ambient, value }.build(self, site);
+        let second = defs[1].build(self, None);
+        let ambient = Bullet.build(self, site);
+        let tail = Let { binder: Cons(second, Bullet), bindee: ambient, tail }.build(self, site);
+        let first = defs[0].build(self, None);
+        let node = Let { binder: Cons(first, Bullet), bindee: stack.node, tail }.build(self, site);
+        Residual { node, demands: stack.demands }
+    }
+
+    fn external_call(
+        &mut self, function: ExternalFunction, stack: ScopedStack, site: Option<ss::TermId>,
+    ) -> Residual<CompuId> {
+        if let ExternalFunction::Host(name) = &function
+            && let Some(builtin) = self.arena.admin.builtins.get(name)
+            && let Some(operation) = PrimitiveOp::from_builtin(builtin.role)
+        {
+            return self.primitive_call(operation, stack, site);
+        }
+        let stack = self.stack(stack);
+        let node = ExternCall { function, stack: stack.node }.build(self, site);
+        Residual { node, demands: stack.demands }
+    }
+
     fn compu(&mut self, id: CompuId, scope: Scope) -> Residual<CompuId> {
         let site = self.source.admin.terms.back(&TermId::Compu(id)).copied();
         let (compu, demands): (Computation<LetJoin>, _) = match self.source.inner.compus[&id]
@@ -562,11 +668,7 @@ impl Normalizer {
                 let known = self.known(thunk, scope.values);
                 let stack = ScopedStack { node: stack, scope: scope.clone() };
                 if let KnownValue::External(function) = known.as_ref() {
-                    let stack = self.stack(stack);
-                    (
-                        ExternCall { function: function.clone(), stack: stack.node }.into(),
-                        stack.demands,
-                    )
+                    return self.external_call(function.clone(), stack, site);
                 } else if self.movable_stack(stack.node)
                     && let Value::Closure(Closure { body, .. }) = self.source.inner.values[&thunk]
                 {
@@ -681,8 +783,7 @@ impl Normalizer {
                 )
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
-                let stack = self.stack(ScopedStack { node: stack, scope });
-                (ExternCall { function, stack: stack.node }.into(), stack.demands)
+                return self.external_call(function, ScopedStack { node: stack, scope }, site);
             }
         };
         Residual { node: compu.build(self, site), demands }
@@ -741,8 +842,18 @@ mod tests {
             self.build(ExternCall { function: ExternalFunction::Host(name.into()), stack })
         }
 
-        fn trap(&mut self, operator: &str) -> ValueId {
-            self.build(Complex { operator: operator.into(), operands: Vec::new() })
+        fn trap(&mut self, operation: &str) -> ValueId {
+            let first =
+                self.build(Literal::Integer(IntegerLiteral::Int64(if operation == "left" {
+                    1
+                } else {
+                    2
+                })));
+            let second = self.build(Literal::Integer(IntegerLiteral::Int64(0)));
+            self.build(Primitive {
+                operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Div),
+                operands: [first, second],
+            })
         }
 
         fn effect_before_popping_argument(&mut self) -> CompuId {
@@ -807,13 +918,19 @@ mod tests {
         });
 
         let program = fixture.normalize(root);
-        assert!(matches!(
-            &program.arena().inner.compus[&program.root()],
-            Computation::ExternCall(ExternCall { function: ExternalFunction::Host(name), .. })
-                if name == "int64_add"
-        ));
-        assert_eq!(program.arena().inner.compus.iter().count(), 1);
-        assert_eq!(program.arena().inner.values.iter().count(), 0);
+        let arena = &program.arena().inner;
+        let Computation::LetArg(Let { tail, .. }) = arena.compus[&program.root()] else {
+            panic!("a primitive with an ambient argument stack must pop its first argument")
+        };
+        let Computation::LetArg(Let { tail, .. }) = arena.compus[&tail] else {
+            panic!("the primitive must pop its second argument")
+        };
+        let Computation::Ret(SReturn { value, .. }) = arena.compus[&tail] else {
+            panic!("the primitive must return its inline result")
+        };
+        assert!(matches!(arena.values[&value], Value::Primitive(_)));
+        assert_eq!(arena.compus.iter().count(), 3);
+        assert_eq!(arena.values.iter().count(), 3);
     }
 
     #[test]
@@ -829,6 +946,69 @@ mod tests {
             panic!("returning a primitive must not invoke it")
         };
         assert!(matches!(program.arena().inner.values[value], Value::Closure(_)));
+    }
+
+    #[test]
+    fn unused_primitive_calls_disappear_only_when_their_evaluation_is_total() {
+        for (arithmetic, divisor, trapping_operand, retained) in [
+            (IntegerArithmetic::Add, 0, false, false),
+            (IntegerArithmetic::Div, 2, false, false),
+            (IntegerArithmetic::Div, 0, false, true),
+            (IntegerArithmetic::Mod, 0, false, true),
+            (IntegerArithmetic::Add, 1, true, true),
+        ] {
+            let mut fixture = Fixture::default();
+            let role = PrimitiveOp::Integer(IntegerType::Int64, arithmetic).builtin();
+            let builtin = Builtin::for_role(&fixture.arena.admin.builtins, role).unwrap();
+            let thunk = builtin.make_function(&mut fixture.arena);
+            let first = if trapping_operand {
+                fixture.trap("operand")
+            } else {
+                fixture.build(Literal::Integer(IntegerLiteral::Int64(7)))
+            };
+            let second = fixture.build(Literal::Integer(IntegerLiteral::Int64(divisor)));
+            let after = fixture.external("after");
+            let binder = fixture.build(Hole);
+            let rest = fixture.build(Kont { binder, body: after });
+            let stack: StackId = fixture.build(Cons(second, rest));
+            let stack = fixture.build(Cons(first, stack));
+            let call = fixture.build(SForce { thunk, stack });
+            let binder = fixture.build(Hole);
+            let stack = fixture.build(Kont { binder, body: call });
+            let root = fixture
+                .build(ExternCall { function: ExternalFunction::Host("before".into()), stack });
+
+            let program = fixture.normalize(root);
+            let arena = &program.arena().inner;
+            let Computation::ExternCall(ExternCall {
+                function: ExternalFunction::Host(name),
+                stack,
+            }) = &arena.compus[&program.root()]
+            else {
+                panic!("the preceding effect must remain first")
+            };
+            assert_eq!(name, "before");
+            let Stack::Kont(Kont { body, .. }) = arena.stacks[stack] else {
+                panic!("the effect must resume its consumer")
+            };
+            let body = if retained {
+                let Computation::Join(LetJoin::Value(Let { bindee, tail, .. })) =
+                    arena.compus[&body]
+                else {
+                    panic!("trapping arithmetic must remain bound before the following effect")
+                };
+                assert!(matches!(arena.values[&bindee], Value::Primitive(_)));
+                tail
+            } else {
+                assert!(
+                    !arena.values.iter().any(|(_, value)| matches!(value, Value::Primitive(_)))
+                );
+                body
+            };
+            assert!(
+                matches!(&arena.compus[&body], Computation::ExternCall(ExternCall { function: ExternalFunction::Host(name), .. }) if name == "after")
+            );
+        }
     }
 
     #[test]
@@ -876,8 +1056,8 @@ mod tests {
         let value: ValueId = fixture.build(Triv);
         let ambient = fixture.build(Bullet);
         let stack = fixture.build(Cons(value, ambient));
-        let body = fixture
-            .build(ExternCall { function: ExternalFunction::Host("int64_add".into()), stack });
+        let body =
+            fixture.build(ExternCall { function: ExternalFunction::Host("effect".into()), stack });
         let thunk = fixture.build(Closure { stack: Bullet, body });
         let root = fixture.force(thunk);
 
@@ -936,11 +1116,14 @@ mod tests {
     }
 
     #[test]
-    fn unused_intrinsic_results_still_execute() {
+    fn unused_trapping_primitive_results_still_execute() {
         let mut fixture = Fixture::default();
         let left = fixture.build(Triv);
         let right = fixture.build(Triv);
-        let bindee = fixture.build(Complex { operator: "div".into(), operands: vec![left, right] });
+        let bindee = fixture.build(Primitive {
+            operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Div),
+            operands: [left, right],
+        });
         let value = fixture.build(Triv);
         let tail = fixture.ret(value);
         let binder: VPatId = fixture.build(Hole);
@@ -957,7 +1140,7 @@ mod tests {
                 .inner
                 .values
                 .iter()
-                .any(|(_, value)| matches!(value, Value::Complex(_)))
+                .any(|(_, value)| matches!(value, Value::Primitive(_)))
         );
     }
 
@@ -1026,7 +1209,9 @@ mod tests {
                 panic!("each trapping value must keep its evaluation")
             };
             assert!(
-                matches!(&arena.inner.values[&bindee], Value::Complex(Complex { operator, .. }) if operator == expected)
+                matches!(&arena.inner.values[&bindee], Value::Primitive(Primitive { operands, .. })
+                    if matches!(&arena.inner.values[&operands[0]], Value::Literal(Literal::Integer(value))
+                        if value.value() == if expected == "left" { 1 } else { 2 }))
             );
             node = tail;
         }
@@ -1161,7 +1346,7 @@ mod tests {
                 .inner
                 .values
                 .iter()
-                .any(|(_, value)| matches!(value, Value::Complex(_)))
+                .any(|(_, value)| matches!(value, Value::Primitive(_)))
         );
         assert!(!program.arena().inner.compus.iter().any(|(_, node)| matches!(
             node,
@@ -1324,7 +1509,7 @@ mod tests {
                     .inner
                     .values
                     .iter()
-                    .filter(|(_, value)| matches!(value, Value::Complex(_)))
+                    .filter(|(_, value)| matches!(value, Value::Primitive(_)))
                     .count(),
                 1
             );

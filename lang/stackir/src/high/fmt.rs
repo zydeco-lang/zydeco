@@ -118,8 +118,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::text(lit.ugly(&statics_fmt))
             }
-            | Value::Complex(Complex { operator, operands }) => {
-                let op_str = format!("<operator:{}>", operator);
+            | Value::Primitive(Primitive { operation, operands }) => {
+                let op_str = format!("<primitive:{}>", operation);
                 let ops_doc = RcDoc::concat(
                     operands
                         .iter()
@@ -373,13 +373,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackirProgram {
         let builtins = &f.admin.builtins;
 
         // Print all builtins
-        for (name, builtin) in
-            builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Operator)
-        {
-            doc = doc.append(RcDoc::text(format!("[operator:{}] {}", name, builtin)));
-            doc = doc.append(RcDoc::line());
-        }
-        for (name, builtin) in builtins.iter().filter(|(_, builtin)| builtin.is_function()) {
+        for (name, builtin) in builtins {
             doc = doc.append(RcDoc::text(format!("[function:{}] {}", name, builtin)));
             doc = doc.append(RcDoc::line());
         }

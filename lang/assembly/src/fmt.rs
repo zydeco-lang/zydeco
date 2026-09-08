@@ -174,7 +174,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::PushArg(push) => push.pretty(f),
             | Instruction::PopArg(pop) => pop.pretty(f),
             | Instruction::PushTag(push) => push.pretty(f),
-            | Instruction::Intrinsic(builtin) => builtin.pretty(f),
+            | Instruction::Primitive(builtin) => builtin.pretty(f),
             | Instruction::Clear(context) => context.pretty(f),
             | Instruction::RetainFrame(retain) => {
                 RcDoc::text(format!("retain-frame {:?}", retain.captures))
@@ -299,9 +299,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Imm {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Intrinsic {
+impl<'a> Pretty<'a, Formatter<'a>> for PrimitiveOp {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(self.name.clone())
+        RcDoc::text(self.to_string())
     }
 }
 

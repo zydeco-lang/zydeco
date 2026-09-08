@@ -256,7 +256,7 @@ impl<'a> SpsLowValidator<'a> {
             | Value::VCons(VCons { items, layout: _ }) => {
                 items.into_iter().try_for_each(|value| self.value(value))
             }
-            | Value::Complex(Complex { operator: _, operands }) => {
+            | Value::Primitive(Primitive { operation: _, operands }) => {
                 operands.into_iter().try_for_each(|value| self.value(value))
             }
         }

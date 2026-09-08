@@ -79,9 +79,10 @@ Once that unpack disappears, its shape no longer contributes demand.
 ## Observations beyond projections
 
 An indirect force observes its thunk whole.
-The result demand is not a demand on the closure package.
-A direct primitive call can remove that closure use through normalization, while retaining the external call
-and every value needed by its supplied stack.
+The result demand is not a demand on the closure package. A known primitive call removes that closure use
+under the [primitive call rules](normalization.md#residual-primitive-calls).
+Arithmetic exposes a value producer and its return consumer to demand analysis;
+other operations retain the external call and every value needed by its supplied stack.
 
 A constructor pattern observes the tag even if it ignores every payload binder.
 Surviving constructor matches conservatively demand their scrutinees whole.

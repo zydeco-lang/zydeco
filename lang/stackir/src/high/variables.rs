@@ -42,7 +42,7 @@ impl FreeVars for ValueId {
                 .into_iter()
                 .map(|item| item.free_vars(arena))
                 .fold(CoContext::new(), |vars, item| vars + item),
-            | Value::Complex(Complex { operator: _, operands }) => operands
+            | Value::Primitive(Primitive { operation: _, operands }) => operands
                 .into_iter()
                 .map(|operand| operand.free_vars(arena))
                 .fold(CoContext::new(), |acc, x| acc + x),

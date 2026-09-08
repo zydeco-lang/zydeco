@@ -21,13 +21,7 @@ pub struct Builtin {
     pub role: BuiltinValueRole,
     pub name: String,
     pub arity: usize,
-    pub sort: BuiltinSort,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BuiltinSort {
-    Operator,
-    Function(HostCallMode),
+    pub mode: HostCallMode,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +38,6 @@ impl Builtin {
     }
 
     fn for_known_role(role: BuiltinValueRole) -> Self {
-        use BuiltinSort::Function;
         use HostCallMode::{Control, Returning};
 
         let mode = match role {
@@ -94,7 +87,7 @@ impl Builtin {
             | BuiltinValueRole::Exit => Control,
             | _ => Returning,
         };
-        Builtin { role, name: role.host_name(), arity: role.arity(), sort: Function(mode) }
+        Builtin { role, name: role.host_name(), arity: role.arity(), mode }
     }
 
     fn generate(self) -> (String, Self) {
@@ -110,39 +103,6 @@ impl Builtin {
             .ok_or(BuiltinPackageLowerError::UnsupportedOperation { role })
     }
 
-    /// Turn a builtin operator definition into returning a complex CBPV value,
-    /// pop parameters from stack (CBPV function), and finally wrap it with closure.
-    pub fn make_operator<Arena>(&self, arena: &mut Arena) -> ValueId
-    where
-        Arena: AsMut<StackirArena>,
-    {
-        let op = self.name.clone();
-        // make fresh variables as operands
-        let params: Vec<_> = (0..self.arity)
-            .map(|i| {
-                let param = VarName::from(format!("param_{}", i));
-                let id = AsMut::<StackirArena>::as_mut(arena).admin.fresh();
-                AsMut::<StackirArena>::as_mut(arena).admin.insert_def(id, param);
-                id
-            })
-            .collect();
-        let operands = params.iter().map(|def| def.build(arena, None)).collect();
-        // construct the complex value
-        let complex = Complex { operator: op, operands }.build(arena, None);
-        // construct the computation of returning the complex value
-        let stack = Bullet.build(arena, None);
-        let mut tail = SReturn { stack, value: complex }.build(arena, None);
-        // construct the let-argument (CBPV function) wrapping the return computation
-        for def in params.into_iter().rev() {
-            let vpat = def.build(arena, None);
-            let binder = Cons(vpat, Bullet);
-            let bindee = Bullet.build(arena, None);
-            tail = Computation::LetArg(Let { binder, bindee, tail }).build(arena, None);
-        }
-        // construct the closure wrapping the whole computation
-        Closure { stack: Bullet, body: tail }.build(arena, None)
-    }
-
     /// Wrap a builtin function definition with closure.
     pub fn make_function<Arena>(&self, arena: &mut Arena) -> ValueId
     where
@@ -152,10 +112,6 @@ impl Builtin {
         let stack = Bullet.build(arena, None);
         let body = ExternCall { function, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)
-    }
-
-    pub fn is_function(&self) -> bool {
-        matches!(self.sort, BuiltinSort::Function(_))
     }
 }
 

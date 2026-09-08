@@ -43,6 +43,8 @@ pub enum Error {
     StackUnderflow,
     #[error("Type error: {0}")]
     TypeError(String),
+    #[error(transparent)]
+    Primitive(#[from] PrimitiveError),
 }
 
 impl CompilerPass for Interpreter {
@@ -186,10 +188,23 @@ impl Eval for Instruction {
                 interp.runtime.stack.push(Value::Tag(tag));
                 Ok(())
             }
-            | Instruction::Intrinsic(Intrinsic { name, arity }) => {
-                let _ = name;
-                let _ = arity;
-                todo!()
+            | Instruction::Primitive(operation) => {
+                let mut operand =
+                    || match interp.runtime.stack.pop().ok_or(Error::StackUnderflow)? {
+                        | Value::Atom(Atom::Imm(Imm::Integer(value))) => {
+                            Ok(Literal::Integer(value))
+                        }
+                        | Value::Atom(Atom::Imm(Imm::Float(value))) => Ok(Literal::Float(value)),
+                        | _ => Err(Error::Primitive(PrimitiveError::OperandType)),
+                    };
+                let result = operation.evaluate(&[operand()?, operand()?])?;
+                let result = match result {
+                    | Literal::Integer(value) => Imm::Integer(value),
+                    | Literal::Float(value) => Imm::Float(value),
+                    | _ => unreachable!("arithmetic returns a scalar"),
+                };
+                interp.runtime.stack.push(Value::Atom(Atom::Imm(result)));
+                Ok(())
             }
             | Instruction::Clear(context) => {
                 for var in context {

@@ -166,10 +166,6 @@ impl HostFloat64 {
     fn decode(word: Word) -> f64 {
         f64::from_bits(OpaqueScalar::load(word) as u64)
     }
-
-    fn encode(value: f64, spare: *mut Word) -> Word {
-        OpaqueScalar::store(spare, value.to_bits() as Word)
-    }
 }
 
 struct HostFloat32;
@@ -177,10 +173,6 @@ struct HostFloat32;
 impl HostFloat32 {
     fn decode(word: Word) -> f32 {
         f32::from_bits(Immediate::decode_unsigned(word) as u32)
-    }
-
-    fn encode(value: f32, _spare: *mut Word) -> Word {
-        Immediate::expect_unsigned(value.to_bits() as Word)
     }
 }
 
@@ -499,6 +491,16 @@ extern "sysv64" fn zydeco_abort() -> ! {
     RuntimeFailure::PatternMatch.exit()
 }
 
+#[unsafe(export_name = "\x01zydeco_integer_division_by_zero")]
+extern "sysv64" fn zydeco_integer_division_by_zero() -> ! {
+    RuntimeFailure::IntegerDivisionByZero.exit()
+}
+
+#[unsafe(export_name = "\x01zydeco_integer_remainder_by_zero")]
+extern "sysv64" fn zydeco_integer_remainder_by_zero() -> ! {
+    RuntimeFailure::IntegerRemainderByZero.exit()
+}
+
 enum RuntimeFailure {
     PatternMatch,
     IntegerDivisionByZero,
@@ -642,57 +644,11 @@ extern "sysv64" fn zydeco_str_get_branch(
 macro_rules! integer_runtime {
     (
         $type:ty,
-        $add:ident => $add_symbol:literal,
-        $sub:ident => $sub_symbol:literal,
-        $mul:ident => $mul_symbol:literal,
-        $div:ident => $div_symbol:literal,
-        $modulo:ident => $modulo_symbol:literal,
         $eq:ident => $eq_symbol:literal,
         $lt:ident => $lt_symbol:literal,
         $gt:ident => $gt_symbol:literal,
         $to_string:ident => $to_string_symbol:literal
     ) => {
-        #[unsafe(export_name = $add_symbol)]
-        extern "sysv64" fn $add(first: Word, second: Word, spare: *mut Word) -> Word {
-            let first = <$type as RuntimeInteger>::decode(first);
-            let second = <$type as RuntimeInteger>::decode(second);
-            RuntimeInteger::encode(first.wrapping_add(second), spare)
-        }
-
-        #[unsafe(export_name = $sub_symbol)]
-        extern "sysv64" fn $sub(first: Word, second: Word, spare: *mut Word) -> Word {
-            let first = <$type as RuntimeInteger>::decode(first);
-            let second = <$type as RuntimeInteger>::decode(second);
-            RuntimeInteger::encode(first.wrapping_sub(second), spare)
-        }
-
-        #[unsafe(export_name = $mul_symbol)]
-        extern "sysv64" fn $mul(first: Word, second: Word, spare: *mut Word) -> Word {
-            let first = <$type as RuntimeInteger>::decode(first);
-            let second = <$type as RuntimeInteger>::decode(second);
-            RuntimeInteger::encode(first.wrapping_mul(second), spare)
-        }
-
-        #[unsafe(export_name = $div_symbol)]
-        extern "sysv64" fn $div(first: Word, second: Word, spare: *mut Word) -> Word {
-            let first = <$type as RuntimeInteger>::decode(first);
-            let second = <$type as RuntimeInteger>::decode(second);
-            if second == 0 {
-                RuntimeFailure::IntegerDivisionByZero.exit();
-            }
-            RuntimeInteger::encode(first.wrapping_div(second), spare)
-        }
-
-        #[unsafe(export_name = $modulo_symbol)]
-        extern "sysv64" fn $modulo(first: Word, second: Word, spare: *mut Word) -> Word {
-            let first = <$type as RuntimeInteger>::decode(first);
-            let second = <$type as RuntimeInteger>::decode(second);
-            if second == 0 {
-                RuntimeFailure::IntegerRemainderByZero.exit();
-            }
-            RuntimeInteger::encode(first.wrapping_rem(second), spare)
-        }
-
         #[unsafe(export_name = $eq_symbol)]
         extern "sysv64" fn $eq(
             first: Word, second: Word, when_true: Word, when_false: Word,
@@ -738,11 +694,6 @@ macro_rules! integer_runtime {
 
 integer_runtime!(
     i8,
-    zydeco_int8_add => "\x01zydeco_int8_add",
-    zydeco_int8_sub => "\x01zydeco_int8_sub",
-    zydeco_int8_mul => "\x01zydeco_int8_mul",
-    zydeco_int8_div => "\x01zydeco_int8_div",
-    zydeco_int8_mod => "\x01zydeco_int8_mod",
     zydeco_int8_eq_branch => "\x01zydeco_int8_eq_branch",
     zydeco_int8_lt_branch => "\x01zydeco_int8_lt_branch",
     zydeco_int8_gt_branch => "\x01zydeco_int8_gt_branch",
@@ -750,11 +701,6 @@ integer_runtime!(
 );
 integer_runtime!(
     i16,
-    zydeco_int16_add => "\x01zydeco_int16_add",
-    zydeco_int16_sub => "\x01zydeco_int16_sub",
-    zydeco_int16_mul => "\x01zydeco_int16_mul",
-    zydeco_int16_div => "\x01zydeco_int16_div",
-    zydeco_int16_mod => "\x01zydeco_int16_mod",
     zydeco_int16_eq_branch => "\x01zydeco_int16_eq_branch",
     zydeco_int16_lt_branch => "\x01zydeco_int16_lt_branch",
     zydeco_int16_gt_branch => "\x01zydeco_int16_gt_branch",
@@ -762,11 +708,6 @@ integer_runtime!(
 );
 integer_runtime!(
     i32,
-    zydeco_int32_add => "\x01zydeco_int32_add",
-    zydeco_int32_sub => "\x01zydeco_int32_sub",
-    zydeco_int32_mul => "\x01zydeco_int32_mul",
-    zydeco_int32_div => "\x01zydeco_int32_div",
-    zydeco_int32_mod => "\x01zydeco_int32_mod",
     zydeco_int32_eq_branch => "\x01zydeco_int32_eq_branch",
     zydeco_int32_lt_branch => "\x01zydeco_int32_lt_branch",
     zydeco_int32_gt_branch => "\x01zydeco_int32_gt_branch",
@@ -774,11 +715,6 @@ integer_runtime!(
 );
 integer_runtime!(
     i64,
-    zydeco_int64_add => "\x01zydeco_int64_add",
-    zydeco_int64_sub => "\x01zydeco_int64_sub",
-    zydeco_int64_mul => "\x01zydeco_int64_mul",
-    zydeco_int64_div => "\x01zydeco_int64_div",
-    zydeco_int64_mod => "\x01zydeco_int64_mod",
     zydeco_int64_eq_branch => "\x01zydeco_int64_eq_branch",
     zydeco_int64_lt_branch => "\x01zydeco_int64_lt_branch",
     zydeco_int64_gt_branch => "\x01zydeco_int64_gt_branch",
@@ -786,11 +722,6 @@ integer_runtime!(
 );
 integer_runtime!(
     u8,
-    zydeco_uint8_add => "\x01zydeco_uint8_add",
-    zydeco_uint8_sub => "\x01zydeco_uint8_sub",
-    zydeco_uint8_mul => "\x01zydeco_uint8_mul",
-    zydeco_uint8_div => "\x01zydeco_uint8_div",
-    zydeco_uint8_mod => "\x01zydeco_uint8_mod",
     zydeco_uint8_eq_branch => "\x01zydeco_uint8_eq_branch",
     zydeco_uint8_lt_branch => "\x01zydeco_uint8_lt_branch",
     zydeco_uint8_gt_branch => "\x01zydeco_uint8_gt_branch",
@@ -798,11 +729,6 @@ integer_runtime!(
 );
 integer_runtime!(
     u16,
-    zydeco_uint16_add => "\x01zydeco_uint16_add",
-    zydeco_uint16_sub => "\x01zydeco_uint16_sub",
-    zydeco_uint16_mul => "\x01zydeco_uint16_mul",
-    zydeco_uint16_div => "\x01zydeco_uint16_div",
-    zydeco_uint16_mod => "\x01zydeco_uint16_mod",
     zydeco_uint16_eq_branch => "\x01zydeco_uint16_eq_branch",
     zydeco_uint16_lt_branch => "\x01zydeco_uint16_lt_branch",
     zydeco_uint16_gt_branch => "\x01zydeco_uint16_gt_branch",
@@ -810,11 +736,6 @@ integer_runtime!(
 );
 integer_runtime!(
     u32,
-    zydeco_uint32_add => "\x01zydeco_uint32_add",
-    zydeco_uint32_sub => "\x01zydeco_uint32_sub",
-    zydeco_uint32_mul => "\x01zydeco_uint32_mul",
-    zydeco_uint32_div => "\x01zydeco_uint32_div",
-    zydeco_uint32_mod => "\x01zydeco_uint32_mod",
     zydeco_uint32_eq_branch => "\x01zydeco_uint32_eq_branch",
     zydeco_uint32_lt_branch => "\x01zydeco_uint32_lt_branch",
     zydeco_uint32_gt_branch => "\x01zydeco_uint32_gt_branch",
@@ -822,97 +743,20 @@ integer_runtime!(
 );
 integer_runtime!(
     u64,
-    zydeco_uint64_add => "\x01zydeco_uint64_add",
-    zydeco_uint64_sub => "\x01zydeco_uint64_sub",
-    zydeco_uint64_mul => "\x01zydeco_uint64_mul",
-    zydeco_uint64_div => "\x01zydeco_uint64_div",
-    zydeco_uint64_mod => "\x01zydeco_uint64_mod",
     zydeco_uint64_eq_branch => "\x01zydeco_uint64_eq_branch",
     zydeco_uint64_lt_branch => "\x01zydeco_uint64_lt_branch",
     zydeco_uint64_gt_branch => "\x01zydeco_uint64_gt_branch",
     zydeco_uint64_to_string => "\x01zydeco_uint64_to_string"
 );
 
-struct IntrinsicInt64;
-
-impl IntrinsicInt64 {
-    fn compare(first: Word, second: Word, predicate: impl FnOnce(i64, i64) -> bool) -> Word {
-        Immediate::expect_unsigned(predicate(
-            <i64 as RuntimeInteger>::decode(first),
-            <i64 as RuntimeInteger>::decode(second),
-        ) as Word)
-    }
-
-    fn bitwise(
-        first: Word, second: Word, spare: *mut Word, op: impl FnOnce(i64, i64) -> i64,
-    ) -> Word {
-        op(<i64 as RuntimeInteger>::decode(first), <i64 as RuntimeInteger>::decode(second))
-            .encode(spare)
-    }
-}
-
-#[unsafe(export_name = "\x01zydeco_intrinsic_int64_eq")]
-extern "sysv64" fn zydeco_intrinsic_int64_eq(first: Word, second: Word) -> Word {
-    IntrinsicInt64::compare(first, second, |first, second| first == second)
-}
-
-#[unsafe(export_name = "\x01zydeco_intrinsic_int64_lt")]
-extern "sysv64" fn zydeco_intrinsic_int64_lt(first: Word, second: Word) -> Word {
-    IntrinsicInt64::compare(first, second, |first, second| first < second)
-}
-
-#[unsafe(export_name = "\x01zydeco_intrinsic_int64_gt")]
-extern "sysv64" fn zydeco_intrinsic_int64_gt(first: Word, second: Word) -> Word {
-    IntrinsicInt64::compare(first, second, |first, second| first > second)
-}
-
-#[unsafe(export_name = "\x01zydeco_intrinsic_int64_and")]
-extern "sysv64" fn zydeco_intrinsic_int64_and(first: Word, second: Word, spare: *mut Word) -> Word {
-    IntrinsicInt64::bitwise(first, second, spare, |first, second| first & second)
-}
-
-#[unsafe(export_name = "\x01zydeco_intrinsic_int64_or")]
-extern "sysv64" fn zydeco_intrinsic_int64_or(first: Word, second: Word, spare: *mut Word) -> Word {
-    IntrinsicInt64::bitwise(first, second, spare, |first, second| first | second)
-}
-
-#[unsafe(export_name = "\x01zydeco_intrinsic_int64_xor")]
-extern "sysv64" fn zydeco_intrinsic_int64_xor(first: Word, second: Word, spare: *mut Word) -> Word {
-    IntrinsicInt64::bitwise(first, second, spare, |first, second| first ^ second)
-}
-
 macro_rules! float_runtime {
     (
         $type:ty, $codec:ident,
-        $add:ident => $add_symbol:literal,
-        $sub:ident => $sub_symbol:literal,
-        $mul:ident => $mul_symbol:literal,
-        $div:ident => $div_symbol:literal,
         $eq:ident => $eq_symbol:literal,
         $lt:ident => $lt_symbol:literal,
         $gt:ident => $gt_symbol:literal,
         $to_string:ident => $to_string_symbol:literal
     ) => {
-        #[unsafe(export_name = $add_symbol)]
-        extern "sysv64" fn $add(first: Word, second: Word, spare: *mut Word) -> Word {
-            $codec::encode($codec::decode(first) + $codec::decode(second), spare)
-        }
-
-        #[unsafe(export_name = $sub_symbol)]
-        extern "sysv64" fn $sub(first: Word, second: Word, spare: *mut Word) -> Word {
-            $codec::encode($codec::decode(first) - $codec::decode(second), spare)
-        }
-
-        #[unsafe(export_name = $mul_symbol)]
-        extern "sysv64" fn $mul(first: Word, second: Word, spare: *mut Word) -> Word {
-            $codec::encode($codec::decode(first) * $codec::decode(second), spare)
-        }
-
-        #[unsafe(export_name = $div_symbol)]
-        extern "sysv64" fn $div(first: Word, second: Word, spare: *mut Word) -> Word {
-            $codec::encode($codec::decode(first) / $codec::decode(second), spare)
-        }
-
         #[unsafe(export_name = $eq_symbol)]
         extern "sysv64" fn $eq(
             first: Word, second: Word, when_true: Word, when_false: Word,
@@ -944,10 +788,6 @@ macro_rules! float_runtime {
 
 float_runtime!(
     f32, HostFloat32,
-    zydeco_float32_add => "\x01zydeco_float32_add",
-    zydeco_float32_sub => "\x01zydeco_float32_sub",
-    zydeco_float32_mul => "\x01zydeco_float32_mul",
-    zydeco_float32_div => "\x01zydeco_float32_div",
     zydeco_float32_eq_branch => "\x01zydeco_float32_eq_branch",
     zydeco_float32_lt_branch => "\x01zydeco_float32_lt_branch",
     zydeco_float32_gt_branch => "\x01zydeco_float32_gt_branch",
@@ -955,10 +795,6 @@ float_runtime!(
 );
 float_runtime!(
     f64, HostFloat64,
-    zydeco_float64_add => "\x01zydeco_float64_add",
-    zydeco_float64_sub => "\x01zydeco_float64_sub",
-    zydeco_float64_mul => "\x01zydeco_float64_mul",
-    zydeco_float64_div => "\x01zydeco_float64_div",
     zydeco_float64_eq_branch => "\x01zydeco_float64_eq_branch",
     zydeco_float64_lt_branch => "\x01zydeco_float64_lt_branch",
     zydeco_float64_gt_branch => "\x01zydeco_float64_gt_branch",

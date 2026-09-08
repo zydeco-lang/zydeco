@@ -34,14 +34,15 @@ fn rendered_assembly(relative: &str) -> String {
 
 /// Dead top-level definitions, dead recursive definitions, and undemanded host
 /// operations are absent from the emitted assembly, while the operations the
-/// program calls survive with their extern declarations.
+/// program calls survive as primitive instructions or external calls.
 #[test]
 fn dead_definitions_and_undemanded_operations_are_not_emitted() {
     let assembly = rendered_assembly("tests/demand/prune.zy");
     assert!(
-        assembly.contains("extern:int64_add"),
+        assembly.lines().any(|line| line.trim() == "int64_add;"),
         "the called operation must survive elimination:\n{assembly}"
     );
+    assert!(!assembly.contains("extern:int64_add"), "arithmetic must be inline:\n{assembly}");
     assert!(
         assembly.contains("extern:exit"),
         "the exit operation must survive elimination:\n{assembly}"

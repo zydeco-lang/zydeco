@@ -10,6 +10,9 @@ pub use text::*;
 pub mod word;
 pub use word::*;
 
+pub mod primitive;
+pub use primitive::*;
+
 mod impls;
 use derive_more::From;
 use strum::{IntoEnumIterator, VariantArray as _};
@@ -239,6 +242,15 @@ impl IntegerType {
 
     pub fn is_signed(self) -> bool {
         matches!(self, Self::Int8 | Self::Int16 | Self::Int32 | Self::Int64)
+    }
+
+    pub fn bits(self) -> u8 {
+        match self {
+            | Self::Int8 | Self::UInt8 => 8,
+            | Self::Int16 | Self::UInt16 => 16,
+            | Self::Int32 | Self::UInt32 => 32,
+            | Self::Int64 | Self::UInt64 => 64,
+        }
     }
 }
 

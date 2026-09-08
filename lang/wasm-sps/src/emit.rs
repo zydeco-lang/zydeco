@@ -12,11 +12,11 @@ use zydeco_stackir::{
         VPatId, ValueId, ValuePattern,
     },
 };
-use zydeco_syntax::Literal;
+use zydeco_syntax::{Literal, PrimitiveOp};
 use zydeco_wasm_common::{
-    AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Intrinsics, Limits,
-    PointerLocal, ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable,
-    WASM_PAGE_BYTES, WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
+    AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Limits, PointerLocal,
+    ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
+    WORD_BYTES, WORD_MEMORY, WasmEmitError, WasmSections, WordEmitter, WordError,
 };
 
 pub use zydeco_wasm_common::{HOST_MODULE, WasmModule};
@@ -63,12 +63,8 @@ pub enum EmitError {
     MissingString(ValueId),
     #[error("SPS WebAssembly backend cannot find host import `{0}`")]
     MissingHostImport(String),
-    #[error("SPS WebAssembly backend found an operator `{0}` in function position")]
-    OperatorCalledAsFunction(String),
     #[error("SPS WebAssembly backend cannot import native foreign symbol `{0}`")]
     UnsupportedForeignImport(String),
-    #[error("unsupported SPS intrinsic `{name}/{arity}` in the WebAssembly backend")]
-    UnsupportedIntrinsic { name: String, arity: usize },
     #[error("invalid SPS coproduct match: constructor arms cannot be mixed with a catch-all arm")]
     InvalidCoprodMatch,
     #[error(transparent)]
@@ -281,26 +277,29 @@ impl ModulePlan {
         let first_host_function =
             RuntimeFailure::IMPORT_COUNT + u32::from(string_literal_function.is_some());
 
-        let mut builtins = arena
-            .admin
-            .builtins
-            .values()
-            .filter_map(|builtin| match builtin.sort {
-                | sps::BuiltinSort::Function(mode) => Some((builtin, mode)),
-                | sps::BuiltinSort::Operator => None,
+        let builtins = arena
+            .inner
+            .compus
+            .iter()
+            .filter_map(|(_, compu)| match compu {
+                | sps::Computation::ExternCall(sps::ExternCall {
+                    function: sps::ExternalFunction::Host(name),
+                    ..
+                }) => Some(name),
+                | _ => None,
             })
-            .collect::<Vec<_>>();
-        builtins.sort_by(|(left, _), (right, _)| left.name.cmp(&right.name));
+            .collect::<std::collections::BTreeSet<_>>();
         let host_imports = builtins
             .into_iter()
             .enumerate()
-            .map(|(offset, (builtin, mode))| {
+            .map(|(offset, name)| {
+                let builtin = &arena.admin.builtins[name];
                 let offset = Limits::u32(offset, "host import count")?;
                 Ok(HostImport {
                     function: first_host_function + offset,
                     name: builtin.name.clone(),
                     arity: builtin.arity,
-                    mode: match mode {
+                    mode: match builtin.mode {
                         | HostCallMode::Returning => HostCallKind::Returning,
                         | HostCallMode::Control => HostCallKind::Control,
                     },
@@ -719,8 +718,8 @@ impl<'a> CaseEncoder<'a> {
                 self.emit_product(target, items, layout)?;
             }
             | sps::Value::Literal(literal) => self.emit_literal(id, literal)?,
-            | sps::Value::Complex(sps::Complex { operator, operands }) => {
-                self.emit_intrinsic(&operator, &operands)?;
+            | sps::Value::Primitive(sps::Primitive { operation, operands }) => {
+                self.emit_primitive(operation, operands)?;
             }
         }
         self.function.instruction(&WasmInstruction::LocalTee(target));
@@ -873,9 +872,6 @@ impl<'a> CaseEncoder<'a> {
 
     fn emit_extern(&mut self, name: &str, stack: StackId) -> Result<(), EmitError> {
         let import = self.plan.host(name)?.clone();
-        if !matches!(self.arena.admin.builtins[name].sort, sps::BuiltinSort::Function(_)) {
-            return Err(EmitError::OperatorCalledAsFunction(name.to_owned()));
-        }
         self.emit_stack(stack)?;
         self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
         for _ in 0..import.arity {
@@ -947,62 +943,28 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::Return);
     }
 
-    fn emit_intrinsic(&mut self, name: &str, operands: &[ValueId]) -> Result<(), EmitError> {
-        if operands.len() != 2 {
-            return Err(EmitError::UnsupportedIntrinsic {
-                name: name.to_owned(),
-                arity: operands.len(),
-            });
+    fn emit_primitive(
+        &mut self, operation: PrimitiveOp, operands: [ValueId; 2],
+    ) -> Result<(), EmitError> {
+        // Match the value evaluation order used by Stack IR and ZASM lowering.
+        for operand in operands.into_iter().rev() {
+            self.emit_value(operand)?;
+            self.function.instruction(&WasmInstruction::Drop);
         }
-        self.emit_value(operands[0])?;
-        self.function.instruction(&WasmInstruction::Drop);
-        self.emit_value(operands[1])?;
-        self.function.instruction(&WasmInstruction::Drop);
-        WordEmitter::new(&mut self.function, self.plan.alloc_function()).decode_signed_local(
-            self.plan.locals.value(operands[0])?,
+        for (operand, local) in operands
+            .into_iter()
+            .zip([self.plan.locals.decoded_first, self.plan.locals.decoded_second])
+        {
+            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.value(operand)?));
+            self.function.instruction(&WasmInstruction::LocalSet(local));
+        }
+        WordEmitter::new(&mut self.function, self.plan.alloc_function()).primitive(
+            operation,
             self.plan.locals.decoded_first,
-        );
-        WordEmitter::new(&mut self.function, self.plan.alloc_function()).decode_signed_local(
-            self.plan.locals.value(operands[1])?,
             self.plan.locals.decoded_second,
+            self.plan.locals.result,
+            self.plan.locals.pointer(),
         );
-
-        if let Some(operation) = Intrinsics::comparison(name) {
-            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
-            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
-            self.function.instruction(&operation);
-            self.function.instruction(&WasmInstruction::I64ExtendI32U);
-            self.function.instruction(&WasmInstruction::I64Const(1));
-            self.function.instruction(&WasmInstruction::I64Shl);
-            self.function.instruction(&WasmInstruction::I64Const(1));
-            self.function.instruction(&WasmInstruction::I64Or);
-            self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
-            // Intrinsic comparisons return the runtime pair `(encoded_bool, ())`.
-            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.result));
-            self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::index(0)? as i64));
-            self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
-        } else if let Some(operation) = Intrinsics::arithmetic(name) {
-            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_first));
-            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.decoded_second));
-            self.function.instruction(&operation);
-            self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
-            WordEmitter::new(&mut self.function, self.plan.alloc_function())
-                .encode_signed_local(self.plan.locals.result, self.plan.locals.pointer());
-        } else if let Some(remainder) = Intrinsics::division(name) {
-            WordEmitter::new(&mut self.function, self.plan.alloc_function()).wrapping_division(
-                self.plan.locals.decoded_first,
-                self.plan.locals.decoded_second,
-                self.plan.locals.result,
-                remainder,
-            );
-            WordEmitter::new(&mut self.function, self.plan.alloc_function())
-                .encode_signed_local(self.plan.locals.result, self.plan.locals.pointer());
-        } else {
-            return Err(EmitError::UnsupportedIntrinsic {
-                name: name.to_owned(),
-                arity: operands.len(),
-            });
-        }
         Ok(())
     }
 

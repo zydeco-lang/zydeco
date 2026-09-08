@@ -12,9 +12,7 @@ pub mod word;
 
 pub use host::{HostCallKind, HostImport, HostSections, RuntimeFailure, StaticString, StringTable};
 pub use module::{AllocFunction, WasmModule, WasmSections};
-pub use word::{
-    EncodedScalar, Intrinsics, PointerLocal, ProductFields, RuntimeWord, WordEmitter, WordError,
-};
+pub use word::{EncodedScalar, PointerLocal, ProductFields, RuntimeWord, WordEmitter, WordError};
 
 use thiserror::Error;
 use wasm_encoder::MemArg;

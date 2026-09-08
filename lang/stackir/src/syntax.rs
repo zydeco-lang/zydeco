@@ -60,11 +60,12 @@ pub enum ValuePattern<Pat> {
     VCons(VCons<Pat>),
 }
 
+/// Binary scalar arithmetic, evaluating the second operand before the first
+/// to preserve construction order when consuming an argument stack.
 #[derive(Clone, Debug)]
-pub struct Complex<V> {
-    /// Operator name; can be found in builtins map
-    pub operator: String,
-    pub operands: Vec<V>,
+pub struct Primitive<V> {
+    pub operation: PrimitiveOp,
+    pub operands: [V; 2],
 }
 
 /* ---------------------------------- Stack --------------------------------- */

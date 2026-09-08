@@ -1,10 +1,12 @@
+mod primitive;
+
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use zydeco_assembly::frames::{Entry, FramePlan, NativeProgram};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
-    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
+    syntax::{self as sa, Atom, Instruction, ProgId, Program, Symbol, Terminator},
 };
 use zydeco_machine::frames::{Action, STEP_SYMBOL};
 use zydeco_machine::native::{
@@ -189,7 +191,7 @@ impl<'e> Emitter<'e> {
             | Instruction::PushTag(_)
             | Instruction::PopArg(_)
             | Instruction::RetainFrame(_) => true,
-            | Instruction::Intrinsic(Intrinsic { arity, .. }) => arity % 2 == 0,
+            | Instruction::Primitive(_) => true,
             | Instruction::AllocContext(_) | Instruction::Clear(_) => false,
         }
     }
@@ -476,13 +478,8 @@ impl<'e> CompilerPass for Emitter<'e> {
             // fixed-heap allocation entry points
             Instr::Extern(AllocationKind::Scanned.symbol().to_string()),
             Instr::Extern(AllocationKind::Opaque.symbol().to_string()),
-            // legacy intrinsic comparison helpers
-            Instr::Extern("zydeco_intrinsic_int64_eq".to_string()),
-            Instr::Extern("zydeco_intrinsic_int64_lt".to_string()),
-            Instr::Extern("zydeco_intrinsic_int64_gt".to_string()),
-            Instr::Extern("zydeco_intrinsic_int64_and".to_string()),
-            Instr::Extern("zydeco_intrinsic_int64_or".to_string()),
-            Instr::Extern("zydeco_intrinsic_int64_xor".to_string()),
+            Instr::Extern("zydeco_integer_division_by_zero".to_string()),
+            Instr::Extern("zydeco_integer_remainder_by_zero".to_string()),
             // host callback used by runtime-created argument-fold thunks
             Instr::Extern("zydeco_arg_fold_resume".to_string()),
             // construct an owned host string from static UTF-8 bytes
@@ -1006,8 +1003,8 @@ impl<'a> Emit<'a> for Instruction {
                 ]);
                 em.shift_stack_parity(1);
             }
-            | Instruction::Intrinsic(intrinsic) => {
-                intrinsic.emit(id, em);
+            | Instruction::Primitive(operation) => {
+                operation.emit(id, em);
             }
             | Instruction::Clear(_) => {
                 // Slot maps exclude dead bindings from collection. A pending continuation
@@ -1138,75 +1135,6 @@ impl<'a> Emit<'a> for Atom {
                     em.shift_stack_parity(1);
                 }
             },
-        }
-    }
-}
-
-impl<'a> Emit<'a> for Intrinsic {
-    type Env = ProgId;
-    fn emit(&self, id: Self::Env, em: &mut Emitter) {
-        let Intrinsic { name, arity } = self;
-
-        match (name.as_str(), arity) {
-            | (_, 2) if matches!(name.as_str(), "int_eq" | "int_lt" | "int_gt") => {
-                let target = match name.as_str() {
-                    | "int_eq" => "zydeco_intrinsic_int64_eq",
-                    | "int_lt" => "zydeco_intrinsic_int64_lt",
-                    | "int_gt" => "zydeco_intrinsic_int64_gt",
-                    | _ => unreachable!("matched comparison intrinsic"),
-                };
-                em.asm
-                    .text
-                    .extend([Instr::Pop(Loc::Reg(Reg::Rdi)), Instr::Pop(Loc::Reg(Reg::Rsi))]);
-                em.shift_stack_parity(-2);
-                em.emit_aligned_call(JmpArgs::Label(target.to_string()));
-                // Keep the tagged constructor index rooted while allocation may collect.
-                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
-                em.shift_stack_parity(1);
-                em.emit_alloc_call(2, AllocationKind::Scanned, id);
-                em.asm.text.extend([
-                    Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::Rax))),
-                    Instr::Pop(Loc::Reg(Reg::Rcx)),
-                    Instr::Mov(MovArgs::ToMem(
-                        MemRef { reg: Reg::Rdx, offset: 0 },
-                        Reg32::Reg(Reg::Rcx),
-                    )),
-                    Instr::Mov(MovArgs::ToMem(
-                        MemRef { reg: Reg::Rdx, offset: 8 },
-                        Reg32::Imm(RuntimeWord::TAG as i32),
-                    )),
-                    Instr::Push(Arg32::Reg(Reg::Rdx)),
-                ]);
-                em.shift_stack_parity(-1);
-                em.shift_stack_parity(1);
-            }
-            | (_, 2) => {
-                let target = match name.as_str() {
-                    | "add" => "zydeco_int64_add",
-                    | "sub" => "zydeco_int64_sub",
-                    | "mul" => "zydeco_int64_mul",
-                    | "div" => "zydeco_int64_div",
-                    | "mod" => "zydeco_int64_mod",
-                    | "and" => "zydeco_intrinsic_int64_and",
-                    | "or" => "zydeco_intrinsic_int64_or",
-                    | "xor" => "zydeco_intrinsic_int64_xor",
-                    | _ => {
-                        unimplemented!("intrinsic {} with arity {} not implemented", name, arity)
-                    }
-                };
-                em.emit_alloc_call(1, AllocationKind::Opaque, id);
-                em.asm.text.extend([
-                    Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rax))),
-                    Instr::Pop(Loc::Reg(Reg::Rdi)),
-                    Instr::Pop(Loc::Reg(Reg::Rsi)),
-                    Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Reg(Reg::R11))),
-                ]);
-                em.shift_stack_parity(-2);
-                em.emit_aligned_call(JmpArgs::Label(target.to_string()));
-                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
-                em.shift_stack_parity(1);
-            }
-            | _ => unimplemented!("intrinsic {} with arity {} not implemented", name, arity),
         }
     }
 }

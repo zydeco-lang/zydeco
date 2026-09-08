@@ -50,6 +50,26 @@ pub enum Reg8 {
 
 #[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[display(rename_all = "lowercase")]
+pub enum Xmm {
+    Xmm0,
+    Xmm1,
+}
+
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[display(rename_all = "lowercase")]
+pub enum FloatOpcode {
+    Addss,
+    Subss,
+    Mulss,
+    Divss,
+    Addsd,
+    Subsd,
+    Mulsd,
+    Divsd,
+}
+
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[display(rename_all = "lowercase")]
 pub enum ConditionCode {
     E,
     NE,
@@ -166,6 +186,16 @@ pub enum Instr {
     Cqo,
     #[display("        idiv {_0}")]
     IDiv(Reg),
+    #[display("        div {_0}")]
+    Div(Reg),
+    #[display("        movq {_0}, {_1}")]
+    ToXmm(Xmm, Reg),
+    #[display("        movq {_0}, {_1}")]
+    FromXmm(Reg, Xmm),
+    #[display("        {_0} {_1}, {_2}")]
+    FloatBinary(FloatOpcode, Xmm, Xmm),
+    #[display("        ud2")]
+    Ud2,
     #[display("        and {_0}")]
     And(BinArgs),
     #[display("        or {_0}")]

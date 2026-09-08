@@ -486,10 +486,7 @@ impl BuiltinPackageLowering {
             | BuiltinPackageValue::Unit => Ok(Triv.build(lowerer, None)),
             | BuiltinPackageValue::Operation(role) => {
                 let builtin = Builtin::for_role(&lowerer.arena.admin.builtins, role)?;
-                Ok(match builtin.sort {
-                    | BuiltinSort::Operator => builtin.make_operator(lowerer),
-                    | BuiltinSort::Function(_) => builtin.make_function(lowerer),
-                })
+                Ok(builtin.make_function(lowerer))
             }
             | BuiltinPackageValue::Product(product) => {
                 let values = product

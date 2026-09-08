@@ -31,9 +31,10 @@ impl PrimitiveFixture {
 
 #[test]
 fn known_primitive_calls_do_not_allocate_thunks() {
-    for (fixture, additions) in [("add.zy", 1), ("primitive-aliases.zy", 2)] {
+    for fixture in ["add.zy", "primitive-aliases.zy"] {
         let sps = PrimitiveFixture::sps_low(fixture);
-        assert_eq!(sps.matches("<extern:int64_add/2>").count(), additions, "{sps}");
+        assert!(!sps.contains("<extern:int64_add/2>"), "{sps}");
+        assert!(!sps.contains("pack-continuation("), "arithmetic returns must be inlined:\n{sps}");
         assert_eq!(sps.matches("<extern:exit/1>").count(), 1, "{sps}");
         assert!(!sps.contains("pack-closure("), "known calls must not allocate thunks:\n{sps}");
         assert!(

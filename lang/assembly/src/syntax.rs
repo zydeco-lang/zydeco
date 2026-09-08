@@ -66,7 +66,7 @@ pub enum Instruction {
     /// Destructed by [`PopBranch`].
     PushTag(Push<Tag>),
     /// Builtin instructions.
-    Intrinsic(Intrinsic),
+    Primitive(PrimitiveOp),
     /// Clear specified variables from the current context.
     Clear(Context),
     /// Retain the active activation for a checked native continuation entry.
@@ -165,12 +165,6 @@ pub enum Imm {
     Integer(IntegerLiteral),
     Float(FloatLiteral),
     Char(char),
-}
-
-#[derive(Clone, Debug)]
-pub struct Intrinsic {
-    pub name: String,
-    pub arity: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

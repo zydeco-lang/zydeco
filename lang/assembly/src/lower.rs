@@ -75,14 +75,6 @@ impl<'a> Lowerer<'a> {
     }
 
     pub(crate) fn run(mut self) -> AssemblyBuild {
-        // Lower all builtins
-        for builtin in self.sps_low.admin.builtins.values() {
-            let sk::Builtin { role, name, arity, sort } = builtin.clone();
-            if let Some(mode) = ExternMode::for_builtin(sort) {
-                self.arena.externs.push(Extern::Host { role, name, arity, mode });
-            }
-        }
-
         let sps_low_root = self.root;
         let root = sps_low_root.lower(&mut self, Context::new());
         if self.native_frames {
@@ -341,12 +333,10 @@ impl<'a> Lower<'a> for sk::ValueId {
                 let atom = Atom::Sym(s.build(lo, (Some(String::from("")), None)));
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
-            | Value::Complex(sk::Complex { operator, operands }) => {
+            | Value::Primitive(sk::Primitive { operation, operands }) => {
                 // Lower all operands onto the stack
-                let arity = operands.len();
-                let kont: Kont<'_, Lowerer<'_>> = Box::new(move |lo, cx| {
-                    Intrinsic { name: operator, arity }.build(lo, With::new(cx, CxKont::same(kont)))
-                });
+                let kont: Kont<'_, Lowerer<'_>> =
+                    Box::new(move |lo, cx| operation.build(lo, With::new(cx, CxKont::same(kont))));
                 let kont = operands.into_iter().fold(
                     kont,
                     |kont: Kont<'_, Lowerer<'_>>, operand: sk::ValueId| {
@@ -698,8 +688,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                         let builtin = &lo.sps_low.admin.builtins[&function];
                         let role = builtin.role;
                         let arity = builtin.arity;
-                        let mode = ExternMode::for_builtin(builtin.sort.clone())
-                            .expect("operator used as extern");
+                        let mode = ExternMode::from(builtin.mode);
                         Extern::Host { role, name: function, arity, mode }
                     }
                     | sk::ExternalFunction::Foreign(import) => Extern::Foreign(import),
@@ -713,12 +702,11 @@ impl<'a> Lower<'a> for sk::CompuId {
     }
 }
 
-impl ExternMode {
-    fn for_builtin(sort: sk::BuiltinSort) -> Option<Self> {
-        match sort {
-            | sk::BuiltinSort::Operator => None,
-            | sk::BuiltinSort::Function(sk::HostCallMode::Returning) => Some(Self::Returning),
-            | sk::BuiltinSort::Function(sk::HostCallMode::Control) => Some(Self::Control),
+impl From<sk::HostCallMode> for ExternMode {
+    fn from(mode: sk::HostCallMode) -> Self {
+        match mode {
+            | sk::HostCallMode::Returning => Self::Returning,
+            | sk::HostCallMode::Control => Self::Control,
         }
     }
 }
