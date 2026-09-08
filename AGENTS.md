@@ -90,7 +90,21 @@ git ls-files -z '*.zy' '*.zyi' '*.zydeco' | xargs -0 cargo run --quiet --bin zyd
 After a repository-wide Zydeco formatting pass, run the affected Rust tests and update embedded source fixtures
 and expected output snapshots as needed.
 
-## Design Records
+## Documentation Structure and Design Records
+
+[docs/README.md](docs/README.md) indexes the documentation:
+
+- `docs/references/`: concise language and compiler references; assume basic PL background.
+- `docs/todos/`: documentation drift, proposed fixes, and consolidation work, kept separate from reference prose.
+- `docs/proposals/`: stable designs, invariants, rationale, examples, and open questions.
+- `docs/ideas/`: exploratory problems, constraints, alternatives, and decision criteria.
+- `docs/tutorial/`, `docs/spell/`, `docs/examples/`: tutorials, literate chapters, and checked examples.
+- `docs/legacy/`: historical material.
+- `docs/scripts/`: documentation tooling.
+- `docs/logs/`: optional scratch records; fold durable content into its owner, then delete the log.
+
+Existing rule owners remain authoritative until reference replacements are accepted.
+The implementation and stable docs must justify themselves without scratch logs.
 
 When substantial design or exploratory work converges, revise the existing proposal that owns the topic.
 Propose a new review document under `docs/proposals/` only for an independently reviewable topic
@@ -98,13 +112,6 @@ that does not fit an existing proposal.
 Use Markdown or Typst and explain what it would make easier to review: the problem, constraints,
 alternatives, chosen invariants, representative examples, and remaining uncertainty.
 Suggest a new artifact rather than creating it automatically; skip this for small routine changes.
-
-- Put exploratory notes in `docs/ideas/`: explain the problem, constraints, alternatives, and decision criteria.
-- Put stable proposals in `docs/proposals/`: explain the problem, constraints, chosen invariants, examples,
-  and remaining uncertainty.
-- Use `docs/logs/` only for optional scratch records.
-  Fold durable motivations and rules into proposals or adjacent code comments, then delete the worklog.
-  The implementation and stable docs must justify themselves.
 
 Maintain **one home per semantic rule**: the proposal or design section that owns a mechanism
 or invariant is authoritative for its rules.
