@@ -17,3 +17,12 @@ path = "stub.rs"
 [dependencies]
 zydeco-machine = { workspace = true }
 rand = { workspace = true }
+
+# LLVM's local ThinLTO can discard the undecorated exports referenced only by
+# generated assembly. Keep them visible to the native linker in optimized builds.
+# `false` still permits local ThinLTO; `off` disables it as well.
+[profile.dev]
+lto = "off"
+
+[profile.release]
+lto = "off"

@@ -26,6 +26,30 @@ fn packaged_model_links_and_a_mismatched_model_cannot_publish_an_executable() {
     let output = Command::new(executable.path()).stdin(Stdio::null()).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 
+    // Generated assembly is the only caller of many runtime exports. Optimized
+    // builds must retain these symbols, including when Rust would otherwise use
+    // local ThinLTO. Build the already packaged program without mutating process
+    // environment shared with the other integration tests.
+    let target = match operating_system {
+        | TargetOs::Linux => "x86_64-unknown-linux-gnu",
+        | TargetOs::Macos => "x86_64-apple-darwin",
+    };
+    let mut cargo = Command::new("cargo");
+    cargo
+        .args(["build", "--release", "--target", target, "--manifest-path"])
+        .arg(directory.path().join("Cargo.toml"))
+        .env("ZYDECO_STATIC_LIB", "zymatching")
+        .env("ZYDECO_LIB_DIR", directory.path())
+        .env("CARGO_TARGET_DIR", directory.path().join("target"));
+    if operating_system == TargetOs::Macos {
+        cargo.env("RUSTFLAGS", "-C panic=abort");
+    }
+    let output = cargo.output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let optimized = directory.path().join("target").join(target).join("release/main");
+    let output = Command::new(optimized).stdin(Stdio::null()).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+
     let incompatible = assembly.replace(ENTRY_SYMBOL, "zydeco_entry_frames_incompatible");
     let error = options.link_amd64("mismatched", &incompatible, &libraries).unwrap_err();
     let NativeError::ToolFailed { stderr, .. } = error else {

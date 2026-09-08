@@ -119,6 +119,14 @@ Changing the model requires rebuilding the compiler before generating new native
 The [shared model contract](DESIGN.md#shared-rust-runtime-model) explains how native entry symbols reject
 artifacts compiled against different model sources.
 
+The CLI currently invokes Cargo's dev profile for the runtime, independently of the compiler's own profile.
+For an optimized-runtime experiment, set `CARGO_PROFILE_DEV_OPT_LEVEL=3` explicitly
+and record the other profile settings; building the compiler with `--release` alone does not optimize the runtime.
+The supplied runtime manifest disables local ThinLTO in dev and release profiles
+because it can discard undecorated exports referenced only by generated assembly.
+Keep that setting in custom runtime manifests.
+The `native_model` integration target checks both default and release runtime linking and execution.
+
 Native builds use retained activation frames and static frame action descriptors from `zydeco-machine`.
 The environment region is fixed at 1 MiB; exhausting it reports an environment stack overflow
 before overwriting retained storage.
