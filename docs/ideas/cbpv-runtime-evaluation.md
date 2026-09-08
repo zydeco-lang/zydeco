@@ -6,7 +6,7 @@
 - Origin Mode: engineering experiment plan and evaluation
 - Origin Date: 2026-09-08
 - Verification Status: VERIFIED for the bounded experiments and source audits recorded below
-- Version Label: runtime_study_v2
+- Version Label: runtime_study_v3
 
 ## Question and scope
 
@@ -16,6 +16,8 @@ The goal is to compare concrete mechanisms, including the newly implemented reta
 without choosing a winner from the word “stack”.
 The [second round](#second-round-static-layouts-and-heap-environments) extends the initial comparison
 with static slot packing, growable storage, and a collector-integrated managed-frame prototype.
+The [third round](#third-round-reusable-active-storage-and-compact-suspensions) evaluates compact snapshots
+behind the same native action contract.
 
 The semantic starting point is
 [computation types as stack protocols](../../DESIGN.md#computation-types-as-stack-protocols).
@@ -871,3 +873,131 @@ Focused verification covers the machine and assembly tests, `native_gc`, `native
 and FFI cases, both executable model traces, workspace Clippy, and standalone-runtime Clippy for AMD64.
 The full workspace test suite was not run. The implementation promotes packing and growable storage;
 managed-frame root publication remains an explicitly bounded prototype.
+
+
+## Third round: reusable active storage and compact suspensions
+
+### Hypothesis and controlled boundary
+
+Static packing improved active layouts, but a frame's peak local demand can still exceed what survives a call.
+This round implements a compact suspension buffer alongside one reusable active environment.
+The [compact environment contract](../proposals/native-frames.md#experimental-compact-environments) owns its transitions
+and roots.
+The compiler's preservation analysis, slot assignments, control-stack convention, managed collector,
+and generated action descriptors stay fixed between retained and compact selections.
+The two engines share the sealed Rust `Environment` capability;
+selecting compact storage changes only the stub's concrete model type through `compact-environments`.
+
+The first candidate snapshots captures eagerly at Suspend.
+Unlike the earlier heap-capture backend, it allocates no managed tuple per continuation
+and needs no capture-unpacking instructions in generated entries.
+One geometrically growing buffer stores nested fragments, while another supplies active slots.
+This isolates capture copying and compact storage from collector-integrated frame allocation.
+It remains a nested continuation implementation, not a new first-class control capability.
+
+The literature suggests measuring creation, copying, sharing, and retention separately:
+[Appel and Shao](https://www.cs.princeton.edu/~appel/papers/stack2.pdf) provide those cost categories,
+while [Farvardin and Reppy](https://kavon.farvard.in/papers/pldi20-stacks.pdf) motivate comparing concrete strategies
+within one compiler.
+The application to Zydeco's separate environment and control stacks is our inference.
+Their implementations and collectors do not predict the measurements below.
+
+### Eager snapshot results
+
+The pilot ran the eight existing workloads with three samples per variant.
+Disassembly showed out-of-line calls from `Action::apply` to the compact transition methods.
+Inline hints removed those transition calls; the follow-up uses seven samples and adds two sparse wide-frame workloads.
+Inlining alone did not remove the compact engine's execution penalty.
+The previous commit, `77b9c14e`, remains an external anchor, while the retained engine in the new model controls
+for the introduction of the `Environment` interface.
+
+Optimized median wall times in milliseconds, on the same M5 Pro/Rosetta host as earlier rounds:
+
+| Workload | Previous commit | Retained through shared interface | Eager compact |
+| --- | ---: | ---: | ---: |
+| Retained closure | 78.046 | 78.270 | 86.097 |
+| Zero source captures | 37.478 | 37.378 | 41.708 |
+| Shallow captures | 48.490 | 47.846 | 54.292 |
+| Deep captures | 17.628 | 17.879 | 19.178 |
+| Mixed protocol | 42.871 | 42.731 | 50.777 |
+| Repeated 16 | 83.278 | 83.298 | 99.563 |
+| Repeated 64 | 105.886 | 105.531 | 147.348 |
+| Sequential locals | 49.933 | 50.045 | 56.439 |
+| Sparse repeated 64 | 106.506 | 106.053 | 147.472 |
+| Sparse deep 64 | 17.588 | 17.659 | 19.564 |
+
+The shared interface adds no clear measurable cost in this bounded comparison.
+Eager compaction saves substantial suspended storage when local demand is wide and captures are sparse:
+`sparse-deep-64` peaks at 8,581 retained words versus 260 compact words,
+with word-buffer reservations of 8,704 versus 451 words.
+The reduction keeps the same source result and collector root counts.
+For `repeated-64`, compact peak storage instead rises from 73 to 135 words and reservation rises from 138 to 164:
+copying a nearly complete environment temporarily keeps both its active words and snapshot.
+Metadata, allocator rounding, control-stack words, and managed heap reservation are excluded from these figures.
+Cached capacities remain allocated after returning to shallow execution.
+
+Separate probe binaries count the actual action stream and collection root visits.
+`repeated-64` executes 2,740,003 suspensions but only 200,004 fresh entries,
+saving and restoring 89,980,000 capture words in each direction with eager snapshots.
+The sparse repeated variant still has 88,780,000 words in each direction: reducing locals
+before the recursive call does not remove the many earlier primitive-return continuations.
+Even the workload named zero captures performs 600,131 lowered suspensions with 1,200,256 captured words;
+its name describes the source-level nesting parameter, not every lowered host return.
+None of these ten workloads had multiple pending suspensions of the same dynamic activation.
+
+This explains why capture density at one selected call is insufficient as a policy.
+A host primitive can resume within the same activation without any fresh Enter in between.
+The eager engine pays copying on those suspensions even though the active region was never reused.
+The next candidate should defer materializing snapshots until Enter actually overwrites active storage.
+That distinction follows the CBPV machine operations: consuming a return continuation
+and establishing another closure activation are separate events.
+
+### Sharing and collection traces
+
+The executable `environment_fragments` example runs both engines with the production Cheney collector,
+100,000 tail entries, and exact value-survival checks after reverse resumption.
+It varies layout size, capture offsets, nesting depth, and overlapping suspensions of one activation.
+Each trace forces 36 or 37 collections.
+Word reservations are observed; the copy counts below are derived exactly from the executed sequence in
+which every suspension is made and consumed once.
+
+| Trace | Retained peak / reserved words | Compact peak / reserved words | Retained / compact suspended root locations | Compact copied words |
+| --- | ---: | ---: | ---: | ---: |
+| 32 sparse 256-word owners, four captures each | 8,448 / 16,384 | 384 / 384 | 128 / 128 | 256 |
+| 32 dense four-word owners | 132 / 256 | 132 / 132 | 128 / 128 | 256 |
+| 32 empty-capture 256-word owners | 8,448 / 16,384 | 256 / 256 | 0 / 0 | 0 |
+| 32 suspensions sharing one eight-word owner | 16 / 16 | 264 / 264 | 8 / 256 | 512 |
+| 32 suspensions sharing four slots in one 256-word owner | 512 / 512 | 384 / 384 | 4 / 128 | 256 |
+
+Sparse captures at low or scattered high offsets give the same compact size.
+The shared-owner cases show a limit absent from the native workload set: snapshots duplicate both storage
+and physical root locations, while retained frames share the union of slots.
+For the eight-word shared owner, root visits across 36 collections rise from 288 to 9,216.
+All aliases still point to correctly relocated objects after resumption.
+The regression tests also cover a collecting allocation failure: every live copy is repaired before returning the error.
+
+### Evidence and reproduction
+
+- [Pilot](runtime-study-2026-09-08/fragments-pilot.json): 72 samples, 24 warmups, and 24 separate probes.
+- [Eager comparison after inline hints](runtime-study-2026-09-08/fragments-eager.json): 210 samples,
+  30 warmups, and 30 separate probes including transition counts.
+- [Executable collector traces](runtime-study-2026-09-08/fragments-eager-layouts.csv)
+  and [data/source hashes](runtime-study-2026-09-08/fragments-eager-manifest.json).
+
+All samples, warmups, and probes passed their output oracles.
+Builds precede every timed run; variant order rotates and workload order alternates between samples.
+Probe binaries are built and run separately after timing.
+Their counters do not affect the timed executables.
+The JSON records source/runtime/model hashes, exact commands, output, and failures.
+The pilot predates the sparse workload and transition-probe additions; its recorded runner hash is retained.
+
+Use `lang/tests/environment-study.py --fragments --samples 7` with explicit `--variant NAME COMPILER RUNTIME` arguments
+for each compiler/runtime pair.
+The compact runtime copy changes only its Cargo feature defaults to `["compact-environments"]`.
+Build historical compilers in isolated source and target directories to preserve their bundled model identities.
+Run `cargo run --quiet -p zydeco-tests --example environment_fragments` for the collector/storage traces.
+Focused validation includes model and assembly tests, `native_gc`, `native_model`,
+workspace Clippy, and standalone AMD64 runtime Clippy.
+The compact integration case compares host-return, GC-stress, escaping-closure,
+callback, and control-library programs against interpreter outputs.
+The full workspace test suite was not run.

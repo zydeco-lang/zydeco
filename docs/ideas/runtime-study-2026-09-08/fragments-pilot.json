@@ -1,0 +1,4202 @@
+{
+  "metadata": {
+    "schema": 1,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "host_machine": "arm64",
+    "native_target": "x86_64",
+    "translation_expected": true,
+    "optimized_runtime_environment": {
+      "CARGO_PROFILE_DEV_OPT_LEVEL": "3",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "false",
+      "CARGO_PROFILE_DEV_OVERFLOW_CHECKS": "false",
+      "CARGO_PROFILE_DEV_LTO": "off"
+    },
+    "options": {
+      "variant": [
+        [
+          "previous",
+          "build/runtime-study-v3/baseline/zydeco",
+          "build/runtime-study-v3/baseline/runtime"
+        ],
+        [
+          "retained",
+          "build/runtime-study-v3/zydeco-fragments",
+          "runtime"
+        ],
+        [
+          "compact",
+          "build/runtime-study-v3/zydeco-fragments",
+          "build/runtime-study-v3/compact-runtime"
+        ]
+      ],
+      "output": "build/runtime-study-v3/pilot",
+      "profiles": [
+        "optimized"
+      ],
+      "samples": 3,
+      "scale": 10,
+      "timeout": 30,
+      "build_timeout": 300,
+      "capacity_only": false,
+      "growable_variant": [],
+      "workloads": null
+    },
+    "tools": {
+      "rustc": {
+        "command": [
+          "rustc",
+          "--version",
+          "--verbose"
+        ],
+        "seconds": 0.018101125,
+        "exit": 0,
+        "stdout": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cargo": {
+        "command": [
+          "cargo",
+          "--version"
+        ],
+        "seconds": 0.013335167,
+        "exit": 0,
+        "stdout": "cargo 1.98.0 (797e8a9bc 2026-08-05)\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "node": {
+        "command": [
+          "node",
+          "--version"
+        ],
+        "seconds": 0.041787625,
+        "exit": 0,
+        "stdout": "v24.15.0\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "nasm": {
+        "command": [
+          "nasm",
+          "--version"
+        ],
+        "seconds": 0.002629416,
+        "exit": 0,
+        "stdout": "NASM version 3.02 compiled on Jun 29 2026\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "revision": {
+        "command": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "seconds": 0.009162333,
+        "exit": 0,
+        "stdout": "77b9c14ebf5358ea6fe8644c8b0149ab3d5f2dd5\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "working_tree": {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "seconds": 0.014384167,
+        "exit": 0,
+        "stdout": " M lang/machine/examples/frame_layouts.rs\n M lang/machine/src/frames.rs\n M lang/machine/src/frames/storage.rs\n M lang/tests/examples/environment_layouts.rs\n M lang/tests/tests/native_gc.rs\n M lang/tests/tests/native_model.rs\n M runtime/Cargo.toml\n M runtime/stub.rs\n?? lang/machine/src/frames/fragments.rs\n",
+        "stderr": "",
+        "timed_out": false
+      },
+      "cpu": {
+        "command": [
+          "sysctl",
+          "-n",
+          "machdep.cpu.brand_string"
+        ],
+        "seconds": 0.002834417,
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sysctl: sysctl fmt -1 1024 1: Operation not permitted\n",
+        "timed_out": false
+      }
+    },
+    "input_hashes": {
+      "${REPO}/build/runtime-study-v3/baseline/zydeco": "353fe55ac4644e63d1ba448573e339901c140631bc74f9e479a5b39d704ba331",
+      "${REPO}/build/runtime-study-v3/zydeco-fragments": "5cd217270bf0058b557b27d5bdc8585f6f12ccca2d3d0aac6a4c4276314a17c1",
+      "${REPO}/build/runtime-study-v3/baseline/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study-v3/baseline/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/build/runtime-study-v3/baseline/runtime/stub.rs": "e0d29fc8ffa36e6ae500507b32871db16df2eb4f13e906f03bfce424e17f6d5b",
+      "${REPO}/build/runtime-study-v3/baseline/runtime/Cargo.toml": "236a7418e5e767706cc30c9b6c25e6c2b51be5063dca2623af44d8fbc1f65f51",
+      "${REPO}/runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/runtime/stub.rs": "dc56172e93c53f8abf2f1059c3c8f55f4eb2f47e336984c1cda699a41cecd8b8",
+      "${REPO}/runtime/Cargo.toml": "ac2b6fd7658ca115ea061792747d26e1fcc7a2d58029135692123e487a64f0c5",
+      "${REPO}/build/runtime-study-v3/compact-runtime/build.rs": "310fb47d55e74cc7948fdfd913205829f61647c334febfb8bcef514014c74278",
+      "${REPO}/build/runtime-study-v3/compact-runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57",
+      "${REPO}/build/runtime-study-v3/compact-runtime/stub.rs": "dc56172e93c53f8abf2f1059c3c8f55f4eb2f47e336984c1cda699a41cecd8b8",
+      "${REPO}/build/runtime-study-v3/compact-runtime/Cargo.toml": "79839f56cf7c0874dc1aa5114970b02d2681a77197b20298cf9fc4a904da5e30",
+      "${REPO}/lang/machine/src/closure.rs": "b0382c39a8440ee60d686d6dbf9f5a7df0e5c7d1d3cfe0536be4fec94364f1ad",
+      "${REPO}/lang/machine/src/frames/fragments.rs": "3525e2596818ec4ced0449ff226fc8a738cfbb24fe92efcbd49e9bb4cd3a27fe",
+      "${REPO}/lang/machine/src/frames/moving.rs": "0291a92d54e2ac25899898b7abb36a958ebb886ca9c07fa5fb97686f46973eee",
+      "${REPO}/lang/machine/src/frames/storage.rs": "a0b32aad1bf2676c95d37bd98b8d4d3f7036d0185079239fec9c72d8bfb290b3",
+      "${REPO}/lang/machine/src/frames.rs": "0eddfbf535435a692387d4f4cab0bda0eda717bc8402d97ef1b8fed33325c84f",
+      "${REPO}/lang/machine/src/lib.rs": "21f02e3b32fe070bd6b2beb05b271d18431d3057bd56527dd3f3bb333cad8858",
+      "${REPO}/lang/machine/src/native.rs": "b5aff3ec2af8ff3bd61b031cec504c9cb1aa3f8d62e9d56de2c9f45c44f734e8",
+      "${REPO}/lang/machine/src/word.rs": "569d7f8324cb4361bede8e0d987788b2e130d07d70f54303e8814ce69c1d509a",
+      "builtin.zy": "58fe4840c1afc416f80c98a35d2f79913f09a976014bc045a9025773fae59610",
+      "runtime-study.py": "1a2dff7f739724dd83ae840ea2a5b8db9ddc570364792dadd895178b86a31b70",
+      "wasm-host.mjs": "2710b37125e8739aa1d5238b90d359d3e0726ffba5575e98a42fec587194962a",
+      "environment-study.py": "f49b3c3e30cb04e8aac3fe6fa0c906a1ddc30db09b2b2ed77a4b7ba813c2d913"
+    },
+    "hardware": [
+      {
+        "chip_type": "Apple M5 Pro",
+        "machine_model": "Mac17,8",
+        "number_processors": "proc 18:6:0:12",
+        "physical_memory": "48 GB"
+      }
+    ]
+  },
+  "records": [
+    {
+      "kind": "source",
+      "workload": "retained-closure",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/retained-closure.zy",
+      "sha256": "f7afc194399c19fdde6190583104baa2b3a237f53c43bd8e95a5a32d52aa8fff"
+    },
+    {
+      "kind": "source",
+      "workload": "zero-captures",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/zero-captures.zy",
+      "sha256": "b654bc0af7dd8c45983540a3fe52489213fc98b100d40eaf103f7d8cc1d0b896"
+    },
+    {
+      "kind": "source",
+      "workload": "shallow-captures",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/shallow-captures.zy",
+      "sha256": "f682f5d7afead33f59f6f29cfa2402d5574cdf7cb6ef3044fb2339a7fd238b32"
+    },
+    {
+      "kind": "source",
+      "workload": "deep-captures",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/deep-captures.zy",
+      "sha256": "871137b3dcf9bc7b8102b9c95d9f6e10b2807b280cff11c3d25159b4772817e7"
+    },
+    {
+      "kind": "source",
+      "workload": "mixed-protocol",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/mixed-protocol.zy",
+      "sha256": "393fea397eaf9682fca05a3943dd5ad992240923cb216214c7e274640cd82634"
+    },
+    {
+      "kind": "source",
+      "workload": "repeated-16",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/repeated-16.zy",
+      "sha256": "202791a4bfe941640a3f68ef4770a5f40d9c99c762e752cb5274ba7aaa5064e6"
+    },
+    {
+      "kind": "source",
+      "workload": "repeated-64",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/repeated-64.zy",
+      "sha256": "98ea44cd28d94a7ff8e6df6f8ffc1ce5b891ea5849de593a447c4d1bc21508b9"
+    },
+    {
+      "kind": "source",
+      "workload": "sequential-locals",
+      "path": "${REPO}/build/runtime-study-v3/pilot/sources/sequential-locals.zy",
+      "sha256": "05540bd4eb821c008a9ab18577e890973b894c60c72bea483ebc80a7df0fb29b"
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "0c57054948c4e80509285caa53d2fcb68167195a4ac4fdda165015ff658aa758",
+      "assembly_bytes": 32208,
+      "executable_bytes": 450352,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 1.613237875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "158fcb63ad4cc6c1b4cd53be0394ce1608cca5a777d41df63c905d0ed1a8ab63",
+      "assembly_bytes": 35603,
+      "executable_bytes": 450416,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 0.64870325,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "c870442177f7a91eaca69ae4cb1764f4524305d354d7fd8a5cf6a8de964fa44b",
+      "assembly_bytes": 54209,
+      "executable_bytes": 455736,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 0.6538475,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "5dfbaff8428950d7f566df04c1f91b7008869bdfbf541be50d4733615e2e7c63",
+      "assembly_bytes": 112662,
+      "executable_bytes": 467632,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 0.672594125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "e4d651ebd81913e1fbf61319d47f8d0f5178fcb49830be085393d76d53677554",
+      "assembly_bytes": 33268,
+      "executable_bytes": 450352,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 0.676144416,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "42350912d7411532ca5f461c69267b69df44612aab811e400f6753f7a42698e8",
+      "assembly_bytes": 112855,
+      "executable_bytes": 467936,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 0.673868208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "4f1d71b021566b5528aea93d8d2b3278d9e73d2f8025bdec25e35994bb039afc",
+      "assembly_bytes": 376086,
+      "executable_bytes": 544576,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 0.852841584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "success": true,
+      "assembly_sha256": "c73d063cbe7457e26eca6eb3595b89c0eea4ef221ddfe592e5c6a8ffd3a2e1c5",
+      "assembly_bytes": 303649,
+      "executable_bytes": 506656,
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/baseline/runtime"
+      ],
+      "seconds": 0.717733625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "1bcf7c166393bd4d56167d7981692d3e199f114c761534b2c2fc712e31252e99",
+      "assembly_bytes": 32208,
+      "executable_bytes": 450496,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 1.553827541,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "3223ccde202e3228940ea5bbd91e628051c7d61ffefb7a65669d98a57c045451",
+      "assembly_bytes": 35603,
+      "executable_bytes": 450560,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.656208875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "7f63b1a17c7a9d10d20aaffdf679088ee3cf52d6afc5a3e09f636099c177d286",
+      "assembly_bytes": 54209,
+      "executable_bytes": 455888,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.660673584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "882e822982b59b1cb6e24e5aaaf1f4f7c9a6e68f321f4dfe5b2a17bfbe894430",
+      "assembly_bytes": 112662,
+      "executable_bytes": 467776,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.675695416,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "0e530b1840529e3769f77f0697148e39e898995d6e441df8ed77b3e262fe11ec",
+      "assembly_bytes": 33268,
+      "executable_bytes": 450504,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.654584084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "cc05d55bb8a74485cd4b252ce4ff50d333ee217177fd3d6750bd1e30b71c1070",
+      "assembly_bytes": 112855,
+      "executable_bytes": 468080,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.673528292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "29b3c4592dd0bccb601ba31fd98079a30c4fda87d45831a052e38571062175e8",
+      "assembly_bytes": 376086,
+      "executable_bytes": 544720,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.855099333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "success": true,
+      "assembly_sha256": "130b88175aa7aa03caa77fbb990305e8f89c3e2c89f8319a368357021934ada0",
+      "assembly_bytes": 303649,
+      "executable_bytes": 506800,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/runtime"
+      ],
+      "seconds": 0.720793833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "success": true,
+      "assembly_sha256": "1bcf7c166393bd4d56167d7981692d3e199f114c761534b2c2fc712e31252e99",
+      "assembly_bytes": 32208,
+      "executable_bytes": 451920,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 1.722142542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "success": true,
+      "assembly_sha256": "3223ccde202e3228940ea5bbd91e628051c7d61ffefb7a65669d98a57c045451",
+      "assembly_bytes": 35603,
+      "executable_bytes": 456080,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 0.650690875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "success": true,
+      "assembly_sha256": "7f63b1a17c7a9d10d20aaffdf679088ee3cf52d6afc5a3e09f636099c177d286",
+      "assembly_bytes": 54209,
+      "executable_bytes": 457304,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 0.655972958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "success": true,
+      "assembly_sha256": "882e822982b59b1cb6e24e5aaaf1f4f7c9a6e68f321f4dfe5b2a17bfbe894430",
+      "assembly_bytes": 112662,
+      "executable_bytes": 469200,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 0.667881292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "success": true,
+      "assembly_sha256": "0e530b1840529e3769f77f0697148e39e898995d6e441df8ed77b3e262fe11ec",
+      "assembly_bytes": 33268,
+      "executable_bytes": 451920,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 0.655129,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "success": true,
+      "assembly_sha256": "cc05d55bb8a74485cd4b252ce4ff50d333ee217177fd3d6750bd1e30b71c1070",
+      "assembly_bytes": 112855,
+      "executable_bytes": 469504,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 0.670734167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "success": true,
+      "assembly_sha256": "29b3c4592dd0bccb601ba31fd98079a30c4fda87d45831a052e38571062175e8",
+      "assembly_bytes": 376086,
+      "executable_bytes": 546144,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 0.841027375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "success": true,
+      "assembly_sha256": "130b88175aa7aa03caa77fbb990305e8f89c3e2c89f8319a368357021934ada0",
+      "assembly_bytes": 303649,
+      "executable_bytes": 508224,
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/compact-runtime"
+      ],
+      "seconds": 0.729654416,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/retained-closure.exe"
+      ],
+      "seconds": 0.366730417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/zero-captures.exe"
+      ],
+      "seconds": 0.331234583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/shallow-captures.exe"
+      ],
+      "seconds": 0.3283315,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/deep-captures.exe"
+      ],
+      "seconds": 0.305663208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/mixed-protocol.exe"
+      ],
+      "seconds": 0.3170695,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-16.exe"
+      ],
+      "seconds": 0.361151125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-64.exe"
+      ],
+      "seconds": 0.391935791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/sequential-locals.exe"
+      ],
+      "seconds": 0.325774292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/retained-closure.exe"
+      ],
+      "seconds": 0.354709209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/zero-captures.exe"
+      ],
+      "seconds": 0.3095065,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/shallow-captures.exe"
+      ],
+      "seconds": 0.317597084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/deep-captures.exe"
+      ],
+      "seconds": 0.297053584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/mixed-protocol.exe"
+      ],
+      "seconds": 0.307486917,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-16.exe"
+      ],
+      "seconds": 0.381159042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-64.exe"
+      ],
+      "seconds": 0.383815958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/sequential-locals.exe"
+      ],
+      "seconds": 0.333812667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/retained-closure.exe"
+      ],
+      "seconds": 0.408831709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/zero-captures.exe"
+      ],
+      "seconds": 0.327269292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/shallow-captures.exe"
+      ],
+      "seconds": 0.347575958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/deep-captures.exe"
+      ],
+      "seconds": 0.311464709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/mixed-protocol.exe"
+      ],
+      "seconds": 0.315613958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-16.exe"
+      ],
+      "seconds": 0.334478417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-64.exe"
+      ],
+      "seconds": 0.428897417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "warmup",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/sequential-locals.exe"
+      ],
+      "seconds": 0.34406875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/retained-closure.exe"
+      ],
+      "seconds": 0.079688333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/retained-closure.exe"
+      ],
+      "seconds": 0.079152875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/retained-closure.exe"
+      ],
+      "seconds": 0.083379333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/zero-captures.exe"
+      ],
+      "seconds": 0.037210667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/zero-captures.exe"
+      ],
+      "seconds": 0.037780041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/zero-captures.exe"
+      ],
+      "seconds": 0.041893167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/shallow-captures.exe"
+      ],
+      "seconds": 0.047870375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/shallow-captures.exe"
+      ],
+      "seconds": 0.047792792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/shallow-captures.exe"
+      ],
+      "seconds": 0.051842791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/deep-captures.exe"
+      ],
+      "seconds": 0.018201292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/deep-captures.exe"
+      ],
+      "seconds": 0.018008042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/deep-captures.exe"
+      ],
+      "seconds": 0.018557541,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/mixed-protocol.exe"
+      ],
+      "seconds": 0.042515083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/mixed-protocol.exe"
+      ],
+      "seconds": 0.042235958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/mixed-protocol.exe"
+      ],
+      "seconds": 0.04877875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-16.exe"
+      ],
+      "seconds": 0.0828985,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-16.exe"
+      ],
+      "seconds": 0.082882667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-16.exe"
+      ],
+      "seconds": 0.092593041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-64.exe"
+      ],
+      "seconds": 0.105291125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-64.exe"
+      ],
+      "seconds": 0.105791709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-64.exe"
+      ],
+      "seconds": 0.142567333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/sequential-locals.exe"
+      ],
+      "seconds": 0.050520875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/sequential-locals.exe"
+      ],
+      "seconds": 0.049987542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "sample": 0,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/sequential-locals.exe"
+      ],
+      "seconds": 0.058405083,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/sequential-locals.exe"
+      ],
+      "seconds": 0.049919792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/sequential-locals.exe"
+      ],
+      "seconds": 0.058651042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/sequential-locals.exe"
+      ],
+      "seconds": 0.049943208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-64.exe"
+      ],
+      "seconds": 0.106060375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-64.exe"
+      ],
+      "seconds": 0.142483209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-64.exe"
+      ],
+      "seconds": 0.107649333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-16.exe"
+      ],
+      "seconds": 0.0848955,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-16.exe"
+      ],
+      "seconds": 0.092723166,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-16.exe"
+      ],
+      "seconds": 0.0835565,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/mixed-protocol.exe"
+      ],
+      "seconds": 0.043588334,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/mixed-protocol.exe"
+      ],
+      "seconds": 0.048216792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/mixed-protocol.exe"
+      ],
+      "seconds": 0.041844292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/deep-captures.exe"
+      ],
+      "seconds": 0.017834625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/deep-captures.exe"
+      ],
+      "seconds": 0.018781792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/deep-captures.exe"
+      ],
+      "seconds": 0.017450334,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/shallow-captures.exe"
+      ],
+      "seconds": 0.046290417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/shallow-captures.exe"
+      ],
+      "seconds": 0.052420625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/shallow-captures.exe"
+      ],
+      "seconds": 0.048798375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/zero-captures.exe"
+      ],
+      "seconds": 0.037849792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/zero-captures.exe"
+      ],
+      "seconds": 0.044336167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/zero-captures.exe"
+      ],
+      "seconds": 0.039219167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/retained-closure.exe"
+      ],
+      "seconds": 0.079144875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/retained-closure.exe"
+      ],
+      "seconds": 0.084875084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "sample": 1,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/retained-closure.exe"
+      ],
+      "seconds": 0.079456541,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/retained-closure.exe"
+      ],
+      "seconds": 0.084147417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/retained-closure.exe"
+      ],
+      "seconds": 0.077728625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/retained-closure.exe"
+      ],
+      "seconds": 0.076751166,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/zero-captures.exe"
+      ],
+      "seconds": 0.042617417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/zero-captures.exe"
+      ],
+      "seconds": 0.038355583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/zero-captures.exe"
+      ],
+      "seconds": 0.037300916,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/shallow-captures.exe"
+      ],
+      "seconds": 0.052404417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/shallow-captures.exe"
+      ],
+      "seconds": 0.049096709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/shallow-captures.exe"
+      ],
+      "seconds": 0.049266791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/deep-captures.exe"
+      ],
+      "seconds": 0.0188735,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/deep-captures.exe"
+      ],
+      "seconds": 0.018028458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/deep-captures.exe"
+      ],
+      "seconds": 0.01796625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/mixed-protocol.exe"
+      ],
+      "seconds": 0.048315292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/mixed-protocol.exe"
+      ],
+      "seconds": 0.042095333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/mixed-protocol.exe"
+      ],
+      "seconds": 0.041781042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-16.exe"
+      ],
+      "seconds": 0.093532208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-16.exe"
+      ],
+      "seconds": 0.084635291,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-16.exe"
+      ],
+      "seconds": 0.084556958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/repeated-64.exe"
+      ],
+      "seconds": 0.143158833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/repeated-64.exe"
+      ],
+      "seconds": 0.108668292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/repeated-64.exe"
+      ],
+      "seconds": 0.1129875,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/compact/sequential-locals.exe"
+      ],
+      "seconds": 0.060025833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/previous/sequential-locals.exe"
+      ],
+      "seconds": 0.050429542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "sample",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "sample": 2,
+      "success": true,
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/native/optimized/retained/sequential-locals.exe"
+      ],
+      "seconds": 0.05023325,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.079456541,
+      "min_seconds": 0.077728625,
+      "max_seconds": 0.079688333
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.038355583,
+      "min_seconds": 0.037210667,
+      "max_seconds": 0.039219167
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.048798375,
+      "min_seconds": 0.047870375,
+      "max_seconds": 0.049096709
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.018028458,
+      "min_seconds": 0.017450334,
+      "max_seconds": 0.018201292
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.042095333,
+      "min_seconds": 0.041844292,
+      "max_seconds": 0.042515083
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.0835565,
+      "min_seconds": 0.0828985,
+      "max_seconds": 0.084635291
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.107649333,
+      "min_seconds": 0.105291125,
+      "max_seconds": 0.108668292
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.050429542,
+      "min_seconds": 0.049943208,
+      "max_seconds": 0.050520875
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.079144875,
+      "min_seconds": 0.076751166,
+      "max_seconds": 0.079152875
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.037780041,
+      "min_seconds": 0.037300916,
+      "max_seconds": 0.037849792
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.047792792,
+      "min_seconds": 0.046290417,
+      "max_seconds": 0.049266791
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.01796625,
+      "min_seconds": 0.017834625,
+      "max_seconds": 0.018008042
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.042235958,
+      "min_seconds": 0.041781042,
+      "max_seconds": 0.043588334
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.084556958,
+      "min_seconds": 0.082882667,
+      "max_seconds": 0.0848955
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.106060375,
+      "min_seconds": 0.105791709,
+      "max_seconds": 0.1129875
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.049987542,
+      "min_seconds": 0.049919792,
+      "max_seconds": 0.05023325
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.084147417,
+      "min_seconds": 0.083379333,
+      "max_seconds": 0.084875084
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.042617417,
+      "min_seconds": 0.041893167,
+      "max_seconds": 0.044336167
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.052404417,
+      "min_seconds": 0.051842791,
+      "max_seconds": 0.052420625
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.018781792,
+      "min_seconds": 0.018557541,
+      "max_seconds": 0.0188735
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.048315292,
+      "min_seconds": 0.048216792,
+      "max_seconds": 0.04877875
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.092723166,
+      "min_seconds": 0.092593041,
+      "max_seconds": 0.093532208
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.142567333,
+      "min_seconds": 0.142483209,
+      "max_seconds": 0.143158833
+    },
+    {
+      "kind": "summary",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "successful_samples": 3,
+      "requested_samples": 3,
+      "median_seconds": 0.058651042,
+      "min_seconds": 0.058405083,
+      "max_seconds": 0.060025833
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "words_by_layout": {
+        "6": 1,
+        "7": 1,
+        "2": 2,
+        "0": 3,
+        "3": 2,
+        "4": 3,
+        "5": 1,
+        "1": 2
+      },
+      "total_static_words": 15,
+      "maximum_frame_words": 3
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "words_by_layout": {
+        "1": 3,
+        "7": 1,
+        "8": 1,
+        "2": 4,
+        "0": 1,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2
+      },
+      "total_static_words": 20,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "words_by_layout": {
+        "1": 7,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1,
+        "0": 1,
+        "2": 8,
+        "3": 1,
+        "4": 3
+      },
+      "total_static_words": 28,
+      "maximum_frame_words": 8
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "words_by_layout": {
+        "1": 19,
+        "0": 1,
+        "2": 20,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 52,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "words_by_layout": {
+        "1": 3,
+        "2": 20,
+        "0": 1,
+        "3": 2,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 37,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "words_by_layout": {
+        "1": 3,
+        "2": 68,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "0": 1,
+        "3": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 85,
+      "maximum_frame_words": 68
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "words_by_layout": {
+        "6": 1,
+        "7": 1,
+        "2": 2,
+        "0": 3,
+        "3": 2,
+        "4": 3,
+        "5": 1,
+        "1": 2
+      },
+      "total_static_words": 15,
+      "maximum_frame_words": 3
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "words_by_layout": {
+        "1": 3,
+        "7": 1,
+        "8": 1,
+        "2": 4,
+        "0": 1,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2
+      },
+      "total_static_words": 20,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "words_by_layout": {
+        "1": 7,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1,
+        "0": 1,
+        "2": 8,
+        "3": 1,
+        "4": 3
+      },
+      "total_static_words": 28,
+      "maximum_frame_words": 8
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "words_by_layout": {
+        "1": 19,
+        "0": 1,
+        "2": 20,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 52,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "words_by_layout": {
+        "1": 3,
+        "2": 20,
+        "0": 1,
+        "3": 2,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 37,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "words_by_layout": {
+        "1": 3,
+        "2": 68,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "0": 1,
+        "3": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 85,
+      "maximum_frame_words": 68
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "words_by_layout": {
+        "6": 1,
+        "7": 1,
+        "2": 2,
+        "0": 3,
+        "3": 2,
+        "4": 3,
+        "5": 1,
+        "1": 2
+      },
+      "total_static_words": 15,
+      "maximum_frame_words": 3
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "words_by_layout": {
+        "1": 3,
+        "7": 1,
+        "8": 1,
+        "2": 4,
+        "0": 1,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2
+      },
+      "total_static_words": 20,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "words_by_layout": {
+        "1": 7,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1,
+        "0": 1,
+        "2": 8,
+        "3": 1,
+        "4": 3
+      },
+      "total_static_words": 28,
+      "maximum_frame_words": 8
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "words_by_layout": {
+        "1": 19,
+        "0": 1,
+        "2": 20,
+        "3": 1,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 52,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "words_by_layout": {
+        "1": 3,
+        "2": 20,
+        "0": 1,
+        "3": 2,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 37,
+      "maximum_frame_words": 20
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "words_by_layout": {
+        "1": 3,
+        "2": 68,
+        "4": 3,
+        "5": 4,
+        "6": 2,
+        "0": 1,
+        "3": 2,
+        "7": 1,
+        "8": 1
+      },
+      "total_static_words": 85,
+      "maximum_frame_words": 68
+    },
+    {
+      "kind": "layouts",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "words_by_layout": {
+        "1": 3,
+        "4": 1,
+        "5": 1,
+        "2": 4,
+        "0": 1,
+        "3": 2
+      },
+      "total_static_words": 12,
+      "maximum_frame_words": 4
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 1.402871,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "retained-closure",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 6,
+        "reserved_words": 6
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/retained-closure.exe"
+      ],
+      "seconds": 0.360811792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 6 6\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 0.655858583,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "zero-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/zero-captures.exe"
+      ],
+      "seconds": 0.328793584,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 0.659626208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "shallow-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 72,
+        "reserved_words": 128
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/shallow-captures.exe"
+      ],
+      "seconds": 0.332037625,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 72 128\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 0.673907125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "deep-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 2580,
+        "reserved_words": 5120
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/deep-captures.exe"
+      ],
+      "seconds": 0.300831542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 2580 5120\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 0.652115667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "mixed-protocol",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/mixed-protocol.exe"
+      ],
+      "seconds": 0.330876042,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 0.668649292,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-16",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 25,
+        "reserved_words": 42
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/repeated-16.exe"
+      ],
+      "seconds": 0.360109458,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 25 42\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 0.849835375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "repeated-64",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 73,
+        "reserved_words": 138
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/repeated-64.exe"
+      ],
+      "seconds": 0.391582209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 73 138\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "success": true,
+      "runtime_sha256": "b95e22004036ee98b6c776ee460a17857361737819167f0dec72c4751bd7793d",
+      "command": [
+        "${REPO}/build/runtime-study-v3/baseline/zydeco",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/previous"
+      ],
+      "seconds": 0.723262125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "previous",
+      "workload": "sequential-locals",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/previous/sequential-locals.exe"
+      ],
+      "seconds": 0.336697792,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 1.434855166,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "retained-closure",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 6,
+        "reserved_words": 6
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/retained-closure.exe"
+      ],
+      "seconds": 0.363294375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 6 6\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 0.661395833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "zero-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/zero-captures.exe"
+      ],
+      "seconds": 0.325918708,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 0.661458041,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "shallow-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 72,
+        "reserved_words": 128
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/shallow-captures.exe"
+      ],
+      "seconds": 0.371394833,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 72 128\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 0.695997375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "deep-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 2580,
+        "reserved_words": 5120
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/deep-captures.exe"
+      ],
+      "seconds": 0.30507375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 2580 5120\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 0.65847075,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "mixed-protocol",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/mixed-protocol.exe"
+      ],
+      "seconds": 0.31849775,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 0.6815055,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-16",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 25,
+        "reserved_words": 42
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/repeated-16.exe"
+      ],
+      "seconds": 0.375776958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 25 42\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 0.855668375,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "repeated-64",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 73,
+        "reserved_words": 138
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/repeated-64.exe"
+      ],
+      "seconds": 0.407113708,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 73 138\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/retained"
+      ],
+      "seconds": 0.716356208,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "retained",
+      "workload": "sequential-locals",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 5,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/retained/sequential-locals.exe"
+      ],
+      "seconds": 0.337792125,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 5 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/retained-closure.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 1.4085565,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "retained-closure",
+      "success": true,
+      "metrics": {
+        "final_words": 3,
+        "high_water_words": 5,
+        "reserved_words": 5
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/retained-closure.exe"
+      ],
+      "seconds": 0.367349417,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 3 5 5\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/zero-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 0.657014709,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "zero-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 6,
+        "reserved_words": 8
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/zero-captures.exe"
+      ],
+      "seconds": 0.334256416,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 6 8\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/shallow-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 0.658113666,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "shallow-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 45,
+        "reserved_words": 62
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/shallow-captures.exe"
+      ],
+      "seconds": 0.338041167,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 45 62\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/deep-captures.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 0.673411667,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "deep-captures",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 2085,
+        "reserved_words": 3110
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/deep-captures.exe"
+      ],
+      "seconds": 0.297815291,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 2085 3110\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/mixed-protocol.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 0.665324333,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "mixed-protocol",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 7,
+        "reserved_words": 9
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/mixed-protocol.exe"
+      ],
+      "seconds": 0.330625459,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 7 9\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-16.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 0.671105791,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-16",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 39,
+        "reserved_words": 44
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/repeated-16.exe"
+      ],
+      "seconds": 0.370761542,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 39 44\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/repeated-64.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 0.844120209,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "repeated-64",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 135,
+        "reserved_words": 164
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/repeated-64.exe"
+      ],
+      "seconds": 0.424804958,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 135 164\n",
+      "timed_out": false
+    },
+    {
+      "kind": "probe-build",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "success": true,
+      "runtime_sha256": "e4304e843420a0329758ccffd2e58dd33b809bc34f42cd9e9b3214affd6a2179",
+      "command": [
+        "${REPO}/build/runtime-study-v3/zydeco-fragments",
+        "build",
+        "${REPO}/build/runtime-study-v3/pilot/sources/sequential-locals.zy",
+        "--target",
+        "exe",
+        "--target-arch",
+        "x86-64",
+        "--build-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact",
+        "--runtime-dir",
+        "${REPO}/build/runtime-study-v3/pilot/probe-runtimes/optimized/compact"
+      ],
+      "seconds": 0.71772025,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    {
+      "kind": "environment",
+      "profile": "optimized",
+      "variant": "compact",
+      "workload": "sequential-locals",
+      "success": true,
+      "metrics": {
+        "final_words": 1,
+        "high_water_words": 7,
+        "reserved_words": 9
+      },
+      "command": [
+        "${REPO}/build/runtime-study-v3/pilot/probes/optimized/compact/sequential-locals.exe"
+      ],
+      "seconds": 0.339874084,
+      "exit": 0,
+      "stdout": "",
+      "stderr": "zydeco_environment: 1 7 9\n",
+      "timed_out": false
+    }
+  ]
+}

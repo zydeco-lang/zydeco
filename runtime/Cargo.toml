@@ -6,6 +6,11 @@ build = "build.rs"
 
 [workspace]
 
+[features]
+# Experimental storage engine; generated actions and preservation proofs agree
+# with the default retained-frame engine through the shared Environment contract.
+compact-environments = []
+
 [workspace.dependencies]
 zydeco-machine = { path = "../lang/machine", features = ["runtime"] }
 rand = "0.10"

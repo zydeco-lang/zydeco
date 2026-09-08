@@ -1,4 +1,4 @@
-//! Retained activation frames. Entry returns a fresh base after any storage growth.
+//! Nested environments. Entry returns a fresh base after any storage growth.
 //! Transitions do not collect the managed heap. Suspensions are consumed in nesting
 //! order, and their slot sets supply precise roots independently of reserved capacity.
 
@@ -7,7 +7,32 @@ use alloc::vec::Vec;
 
 pub mod storage;
 pub mod moving;
+pub mod fragments;
 use storage::Storage;
+
+mod sealed {
+    pub trait Sealed {}
+}
+
+/// The native compiler's nested, one-shot environment capability.
+///
+/// Enter establishes a layout after outgoing arguments have been staged. Suspend
+/// preserves the selected initialized values; generated code must not overwrite
+/// those slots while that suspension is pending. Resume consumes the newest token
+/// and reestablishes its layout and captured values, including collector updates.
+/// Only declared captures and newly bound inputs are available after resumption.
+///
+/// Transitions never collect the managed heap. Suspend cannot move the active
+/// base; Enter and Resume return the base generated code must subsequently use.
+/// Roots returns mutable live value locations, valid until any next transition.
+/// Managed values cannot contain pointers into environment storage. Implementations
+/// are sealed because emitted code relies on these obligations, not just signatures.
+pub trait Environment: sealed::Sealed {
+    fn enter(&mut self, layout: Layout) -> Result<*mut Word, FrameError>;
+    fn suspend(&mut self, layout: LayoutId, slots: &'static [Word]) -> Result<Token, FrameError>;
+    fn resume(&mut self, layout: LayoutId, token: Token) -> Result<*mut Word, FrameError>;
+    fn roots(&mut self, layout: LayoutId, slots: &[Word]) -> Result<Vec<*mut Word>, FrameError>;
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LayoutId(pub usize);
@@ -113,21 +138,6 @@ impl<S: Storage> Frames<S> {
         self.storage.reserved_words()
     }
 
-    /// Establish a closure activation, reusing an unretained active frame.
-    /// All validation precedes mutation, including failure during tail replacement.
-    pub fn enter(&mut self, layout: Layout) -> Result<*mut Word, FrameError> {
-        let replace = self.activations.last().is_some_and(|frame| frame.retained == 0);
-        let base = if replace { self.activations.last().unwrap().base } else { self.used_words() };
-        self.storage.reserve(base, layout.words)?;
-        if replace {
-            self.activations.pop();
-        }
-        let end = base + layout.words;
-        self.activations.push(Activation { layout, base, end, retained: 0 });
-        self.high_water = self.high_water.max(end);
-        Ok(self.storage.base().wrapping_add(base))
-    }
-
     fn active(&self, layout: LayoutId) -> Result<Activation, FrameError> {
         let frame = *self.activations.last().ok_or(FrameError::MissingActivation)?;
         Self::check_layout(frame, layout)?;
@@ -150,10 +160,27 @@ impl<S: Storage> Frames<S> {
             }
         })
     }
+}
 
-    pub fn suspend(
-        &mut self, layout: LayoutId, slots: &'static [Word],
-    ) -> Result<Token, FrameError> {
+impl<S: Storage> sealed::Sealed for Frames<S> {}
+
+impl<S: Storage> Environment for Frames<S> {
+    /// Establish a closure activation, reusing an unretained active frame.
+    /// All validation precedes mutation, including failure during tail replacement.
+    fn enter(&mut self, layout: Layout) -> Result<*mut Word, FrameError> {
+        let replace = self.activations.last().is_some_and(|frame| frame.retained == 0);
+        let base = if replace { self.activations.last().unwrap().base } else { self.used_words() };
+        self.storage.reserve(base, layout.words)?;
+        if replace {
+            self.activations.pop();
+        }
+        let end = base + layout.words;
+        self.activations.push(Activation { layout, base, end, retained: 0 });
+        self.high_water = self.high_water.max(end);
+        Ok(self.storage.base().wrapping_add(base))
+    }
+
+    fn suspend(&mut self, layout: LayoutId, slots: &'static [Word]) -> Result<Token, FrameError> {
         let frame = self.active(layout)?;
         Self::check_slots(frame, slots)?;
         let token = RuntimeWord::unsigned(self.next_token).ok_or(FrameError::TokenOverflow)?;
@@ -165,7 +192,7 @@ impl<S: Storage> Frames<S> {
         Ok(token)
     }
 
-    pub fn resume(&mut self, layout: LayoutId, token: Token) -> Result<*mut Word, FrameError> {
+    fn resume(&mut self, layout: LayoutId, token: Token) -> Result<*mut Word, FrameError> {
         let suspension = self.suspensions.last().ok_or(FrameError::InvalidResumption)?;
         if suspension.token != token {
             return Err(FrameError::InvalidResumption);
@@ -184,9 +211,7 @@ impl<S: Storage> Frames<S> {
 
     /// Addresses of active live slots and the union of pending suspensions' slots.
     /// Compiler validation establishes initialization before publishing a slot set.
-    pub fn roots(
-        &mut self, layout: LayoutId, slots: &[Word],
-    ) -> Result<Vec<*mut Word>, FrameError> {
+    fn roots(&mut self, layout: LayoutId, slots: &[Word]) -> Result<Vec<*mut Word>, FrameError> {
         let active = self.active(layout)?;
         Self::check_slots(active, slots)?;
         let mut indices = slots
@@ -254,8 +279,8 @@ impl Action<Word> {
     /// # Safety
     /// The descriptor and its `words` trailing slot indices must be valid static
     /// storage emitted by the matching compiler. Enter/Resume have no trailing slots.
-    pub unsafe fn apply<S: Storage>(
-        &'static self, frames: &mut Frames<S>, token: Word,
+    pub unsafe fn apply<E: Environment>(
+        &'static self, frames: &mut E, token: Word,
     ) -> Result<Word, FrameError> {
         let layout = LayoutId(self.layout);
         match self.kind as u64 {
@@ -278,8 +303,8 @@ impl Action<Word> {
 
     /// # Safety
     /// The descriptor must be followed by `words` static slot indices.
-    pub unsafe fn root_slots<S: Storage>(
-        &'static self, frames: &mut Frames<S>,
+    pub unsafe fn root_slots<E: Environment>(
+        &'static self, frames: &mut E,
     ) -> Result<Vec<*mut Word>, FrameError> {
         if self.kind as u64 != ActionKind::Roots as u64 {
             return Err(FrameError::InvalidAction);

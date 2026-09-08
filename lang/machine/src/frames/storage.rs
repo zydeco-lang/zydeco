@@ -16,6 +16,7 @@ pub trait Storage: sealed::Sealed {
     const EMPTY: Self;
     /// Preserve existing words on success and leave them untouched on failure.
     /// Make the complete `[base, base + words)` extent addressable on success.
+    /// Previously reserved extents stay addressable for the lifetime of the store.
     fn reserve(&mut self, base: usize, words: usize) -> Result<(), FrameError>;
     fn base(&mut self) -> *mut Word;
     fn reserved_words(&self) -> usize;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare explicit compiler/runtime pairs for the environment study's second round.
+"""Compare explicit compiler/runtime pairs for the environment studies.
 
 Reuses the first round's workload generation, exact oracles, build isolation, and
 rotating sample order. See docs/ideas/cbpv-runtime-evaluation.md for interpretation.
@@ -22,6 +22,9 @@ class EnvironmentStudy(RUNTIME.Study):
     def inspect(self):
         super().inspect()
         self.metadata["input_hashes"]["environment-study.py"] = self.sha256(Path(__file__))
+        if self.args.fragments:
+            self.metadata["input_hashes"]["environment-probe.rs"] = self.sha256(
+                Path(__file__).with_name("environment-probe.rs"))
         self.save()
 
     def variants(self):
@@ -50,7 +53,44 @@ class EnvironmentStudy(RUNTIME.Study):
   do status <- ! int64/sub result {iterations * width};
   ! process/exit status"""
         workloads["sequential-locals"] = self.source("sequential-locals", body)
+        if self.args.fragments:
+            workloads["sparse-repeated-64"] = self.source(
+                "sparse-repeated-64", self.sparse_repeated(64, max(1, round(2000 * self.args.scale))))
+            workloads["sparse-deep-64"] = self.source(
+                "sparse-deep-64", self.sparse_nested(64, 128, max(1, round(10000 * self.args.scale))))
         return workloads
+
+    def sparse_repeated(self, width, iterations):
+        # Reduce the wide live set before calling churn. The wide frame layout
+        # still exists, but the continuation needs only the completed subtotal.
+        uses = "\n".join(f"    do result <- ! int64/add result x{i};" for i in range(width))
+        original = f"    do result <- ! churn 3 seed;\n{uses}"
+        replacement = (f"    let result = 0 in\n{uses}\n"
+                       "    do returned <- ! churn 3 seed;\n"
+                       "    do result <- ! int64/add result returned;")
+        body = self.repeated(width, iterations)
+        assert body.count(original) == 1
+        return body.replace(original, replacement)
+
+    def sparse_nested(self, width, depth, iterations):
+        bindings = "\n".join(f"      do x{i} <- ! int64/add seed {i};" for i in range(width))
+        uses = "\n".join(f"      do subtotal <- ! int64/add subtotal x{i};" for i in range(width))
+        churn = self.churn(iterations).split("  do result <- ! churn")[0]
+        expected = depth * width * (width + 1) // 2 + iterations + 1
+        return churn + f"""
+  def fix nest (remaining : Int64) (seed : Int64) : Ret Int64 =
+    ! int64/eq (Ret Int64) remaining 0 {{ ! churn {iterations} seed }} {{
+{bindings}
+      let subtotal = 0 in
+{uses}
+      do next <- ! int64/sub remaining 1;
+      do returned <- ! nest next seed;
+      ! int64/add returned subtotal
+    }}
+  in
+  do result <- ! nest {depth} 1;
+  do status <- ! int64/sub result {expected};
+  ! process/exit status"""
 
     def layouts(self):
         # The shared Action declaration emits kind, layout ID, word count. Read
@@ -109,6 +149,8 @@ class EnvironmentStudy(RUNTIME.Study):
                 source = source.replace(marker, marker + '\n    let frames = unsafe { &*FRAMES.get() };\n'
                                         '    eprintln!("zydeco_environment: {} {} {}", frames.used_words(), '
                                         f'frames.high_water_words(), {reserved});')
+                if self.args.fragments:
+                    source = self.instrument_transitions(source)
                 stub.write_text(source)
                 directory = self.output / "probes" / profile / variant
                 for record in list(self.records):
@@ -126,12 +168,37 @@ class EnvironmentStudy(RUNTIME.Study):
                     if not success:
                         continue
                     result = self.run([directory / f"{name}.exe"], timeout=self.args.timeout)
-                    match = re.fullmatch(r"zydeco_environment: (\d+) (\d+) (\d+)\n", result["stderr"])
-                    success = result["exit"] == 0 and result["stdout"] == "" and match is not None
+                    lines = result["stderr"].splitlines()
+                    match = re.fullmatch(r"zydeco_environment: (\d+) (\d+) (\d+)", lines[0]) if lines else None
+                    transitions = None
+                    if self.args.fragments and len(lines) == 2 and lines[1].startswith("zydeco_transitions: "):
+                        transitions = json.loads(lines[1].removeprefix("zydeco_transitions: "))
+                    success = (result["exit"] == 0 and result["stdout"] == "" and match is not None
+                               and (transitions is not None if self.args.fragments else len(lines) == 1))
                     metrics = dict(zip(["final_words", "high_water_words", "reserved_words"],
                                        map(int, match.groups()))) if match else None
                     self.record("environment", profile=profile, variant=variant, workload=name,
-                                success=success, metrics=metrics, **result)
+                                success=success, metrics=metrics, transitions=transitions, **result)
+
+    @staticmethod
+    def instrument_transitions(source):
+        hooks = {
+            # Exit prints the word-buffer metrics first, then the independent
+            # transition probe. It observes actions without knowing storage layout.
+            'extern "sysv64" fn zydeco_frame_step(action: &\'static Action<Word>, token: Word) -> Word {':
+                '    unsafe { &mut *ENVIRONMENT_PROBE.get() }.step(action);',
+            '        slots.extend(unsafe { &*HOST_ROOTS.get() }.slots.iter().copied());':
+                '        unsafe { &mut *ENVIRONMENT_PROBE.get() }.roots(slots.len());',
+        }
+        for marker, insertion in hooks.items():
+            if source.count(marker) != 1:
+                raise ValueError(f"cannot instrument runtime marker: {marker}")
+            source = source.replace(marker, marker + "\n" + insertion)
+        marker = "frames.high_water_words(), "
+        start = source.index(marker)
+        end = source.index(";", start) + 1
+        source = source[:end] + '\n    unsafe { &*ENVIRONMENT_PROBE.get() }.report();' + source[end:]
+        return source + "\n" + Path(__file__).with_name("environment-probe.rs").read_text()
 
     @classmethod
     def main(cls):
@@ -142,6 +209,8 @@ class EnvironmentStudy(RUNTIME.Study):
         parser.add_argument("--profiles", nargs="+", choices=["debug", "optimized"], default=["optimized"])
         parser.add_argument("--samples", type=int, default=5)
         parser.add_argument("--scale", type=float, default=10)
+        parser.add_argument("--fragments", action="store_true",
+                            help="include sparse wide-frame workloads and separate transition probes")
         parser.add_argument("--timeout", type=float, default=30)
         parser.add_argument("--build-timeout", type=float, default=300)
         parser.add_argument("--capacity-only", action="store_true", help="run the deep environment boundary case")

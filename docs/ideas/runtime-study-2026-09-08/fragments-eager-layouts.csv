@@ -1,0 +1,13 @@
+scenario,scheme,owners,suspensions_per_owner,frame_words,captures,peak_words,reserved_words,final_words,reserved_after_return,suspended_root_slots,collections,root_slots_visited,copied_value_words
+sparse-low,retained,32,1,256,4,8448,16384,256,16384,128,37,4736,0
+sparse-low,compact,32,1,256,4,384,384,256,384,128,37,4736,256
+sparse-high,retained,32,1,256,4,8448,16384,256,16384,128,37,4736,0
+sparse-high,compact,32,1,256,4,384,384,256,384,128,37,4736,256
+dense,retained,32,1,4,4,132,256,4,256,128,37,4736,0
+dense,compact,32,1,4,4,132,132,4,132,128,37,4736,256
+empty,retained,32,1,256,0,8448,16384,256,16384,0,36,0,0
+empty,compact,32,1,256,0,256,256,256,256,0,36,0,0
+shared,retained,1,32,8,8,16,16,8,16,8,36,288,0
+shared,compact,1,32,8,8,264,264,8,264,256,36,9216,512
+shared-sparse,retained,1,32,256,4,512,512,256,512,4,36,144,0
+shared-sparse,compact,1,32,256,4,384,384,256,384,128,36,4608,256

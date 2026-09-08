@@ -81,3 +81,52 @@ fn tail_calls_and_an_escaping_closure_survive_frame_reuse() {
         SourceProgram::setup("tests/core/native-frames.zy").test(backend);
     }
 }
+
+#[test]
+fn compact_environments_execute_the_same_generated_actions() {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = directory.path().join("runtime");
+    std::fs::create_dir(&runtime).unwrap();
+    for entry in std::fs::read_dir(workspace.join("runtime")).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|extension| extension == "rs")
+            || path.file_name().unwrap() == "Cargo.toml"
+        {
+            std::fs::copy(&path, runtime.join(path.file_name().unwrap())).unwrap();
+        }
+    }
+    let manifest = runtime.join("Cargo.toml");
+    let source = std::fs::read_to_string(&manifest).unwrap();
+    assert_eq!(source.matches("[features]").count(), 1);
+    std::fs::write(
+        manifest,
+        source.replace("[features]", "[features]\ndefault = [\"compact-environments\"]"),
+    )
+    .unwrap();
+    let operating_system = TargetOs::host().unwrap();
+    let options = BuildOptions::new(
+        directory.path().join("build"),
+        runtime,
+        TargetArchitecture::X86_64,
+        operating_system,
+    );
+    for source in [
+        "builtin/host-runtime.zy",
+        "core/native-frames.zy",
+        "core/gc-stress.zy",
+        "core/runtime-package-callback.zy",
+        "delimcc/reset-shift-k.zy",
+    ] {
+        let path = workspace.join("lib/tests").join(source);
+        let backend = CommandCompiler::default().lower(&path).unwrap();
+        let assembly = backend.emit_amd64(operating_system);
+        let executable =
+            options.link_amd64("compact", &assembly, &backend.foreign_libraries()).unwrap();
+        let output = Command::new(executable.path()).stdin(Stdio::null()).output().unwrap();
+        let expected = CommandCompiler::default().test_io(&path, &[], "").unwrap();
+        assert_eq!(output.status.code(), Some(expected.code), "{source}: {output:?}");
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), expected.output, "{source}");
+        assert!(output.stderr.is_empty(), "{source}: {:?}", output.stderr);
+    }
+}

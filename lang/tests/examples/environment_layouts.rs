@@ -10,7 +10,7 @@ use gc::{CheneyHeap, OutOfMemory, RootRange, RootSource, Roots};
 use std::cell::Cell;
 use zydeco_machine::{
     frames::{
-        FrameError, Frames, Layout, LayoutId,
+        Environment, FrameError, Frames, Layout, LayoutId,
         moving::{ALLOCATION_KIND, LiveFrame, MovingRoots},
         storage::{Fixed, Growable, Storage},
     },

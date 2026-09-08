@@ -1,0 +1,20 @@
+{
+  "data_sha256": {
+    "fragments-pilot.json": "0e29bee37cd9be61550b4205e8e908ad0efea741beb170620a6291859224a189",
+    "fragments-eager.json": "e90cc3f483f350024a2a327e021b55469eb7551b506112014212820b468fb317",
+    "fragments-eager-layouts.csv": "3852a732457d2f70100e3244cf0edb865968158871e254a9e88a846be28ff1d6"
+  },
+  "trace_sources_sha256": {
+    "lang/tests/examples/environment_fragments.rs": "43734d948c0d13a892b8c5b11b814472527c2b2be6e9296ff33caccc7832e56a",
+    "lang/tests/environment-study.py": "16ae41003b60751be98b4616fa9a216659cecc8b0a224210be909383656598f2",
+    "lang/tests/environment-probe.rs": "3675bdf0568a8c6171fa0a5708a4b8ac496c1f8716021978194edda4894b5812",
+    "lang/machine/src/frames.rs": "0eddfbf535435a692387d4f4cab0bda0eda717bc8402d97ef1b8fed33325c84f",
+    "lang/machine/src/frames/fragments.rs": "e7bf17f83b9aed68117084b68d6b1bb184b040ae78bd254ad38b4986047c78a2",
+    "lang/machine/src/frames/storage.rs": "a0b32aad1bf2676c95d37bd98b8d4d3f7036d0185079239fec9c72d8bfb290b3",
+    "runtime/stub.rs": "dc56172e93c53f8abf2f1059c3c8f55f4eb2f47e336984c1cda699a41cecd8b8",
+    "runtime/Cargo.toml": "ac2b6fd7658ca115ea061792747d26e1fcc7a2d58029135692123e487a64f0c5",
+    "runtime/gc.rs": "36ee013a47f69e5c1b0d4702b1e2f98076d0dec1b3d73ffa0d8e9d0f4fa2fb57"
+  },
+  "trace_command": "cargo run --quiet -p zydeco-tests --example environment_fragments",
+  "trace_exit": 0
+}

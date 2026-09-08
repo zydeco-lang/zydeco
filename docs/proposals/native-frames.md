@@ -266,11 +266,16 @@ A future IR operation that captures machine stacks must revisit this justificati
 ### Shared executable frame model
 
 [`zydeco-machine::frames`](../../lang/machine/src/frames.rs) owns `Layout`, `Token`, `Action`, and `Frames`.
+Its sealed `Environment` capability shares action dispatch between the retained engine and compact fragments below.
+It promises nested one-shot resumption, initialized declared captures, no collecting transitions,
+a stable active base during Suspend, and a returned base to reload after Enter or Resume.
+Root addresses expire at the next transition; they refer to values, not necessarily to their active-layout offsets.
+This capability does not require suspended values to retain their original physical addresses.
 The emitter serializes `Action<u64>` followed, where applicable, by static slot indices.
 One declaration generates both the Rust header and its serialization order;
 AMD64 data sections guarantee word alignment.
 The runtime reads the same record as `Action<usize>`, with target-side size and alignment assertions.
-The following actions invoke the model's transition methods:
+The following actions invoke the retained engine's transition methods:
 
 | Action | Model behavior |
 | --- | --- |
@@ -313,6 +318,38 @@ instruction selection and SysV register placement still need integration checks.
 Returning host and C calls preserve the continuation already on the control stack
 and reach the same resumption prologue.
 The [C import contract](c-ffi.md) continues to own borrowing, unwinding, and reentry restrictions.
+
+### Experimental compact environments
+
+[`frames::fragments::Fragments`](../../lang/machine/src/frames/fragments.rs) implements the same
+`Environment` capability with one reusable active region and a separate contiguous buffer of captured values.
+Suspend copies its declared slots into a compact fragment and saves the layout, slot map, and token.
+Enter reuses the active region after the generated transfer has staged its outgoing arguments.
+Resume consumes the latest fragment, copies its current values back to the declared offsets,
+and reestablishes the owner's layout.
+Slots outside that entry's declared captures are unavailable.
+The existing compiler's preservation analysis remains unchanged, so both engines accept the same generated code.
+
+Several suspensions of one activation have independent snapshots, even when their capture maps overlap.
+Active roots point into scratch storage; suspended roots point into the compact buffer.
+The collector must update every physical copy of a live pointer.
+Deduplicating equal pointer values would leave some resumption copies stale; only duplicate addresses can be removed.
+Dead active slots are still excluded by the active root map.
+
+Both buffers use the selected `Storage` policy and cache capacity independently.
+The snapshot frontier follows token nesting; consuming a token reclaims its fragment
+without a heap allocation or free operation per continuation.
+Snapshot growth cannot move the active base during Suspend.
+Enter may grow the active region, and previously reserved scratch extents remain addressable on Resume.
+With a fixed pending continuation set, tail entries remain bounded by the largest active region plus its snapshots.
+Whole-buffer reservation can exceed that logical bound because capacities retain earlier peaks and geometric slack.
+
+The standalone runtime's experimental `compact-environments` Cargo feature selects this engine;
+retained frames remain the default.
+Both selections consume the compiler's bundled model and identical descriptors.
+This experiment keeps captures in ordinary Rust storage, not in the moving value heap.
+It therefore isolates capture copying and compact storage without introducing the collecting-entry boundary below.
+It also retains the nested token discipline: copied payloads do not make machine continuations detachable or duplicable.
 
 ### Experimental managed environments
 

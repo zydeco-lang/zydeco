@@ -3,7 +3,7 @@
 //! See docs/ideas/cbpv-runtime-evaluation.md for the accounting boundary.
 
 use zydeco_machine::{
-    frames::{FrameError, Frames, Layout, LayoutId},
+    frames::{Environment, FrameError, Frames, Layout, LayoutId},
     native::{ENVIRONMENT_BYTES, WORD_BYTES, Word},
 };
 

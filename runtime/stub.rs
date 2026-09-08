@@ -7,7 +7,11 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
-use zydeco_machine::frames::{Action, FrameError, Frames, storage::Growable};
+#[cfg(not(feature = "compact-environments"))]
+use zydeco_machine::frames::Frames as NativeFrames;
+#[cfg(feature = "compact-environments")]
+use zydeco_machine::frames::fragments::Fragments as NativeFrames;
+use zydeco_machine::frames::{Action, FrameError, storage::Growable};
 use zydeco_machine::native::{
     AllocationKind, Closure, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word, entry,
 };
@@ -1407,7 +1411,7 @@ fn out_of_host_roots(_error: HostRootOverflow) -> ! {
 
 static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>> =
     RuntimeCell::new(CheneyHeap::new());
-static FRAMES: RuntimeCell<Frames<Growable>> = RuntimeCell::new(Frames::EMPTY);
+static FRAMES: RuntimeCell<NativeFrames<Growable>> = RuntimeCell::new(NativeFrames::EMPTY);
 static STACK_END: RuntimeCell<*mut Word> = RuntimeCell::new(std::ptr::null_mut());
 static HOST_ROOTS: RuntimeCell<HostRoots> = RuntimeCell::new(HostRoots::new());
 static CONTROL_TRANSFER: RuntimeCell<HostTransfer<Word>> =
