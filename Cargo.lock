@@ -2105,6 +2105,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_datetime"
+version = "1.1.1+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3165f65f62e28e0115a00b2ebdd37eb6f3b641855f9d636d3cd4103767159ad7"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.25.13+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6975367e4d2ef766d86af01ffad14b622fecc8d4357a998fbc4deb6e9bacaf9b"
+dependencies = [
+ "indexmap",
+ "toml_datetime",
+ "toml_parser",
+ "toml_writer",
+ "winnow",
+]
+
+[[package]]
+name = "toml_parser"
+version = "1.1.3+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
+dependencies = [
+ "winnow",
+]
+
+[[package]]
+name = "toml_writer"
+version = "1.1.2+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2445,6 +2482,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9aec5da331524158c6d1a4ac0ab1541149c0b9505fde06423b02f5ef0106b9f0"
 
 [[package]]
+name = "winnow"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2545,6 +2591,7 @@ version = "0.3.0"
 dependencies = [
  "derive_more",
  "zydeco-assembly",
+ "zydeco-machine",
  "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",
@@ -2562,6 +2609,7 @@ dependencies = [
  "rustc-hash",
  "thiserror",
  "zydeco-derive",
+ "zydeco-machine",
  "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",
@@ -2580,11 +2628,13 @@ dependencies = [
  "sha3",
  "tempfile",
  "thiserror",
+ "toml_edit",
  "url",
  "wasmparser",
  "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-dynamics",
+ "zydeco-machine",
  "zydeco-session",
  "zydeco-stackir",
  "zydeco-statics",
@@ -2624,6 +2674,10 @@ dependencies = [
  "zydeco-syntax",
  "zydeco-utils",
 ]
+
+[[package]]
+name = "zydeco-machine"
+version = "0.3.0"
 
 [[package]]
 name = "zydeco-session"
@@ -2720,6 +2774,7 @@ dependencies = [
  "strum",
  "thiserror",
  "zydeco-derive",
+ "zydeco-machine",
  "zydeco-utils",
 ]
 
@@ -2732,6 +2787,7 @@ dependencies = [
  "thiserror",
  "walkdir",
  "zydeco-cli",
+ "zydeco-machine",
  "zydeco-session",
  "zydeco-stackir",
  "zydeco-statics",

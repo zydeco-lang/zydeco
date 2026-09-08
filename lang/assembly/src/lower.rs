@@ -10,6 +10,7 @@ use super::{
 };
 use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
+use zydeco_machine::closure::Closure;
 use zydeco_stackir::{SpsLowProgram, arena::DefinitionNames as _, low::syntax as sk};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -252,14 +253,17 @@ impl<'a> Lower<'a> for sk::ValueId {
                 let kont: Kont<'a, Lowerer<'a>> = if lo.unboxing.values.contains(self) {
                     kont
                 } else {
-                    let product = ProductLayout::new(2, 2);
+                    let product = ProductLayout::new(Closure::<u64>::WORDS, Closure::<u64>::WORDS);
                     Box::new(move |lo, cx| {
                         Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
                     })
                 };
-                [environment, code].into_iter().fold(kont, |kont: Kont<'a, Lowerer<'a>>, value| {
-                    Box::new(move |lo, cx| value.lower(lo, With::new(cx, kont)))
-                })(lo, cx)
+                Closure { environment, code }.into_words().into_iter().fold(
+                    kont,
+                    |kont: Kont<'a, Lowerer<'a>>, value| {
+                        Box::new(move |lo, cx| value.lower(lo, With::new(cx, kont)))
+                    },
+                )(lo, cx)
             }
             | Value::Ctor(Ctor(ctor, body)) => {
                 let product = ProductLayout::new(2, 2);
@@ -599,48 +603,23 @@ impl<'a> Lower<'a> for sk::CompuId {
                     With::new(
                         cx,
                         Box::new(move |lo, cx| {
+                            let kont: Kont<'a, Lowerer<'a>> =
+                                Box::new(move |lo, cx| body.lower(lo, cx));
+                            let kont = Closure { environment, code }
+                                .into_words()
+                                .into_iter()
+                                .rev()
+                                .fold(kont, |kont: Kont<'a, Lowerer<'a>>, pattern| {
+                                    Box::new(move |lo, cx| pattern.lower(lo, With::new(cx, kont)))
+                                });
                             if unboxed {
-                                environment.lower(
-                                    lo,
-                                    With::new(
-                                        cx,
-                                        Box::new(move |lo, cx| {
-                                            code.lower(
-                                                lo,
-                                                With::new(
-                                                    cx,
-                                                    Box::new(move |lo, cx| body.lower(lo, cx)),
-                                                ),
-                                            )
-                                        }),
-                                    ),
-                                )
+                                kont(lo, cx)
                             } else {
-                                Unpack(ProductLayout::new(2, 2)).build(
-                                    lo,
-                                    With::new(
-                                        cx,
-                                        CxKont::same(Box::new(move |lo, cx| {
-                                            environment.lower(
-                                                lo,
-                                                With::new(
-                                                    cx,
-                                                    Box::new(move |lo, cx| {
-                                                        code.lower(
-                                                            lo,
-                                                            With::new(
-                                                                cx,
-                                                                Box::new(move |lo, cx| {
-                                                                    body.lower(lo, cx)
-                                                                }),
-                                                            ),
-                                                        )
-                                                    }),
-                                                ),
-                                            )
-                                        })),
-                                    ),
-                                )
+                                Unpack(ProductLayout::new(
+                                    Closure::<u64>::WORDS,
+                                    Closure::<u64>::WORDS,
+                                ))
+                                .build(lo, With::new(cx, CxKont::same(kont)))
                             }
                         }),
                     ),

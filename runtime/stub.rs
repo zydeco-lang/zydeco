@@ -1,51 +1,16 @@
 mod gc;
 
-use gc::{BlockTag, CheneyHeap, IMMEDIATE_TAG, OutOfMemory, RootRange, Roots};
+use gc::{CheneyHeap, OutOfMemory, RootRange, Roots};
 use std::{
     cell::{RefCell, UnsafeCell},
     collections::HashMap,
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
-
-type Word = usize;
-
-const IMMEDIATE_UNSIGNED_MAX: Word = 0x7fff_ffff_ffff_ffff;
-const IMMEDIATE_SIGNED_MIN: i64 = -0x4000_0000_0000_0000;
-const IMMEDIATE_SIGNED_MAX: i64 = 0x3fff_ffff_ffff_ffff;
-
-/// Odd immediate values in the native one-word representation.
-struct Immediate;
-
-impl Immediate {
-    fn unsigned(value: Word) -> Option<Word> {
-        (value <= IMMEDIATE_UNSIGNED_MAX).then_some((value << 1) | IMMEDIATE_TAG)
-    }
-
-    fn signed(value: i64) -> Option<Word> {
-        (IMMEDIATE_SIGNED_MIN..=IMMEDIATE_SIGNED_MAX)
-            .contains(&value)
-            .then_some(((value as Word) << 1) | IMMEDIATE_TAG)
-    }
-
-    fn expect_unsigned(value: Word) -> Word {
-        Self::unsigned(value).expect("runtime value does not fit an unsigned immediate")
-    }
-
-    fn expect_signed(value: i64) -> Word {
-        Self::signed(value).expect("runtime value does not fit a signed immediate")
-    }
-
-    fn decode_unsigned(value: Word) -> Word {
-        assert_eq!(value & IMMEDIATE_TAG, IMMEDIATE_TAG, "expected an immediate value");
-        value >> 1
-    }
-
-    fn decode_signed(value: Word) -> i64 {
-        assert_eq!(value & IMMEDIATE_TAG, IMMEDIATE_TAG, "expected an immediate value");
-        (value as i64) >> 1
-    }
-}
+use zydeco_machine::native::{
+    AllocationKind, Closure, ENVIRONMENT_BYTES, HostArguments, HostTransfer, IMMEDIATE_TAG,
+    Immediate, Word, entry,
+};
 
 /// One full-width scalar payload in an opaque managed block.
 struct OpaqueScalar;
@@ -155,41 +120,26 @@ impl<T> RuntimeCell<T> {
 // SAFETY: the native runtime is single-threaded; `main` is the only entry point.
 unsafe impl<T> Sync for RuntimeCell<T> {}
 
-#[repr(C)]
-struct ZydecoClosure {
-    environment: *mut u8,
-    code: *mut u8,
-}
+/// Publishes a host-control result for immediate consumption by generated code.
+struct HostControl;
 
-#[repr(C)]
-struct Continuation {
-    resume: *mut u8,
-    closure: Word,
-    first: Word,
-    second: Word,
-}
-
-impl Continuation {
+impl HostControl {
     fn without_arguments(closure: Word) -> Word {
-        Self::store(rust_resume_zydeco_0, closure, 0, 0)
+        Self::store(closure, HostArguments::None)
     }
 
     fn with_one_argument(closure: Word, argument: Word) -> Word {
-        Self::store(rust_resume_zydeco_1, closure, argument, 0)
+        Self::store(closure, HostArguments::One(argument))
     }
 
     fn with_two_arguments(closure: Word, first: Word, second: Word) -> Word {
-        Self::store(rust_resume_zydeco_2, closure, first, second)
+        Self::store(closure, HostArguments::Two(first, second))
     }
 
-    fn store(
-        resume: unsafe extern "sysv64" fn(), closure: Word, first: Word, second: Word,
-    ) -> Word {
-        let resume = resume as *const () as *mut u8;
+    fn store(closure: Word, arguments: HostArguments<Word>) -> Word {
         let transfer = CONTROL_TRANSFER.get();
-        // A control transfer is consumed by the assembly bridge before another host
-        // call can occur, so one fixed protocol slot is sufficient.
-        unsafe { transfer.write(Self { resume, closure, first, second }) };
+        // The assembly bridge consumes this record before another host call can occur.
+        unsafe { transfer.write(HostTransfer::for_closure(closure, arguments)) };
         transfer as Word
     }
 }
@@ -390,7 +340,7 @@ struct IoBranch;
 
 impl IoBranch {
     fn error(continuation: Word, error: io::Error) -> Word {
-        Continuation::with_two_arguments(
+        HostControl::with_two_arguments(
             continuation,
             Immediate::expect_signed(HostIoErrorKind::from_error(&error) as i64),
             HostString::leak(error.to_string()),
@@ -399,14 +349,14 @@ impl IoBranch {
 
     fn unit(result: io::Result<()>, when_error: Word, when_success: Word) -> Word {
         match result {
-            | Ok(()) => Continuation::without_arguments(when_success),
+            | Ok(()) => HostControl::without_arguments(when_success),
             | Err(error) => Self::error(when_error, error),
         }
     }
 
     fn value(result: io::Result<Word>, when_error: Word, when_success: Word) -> Word {
         match result {
-            | Ok(value) => Continuation::with_one_argument(when_success, value),
+            | Ok(value) => HostControl::with_one_argument(when_success, value),
             | Err(error) => Self::error(when_error, error),
         }
     }
@@ -451,7 +401,7 @@ struct Branch;
 
 impl Branch {
     fn select(condition: bool, when_true: Word, when_false: Word) -> Word {
-        Continuation::without_arguments(if condition { when_true } else { when_false })
+        HostControl::without_arguments(if condition { when_true } else { when_false })
     }
 }
 
@@ -460,8 +410,8 @@ struct OptionalPairBranch;
 impl OptionalPairBranch {
     fn select(pair: Option<(String, String)>, when_none: Word, when_some: Word) -> Word {
         match pair {
-            | None => Continuation::without_arguments(when_none),
-            | Some((first, second)) => Continuation::with_two_arguments(
+            | None => HostControl::without_arguments(when_none),
+            | Some((first, second)) => HostControl::with_two_arguments(
                 when_some,
                 HostString::leak(first),
                 HostString::leak(second),
@@ -482,7 +432,7 @@ impl OptionalPairBranch {
 }
 
 struct ArgumentFold {
-    closure: ZydecoClosure,
+    closure: Closure<Word>,
     arguments: std::vec::IntoIter<String>,
     when_empty: Word,
     when_item: Word,
@@ -491,8 +441,7 @@ struct ArgumentFold {
 impl ArgumentFold {
     fn from_process(when_empty: Word, when_item: Word) -> Self {
         let arguments = std::env::args().skip(1).collect::<Vec<_>>().into_iter();
-        let closure =
-            ZydecoClosure { environment: std::ptr::null_mut(), code: std::ptr::null_mut() };
+        let closure = Closure { environment: 0, code: 0 };
         Self { closure, arguments, when_empty, when_item }
     }
 
@@ -511,8 +460,8 @@ impl ArgumentFold {
             .register(&roots)
             .unwrap_or_else(|error| out_of_host_roots(error));
         unsafe {
-            (*environment).closure.environment = environment.cast::<u8>();
-            (*environment).closure.code = rust_arg_fold_tail as *const () as *mut u8;
+            (*environment).closure.environment = environment as Word;
+            (*environment).closure.code = rust_arg_fold_tail as *const () as Word;
             std::ptr::addr_of_mut!((*environment).closure) as Word
         }
     }
@@ -531,11 +480,11 @@ impl ArgumentFold {
 
     fn resume(mut self) -> Word {
         match self.arguments.next() {
-            | None => Continuation::without_arguments(self.when_empty),
+            | None => HostControl::without_arguments(self.when_empty),
             | Some(argument) => {
                 let when_item = self.when_item;
                 let tail = self.into_thunk();
-                Continuation::with_two_arguments(when_item, HostString::leak(argument), tail)
+                HostControl::with_two_arguments(when_item, HostString::leak(argument), tail)
             }
         }
     }
@@ -555,9 +504,9 @@ enum RuntimeFailure {
 impl RuntimeFailure {
     fn exit(self) -> ! {
         let message = match self {
-            Self::PatternMatch => "pattern match failed",
-            Self::IntegerDivisionByZero => "integer division by zero",
-            Self::IntegerRemainderByZero => "integer remainder by zero",
+            | Self::PatternMatch => "pattern match failed",
+            | Self::IntegerDivisionByZero => "integer division by zero",
+            | Self::IntegerRemainderByZero => "integer remainder by zero",
         };
         eprintln!("Zydeco runtime: {message}");
         std::process::exit(1)
@@ -568,7 +517,7 @@ struct ManagedHeap;
 
 impl ManagedHeap {
     fn allocate(
-        size_words: usize, tag: BlockTag, stack_start: *mut Word, environment: *mut Word,
+        size_words: usize, tag: AllocationKind, stack_start: *mut Word, environment: *mut Word,
         environment_words: usize,
     ) -> *mut u8 {
         let stack_end = unsafe { *STACK_END.get() };
@@ -595,7 +544,7 @@ extern "sysv64" fn zydeco_alloc_scanned(
 ) -> *mut u8 {
     ManagedHeap::allocate(
         size_words,
-        BlockTag::Scanned,
+        AllocationKind::Scanned,
         stack_start,
         environment,
         environment_words,
@@ -606,7 +555,13 @@ extern "sysv64" fn zydeco_alloc_scanned(
 extern "sysv64" fn zydeco_alloc_opaque(
     size_words: usize, stack_start: *mut Word, environment: *mut Word, environment_words: usize,
 ) -> *mut u8 {
-    ManagedHeap::allocate(size_words, BlockTag::Opaque, stack_start, environment, environment_words)
+    ManagedHeap::allocate(
+        size_words,
+        AllocationKind::Opaque,
+        stack_start,
+        environment,
+        environment_words,
+    )
 }
 
 #[unsafe(export_name = "\x01zydeco_ffi_borrow_bytes")]
@@ -628,12 +583,6 @@ extern "sysv64" fn zydeco_ffi_encode_u64(value: u64, spare: *mut Word) -> Word {
 unsafe extern "sysv64" {
     #[link_name = "\x01rust_arg_fold_tail"]
     fn rust_arg_fold_tail();
-    #[link_name = "\x01rust_resume_zydeco_0"]
-    fn rust_resume_zydeco_0();
-    #[link_name = "\x01rust_resume_zydeco_1"]
-    fn rust_resume_zydeco_1();
-    #[link_name = "\x01rust_resume_zydeco_2"]
-    fn rust_resume_zydeco_2();
 }
 
 #[unsafe(export_name = "\x01zydeco_exit")]
@@ -676,11 +625,10 @@ extern "sysv64" fn zydeco_str_get_branch(
         .ok()
         .and_then(|index| unsafe { HostString::borrow(string) }.chars().nth(index));
     match character {
-        | None => Continuation::without_arguments(when_none),
-        | Some(character) => Continuation::with_one_argument(
-            when_some,
-            Immediate::expect_unsigned(character as Word),
-        ),
+        | None => HostControl::without_arguments(when_none),
+        | Some(character) => {
+            HostControl::with_one_argument(when_some, Immediate::expect_unsigned(character as Word))
+        }
     }
 }
 
@@ -1028,11 +976,10 @@ extern "sysv64" fn zydeco_char_from_codepoint_branch(
 ) -> Word {
     let codepoint = <i64 as RuntimeInteger>::decode(codepoint);
     match u32::try_from(codepoint).ok().and_then(char::from_u32) {
-        | None => Continuation::without_arguments(when_none),
-        | Some(character) => Continuation::with_one_argument(
-            when_some,
-            Immediate::expect_unsigned(character as Word),
-        ),
+        | None => HostControl::without_arguments(when_none),
+        | Some(character) => {
+            HostControl::with_one_argument(when_some, Immediate::expect_unsigned(character as Word))
+        }
     }
 }
 
@@ -1041,8 +988,8 @@ extern "sysv64" fn zydeco_str_parse_int_branch(
     string: Word, when_none: Word, when_some: Word, spare: *mut Word,
 ) -> Word {
     match unsafe { HostString::borrow(string) }.parse::<i64>() {
-        | Err(_) => Continuation::without_arguments(when_none),
-        | Ok(integer) => Continuation::with_one_argument(when_some, integer.encode(spare)),
+        | Err(_) => HostControl::without_arguments(when_none),
+        | Ok(integer) => HostControl::with_one_argument(when_some, integer.encode(spare)),
     }
 }
 
@@ -1073,9 +1020,9 @@ extern "sysv64" fn zydeco_bytes_to_str_branch(
     bytes: Word, when_invalid: Word, when_valid: Word,
 ) -> Word {
     match std::str::from_utf8(unsafe { HostBytes::borrow(bytes) }) {
-        | Err(_) => Continuation::without_arguments(when_invalid),
+        | Err(_) => HostControl::without_arguments(when_invalid),
         | Ok(string) => {
-            Continuation::with_one_argument(when_valid, HostString::leak(string.to_string()))
+            HostControl::with_one_argument(when_valid, HostString::leak(string.to_string()))
         }
     }
 }
@@ -1089,8 +1036,8 @@ extern "sysv64" fn zydeco_bytes_get_branch(
         .ok()
         .and_then(|index| unsafe { HostBytes::borrow(bytes) }.get(index).copied());
     match octet {
-        | None => Continuation::without_arguments(when_none),
-        | Some(octet) => Continuation::with_one_argument(
+        | None => HostControl::without_arguments(when_none),
+        | Some(octet) => HostControl::with_one_argument(
             when_some,
             <u8 as RuntimeInteger>::encode(octet, std::ptr::null_mut()),
         ),
@@ -1111,8 +1058,8 @@ extern "sysv64" fn zydeco_bytes_slice_branch(
         })
     });
     match window {
-        | None => Continuation::without_arguments(when_none),
-        | Some(window) => Continuation::with_one_argument(when_some, HostBytes::leak(window)),
+        | None => HostControl::without_arguments(when_none),
+        | Some(window) => HostControl::with_one_argument(when_some, HostBytes::leak(window)),
     }
 }
 
@@ -1230,8 +1177,8 @@ extern "sysv64" fn zydeco_io_read_line(
         })
     });
     match result {
-        | Ok((0, _)) => Continuation::without_arguments(when_eof),
-        | Ok((_, bytes)) => Continuation::with_one_argument(when_line, HostBytes::leak(bytes)),
+        | Ok((0, _)) => HostControl::without_arguments(when_eof),
+        | Ok((_, bytes)) => HostControl::with_one_argument(when_line, HostBytes::leak(bytes)),
         | Err(error) => IoBranch::error(when_error, error),
     }
 }
@@ -1319,7 +1266,7 @@ extern "sysv64" fn zydeco_fs_append_writer(
 #[unsafe(export_name = "\x01zydeco_read_line")]
 extern "sysv64" fn zydeco_read_line(continuation: Word) -> Word {
     let line = Input::line();
-    Continuation::with_one_argument(continuation, HostString::leak(line))
+    HostControl::with_one_argument(continuation, HostString::leak(line))
 }
 
 #[unsafe(export_name = "\x01zydeco_read_line_as_int_branch")]
@@ -1327,14 +1274,14 @@ extern "sysv64" fn zydeco_read_line_as_int_branch(
     when_invalid: Word, when_valid: Word, spare: *mut Word,
 ) -> Word {
     match Input::line().parse::<i64>() {
-        | Ok(integer) => Continuation::with_one_argument(when_valid, integer.encode(spare)),
-        | Err(_) => Continuation::without_arguments(when_invalid),
+        | Ok(integer) => HostControl::with_one_argument(when_valid, integer.encode(spare)),
+        | Err(_) => HostControl::without_arguments(when_invalid),
     }
 }
 
 #[unsafe(export_name = "\x01zydeco_read_till_eof")]
 extern "sysv64" fn zydeco_read_till_eof(continuation: Word) -> Word {
-    Continuation::with_one_argument(continuation, HostString::leak(Input::remaining()))
+    HostControl::with_one_argument(continuation, HostString::leak(Input::remaining()))
 }
 
 #[unsafe(export_name = "\x01zydeco_write_str")]
@@ -1347,7 +1294,7 @@ extern "sysv64" fn zydeco_write_str(string: Word, continuation: Word) -> Word {
             })
         })
         .expect("legacy standard-output write failed");
-    Continuation::without_arguments(continuation)
+    HostControl::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_write_int")]
@@ -1361,7 +1308,7 @@ extern "sysv64" fn zydeco_write_int(integer: Word, continuation: Word) -> Word {
             })
         })
         .expect("legacy standard-output write failed");
-    Continuation::without_arguments(continuation)
+    HostControl::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_write_line")]
@@ -1374,7 +1321,7 @@ extern "sysv64" fn zydeco_write_line(line: Word, continuation: Word) -> Word {
             })
         })
         .expect("legacy standard-output write failed");
-    Continuation::without_arguments(continuation)
+    HostControl::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_arg_fold")]
@@ -1391,19 +1338,13 @@ extern "sysv64" fn zydeco_arg_fold_resume(environment: *mut u8) -> Word {
 extern "sysv64" fn zydeco_random_int(continuation: Word, spare: *mut Word) -> Word {
     use rand::RngExt;
     let integer = rand::rng().random_range(i64::MIN..=i64::MAX);
-    Continuation::with_one_argument(continuation, integer.encode(spare))
+    HostControl::with_one_argument(continuation, integer.encode(spare))
 }
 
 /* ---------------------------------- Entry --------------------------------- */
 
-unsafe extern "sysv64" {
-    #[link_name = "\x01entry"]
-    fn entry(environment: *mut u8) -> Word;
-}
-
 const HEAP_SPACE_BYTES: usize = 1024 * 1024;
 const HEAP_INDEX_REGIONS: usize = HEAP_SPACE_BYTES.div_ceil(gc::INDEX_REGION_BYTES);
-const ENVIRONMENT_BYTES: usize = 1024 * 1024;
 const HOST_ROOT_CAPACITY: usize = 256;
 
 #[repr(align(8))]
@@ -1470,12 +1411,8 @@ static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>> =
 static ENVIRONMENT: RuntimeCell<Environment> = RuntimeCell::new(Environment::new());
 static STACK_END: RuntimeCell<*mut Word> = RuntimeCell::new(std::ptr::null_mut());
 static HOST_ROOTS: RuntimeCell<HostRoots> = RuntimeCell::new(HostRoots::new());
-static CONTROL_TRANSFER: RuntimeCell<Continuation> = RuntimeCell::new(Continuation {
-    resume: std::ptr::null_mut(),
-    closure: 0,
-    first: 0,
-    second: 0,
-});
+static CONTROL_TRANSFER: RuntimeCell<HostTransfer<Word>> =
+    RuntimeCell::new(HostTransfer { resume: 0, closure: 0, first: 0, second: 0 });
 
 thread_local! {
     static HOST_IO: RefCell<HostIoRuntime> = RefCell::new(HostIoRuntime::new());

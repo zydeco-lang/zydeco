@@ -828,6 +828,48 @@ from movable pointers exactly.
 Opaque scalar blocks are copied but their payload bits are never traced.
 Aligned Rust-owned pointers, such as host strings, are outside both semispaces and remain unchanged.
 
+### Shared Rust Runtime Model
+
+[`zydeco-machine`](lang/machine/src/lib.rs) is a dependency-free `no_std` crate consumed
+by compiler phases and the standalone native runtime.
+It owns the tagged-word operations described above, the closure field order used by ZASM,
+and the current AMD64 host-transfer representation.
+Compiler-specific literal resolution stays in `zydeco-syntax`.
+
+Closure records are parameterized by their word carrier.
+Code generation derives byte offsets from `Closure<u64>` and `HostTransfer<u64>`,
+so an ARM or 32-bit compiler host cannot change the AMD64 layout accidentally.
+The native stub uses the same records with `usize` words; target-side assertions check their sizes,
+alignment, and offsets against the 64-bit layouts.
+The closure declaration also generates the field traversal used by ZASM packing and opening.
+
+The host-control protocol is represented by `HostArguments` and a shared resumption catalog.
+A host operation returns a pointer to a `HostTransfer` containing a bridge address, a closure, and up to two arguments.
+The stub selects that address from the arguments' arity; the emitter generates each bridge
+from the same catalog and record offsets.
+The bridge loads the closure, pushes arguments in reverse consumption order,
+pushes the closure environment, and jumps to its code.
+The stub has one reusable transfer slot, consumed before another host call occurs.
+This record is separate from a source-language `Ret` continuation on the control stack.
+
+The compiler embeds a self-contained source bundle of the model and supplies it to each native build.
+Both compilations derive the native entry symbol from a deterministic fingerprint
+of the model sources, including its manifest and build script.
+Different source identities therefore fail to link.
+This is a conservative compatibility check: even a comment change requires rebuilding both sides.
+It checks artifact pairing, while the shared definitions remove duplicated layout and protocol decisions;
+it does not prove the correctness of handwritten instruction selection or host implementations.
+See [native build packaging](CONTRIBUTING.md#compile-programs) for the build-directory contract.
+
+This first model describes the existing runtime scheme.
+Register assignment, stack alignment, continuation lowering, root-range construction,
+and individual builtin signatures still have their existing implementations.
+The collector owns its private headers and forwarding algorithm,
+while the model supplies allocation kinds and the immediate tag.
+A future scheme can introduce its own state and transition types in this crate;
+there is no universal runtime trait or retained-frame implementation yet.
+Shared abstractions should follow a second concrete implementation with demonstrated common requirements.
+
 ### Native Garbage Collection
 
 The native runtime uses Cheney copying collection with two fixed 1 MiB semispaces.
@@ -953,6 +995,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 | Path | Role |
 | --- | --- |
 | `lang/` | Compiler phases, interpreter, emitters, utilities, test harnesses, and data-driven case fixtures under `lang/tests/cases/`. |
+| `lang/machine/` | Rust representations and host-resumption descriptions shared by compiler phases and native stubs. |
 | `lib/` | Standard library, reusable examples, and regression projects under `lib/tests/`. |
 | `cli/` | Source checking, interpreter launch, formatting, and compilation commands. |
 | `runtime/` | Runtime sources copied into native executable builds. |

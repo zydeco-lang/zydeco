@@ -4,6 +4,7 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+zydeco-machine = { workspace = true }
 zydeco-session = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-cli = { path = "../../cli" }

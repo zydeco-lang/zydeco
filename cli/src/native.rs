@@ -43,7 +43,44 @@ impl BuildOptions {
                 std::fs::copy(entry.path(), self.build_dir.join(entry.file_name()))
                     .map(|_| ())
                     .map_err(NativeError::CopyRuntimeFile)
-            })
+            })?;
+
+        let manifest_path = self.build_dir.join("Cargo.toml");
+        let mut manifest = std::fs::read_to_string(&manifest_path)
+            .map_err(NativeError::PackageRuntimeModel)?
+            .parse::<toml_edit::DocumentMut>()
+            .map_err(NativeError::RuntimeManifest)?;
+        let inherits_model = manifest
+            .get("dependencies")
+            .and_then(|item| item.get("zydeco-machine"))
+            .and_then(|item| item.get("workspace"))
+            .and_then(toml_edit::Item::as_bool);
+        if inherits_model != Some(true) {
+            return Err(NativeError::RuntimeModelDependency);
+        }
+        let dependency = manifest
+            .get_mut("workspace")
+            .and_then(|item| item.get_mut("dependencies"))
+            .and_then(|item| item.get_mut("zydeco-machine"))
+            .and_then(toml_edit::Item::as_table_like_mut)
+            .ok_or(NativeError::RuntimeModelDependency)?;
+        dependency.insert("path", toml_edit::value("machine"));
+
+        // Use the compiler's embedded sources, including when installed outside this
+        // repository. Remove previous generated sources so deleted model files cannot
+        // influence the next build's identity.
+        let model_dir = self.build_dir.join("machine");
+        if model_dir.exists() {
+            std::fs::remove_dir_all(&model_dir).map_err(NativeError::PackageRuntimeModel)?;
+        }
+        for source in zydeco_machine::bundle::FILES {
+            let path = model_dir.join(source.path);
+            std::fs::create_dir_all(path.parent().unwrap())
+                .map_err(NativeError::PackageRuntimeModel)?;
+            std::fs::write(path, source.contents).map_err(NativeError::PackageRuntimeModel)?;
+        }
+        std::fs::write(manifest_path, manifest.to_string())
+            .map_err(NativeError::PackageRuntimeModel)
     }
 
     pub fn link_amd64(
@@ -126,7 +163,8 @@ impl BuildOptions {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::BuildOptions;
+    use super::{BuildOptions, NativeError};
+    use crate::{TargetArchitecture, TargetOs};
     use std::os::unix::fs::MetadataExt;
 
     #[test]
@@ -143,6 +181,70 @@ mod tests {
         assert!(!source.exists());
         assert_eq!(destination.metadata().unwrap().ino(), source_inode);
         assert_eq!(std::fs::read_to_string(destination).unwrap(), "new executable");
+    }
+
+    #[test]
+    fn packages_a_self_contained_model_and_removes_superseded_sources() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime");
+        let options = BuildOptions::new(
+            directory.path().to_path_buf(),
+            runtime,
+            TargetArchitecture::X86_64,
+            TargetOs::Linux,
+        );
+        let obsolete = directory.path().join("machine/src/obsolete.rs");
+        std::fs::create_dir_all(obsolete.parent().unwrap()).unwrap();
+        std::fs::write(&obsolete, "obsolete model source").unwrap();
+
+        options.prepare().unwrap();
+
+        assert!(!obsolete.exists());
+        let manifest = std::fs::read_to_string(directory.path().join("Cargo.toml"))
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        assert_eq!(
+            manifest["workspace"]["dependencies"]["zydeco-machine"]["path"].as_str(),
+            Some("machine"),
+        );
+        for source in zydeco_machine::bundle::FILES {
+            assert_eq!(
+                std::fs::read_to_string(directory.path().join("machine").join(source.path))
+                    .unwrap(),
+                source.contents,
+            );
+        }
+        let model = std::fs::read_to_string(directory.path().join("machine/Cargo.toml"))
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        assert!(model["package"]["version"].is_str());
+        assert!(model["package"]["edition"].is_str());
+        assert!(!model.contains_key("dependencies"));
+    }
+
+    #[test]
+    fn rejects_runtime_manifests_without_an_inherited_model_dependency() {
+        let directory = tempfile::tempdir().unwrap();
+        let runtime = directory.path().join("runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        for manifest in [
+            "[workspace]\n[dependencies]\n",
+            "[workspace.dependencies]\nzydeco-machine = '0.3'\n\
+             [dependencies]\nzydeco-machine = { workspace = true }\n",
+        ] {
+            std::fs::write(runtime.join("Cargo.toml"), manifest).unwrap();
+            let build = directory.path().join("build");
+            let options = BuildOptions::new(
+                build.clone(),
+                runtime.clone(),
+                TargetArchitecture::X86_64,
+                TargetOs::Linux,
+            );
+            assert!(matches!(options.prepare(), Err(NativeError::RuntimeModelDependency)));
+            assert!(!build.join("machine").exists());
+        }
     }
 }
 
@@ -243,6 +345,12 @@ pub enum NativeError {
     ReadRuntimeDirectory(#[source] std::io::Error),
     #[error("cannot copy a runtime file: {0}")]
     CopyRuntimeFile(#[source] std::io::Error),
+    #[error("cannot package the compiler's runtime model: {0}")]
+    PackageRuntimeModel(#[source] std::io::Error),
+    #[error("invalid runtime Cargo manifest: {0}")]
+    RuntimeManifest(#[source] toml_edit::TomlError),
+    #[error("runtime manifest must inherit zydeco-machine from its workspace dependencies")]
+    RuntimeModelDependency,
     #[error("cannot write backend output: {0}")]
     WriteBackendOutput(#[source] std::io::Error),
     #[error("cannot start {tool}: {source}")]

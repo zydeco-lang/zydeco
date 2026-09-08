@@ -18,27 +18,14 @@
 
 use std::{mem::size_of, ptr};
 
-pub(crate) type Word = usize;
+use zydeco_machine::native::{AllocationKind, IMMEDIATE_TAG, WORD_BYTES, Word};
 
-const WORD_BYTES: usize = size_of::<Word>();
 const FORWARDED_BIT: Word = 1;
 const TAG_MASK: Word = 0xff;
-pub(crate) const IMMEDIATE_TAG: Word = 1;
-
-/// Whether the words in a block are themselves runtime values.
-///
-/// Tags are even so the low bit remains available for a forwarding pointer while
-/// a collection is in progress.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(usize)]
-pub(crate) enum BlockTag {
-    Scanned = 0,
-    Opaque = 1 << 1,
-}
 
 /// The header immediately before every payload pointer returned to generated code.
 ///
-/// `metadata` normally contains a [`BlockTag`].  After a block has moved, its old
+/// `metadata` normally contains a [`AllocationKind`].  After a block has moved, its old
 /// header contains the new payload pointer with [`FORWARDED_BIT`] set.  Keeping the
 /// size in a separate word makes interior-pointer lookup possible even after a
 /// preceding block has been forwarded.
@@ -54,21 +41,21 @@ const INDEX_REGION_WORDS: usize = Word::BITS as usize;
 pub(crate) const INDEX_REGION_BYTES: usize = INDEX_REGION_WORDS * WORD_BYTES;
 
 const _: () = {
-    assert!(WORD_BYTES == 8, "the native runtime currently requires 64-bit words");
+    assert!(size_of::<Word>() == WORD_BYTES, "the native runtime requires 64-bit words");
     assert!(HEADER_BYTES == 2 * WORD_BYTES);
     assert!(size_of::<RegionStarts>() == 2 * WORD_BYTES);
 };
 
 impl BlockHeader {
-    const fn new(size_words: usize, tag: BlockTag) -> Self {
+    const fn new(size_words: usize, tag: AllocationKind) -> Self {
         Self { size_words, metadata: tag as Word }
     }
 
-    fn tag(self) -> BlockTag {
+    fn tag(self) -> AllocationKind {
         debug_assert_eq!(self.metadata & FORWARDED_BIT, 0);
         match self.metadata & TAG_MASK {
-            | value if value == BlockTag::Scanned as Word => BlockTag::Scanned,
-            | value if value == BlockTag::Opaque as Word => BlockTag::Opaque,
+            | value if value == AllocationKind::Scanned as Word => AllocationKind::Scanned,
+            | value if value == AllocationKind::Opaque as Word => AllocationKind::Opaque,
             | value => panic!("invalid runtime block tag {value}"),
         }
     }
@@ -262,7 +249,7 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
     /// Every nonempty root range must be valid, word-aligned, writable, and belong
     /// exclusively to the current runtime thread for the duration of this call.
     pub unsafe fn allocate(
-        &mut self, size_words: usize, tag: BlockTag, roots: Roots<'_>,
+        &mut self, size_words: usize, tag: AllocationKind, roots: Roots<'_>,
     ) -> Result<*mut u8, OutOfMemory> {
         let cell_bytes = Self::cell_bytes(size_words).ok_or_else(|| self.oom(size_words))?;
         if cell_bytes > BYTES {
@@ -336,7 +323,7 @@ impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
             debug_assert!(header.forwarded_to().is_none());
             let payload = unsafe { header_pointer.cast::<u8>().add(HEADER_BYTES).cast::<Word>() };
 
-            if header.tag() == BlockTag::Scanned {
+            if header.tag() == AllocationKind::Scanned {
                 for index in 0..header.size_words {
                     let slot = unsafe { payload.add(index) };
                     let value = unsafe { slot.read() };
@@ -433,7 +420,7 @@ mod tests {
         }
 
         unsafe fn allocate<const BYTES: usize, const REGIONS: usize>(
-            &mut self, heap: &mut CheneyHeap<BYTES, REGIONS>, words: usize, tag: BlockTag,
+            &mut self, heap: &mut CheneyHeap<BYTES, REGIONS>, words: usize, tag: AllocationKind,
         ) -> Result<*mut u8, OutOfMemory> {
             unsafe { heap.allocate(words, tag, self.roots()) }
         }
@@ -470,7 +457,7 @@ mod tests {
             .into_iter()
             .map(|words| {
                 let payload =
-                    unsafe { roots.allocate(&mut heap, words, BlockTag::Scanned) }.unwrap();
+                    unsafe { roots.allocate(&mut heap, words, AllocationKind::Scanned) }.unwrap();
                 unsafe { write_words(payload, &vec![IMMEDIATE_TAG; words]) };
                 (payload as Word, words)
             })
@@ -508,13 +495,13 @@ mod tests {
         // These old starts will lie inside the large product when this space is
         // reused. Its index must replace them, including the final partial region.
         for _ in 0..32 {
-            let garbage = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+            let garbage = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
             unsafe { write_words(garbage, &[IMMEDIATE_TAG]) };
         }
-        let leaf = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+        let leaf = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
         unsafe { write_words(leaf, &[immediate(77)]) };
         roots.words[0] = leaf as Word;
-        let product = unsafe { roots.allocate(&mut heap, 200, BlockTag::Scanned) }.unwrap();
+        let product = unsafe { roots.allocate(&mut heap, 200, AllocationKind::Scanned) }.unwrap();
         let mut fields = (0..200).map(immediate).collect::<Vec<_>>();
         fields[199] = roots.words[0];
         unsafe { write_words(product, &fields) };
@@ -541,7 +528,8 @@ mod tests {
             assert_eq!(unsafe { (roots.words[3] as *const Word).read() }, immediate(77));
 
             while heap.used_bytes() + HEADER_BYTES + WORD_BYTES <= 4096 {
-                let garbage = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+                let garbage =
+                    unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
                 unsafe { write_words(garbage, &[IMMEDIATE_TAG]) };
             }
         }
@@ -552,7 +540,7 @@ mod tests {
         roots.words.fill(leaf);
         unsafe { roots.collect(&mut heap) };
         assert_eq!(heap.used_bytes(), HEADER_BYTES + WORD_BYTES);
-        let product = unsafe { roots.allocate(&mut heap, 200, BlockTag::Scanned) }.unwrap();
+        let product = unsafe { roots.allocate(&mut heap, 200, AllocationKind::Scanned) }.unwrap();
         unsafe { write_words(product, &vec![IMMEDIATE_TAG; 200]) };
         let base = heap.active_base();
         let index = &heap.starts[heap.active];
@@ -577,7 +565,8 @@ mod tests {
             let mut roots = TestRoots::new([IMMEDIATE_TAG]);
             for _ in 0..blocks {
                 let previous = roots.words[0];
-                let payload = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+                let payload =
+                    unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
                 unsafe { write_words(payload, &[previous]) };
                 roots.words[0] = payload as Word;
             }
@@ -599,7 +588,8 @@ mod tests {
             let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
             let mut roots = TestRoots::new([IMMEDIATE_TAG]);
             for _ in 0..blocks {
-                let payload = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+                let payload =
+                    unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
                 unsafe { write_words(payload, &[immediate(42)]) };
                 roots.words[0] = payload as Word;
             }
@@ -617,7 +607,8 @@ mod tests {
         for words in [64, 1024, 16384] {
             let mut heap = CheneyHeap::<{ 512 * 1024 }, 1024>::new();
             let mut roots = TestRoots::new([IMMEDIATE_TAG]);
-            let payload = unsafe { roots.allocate(&mut heap, words, BlockTag::Opaque) }.unwrap();
+            let payload =
+                unsafe { roots.allocate(&mut heap, words, AllocationKind::Opaque) }.unwrap();
             unsafe { write_words(payload, &vec![immediate(17); words]) };
             roots.words[0] = unsafe { payload.add((words - 1) * WORD_BYTES) } as Word;
             let work = unsafe { roots.collect(&mut heap) };
@@ -631,13 +622,13 @@ mod tests {
     fn copies_reachable_blocks_and_rewrites_edges() {
         let mut heap = CheneyHeap::<128, 1>::new();
         let mut roots = TestRoots::new([0]);
-        let leaf = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let leaf = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(leaf, &[immediate(41)]) };
-        let parent = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let parent = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(parent, &[leaf as Word]) };
         roots.words[0] = parent as Word;
 
-        let garbage = unsafe { roots.allocate(&mut heap, 6, BlockTag::Scanned).unwrap() };
+        let garbage = unsafe { roots.allocate(&mut heap, 6, AllocationKind::Scanned).unwrap() };
         unsafe {
             write_words(
                 garbage,
@@ -652,7 +643,7 @@ mod tests {
             )
         };
         let old_parent = roots.words[0];
-        let fresh = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let fresh = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(fresh, &[immediate(99)]) };
 
         assert_eq!(heap.collections(), 1);
@@ -667,13 +658,13 @@ mod tests {
     fn tagged_immediate_cannot_be_mistaken_for_a_heap_pointer() {
         let mut heap = CheneyHeap::<80, 1>::new();
         let mut roots = TestRoots::new([0]);
-        let target = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let target = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         let pointer_shaped_payload = target as Word | IMMEDIATE_TAG;
         roots.words[0] = pointer_shaped_payload;
 
-        let garbage = unsafe { roots.allocate(&mut heap, 2, BlockTag::Scanned).unwrap() };
+        let garbage = unsafe { roots.allocate(&mut heap, 2, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(garbage, &[IMMEDIATE_TAG, IMMEDIATE_TAG]) };
-        let fresh = unsafe { roots.allocate(&mut heap, 2, BlockTag::Scanned).unwrap() };
+        let fresh = unsafe { roots.allocate(&mut heap, 2, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(fresh, &[IMMEDIATE_TAG, IMMEDIATE_TAG]) };
 
         assert_eq!(heap.collections(), 1);
@@ -685,14 +676,14 @@ mod tests {
     fn preserves_interior_product_pointers() {
         let mut heap = CheneyHeap::<104, 1>::new();
         let mut roots = TestRoots::new([0]);
-        let product = unsafe { roots.allocate(&mut heap, 3, BlockTag::Scanned).unwrap() };
+        let product = unsafe { roots.allocate(&mut heap, 3, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(product, &[immediate(10), immediate(20), immediate(30)]) };
         roots.words[0] = unsafe { product.add(WORD_BYTES) } as Word;
         let old_suffix = roots.words[0];
 
-        let garbage = unsafe { roots.allocate(&mut heap, 4, BlockTag::Scanned).unwrap() };
+        let garbage = unsafe { roots.allocate(&mut heap, 4, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(garbage, &[immediate(1), immediate(2), immediate(3), immediate(4)]) };
-        let fresh = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let fresh = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(fresh, &[immediate(40)]) };
 
         assert_eq!(heap.collections(), 1);
@@ -706,16 +697,16 @@ mod tests {
     fn forwarding_breaks_cycles_without_a_mark_stack() {
         let mut heap = CheneyHeap::<96, 1>::new();
         let mut roots = TestRoots::new([0]);
-        let first = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
-        let second = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let first = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
+        let second = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe {
             write_words(first, &[second as Word]);
             write_words(second, &[first as Word]);
         }
         roots.words[0] = first as Word;
-        let garbage = unsafe { roots.allocate(&mut heap, 2, BlockTag::Scanned).unwrap() };
+        let garbage = unsafe { roots.allocate(&mut heap, 2, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(garbage, &[immediate(7), immediate(8)]) };
-        let fresh = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let fresh = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(fresh, &[immediate(9)]) };
 
         let moved_first = roots.words[0] as *mut Word;
@@ -728,14 +719,14 @@ mod tests {
     fn opaque_blocks_do_not_trace_payload_words() {
         let mut heap = CheneyHeap::<96, 1>::new();
         let mut roots = TestRoots::new([0]);
-        let target = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let target = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(target, &[immediate(77)]) };
-        let opaque = unsafe { roots.allocate(&mut heap, 1, BlockTag::Opaque).unwrap() };
+        let opaque = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Opaque).unwrap() };
         unsafe { write_words(opaque, &[target as Word]) };
         roots.words[0] = opaque as Word;
-        let garbage = unsafe { roots.allocate(&mut heap, 3, BlockTag::Scanned).unwrap() };
+        let garbage = unsafe { roots.allocate(&mut heap, 3, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(garbage, &[immediate(1), immediate(2), immediate(3)]) };
-        let fresh = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let fresh = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(fresh, &[immediate(4)]) };
 
         assert_eq!(heap.collections(), 1);
@@ -746,11 +737,11 @@ mod tests {
     fn rewrites_registered_host_roots() {
         let mut heap = CheneyHeap::<80, 1>::new();
         let mut roots = TestRoots::new([]);
-        let target = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let target = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(target, &[immediate(55)]) };
         let mut host_value = target as Word;
 
-        let garbage = unsafe { roots.allocate(&mut heap, 2, BlockTag::Scanned).unwrap() };
+        let garbage = unsafe { roots.allocate(&mut heap, 2, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(garbage, &[immediate(1), immediate(2)]) };
         let mut host_slots = [std::ptr::addr_of_mut!(host_value)];
         let empty = ptr::null_mut();
@@ -759,8 +750,8 @@ mod tests {
             environment: RootRange { start: empty, end: empty },
             host: &mut host_slots,
         };
-        let fresh =
-            unsafe { heap.allocate(2, BlockTag::Scanned, root_set) }.expect("collection succeeds");
+        let fresh = unsafe { heap.allocate(2, AllocationKind::Scanned, root_set) }
+            .expect("collection succeeds");
         unsafe { write_words(fresh, &[immediate(3), immediate(4)]) };
 
         assert_eq!(heap.collections(), 1);
@@ -772,14 +763,14 @@ mod tests {
     fn reports_oom_when_the_live_set_leaves_no_room() {
         let mut heap = CheneyHeap::<64, 1>::new();
         let mut roots = TestRoots::new([0, 0]);
-        let first = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let first = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(first, &[immediate(0)]) };
         roots.words[0] = first as Word;
-        let second = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned).unwrap() };
+        let second = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned).unwrap() };
         unsafe { write_words(second, &[immediate(0)]) };
         roots.words[1] = second as Word;
 
-        let error = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap_err();
+        let error = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap_err();
         assert_eq!(error.requested_words, 1);
         assert_eq!(error.live_bytes, 2 * (HEADER_BYTES + WORD_BYTES));
         assert_eq!(error.capacity_bytes, 64);
@@ -789,7 +780,7 @@ mod tests {
             roots.words.iter().all(|&root| unsafe { (root as *const Word).read() == immediate(0) })
         );
         roots.words[1] = IMMEDIATE_TAG;
-        let fresh = unsafe { roots.allocate(&mut heap, 1, BlockTag::Scanned) }.unwrap();
+        let fresh = unsafe { roots.allocate(&mut heap, 1, AllocationKind::Scanned) }.unwrap();
         unsafe { write_words(fresh, &[immediate(1)]) };
         assert_eq!(heap.collections(), 2);
         assert_eq!(heap.used_bytes(), 2 * (HEADER_BYTES + WORD_BYTES));

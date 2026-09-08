@@ -11,6 +11,8 @@ readme = { workspace = true }
 description = "Command-line interface for the Zydeco programming language"
 
 [dependencies]
+zydeco-machine = { workspace = true, features = ["bundle"] }
+toml_edit = { workspace = true }
 clap = { workspace = true }
 zydeco-session = { workspace = true }
 zydeco-tui = { workspace = true }

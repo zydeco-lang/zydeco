@@ -6,9 +6,14 @@ build = "build.rs"
 
 [workspace]
 
+[workspace.dependencies]
+zydeco-machine = { path = "../lang/machine", features = ["runtime"] }
+rand = "0.10"
+
 [[bin]]
 name = "main"
 path = "stub.rs"
 
 [dependencies]
-rand = "0.10"
+zydeco-machine = { workspace = true }
+rand = { workspace = true }

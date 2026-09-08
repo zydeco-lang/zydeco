@@ -110,6 +110,14 @@ Selecting `--target-os` or `--target-arch` does not install a cross-compilation 
 The default build and runtime directories are `build/` and `runtime/`, relative to the command's working directory.
 AMD64 linking copies runtime sources into the build directory and invokes Cargo there,
 which may fetch runtime dependencies.
+It also writes the compiler's embedded `zydeco-machine` sources into `build/machine/`
+and redirects the copied runtime workspace's model dependency to that directory.
+This generated directory is replaced on each native build; keep local runtime changes in the source runtime directory.
+A custom runtime manifest must inherit `zydeco-machine` from its workspace dependencies,
+as [the supplied manifest](runtime/Cargo.toml) does.
+Changing the model requires rebuilding the compiler before generating new native artifacts.
+The [shared model contract](DESIGN.md#shared-rust-runtime-model) explains how native entry symbols reject
+artifacts compiled against different model sources.
 
 Build both WebAssembly variants with:
 

@@ -1,0 +1,16 @@
+[package]
+name = "zydeco-machine"
+# Explicit metadata keeps this dependency-free crate usable in both workspaces
+# and lets the compiler bundle its manifest without rewriting it.
+version = "0.3.0"
+rust-version = "1.97"
+edition = "2024"
+license = "MIT"
+description = "Representations shared by Zydeco code generation and runtime stubs"
+
+[features]
+bundle = []
+runtime = []
+
+[lints.clippy]
+debug_assert_with_mut_call = "warn"

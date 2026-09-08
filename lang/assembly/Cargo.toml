@@ -11,6 +11,7 @@ readme = { workspace = true }
 description = "zydeco compiled to assembly"
 
 [dependencies]
+zydeco-machine = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-statics = { workspace = true }

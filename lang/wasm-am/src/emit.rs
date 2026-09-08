@@ -670,11 +670,11 @@ impl<'a> CaseEncoder<'a> {
     fn emit_immediate(&mut self, immediate: &Imm) -> Result<(), EmitError> {
         match immediate {
             | Imm::Triv(_) => self.push_constant(RuntimeWord::index(0)? as i64),
-            | Imm::Integer(integer) => match RuntimeWord::integer(*integer)? {
+            | Imm::Integer(integer) => match integer.encode_runtime()? {
                 | EncodedScalar::Immediate(word) => self.push_constant(word as i64),
                 | EncodedScalar::Boxed(bits) => self.push_boxed(bits),
             },
-            | Imm::Float(float) => match RuntimeWord::float(*float) {
+            | Imm::Float(float) => match float.encode_runtime() {
                 | EncodedScalar::Immediate(word) => self.push_constant(word as i64),
                 | EncodedScalar::Boxed(bits) => self.push_boxed(bits),
             },

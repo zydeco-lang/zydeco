@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "lang/utils",
     "lang/derive",
+    "lang/machine",
     "lang/syntax",
     "lang/surface",
     "lang/statics",
@@ -41,6 +42,7 @@ debug_assert_with_mut_call = "warn"
 # zydeco
 zydeco-utils = { path = "lang/utils" }
 zydeco-derive = { path = "lang/derive" }
+zydeco-machine = { path = "lang/machine" }
 zydeco-syntax = { path = "lang/syntax" }
 zydeco-surface = { path = "lang/surface" }
 zydeco-statics = { path = "lang/statics" }

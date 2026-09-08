@@ -764,13 +764,13 @@ impl<'a> CaseEncoder<'a> {
 
     fn emit_literal(&mut self, id: ValueId, literal: Literal) -> Result<(), EmitError> {
         match literal {
-            | Literal::Integer(integer) => match RuntimeWord::integer(integer)? {
+            | Literal::Integer(integer) => match integer.encode_runtime()? {
                 | EncodedScalar::Immediate(word) => {
                     self.function.instruction(&WasmInstruction::I64Const(word as i64));
                 }
                 | EncodedScalar::Boxed(bits) => self.emit_boxed(bits),
             },
-            | Literal::Float(float) => match RuntimeWord::float(float) {
+            | Literal::Float(float) => match float.encode_runtime() {
                 | EncodedScalar::Immediate(word) => {
                     self.function.instruction(&WasmInstruction::I64Const(word as i64));
                 }

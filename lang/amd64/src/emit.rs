@@ -5,27 +5,15 @@ use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike, AssemblyProgram},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
+use zydeco_machine::native::{
+    AllocationKind, ClosureField, ENTRY_SYMBOL, ResumeArity, TransferField, WORD_BYTES,
+};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
 use zydeco_utils::pass::CompilerPass;
 
 pub const ENV_REG: Reg = Reg::Rbp;
-
-#[derive(Clone, Copy)]
-enum AllocationKind {
-    Scanned,
-    Opaque,
-}
-
-impl AllocationKind {
-    fn symbol(self) -> &'static str {
-        match self {
-            | Self::Scanned => "zydeco_alloc_scanned",
-            | Self::Opaque => "zydeco_alloc_opaque",
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetFormat {
@@ -426,8 +414,8 @@ impl<'e> CompilerPass for Emitter<'e> {
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
             // fixed-heap allocation entry points
-            Instr::Extern("zydeco_alloc_scanned".to_string()),
-            Instr::Extern("zydeco_alloc_opaque".to_string()),
+            Instr::Extern(AllocationKind::Scanned.symbol().to_string()),
+            Instr::Extern(AllocationKind::Opaque.symbol().to_string()),
             // legacy intrinsic comparison helpers
             Instr::Extern("zydeco_intrinsic_int64_eq".to_string()),
             Instr::Extern("zydeco_intrinsic_int64_lt".to_string()),
@@ -459,50 +447,44 @@ impl<'e> CompilerPass for Emitter<'e> {
         externs.sort();
         self.asm.text.extend(externs.into_iter().map(Instr::Extern));
 
-        // Emit host-to-Zydeco resumption bridges. Each bridge is entered by a
-        // SysV call when Rust invokes it, so its entry parity is misaligned;
-        // it pushes arguments before tail-jumping into Zydeco code.
-        self.stack_parity = StackParity::Misaligned;
-        self.asm.text.extend([
-            Instr::Global("rust_resume_zydeco_0".to_string()),
-            Instr::Label("rust_resume_zydeco_0".to_string()),
-            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 8 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }))),
-            Instr::Push(Arg32::Reg(Reg::Rsi)),
-            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
-        ]);
-        self.shift_stack_parity(1);
-
-        self.stack_parity = StackParity::Misaligned;
-        self.asm.text.extend([
-            Instr::Global("rust_resume_zydeco_1".to_string()),
-            Instr::Label("rust_resume_zydeco_1".to_string()),
-            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 16 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 8 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }))),
-            Instr::Push(Arg32::Reg(Reg::Rdx)),
-            Instr::Push(Arg32::Reg(Reg::Rsi)),
-            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
-        ]);
-        self.shift_stack_parity(2);
-
-        self.stack_parity = StackParity::Misaligned;
-        self.asm.text.extend([
-            Instr::Global("rust_resume_zydeco_2".to_string()),
-            Instr::Label("rust_resume_zydeco_2".to_string()),
-            Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 16 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 24 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 8 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }))),
-            Instr::Push(Arg32::Reg(Reg::Rcx)),
-            Instr::Push(Arg32::Reg(Reg::Rdx)),
-            Instr::Push(Arg32::Reg(Reg::Rsi)),
-            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
-        ]);
-        self.shift_stack_parity(3);
+        // A host call returns a transfer record; the control terminator jumps here.
+        // The shared catalog describes consumption order, so push its arguments in reverse.
+        for &arity in ResumeArity::ALL {
+            self.stack_parity = StackParity::Unknown;
+            self.asm.text.extend([
+                Instr::Global(arity.symbol().to_string()),
+                Instr::Label(arity.symbol().to_string()),
+            ]);
+            self.asm.text.extend([
+                Instr::Mov(MovArgs::ToReg(
+                    Reg::Rax,
+                    Arg64::Mem(MemRef {
+                        reg: Reg::Rdi,
+                        offset: TransferField::Closure.offset() as i32,
+                    }),
+                )),
+                Instr::Mov(MovArgs::ToReg(
+                    Reg::Rsi,
+                    Arg64::Mem(MemRef {
+                        reg: Reg::Rax,
+                        offset: ClosureField::Environment.offset() as i32,
+                    }),
+                )),
+                Instr::Mov(MovArgs::ToReg(
+                    Reg::Rax,
+                    Arg64::Mem(MemRef {
+                        reg: Reg::Rax,
+                        offset: ClosureField::Code.offset() as i32,
+                    }),
+                )),
+            ]);
+            self.asm.text.extend(arity.arguments().iter().rev().map(|field| {
+                Instr::Push(Arg32::Mem(MemRef { reg: Reg::Rdi, offset: field.offset() as i32 }))
+            }));
+            self.asm
+                .text
+                .extend([Instr::Push(Arg32::Reg(Reg::Rsi)), Instr::Jmp(JmpArgs::Reg(Reg::Rax))]);
+        }
 
         // This tail is reached by a jump through a runtime-created closure, so
         // its entry parity is not statically known.
@@ -517,15 +499,18 @@ impl<'e> CompilerPass for Emitter<'e> {
         self.emit_aligned_call(JmpArgs::Label("zydeco_arg_fold_resume".to_string()));
         self.asm.text.extend([
             Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 0 }))),
+            Instr::Mov(MovArgs::ToReg(
+                Reg::Rax,
+                Arg64::Mem(MemRef { reg: Reg::Rdi, offset: TransferField::Resume.offset() as i32 }),
+            )),
             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
         ]);
 
         self.stack_parity =
             self.entry_parities.get(&self.root).copied().unwrap_or(StackParity::Unknown);
         self.asm.text.extend([
-            Instr::Global("entry".to_string()),
-            Instr::Label("entry".to_string()),
+            Instr::Global(ENTRY_SYMBOL.to_string()),
+            Instr::Label(ENTRY_SYMBOL.to_string()),
             Instr::Comment("initialize environment".to_string()),
             // initialize the environment
             Instr::Mov(MovArgs::ToReg(ENV_REG, Arg64::Reg(Reg::Rdi))),
@@ -795,7 +780,10 @@ impl<'a> Emit<'a> for Terminator {
                             Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
                             Instr::Mov(MovArgs::ToReg(
                                 Reg::Rax,
-                                Arg64::Mem(MemRef { reg: Reg::Rdi, offset: 0 }),
+                                Arg64::Mem(MemRef {
+                                    reg: Reg::Rdi,
+                                    offset: TransferField::Resume.offset() as i32,
+                                }),
                             )),
                             Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
                         ]);
@@ -924,7 +912,7 @@ impl<'a> Emit<'a> for Instruction {
                     Instr::Pop(Loc::Reg(Reg::Rax)),
                     // store to [rbp + 8 * idx]
                     Instr::Mov(MovArgs::ToMem(
-                        MemRef { reg: ENV_REG, offset: 8 * idx },
+                        MemRef { reg: ENV_REG, offset: WORD_BYTES as i32 * idx },
                         Reg32::Reg(Reg::Rax),
                     )),
                 ]);
@@ -977,7 +965,7 @@ impl<'a> Emit<'a> for Atom {
                 em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rax,
-                        Arg64::Mem(MemRef { reg: ENV_REG, offset: 8 * idx }),
+                        Arg64::Mem(MemRef { reg: ENV_REG, offset: WORD_BYTES as i32 * idx }),
                     )),
                     Instr::Push(Arg32::Reg(Reg::Rax)),
                 ]);
@@ -1042,9 +1030,7 @@ impl<'a> Emit<'a> for Atom {
                 }
                 | sa::Imm::Integer(i) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_integer {:?}", i)));
-                    match RuntimeWord::integer(i)
-                        .expect("unresolved integer literal reached emission")
-                    {
+                    match i.encode_runtime().expect("unresolved integer literal reached emission") {
                         | EncodedScalar::Immediate(word) => {
                             em.asm.text.extend([
                                 Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(word))),
@@ -1060,7 +1046,7 @@ impl<'a> Emit<'a> for Atom {
                 }
                 | sa::Imm::Float(value) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_float {:?}", value)));
-                    match RuntimeWord::float(value) {
+                    match value.encode_runtime() {
                         | EncodedScalar::Immediate(word) => {
                             em.asm.text.extend([
                                 Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(word))),
