@@ -222,6 +222,40 @@ end
 }
 
 #[test]
+fn inferred_factory_fields_specialize_solved_result_holes() {
+    let factory = r#"
+let val factory (A : VType) (B : VType) =
+  let val wrap (R : CType) (body : Thk (A -> Ret B)) : Thk (A -> Ret B) = body in
+  (#wrap = wrap)
+in
+"#;
+    let source = format!(
+        r#"{factory}
+let units = factory Unit Unit in
+let integers = factory Int64 Int64 in
+let discard = factory Int64 Unit in
+let unit = units/wrap (Ret Unit) {{ fn value => ret value }} in
+let integer = integers/wrap OS {{ fn value => ret value }} in
+let ignore = discard/wrap OS {{ fn value => ret () }} in
+do () <- ! unit ();
+do () <- ! ignore 42;
+do code <- ! integer 0;
+! exit code
+"#
+    );
+    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::run(&source));
+    SourceCase::assert_accepted(SourceCase::lower(&source));
+    SourceCase::assert_rejected(
+        SourceCase::check(&format!(
+            "{factory} let discard = factory Int64 Unit in \
+             let broken = discard/wrap OS {{ fn value => ret value }} in ! exit 0"
+        )),
+        TyckDiagnosticCode::TypeMismatch,
+    );
+}
+
+#[test]
 fn dependent_applications_recover_forwarded_and_constructed_package_witnesses() {
     let source = r#"
 begin

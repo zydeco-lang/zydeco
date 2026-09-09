@@ -11,8 +11,12 @@ impl TypeId {
         let kd = tycker.statics.type_kind(*self);
         let ty = tycker.statics.types_pre[self].to_owned();
         let ty = match ty {
-            // Fixme: should invoke substitution once the type is filled
-            | Fillable::Fill(_) => *self,
+            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
+                | Some(AnnId::Type(solution)) => solution.subst_env(tycker, env)?,
+                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
+                // An unsolved hole still needs deferred substitution obligations.
+                | None => *self,
+            },
             | Fillable::Done(ty) => match ty {
                 | Type::Var(def) => match env.get(&def) {
                     | Some(ann) => match ann {
@@ -261,8 +265,12 @@ impl TypeId {
         let kd = tycker.statics.type_kind(*self);
         let env = tycker.statics.env_at(*self);
         let ty = match tycker.statics.types_pre[self].to_owned() {
-            // Todo: add subst obligation to fills
-            | Fillable::Fill(_) => *self,
+            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
+                | Some(AnnId::Type(solution)) => solution.subst_absts(tycker, assignments)?,
+                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
+                // An unsolved hole still needs deferred substitution obligations.
+                | None => *self,
+            },
             | Fillable::Done(ty) => match ty {
                 | Type::Var(_) => *self,
                 | Type::Abst(abst) => {

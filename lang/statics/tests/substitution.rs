@@ -2,6 +2,7 @@ mod common;
 
 use common::TestFixture;
 use zydeco_statics::{Alloc, StaticsAlloc, Tycker, environment::*, syntax::*};
+use zydeco_utils::prelude::ArenaAccess;
 
 impl TestFixture {
     fn abst_type(tycker: &mut Tycker<'_>, kind: KindId) -> (AbstId, TypeId) {
@@ -10,6 +11,35 @@ impl TestFixture {
         let ty = Alloc::alloc(tycker, abst, kind, &env);
         (abst, ty)
     }
+}
+
+#[test]
+fn lexical_substitution_specializes_a_solved_hole_without_mutating_its_solution() {
+    TestFixture::run(|tycker| {
+        let (vtype, _) = TestFixture::kinds(tycker);
+        let env = TyEnv::new();
+        let source_def: DefId = tycker.fresh();
+        let source = Alloc::alloc(tycker, source_def, vtype, &env);
+        let solution = Alloc::alloc(tycker, Prod(vec![source, source]), vtype, &env);
+        let site = tycker.data.root(tycker.db);
+        let fill: FillId = Alloc::alloc(tycker, InferenceSite::Term(site), (), &());
+        let hole: TypeId = Alloc::alloc(tycker, fill, vtype, &env);
+        assert!(fill.fill(tycker, solution.into()).is_ok());
+        let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
+        let opaque = Alloc::alloc(tycker, OpaqueTy, vtype, &env);
+
+        for replacement in [unit, opaque] {
+            let substitution = TyEnv::from_iter([(source_def, replacement.into())]);
+            let Ok(specialized) = hole.subst_env(tycker, &substitution) else {
+                panic!("substitution must follow a solved hole")
+            };
+            let Ok(Type::Prod(Prod(components))) = tycker.type_filled(&specialized) else {
+                panic!("specialization must retain the solved product shape")
+            };
+            assert_eq!(components.as_slice(), [replacement, replacement]);
+            assert_eq!(tycker.statics.solus.get(&fill), Some(&solution.into()));
+        }
+    });
 }
 
 #[test]

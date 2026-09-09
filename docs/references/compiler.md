@@ -280,6 +280,9 @@ Filling checks occurs and visible-skolem conditions.
 Sharing a flexible type across occurrences intersects admissible scopes; subsequent solutions obey that intersection.
 A failed speculative fill restores both solutions and scopes.
 Diagnostics retain the inference site and the conflicting body or call-site constraints.
+Lexical and abstract-witness substitution follow solved type holes before rewriting their solutions.
+This lets an inferred factory result specialize independently at each application, including value-function fields;
+the shared solution itself remains unchanged.
 
 `CheckedTermRepository` retains a canonical result per resolved term for sources,
 classifier queries, and monadic payloads.
