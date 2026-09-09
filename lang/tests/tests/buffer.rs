@@ -1,7 +1,10 @@
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{e2e_sources, utils::SourceCase};
 
-e2e_sources!({ buffer => "tests/std/buffer.zy" });
+e2e_sources!({
+    buffer => "tests/std/buffer.zy",
+    storage_access => "tests/std/storage-access.zy",
+});
 
 #[test]
 fn a_buffer_handle_cannot_be_forged_from_an_integer() {

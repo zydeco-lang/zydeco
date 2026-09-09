@@ -165,8 +165,8 @@ lexical buffer lifetimes remain unexpressed.
 
 Allocator selection and checked mutable destination capabilities are implemented below.
 A borrowed region with a statically scoped lifetime remains a separate boundary.
-That would permit construction into caller-provided storage and field reads by verified offsets,
-followed by representation-aware native argument/result classification.
+Checked offset access into caller-provided storage is implemented below; statically verified field paths
+and representation-aware native argument/result classification remain separate extensions.
 Automatically changing all products or adding representation-polymorphic calls first would conflate storage,
 ownership, and the native calling convention before their boundaries are expressible.
 
@@ -228,6 +228,42 @@ A thunk may be retained, invoked twice, or invoke its completion continuation ze
 A scope-shaped helper cannot derive single invocation or cleanup from these types.
 The current extension provides checked close and freeze; an affine completion protocol
 or an explicitly handled dynamic scope is needed before a stronger borrow-lifetime claim can be made.
+
+## Access through existing representation contracts
+
+[access.zy](../../lib/std/memory/access.zy) is an extension consuming the existing existential
+`Representation A` interface.
+It introduces no compiler rule and does not couple the immutable layout builder to `OS` or `Buffer`.
+
+`read_at A R representation source offset no yes` checks a window of the representation's exact size,
+validates its canonical contents, and decodes an `A`.
+It accepts dynamically supplied representation packages: unpacking occurs inside the body
+because the result does not depend on their hidden stored type.
+It returns through the caller's `R` stack and can inspect a field of a larger immutable buffer.
+Invalid ranges or representations select `no`.
+
+`write_to A representation destination offset value error done` encodes an `A`
+and writes it into a caller-provided `Buffer`.
+Destination bounds and closed-handle errors are the buffer protocol's errors;
+detected temporary storage allocation failure uses `AllocationFailed`.
+No destination byte changes unless encoding and bounds checking succeed.
+The operation still constructs a temporary encoding, but repeated field writes reuse the destination allocation rather
+than reconstructing the whole record.
+The caller chooses its capacity and base alignment through an allocator.
+
+A successful write proves that the bytes fit; it does not turn the destination
+into `Stored` or prove that the chosen offset is aligned for a field.
+Freeze and import through a complete representation when that proof boundary is needed.
+Typed field paths relating parent and child layouts remain deferred:
+the current types carry no value-dependent offset or layout-equality evidence.
+These explicit checked offset operations remain useful without claiming those proofs.
+
+[Access tests](../../lib/tests/std/storage-access.zy) cover field decoding, wrong ranges,
+and failed writes preserving other fields on all backends.
+[The C construction example](../../lib/tests/ffi/storage-access.zy) creates the existing 64-byte-aligned record
+by writing fields into one destination and freezing it before foreign borrowing.
+Reads may copy windows, and writes currently allocate temporary encodings;
+a direct destination codec is a later optimization that must preserve these failure and canonical-padding contracts.
 
 ## Alternatives and decision criteria
 

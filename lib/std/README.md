@@ -88,6 +88,7 @@ text/package.zy            cross-representation text operations
 
 memory/package.zy          layout composition and checked concrete storage
 memory/allocation.zy       allocator service and allocation computations
+memory/access.zy           checked offset reads and caller-provided destinations
 memory/package.type.zy     abstract layout builder interface
 memory/representation.type.zy  per-realization abstract stored type and operations
 
@@ -306,6 +307,12 @@ write checked ranges, then freeze it into immutable bytes or close it.
 `memory/allocation.zy` provides the source-defined allocator service and a per-request size-limiting provider.
 See [the owning buffer protocol](../../docs/proposals/bytes.md#mutable-destination-capabilities)
 for state transitions and [the example](../tests/std/buffer.zy) for complete use.
+
+[memory/access.zy](memory/access.zy) adds `read_at` for decoding a checked field window
+and `write_to` for encoding into a caller-provided `Buffer`.
+It consumes the existing representation package and works with runtime-selected contracts.
+See [access rules](../../docs/proposals/bytes.md#access-through-existing-representation-contracts)
+and [the C construction example](../tests/ffi/storage-access.zy).
 
 ## Byte operation costs
 
