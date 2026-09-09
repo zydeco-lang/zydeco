@@ -589,15 +589,29 @@ extern "sysv64" fn zydeco_ffi_borrow_bytes(bytes: Word) -> ForeignBytes {
     ForeignBytes { pointer: bytes.as_ptr(), length: bytes.len() }
 }
 
-#[unsafe(export_name = "\x01zydeco_ffi_decode_u64")]
-extern "sysv64" fn zydeco_ffi_decode_u64(value: Word) -> u64 {
-    <u64 as RuntimeInteger>::decode(value)
+macro_rules! foreign_integer {
+    ($type:ty, $decode:ident, $encode:ident) => {
+        #[unsafe(export_name = concat!("\x01", stringify!($decode)))]
+        extern "sysv64" fn $decode(value: Word) -> Word {
+            <$type as RuntimeInteger>::decode(value) as Word
+        }
+
+        #[unsafe(export_name = concat!("\x01", stringify!($encode)))]
+        extern "sysv64" fn $encode(value: Word, spare: *mut Word) -> Word {
+            // The C ABI leaves excess register bits unspecified for narrow integer results.
+            <$type as RuntimeInteger>::encode(value as $type, spare)
+        }
+    };
 }
 
-#[unsafe(export_name = "\x01zydeco_ffi_encode_u64")]
-extern "sysv64" fn zydeco_ffi_encode_u64(value: u64, spare: *mut Word) -> Word {
-    <u64 as RuntimeInteger>::encode(value, spare)
-}
+foreign_integer!(i8, zydeco_ffi_decode_int8, zydeco_ffi_encode_int8);
+foreign_integer!(i16, zydeco_ffi_decode_int16, zydeco_ffi_encode_int16);
+foreign_integer!(i32, zydeco_ffi_decode_int32, zydeco_ffi_encode_int32);
+foreign_integer!(i64, zydeco_ffi_decode_int64, zydeco_ffi_encode_int64);
+foreign_integer!(u8, zydeco_ffi_decode_uint8, zydeco_ffi_encode_uint8);
+foreign_integer!(u16, zydeco_ffi_decode_uint16, zydeco_ffi_encode_uint16);
+foreign_integer!(u32, zydeco_ffi_decode_uint32, zydeco_ffi_encode_uint32);
+foreign_integer!(u64, zydeco_ffi_decode_uint64, zydeco_ffi_encode_uint64);
 
 unsafe extern "sysv64" {
     #[link_name = "\x01rust_arg_fold_tail"]

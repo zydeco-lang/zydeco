@@ -55,3 +55,41 @@ uint64_t zyffi_record(const void *data, size_t length) {
     }
     return 1;
 }
+
+/* Fixed-width declarations exercise each signedness/width independently. */
+#define ZYFFI_ECHO(type, name) type zyffi_##name(type value) { return value; }
+ZYFFI_ECHO(int8_t, int8)
+ZYFFI_ECHO(int16_t, int16)
+ZYFFI_ECHO(int32_t, int32)
+ZYFFI_ECHO(int64_t, int64)
+ZYFFI_ECHO(uint8_t, uint8)
+ZYFFI_ECHO(uint16_t, uint16)
+ZYFFI_ECHO(uint32_t, uint32)
+ZYFFI_ECHO(uint64_t, uint64)
+
+/* The ABI defines only the low bits of a narrow integer return register. */
+#if defined(__x86_64__)
+#define ZYFFI_DIRTY(type, name) \
+    __attribute__((naked)) type zyffi_dirty_##name(void) { \
+        __asm__("movabs $0x5a5a5a5a80008080, %rax\nret"); \
+    }
+#else
+#define ZYFFI_DIRTY(type, name) \
+    type zyffi_dirty_##name(void) { return (type)UINT64_C(0x5a5a5a5a80008080); }
+#endif
+ZYFFI_DIRTY(int8_t, int8)
+ZYFFI_DIRTY(int16_t, int16)
+ZYFFI_DIRTY(int32_t, int32)
+ZYFFI_DIRTY(uint8_t, uint8)
+ZYFFI_DIRTY(uint16_t, uint16)
+ZYFFI_DIRTY(uint32_t, uint32)
+
+int64_t zyffi_integer_mix(int8_t a, int16_t b, int32_t c,
+                          uint8_t d, uint16_t e, uint32_t f) {
+    return (int64_t)a + 3 * (int64_t)b + 5 * (int64_t)c
+           + 7 * (int64_t)d + 11 * (int64_t)e + 13 * (int64_t)f;
+}
+
+static int64_t zyffi_saved;
+void zyffi_save(int64_t value) { zyffi_saved = value; }
+int64_t zyffi_saved_value(void) { return zyffi_saved; }

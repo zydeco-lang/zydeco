@@ -387,7 +387,6 @@ impl<'e> Emitter<'e> {
 
     fn emit_foreign_call(&mut self, id: ProgId, import: &ForeignImport) {
         assert_eq!(import.target.abi, ForeignAbi::C);
-        assert_eq!(import.signature.result(), ForeignResult::UInt64);
         let arguments = import.signature.arguments().collect::<Vec<_>>();
         let scratch_words = arguments.len();
         let scratch_bytes =
@@ -410,10 +409,12 @@ impl<'e> Emitter<'e> {
                 Arg64::Mem(MemRef { reg: Reg::Rsp, offset: scratch_bytes + (index * 8) as i32 }),
             )));
             let helper = match parameter {
-                | ForeignParameter::BorrowedBytes => "zydeco_ffi_borrow_bytes",
-                | ForeignParameter::UInt64 => "zydeco_ffi_decode_u64",
+                | ForeignParameter::BorrowedBytes => "zydeco_ffi_borrow_bytes".to_string(),
+                | ForeignParameter::Integer(integer) => {
+                    format!("zydeco_ffi_decode_{}", integer.source_name())
+                }
             };
-            self.emit_aligned_call(JmpArgs::Label(helper.to_string()));
+            self.emit_aligned_call(JmpArgs::Label(helper));
             self.asm.text.extend(
                 arguments
                     .iter()
@@ -421,7 +422,9 @@ impl<'e> Emitter<'e> {
                     .filter(|(_, argument)| argument.parameter == index)
                     .map(|(slot, argument)| {
                         let register = match argument.component {
-                            | ForeignComponent::BytesPointer | ForeignComponent::UInt64 => Reg::Rax,
+                            | ForeignComponent::BytesPointer | ForeignComponent::Integer(_) => {
+                                Reg::Rax
+                            }
                             | ForeignComponent::BytesLength => Reg::Rdx,
                         };
                         Instr::Mov(MovArgs::ToMem(
@@ -450,12 +453,24 @@ impl<'e> Emitter<'e> {
             )));
             self.shift_stack_parity(-(consumed_words as i64));
         }
-        self.emit_alloc_call(1, AllocationKind::Opaque, id);
-        self.asm.text.extend([
-            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))),
-            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))),
-        ]);
-        self.emit_aligned_call(JmpArgs::Label("zydeco_ffi_encode_u64".to_string()));
+        match import.signature.result() {
+            | ForeignResult::Unit => {
+                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(1))));
+            }
+            | ForeignResult::Integer(integer) => {
+                if integer.bits() == 64 {
+                    self.emit_alloc_call(1, AllocationKind::Opaque, id);
+                    self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))));
+                } else {
+                    self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Signed(0))));
+                }
+                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))));
+                self.emit_aligned_call(JmpArgs::Label(format!(
+                    "zydeco_ffi_encode_{}",
+                    integer.source_name()
+                )));
+            }
+        }
         self.asm.text.extend([
             Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(Reg::Rax))),
             Instr::Pop(Loc::Reg(Reg::Rax)),
@@ -486,9 +501,15 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Extern("zydeco_string_literal".to_string()),
             // source-to-C marshalling helpers
             Instr::Extern("zydeco_ffi_borrow_bytes".to_string()),
-            Instr::Extern("zydeco_ffi_decode_u64".to_string()),
-            Instr::Extern("zydeco_ffi_encode_u64".to_string()),
         ]);
+        for integer in <IntegerType as strum::VariantArray>::VARIANTS {
+            for operation in ["decode", "encode"] {
+                self.asm.text.push(Instr::Extern(format!(
+                    "zydeco_ffi_{operation}_{}",
+                    integer.source_name()
+                )));
+            }
+        }
 
         // Emit the externs. The arena's extern order is not stable across runs, so
         // sort the declarations to keep emitted assembly byte-reproducible.

@@ -7,11 +7,11 @@ use zydeco_syntax::{ForeignImport, ForeignLibraryName, ForeignSymbolName};
 #[cfg(unix)]
 use {
     crate::host::HostValue,
-    libffi::middle::{Arg, Cif, CodePtr, Type, arg},
+    libffi::middle::{Arg, Cif, CodePtr, Ret, Type, arg},
     std::{collections::HashMap, ffi::CString, ptr::NonNull, rc::Rc},
     zydeco_syntax::{
-        ForeignAbi, ForeignComponent, ForeignResult, ForeignSignature, IntegerLiteral, Literal,
-        Return,
+        ForeignAbi, ForeignComponent, ForeignResult, ForeignSignature, IntegerLiteral, IntegerType,
+        Literal, Return, Triv,
     },
 };
 
@@ -55,9 +55,7 @@ impl ForeignRuntime {
             .ok_or_else(|| ForeignRuntimeError::InvalidArguments(import.target.symbol.clone()))?;
         let function = self.function(import)?;
         let result = function.invoke(&arguments);
-        Ok(ds::Computation::Ret(Return(Rc::new(ds::Value::Lit(Literal::Integer(
-            IntegerLiteral::UInt64(result),
-        ))))))
+        Ok(ds::Computation::Ret(Return(Rc::new(result))))
     }
 
     #[cfg(not(unix))]
@@ -89,6 +87,7 @@ impl ForeignRuntime {
 struct ForeignFunction {
     code: CodePtr,
     interface: Cif,
+    result: ForeignResult,
 }
 
 #[cfg(unix)]
@@ -100,24 +99,74 @@ impl ForeignFunction {
             .map(|argument| match argument.component {
                 | ForeignComponent::BytesPointer => Type::pointer(),
                 | ForeignComponent::BytesLength => Type::usize(),
-                | ForeignComponent::UInt64 => Type::u64(),
+                | ForeignComponent::Integer(integer) => Self::integer_type(integer),
             })
             .collect::<Vec<_>>();
-        let result = match import.signature.result() {
-            | ForeignResult::UInt64 => Type::u64(),
+        let result = import.signature.result();
+        let result_type = match result {
+            | ForeignResult::Integer(integer) => Self::integer_type(integer),
+            | ForeignResult::Unit => Type::void(),
         };
         let interface = match import.target.abi {
-            | ForeignAbi::C => Cif::new(arguments, result),
+            | ForeignAbi::C => Cif::new(arguments, result_type),
         };
-        Self { code, interface }
+        Self { code, interface, result }
     }
 
-    fn invoke(&self, arguments: &ForeignArguments<'_>) -> u64 {
+    fn integer_type(integer: IntegerType) -> Type {
+        match integer {
+            | IntegerType::Int8 => Type::i8(),
+            | IntegerType::Int16 => Type::i16(),
+            | IntegerType::Int32 => Type::i32(),
+            | IntegerType::Int64 => Type::i64(),
+            | IntegerType::UInt8 => Type::u8(),
+            | IntegerType::UInt16 => Type::u16(),
+            | IntegerType::UInt32 => Type::u32(),
+            | IntegerType::UInt64 => Type::u64(),
+        }
+    }
+
+    fn invoke(&self, arguments: &ForeignArguments<'_>) -> ds::Value {
         let arguments = arguments.scalars.iter().map(ForeignScalar::as_arg).collect::<Vec<_>>();
         // SAFETY: the call interface and scalar storage follow the same checked signature.
         // The declaration author must ensure that the external symbol actually obeys that
         // signature and neither retains/mutates borrowed bytes nor reenters Zydeco.
-        unsafe { self.interface.call(self.code, &arguments) }
+        unsafe {
+            let integer = match self.result {
+                | ForeignResult::Unit => {
+                    self.interface.call_return_into(self.code, &arguments, Ret::void());
+                    return ds::Value::Triv(Triv);
+                }
+                // libffi's typed call reserves a register-sized result slot for narrow integers.
+                | ForeignResult::Integer(integer) => match integer {
+                    | IntegerType::Int8 => {
+                        IntegerLiteral::Int8(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::Int16 => {
+                        IntegerLiteral::Int16(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::Int32 => {
+                        IntegerLiteral::Int32(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::Int64 => {
+                        IntegerLiteral::Int64(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::UInt8 => {
+                        IntegerLiteral::UInt8(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::UInt16 => {
+                        IntegerLiteral::UInt16(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::UInt32 => {
+                        IntegerLiteral::UInt32(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::UInt64 => {
+                        IntegerLiteral::UInt64(self.interface.call(self.code, &arguments))
+                    }
+                },
+            };
+            ds::Value::Lit(Literal::Integer(integer))
+        }
     }
 }
 
@@ -146,7 +195,7 @@ impl<'a> ForeignArguments<'a> {
 enum ForeignScalar {
     Pointer(*const u8),
     Size(usize),
-    UInt64(u64),
+    Integer(IntegerLiteral),
 }
 
 #[cfg(unix)]
@@ -160,9 +209,9 @@ impl ForeignScalar {
                 Some(Self::Size(bytes.len()))
             }
             | (
-                ForeignComponent::UInt64,
-                ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt64(value))),
-            ) => Some(Self::UInt64(*value)),
+                ForeignComponent::Integer(integer),
+                ds::SemValue::Literal(Literal::Integer(value)),
+            ) if value.integer_type() == Some(integer) => Some(Self::Integer(*value)),
             | _ => None,
         }
     }
@@ -171,7 +220,17 @@ impl ForeignScalar {
         match self {
             | Self::Pointer(value) => arg(value),
             | Self::Size(value) => arg(value),
-            | Self::UInt64(value) => arg(value),
+            | Self::Integer(value) => match value {
+                | IntegerLiteral::Int8(value) => arg(value),
+                | IntegerLiteral::Int16(value) => arg(value),
+                | IntegerLiteral::Int32(value) => arg(value),
+                | IntegerLiteral::Int64(value) => arg(value),
+                | IntegerLiteral::UInt8(value) => arg(value),
+                | IntegerLiteral::UInt16(value) => arg(value),
+                | IntegerLiteral::UInt32(value) => arg(value),
+                | IntegerLiteral::UInt64(value) => arg(value),
+                | IntegerLiteral::Unresolved(_) => unreachable!("arguments were validated above"),
+            },
         }
     }
 }

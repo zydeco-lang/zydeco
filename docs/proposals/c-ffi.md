@@ -30,10 +30,27 @@ These decisions should precede syntax and be exercised with nested calls and ret
 
 ## Additional ABI shapes
 
-More scalar representations, stack-passed arguments, aggregates, and other result types can extend the typed call plan.
-Keep argument order and flattening in one validated representation consumed by every target.
-Review each representation's width, alignment, ownership, and result encoding;
-do not infer a C representation solely from a source type's runtime layout.
+Fixed-width signed and unsigned integer parameters/results and `void` results now extend the typed call plan.
+They reuse integer registers without requiring a new source representation or lifetime protocol;
+[L14](../references/language.md#14-foreign-interfaces) owns their accepted classifiers.
+The [integer fixture](../../lib/tests/ffi/integers.zy) checks extrema, mixed widths in all six registers,
+unit continuation resumption after an observable C operation, and deliberately dirty upper return bits on AMD64.
+
+The remaining shapes are deferred with distinct prerequisites:
+
+| Direction | Required extension before implementation |
+| --- | --- |
+| Floating-point scalars | Classify and allocate SSE argument/result registers independently of integer registers; preserve payload bits across marshalling and mixed calls. |
+| More than six integer components | Plan stack arguments, their alignment, and cleanup together with the existing temporary frame and return continuation. |
+| Aggregates by value | Derive target ABI classes from an explicit storage contract, including register splitting, memory arguments, and hidden result pointers. |
+| Raw or mutable pointers | Specify bounds, mutability, ownership, validity duration, and alias behavior; an integer address supplies none of this evidence. |
+| Callbacks and exports | Establish runtime entry, retained roots, completion, and reentry as described above. |
+
+The [storage access extension](bytes.md#access-through-existing-representation-contracts) already constructs
+an aligned C record in a caller-provided buffer and passes the frozen result through the existing immutable borrow.
+That supplies a useful aggregate-pointer path while aggregate calling conventions remain open.
+`Layout A` is presently a runtime recipe, so its size and alignment are not static ABI classification evidence.
+Keep argument order and flattening in one validated representation consumed by every target as these shapes are added.
 
 Header-based validation could check some declaration mistakes but would introduce a separate source of ABI evidence.
 Specify how it interacts with the trusted declaration and platform configuration.

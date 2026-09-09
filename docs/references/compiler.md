@@ -893,8 +893,9 @@ Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resou
 ### Foreign calls
 
 [ForeignSignature](../../lang/statics/src/foreign.rs) is a checked call plan for a returning C thunk.
-Arguments are `UInt64` or `Bytes`; a byte buffer flattens into borrowed pointer and length,
-with at most six flattened arguments and a `Ret UInt64` result.
+Arguments are fixed-width integers or `Bytes`; a byte buffer flattens into borrowed pointer
+and length, with at most six flattened arguments.
+Results are fixed-width integers or `Unit` (C `void`).
 Its constructor enforces the flattened bound, and the validated fields remain private.
 Expansion yields ordered `ForeignArgument` entries identifying the source parameter and its integer,
 pointer, or length component; both execution paths consume that plan.
@@ -907,6 +908,13 @@ Missing libraries and symbols are runtime errors; generated native programs do n
 AMD64 marshals the retained source arguments into a temporary raw C frame, loads the SysV argument registers,
 and discards that frame before encoding a result that may allocate.
 The full-width result survives collection in a preserved register and resumes the ordinary return continuation.
+Integer components retain their width and signedness through the call plan.
+Native encoders truncate C return registers to that width before constructing the Zydeco value;
+the [SysV ABI clarification](https://gitlab.com/x86-psABIs/x86-64-ABI/-/merge_requests/61)
+leaves excess integer register bits unspecified.
+Only 64-bit integer results need a spare opaque box; narrow integers and unit fit immediate words.
+The libffi adapter uses exact scalar storage and return types for integers,
+and its explicit void-return operation avoids reading nonexistent result storage.
 Marshalling helpers do not collect.
 Native linking uses the library's linker name; interpreter loading uses platform shared-library names.
 Native foreign imports are unsupported in Wasm and the ZASM interpreter.

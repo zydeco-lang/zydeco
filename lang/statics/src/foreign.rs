@@ -5,20 +5,20 @@ use std::collections::HashSet;
 use thiserror::Error;
 use zydeco_syntax::{
     App, Arrow, ForeignImport, ForeignParameter, ForeignResult, ForeignSignature,
-    ForeignSignatureError, ForeignTarget, IntegerType, Named, PrimitiveType,
+    ForeignSignatureError, ForeignTarget, Named, PrimitiveType,
 };
 use zydeco_utils::prelude::ArenaAccess;
 
 /// A foreign annotation whose classifier is outside the implemented C ABI subset.
 #[derive(Clone, Debug, Error)]
 pub enum ForeignClassifierError {
-    #[error("C ffi requires a thunk classified by `Thk (A1 -> ... -> Ret UInt64)`")]
+    #[error("C ffi requires a thunk classified by `Thk (A1 -> ... -> Ret B)`")]
     ExpectedThunk { classifier: ss::TypeId },
-    #[error("C ffi argument {index} must have type `Bytes` or `UInt64`")]
+    #[error("C ffi argument {index} must have type `Bytes` or a fixed-width integer")]
     UnsupportedParameter { index: usize, classifier: ss::TypeId },
-    #[error("C ffi computation must end in `Ret UInt64`")]
+    #[error("C ffi computation must end in `Ret B`")]
     ExpectedReturn { classifier: ss::TypeId },
-    #[error("C ffi currently supports only a `UInt64` result")]
+    #[error("C ffi result must be a fixed-width integer or `Unit`")]
     UnsupportedResult { classifier: ss::TypeId },
     #[error(transparent)]
     Signature(#[from] ForeignSignatureError),
@@ -51,7 +51,7 @@ impl<'a> ForeignClassifier<'a> {
             };
             let representation = match self.primitive(parameter) {
                 | Some(PrimitiveType::Bytes) => ForeignParameter::BorrowedBytes,
-                | Some(PrimitiveType::Integer(IntegerType::UInt64)) => ForeignParameter::UInt64,
+                | Some(PrimitiveType::Integer(integer)) => ForeignParameter::Integer(integer),
                 | _ => {
                     return Err(ForeignClassifierError::UnsupportedParameter {
                         index: parameters.len() + 1,
@@ -65,10 +65,14 @@ impl<'a> ForeignClassifier<'a> {
         let result = self
             .unary_application(body, ForeignConstructor::Return)
             .ok_or(ForeignClassifierError::ExpectedReturn { classifier: body })?;
-        if self.primitive(result) != Some(PrimitiveType::Integer(IntegerType::UInt64)) {
-            return Err(ForeignClassifierError::UnsupportedResult { classifier: result });
-        }
-        let signature = ForeignSignature::new(parameters, ForeignResult::UInt64)?;
+        let representation = match self.type_view(result) {
+            | Some(ss::Type::Primitive(ss::PrimitiveTy(PrimitiveType::Integer(integer)))) => {
+                ForeignResult::Integer(integer)
+            }
+            | Some(ss::Type::Unit(_)) => ForeignResult::Unit,
+            | _ => return Err(ForeignClassifierError::UnsupportedResult { classifier: result }),
+        };
+        let signature = ForeignSignature::new(parameters, representation)?;
         Ok(ForeignImport { target, signature })
     }
 

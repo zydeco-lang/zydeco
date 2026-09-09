@@ -46,7 +46,11 @@ impl ForeignFixture {
                 library: ForeignLibraryName::parse("zyffi_boundary").unwrap(),
                 symbol: ForeignSymbolName::parse(symbol).unwrap(),
             },
-            signature: ForeignSignature::new(parameters, ForeignResult::UInt64).unwrap(),
+            signature: ForeignSignature::new(
+                parameters,
+                ForeignResult::Integer(IntegerType::UInt64),
+            )
+            .unwrap(),
         }
     }
 
@@ -71,11 +75,91 @@ impl ForeignFixture {
         };
         result
     }
+
+    fn call_result(
+        &mut self, symbol: &str, result: ForeignResult, argument: Option<IntegerLiteral>,
+    ) -> Rc<ds::Value> {
+        let parameters = argument
+            .iter()
+            .map(|value| ForeignParameter::Integer(value.integer_type().unwrap()))
+            .collect();
+        let mut import = Self::import(symbol, vec![]);
+        import.signature = ForeignSignature::new(parameters, result).unwrap();
+        let arguments = argument
+            .into_iter()
+            .map(|value| ds::SemValue::Literal(Literal::Integer(value)))
+            .collect();
+        let ds::Computation::Ret(Return(value)) = self.runtime.invoke(&import, arguments).unwrap()
+        else {
+            panic!("C call must return through Ret")
+        };
+        value
+    }
+}
+
+#[test]
+fn preserves_every_integer_width_and_signedness() {
+    let mut fixture = ForeignFixture::new();
+    for (integer, minimum, maximum) in [
+        (IntegerType::Int8, i8::MIN as i128, i8::MAX as i128),
+        (IntegerType::Int16, i16::MIN as i128, i16::MAX as i128),
+        (IntegerType::Int32, i32::MIN as i128, i32::MAX as i128),
+        (IntegerType::Int64, i64::MIN as i128, i64::MAX as i128),
+        (IntegerType::UInt8, 0, u8::MAX as i128),
+        (IntegerType::UInt16, 0, u16::MAX as i128),
+        (IntegerType::UInt32, 0, u32::MAX as i128),
+        (IntegerType::UInt64, 0, u64::MAX as i128),
+    ] {
+        for value in [minimum, maximum] {
+            let literal = IntegerLiteral::from_value(value, integer);
+            let returned = fixture.call_result(
+                &format!("zyffi_{}", integer.source_name()),
+                ForeignResult::Integer(integer),
+                Some(literal),
+            );
+            assert!(
+                matches!(*returned, ds::Value::Lit(Literal::Integer(actual)) if actual == literal)
+            );
+        }
+    }
+    for (integer, expected) in [
+        (IntegerType::Int8, -128),
+        (IntegerType::Int16, -32640),
+        (IntegerType::Int32, -2147450752),
+        (IntegerType::UInt8, 128),
+        (IntegerType::UInt16, 32896),
+        (IntegerType::UInt32, 2147516544),
+    ] {
+        let returned = fixture.call_result(
+            &format!("zyffi_dirty_{}", integer.source_name()),
+            ForeignResult::Integer(integer),
+            None,
+        );
+        assert!(matches!(*returned, ds::Value::Lit(Literal::Integer(actual))
+            if actual == IntegerLiteral::from_value(expected, integer)));
+    }
+}
+
+#[test]
+fn void_calls_execute_and_resume_with_unit() {
+    let mut fixture = ForeignFixture::new();
+    for value in [i64::MIN, i64::MAX] {
+        let literal = IntegerLiteral::Int64(value);
+        let returned = fixture.call_result("zyffi_save", ForeignResult::Unit, Some(literal));
+        assert!(matches!(*returned, ds::Value::Triv(Triv)));
+        let returned = fixture.call_result(
+            "zyffi_saved_value",
+            ForeignResult::Integer(IntegerType::Int64),
+            None,
+        );
+        assert!(matches!(*returned, ds::Value::Lit(Literal::Integer(actual)) if actual == literal));
+    }
 }
 
 #[test]
 fn calls_c_with_zero_scalar_and_borrowed_arguments() {
-    use ForeignParameter::{BorrowedBytes as B, UInt64 as U};
+    use ForeignParameter::BorrowedBytes as B;
+    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
     let mut fixture = ForeignFixture::new();
     assert_eq!(fixture.call("zyffi_zero", vec![], vec![]), u64::MAX);
     for value in [0, 7, 1 << 63, u64::MAX] {
@@ -117,7 +201,8 @@ fn borrows_only_shared_byte_windows_after_the_parent_is_dropped() {
 
 #[test]
 fn preserves_source_order_across_six_flattened_c_arguments() {
-    use ForeignParameter::{BorrowedBytes as B, UInt64 as U};
+    use ForeignParameter::BorrowedBytes as B;
+    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
     let mut fixture = ForeignFixture::new();
     assert_eq!(
         fixture.call(
@@ -152,7 +237,8 @@ fn preserves_source_order_across_six_flattened_c_arguments() {
 
 #[test]
 fn rejects_invalid_runtime_arguments_before_loading_or_calling() {
-    use ForeignParameter::{BorrowedBytes as B, UInt64 as U};
+    use ForeignParameter::BorrowedBytes as B;
+    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
     let mut runtime = ForeignRuntime::new();
     for (parameters, arguments) in [
         (vec![U], vec![]),

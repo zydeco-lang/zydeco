@@ -637,10 +637,14 @@ param val (/Thk; /Ret; /Bytes; /UInt64) : @(import("../../lib/std/builtin.zy")) 
 (@(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk (Bytes -> Ret UInt64))
 ```
 
-The supported classifier is `Thk (A1 -> ... -> An -> Ret UInt64)`, including zero arguments.
-Each `UInt64` contributes one C `uint64_t`; each `Bytes` contributes a `const void *` and `size_t`, in source order.
+The supported classifier is `Thk (A1 -> ... -> An -> Ret B)`, including zero arguments.
+Each fixed-width integer (`Int8` through `Int64`, `UInt8` through `UInt64`) contributes the matching C `intN_t`
+or `uintN_t`; each `Bytes` contributes a `const void *` and `size_t`, in source order.
+The result `B` is a fixed-width integer or `Unit`; `Ret Unit` calls a C `void` function
+and resumes the Zydeco continuation with `()`.
+The declaration specifies exact widths: C `int`, `long`, enums, and typedefs require platform-specific agreement.
 At most six flattened C arguments are accepted.
-The `uint64_t` result preserves all bits when re-encoded.
+Integer results preserve the declared width and signedness when re-encoded.
 
 A byte argument lends its visible contiguous window for the duration of the call.
 The callee must neither modify nor retain the pointer, and must not dereference it for a zero-length window.
@@ -652,7 +656,8 @@ Checking validates the declared classifier without loading a library or inspecti
 The Unix interpreter loads symbols lazily; native AMD64 links the named library.
 Missing libraries or symbols fail at loading/linking.
 Wasm and the ZASM interpreter reject native imports.
-Callbacks, C-to-Zydeco exports, other scalar/result types, and larger signatures are outside this subset.
+Callbacks, C-to-Zydeco exports, floating-point or aggregate values, raw pointers,
+and larger signatures are outside this subset.
 
 ## 15. Execution profiles
 

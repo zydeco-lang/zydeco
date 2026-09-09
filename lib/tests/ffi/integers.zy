@@ -1,0 +1,176 @@
+begin
+  param (/Thk; /Ret; /Unit; /OS; /Int8; /Int16; /Int32; /Int64;
+    /UInt8; /UInt16; /UInt32; /UInt64; /numeric; /process) : @(import("../../std/builtin.zy")) that
+  let fail = { ! process/exit 1 } in
+  let echo_int8 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int8"))) : Thk (Int8 -> Ret Int8)
+  ) in
+  let check_int8 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_int8 -128;
+      do high <- ! echo_int8 127;
+      ! numeric/int8/eq OS low -128 {
+        ! numeric/int8/eq OS high 127 next fail
+      } fail
+  } in
+  let dirty_int8 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_dirty_int8"))) : Thk (Ret Int8)
+  ) in
+  let check_dirty_int8 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do value <- ! dirty_int8;
+      ! numeric/int8/eq OS value -128 next fail
+  } in
+  let echo_int16 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int16"))) : Thk (Int16 -> Ret Int16)
+  ) in
+  let check_int16 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_int16 -32768;
+      do high <- ! echo_int16 32767;
+      ! numeric/int16/eq OS low -32768 {
+        ! numeric/int16/eq OS high 32767 next fail
+      } fail
+  } in
+  let dirty_int16 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_dirty_int16"))) : Thk (Ret Int16)
+  ) in
+  let check_dirty_int16 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do value <- ! dirty_int16;
+      ! numeric/int16/eq OS value -32640 next fail
+  } in
+  let echo_int32 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int32"))) : Thk (Int32 -> Ret Int32)
+  ) in
+  let check_int32 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_int32 -2147483648;
+      do high <- ! echo_int32 2147483647;
+      ! numeric/int32/eq OS low -2147483648 {
+        ! numeric/int32/eq OS high 2147483647 next fail
+      } fail
+  } in
+  let dirty_int32 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_dirty_int32"))) : Thk (Ret Int32)
+  ) in
+  let check_dirty_int32 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do value <- ! dirty_int32;
+      ! numeric/int32/eq OS value -2147450752 next fail
+  } in
+  let echo_int64 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int64"))) : Thk (Int64 -> Ret Int64)
+  ) in
+  let check_int64 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_int64 -9223372036854775808;
+      do high <- ! echo_int64 9223372036854775807;
+      ! numeric/int64/eq OS low -9223372036854775808 {
+        ! numeric/int64/eq OS high 9223372036854775807 next fail
+      } fail
+  } in
+  let echo_uint8 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_uint8"))) : Thk (UInt8 -> Ret UInt8)
+  ) in
+  let check_uint8 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_uint8 0;
+      do high <- ! echo_uint8 255;
+      ! numeric/uint8/eq OS low 0 {
+        ! numeric/uint8/eq OS high 255 next fail
+      } fail
+  } in
+  let dirty_uint8 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_dirty_uint8"))) : Thk (Ret UInt8)
+  ) in
+  let check_dirty_uint8 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do value <- ! dirty_uint8;
+      ! numeric/uint8/eq OS value 128 next fail
+  } in
+  let echo_uint16 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_uint16"))) : Thk (UInt16 -> Ret UInt16)
+  ) in
+  let check_uint16 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_uint16 0;
+      do high <- ! echo_uint16 65535;
+      ! numeric/uint16/eq OS low 0 {
+        ! numeric/uint16/eq OS high 65535 next fail
+      } fail
+  } in
+  let dirty_uint16 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_dirty_uint16"))) : Thk (Ret UInt16)
+  ) in
+  let check_dirty_uint16 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do value <- ! dirty_uint16;
+      ! numeric/uint16/eq OS value 32896 next fail
+  } in
+  let echo_uint32 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_uint32"))) : Thk (UInt32 -> Ret UInt32)
+  ) in
+  let check_uint32 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_uint32 0;
+      do high <- ! echo_uint32 4294967295;
+      ! numeric/uint32/eq OS low 0 {
+        ! numeric/uint32/eq OS high 4294967295 next fail
+      } fail
+  } in
+  let dirty_uint32 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_dirty_uint32"))) : Thk (Ret UInt32)
+  ) in
+  let check_dirty_uint32 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do value <- ! dirty_uint32;
+      ! numeric/uint32/eq OS value 2147516544 next fail
+  } in
+  let echo_uint64 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_uint64"))) : Thk (UInt64 -> Ret UInt64)
+  ) in
+  let check_uint64 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_uint64 0;
+      do high <- ! echo_uint64 18446744073709551615;
+      ! numeric/uint64/eq OS low 0 {
+        ! numeric/uint64/eq OS high 18446744073709551615 next fail
+      } fail
+  } in
+  let mix = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_integer_mix"))) : Thk (
+      Int8 -> Int16 -> Int32 -> UInt8 -> UInt16 -> UInt32 -> Ret Int64
+    )
+  ) in
+  let save = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_save"))) : Thk (Int64 -> Ret Unit)
+  ) in
+  let saved = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_saved_value"))) : Thk (Ret Int64)
+  ) in
+  let check_effect : Thk (Thk OS -> OS) = {
+    fn next =>
+      do () <- ! save -9223372036854775808;
+      do value <- ! saved;
+      do mixed <- ! mix -128 -32768 -2147483648 255 65535 4294967295;
+      ! numeric/int64/eq OS value -9223372036854775808 {
+        ! numeric/int64/eq OS mixed 45097780833 next fail
+      } fail
+  } in
+  let signed : Thk (Thk OS -> OS) = {
+    fn next => ! check_int8 { ! check_int16 { ! check_int32 { ! check_int64 { ! next } } } }
+  } in
+  let unsigned : Thk (Thk OS -> OS) = {
+    fn next => ! check_uint8 { ! check_uint16 { ! check_uint32 { ! check_uint64 { ! next } } } }
+  } in
+  let dirty_signed : Thk (Thk OS -> OS) = {
+    fn next => ! check_dirty_int8 { ! check_dirty_int16 { ! check_dirty_int32 { ! next } } }
+  } in
+  let dirty_unsigned : Thk (Thk OS -> OS) = {
+    fn next => ! check_dirty_uint8 { ! check_dirty_uint16 { ! check_dirty_uint32 { ! next } } }
+  } in
+  ! signed {
+    ! unsigned { ! dirty_signed { ! dirty_unsigned { ! check_effect { ! process/exit 0 } } } }
+  }
+end

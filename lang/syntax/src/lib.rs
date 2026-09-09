@@ -884,17 +884,19 @@ pub struct ForeignTarget {
 pub enum ForeignParameter {
     /// Borrow an immutable `Bytes` value as `const void *` plus `size_t` for the duration of a call.
     BorrowedBytes,
-    UInt64,
+    Integer(IntegerType),
 }
 
 impl ForeignParameter {
-    pub fn components(self) -> &'static [ForeignComponent] {
+    pub fn components(self) -> impl Iterator<Item = ForeignComponent> {
         match self {
             | Self::BorrowedBytes => {
-                &[ForeignComponent::BytesPointer, ForeignComponent::BytesLength]
+                [Some(ForeignComponent::BytesPointer), Some(ForeignComponent::BytesLength)]
             }
-            | Self::UInt64 => &[ForeignComponent::UInt64],
+            | Self::Integer(integer) => [Some(ForeignComponent::Integer(integer)), None],
         }
+        .into_iter()
+        .flatten()
     }
 }
 
@@ -903,7 +905,7 @@ impl ForeignParameter {
 pub enum ForeignComponent {
     BytesPointer,
     BytesLength,
-    UInt64,
+    Integer(IntegerType),
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
@@ -916,7 +918,9 @@ pub struct ForeignArgument {
 /// One source-level foreign result whose C representation is known to the compiler.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ForeignResult {
-    UInt64,
+    Integer(IntegerType),
+    /// C `void` resumes the Zydeco continuation with the unit value.
+    Unit,
 }
 
 /// The marshalling protocol derived from a checked CBPV classifier.
@@ -956,8 +960,7 @@ impl ForeignSignature {
         self.parameters.iter().enumerate().flat_map(|(parameter, representation)| {
             representation
                 .components()
-                .iter()
-                .map(move |&component| ForeignArgument { parameter, component })
+                .map(move |component| ForeignArgument { parameter, component })
         })
     }
 }

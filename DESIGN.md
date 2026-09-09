@@ -861,8 +861,8 @@ and existing foreign borrowing.
 ### Returning C Imports
 
 A foreign annotation supplies an implementation for a thunk.
-The supported classifier has the form `Thk (A1 -> ... -> An -> Ret UInt64)`,
-with each argument either `UInt64` or `Bytes`.
+The supported classifier has the form `Thk (A1 -> ... -> An -> Ret B)`, with each argument either a fixed-width integer
+or `Bytes`, and result `B` a fixed-width integer or `Unit` (C `void`).
 A byte buffer expands into a borrowed pointer and length, and the flattened C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.

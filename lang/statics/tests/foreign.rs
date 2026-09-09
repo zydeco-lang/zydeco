@@ -34,7 +34,7 @@ impl ForeignFixture {
 }
 
 const U64: PrimitiveType = PrimitiveType::Integer(IntegerType::UInt64);
-const U32: PrimitiveType = PrimitiveType::Integer(IntegerType::UInt32);
+const F32: PrimitiveType = PrimitiveType::Float(FloatType::Float32);
 const BYTES: PrimitiveType = PrimitiveType::Bytes;
 
 #[test]
@@ -57,12 +57,12 @@ fn derives_signatures_compositionally_in_source_order() {
                 .iter()
                 .map(|parameter| match *parameter {
                     | BYTES => ForeignParameter::BorrowedBytes,
-                    | U64 => ForeignParameter::UInt64,
+                    | U64 => ForeignParameter::Integer(IntegerType::UInt64),
                     | _ => unreachable!(),
                 })
                 .collect::<Vec<_>>();
             assert_eq!(import.signature.parameters(), expected);
-            assert_eq!(import.signature.result(), ForeignResult::UInt64);
+            assert_eq!(import.signature.result(), ForeignResult::Integer(IntegerType::UInt64));
         });
     }
 }
@@ -70,17 +70,27 @@ fn derives_signatures_compositionally_in_source_order() {
 #[test]
 fn call_plan_expands_bytes_at_their_source_positions() {
     let signature = ForeignSignature::new(
-        vec![ForeignParameter::UInt64, ForeignParameter::BorrowedBytes, ForeignParameter::UInt64],
-        ForeignResult::UInt64,
+        vec![
+            ForeignParameter::Integer(IntegerType::UInt64),
+            ForeignParameter::BorrowedBytes,
+            ForeignParameter::Integer(IntegerType::UInt64),
+        ],
+        ForeignResult::Integer(IntegerType::UInt64),
     )
     .unwrap();
     assert_eq!(
         signature.arguments().collect::<Vec<_>>(),
         [
-            ForeignArgument { parameter: 0, component: ForeignComponent::UInt64 },
+            ForeignArgument {
+                parameter: 0,
+                component: ForeignComponent::Integer(IntegerType::UInt64)
+            },
             ForeignArgument { parameter: 1, component: ForeignComponent::BytesPointer },
             ForeignArgument { parameter: 1, component: ForeignComponent::BytesLength },
-            ForeignArgument { parameter: 2, component: ForeignComponent::UInt64 },
+            ForeignArgument {
+                parameter: 2,
+                component: ForeignComponent::Integer(IntegerType::UInt64)
+            },
         ]
     );
 }
@@ -88,12 +98,12 @@ fn call_plan_expands_bytes_at_their_source_positions() {
 #[test]
 fn rejects_unsupported_parameters_and_results() {
     TestFixture::run(|tycker| {
-        let classifier = ForeignFixture::classifier(tycker, &[BYTES, U32], U64);
+        let classifier = ForeignFixture::classifier(tycker, &[BYTES, F32], U64);
         assert!(matches!(
             ForeignClassifier::new(&tycker.statics).validate(ForeignFixture::target(), classifier),
             Err(ForeignClassifierError::UnsupportedParameter { index: 2, .. })
         ));
-        let classifier = ForeignFixture::classifier(tycker, &[BYTES, U64], U32);
+        let classifier = ForeignFixture::classifier(tycker, &[BYTES, U64], F32);
         assert!(matches!(
             ForeignClassifier::new(&tycker.statics).validate(ForeignFixture::target(), classifier),
             Err(ForeignClassifierError::UnsupportedResult { .. })

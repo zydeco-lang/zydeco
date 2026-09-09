@@ -114,6 +114,9 @@ fn unsupported_backends_report_the_native_import() {
 fn accepts_compositional_classifiers_without_loading_a_library() {
     for classifier in [
         "Thk (Ret UInt64)",
+        "Thk (Ret Unit)",
+        "Thk (Int8 -> Int16 -> Int32 -> Ret Int64)",
+        "Thk (UInt8 -> UInt16 -> UInt32 -> Ret Unit)",
         "Thk (UInt64 -> Ret UInt64)",
         "Thk (Bytes -> Ret UInt64)",
         "Thk (UInt64 -> Bytes -> Bytes -> UInt64 -> Ret UInt64)",
@@ -122,15 +125,20 @@ fn accepts_compositional_classifiers_without_loading_a_library() {
     ] {
         SourceCase::check(&FfiCase::declaration(classifier)).unwrap();
     }
+    for integer in ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"] {
+        SourceCase::check(&FfiCase::declaration(&format!("Thk ({integer} -> Ret {integer})")))
+            .unwrap();
+    }
 }
 
 #[test]
 fn rejects_unsupported_classifier_components_with_specific_diagnostics() {
+    FfiCase::rejected("Thk ((UInt8 * UInt32) -> Ret Unit)", "argument 1");
     FfiCase::rejected("UInt64", "requires a thunk");
-    FfiCase::rejected("Thk (UInt32 -> Ret UInt64)", "argument 1");
-    FfiCase::rejected("Thk (Bytes -> UInt32 -> Ret UInt64)", "argument 2");
-    FfiCase::rejected("Thk (Bytes -> Ret Bytes)", "only a `UInt64` result");
-    FfiCase::rejected("Thk (UInt64 -> OS)", "must end in `Ret UInt64`");
+    FfiCase::rejected("Thk (Float32 -> Ret UInt64)", "argument 1");
+    FfiCase::rejected("Thk (Bytes -> String -> Ret UInt64)", "argument 2");
+    FfiCase::rejected("Thk (Bytes -> Ret Bytes)", "fixed-width integer or `Unit`");
+    FfiCase::rejected("Thk (UInt64 -> OS)", "must end in `Ret B`");
     FfiCase::rejected("Thk (Bytes -> Bytes -> Bytes -> UInt64 -> Ret UInt64)", "needs 7");
     FfiCase::rejected("Thk (Bytes -> Bytes -> Bytes -> Bytes -> Ret UInt64)", "needs 8");
 }
@@ -182,7 +190,7 @@ fn native_c_boundary_executes_the_compositional_protocol() {
         TargetArchitecture::X86_64,
         operating_system,
     );
-    for fixture in ["boundary.zy", "representation.zy", "storage-access.zy"] {
+    for fixture in ["boundary.zy", "representation.zy", "storage-access.zy", "integers.zy"] {
         let backend = CommandCompiler::default().lower(&FfiCase::path(fixture)).unwrap();
         let executable = options
             .link_amd64(
