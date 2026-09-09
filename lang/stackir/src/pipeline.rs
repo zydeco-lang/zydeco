@@ -120,10 +120,10 @@ mod tests {
             else {
                 panic!("the folded result must return to the ambient continuation")
             };
-            let low::Computation::Jump(low::Jump { stack, .. }) = arena.compus[&body] else {
+            let low::Computation::Jump(low::Jump { argument, .. }) = arena.compus[&body] else {
                 panic!("return must resume the ambient continuation")
             };
-            let low::Stack::Arg(Cons(value, _)) = arena.stacks[&stack] else {
+            let low::EntryArgument::Continuation { result: value } = argument else {
                 panic!("return must pass one result")
             };
             assert!(

@@ -243,11 +243,14 @@ impl<'a> Lower<'a> for sk::ValueId {
                     Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
                 }
             }
-            | Value::Block(sk::Block { label, body }) => {
+            | Value::Block(sk::Block { label, entry, body }) => {
                 let name =
                     lo.sps_low.admin.def_name(lo.scoped, lo.statics, &label).plain().to_string();
                 let sym = Undefined.build(lo, (Some(name.clone()), Some(label)));
-                let body = body.lower(lo, Context::new());
+                let body: Kont<'a, Lowerer<'a>> = Box::new(move |lo, cx| body.lower(lo, cx));
+                let body = entry.words().rev().fold(body, |next, (_, pattern)| {
+                    Box::new(move |lo, cx| pattern.lower(lo, With::new(cx, next)))
+                })(lo, Context::new());
                 if lo.native_frames {
                     lo.arena.frame_entries.insert(body, crate::frames::Entry::Fresh);
                 }
@@ -455,23 +458,31 @@ impl<'a> Lower<'a> for sk::CompuId {
             | Compu::Hole(sk::SHole(tail)) => {
                 tail.lower(lo, With::new(cx, Box::new(move |lo, cx| Abort.build(lo, cx))))
             }
-            | Compu::Jump(sk::Jump { target, stack }) => stack.lower(
+            | Compu::Jump(sk::Jump { target, argument, stack }) => stack.lower(
                 lo,
                 With::new(
                     cx,
                     Box::new(move |lo, cx| {
-                        target.lower(
+                        argument.word().1.lower(
                             lo,
                             With::new(
                                 cx,
                                 Box::new(move |lo, cx| {
-                                    Alloc(ContextMarker).build(
+                                    target.lower(
                                         lo,
                                         With::new(
                                             cx,
-                                            CxKont::clean(Box::new(move |lo, cx| {
-                                                PopJump.build(lo, cx)
-                                            })),
+                                            Box::new(move |lo, cx| {
+                                                Alloc(ContextMarker).build(
+                                                    lo,
+                                                    With::new(
+                                                        cx,
+                                                        CxKont::clean(Box::new(move |lo, cx| {
+                                                            PopJump.build(lo, cx)
+                                                        })),
+                                                    ),
+                                                )
+                                            }),
                                         ),
                                     )
                                 }),

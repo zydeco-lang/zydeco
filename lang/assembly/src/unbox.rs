@@ -47,8 +47,9 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
     fn compu(&mut self, id: sk::CompuId) {
         match self.arena.inner.compus[&id].clone() {
             | sk::Computation::Hole(sk::SHole(stack)) => self.stack(stack),
-            | sk::Computation::Jump(sk::Jump { target, stack }) => {
+            | sk::Computation::Jump(sk::Jump { target, argument, stack }) => {
                 self.value(target);
+                self.value(argument.word().1);
                 self.stack(stack);
             }
             | sk::Computation::ProductMatch(sk::SProductMatch { scrut, binder, body }) => {
@@ -123,7 +124,12 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
             | sk::Value::Var(_)
             | sk::Value::Triv(_)
             | sk::Value::Literal(_) => {}
-            | sk::Value::Block(sk::Block { label: _, body }) => self.compu(body),
+            | sk::Value::Block(sk::Block { entry, body, .. }) => {
+                for (_, pattern) in entry.words() {
+                    self.pattern(pattern);
+                }
+                self.compu(body);
+            }
             | sk::Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
                 self.value(environment);
                 self.value(code);
@@ -294,8 +300,9 @@ impl VarVisitor<'_> {
     fn compu(&mut self, id: sk::CompuId) {
         match self.arena.compus[&id].clone() {
             | sk::Computation::Hole(sk::SHole(stack)) => self.stack(stack),
-            | sk::Computation::Jump(sk::Jump { target, stack }) => {
+            | sk::Computation::Jump(sk::Jump { target, argument, stack }) => {
                 self.value_escape(target);
+                self.value_escape(argument.word().1);
                 self.stack(stack);
             }
             | sk::Computation::ProductMatch(sk::SProductMatch { scrut, binder, body }) => {
@@ -449,6 +456,8 @@ mod tests {
     enum ClosureUse {
         Open,
         Argument,
+        EntryEnvironment,
+        EntryResult,
         Capture,
         Continuation,
         Alias,
@@ -496,17 +505,25 @@ mod tests {
             (SpsLowProgram::try_new(arena, root).unwrap(), bindee, variable)
         }
 
-        fn block(arena: &mut sk::SpsLowArena) -> sk::ValueId {
+        fn block(arena: &mut sk::SpsLowArena, kind: sk::EntryKind) -> sk::ValueId {
             let label = Self::definition(arena);
             let body = Self::terminal(arena);
-            sk::Block { label, body }.build(arena, None)
+            let environment = sk::Hole.build(arena, None);
+            let entry = match kind {
+                | sk::EntryKind::Closure => sk::EntryParameters::Closure { environment },
+                | sk::EntryKind::Continuation => sk::EntryParameters::Continuation {
+                    result: sk::Hole.build(arena, None),
+                    environment,
+                },
+            };
+            sk::Block { label, entry, body }.build(arena, None)
         }
 
         fn closure(usage: ClosureUse) -> (SpsLowProgram, sk::ValueId, sk::DefId) {
             let mut arena = sk::SpsLowArena::default();
             let variable = Self::definition(&mut arena);
             let environment = Self::product(&mut arena);
-            let code = Self::block(&mut arena);
+            let code = Self::block(&mut arena, sk::EntryKind::Closure);
             let bindee = sk::ClosurePackage { environment, code }.build(&mut arena, None);
             let value = variable.build(&mut arena, None);
             let mut tail = match usage {
@@ -517,11 +534,32 @@ mod tests {
                     sk::OpenClosure { package: value, environment, code, body }
                         .build(&mut arena, None)
                 }
+                | ClosureUse::EntryEnvironment | ClosureUse::EntryResult => {
+                    let stack = sk::Bullet.build(&mut arena, None);
+                    let (kind, argument, stack) = match usage {
+                        | ClosureUse::EntryEnvironment => (
+                            sk::EntryKind::Closure,
+                            sk::EntryArgument::Closure { environment: value },
+                            stack,
+                        ),
+                        | _ => {
+                            let environment: sk::ValueId = sk::Triv.build(&mut arena, None);
+                            let stack = sk::Cons(environment, stack).build(&mut arena, None);
+                            (
+                                sk::EntryKind::Continuation,
+                                sk::EntryArgument::Continuation { result: value },
+                                stack,
+                            )
+                        }
+                    };
+                    let target = Self::block(&mut arena, kind);
+                    sk::Jump { target, argument, stack }.build(&mut arena, None)
+                }
                 | ClosureUse::Argument | ClosureUse::Continuation => {
                     let stack = sk::Bullet.build(&mut arena, None);
                     let residual = sk::Cons(value, stack).build(&mut arena, None);
                     let stack = if matches!(usage, ClosureUse::Continuation) {
-                        let code = Self::block(&mut arena);
+                        let code = Self::block(&mut arena, sk::EntryKind::Continuation);
                         sk::ContinuationPackage { code, residual }.build(&mut arena, None)
                     } else {
                         residual
@@ -531,7 +569,7 @@ mod tests {
                 | ClosureUse::Capture | ClosureUse::Alias | ClosureUse::Constructor => {
                     let bindee = match usage {
                         | ClosureUse::Capture => {
-                            let code = Self::block(&mut arena);
+                            let code = Self::block(&mut arena, sk::EntryKind::Closure);
                             sk::ClosurePackage { environment: value, code }.build(&mut arena, None)
                         }
                         | ClosureUse::Constructor => {
@@ -546,7 +584,7 @@ mod tests {
                 }
             };
             // An unrelated closed code block must not count as an escaping occurrence.
-            let unrelated = Self::block(&mut arena);
+            let unrelated = Self::block(&mut arena, sk::EntryKind::Closure);
             let ignored = sk::Hole.build(&mut arena, None);
             tail =
                 sk::LetValue { binder: ignored, bindee: unrelated, tail }.build(&mut arena, None);
@@ -581,6 +619,8 @@ mod tests {
         for usage in [
             ClosureUse::Open,
             ClosureUse::Argument,
+            ClosureUse::EntryEnvironment,
+            ClosureUse::EntryResult,
             ClosureUse::Capture,
             ClosureUse::Continuation,
             ClosureUse::Alias,
@@ -685,7 +725,8 @@ mod tests {
         let env_value = Fixture::product(&mut arena);
         let block_body = Fixture::terminal(&mut arena);
         let label = IdAllocator::<StaticsScope>::new().alloc();
-        let block = sk::Block { label, body: block_body }.build(&mut arena, None);
+        let entry = sk::EntryParameters::Closure { environment: sk::Hole.build(&mut arena, None) };
+        let block = sk::Block { label, entry, body: block_body }.build(&mut arena, None);
         let package =
             sk::ClosurePackage { environment: env_value, code: block }.build(&mut arena, None);
         let environment = Fixture::pattern(&mut arena);

@@ -104,6 +104,7 @@ impl MemoryLayout {
 struct Case {
     index: u32,
     label: Option<DefId>,
+    entry: Option<sps::EntryParameters>,
     body: CompuId,
 }
 
@@ -242,13 +243,13 @@ impl ModulePlan {
             .collect::<Vec<_>>();
         blocks.sort_by_key(|block| block.label);
 
-        let root = Case { index: 0, label: None, body: program.root() };
+        let root = Case { index: 0, label: None, entry: None, body: program.root() };
         let block_cases = blocks
             .into_iter()
             .enumerate()
-            .map(|(offset, Block { label, body })| {
+            .map(|(offset, Block { label, entry, body })| {
                 let index = Limits::u32(offset + 1, "SPS block count")?;
-                Ok(Case { index, label: Some(label), body })
+                Ok(Case { index, label: Some(label), entry: Some(entry), body })
             })
             .collect::<Result<Vec<_>, EmitError>>()?;
         let cases = std::iter::once(root).chain(block_cases).collect::<Vec<_>>();
@@ -415,7 +416,7 @@ impl<'a> ModuleEncoder<'a> {
         code.function(&AllocFunction::new(HEAP_POINTER_GLOBAL).emit());
         code.function(&self.pair_function());
         for case in &self.plan.cases {
-            code.function(&CaseEncoder::new(self.program, &self.plan).encode(case.body)?);
+            code.function(&CaseEncoder::new(self.program, &self.plan).encode(*case)?);
         }
         code.function(&self.entry_function());
         module.section(&code);
@@ -514,10 +515,25 @@ impl<'a> CaseEncoder<'a> {
         Self { arena: program.arena(), plan, function }
     }
 
-    fn encode(mut self, body: CompuId) -> Result<Function, EmitError> {
-        self.emit_compu(body)?;
+    fn encode(mut self, case: Case) -> Result<Function, EmitError> {
+        if let Some(entry) = case.entry {
+            for (_, pattern) in entry.words() {
+                self.function.instruction(&WasmInstruction::LocalGet(0));
+                self.consume_argument(pattern)?;
+            }
+        }
+        self.emit_compu(case.body)?;
         self.function.instruction(&WasmInstruction::End);
         Ok(self.function)
+    }
+
+    fn consume_argument(&mut self, binder: VPatId) -> Result<(), EmitError> {
+        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
+        self.load_local_word(self.plan.locals.scratch_stack, 0);
+        self.emit_pattern(binder)?;
+        self.load_local_word(self.plan.locals.scratch_stack, 1);
+        self.function.instruction(&WasmInstruction::LocalSet(0));
+        Ok(())
     }
 
     fn emit_compu(&mut self, mut id: CompuId) -> Result<(), EmitError> {
@@ -529,8 +545,10 @@ impl<'a> CaseEncoder<'a> {
                     self.function.instruction(&WasmInstruction::Unreachable);
                     break;
                 }
-                | Computation::Jump(sps::Jump { target, stack }) => {
+                | Computation::Jump(sps::Jump { target, argument, stack }) => {
+                    self.emit_value(argument.word().1)?;
                     self.emit_stack(stack)?;
+                    self.function.instruction(&WasmInstruction::Call(self.plan.pair_function()));
                     self.function.instruction(&WasmInstruction::GlobalSet(AMBIENT_STACK_GLOBAL));
                     self.emit_value(target)?;
                     self.set_program_counter_from_code();
@@ -566,12 +584,7 @@ impl<'a> CaseEncoder<'a> {
                     tail: body,
                 }) => {
                     self.emit_stack(bindee)?;
-                    self.function
-                        .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
-                    self.load_local_word(self.plan.locals.scratch_stack, 0);
-                    self.emit_pattern(binder)?;
-                    self.load_local_word(self.plan.locals.scratch_stack, 1);
-                    self.function.instruction(&WasmInstruction::LocalSet(0));
+                    self.consume_argument(binder)?;
                     id = body;
                 }
                 | Computation::CoCase(sps::SCoMatch { scrut, arms }) => {
@@ -694,7 +707,7 @@ impl<'a> CaseEncoder<'a> {
                         .instruction(&WasmInstruction::LocalGet(self.plan.locals.variable(def)?));
                 }
             }
-            | sps::Value::Block(Block { label, body: _ }) => {
+            | sps::Value::Block(Block { label, .. }) => {
                 self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::code(
                     self.plan.label(label)?,
                 ) as i64));

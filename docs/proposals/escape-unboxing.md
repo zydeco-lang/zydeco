@@ -70,13 +70,14 @@ That would make representation choice part of an interface rather than merely an
 The implemented source interface now shares storage evidence across calls using the existing word transport.
 Selecting a different physical calling convention remains a separate compiler extension.
 
-There are four different descriptions in the implementation:
+The implementation carries several complementary descriptions:
 
 | Description | Evidence available today | What it does not establish |
 | --- | --- | --- |
 | Source `Representation A` and `Storage A Stored` | An abstract carrier shared by codecs and call signatures, runtime size/alignment | A statically selected argument width or register class |
 | Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
 | SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
+| SPSLow word entries | Ordered environment/result words and checked code/package provenance | Complete source stack protocols or a different component transport |
 | Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
 
 For example, the ordinary logical type `UInt8 * UInt32` can have natural storage of eight bytes,
@@ -161,10 +162,33 @@ It does not establish a new machine ABI: each stored value remains the existing 
 An encoded logical worker still performs a load and a store, and its decoded wrapper adds a store and a load.
 Those explicit conversions may allocate and are not removed merely because the carriers match.
 
+### Checked word entry experiment
+
+The compiler now represents the administrative part of a call as explicit SPSLow entry parameters and transfers.
+[C9's word entry contract](../references/compiler.md#word-entry-contracts) owns their order,
+provenance checks, and lowering rules.
+This makes the existing convention inspectable with `zydeco build --target zir` and checked
+before either assembly lowering or direct SPS Wasm emission.
+
+The useful distinction is between the environment/result words introduced by closure conversion
+and the source computation's remaining stack protocol.
+The former have fixed roles even when the source worker or its representation provider is selected at runtime.
+The latter requires information that high SPS currently erases.
+The accepted extension therefore exposes the administrative roles and checks package agreement first.
+It leaves ordinary argument consumption in the block body and retains the current word transport.
+
+Direct entries, recursive labels, and package openings now supply code evidence to the verifier.
+Regression tests pair accepted transfers with mismatched entry kinds, environment arities,
+crossed closure environments, and replaced or partially consumed continuation stacks.
+Aliases preserve the association when their producer is known.
+The existing execution fixtures exercise recursive and dynamic calls on all backends;
+policy tests keep wide captured values live across native collection.
+These checks improve the compiler boundary without making a new runtime representation or performance claim.
+
 ### Remaining machine-call boundary
 
-The [local analysis](../../lang/assembly/src/unbox.rs) deliberately treats argument-stack uses of a variable
-as escapes, and the [lowerer](../../lang/assembly/src/lower.rs) consumes its local pack/unpack decisions.
+The [local analysis](../../lang/assembly/src/unbox.rs) deliberately treats call arguments and argument-stack uses
+of a variable as escapes, and the [lowerer](../../lang/assembly/src/lower.rs) consumes its local pack/unpack decisions.
 SPSLow does not retain a source carrier's layout as a shared component contract for indirect calls or returns.
 Changing only the caller's packing would therefore change the stack shape expected by existing callees.
 
@@ -182,8 +206,10 @@ A modular extension needs the following boundaries in order:
    Abstract source carriers currently erase.
    An entry contract needs explicit evidence at the call boundary; a compiler policy cannot infer permission
    to change an ABI from an arbitrary `Int64` field.
-2. **One entry contract for both ends.** Extend the checked SPSLow boundary with ordered argument/result components
-   and representation evidence shared by direct calls, indirect calls, closures, and return continuations.
+2. **One entry contract for both ends.** The checked word entry experiment establishes administrative roles
+   and package agreement.
+   Extend that boundary with source argument/result components and representation evidence shared
+   by direct calls, indirect calls, closures, and return continuations.
    Unknown representations require a uniform transport or a checked adapter;
    separate callers cannot independently infer a different number of stack slots.
 3. **Target placement and tracing.** Derive register/stack placement and exact live-reference maps together.
@@ -201,9 +227,15 @@ Before accepting another machine transport, its tests must also retain managed f
 across collection and verify that padding or raw scalar bits never become roots.
 The current experiment inherits the existing handle/root contract; it does not exercise mixed raw/reference slots.
 
-The next bounded compiler experiment should make the existing ordered word entry contract explicit in SPSLow
-and validate both calls and return continuations against it, before adding a second transport choice.
-That gives the Rust policy configuration an evidence-bearing selection boundary shared by both ends.
+The next bounded compiler experiment should retain source stack protocol evidence
+through high SPS normalization and closure conversion.
+Begin with fixed `A -> Ret B` protocols using ordinary word transport, and preserve explicit unknown tails
+for computation polymorphism and dynamically obtained interfaces.
+The same descriptor must reach the closure, its force sites, and the result continuation;
+inferring a signature from a block's leading `LetArg` nodes would lose forwarding and effect protocols.
+Acceptance requires matched direct, indirect, recursive, and returned-thunk cases,
+paired with rejected known protocol mismatches and conservative handling of unknown tails.
+Only after that evidence survives normalization should a Rust policy choose another component transport.
 Static layout identity by structural equality, dependent size proofs, raw scalar slots,
 mixed reference layouts, and C aggregate classification remain separate open work.
 The accepted source library needs none of those mechanisms to express stored interfaces today.

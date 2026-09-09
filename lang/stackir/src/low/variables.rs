@@ -33,9 +33,11 @@ impl FreeVars for ValueId {
     fn free_vars(self, arena: &SpsLowInnerArena) -> CoContext<DefId> {
         match arena.values[&self].clone() {
             | Value::Var(def) => CoContext::singleton(def),
-            | Value::Block(Block { label, body }) => {
-                body.free_vars(arena) - Context::singleton(label)
-            }
+            | Value::Block(Block { label, entry, body }) => entry
+                .words()
+                .fold(body.free_vars(arena) - Context::singleton(label), |free, (_, pattern)| {
+                    free - pattern.vars(arena)
+                }),
             | Value::ClosurePackage(ClosurePackage { environment, code }) => {
                 environment.free_vars(arena) + code.free_vars(arena)
             }
@@ -70,8 +72,10 @@ impl FreeVars for CompuId {
     fn free_vars(self, arena: &SpsLowInnerArena) -> CoContext<DefId> {
         match arena.compus[&self].clone() {
             | Computation::Hole(SHole(stack)) => stack.free_vars(arena),
-            | Computation::Jump(Jump { target, stack }) => {
-                target.free_vars(arena) + stack.free_vars(arena)
+            | Computation::Jump(Jump { target, argument, stack }) => {
+                target.free_vars(arena)
+                    + argument.word().1.free_vars(arena)
+                    + stack.free_vars(arena)
             }
             | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
                 scrut.free_vars(arena) + (body.free_vars(arena) - binder.vars(arena))

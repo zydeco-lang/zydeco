@@ -33,6 +33,8 @@ pub enum SpsLowError {
     OpenRoot { variables: Vec<DefId> },
     #[error("continuation {stack:?} has an invalid capture or entry context")]
     ContinuationContext { stack: StackId },
+    #[error(transparent)]
+    EntryContract(#[from] super::contracts::EntryContractError),
 }
 
 impl SpsLowProgram {
@@ -43,6 +45,7 @@ impl SpsLowProgram {
         if !variables.is_empty() {
             return Err(SpsLowError::OpenRoot { variables });
         }
+        super::contracts::EntryValidator::validate(&arena.inner, root)?;
         Ok(Self { arena: FrozenArena::new(arena), root })
     }
 
@@ -81,23 +84,11 @@ impl ContinuationEntry {
         else {
             return false;
         };
-        let Some(Value::Block(Block { label, body })) = arena.values.get(code) else {
+        let Some(Value::Block(Block { label, entry, body })) = arena.values.get(code) else {
             return false;
         };
-        let Computation::LetArg(LetArg { binder: Cons(result, Bullet), bindee, tail }) =
-            arena.compus[body]
-        else {
-            return false;
-        };
-        if result != self.result || !matches!(arena.stacks[&bindee], Stack::Var(Bullet)) {
-            return false;
-        }
-        let Computation::LetArg(LetArg { binder: Cons(environment, Bullet), bindee, tail }) =
-            arena.compus[&tail]
-        else {
-            return false;
-        };
-        if tail != self.body || !matches!(arena.stacks[&bindee], Stack::Var(Bullet)) {
+        let EntryParameters::Continuation { result, environment } = *entry else { return false };
+        if result != self.result || *body != self.body {
             return false;
         }
         let Stack::Arg(Cons(value, ambient)) = arena.stacks[residual] else { return false };
@@ -155,8 +146,9 @@ impl<'a> SpsLowValidator<'a> {
 
         match self.arena.compus[&id].clone() {
             | Computation::Hole(SHole(stack)) => self.stack(stack),
-            | Computation::Jump(Jump { target, stack }) => {
+            | Computation::Jump(Jump { target, argument, stack }) => {
                 self.value(target)?;
+                self.value(argument.word().1)?;
                 self.stack(stack)
             }
             | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
@@ -236,15 +228,21 @@ impl<'a> SpsLowValidator<'a> {
 
         match self.arena.values[&id].clone() {
             | Value::Hole(Hole) | Value::Var(_) | Value::Triv(Triv) | Value::Literal(_) => Ok(()),
-            | Value::Block(Block { label, body }) => {
+            | Value::Block(Block { label, entry, body }) => {
                 if !self.labels.insert(label) {
                     return Err(SpsLowError::DuplicateBlockLabel { label });
                 }
-                let mut captures = body.free_vars(self.arena).into_iter().collect::<Vec<_>>();
+                let free = entry.words().fold(body.free_vars(self.arena), |free, (_, pattern)| {
+                    free - pattern.vars(self.arena)
+                });
+                let mut captures = free.into_iter().collect::<Vec<_>>();
                 captures.retain(|capture| *capture != label);
                 captures.sort_unstable();
                 if !captures.is_empty() {
                     return Err(SpsLowError::ImplicitBlockCapture { label, captures });
+                }
+                for (_, pattern) in entry.words() {
+                    self.pattern(pattern)?;
                 }
                 self.compu(body, false)
             }
@@ -284,13 +282,26 @@ impl<'a> SpsLowValidator<'a> {
 mod tests {
     use super::*;
 
+    struct Fixture;
+
+    impl Fixture {
+        fn argument(arena: &mut SpsLowArena) -> EntryArgument {
+            EntryArgument::Closure { environment: Triv.build(arena, None) }
+        }
+
+        fn entry(arena: &mut SpsLowArena) -> EntryParameters {
+            EntryParameters::Closure { environment: Hole.build(arena, None) }
+        }
+    }
+
     #[test]
     fn low_program_rejects_implicit_arena_sharing() {
         let mut arena = SpsLowArena::default();
         let shared = Triv.build(&mut arena, None);
         let package = ClosurePackage { environment: shared, code: shared }.build(&mut arena, None);
         let stack = Bullet.build(&mut arena, None);
-        let root = Jump { target: package, stack }.build(&mut arena, None);
+        let root = Jump { argument: Fixture::argument(&mut arena), target: package, stack }
+            .build(&mut arena, None);
 
         assert_eq!(
             SpsLowProgram::try_new(arena, root).unwrap_err(),
@@ -305,10 +316,18 @@ mod tests {
         let captured = arena.admin.fresh_def();
         let captured_value: ValueId = captured.build(&mut arena, None);
         let body_stack = Bullet.build(&mut arena, None);
-        let body = Jump { target: captured_value, stack: body_stack }.build(&mut arena, None);
-        let block = Block { label, body }.build(&mut arena, None);
+        let body = Jump {
+            argument: Fixture::argument(&mut arena),
+            target: captured_value,
+            stack: body_stack,
+        }
+        .build(&mut arena, None);
+        let block =
+            Block { entry: Fixture::entry(&mut arena), label, body }.build(&mut arena, None);
         let root_stack = Bullet.build(&mut arena, None);
-        let root = Jump { target: block, stack: root_stack }.build(&mut arena, None);
+        let root =
+            Jump { argument: Fixture::argument(&mut arena), target: block, stack: root_stack }
+                .build(&mut arena, None);
 
         assert_eq!(
             SpsLowProgram::try_new(arena, root).unwrap_err(),
@@ -322,7 +341,8 @@ mod tests {
         let free = arena.admin.fresh_def();
         let target: ValueId = free.build(&mut arena, None);
         let stack = Bullet.build(&mut arena, None);
-        let root = Jump { target, stack }.build(&mut arena, None);
+        let root =
+            Jump { argument: Fixture::argument(&mut arena), target, stack }.build(&mut arena, None);
 
         assert_eq!(
             SpsLowProgram::try_new(arena, root).unwrap_err(),
@@ -337,18 +357,31 @@ mod tests {
 
         let first_target: ValueId = label.build(&mut arena, None);
         let first_stack = Bullet.build(&mut arena, None);
-        let first_body = Jump { target: first_target, stack: first_stack }.build(&mut arena, None);
-        let first = Block { label, body: first_body }.build(&mut arena, None);
+        let first_body = Jump {
+            argument: Fixture::argument(&mut arena),
+            target: first_target,
+            stack: first_stack,
+        }
+        .build(&mut arena, None);
+        let first = Block { entry: Fixture::entry(&mut arena), label, body: first_body }
+            .build(&mut arena, None);
 
         let second_target: ValueId = label.build(&mut arena, None);
         let second_stack = Bullet.build(&mut arena, None);
-        let second_body =
-            Jump { target: second_target, stack: second_stack }.build(&mut arena, None);
-        let second = Block { label, body: second_body }.build(&mut arena, None);
+        let second_body = Jump {
+            argument: Fixture::argument(&mut arena),
+            target: second_target,
+            stack: second_stack,
+        }
+        .build(&mut arena, None);
+        let second = Block { entry: Fixture::entry(&mut arena), label, body: second_body }
+            .build(&mut arena, None);
 
         let package = ClosurePackage { environment: first, code: second }.build(&mut arena, None);
         let root_stack = Bullet.build(&mut arena, None);
-        let root = Jump { target: package, stack: root_stack }.build(&mut arena, None);
+        let root =
+            Jump { argument: Fixture::argument(&mut arena), target: package, stack: root_stack }
+                .build(&mut arena, None);
 
         assert_eq!(
             SpsLowProgram::try_new(arena, root).unwrap_err(),

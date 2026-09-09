@@ -35,8 +35,11 @@ Both representations have one computation root rather than a top-level declarati
   and the consumer demands defined by `high::demand`, following the
   [residual normalization rules](../../../docs/references/compiler.md#c8-high-sps-lowering-normalization-and-demand).
 - `low::syntax` and `low::arena` define first-order SPS with typed package forms.
-- `low::convert` performs fresh structural closure conversion; `low::check` validates the resulting lexical ownership
-  and retained branch-join invariant.
+- `low::entry` defines the explicit environment/result word roles consumed by block entries and supplied by jumps.
+- `low::convert` performs fresh structural closure conversion; `low::check` validates lexical ownership,
+  retained branch joins, and native continuation metadata.
+  `low::contracts` checks code provenance and package agreement
+  under the [word entry contract](../../../docs/references/compiler.md#word-entry-contracts).
 - `SpsLowPipeline` is the consuming boundary between high SPS and assembly-ready SPSLow.
 
 The paper correspondence and the phase invariants are summarized in the implementation architecture section

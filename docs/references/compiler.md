@@ -635,11 +635,65 @@ Administrative definition allocation continues from the consumed high program as
 
 `SpsLowProgram` has one root and first-order closed blocks.
 Its [verifier](../../lang/stackir/src/low/check.rs) checks reference closure,
-lexical node ownership, and retained branch joins.
+lexical node ownership, retained branch joins, and the word entry contracts below.
 A single-occurrence syntax tree means runtime sharing is explicit in variables;
 it is not a proof that a continuation is dynamically used once.
 Native preparation must establish the stronger lifetime facts in C11.
 Structured Wasm can consume this representation directly because block boundaries and residual stacks are explicit.
+
+### Word entry contracts
+
+Closure conversion introduces words that have no corresponding source argument:
+a closure's captured environment and a continuation's saved environment.
+Making their roles explicit lets callers and code entries agree before assembly lowering chooses stack operations.
+A returned source value also has an explicit entry role.
+The remaining source arguments and effects still use the residual stack.
+
+Each `Block` declares [EntryParameters](../../lang/stackir/src/low/entry.rs),
+and each `Jump` supplies an `EntryArgument` before its residual stack:
+
+| Entry kind | Parameters in consumption order | Word supplied by the jump | Residual stack at the jump |
+| --- | --- | --- | --- |
+| Closure | Environment | Environment from the closure package | Ordinary argument/effect stack |
+| Continuation | Result, environment | Returned result | Saved environment followed by the caller's stack |
+
+Every listed parameter occupies one ordinary target value word, including a product or buffer handle.
+`EntryParameters::words` fixes their order for both ZASM lowering and direct SPS Wasm emission.
+The block's patterns bind these parameters before its body executes;
+ordinary `LetArg` nodes in the body consume subsequent user arguments.
+`OpenContinuation` restores the residual stack, so returning supplies only the result word.
+The explicit entry forms replace administrative `LetArg` prologues and `Arg` prefixes in SPSLow.
+Their lowering preserves the existing physical word convention.
+
+The [entry verifier](../../lang/stackir/src/low/contracts.rs) checks a code value's origin
+and entry kind at each package construction and jump.
+A block and its recursive self label carry the declared kind.
+Known unit/product environments must agree with a direct block's outer environment arity;
+unknown shapes remain subject to upstream source typing.
+This is a partial shape check, not reconstruction of the erased source types or their field classifiers.
+
+Opening a closure establishes a local association between its code and its whole environment.
+An indirect jump or repackaging must preserve that association.
+Opening a continuation similarly associates its code with the restored residual stack;
+returning or repackaging must use that same residual stack.
+Code from one opening cannot consume another opening's environment or continuation stack,
+even if both packages happen to have the same shape.
+The verifier propagates evidence through whole-value aliases and projections of known complete products.
+Destructuring an opaque environment does not establish permission to reconstruct an equivalent one.
+Stack operations retain evidence when their known pushes and pops cancel; a remaining prefix or a pop
+into the opaque restored stack loses the required agreement.
+
+These checks assume source typing and closure conversion establish the shapes of dynamically obtained packages.
+They do not recheck logical argument/result types, complete `CType` protocols, or continuation lifetime.
+Host and C external calls retain their own upstream signatures and transfer contracts.
+Local representation policies must preserve the ordinary word transport at this boundary;
+source storage alignment and padding alone cannot select a different call layout.
+
+For native retained-frame lowering, `ContinuationEntry` additionally records the result pattern,
+body, and ordered capture bindings.
+The verifier compares that metadata with the explicit continuation entry and its package
+before C11 replaces portable captures with retained slots.
+There is no second executable entry prologue to infer or keep synchronized.
 
 ## C10. ZASM, stack analysis, and local representation choices
 
@@ -664,6 +718,8 @@ Lowering then omits the corresponding pack/unpack pair or expands a variable int
 Alias uses and escaping or unknown consumers retain the ordinary boxed representation.
 Escape classification follows occurrences of the candidate variable through values and residual stacks;
 an unrelated primitive, constructor, or closed block does not constitute an escape.
+The explicit environment/result arguments of a jump are escaping uses
+under the [word entry contract](#word-entry-contracts).
 SPSLow's closed-block invariant places captures in explicit environments and continuation residuals.
 
 ### Policy selection

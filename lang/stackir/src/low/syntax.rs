@@ -1,6 +1,7 @@
 //! Syntax of the paper's first-order `SPS_l` target, extended with Zydeco primitives.
 
 pub use super::arena::*;
+pub use super::entry::*;
 pub use crate::syntax::*;
 
 use crate::syntax as common;
@@ -36,6 +37,7 @@ pub type LetArg = Let<Cons<VPatId, Bullet>, StackId, CompuId>;
 #[derive(Clone, Debug)]
 pub struct Block {
     pub label: DefId,
+    pub entry: EntryParameters,
     pub body: CompuId,
 }
 
@@ -96,6 +98,7 @@ pub enum Stack {
 #[derive(Clone, Debug)]
 pub struct Jump {
     pub target: ValueId,
+    pub argument: EntryArgument,
     pub stack: StackId,
 }
 

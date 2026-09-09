@@ -266,15 +266,9 @@ impl<'a> SpsLowConverter<'a> {
         let body_env = self.extend_env(env, capture_bindings.iter().copied());
         let body = self.translate_compu(body, body_env);
         let environment_pattern = self.captured_pattern(&capture_bindings);
-        let incoming = low::Bullet.build(self, site);
-        let body = low::LetArg {
-            binder: low::Cons(environment_pattern, low::Bullet),
-            bindee: incoming,
-            tail: body,
-        }
-        .build(self, site);
         let label = self.alloc_label("closure");
-        let code = low::Block { label, body }.build(self, site);
+        let entry = low::EntryParameters::Closure { environment: environment_pattern };
+        let code = low::Block { label, entry, body }.build(self, site);
         let environment = self.captured_value_outside(&captures, env, site);
         low::ClosurePackage { environment, code }.build(self, site)
     }
@@ -323,22 +317,10 @@ impl<'a> SpsLowConverter<'a> {
         };
 
         let environment_pattern = self.captured_pattern(&capture_bindings);
-        let incoming_environment = low::Bullet.build(self, site);
-        let body = low::LetArg {
-            binder: low::Cons(environment_pattern, low::Bullet),
-            bindee: incoming_environment,
-            tail: body,
-        }
-        .build(self, site);
-        let incoming_value = low::Bullet.build(self, site);
-        let body = low::LetArg {
-            binder: low::Cons(binder, low::Bullet),
-            bindee: incoming_value,
-            tail: body,
-        }
-        .build(self, site);
         let label = self.alloc_label("continuation");
-        let code = low::Block { label, body }.build(self, site);
+        let parameters =
+            low::EntryParameters::Continuation { result: binder, environment: environment_pattern };
+        let code = low::Block { label, entry: parameters, body }.build(self, site);
 
         let environment = self.captured_value_outside(&captures, env, site);
         let ambient = low::Bullet.build(self, site);
@@ -438,8 +420,8 @@ impl<'a> SpsLowConverter<'a> {
         let code: low::VPatId = code_def.build(self, None);
         let environment_value: low::ValueId = environment_def.build(self, site);
         let code_value: low::ValueId = code_def.build(self, site);
-        let stack = low::Cons(environment_value, stack).build(self, site);
-        let body = low::Jump { target: code_value, stack }.build(self, site);
+        let argument = low::EntryArgument::Closure { environment: environment_value };
+        let body = low::Jump { target: code_value, argument, stack }.build(self, site);
         low::OpenClosure { package, environment, code, body }.build(self, site)
     }
 
@@ -452,8 +434,8 @@ impl<'a> SpsLowConverter<'a> {
         let code: low::VPatId = code_def.build(self, None);
         let code_value: low::ValueId = code_def.build(self, site);
         let residual = low::Bullet.build(self, site);
-        let stack = low::Cons(value, residual).build(self, site);
-        let body = low::Jump { target: code_value, stack }.build(self, site);
+        let argument = low::EntryArgument::Continuation { result: value };
+        let body = low::Jump { target: code_value, argument, stack: residual }.build(self, site);
         low::OpenContinuation { package, code, body }.build(self, site)
     }
 
@@ -479,18 +461,12 @@ impl<'a> SpsLowConverter<'a> {
         let body = low::LetValue { binder: closure_pattern, bindee: closure, tail: body }
             .build(self, site);
         let environment_pattern = self.captured_pattern(&capture_bindings);
-        let incoming = low::Bullet.build(self, site);
-        let body = low::LetArg {
-            binder: low::Cons(environment_pattern, low::Bullet),
-            bindee: incoming,
-            tail: body,
-        }
-        .build(self, site);
-        let block = low::Block { label, body }.build(self, site);
+        let entry = low::EntryParameters::Closure { environment: environment_pattern };
+        let block = low::Block { label, entry, body }.build(self, site);
 
         let environment = self.captured_value_outside(&captures, env, site);
-        let stack = low::Cons(environment, stack).build(self, site);
-        low::Jump { target: block, stack }.build(self, site)
+        let argument = low::EntryArgument::Closure { environment };
+        low::Jump { target: block, argument, stack }.build(self, site)
     }
 }
 
@@ -565,7 +541,21 @@ mod tests {
                 .iter()
                 .any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
         );
-        assert!(arena.inner.values.iter().any(|(_, value)| matches!(value, low::Value::Block(_))));
+        let block = arena
+            .inner
+            .values
+            .iter()
+            .find_map(|(_, value)| match value {
+                | low::Value::Block(block) => Some(block),
+                | _ => None,
+            })
+            .unwrap();
+        assert!(matches!(block.entry, low::EntryParameters::Closure { .. }));
+        assert_eq!(
+            block.entry.words().map(|(role, _)| role).collect::<Vec<_>>(),
+            vec![low::EntryRole::Environment]
+        );
+        assert!(matches!(arena.inner.compus[&block.body], low::Computation::OpenContinuation(_)));
         assert!(
             arena
                 .inner
@@ -593,9 +583,21 @@ mod tests {
         else {
             panic!("return must open a continuation package")
         };
+        let low::Stack::ContinuationPackage(low::ContinuationPackage { code, .. }) =
+            program.arena().inner.stacks[package]
+        else {
+            panic!("return must retain its continuation package")
+        };
+        let low::Value::Block(block) = &program.arena().inner.values[&code] else {
+            panic!("continuation must have a block entry")
+        };
+        assert_eq!(
+            block.entry.words().map(|(role, _)| role).collect::<Vec<_>>(),
+            vec![low::EntryRole::Result, low::EntryRole::Environment]
+        );
         assert!(matches!(
-            program.arena().inner.stacks[package],
-            low::Stack::ContinuationPackage(_)
+            program.arena().inner.compus[&block.body],
+            low::Computation::OpenContinuation(_)
         ));
         let package = *package;
         assert!(program.arena().inner.continuations.get(&package).is_some());

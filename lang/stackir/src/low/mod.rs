@@ -3,6 +3,8 @@
 pub mod arena;
 pub mod check;
 pub mod convert;
+pub mod contracts;
+pub mod entry;
 pub mod fmt;
 pub mod syntax;
 pub mod variables;

@@ -72,12 +72,20 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
         match self {
             | Value::Hole(Hole) => RcDoc::text("_"),
             | Value::Var(def) => def.pretty(f),
-            | Value::Block(Block { label, body }) => RcDoc::concat([
+            | Value::Block(Block { label, entry, body }) => RcDoc::concat([
                 RcDoc::text("block"),
                 RcDoc::space(),
                 RcDoc::text("["),
                 label.pretty(f),
                 RcDoc::text("]"),
+                RcDoc::text("("),
+                RcDoc::intersperse(
+                    entry.words().map(|(role, pattern)| {
+                        RcDoc::concat([RcDoc::text(format!("{role}: ")), pattern.pretty(f)])
+                    }),
+                    RcDoc::text(", "),
+                ),
+                RcDoc::text(")"),
                 RcDoc::space(),
                 RcDoc::text("•"),
                 RcDoc::space(),
@@ -172,9 +180,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
             | Computation::Hole(SHole(stack)) => {
                 RcDoc::concat([RcDoc::text("_ ! "), stack.pretty(f)])
             }
-            | Computation::Jump(Jump { target, stack }) => RcDoc::concat([
+            | Computation::Jump(Jump { target, argument, stack }) => RcDoc::concat([
                 RcDoc::text("jump "),
                 target.pretty(f),
+                RcDoc::text(format!("({}: ", argument.word().0)),
+                argument.word().1.pretty(f),
+                RcDoc::text(")"),
                 RcDoc::text(" ! "),
                 stack.pretty(f),
             ]),

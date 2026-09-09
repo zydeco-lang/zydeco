@@ -517,6 +517,8 @@ connects source loading and checking to interpretation, SPS lowering, and native
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
 High SPS retains lexical branch joins; normalization simplifies known producers
 and consumers before closure conversion constructs first-order SPSLow.
+SPSLow checks explicit environment/result entry roles and package provenance
+under the [word entry contract](docs/references/compiler.md#word-entry-contracts).
 ZASM makes the control-flow graph explicit for assembly-derived targets.
 
 | Responsibility | Owning reference | Implementation |
