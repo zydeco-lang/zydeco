@@ -55,22 +55,25 @@ Keep that editorial work separate from the reference text.
 ## Completed proposal retirements
 
 The language-reference batches and compiler-reference consolidation were requested on 2026-09-08.
-Twelve standalone proposals have been removed after transferring their durable material and incoming links:
+Fifteen standalone proposals have been removed after transferring their durable material and incoming links:
 
 | Retired proposal | Current homes | Preserved material |
 | --- | --- | --- |
-| `syntax.md` | [Language syntax](../references/language.md#2-lexical-structure-and-syntax), [values](../references/language.md#5-values-products-and-data), [computations](../references/language.md#6-computations-and-control); [style rationale](../proposals/style.md#reading-the-surface-syntax) | Accepted forms and grouping; the reasons for classifier-directed spines, arrows, and delimiters |
+| `syntax.md` | [Language syntax](../references/language.md#2-lexical-structure-and-syntax), [values](../references/language.md#5-values-products-and-data), [computations](../references/language.md#6-computations-and-control); [style rationale](../style.md#reading-the-surface-syntax) | Accepted forms and grouping; the reasons for classifier-directed spines, arrows, and delimiters |
 | `primitive-packages.md` | [Primitive identity](../references/language.md#13-primitive-values-and-capabilities); [package rationale](../proposals/package-modularization.md#primitive-identity-and-package-boundaries); [Builtin guide](../../lib/std/README.md#builtin-packages) | Canonical versus provider-owned identities, public carrier names, dependency boundaries, and current package use |
 | `numeric-capabilities.md` | [Numeric library guide](../../lib/std/README.md#numeric-capabilities-and-explicit-instances) and its linked interface definitions | Dictionary composition, law boundaries, explicit selection, and checked manifest-instance examples |
 | `local-inference.md` | [Classification and inference](../references/language.md#4-classification-and-inference), [source boundaries](../references/language.md#12-sources-imports-and-entry); [solver invariants](../references/compiler.md#inference-and-reuse) | Binder defaulting, order-independent constraints, shape refinement, source closure, scope intersection, rollback, and diagnostic provenance |
 | `typeof.md` | [Classification and inference](../references/language.md#4-classification-and-inference), [binder dependencies](../references/language.md#9-polymorphism-and-packages), [imports and signatures](../references/language.md#12-sources-imports-and-entry); [checked-term reuse](../references/compiler.md#inference-and-reuse) | Classifier identity, staging, erasure, witness scope, import cycles, and canonical synthesis under context extension |
 | `integer-literal-patterns.md` | [Pattern rules](../references/language.md#7-patterns-and-coverage), [numeric representations](../references/language.md#13-primitive-values-and-capabilities); [pattern implementation](../references/compiler.md#pattern-decisions-and-validation) and [remaining decisions](../proposals/exhaustiveness.md) | Range and refutability boundaries, conservative coverage, equality-branch lowering, float equality, and redundancy questions |
-| `aliasing.md` | [Pattern rules](../references/language.md#7-patterns-and-coverage); [syntax rationale](../proposals/style.md#pattern-alias-syntax); [pattern implementation](../references/compiler.md#pattern-decisions-and-validation) and [remaining decisions](../proposals/exhaustiveness.md) | Shared bindees, ordered scope, composable syntax and alternatives, runtime sharing, and refutable-conjunction questions |
+| `aliasing.md` | [Pattern rules](../references/language.md#7-patterns-and-coverage); [syntax rationale](../style.md#pattern-alias-syntax); [pattern implementation](../references/compiler.md#pattern-decisions-and-validation) and [remaining decisions](../proposals/exhaustiveness.md) | Shared bindees, ordered scope, composable syntax and alternatives, runtime sharing, and refutable-conjunction questions |
 | `normalization.md` | [Package rules](../references/language.md#9-polymorphism-and-packages), [static elimination](../references/language.md#10-static-elimination); [finalization](../references/compiler.md#finalization), [static elaboration](../references/compiler.md#static-elimination), [SPS normalization](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand) | Manifest formation and erasure, residual acceptance, shared graph normalization, and reductions preserving sharing and traps |
 | `demand-analysis.md` | [Consumer demands](../references/compiler.md#consumer-demands) and the surrounding normalizer contract | Demand lattice, lexical propagation, physical suffixes, aliases, opaque consumers, and suspended captures |
 | `query-owned-statics.md` | [Query/checker ownership](../references/compiler.md#query-and-checker-ownership); [memory design](../proposals/arena-gc.md) | Achieved producer boundary, stateful solver constraints, alternatives, and qualified historical cost evidence |
 | `typed-type-rendering.md` | [Tooling implementation](../references/compiler.md#formatting-and-typed-rendering); [formatting choices](../proposals/formatting.md#elaborated-type-rendering) | Printer responsibilities, witness hints, source-shaped types, reification alternatives, and unresolved layout questions |
 | `data-driven-cases.md` | [Fixture architecture](../references/compiler.md#source-fixtures-and-runtime-oracles); [case guide](../../lang/tests/cases/README.md) | Discovery, structured assertions, runner rationale, Rust-only relationships, and possible directive extensions |
+| `field-projection.md` | [L9](../references/language.md#9-polymorphism-and-packages), [C5](../references/compiler.md#package-evidence-and-lookup), [package rationale](../proposals/package-modularization.md), [coverage extension](../proposals/exhaustiveness.md#refutable-projection-payloads) | Search namespace and opacity, shared openings, typed routes, and future refutable payloads |
+| `value-pi.md` | [L8](../references/language.md#8-value-functions-and-views), [library recipes](../../lib/std/README.md#package-composition), [deferred designs](deferred-designs.md#value-views) | Value equations and view coherence; package idioms; refutable-view coverage, syntax, evaluation sharing, and residual factoring as todos |
+| `repl.md` | [C15](../references/compiler.md#interactive-engine), [CONTRIBUTING](../../CONTRIBUTING.md#use-the-interactive-repl), [history todos](deferred-designs.md#repl-history-and-replay) | Numbered identity, retry, wrapper behavior, commands, and future persistence/replay |
 
 These destinations own the transferred material. Discarded layout and implementation claims are recorded
 in the [drift list](reference-drift.md); no compatibility proposal stubs remain.
@@ -79,15 +82,30 @@ and open questions; the checker guide retains its module map.
 Their current algorithms live in C3/C5/C6/C8/C16.
 DESIGN's implementation overview links to those owners.
 
-## Deferred questions from retired proposals
+## Broader consolidation
 
-- **Classifier-query editor affordances.** Decide whether editors should offer an action
-  for constructing `@[typeof]` expressions.
-  The source construct and the REPL's display-only `@[type]` command already have distinct meanings;
-  an editor convenience would not change them.
-- **Type and kind pattern aliases.** These remain outside the admitted pattern language.
-  Their classification and scope need a separate decision if the feature is pursued;
-  the value-pattern usefulness work does not implicitly authorize them.
+The follow-up consolidation was inspected against `14e0410a` on 2026-09-08.
+Two explorations and a completed scratch log were also removed: `span-source-map.md`
+and its 2026-08-30 log transferred compact-position rationale and coordinate invariants to C2,
+with remaining lookup/storage work in todos; `delimited-continuations.md` transferred its library-control motivation
+and working examples to [the library guide](../../lib/std/README.md#relative-monads-and-control-examples).
+
+[Style guidance](../style.md) moved out of proposals.
+Term and package records now retain binding/identity and interface rationale.
+Byte APIs and costs and filesystem operations moved to the library guide,
+with representation and capability lifetime kept as separate designs.
+The memory-backed Writer and byte builder has one home in the filesystem design.
+C FFI now concerns exports, callbacks, ownership, reentry, and ABI extensions.
+Completion, documentation, and formatting retain their recovery, provenance, publication,
+and layout questions; completed roadmaps and parallel implementation accounts were removed.
+
+Escape/unboxing, native frames, and Wasm remain independent representation, lifetime, and backend decisions.
+Runtime recommendations moved to the native and Wasm records;
+the dated [runtime study](../ideas/cbpv-runtime-evaluation.md) and every raw JSON/CSV evidence file remain together.
+
+[Deferred designs](deferred-designs.md) is the single follow-up list for questions
+from retired records, including refutable-view coverage.
+Recording them there does not make them accepted language extensions.
 
 ## Reference ownership after migration
 
@@ -133,8 +151,7 @@ An implemented proposal should not retain a second full reference account.
 | [DESIGN](../../DESIGN.md) | Language model and mechanisms to L1–L14; architecture/runtime/tooling to C1–C15 | A concise project design overview and navigation to the two references |
 | [term](../proposals/term.md) | L3–L4, L7, L12; C4–C5 | Binding and scope rationale where it explains actual tradeoffs |
 | [Checker guide](../../lang/statics/src/check/README.md) | C5; current account transferred | Local module ownership and links to shared contracts |
-| [value-pi](../proposals/value-pi.md) | L8; C5–C6 | Deferred syntax and residual-code sharing questions |
-| [field projection](../proposals/field-projection.md), [package modularization](../proposals/package-modularization.md) | L9, L12–L13; C5–C6 | Independently reviewable package-interface questions; remove repeated shared rules |
+| [package modularization](../proposals/package-modularization.md) | L9, L12–L13; C5–C6 | Independently reviewable package-interface questions; remove repeated shared rules |
 | [Coverage extensions](../proposals/exhaustiveness.md), [type lint](../proposals/tyck-lint.md) | C6/C8/C16; current account transferred | Usefulness, refutable patterns, dependent copatterns, and stronger verification evidence |
 | [bytes](../proposals/bytes.md), [filesystem](../proposals/filesystem.md), [C FFI](../proposals/c-ffi.md) | L13–L15; C12–C14 | Builders, stream extensions, foreign exports/callbacks, and other unimplemented boundaries |
 | [Arena retention](../proposals/arena-gc.md) | C3; current account transferred | Memo reclamation, compact facts, normalization strategies, and historical measurement limits |
@@ -144,11 +161,8 @@ An implemented proposal should not retain a second full reference account.
 | [Completion](../proposals/completion.md), [formatting](../proposals/formatting.md#elaborated-type-rendering) | C15 | Recovery/ranking guarantees and source-rendering design questions |
 | [formatting](../proposals/formatting.md) | L2 metadata index; C4/C15 | Independent layout-policy rationale; formatting workflow stays in CONTRIBUTING |
 | [documentation](../proposals/documentation.md) | C15–C16 | Unresolved authoring/verification mechanisms; [authoring guide](../documentation.md) remains user-facing |
-| [REPL](../proposals/repl.md) | L12; C3/C7/C15 | Future interaction design; command and key reference stays in CONTRIBUTING |
-| [style](../proposals/style.md) | Links from L2 and the tutorial | A user-facing style guide, separate from accepted syntax and semantics |
-| [source-map idea](../ideas/span-source-map.md) | C2 | Useful alternatives after removing the obsolete implementation account |
+| [style](../style.md) | Links from L2 and the tutorial | A user-facing style guide, separate from accepted syntax and semantics |
 | [runtime evaluation](../ideas/cbpv-runtime-evaluation.md) | Evidence links in C11–C13/C16 | Reproducible studies and open comparisons with their original scope and revisions |
-| [delimited-control idea](../ideas/delimited-continuations.md) | Context for L11 | Historical motivation; establish current behavior from library code and tests |
 | [tutorial](../tutorial/zydeco-guide.md), [literate chapters](../spell), [library guide](../../lib/std/README.md) | Example and API sources throughout L | Distinct learning and library tasks, linked to reference owners for detailed rules |
 | [older tutorial](../tutorial/intro_to_zydeco.md), [legacy material](../legacy) | Historical links only | Explicitly historical accounts, outside the current reference's authority |
 | [scratch logs](../logs) | Audit for missing durable motivations | Fold unique durable material into its owner, then remove redundant scratch records |
@@ -163,16 +177,14 @@ The language and compiler drafts cover L1–L15 and C1–C16.
 Drift and proposed repairs stay in the [separate list](reference-drift.md);
 recording a mismatch does not authorize a language or compiler behavior change.
 
-1. Review the remaining term, package, value-function, and projection proposals for duplicated construct rules.
-   Preserve their independently reviewable scope and composition questions.
-2. Consolidate the broader DESIGN language, runtime, and tooling sections into a shorter overview
+1. Consolidate the broader DESIGN language, runtime, and tooling sections into a shorter overview
    as their detailed owners are reviewed.
    Native frame alternatives, Wasm strategy comparisons,
    and tooling designs retain useful independent content beyond the reference summaries.
-3. Reconcile the tutorial and formal calculus with the source accounts,
+2. Reconcile the tutorial and formal calculus with the source accounts,
    including product shape and recursion boundaries.
    Keep mathematical rules in one companion rather than copying a second calculus into the references.
-4. Audit historical measurements and remaining scratch records for durable evidence,
+3. Audit historical measurements and remaining scratch records for durable evidence,
    then move that evidence to its owner.
    Reproduce claims used to select a default before presenting them as current results.
 

@@ -362,6 +362,22 @@ let (first ~> x; whole) = (3, 4) in
 ret (x, whole)
 ```
 
+Views associate to the right: `f ~> g ~> p` transforms with `f`, then `g`, before matching `p`.
+For complete, well-typed total values, the usual capture-avoiding equations explain application and binding:
+
+```text
+V |> (val p => W)                 = let p = V in W
+let x = V in x                   = V
+let x = V in W                   = W                     (x not free in W)
+let y = (let x = V in W) in U     = let x = V in let y = W in U
+val x => f x                     = f                     (x not free in f)
+let f ~> p = V in W               = let p = (V |> f) in W
+```
+
+The reassociation requires `x` fresh for `U`; binders may be renamed to satisfy it.
+The binding equations use irrefutable patterns.
+Type abstraction/application has the corresponding beta and eta equations.
+These equations concern value transformations; execution still requires the bounded static elimination in §10.
 An explicitly authored thunk is the runtime callable form when an implementation must remain dynamically selectable.
 
 ## 9. Polymorphism and packages
@@ -425,6 +441,7 @@ from the resulting component type, even when mentioned only through `typeof`.
 Field selection `v/field` recursively searches named wrappers, product components,
 and package telescopes for exactly one matching public name.
 Functions, thunks, and data payloads are opacity boundaries.
+Explicit named fields and public punned binder names, including manifest kind entries, share this search namespace.
 Missing and ambiguous names are different errors, and an explicit path performs a new search at each slash.
 Manifest packages are transparent; selecting through an abstract package requires a projection pattern.
 Its hidden fields still count when checking ambiguity.
@@ -434,7 +451,8 @@ Its hidden fields still count when checking ambiguity.
 ```
 
 `/field = p` selects and binds the payload; `/field` puns that binding.
-Payload patterns are irrefutable.
+Payload patterns are irrefutable and may carry annotations.
+Projection patterns associate to the right: `/outer = /inner = p` selects `outer`, then `inner` from its payload.
 A group such as `(/Item; /value; whole)` opens each selected package occurrence once,
 so related fields share witnesses and `whole` can forward the same package.
 Type projection selects the payload of a named kind.

@@ -120,6 +120,120 @@ so no one-line indirection files sit between type expressions and the compiler m
 Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file,
 so their classifiers read as ordinary type expressions.
 
+## Package composition
+
+Select related types and operations in one projection group so they share one abstract opening.
+A whole-package alias passes that same dependency to a factory:
+
+```zydeco check
+param (/Bytes; /Reader; /io; builtin) : @(import("builtin.zy")) in
+let make_std = @(import("std.zy")) in
+let (/bytes; /fs) = builtin |> make_std in
+! bytes/empty
+```
+
+Here `Bytes`, `Reader`, and `io` come from one Builtin opening; `builtin` forwards the original package.
+Slash selection follows the [language rules](../../docs/references/language.md#9-polymorphism-and-packages),
+including nested products and ambiguity.
+A view such as `make_std ~> (/bytes; /fs)` combines application and opening.
+
+A final `pack` introduction is useful when an implementation should synthesize its exported type evidence.
+Use an explicit existential annotation when the contract must prescribe an abstract payload type;
+use a companion `.zyi` source when the contract deserves independent authorship.
+Named product values also synthesize their types, so naming fields alone does not require a companion.
+
+Kind fields currently need an annotated package introduction rather than `pack`:
+
+```zydeco check
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let types =
+  pack (= Thk as @(intrinsic(thk)) : CType -> VType)
+  where () end
+in
+((VType, CType, types) :
+  exists (VType as @(intrinsic(vtype))) (CType as @(intrinsic(ctype))) . @[typeof] types)
+```
+
+The annotation discloses the kind equations, while the inner `pack` supplies a type constructor.
+The shared [package design](../../docs/proposals/package-modularization.md) explains when inferred
+and authored interfaces serve different maintenance needs.
+
+## Explicit runtime contracts
+
+A value functor is a total package-to-package value function and undergoes static elimination.
+A computation functor receives a package through a computation protocol; its thunk may remain dynamically selectable.
+The callee body need not be statically known when its signature and the argument's witnesses are available.
+
+For `Sig = exists (X : K) . A X`, explicit adapters connect `pi ((X, x) : Sig) . C X`
+and `forall (X : K) . A X -> C X`: they group or separate the same type witness and payload.
+The result may depend on `X`, not on the arbitrary runtime value `x`.
+For example, both interfaces can expose codata methods:
+
+```zydeco check
+param (/VType; /Thk; /Ret; /Unit) : @(import("builtin.zy")) in
+let Box = exists (X : VType) . X in
+let Methods (X : VType) = codata
+  | .get : Ret X
+  | .replace : X -> Ret X
+end in
+let Curried = forall (X : VType) . X -> Methods X in
+let Packaged = pi ((X, _) : Box) . Methods X in
+let curried : Thk Curried = {
+  fn (X : VType) (value : X) => comatch
+    | .get => ret value
+    | .replace replacement => ret replacement
+  end
+} in
+let packaged : Thk Packaged = {
+  fn ((X, value) : Box) => ! curried X value
+} in
+let restored : Thk Curried = {
+  fn (X : VType) (value : X) => ! packaged ((X, value) : Box)
+} in
+! restored Unit () .get
+```
+
+These are explicit adapters, not definitional equality between `PackPi` and `Forall`
+or a theorem equating arbitrary effectful protocols.
+A package `pi` outside codata opens once for the residual protocol; inside a method arm it opens for that observation.
+Moving it changes where payloads and witnesses are shared.
+
+When the provider chooses a hidden type, a polymorphic callback can give the consumer one scoped opening:
+
+```zydeco check
+param (/VType; /CType; /Thk; /Ret; /Int64) : @(import("builtin.zy")) in
+let Entry = exists (X : VType) . X * Thk (X -> Ret Int64) in
+let Hidden = codata
+  | .open : forall (R : CType) . Thk (pi ((X, _, _) : Entry) . R) -> R
+end in
+ret ()
+```
+
+The callback receives a value and an operation at the same abstract `X`.
+Its result protocol `R` is chosen outside the opening, so the private witness cannot escape through that result.
+The corresponding curried callback takes `forall (X : VType) . X -> Thk (X -> Ret Int64) -> R`.
+Neither callback type promises purity or single invocation.
+
+## Relative monads and control examples
+
+The [control modules](control) supply `Monad`, `Algebra`, State, Exception, and their combination.
+[L11](../../docs/references/language.md#11-relative-monads) owns monadic-block translation.
+For delimited control, the repository explores a library encoding with `Kont R A = Thk (A -> R) -> R`,
+explicit `reset` and `shift`, and ordinary thunks.
+Working examples are [reset/shift with an explicit continuation](../tests/delimcc/reset-shift-k.zy),
+[reset/shift with a return interface](../tests/delimcc/reset-shift-r.zy),
+and [try/catch](../tests/delimcc/try-catch.zy).
+They are examples, not an exported standard-library delimited-control API.
+
+The design motivation is to express control through a relative monad and evaluate
+that encoding before adding an ambient continuation primitive to `Ret`.
+The historical exploration points to [the HOPE talk](http://maxsnew.com/publications.html#hope22)
+and [the delimcc API discussion](https://okmij.org/ftp/continuations/implementations.html#delimcc-paper).
+These encodings do not capture native frame tokens;
+[native lifetime rules](../../docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+remain a separate implementation contract.
+
 ## Text model
 
 `String` is immutable, valid UTF-8 text.
@@ -137,8 +251,8 @@ surrogate code points, and values above the Unicode range with `none`.
 
 `Bytes` is an immutable sequence of octets with no encoding attached.
 Positions and lengths count octets, not scalars, and `bytes/get` reports one octet as a `UInt8`.
-`bytes/slice value start length` returns the window `[start, start + length)` sharing storage
-with `value` where the backend supports it, so decomposing a buffer does not copy it.
+`bytes/slice value start length` returns the window `[start, start + length)`.
+It shares storage in the interpreter and Wasm host; the native runtime currently copies the window.
 Two buffers are equal exactly when their octet sequences are equal;
 `bytes/lt` compares buffers lexicographically octet by octet.
 Construction from single octets goes through `bytes/singleton`, which is total because every `UInt8` is a valid octet;
@@ -148,6 +262,25 @@ Unicode scalar values are deliberately different from user-perceived grapheme cl
 For example, a combining mark occupies its own position.
 Grapheme segmentation and normalization should be added as a separate text layer rather than changing the meaning
 of these foundational operations.
+
+## Byte operation costs
+
+These costs describe the current contiguous-buffer implementations, excluding general allocation/GC overhead.
+The [compiler reference](../../docs/references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls)
+owns backend storage; [text/package.zy](text/package.zy) defines the derived operations.
+
+| Operation | Work |
+| --- | --- |
+| `length`, `get`, `singleton` | Constant time. |
+| `slice` | Constant-time window in the interpreter and Wasm host; native copies the selected length. |
+| `eq`, `lt` | At most the shorter buffer's length in byte comparisons, with early exit. |
+| `append` | Copies both inputs: O(n + m). |
+| `to_list` | O(n) indexed observations and list cells. |
+| `from_list` | Repeated append of a singleton to the accumulated tail: O(n²) copied bytes. |
+| `concat` | Sum of the lengths copied by the right fold; quadratic for a list of equal-sized chunks. |
+
+A future [memory-backed writer](../../docs/proposals/filesystem.md#memory-backed-writer-and-byte-builder)
+would provide incremental construction without changing immutable-byte observations.
 
 ## Total operations
 
@@ -249,7 +382,7 @@ let _ : Numeric Bool Carrier = operations in
 ```
 
 The [manifest type rules](../../docs/references/language.md#9-polymorphism-and-packages) supply the disclosed equation;
-[package selection](../../docs/proposals/field-projection.md#existential-package-selection) governs the shared opening.
+[package selection](../../docs/references/language.md#9-polymorphism-and-packages) governs the shared opening.
 Naming a manifest field after its carrier avoids imposing a generic role label on each consumer.
 When exporting several instances, use distinctive value names such as `int64_instance` and `float32_instance`
 so their selection is unambiguous.
@@ -259,8 +392,8 @@ Several implementations for one carrier can coexist without global instance sear
 A wrapper can carry additional abstract or manifest type fields under the same package scope rules.
 Its static components obey the [static elimination contract](../../docs/references/language.md#10-static-elimination);
 ordinary dictionary thunks may remain at runtime.
-The [runtime contract design](../../docs/proposals/package-modularization.md#explicit-runtime-contracts)
-describes adapters when operations must be dynamically selectable.
+The [runtime contract design](README.md#explicit-runtime-contracts) describes adapters
+when operations must be dynamically selectable.
 
 ## Public modules
 
@@ -284,8 +417,8 @@ describes adapters when operations must be dynamically selectable.
 Filesystem contents are bytes by default. Text conveniences explicitly validate or produce UTF-8,
 and every fallible operation reports `Result A IoError` to its `OS` continuation.
 EOF is represented as `Option` by line reads; it is not conflated with an empty line or an I/O failure.
-The full rationale and lifecycle contract are documented
-in [`docs/proposals/filesystem.md`](../../docs/proposals/filesystem.md).
+The [stream guide](#streams-and-files) gives the operations and lifecycle contract;
+[filesystem design](../../docs/proposals/filesystem.md) retains the rationale and extension questions.
 
 The topic files are independently importable value functions.
 `std.zy` is the composition root used by most programs; its public package carries the library-defined types
@@ -295,3 +428,63 @@ so no restated contract sits between the implementation and its consumers.
 Consumers still select individual modules and types directly,
 such as `let make_std ~> (/option; /process) = builtin in`, because slash projection searches the nested structure.
 Here `~>` is a view pattern over the imported value function; the function itself is an ordinary value.
+
+## Streams and files
+
+The shared `io` layer is byte-oriented.
+The following computation protocols apply after forcing the exported operation thunks.
+Fallible resource operations use the standard library's continuation-passing `OS` convention:
+
+```text
+io/read       : Reader -> Int64 -> Thk (Result Bytes IoError -> OS) -> OS
+io/read_line  : Reader -> Thk (Result (Option Bytes) IoError -> OS) -> OS
+io/read_all   : Reader -> Thk (Result Bytes IoError -> OS) -> OS
+io/write_all  : Writer -> Bytes -> Thk (Result Unit IoError -> OS) -> OS
+io/flush      : Writer -> Thk (Result Unit IoError -> OS) -> OS
+io/close_reader : Reader -> Thk (Result Unit IoError -> OS) -> OS
+io/close_writer : Writer -> Thk (Result Unit IoError -> OS) -> OS
+```
+
+`read` rejects negative byte counts. `write_all` either writes the complete buffer or reports an error;
+exposing a partial-write primitive would force every caller to duplicate the same retry loop.
+
+The `fs` module uses a typed `Path` wrapper around a UTF-8 `String`.
+This wrapper prevents ordinary text from being passed accidentally where the host expects a path,
+while preserving the current language's portable UTF-8 model.
+It does not claim that every native path can be represented on every operating system;
+a future platform-specific path representation can replace the wrapper without changing stream operations.
+
+```text
+fs/path          : String -> Ret Path
+fs/path_string   : Path -> Ret String
+fs/open_reader   : Path -> Thk (Result Reader IoError -> OS) -> OS
+fs/create_writer : Path -> Thk (Result Writer IoError -> OS) -> OS
+fs/append_writer : Path -> Thk (Result Writer IoError -> OS) -> OS
+fs/read_bytes    : Path -> Thk (Result Bytes IoError -> OS) -> OS
+fs/read_text     : Path -> Thk (Result String IoError -> OS) -> OS
+fs/write_bytes   : Path -> Bytes -> Thk (Result Unit IoError -> OS) -> OS
+fs/write_text    : Path -> String -> Thk (Result Unit IoError -> OS) -> OS
+```
+
+`create_writer` creates a missing file and truncates an existing one.
+`append_writer` creates a missing file and places every write at the end.
+Whole-file helpers open, operate, and close internally.
+If the data operation fails, that error wins; otherwise a close error is returned.
+
+The `stdio` module exposes `stdin`, `stdout`, and `stderr` as capabilities.
+Its `read_line` checks UTF-8 and returns `Result (Option String) IoError`; its `write`, `write_line`,
+and error-stream variants encode `String` to `Bytes`, delegate to `io/write_all`, and preserve write or flush failures.
+
+`IoError` carries a stable kind and a display message.
+The kinds are `NotFound`, `PermissionDenied`, `AlreadyExists`, `InvalidInput`, `InvalidData`,
+`BrokenPipe`, `Closed`, and `Other`; branch on the kind rather than parsing the message.
+A read at EOF returns empty bytes; `read_line` returns `Ok None` instead.
+An empty line is `Ok (Some empty)`, and a final line without a newline is still returned.
+Line reads strip a trailing LF and its immediately preceding CR; arbitrary byte reads preserve their contents.
+A zero-byte read also returns empty bytes, so it cannot by itself establish EOF.
+
+Handles are alias-visible capabilities.
+Closing a file-backed reader or writer closes it for every alias, and subsequent operations report `Closed`.
+Reserved standard streams remain available after ordinary close requests.
+The current streams block. [Capability extensions](../../docs/proposals/filesystem.md) cover buffering,
+seeking, memory-backed writers, and future asynchronous protocols.

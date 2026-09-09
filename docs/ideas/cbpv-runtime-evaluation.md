@@ -103,32 +103,16 @@ Rust-owned host strings and bytes have a separate reclamation problem.
 
 ## Further work
 
-1. **Refresh the baseline and broaden the workloads.** Rerun after `77ee657f`,
-   which already turns known arithmetic returns into ordinary bindings.
-   Include callbacks, escaping closures, overlapping suspensions of one activation,
-   host values, and alternating deep and shallow phases.
-   Physical AMD64 runs and representative programs should precede any default change;
-   arithmetic-heavy Rosetta microbenchmarks are insufficient.
-2. **Remove remaining provably local control transitions.** Preserve known entry contexts
-   through the relevant IR boundaries and eliminate suspension bookkeeping
-   when the transfer cannot reuse the environment.
-   Pair local cases with host callbacks and indirect returns that must retain the full protocol.
-   [Primitive call normalization](../references/compiler.md#primitive-calls) is the implemented starting point.
-3. **Compare shared captures with selective frame retention.** Try an activation-level union
-   of saved bindings or retention for dense, overlapping captures.
-   Check that older values survive inner resumptions and slot reuse.
-   Measure copying, duplicate root locations, metadata, and total reservation together.
-4. **Reclaim words and metadata together.** Compare segments, regions, or shrink policies under deep-to-shallow phases.
-   Demonstrate that reservation falls after the retained state is released, while tail usage remains bounded.
-   A segmented suspended store can implement the environment capability without promising one contiguous storage base.
-5. **Extend capabilities when a program needs them.** Integrate moving environments or detached control only
-   with an explicit relocation, ownership, safepoint, and host-boundary contract.
-   Force collection and allocation failure at those boundaries.
-   Flattened control-stack captures, generational environments, and region allocation remain candidates,
-   not completed native comparisons.
-6. **Evaluate whole-program reclamation.** Add long-running WebAssembly and native host-value cases.
-   Account separately for live values, environment/control storage, cached capacity, and external resources.
-   Select tracing, regions, or destructive reuse only after establishing the required lifetime and sharing discipline.
+Actionable design questions now live in [native frame decisions](../proposals/native-frames.md#remaining-decisions)
+and [Wasm decisions](../proposals/wasm-backends.md#open-questions).
+They cover local transfers, shared captures, reclamation of words and metadata, relocation contracts,
+and long-running host-value and Wasm memory behavior.
+
+For a follow-up experiment, refresh the baseline after `77ee657f`, which already normalizes known arithmetic returns.
+Include callbacks, escaping closures, overlapping suspensions, host values, and alternating deep and shallow phases.
+Record the same total-space accounting and output oracles as this study.
+Physical AMD64 runs and representative programs are needed before changing a default;
+arithmetic-heavy Rosetta microbenchmarks do not suffice.
 
 ## Evidence and limits
 

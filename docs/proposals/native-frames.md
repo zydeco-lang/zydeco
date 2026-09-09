@@ -2,24 +2,17 @@
 
 ## Status and scope
 
-This proposal describes an alternative AMD64 environment representation: preserve the locals needed
-by a return continuation in an activation frame while another computation runs.
-The continuation resumes against that frame, avoiding a separate heap capture tuple
-and the reconstruction of its local environment.
-The candidate is implemented for AMD64 through the shared `zydeco-machine` model,
-with statically packed slots and growable environment storage.
-It replaces native continuation capture tuples with retained slots; portable ZASM
-and WebAssembly keep their existing capture-based lowering.
-The [runtime evaluation](../ideas/cbpv-runtime-evaluation.md) records the measured space and execution tradeoffs.
+Retained activation frames are the current AMD64 environment representation.
+[C11](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) owns native preparation,
+slot assignment, and the lifetime justification;
+[C12](../references/compiler.md#environment-actions-and-roots) owns the shared model and root contract.
+Portable ZASM and WebAssembly retain capture-based lowering.
 
-The independently reviewable question is the lifetime of an activation and the context available
-when its continuation resumes.
-This document owns the frame lifetime, entry, reclamation, and root invariants.
-[Escape analysis and unboxing](escape-unboxing.md) owns the representation choices for individual values;
-it can use these frame lifetimes without redefining them.
-The current implementation remains documented
-in [Runtime Representations](../../DESIGN.md#runtime-representations), and the source meaning of `Ret` remains
-in [Computation Types as Stack Protocols](../../DESIGN.md#computation-types-as-stack-protocols).
+This record owns the reasons for retaining frames, the lifetime requirements any alternative must meet,
+and the experimental storage choices.
+[Escape and unboxing](escape-unboxing.md) owns individual value representations.
+The [runtime study](../ideas/cbpv-runtime-evaluation.md) keeps dated evidence and measurement limits;
+source computation protocols belong to [L6](../references/language.md#6-computations-and-control).
 
 ## Motivation and the previous implementation
 
@@ -215,113 +208,20 @@ Slot reuse, smaller retained extents, or compact continuation captures may be pr
 
 ## Boundary with compiler and runtime
 
-### Checked native preparation
+The common [preparation contract](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+provides initialized bindings, ownership, packed slots, and suspension maps.
+An alternative storage engine must preserve every pending capture,
+not merely the currently executing block's live locals.
+The [environment capability](../references/compiler.md#environment-actions-and-roots) permits suspended values
+to move between transitions but constrains the active base and published root addresses.
+This is the boundary against which the following experiments are compared.
 
-SPSLow still represents a lexical tree of closed executable blocks.
-Continuation conversion additionally records `ContinuationEntry` provenance: the returned-value pattern,
-the body after the portable environment preamble, and the source-to-captured-binding relation.
-Validation checks this metadata against the actual package, capture product, and entry preamble.
-It also checks that the entry body needs only its result bindings and declared captures.
-Metadata references describe existing nodes; they do not introduce additional executable occurrences.
-
-Native lowering uses this checked relation to omit the capture product and its unpacking preamble.
-It introduces a `RetainFrame` instruction and a resumption entry whose captured bindings alias the source slots.
-The root and closure entries establish fresh activations; ordinary branches stay in their current activation.
-The native frame analysis follows local control edges and suspension-to-resumption edges to assign owners.
-It verifies initialized bindings by forward dataflow, independently of ZASM's context annotations,
-and requires suspension captures to agree with the corresponding resumption aliases.
-
-Captured aliases resolve to their original definitions, including through several nested continuations.
-Backward liveness supplies the values needed by current execution at each program point.
-A separate forward may-analysis tracks values retained by pending continuations within each activation.
-An ordinary successor inherits that pending set; suspension adds its canonical captures.
-The suspension-to-resumption edge carries the incoming set, because that resumption consumes its own suspension
-while older suspensions remain pending.
-Joins take a union, conservatively preserving every possible pending use.
-
-Two canonical definitions interfere when they are simultaneously live or pending at a program point.
-A definition also interferes with every value preserved across its write, even if its own result is dead.
-The planner colors this interference graph with a deterministic greedy order, independently for each activation.
-Aliases inherit their source's slot.
-A frame with no definitions needs zero words; otherwise its size is one plus its largest assigned slot.
-This is a static safe bound, not a claim of optimal graph coloring or a whole-program recursion bound.
-The compiler emits the same packed offsets in accesses, suspension maps, and active root maps.
-The runtime still discovers the precise union for the suspensions actually pending at collection time.
-A checked, immutable `NativeProgram` is the AMD64 emitter's input.
-
-For example, after `x` is used for the last time a later result can occupy its slot.
-If an outer continuation still captures `x`, an inner continuation's result must occupy another slot,
-even when the inner code never reads `x`.
-Merely coloring ordinary backward liveness would allow that overwrite.
-Static size is therefore useful together with a preservation analysis; knowing how many names are
-in scope does not establish which storage may be reused.
-
-The lifetime justification comes from the lowered machine-stack operations.
-SPSLow values cannot contain a residual machine stack, and the checked continuation code cannot refer
-to its own label from its body.
-The package pushes code and a token onto the ambient stack; opening it consumes that stack destructively.
-Recursive closure invocation establishes another activation instead of reentering a suspended one.
-Source control-library encodings can copy ordinary heap closures, but cannot detach or copy these machine tokens.
-The runtime also checks that resumption consumes the most recently pending token.
-A future IR operation that captures machine stacks must revisit this justification.
-
-### Shared executable frame model
-
-[`zydeco-machine::frames`](../../lang/machine/src/frames.rs) owns `Layout`, `Token`, `Action`, and `Frames`.
-Its sealed `Environment` capability shares action dispatch between the retained engine and compact fragments below.
-It promises nested one-shot resumption, initialized declared captures, no collecting transitions,
-a stable active base during Suspend, and a returned base to reload after Enter or Resume.
-Root addresses expire at the next attempted transition, including a failed reservation;
-they refer to values, not necessarily to their active-layout offsets.
-This capability does not require suspended values to retain their original physical addresses.
-Managed-value collection may rewrite the published words, but cannot relocate the active base or root locations.
-The emitter serializes `Action<u64>` followed, where applicable, by static slot indices.
-One declaration generates both the Rust header and its serialization order;
-AMD64 data sections guarantee word alignment.
-The runtime reads the same record as `Action<usize>`, with target-side size and alignment assertions.
-The following actions invoke the retained engine's transition methods:
-
-| Action | Model behavior |
-| --- | --- |
-| Enter | Reserve storage, then replace an unretained active frame or append above a retained one; return its possibly relocated base. |
-| Suspend | Validate the layout and slots, retain the active frame, and return a fresh tagged token. |
-| Resume | Validate the most recent token and owner layout, release that suspension, reclaim younger frames, and return the restored base. |
-| Roots | Validate the active slot map and return addresses for its union with every pending suspension's slot map. |
-
-The stub owns `Frames<Growable>`.
-`frames::storage::Storage` isolates the reservation policy from the common nested transitions,
-with concrete fixed and geometrically growing implementations.
-The growable store allocates on demand at entry and caches capacity at its historical high-water mark.
-It doubles capacity when that suffices, or grows directly to a larger requested extent.
-The fixed store is an experimental comparison using the same actions, not a second continuation convention.
-Moving the Rust owner cannot move its words; successful entry is the only operation permitted to relocate them.
-Slot access uses raw pointers without constructing Rust references over words addressed by generated code.
-Activation and suspension metadata use separate Rust vectors; saved references are indices and checked tokens,
-so metadata growth cannot invalidate frame references.
-Size limits and fallible word reservation are checked before changing activation or suspension state.
-Failure leaves existing words, bases, and tokens usable.
-Rust metadata allocation retains the allocator's ordinary failure behavior;
-this is not a general recovery protocol for host allocation failure.
-Slots need no clearing on reuse: the compiler proves initialization, and sparse maps select the live roots.
-The backing storage's initial zeroes do not count as initialized source bindings.
-
-Frame transitions may allocate Rust metadata but never collect the managed heap.
-A suspension leaves `L_k :: token(F) :: S` on the machine control stack.
-At `k`, the prologue removes the token while preserving `result :: S`, invokes Resume,
-restores `rbp`, and executes the returned-value pattern.
-The model restores the allocation frontier as well as the base.
-Before a managed allocation, generated code passes its active Roots descriptor and the control-stack cursor;
-the stub supplies a deferred root source to the collector.
-[Root publication](../../DESIGN.md#native-garbage-collection) adds registered host roots
-and enumerates frame slots when collection actually needs them.
-
-The [shared model packaging](../../DESIGN.md#shared-rust-runtime-model) pairs these definitions
-with their emitter through a source fingerprint in the entry symbol.
-Frame operations share executable Rust semantics across code generation and the stub;
-instruction selection and SysV register placement still need integration checks.
-Returning host and C calls preserve the continuation already on the control stack
-and reach the same resumption prologue.
-The [C import contract](c-ffi.md) continues to own borrowing, unwinding, and reentry restrictions.
+For example, an inner resumption cannot reuse `x`'s slot while an older continuation still captures `x`,
+even if the inner block never reads it.
+Ordinary backward liveness is therefore insufficient for slot reuse.
+Likewise, implementing a copied source-level control closure does not grant permission
+to copy or detach a machine token.
+A new machine-stack operation would require revisiting the lifetime proof before selecting storage.
 
 ### Experimental compact environments
 
@@ -501,17 +401,24 @@ Their results do not establish that the proposed Zydeco representation is correc
 
 ## Remaining decisions
 
-The [runtime evaluation's further work](../ideas/cbpv-runtime-evaluation.md#further-work) consolidates the
-remaining questions about local transfers, shared captures, storage reclamation, and moving environments,
-together with the evidence needed to choose a new default.
+The [runtime study](../ideas/cbpv-runtime-evaluation.md) motivates these comparisons without choosing a new default:
 
-## Implementation references
+- Remove provably local control transitions when known entry contexts establish
+  that no suspension bookkeeping is needed.
+  Preserve the full protocol for indirect returns and host callbacks;
+  [primitive normalization](../references/compiler.md#primitive-calls) is the implemented starting point.
+- Compare activation-level shared captures with selective retention for dense, overlapping suspensions.
+  Measure copying, duplicate roots, metadata, and total reserved space; older captures must survive inner resumptions.
+- Reclaim word storage and metadata together during deep-to-shallow phases.
+  Compare segments, regions, and shrink policies while preserving bounded tail usage.
+  Segmented suspended storage need not promise one contiguous base for every inactive frame.
+- Integrate moving environments or detached control only with explicit relocation, ownership, safepoint,
+  and host-boundary contracts, including collection and reservation failure at those boundaries.
+  Flattened control-stack captures, generational environments, and regions remain candidates.
+- Include native host text and byte storage in long-running reclamation studies,
+  accounting separately for live values, frame/control storage, cached capacity, and external resources.
 
-- [Closure and continuation conversion](../../lang/stackir/src/low/convert.rs) constructs explicit captures and entries.
-- [SPSLow syntax](../../lang/stackir/src/low/syntax.rs)
-  and [validation](../../lang/stackir/src/low/check.rs) define the present closed block boundary.
-- [Native preparation](../../lang/assembly/src/frames.rs) checks ownership and entries and assigns slots and root maps.
-- [Assembly lowering](../../lang/assembly/src/lower.rs) uses continuation provenance to construct native resumptions.
-- [Native emission](../../lang/amd64/src/emit.rs) emits frame descriptors, transitions, and host bridges.
-- [Runtime stub](../../runtime/stub.rs) provides the environment storage and allocation entry points.
-- [Native collector](../../runtime/gc.rs) consumes root ranges and updates managed pointers.
+Rerun after changes to normalization and include overlapping suspensions, callbacks,
+escaping closures, host values, and alternating deep and shallow phases.
+Physical AMD64 measurements and representative programs should precede a default change;
+Rosetta arithmetic microbenchmarks alone do not establish a general ranking.

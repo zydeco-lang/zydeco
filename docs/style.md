@@ -7,8 +7,7 @@ In particular, the source should reveal where a name is available, whether its d
 and where computation is sequenced.
 
 The conventions below favor Zydeco's direct forms and use annotations where they clarify a type-system boundary.
-The [language reference](../references/language.md#2-lexical-structure-and-syntax) specifies accepted syntax
-and grouping.
+The [language reference](references/language.md#2-lexical-structure-and-syntax) specifies accepted syntax and grouping.
 
 ## Reading the Surface Syntax
 
@@ -16,7 +15,7 @@ Juxtaposition makes the classifier's structure visible without assigning an argu
 In `+Some +Pair(left, right)`, the outer constructor has one payload headed by another constructor.
 In a copattern such as `.route +First(value) .left`, `.route` exposes an argument type,
 `+First(value)` matches that argument, and `.left` observes the remaining codata computation.
-Spaces separate those steps; the [computation rules](../references/language.md#6-computations-and-control)
+Spaces separate those steps; the [computation rules](references/language.md#6-computations-and-control)
 explain how each step follows the residual classifier.
 
 Keep that path visible when laying out longer arms.
@@ -34,7 +33,7 @@ The leading `|` already separates a match scrutinee from its arms, so an additio
 ### Pattern alias syntax
 
 Use `(p; q; ...)` to show several observations of one input, such as `((left, right); whole)` or `(/x; /y; whole)`.
-The [pattern rules](../references/language.md#7-patterns-and-coverage) define its scope and admissibility.
+The [pattern rules](references/language.md#7-patterns-and-coverage) define its scope and admissibility.
 Commas expose product components; semicolons keep every observation attached to the same bindee.
 Parentheses make the complete group a composable pattern terminal, including inside constructor payloads.
 The matching relation is symmetric, while source order makes the availability of earlier bindings visible.
@@ -45,7 +44,7 @@ the first collides with the enclosing binding delimiter, and the second makes mu
 `aliased => pattern` reuses the header/body separator and suggests control flow.
 The semicolon form accommodates several field selections uniformly and preserves source order
 if later pattern designs introduce sequential observations.
-The [coverage proposal](exhaustiveness.md#refutable-conjunctions) retains the unresolved
+The [coverage proposal](proposals/exhaustiveness.md#refutable-conjunctions) retains the unresolved
 refutable-conjunction questions.
 
 ## The Shape of a Source File

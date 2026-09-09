@@ -4,7 +4,9 @@ Keep documentation disagreements and proposed repairs here while the references 
 Recording a discrepancy does not settle a language-design decision or authorize a compiler change.
 
 - [Reference drift](reference-drift.md): observed disagreements, evidence, and bounded follow-up actions.
-- [Reference plan](reference-plan.md): source inventory, eventual rule ownership, and consolidation sequence.
+- [Reference plan](reference-plan.md): source inventory, rule ownership, and consolidation sequence.
+- [Deferred designs](deferred-designs.md): value-view coverage, residual sharing, REPL history,
+  and source-location follow-ups.
 
 The [language reference](../references/language.md)
 and [compiler reference](../references/compiler.md) now cover their planned chapters.

@@ -174,7 +174,7 @@ Documented limits and verified behavior are marked explicitly.
 
 C2's reproducer was a named binding cycle, rather than the anonymous definition described in the report.
 A6's future implementation remains
-in the [escape-analysis proposal](../proposals/escape-unboxing.md#implementation-status).
+in the [escape-analysis proposal](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices).
 
 ## Validation status
 

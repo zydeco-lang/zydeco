@@ -33,7 +33,7 @@ and the [shared-bindee demand rule](../references/compiler.md#consumer-demands).
 
 An unrestricted binary as-pattern remains an alternative when only a whole-value alias
 and one refutable member are needed.
-The [syntax rationale](style.md#pattern-alias-syntax) explains the current semicolon choice.
+The [syntax rationale](../style.md#pattern-alias-syntax) explains the current semicolon choice.
 A syntax extension should first settle how many observations occur and which bindings remain available after failure.
 
 ## Additional literal forms
@@ -58,3 +58,12 @@ and agreement between generated matching and direct package-dependent abstractio
 [Copattern checking](../../lang/statics/src/check/copattern.rs),
 [coverage validation](../../lang/statics/src/validate/coverage.rs),
 and [coverage regressions](../../lang/tests/tests/coverage.rs) are the implementation and validation entry points.
+
+## Refutable projection payloads
+
+Projection patterns currently require irrefutable payloads, including under `@[partial]`.
+Supporting `/field = p` with a refutable `p` would need nested failure to reach the next arm
+while retaining one package opening and the selected field's type evidence.
+Review that together with the existing refutable conjunction questions;
+accepted nesting must have a corresponding missing-case rejection.
+[Refutable value-view coverage](../todos/deferred-designs.md#value-views) remains a separate todo.

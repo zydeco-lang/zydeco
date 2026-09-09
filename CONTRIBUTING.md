@@ -81,8 +81,8 @@ A companion `foo.zyi` is an optional, independently checked type contract for `f
 Use it when maintaining that contract separately is useful; otherwise, annotate introductions
 in place or let `pack` synthesize an existential package type.
 `pack` currently accepts type witnesses but not kind witnesses such as `VType` and `CType`.
-The [package design](docs/proposals/package-modularization.md#package-annotations-and-companion-files)
-explains the prelude's annotated kind prefix and its use of `@[typeof]` to reuse the remaining package type.
+The [package design](lib/std/README.md#package-composition) explains the prelude's annotated kind prefix
+and its use of `@[typeof]` to reuse the remaining package type.
 
 ## Compile Programs
 
@@ -180,6 +180,9 @@ and supplies empty stdin and an empty argument list.
 Enter submits complete syntax and adds a line for incomplete syntax.
 Alt+Enter always inserts a newline; Ctrl+Enter submits even incomplete text for diagnostics.
 A type checking rejection keeps the editor and input number unchanged for correction and retry.
+Recorded submissions are immutable source history; import them explicitly to reuse a term.
+Imports may execute effects again. Clearing the transcript preserves its numbered sources;
+it does not start a fresh lexical environment or discard importable history.
 
 ## Format and Lint
 
@@ -276,7 +279,7 @@ cargo test -p zydeco-tests wasm_ -- --test-threads=1
 Native end-to-end tests invoke the assembler, linker, and a separate Cargo runtime build;
 they require the target toolchain even when the compiler itself runs on another architecture.
 Tests for installed foreign libraries or optional native FFI execution are marked ignored;
-see the [C FFI checks](docs/proposals/c-ffi.md#examples-and-checks) before enabling them.
+see the [C FFI checks](docs/proposals/c-ffi.md#validation-criteria) before enabling them.
 
 The full CI commands are:
 

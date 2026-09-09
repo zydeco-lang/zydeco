@@ -1,130 +1,50 @@
-# Files, byte streams, and standard I/O
+# Stream capabilities and construction
 
-The first standard-I/O interface treats text, terminal input, and files as unrelated host operations.
-That makes simple examples convenient, but it leaves no reusable abstraction for copying data,
-buffering output, or handling failures.
-It also assumes every external resource contains valid UTF-8 text.
-A filesystem interface should instead begin with bytes and expose terminals and files
-through the same stream operations.
+Files and terminals need a common byte-stream abstraction so clients can reuse copying, encoding, and error handling.
+The implemented [stream and file guide](../../lib/std/README.md#streams-and-files) owns the operations,
+EOF distinctions, error precedence, and close behavior.
+[C14](../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) owns host handle tables.
+This design keeps the capability rationale and future stream questions together.
 
-This design introduces opaque `Bytes`, `Reader`, and `Writer` value types.
-`Bytes` represents arbitrary octets; `Reader` and `Writer` are capabilities owned by the runtime.
-All operations that observe or mutate a capability end in `OS`, so opening a file
-or reading a stream cannot be mistaken for a pure computation.
+## Boundary choices
 
-## Module boundaries
+Immutable bytes are data; readers and writers grant access to a resource whose observations can change.
+Keeping resource operations in `OS` exposes that distinction in their protocols.
+Opaque handle IDs permit ordinary value aliasing while giving close one observable meaning across every alias.
+This supports resource safety without pretending that the language already has linear ownership.
 
-The standard library exposes three modules with distinct responsibilities.
+The host reports success or an error kind and message; the library constructs algebraic `Result` values.
+That keeps the ABI independent of one library's data representation while giving programs stable cases to inspect.
+Messages remain display text. Whole-file composition centralizes cleanup and error precedence instead
+of requiring clients to rebuild the same open/operate/close protocol.
 
-- `io` owns byte conversion, stream operations, and structured I/O errors.
-- `fs` opens file-backed readers and writers and provides whole-file convenience operations.
-- `stdio` supplies the process's standard streams and text-oriented terminal conveniences.
-- `process` owns arguments, random numbers, exit, panic, and halt.
-  These operations are no longer mixed into I/O.
+`io` owns shared streams, `fs` supplies file capabilities, and `stdio` supplies reserved process streams.
+Process control remains a separate capability family.
+Text conveniences explicitly encode or validate UTF-8; a typed UTF-8 `Path` prevents accidental text/path interchange
+but cannot express every platform's native paths.
 
-`stdio` and `fs` both call the operations in `io`; they do not have independent read or write implementations.
-This keeps partial writes, UTF-8 validation, EOF, flushing, and errors consistent across terminals and files.
+## Memory-backed Writer and byte builder
 
-## Values and capabilities
+Repeated immutable append copies accumulated content, making byte-at-a-time construction quadratic.
+A memory-backed writer could reuse the existing capability model for amortized constant-time pushes,
+then produce one immutable `Bytes` result.
+This is the sole design home for that builder; [byte representation](bytes.md) owns the resulting value's observations
+and storage alternatives.
 
-The core types have the following roles.
+Before choosing an interface, decide whether obtaining contents snapshots the buffer or freezes and closes the writer.
+A snapshot must remain unchanged after later writes; a freeze must define what every writer alias observes afterward.
+Specify close, repeated observation, failure, and buffer-transfer ownership together.
+The builder must not expose a mutable alias to storage already borrowed as immutable bytes by foreign code.
+Compare copying snapshots with a consuming freeze using workloads that construct many small chunks.
+No new primitive family or operation spelling is selected yet.
 
-```text
-Bytes   arbitrary byte sequences
-Reader  a readable runtime resource
-Writer  a writable runtime resource
-```
+## Other extensions
 
-`Bytes` is immutable at the language boundary. The initial interface provides an empty value, byte length,
-concatenation, UTF-8 encoding from `String`, and checked UTF-8 decoding to `String`.
-Files remain byte-oriented; the `read_text` and `write_text` conveniences make the encoding boundary explicit.
+Buffered and seekable streams need explicit position and aliasing behavior.
+Asynchronous operations need cancellation, pending-operation lifetime, and completion ordering;
+changing a blocking implementation does not settle those protocol choices.
+Platform-specific paths should be independently reviewable and preserve byte-stream composition.
 
-`Reader` and `Writer` are opaque.
-A value contains a runtime-managed handle identifier, never a native pointer or an operating-system file descriptor.
-Copying a Zydeco value can therefore copy the identifier safely.
-Closing removes the corresponding resource from the runtime's handle table,
-and later operations report `Closed` instead of dereferencing freed storage.
-The standard input, output, and error handles are reserved process capabilities and are not closed
-by ordinary library operations.
-
-The first implementation uses blocking streams. This leaves room for future buffered, asynchronous,
-or seekable capabilities without changing the distinction between bytes and text.
-
-## Results, errors, and EOF
-
-Fallible operations return `Result A IoError` to their continuation.
-`IoError` contains a stable library-level kind and a human-readable message.
-The initial kinds are:
-
-```text
-NotFound  PermissionDenied  AlreadyExists  InvalidInput
-InvalidData  BrokenPipe  Closed  Other
-```
-
-The runtime maps host errors to these kinds.
-Programs may branch on the kind and may display the message, but should not parse the message to recover state.
-
-End-of-file is a normal stream state rather than an error.
-`read` returns an empty byte sequence when the stream is at EOF, while `read_line` returns `Ok None`.
-A final line without a trailing newline is returned as `Ok (Some line)`.
-The line operation removes `\n` and an immediately preceding `\r`, matching terminal-oriented expectations
-without changing arbitrary byte reads.
-
-## Public operations
-
-The shared `io` layer is byte-oriented.
-The exact surface types use the standard library's continuation-passing `OS` convention:
-
-```text
-io.read       : Reader -> Int64 -> Thk (Result Bytes IoError -> OS) -> OS
-io.read_line  : Reader -> Thk (Result (Option Bytes) IoError -> OS) -> OS
-io.read_all   : Reader -> Thk (Result Bytes IoError -> OS) -> OS
-io.write_all  : Writer -> Bytes -> Thk (Result Unit IoError -> OS) -> OS
-io.flush      : Writer -> Thk (Result Unit IoError -> OS) -> OS
-io.close_reader : Reader -> Thk (Result Unit IoError -> OS) -> OS
-io.close_writer : Writer -> Thk (Result Unit IoError -> OS) -> OS
-```
-
-`read` rejects negative byte counts. `write_all` either writes the complete buffer or reports an error;
-exposing a partial-write primitive would force every caller to duplicate the same retry loop.
-
-The `fs` module uses a typed `Path` wrapper around a UTF-8 `String`.
-This wrapper prevents ordinary text from being passed accidentally where the host expects a path,
-while preserving the current language's portable UTF-8 model.
-It does not claim that every native path can be represented on every operating system;
-a future platform-specific path representation can replace the wrapper without changing stream operations.
-
-```text
-fs.path          : String -> Path
-fs.path_string   : Path -> String
-fs.open_reader   : Path -> Thk (Result Reader IoError -> OS) -> OS
-fs.create_writer : Path -> Thk (Result Writer IoError -> OS) -> OS
-fs.append_writer : Path -> Thk (Result Writer IoError -> OS) -> OS
-fs.read_bytes    : Path -> Thk (Result Bytes IoError -> OS) -> OS
-fs.read_text     : Path -> Thk (Result String IoError -> OS) -> OS
-fs.write_bytes   : Path -> Bytes -> Thk (Result Unit IoError -> OS) -> OS
-fs.write_text    : Path -> String -> Thk (Result Unit IoError -> OS) -> OS
-```
-
-`create_writer` creates a missing file and truncates an existing one.
-`append_writer` creates a missing file and places every write at the end.
-Whole-file helpers open, operate, and close internally.
-If the data operation fails, that error wins; otherwise a close error is returned.
-
-The `stdio` module exposes `stdin`, `stdout`, and `stderr` as capabilities.
-Its `read_line` checks UTF-8 and returns `Result (Option String) IoError`; its `write`, `write_line`,
-and error-stream variants encode `String` to `Bytes`, delegate to `io.write_all`, and preserve write or flush failures.
-
-## Backend contract
-
-The interpreter and native runtime implement the same primitive ABI.
-Both keep monotonically allocated handle IDs, distinguish reader and writer operations in the typed ABI,
-validate each identifier against its resource table, and translate host errors to the shared error-kind codes.
-The interpreter reserves capabilities for its injected input and output streams so tests
-and embedding continue to control standard I/O.
-The native runtime reserves capabilities backed by the process's actual standard streams.
-
-Primitive callbacks carry either a successful value or an error kind plus message.
-Standard-library code converts those branches into `Result`, keeping runtime representations out of user programs.
-This division makes the host responsible for resource safety and the standard library responsible
-for ergonomic composition.
+Each extension should reuse the existing success/error boundary where it fits,
+and pair normal use with closed handles, failed operations, and cleanup after partial progress.
+Resource lifetime remains a separate question from immutable-byte representation and native continuation lifetime.

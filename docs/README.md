@@ -15,14 +15,15 @@ Two concise references serve expert programmers and compiler maintainers:
 
 The references own the rules and implementation accounts transferred
 through the [completed consolidations](todos/reference-plan.md#completed-proposal-retirements).
-Remaining proposals retain independent rationale and open design questions.
+Remaining proposals retain independent rationale and open design questions;
+[deferred designs](todos/deferred-designs.md) collects follow-ups from retired records.
 
 Other documentation serves distinct purposes:
 
 | Material | Purpose |
 | --- | --- |
 | [Standard library guide](../lib/std/README.md) | Current interfaces, capabilities, and package composition |
-| [Code style](proposals/style.md) | Syntax rationale, naming, layout, and composition conventions |
+| [Code style](style.md) | Syntax rationale, naming, layout, and composition conventions |
 | [Project documentation guide](documentation.md) | `@[doc]`, editor interaction, references, and verified examples |
 | [Editor guide](../editor/README.md) | Cajun behavior, client setup, and runtime configuration |
 | [Literate chapters](spell) | Executable explanations and examples |

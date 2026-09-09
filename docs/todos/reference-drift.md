@@ -1,7 +1,7 @@
 # Reference drift
 
-These are follow-ups from reference drafting on 2026-09-08: the language account was inspected
-against `289f2a14`, and the compiler account against `fdc4eeee`.
+These are follow-ups from reference drafting on 2026-09-08: the language account was inspected against `289f2a14`,
+the compiler account against `fdc4eeee`, and the broader consolidation against `14e0410a`.
 Keep the evidence and proposed repair together here; the reference chapters should contain the resulting account,
 not an editorial history.
 Checked entries record completed documentation repairs; unchecked entries remain follow-ups.
@@ -15,8 +15,10 @@ Checked entries record completed documentation repairs; unchecked entries remain
   Revise the active accounts together, using `A * B * C` versus `A * (B * C)` as the distinguishing example.
   Keep the [older product design](../legacy/ideas/products.md) historical.
 
-- [ ] **Recursive-type admissibility.** The [term proposal](../proposals/term.md#dependency-directed-elaboration)
-  requires a chosen guardedness or positivity discipline.
+- [ ] **Recursive-type admissibility.** The earlier term proposal required a chosen guardedness
+  or positivity discipline.
+  Its [narrowed design](../proposals/term.md#dependency-directed-elaboration) now keeps
+  that requirement as an open question.
   The [binding checker](../../lang/statics/src/check/binding.rs) checks sealed groups and available kinds;
   the formal calculus explicitly records the absence of a positivity judgment.
   Decide whether to specify that current boundary or add a stronger restriction.
@@ -46,11 +48,11 @@ Checked entries record completed documentation repairs; unchecked entries remain
   Correct obsolete forms and make complete guide examples opt into documentation checking.
   Rejoin the Builtin table's `surface` row, which is split across two Markdown lines.
 
-- [ ] **FFI example grouping.** The [FFI proposal](../proposals/c-ffi.md) shows a metadata hole followed
-  by an unparenthesized expression annotation.
-  Used as a complete term, this fails parsing at `:`.
-  Add the grouping used in the [working FFI library](../../lib/ffi/xxhash.zy) and check the example
-  with its imports and parameter context supplied explicitly.
+- [x] **FFI example grouping.** The earlier FFI proposal's unparenthesized metadata-hole annotation failed parsing
+  at `:` as a complete term.
+  The retired import account now points to the grouped, checked example
+  in [L14](../references/language.md#14-foreign-interfaces) and the [working binding](../../lib/ffi/xxhash.zy);
+  the remaining proposal concerns extensions.
 
 ## Superseded implementation accounts
 
@@ -79,12 +81,11 @@ Unchecked entries still need consolidation.
   the [Builtin guide](../../lib/std/README.md#builtin-packages) describes the current contract.
   Incoming links were updated when the proposal was removed.
 
-- [ ] **Remaining package-design summaries.** The opening
-  and [checker-constraint discussion](../proposals/package-modularization.md#checker-constraints-on-the-topic-layout)
-  in package modularization still describe older core/representation groups.
-  The paragraph following `param (/Bytes; /Reader; /io; builtin)` also describes a different set of selections.
-  Audit those summaries and positional examples against [Builtin](../../lib/std/builtin.zy)
-  and the [shared field-selection rules](../proposals/field-projection.md) during that proposal's consolidation.
+- [x] **Remaining package-design summaries.** Package modularization retained older core/representation groups,
+  mismatched selection prose, and a claim that bare records cannot synthesize a principal type.
+  The narrowed [package design](../proposals/package-modularization.md) now links to current rules and inventories;
+  [the library recipes](../../lib/std/README.md#package-composition) use one Builtin opening and checked examples.
+  Named products synthesize types; kind-witness introduction still needs its explicit annotation.
 
 - [x] **Query ownership.** Retired `query-owned-statics.md` retained an all-pure-query target
   and migration instructions alongside its achieved checker-owned core.
@@ -107,19 +108,17 @@ Unchecked entries still need consolidation.
   Consumer-driven normalization remains an evaluation question
   in the [memory design](../proposals/arena-gc.md#open-questions).
 
-- [ ] **Wasm validation claims.** The [Wasm proposal](../proposals/wasm-backends.md) still characterizes the
-  shared source corpus as a successful-exit oracle without captured-output comparison.
-  The [current harness](../../lang/tests/src/lib.rs) also supports declared stdin,
-  output, and exit expectations across registered backends.
-  Update that proposal's evidence and next steps without implying its argument-fold
-  or other embedding gaps have been covered.
-  C16 describes the current harness capability.
+- [x] **Wasm validation claims.** The [Wasm design](../proposals/wasm-backends.md) now labels the 126-case counts,
+  size comparison, and hashes as historical evidence.
+  [C16](../references/compiler.md#source-fixtures-and-runtime-oracles) owns the current harness's stdin,
+  captured-output, and exit oracles.
+  The revised selection criteria distinguish that capability from actual case coverage;
+  the multi-argument process-fold embedding gap remains open.
 
-- [ ] **Escape-analysis environment premise.** The [escape proposal](../proposals/escape-unboxing.md)
-  still describes reusing one environment buffer on every block transfer.
-  The default [native frame path](../../lang/assembly/src/frames.rs) prepares retained activations instead.
-  Revisit stack-product lifetime constraints under that model;
-  a retained environment alone does not justify letting a raw frame pointer escape.
+- [x] **Escape-analysis environment premise.** The [escape design](../proposals/escape-unboxing.md) now
+  uses the retained native activation model and links delivered local unboxing to C10.
+  Stack cells and interprocedural constraints remain proposed,
+  and a retained frame alone still cannot justify an escaping raw pointer.
 
 - [ ] **Lint and deliberate holes.** The earlier lint account conflated a successful source check
   with complete runtime terms.
@@ -129,11 +128,38 @@ Unchecked entries still need consolidation.
   Decide whether the verifier should accept explicitly incomplete artifacts using a separate typed mode;
   preserve detection of unresolved type fills and executable holes.
 
-- [ ] **Source-map layout.** The [source-map exploration](../ideas/span-source-map.md) opens with implementation deltas
-  but retains a present-tense account of the old 32-byte span and a different map ownership path.
-  The current [span](../../lang/utils/src/span.rs) is eight bytes
-  and the [merged span arena](../../lang/surface/src/textual/span.rs) carries its map.
-  Preserve the motivation and alternatives; replace the obsolete implementation and migration account.
+- [x] **Source-map layout.** The retired exploration mixed an old 32-byte span with the implemented eight-byte model.
+  [C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) now owns compact positions,
+  merged `SpanArena` ownership, lazy locations, and local/global coordinate conversion.
+  Remaining lookup and storage choices live in [todos](deferred-designs.md#source-location-storage-and-lookup).
+
+- [x] **REPL wrapper behavior.** The retired proposal described one wrapper and no fallback.
+  The [engine](../../tui/src/engine.rs) analyzes a direct observation, then a returned-value wrapper on rejection,
+  reporting the original direct diagnostic if both reject.
+  [C15](../references/compiler.md#interactive-engine) records that boundary and numbered-source identity.
+
+- [x] **Byte construction costs.** The earlier byte proposal called `from_list` linear
+  and grouped `concat` with a single append.
+  [The library implementation](../../lib/std/text/package.zy) folds repeated append, copying growing tails.
+  The [cost table](../../lib/std/README.md#byte-operation-costs) now records quadratic `from_list`
+  and length-sum copying for `concat`, as well as native copying slices.
+
+- [x] **Formatter corpus scope.** The earlier design excluded CLI fixtures from its corpus account.
+  The [current fixture architecture](../references/compiler.md#source-fixtures-and-runtime-oracles) is the owner;
+  the narrowed formatting design retains layout laws and extension criteria.
+  The still-used punning audit helper remains a [separate todo](deferred-designs.md#formatter-migration-helper).
+
+- [x] **Filesystem conversion protocols.** The earlier filesystem proposal omitted `Ret` from the path helpers.
+  [The implementation](../../lib/std/system/package.zy) exports thunks
+  for `String -> Ret Path` and `Path -> Ret String`.
+  [The stream guide](../../lib/std/README.md#streams-and-files) now states these protocols
+  and makes the omitted outer thunk explicit.
+
+- [ ] **Template-local load diagnostics.** The retired source-map exploration records import-resolution
+  and cycle errors still rendering local byte offsets.
+  Audit these early failures against the template's `FileMap`, separately from merged checker diagnostics,
+  before promising consistent line/column rendering.
+  Include an imported file with non-ASCII text in the diagnostic checks.
 
 ## Compiler boundary probes
 

@@ -116,8 +116,8 @@ The scoped elaboration uses `Abs`, `ValAbs`, `Let`, and `Sealed` for the corresp
 Lexical `in` forms elaborate directly, while runtime recursion remains explicit through `fix`.
 The [term design](docs/proposals/term.md) specifies the binding and scheduling rules.
 The [language reference](docs/references/language.md#2-lexical-structure-and-syntax) specifies surface syntax;
-the [style guide](docs/proposals/style.md#reading-the-surface-syntax) explains how classifier arrows,
-term bodies, and constructor and destructor spines guide the reader.
+the [style guide](docs/style.md#reading-the-surface-syntax) explains how classifier arrows, term bodies,
+and constructor and destructor spines guide the reader.
 
 ## Products and Existential Packages
 
@@ -130,9 +130,9 @@ named components, constructors, other packages, and function arguments and resul
 Their package-witness bindings and structural projection routes are resolved statically
 under the [shared phase contract](docs/references/language.md#10-static-elimination).
 Representable package payloads may also flow through computation parameters and returns.
-[Package modularization](docs/proposals/package-modularization.md#explicit-runtime-contracts) distinguishes
-this static composition from explicit runtime contracts, which may use products of thunks or thunked arrows,
-`forall`, codata, and package-dependent computation `pi`.
+[Package modularization](lib/std/README.md#explicit-runtime-contracts) distinguishes this static composition
+from explicit runtime contracts, which may use products of thunks or thunked arrows, `forall`, codata,
+and package-dependent computation `pi`.
 
 Parenthesized comma sequences are preserved by the surface `Cons` variant over a flat component vector.
 The type checker interprets them as value products or existential packages from the expected type,
@@ -277,7 +277,7 @@ A parenthesized semicolon pattern applies every member to the same bindee.
 For example, `((left, right); whole; copy)` destructures a pair and binds the complete pair twice.
 Semicolon is same-bindee composition, whereas comma assigns successive product components.
 Members retain source order and extend the pattern environment from left to right.
-Same-bindee aliases require [irrefutable value members](docs/proposals/term.md#binding-patterns).
+Same-bindee aliases require [irrefutable value members](docs/references/language.md#7-patterns-and-coverage).
 A group of direct field projections may additionally select static and dynamic fields
 while opening one package telescope.
 Irrefutable whole-value members retain that package for forwarding; general constructor aliases
@@ -304,7 +304,7 @@ then checks `pattern` against the unique payload.
 It associates to the right, allowing `/outer = /inner = payload` to express a staged path.
 Type checking elaborates the result into ordinary named and product patterns with typed holes outside the selected path.
 The pun `/field` expands to `/field = field`, while `/field : Type` annotates that generated payload binder.
-Projection payloads must be [irrefutable](docs/proposals/term.md#binding-patterns);
+Projection payloads must be [irrefutable](docs/references/language.md#7-patterns-and-coverage);
 refutable nested constructor matching through this pattern form is not implemented.
 
 When a same-bindee group of direct projection patterns is checked against a package,
@@ -431,9 +431,8 @@ Static composition admits partial applications, products, constructors, packages
 and results under the [shared residual contract](docs/references/language.md#10-static-elimination).
 Runtime callable values remain explicit suspended computations behind `Thk`;
 failed static elimination does not implicitly construct one.
-The behavior and implementation boundary are specified together
-in [Value Functions and Views with `ValPi`](docs/proposals/value-pi.md), with the pattern rules
-under [Value Views](docs/proposals/value-pi.md#value-views).
+[L8](docs/references/language.md#8-value-functions-and-views) specifies value functions and view patterns;
+[C6](docs/references/compiler.md#static-elimination) owns their implementation boundary.
 
 Package parameters may open existential witnesses used by the result classifier.
 Both computation package-dependent arrows (`PackPi`) and value-function classifiers (`ValPi`) retain those witnesses;
@@ -449,8 +448,8 @@ For a package `exists (X : K). A X`, the interfaces `pi ((X, x) : Package). C X`
 and `forall (X : K). A X -> C X` admit explicit packaging and unpackaging adapters.
 Their thunked implementations may remain runtime values, and `C X` may itself be a codata protocol.
 This correspondence preserves witness scope; it does not make the two classifiers definitionally equal.
-The [runtime contract account](docs/proposals/package-modularization.md#package-dependent-runtime-contracts)
-includes the adapters and the distinction between polymorphism and a provider's hidden representation type.
+The [runtime contract account](lib/std/README.md#explicit-runtime-contracts) includes the adapters
+and the distinction between polymorphism and a provider's hidden representation type.
 
 ## Classifier Extraction
 
@@ -632,7 +631,7 @@ Root metadata supplies frontend commands: `@[type]` requests static inspection,
 Default evaluation supports values and directly returning computations;
 explicit execution may supply a Builtin host contract.
 The frontend captures output and uses empty stdin and arguments.
-The [REPL design](docs/proposals/repl.md) explains its lifecycle,
+The [interactive engine](docs/references/compiler.md#interactive-engine) explains its lifecycle,
 and [CONTRIBUTING.md](CONTRIBUTING.md#use-the-interactive-repl) lists the commands and editing keys.
 
 ### Arena and ID invariants
@@ -764,8 +763,9 @@ See [native build packaging](CONTRIBUTING.md#compile-programs) for the build-dir
 The frame model implements entry, suspension, resumption, and sparse root discovery.
 Native preparation checks activation ownership, initialized bindings, and continuation slot aliases before emission;
 the emitter supplies static action descriptors consumed by the same model in the stub.
-The [native frame contract](docs/proposals/native-frames.md#boundary-with-compiler-and-runtime) owns the phase boundary
-and the transition invariants.
+The [native preparation](docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+and [environment actions](docs/references/compiler.md#environment-actions-and-roots) own those phase
+and transition contracts.
 Register assignment, stack alignment, control-stack instruction selection,
 and individual builtin signatures remain outside the model.
 The collector owns its private headers and forwarding algorithm,
@@ -949,7 +949,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 - Value-function application inlines each body at its use, so emitted code and compiler recursion depth grow
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; factoring repeated residual code remains future work recorded
-  in [Value Functions and Views with `ValPi`](docs/proposals/value-pi.md).
+  in [residual-code sharing todos](docs/todos/deferred-designs.md#residual-code-sharing).
 - Static reduction has the documented [resource bounds](docs/references/language.md#10-static-elimination)
   and does not enter computations to discover static functions or witnesses.
   Demand does not yet flow through runtime package-dependent computation applications,

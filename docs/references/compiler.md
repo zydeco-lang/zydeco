@@ -126,13 +126,24 @@ or duplicate results; one typed node may produce several IR nodes.
 Parsed entities use the tagged `EntityId` category rather than casts between definition, pattern, and term IDs.
 Generated definitions and phase-local provenance belong to the phase that creates them.
 
-[Span](../../lang/utils/src/span.rs) is two `u32` byte positions.
-Parsed file-local spans are rebased into the merged program's source-map address space,
-owned through the [surface span arena](../../lang/surface/src/textual/span.rs).
-Retained source text resolves those positions to files and human-readable locations after an error.
-Editor conversion to UTF-16 belongs at the protocol boundary; it must not change compiler byte offsets.
+[Span](../../lang/utils/src/span.rs) stores two `BytePos(u32)` endpoints: eight bytes per span.
+Compact byte positions avoid retaining a path, line, and column at every syntax node.
+A `FileMap` owns a file's path, retained text, global base, and line-start index;
+`SourceMap` orders files by their global base.
+File-local parsing starts at byte zero.
+Merging rebases spans into one address space beginning at one, reserving the zero span for a dummy location.
+The [merged surface span arena](../../lang/surface/src/textual/span.rs) owns the source map;
+a cached parse template retains its local file map until assembly.
+
+Location rendering finds the file and line by binary search and derives character columns from retained text.
+It performs this work on demand, including after rejection; a `ResolveFailure` retains the error and span arena.
+Editor conversion to UTF-16 belongs at the protocol boundary and does not change compiler byte offsets.
+Before comparing a global span with an editor's file-local cursor or range, localize it through the owning map.
+File attribution alone cannot validate this conversion: source-location tests must also check hover
+and token ranges in non-ASCII text and in files beyond the first merged source.
+
 Allocation and provenance changes should exercise arena tests and source-location tests,
-including repeated checking and non-ASCII source text.
+including repeated checking and the distinction between local and merged spans.
 
 ## C3. Source loading, sessions, queries, and memory retention
 
@@ -660,10 +671,23 @@ Invalid preparation is a `FramePlanError`; emission cannot silently fall back to
 | Closure entry | Establish an activation from captures and incoming arguments. |
 | Return continuation | Restore the retained activation and initialize the result binding. |
 
+`ContinuationEntry` provenance records the returned-value pattern, the body after the portable capture preamble,
+and the source-to-capture binding relation.
+Validation checks these against the actual package and preamble;
+metadata does not introduce another executable occurrence.
+Native lowering replaces capture construction and unpacking with `RetainFrame` and resumption aliases.
+Ownership follows local and suspension/resumption edges; forward dataflow verifies initialized bindings independently
+of ZASM context annotations.
+Captured aliases resolve recursively to their original definitions.
+
 Slot assignment combines ordinary liveness with preservation by pending continuations.
 A later result may reuse a dead slot only when no pending continuation still needs its binding.
 Nested continuations can retain different subsets of one activation;
 root and interference information must include all pending uses.
+A forward may-analysis unions pending captures at joins; a resumption consumes its own suspension
+while preserving older ones.
+A write interferes with every binding preserved across it, even when the written result is dead.
+Deterministic greedy coloring assigns canonical definitions to slots; aliases inherit their source slot.
 Packed size is a safe bound from the assigned slots, not an optimal-coloring or recursion theorem.
 The same offsets are used for accesses, capture descriptors, and active root maps.
 
@@ -676,7 +700,9 @@ and releases younger unretained storage.
 A tail transfer reuses an unretained active frame or preserves it beneath its callee when a continuation still needs it.
 
 The lifetime justification comes from the concrete lowered stack operations:
-SPSLow values cannot contain a residual machine stack, and native continuation opening consumes its token destructively.
+SPSLow values cannot contain a residual machine stack, checked continuation bodies cannot refer
+to their own entry label, and native continuation opening consumes its token destructively.
+Recursive closure invocation establishes another activation instead of reentering a suspended one.
 Source `Ret` types and lexical node occurrence counts alone do not establish this property.
 Escaping ordinary closures own heap captures with adequate lifetime.
 A future machine-stack capture or multi-shot continuation operation must revisit preparation and storage together.
@@ -716,10 +742,21 @@ Roots returns mutable addresses for the active map joined with all pending suspe
 Only initialized live slots are roots; reserved capacity and dead tagged words are insufficient evidence of liveness.
 
 The retained store grows geometrically and caches capacity at its high-water mark.
-Failed word reservation preserves existing state.
+Only successful Enter may relocate retained frame words; Suspend keeps the active base stable.
+Slot access uses raw pointers without constructing Rust references over generated-code storage.
+Metadata vectors hold indices and checked tokens, so their growth cannot invalidate logical frame references.
+Failed word reservation preserves existing words, bases, and tokens;
+zeroed capacity does not count as an initialized binding.
 Transitions may allocate Rust metadata but do not collect the managed heap;
 metadata allocation still has the Rust allocator's ordinary failure behavior.
-Root addresses expire at the next attempted environment transition.
+Root addresses expire at the next attempted environment transition, including a failed reservation.
+They identify values and need not coincide with active-layout offsets in every environment implementation.
+Managed collection may rewrite those values but cannot relocate their published addresses.
+A model declaration generates action headers and serialization order;
+emitted records and target carriers share checked alignment.
+A return prologue removes `token(F)` while preserving `result :: S`, resumes the owner,
+restores `rbp`, and then binds the result.
+Returning host and C calls enter that same prologue.
 The experimental compact engine implements the same narrower action capability with suspension fragments;
 experimental moving environments require a different relocation contract and are not an AMD64 backend.
 [The frame design](../proposals/native-frames.md) owns those representation alternatives.
@@ -759,6 +796,9 @@ An embedding supplies the `zydeco` import namespace; the module is not a standal
 Neither path uses recursive host calls to realize unbounded Zydeco control transfers.
 SPS closure code handles are tagged table indices; AM program counters are private untagged indices.
 Both heaps grow without collection.
+SPS partial products use a pointer into the product suffix; constructors use `[tag, payload]`.
+Emission sorts arena-derived IDs before assigning functions, imports, locals,
+and static-data offsets; unsupported forms report typed emission errors.
 The SPS path retains lexical structure but currently uses a whole-program local plan and uniform product boxing.
 The AM path reuses ZASM representation work but emits at machine-program-point granularity.
 
@@ -803,22 +843,39 @@ explains dependency choices.
 Returning and continuation-selecting operations have distinct host call plans.
 C8 owns arithmetic exposure and folding; C11–C13 own the resulting target words and calls.
 
-Host resource tables implement alias-visible handles and error paths.
-Strings are immutable UTF-8 text and bytes are immutable octets; Rust-owned host storage
-and target adapters realize those interfaces independently of the source witness identities.
-Filesystem adapters preserve the distinctions among EOF, empty data, invalid text, I/O errors, and closed resources.
-The [byte](../proposals/bytes.md) and [filesystem](../proposals/filesystem.md) records retain API
-and storage design decisions.
+Strings are immutable UTF-8 text and bytes are immutable octets.
+The interpreter's `SharedBytes` stores `Rc<[u8]>` with a start and length;
+slicing creates a constant-time window whose `as_slice` remains contiguous for foreign borrowing.
+The Wasm host uses `Uint8Array` windows.
+Native byte slices currently copy their window into fresh host storage; that storage is outside the native collector.
+Equal octet sequences have equal observations regardless of sharing.
+The [library guide](../../lib/std/README.md#byte-operation-costs) records the resulting operation costs;
+[byte representation](../proposals/bytes.md) retains the alternatives.
+
+Host resource tables allocate monotonically increasing handle IDs and validate reader and writer operations.
+Closing removes the resource, so every alias subsequently observes `Closed`;
+identifiers are not source-visible pointers.
+Reserved standard-stream capabilities remain open.
+The interpreter backs them with injected streams, while native execution uses the process streams.
+Primitive success/error branches carry a result or an error kind and message;
+[the library](../../lib/std/README.md#streams-and-files) constructs `Result`, `Option`, and typed paths.
+Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resources.
+[Capability design](../proposals/filesystem.md) owns stream extensions and resource-lifetime choices.
 
 ### Foreign calls
 
 [ForeignSignature](../../lang/statics/src/foreign.rs) is a checked call plan for a returning C thunk.
 Arguments are `UInt64` or `Bytes`; a byte buffer flattens into borrowed pointer and length,
 with at most six flattened arguments and a `Ret UInt64` result.
+Its constructor enforces the flattened bound, and the validated fields remain private.
+Expansion yields ordered `ForeignArgument` entries identifying the source parameter and its integer,
+pointer, or length component; both execution paths consume that plan.
 Checking validates the declared shape, not the external symbol's actual ABI.
 The trust and borrowing obligations belong to [L14](language.md#14-foreign-interfaces).
 
-The Unix [interpreter adapter](../../lang/dynamics/src/foreign.rs) loads libraries and symbols and calls through libffi.
+The Unix [interpreter adapter](../../lang/dynamics/src/foreign.rs) lazily loads libraries and symbols,
+caches call interfaces by target and signature, and calls through libffi while borrowing scalar argument storage.
+Missing libraries and symbols are runtime errors; generated native programs do not depend on libffi.
 AMD64 marshals the retained source arguments into a temporary raw C frame, loads the SysV argument registers,
 and discards that frame before encoding a result that may allocate.
 The full-width result survives collection in a preserved register and resumes the ordinary return continuation.
@@ -874,12 +931,36 @@ Interactive type links require semantic anchors from the renderer, never reparsi
 
 [Completion queries](../../lang/session/src/source/query/completion.rs) track the exact cursor hole
 through recovery, resolution, and checking.
+The session recovers only the current root; imports and companions remain strict.
+Assembly remaps the exact cursor node into merged syntax, and desugaring provenance connects it to resolution.
+A resolver `ScopeSnapshot` enumerates names through ordinary lookup, preserving shadowing and binder introduction depth.
+General names require the original parser expectations to admit a term hole;
+a recovered hole in a field-name position is insufficient.
+Resolution can retain scope after recoverable unbound references;
+a fatal phase failure cannot invent an unvisited cursor's environment.
 Resolver scope supplies candidates; incoming analytic annotations supply expectations.
 A synthesized placeholder is not an expectation. Multiple visits retain all analytic constraints.
 Compatibility is `Equal`, `Unknown`, or `Mismatch`: only proven mismatches are omitted,
 and candidates requiring inference remain unknown.
+Probes reuse `Lub`, following solved fills but deferring unsolved ones without solution or scope writes.
+`Equal` satisfies every analytic annotation without inference; one rigid rejection establishes `Mismatch`,
+even when another part of the classifier is unresolved.
+Other unavailable or inconclusive evidence remains `Unknown`.
 Disposable compatibility checks must not mutate source facts or depend on enumeration order.
-Cajun then applies prefix, compatibility, scope-proximity, and deterministic label ordering.
+The session orders candidates by prefix, compatibility, scope proximity,
+and deterministic label order; Cajun projects that order into protocol items.
+Missing annotations remain optional, and classifier fit does not prove that every term-level constraint
+or unrelated error is satisfied by insertion.
+The completion query retains its latest result without installing repaired source or replacing strict analysis;
+Cajun checks the revision of its disposable session snapshot.
+
+Source-path completion recognizes the metadata catalog's `Source` argument kind.
+It merges filesystem entries and overlays relative to the importing source,
+excluding direct self-imports and symlink aliases.
+Directories sort before conventional source files.
+The edit replaces the current path component with source-language escapes,
+preserving quotes, the written directory prefix, and following components.
+Numbered imports, unrelated strings, comments, and unfinished escape sequences receive no path suggestions.
 [Completion design](../proposals/completion.md) owns recovery guarantees and further candidate families.
 
 [Documentation analysis](../../lang/session/src/source/documentation.rs) connects authored attachment,
@@ -887,6 +968,13 @@ typed subject, origin, contract, and use context.
 Exposure paths preserve public interface selection and abstraction; renaming a field
 or re-exporting a value does not justify inventing a new documentation origin.
 Generated references, search, and editor panels share the same semantic index.
+The public graph follows exposed classifiers and generic result interfaces without executing arbitrary runtime terms;
+recursive paths link back to established subjects.
+Selectors use slash-separated field names, `()` for results, and `.` for the root.
+Published anchors start with `api`, use UTF-8 hexadecimal `-f-...` field segments
+and `-result` result segments, and reject duplicate public paths.
+They contain no arena IDs or source offsets.
+Builds record the compiler version and SHA3-256 hashes of exact source and guide inputs.
 [The authoring guide](../documentation.md) owns user syntax;
 the [documentation design](../proposals/documentation.md) retains publication and recovery decisions.
 
@@ -894,17 +982,29 @@ the [documentation design](../proposals/documentation.md) retains publication an
 with paths relative to the owning document.
 Worker execution is bounded by time and request/result size.
 Checked/rejected fences verify static outcomes and specified diagnostic positions; they do not execute examples.
-Executable examples use the ordinary frontend capability boundary,
-and revision-sensitive editor actions must reject stale IDs.
+Run fences are rejected. Revision-sensitive editor actions must reject stale IDs.
 
 ### Interactive engine
 
-The [TUI engine](../../tui/src/engine.rs) stores complete submissions as numbered source inputs.
-It uses session analysis to inspect static terms, evaluate values or returning computations,
-or explicitly launch an executable.
-The transcript captures output and errors; definitions do not leak into a hidden global source context.
-Command syntax and key bindings stay in [CONTRIBUTING](../../CONTRIBUTING.md#use-the-interactive-repl).
-[REPL design](../proposals/repl.md) retains history identity, persistence, and replay questions.
+The [TUI engine](../../tui/src/engine.rs) stores complete submissions as numbered source inputs in a session overlay.
+Each recorded number identifies immutable source text; later inputs compose it explicitly with `@(import(N))`.
+There is no hidden lexical environment.
+Re-importing a computation can repeat effects: history stores source, not memoized runtime results.
+Clearing the transcript leaves those importable sources available.
+A rejected submission returns to the editor at the same number; retry replaces that unrecorded attempt.
+
+For ordinary input, a generated observation root declares its own Builtin parameter around the imported complete input.
+The engine analyzes the direct import first, then tries a `ret` wrapper if the first analysis rejects,
+allowing values and returning computations without requiring a user wrapper.
+If both analyses reject, it reports the original direct diagnostic.
+Static observations use analysis facts; runtime observations link the accepted root with captured output and errors.
+Explicit execution goes through the executable entry boundary.
+
+Root command metadata is parsed into typed commands before ordinary submission handling.
+Help and quit do not consume a source number; unsupported command arguments are rejected,
+and unrecognized metadata remains ordinary language syntax.
+[CONTRIBUTING](../../CONTRIBUTING.md#use-the-interactive-repl) owns commands, keys, and retry interaction.
+[Deferred interaction work](../todos/deferred-designs.md#repl-history-and-replay) covers persistence and pruning.
 
 ## C16. Validation, debugging, and extending the implementation
 

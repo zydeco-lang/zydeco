@@ -1,268 +1,39 @@
-# Uniform Term Composition
+# Binding placement and source identity
 
-Zydeco uses one term language for kinds, types, values, and computations.
-`param`, `let`, and `def` are ordinary term constructors for abstractions,
-transparent bindings, and nominal definitions.
-Their `in` forms establish binders at the written position, while their `that` forms contribute binders
-to the nearest `begin ... end` block.
-A block dependency-orders those contributions and elaborates them into an ordinary heterogeneous telescope.
+Zydeco lets programmers place a binding where it best explains a term while the resolver schedules dependencies.
+That convenience needs a stable answer to two questions: which binder does an occurrence name,
+and which definitions introduce a fresh identity?
+The current rules belong to [L3](../references/language.md#3-bindings-and-scope),
+[L4](../references/language.md#4-classification-and-inference),
+and [L12](../references/language.md#12-sources-imports-and-entry);
+[C4](../references/compiler.md#c4-parsing-desugaring-and-name-resolution) owns dependency scheduling.
 
-A source file stores one complete term.
-The file contributes no context, parameters, declarations, namespace, or runtime structure around that term.
-Every dependency must occur in the term itself, through an ordinary binder or an import that is replaced
-by another independently checked term.
+## Placement and identity are independent
 
-## Blocks and Mobile Bindings
+Binding form determines transparency or generativity; its connective determines placement and scope.
+Keeping these choices independent avoids making a name's meaning depend
+on whether its author writes a definition before or after its use.
+Ordinary `let` remains sufficient for transparent package composition; `def` supplies nominal identity
+where clients must not identify distinct declarations.
 
-In the grammar below, `e` ranges over a source term before sorting determines whether it is a kind,
-type, value, or computation.
-The common metavariable records the shared surface syntax while leaving the CBPV categories intact.
-The constructs can therefore be stated once at the surface level and sorted according to their use.
+Resolution chooses lexical binder identities before dependency reordering.
+Scheduling may then move elaboration, but cannot change capture, shadowing, or which nominal declaration a use denotes.
+This is why textual substitution and sequential declaration environments are inadequate implementation models.
+Patterns introduce their names under the shared [pattern rules](../references/language.md#7-patterns-and-coverage).
 
-The surface grammar includes a block and three binding forms:
+A source is one complete term rather than an implicit declaration namespace.
+Repeated imports of one source share that source's declarations; distinct declaration occurrences retain their identity.
+A source closes its own inference obligations before an importer uses its result.
+This makes independent checking meaningful and avoids letting importer order choose the meaning of a library.
 
-```text
-e ::= ...
-    | begin e end
-    | param p in e
-    | param p that e
-    | param val p in e
-    | param val p that e
-    | let p = e in e
-    | let p = e that e
-    | def p = e in e
-    | def p = e that e
-```
+## Dependency-directed elaboration
 
-The concrete syntax of `begin ... end` marks a region with explicit delimiters, giving nested syntax a visible boundary.
-Metadata can attach to the whole region, as in `@[monadic] begin ... end`,
-while an unannotated `begin` organizes only the static context surrounding a term.
-When its body contributes no mobile bindings, `begin e end` elaborates to `e` much like parentheses.
-Its additional purpose is to provide a visible destination for bindings contributed from within the term.
+The resolver's dependency graph permits recursive components, and the checker requires the relevant sealed types
+and kinds to be available when checking them.
+That is the implemented admissibility boundary.
+A stronger guardedness or positivity discipline is still a design decision, tracked with its evidence
+in [reference drift](../todos/reference-drift.md#language-accounts).
 
-The block supplies a boundary, but each binding still needs to say how it relates to that boundary.
-Each binding combines two choices.
-The form says what enters the context: `param` adds a parameter, `let` adds a transparent binding
-that the type checker may unfold during equality checking, and `def` gives the source binder a stable identity.
-The `val` modifier on `param` records that block reconstruction must introduce a total value function; without it,
-the parameter retains the existing type-function or computation-abstraction discipline.
-The connective says where that binding is established.
-Keeping these choices separate allows the same kind of binding to be either lexical or block-wide.
-
-With `in`, the binding stays where it is written and its following term is its scope.
-Thus `param p in e` forms a local type or computation abstraction, `param val p in e` forms a local value abstraction,
-and the `in` variants of `let` and `def` form transparent and nominal local bindings.
-These forms support the familiar left-to-right reading of lexical scope.
-They provide the baseline against which the mobility of `that` can be understood.
-
-With `that`, the binding belongs to the nearest enclosing `begin`.
-The block places it according to its dependencies, and the resulting block-level position makes the names introduced
-by its pattern visible throughout the block, including text before the binding
-and text outside its syntactic continuation.
-The term following `that` supplies the residual expression at the original site.
-A nested `begin` starts a new closure region, so mobile bindings settle at the closest visible boundary.
-The elaborator allocates every block-wide binder before resolving occurrences in the block.
-
-Whole-block visibility makes forward references possible, but it also determines how far a binding may travel.
-Movement is valid when the binding's dependencies remain available at the block boundary.
-For example, a mobile definition whose right-hand side refers to an enclosing local `in` binder must settle
-at a boundary within that binder's scope.
-The programmer can make the dependency mobile, keep the dependent definition local,
-or place a nested block inside the local scope.
-
-With the boundary and scope rules in place, a small example shows how dependency ordering completes the picture.
-The following block is well scoped:
-
-```zydeco
-begin
-  let answer = seed that
-  param seed that
-  answer
-end
-```
-
-The reference to `seed` induces an ordering constraint, and the block elaborates to
-
-```zydeco
-fn seed => let answer = seed in answer
-```
-
-The example writes `answer` before its dependency `seed`.
-The corresponding graph edge leads the block to place the parameter before the transparent binding.
-
-The first example contains a single dependency.
-The compositional benefit becomes clearer when several mobile parameters occur inside a larger expression:
-
-```zydeco
-begin
-  let x =
-    (param a that param b that a)
-      + (param c that c)
-  in param d that d
-end
-```
-
-The block closes as
-
-```zydeco
-fn a b c d => let x = a + c in d
-```
-
-Here the four `param` forms become parameters of the resulting abstraction.
-Reading the source from left to right orders the otherwise independent parameters as `a`, `b`, `c`, and `d`.
-Dependency edges may still interleave definitions when their types or bodies require it.
-The unused parameter `b` remains part of the result because `param` constructs an explicit binder instead
-of asking the compiler to infer one from free variables.
-
-The examples above focus on placement. The other choice carried by a binding form concerns identity.
-The pairing of `def` and `let` is deliberate.
-`let` names a type or value transparently, so the surrounding term may use its defining equation.
-`def` establishes an abstraction boundary by giving the source binder its own identity.
-This distinction concerns identity and equality.
-The connectives `in` and `that` separately determine placement and scope.
-
-These surface rules explain what a block means to the programmer.
-The next question is how the elaborator turns freely placed contributions into one well-scoped term.
-
-## Dependency-Directed Elaboration
-
-Whole-block visibility separates the availability of a name from the eventual position of its binder.
-Elaboration therefore begins by assigning source identities to the binders in every block-wide pattern
-and resolving occurrences against the complete block context.
-Each mobile form then contributes a candidate that records its pattern and binder identities,
-an optional right-hand side, its binding mode, and its source position.
-At the end of this collection step, every block-wide name is available,
-but the binders have intentionally been left unordered.
-
-Dependency analysis supplies that missing order.
-The block builds a dependency graph over these candidates.
-An edge records that one candidate must be established before another can be formed.
-Occurrences in right-hand sides, pattern annotations, and parameter types all create such edges.
-If a parameter type mentions a local type definition, the definition precedes the parameter.
-When a definition uses a parameter, the parameter precedes the definition.
-The resulting order is a heterogeneous telescope, since parameters and definitions may alternate
-and each entry may refer to earlier entries.
-Source order breaks ties between independent candidates, which keeps elaboration and diagnostics deterministic.
-
-The graph determines where binders are placed.
-Their meaning, however, was already fixed when names were resolved.
-Scheduling preserves the identities chosen during name resolution.
-An occurrence continues to refer to the same source binder after that binder moves,
-and a nominal type receives its identity from its source `def`.
-This separation between resolution and placement prevents capture and makes nominal identity independent
-of the particular topological order selected by the graph algorithm.
-
-For an acyclic block, this scheduling step completes the plan.
-Recursive types require one further distinction, because their dependency cycles are intentional.
-Cycles in the graph are analyzed as strongly connected components (SCCs), groups in
-which every member depends, directly or indirectly, on every other member.
-A recursive component is admissible when all of its members define types, their kinds are available
-before their bodies are checked, and their recursive occurrences satisfy the guardedness
-or positivity discipline chosen for well-formed recursive types.
-The checker allocates the nominal identities for such a component together and then checks its equations.
-Parameters, values, and transparent type aliases follow acyclic dependency order.
-A cycle involving one of them receives a focused diagnostic.
-
-This account of recursive components also gives the named type forms a natural place in the design.
-Named `data` and `codata` forms enter a block as specialized nominal definitions.
-A named `data` form elaborates to a nominal definition whose right-hand side abstracts its parameters
-over an anonymous `data ... end` term.
-The `codata` form supplies the computation-type dual.
-Their parameters and constructor or destructor signatures contribute dependency edges,
-so mutually recursive named types pass through the same SCC analysis as other type definitions.
-Constructors and destructors remain arms of their respective type terms,
-and the enclosing type serves as the scheduling candidate.
-Anonymous `data ... end` and `codata ... end` remain ordinary terms.
-
-Type recursion is accounted for by the block graph.
-Computation recursion continues to use the explicit introduction form already present in Zydeco.
-A value may suspend a computation that uses `fix`, while the value's static dependency component stays acyclic.
-This keeps recursive types, recursive computations, and dependency cycles as three distinct ideas in the language.
-
-The separation between static and computational recursion also explains two restrictions on mobile bindings.
-The scheduler accepts only types and values on the right of `def` and `let`.
-Its choices change static nesting, while effect order continues to follow computation syntax.
-Mobile patterns follow the common [binding-pattern rules](#binding-patterns),
-including their explicit partiality boundary.
-
-Block elaboration supplies both a scope and an order for every contributed binder.
-
-## Binding Patterns
-
-Ordinary bindings establish a context directly, so their patterns must be irrefutable by default.
-An irrefutable pattern matches every value of its checked type.
-Variables, holes, unit, named wrappers, products, and existential unpacking are irrefutable
-when their component patterns are irrefutable.
-A constructor pattern is irrefutable when its data type has exactly one constructor and its payload is irrefutable.
-The [literal and alias rules](../references/language.md#7-patterns-and-coverage) make integer literals refutable;
-selections from a data type with multiple constructors are also refutable.
-Alias groups and field-projection payloads use this same definition.
-
-This requirement applies to computation parameters and the patterns introduced by `let`,
-`def`, `do`, and `param`, including mobile bindings.
-A refutable pattern normally belongs in an explicit `match`, where the program provides alternatives.
-When failure should stop execution, `@[partial]` opts an individual computation binding
-or function header into refutable matching:
-
-```zydeco
-@[partial] let 0 = value in next
-@[partial] do +Some result <- action; next
-@[partial] fn (0 : Int64) (1 : Int64) => body
-```
-
-The annotation takes no arguments and applies only to the annotated construct's own binders.
-A function header includes all of its curried parameters; a named function binding includes its binder
-and parameter header.
-The annotation does not propagate into a function body, binding tail, or nested function,
-and annotating an entire `begin` block is rejected.
-A failed partial pattern stops execution with a clear runtime error and nonzero exit status.
-
-Value functions and value-producing `let` expressions remain total.
-Their patterns must be irrefutable even under `@[partial]`.
-A view transforms its input through a total value function; its result pattern may be refutable
-in a `match` or partial computation binding.
-This boundary keeps static reduction and coverage reasoning total; partiality belongs to computations.
-The annotation also does not extend alias groups or projection payloads to general refutable conjunctions.
-
-## Nominal Identity
-
-Within a term, nominal identity distinguishes `def` from `let`.
-A type introduced by `def` is lexically generative: the source binder receives a stable abstract identity
-for the lifetime of that term occurrence.
-Repeated evaluation of the occurrence reuses the identity.
-For a recursive type component, the checker allocates all member identities together
-before checking their defining equations.
-By contrast, `let` preserves its defining equation and therefore supports transparent equality.
-
-Copying a term freshens its bound identities.
-Two copies of a term containing `def` consequently contain distinct nominal definitions,
-while two uses of one bound copy share the same definitions.
-
-## Source Terms and Imports
-
-A source root is resolved and type checked under an empty context.
-After its own imports and optional companion annotation have been assembled,
-the complete root must synthesize its classifier.
-An expected classifier at a use site may be compared with that result, but it does not participate
-in elaborating the source root.
-
-An implementation source `foo.zy` may have a companion `foo.zyi`.
-The companion contains one type term, which must itself synthesize a type.
-The pair is elaborated as the ordinary annotated term `(contents-of-foo.zy : contents-of-foo.zyi)`.
-The companion supplies no declarations or context.
-
-An import is metadata on a hole:
-
-```zydeco
-@(import("library.zy"))
-```
-
-The spelling `@(import("library.zy"))` abbreviates the same term.
-Source assembly makes the hole refer to the one independently checked source root.
-A source boundary prevents free names and mobile bindings from crossing between the two terms.
-Repeated imports share that root, including its bound and nominal identities.
-
-This operation is ordinary term substitution.
-Its stability claim concerns well-typed, scope-respecting substitutions: substitution preserves typing,
-while the compiler may represent repeated occurrences by edges to one immutable term.
-Static sharing does not make an imported computation execute once; evaluation still occurs at each dynamic occurrence.
+Before adding such a discipline, distinguish the intended recursive values and types from rejected cycles,
+and decide whether the criterion protects normalization, representation, or logical consistency.
+Accepted and rejected examples must establish that purpose; scheduling alone does not establish any of those properties.

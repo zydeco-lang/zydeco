@@ -1,611 +1,75 @@
-# Package modularization with projection patterns
+# Package composition and interface boundaries
 
-Zydeco represents libraries with total value functions, computation functions, products,
-and existential packages, following the account in [Uniform Term Composition](term.md)
-and [static elimination](../references/language.md#10-static-elimination).
-This gives libraries a precise term-level meaning,
-but a positional package pattern makes every consumer repeat the provider's complete public telescope.
-Adding one standard-library type or module then changes programs that never use it.
+A module interface should expose the names a consumer needs without requiring it
+to reproduce the provider's tuple layout.
+Zydeco achieves this with ordinary packages, named components, and value functions.
+[L9](../references/language.md#9-polymorphism-and-packages) owns selection, witness scope, and package formation;
+[C5](../references/compiler.md#package-evidence-and-lookup) owns their typed evidence and routes.
+The [library guide](../../lib/std/README.md#package-composition) gives composition and adapter recipes.
+This record keeps the reasons for those choices and the remaining interface questions.
 
-Field projection patterns already provide the right modular operation.
-A consumer can open one package and select only the type identities and module values it needs:
+## Selecting an interface
 
-```zydeco
-begin
-  let make_std = @(import("../../std/std.zy")) that
-  param (/VType; /Thk; /String; /OS; builtin) : @(import("../../std/builtin.zy")) in
-  let (/Result; /Path; /IoError; /result; /fs; /stdio; /process) = builtin |> make_std in
+Complete positional unpacking couples a client to unrelated fields and nested product arities.
+Recursive named selection lets providers group related operations while clients name their actual dependencies.
+Explicit paths remain useful for duplicate names; ambiguity is diagnosed rather than resolved by field order.
+Typed opacity boundaries keep a search from implicitly forcing a thunk or inspecting an arbitrary data payload.
 
-  ...
-end
-```
-
-The semicolon group is the package-use idiom. The `param` selects only the Builtin fields used
-by this source and retains the complete argument as `builtin` for `make_std`.
-The following `let` applies the same pattern form to the public standard package.
-No `use`, `open`, module declaration, or import-specific binding form is added.
-
-## The problem with complete unpacking
-
-The canonical Builtin signature contains manifest core
-and representation packages plus one existential capability telescope.
-Compiler-canonical intrinsics establish the identities of all fixed-width numeric types,
-`Char`, `String`, and `Bytes`; only `Reader`, `Writer`, and `OS` receive fresh provider witnesses.
-Later operation fields refer to those identities.
-The standard library adds another telescope for `Bool`, `Option`, `Result`, `List`, `Path`, and the I/O error types,
-followed by its module values.
-
-Opening the public standard package positionally gives a source name to every entry:
-
-```zydeco
-let (
-  = Bool,
-  = Option,
-  = Result,
-  = List,
-  = Int64,
-  ...,
-  (/bool; /option; /result; /list; /int64; ...; /process)
-) = builtin |> make_std in
-...
-```
-
-This is valid existential elimination, but it obscures the dependency boundary.
-The reader cannot tell which members are used, the positional shape is duplicated,
-and an added public member causes unrelated edits.
-Replacing unused entries with `_` removes their names while retaining the same positional coupling.
-
-Separately opening every generative capability module would create a different problem.
-System modules share identities: `fs/open_reader` produces the same `Reader` accepted by `io/read`.
-Fixed representations such as `Bytes` are canonical and may be referenced independently.
-`Result`, `Option`, and `IoError` similarly cross module boundaries.
-The consumer must therefore open one shared package, rather than independently reopen a package
-for each selected module.
-
-## Selecting package fields
-
-For an ordinary named product, `/field` locates a value field without restating its product path.
-When the expected type begins with an existential telescope,
-the same pattern can also select a named type field from that telescope.
-Several selections are combined with the existing same-bindee semicolon pattern:
-
-```zydeco
-let (/String; /Path; /fs; /process) = package in
-...
-```
-
-The pun `/String` binds the selected type identity as `String`, and `/fs` binds the selected module value as `fs`.
-The explicit payload form renames either kind of selection:
-
-```zydeco
-let (/String = Text; /Path = FilePath; /fs = filesystem) = package in
-...
-```
-
-The package boundary already explains where a selected identity came from.
-Names such as `LocalPath`, `PublicPath`, and `StdPath` repeat that provenance
-without adding a source-level role, so ordinary selections keep the punned name.
-An explicit rename should describe how the consumer uses the field, as `Text`, `FilePath`, or `filesystem` does above.
-
-The same elimination form works directly in an annotated parameter.
-This is the important case for Builtin, because a source can state its capability dependencies
-without copying the complete host ABI:
-
-```zydeco
-param (/Bytes; /Reader; /io; builtin) : @(import("builtin.zy")) in
-...
-```
-
-`/Bytes` and `/io` are the only local bindings introduced from the outer package;
-the following patterns select `Bytes`, `Reader`, and `io` from those narrower structural groups.
-Operations remain qualified, so this source calls `io/read` rather than introducing a generic `read` binding.
-The final `builtin` is an ordinary same-bindee alias for the complete package value.
-It is useful when this source forwards its dependency to another package-dependent function
-and can be omitted in a leaf module.
-The checker associates that alias with the witnesses opened by the projections,
-so `dependency builtin` preserves the same type identities.
-
-After selection, ordinary term projection keeps module operations qualified:
-
-```zydeco
-def ! load (path : FilePath) : OS =
-  ! filesystem/read_text path {
-    fn result => ...
-  }
-in
-! process/exit 0
-```
-
-Type fields conventionally use `UpperCamel` and module values use `lower_snake_case`,
-so their source roles remain visible.
-A declaration such as `exists (= Item : VType) . Body` gives the plain existential binder
-the punned package field name `Item`.
-An explicitly named binder such as `exists (#Item = Hidden : VType) . Body` is selected by its public field name `Item`;
-`Hidden` remains the provider's local payload name.
-
-Selection is structural rather than positional.
-Adding or reordering an unselected package member does not alter a consumer pattern.
-A missing field is rejected, and a name that matches more than one selectable field is ambiguous.
-The search also descends into nested packages, so a capability such as the `OS` protocol can be selected
-from the root contract even though only the `system` group re-exposes it.
-The same rules already govern projection from named products.
-
-## One opening, shared identities
-
-The entire projection group opens the existential telescope once.
-Conceptually, checking the pattern performs the following steps:
-
-1. Traverse the package's complete leading static telescope under one package introduction.
-2. Substitute leading manifest kind and type fields by their disclosed definitions.
-3. Give each abstract field one fresh witness, or reuse the package arrow's canonical witness during checking.
-4. Bind selected static payload patterns to those same definitions or witnesses.
-5. Substitute the opening through the remaining telescope and resolve selected value fields in its body.
-6. Attach the complete witness prefix to any whole-package alias in the same pattern.
-
-Consequently, selected values and selected types agree on the hidden identities they share.
-In this pattern:
-
-```zydeco
-let (/Path; /fs) = package in
-...
-```
-
-`Path` is exactly the abstract identity mentioned by the selected `fs` operations.
-Unselected identities also remain available internally while the body is checked,
-so selecting `/fs` does not require naming every type that occurs in its signature.
-
-Two distinct package openings still receive distinct abstract witnesses.
-Selective projection changes which names the consumer binds; it does not weaken existential abstraction
-or make same-spelled fields globally equal.
-Manifest fields preserve their disclosed equations in the usual way.
-
-All members that must share an opening belong in the same semicolon group.
-Repeating elimination on independently produced package values retains the ordinary generative existential semantics.
+A type and its operations must be selected within one opening of the same abstract package occurrence.
+Otherwise their independently fresh witnesses cannot be assumed equal.
+Projection groups express that opening, and a whole-package alias forwards the original dependency to another factory.
+These are applications of ordinary binding and existential elimination, so a separate module object
+or namespace would duplicate scope and identity machinery without improving this composition model.
 
 ## Primitive identity and package boundaries
 
-Independently assembled libraries need to agree on fixed data representations,
-while operations on a resource need to agree on the provider that owns it.
-The [primitive identity rules](../references/language.md#13-primitive-values-and-capabilities) express that boundary.
-Compiler-canonical types let a numeric or text leaf state its contract independently; provider-owned `Reader`,
-`Writer`, and `OS` witnesses keep related system operations connected to one opening.
-Treating fixed representations as fresh provider witnesses would force consumers to reconcile identities even
-when both sides already mean the same machine representation.
-
-The package layout follows those dependencies.
-A source can select `String` for storage without acquiring text operations,
-or select a width-specific arithmetic module without depending on I/O.
-System operations stay beside the shared capabilities used by file opening, stream access, and standard I/O.
-This separation permits operation modules to evolve independently while their carrier identities stay fixed.
-
-Manifest fields use the public type names, such as `Int64` and `Float64`.
-A single generic label such as `Scalar` would make concrete consumers rename it at every opening;
-using the established names gives the ordinary `/Int64` pun a useful meaning.
-Generic code receives its carrier and operations explicitly,
-as in the [numeric dictionary interfaces](../../lib/std/README.md#numeric-capabilities-and-explicit-instances).
-
-These boundaries use the existing package and product representation.
-The shared [erasure contract](../references/language.md#10-static-elimination) removes manifest fields;
-runtime operation fields use ordinary products and thunks.
-No dynamic field table or separate module object is needed.
-The [Builtin contract](../../lib/std/builtin.zy) supplies the complete shape used by the launcher.
-
-## Standard-library organization
-
-Builtin puts every public static name on its leading telescope and groups only runtime operations:
-
-```text
-surface:  VType CType Thk Ret Unit
-          Int8 Int16 Int32 Int64 UInt8 UInt16 UInt32 UInt64 Float32 Float64 Char String Bytes
-          Reader Writer OS
-numeric:  int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64
-text:     char string bytes
-system:   Reader Writer OS io fs stdio args random process
-```
-
-Every name is unique across the complete package, so one field search reaches kinds,
-types, operations, and capabilities alike.
-Each numeric child is a plain operation module over the surface's carrier types.
-Text owns operations crossing `Char`, `String`, `Bytes`, and `Int64`;
-system re-exposes the generative capabilities beside their operations in one opening.
-The [identity rationale](#primitive-identity-and-package-boundaries) explains this separation.
-
-The source tree mirrors those semantic boundaries:
-
-```text
-lib/std/
-  builtin.zy
-  builtin/
-    numeric/{int8,...,uint64,float32,float64}.zy
-    text/{char,string,bytes}.zy
-    system/{io,fs,stdio,args,random,process}.zy
-  data/package.zy
-  data/{package,bool}.type.zy
-  numeric/{integer,float}.zy
-  numeric/package.zy
-  numeric/*.type.zy
-  text/package.zy
-  system/package.zy
-  control/*.zy
-  std.zy
-```
-
-`builtin.zy` and `std.zy` are deliberately thin composition roots.
-The first closes the complete host ABI and introduces the shared generative system witnesses;
-the second applies the topic packages and constructs the public package.
-Each topic implementation carries its parameter annotations in place, ends in a sealed `pack` introduction
-whose existential type the checker synthesizes, and defines its data types, operations,
-and derived operations in one dependency-scheduled block, so no per-module contract split remains.
-The data topic's `package.type.zy` names the shared base type, stating its existential witnesses
-and module telescopes in one declaration that the dependent implementations import for their base parameter.
-The composition root synthesizes its public type from its own final `pack`,
-so locality does not require copying a contract.
-A topic depends on a selected package boundary rather than on names inherited from a monolithic source file.
-
-The derived integer and floating-point builders share algorithms across the fixed-width representations
-through explicitly annotated `forall` parameters.
-Their result types retain the input `Bool`, scalar, and `String` identities,
-and the numeric assembly returns each width's operation module beside its capability dictionary,
-grouped once more under `dictionaries` for explicitly passing those dictionaries around.
-The [numeric library guide](../../lib/std/README.md#numeric-capabilities-and-explicit-instances) describes dictionary
-composition, explicit selection, and manifest wrappers for carrying a disclosed representation with its operations.
-The public system implementation remains one assembly package because `Reader`, `Writer`,
-and `OS` are abstract provider identities shared by `io`, `fs`, and `stdio`.
-Its host-facing operation contracts are nevertheless split into topic leaves,
-which is the modular boundary that does not duplicate those witnesses.
-
-A source selects only the groups needed for its annotations and calls.
-Individual operations stay qualified, such as `int64/eq`, `string/append`, and `fs/open_reader`;
-this prevents generic names such as `eq`, `read`, and `write` from occupying every consumer's scope.
-
-The public standard package builds on that boundary.
-It carries the library-defined types and groups its own operations into named module values;
-host types and capabilities stay on the Builtin contract, selected directly:
-
-```text
-types:   Bool Option Result List Path IoErrorKind IoError
-         Additive Multiplicative PartialEquality PartialOrder Numeric
-
-modules: bool option result list dictionaries int8 ... uint64 float32 float64
-         char string bytes io fs stdio process
-```
-
-Consumers select the shared types used in annotations and the modules used for operations.
-For example, a minimal integer program needs no complete public telescope:
-
-```zydeco
-let (/int64; /process) = builtin |> make_std in
-do one <- ! int64/increment 0;
-do status <- ! int64/sub one 1;
-! process/exit status
-```
-
-A filesystem consumer can select more capabilities while retaining the same shape:
-
-```zydeco
-let (/Result; /Path; /IoError; /result; /bytes; /io; /fs; /process) = builtin |> make_std in
-...
-```
-
-The implementation uses the same rule. Each standard-library source selects its own Builtin groups,
-and `std.zy` retains a whole alias while forwarding the package to its component modules.
-The complete nested product remains only in the provider representation and host/runtime construction boundary.
-
-## Checker constraints on the topic layout
-
-Four checker facts determine how far the modularization can fold, and each one is load-bearing for the layout above.
-
-- A bare record literal has no principal type, so a package-producing source needs a synthesizing final form.
-  Every standard-library package function now ends in a synthesizing `pack` introduction
-  and carries an annotated value parameter.
-  Within a synthesized telescope, disclosure follows the payload: a witness the payload types apply,
-  such as the control modules' `State` under `Monad (State S)`, is disclosed with `as`,
-  since a transparent type function has no abstraction left for `is` to seal and the body would
-  otherwise stay concrete while the opening binds the seal; a generative data type the payload never applies,
-  such as the public package's `Bool`, seals with `is`.
-- A `def`-bound data type cannot cross a file boundary by disclosure, because an annotation can only name a definition
-  through an import and only compiler intrinsics are canonical importable terms.
-  Existential witnesses therefore remain the only cross-file naming device for library data types,
-  which is why each topic seals its body behind `exists` witnesses, either through the shared `package.type.zy` wrapper
-  or through the pack introduction itself.
-- A type-level application of a transparent `let` function reduces during analysis,
-  so a declared record may apply each module telescope directly to the existential witnesses
-  without new checker support, and the nested shape is what the projection resolver walks.
-- Structural projection searches nested named products and descends through nested package telescopes,
-  opening sealed packages only in patterns and crossing manifest ones everywhere.
-  The public package therefore reintroduces the shared witnesses in one `exists`
-  and keeps topic packages opaque inside their groups, while consumers still select `(/option; /process)`
-  across the nesting unchanged.
-  A public name that a nested group repeats, such as the root contract's `VType` inside `core`,
-  becomes ambiguous from the outermost receiver and is selected from the narrower group instead.
-
-### Package annotations and companion files
-
-A package may need an expected type even when its interface belongs beside its implementation.
-The comma introduction uses that expectation to distinguish static witnesses from runtime fields.
-An inline annotation supplies it directly. A companion `.zyi` supplies the same annotation from another source:
-the loader treats the pair as `(implementation : signature)`.
-The need for an expected type therefore determines where checking needs an annotation;
-it does not determine how many source files the library needs.
-
-Prefer a self-contained `.zy` when `pack` can synthesize the interface from the witnesses and payload.
-Keep any remaining annotation local, and reuse a synthesized payload type with `@[typeof]` when appropriate.
-A `.zyi` is useful when the interface is intentionally authored and reviewed independently of the implementation.
-Repeating the implementation's inferred interface in a companion creates a second description to maintain.
-
-A package that must carry kind fields still needs a small inline annotation.
-`Int64` is a type of kind `VType`, while `VType` and `CType` are themselves kinds.
-The current `pack` checker accepts type-valued evidence and reports `tyck.sort-mismatch` for kind-valued evidence.
-For example, this introduction is currently rejected:
-
-```zydeco
-pack (VType as @(intrinsic(vtype))) where () end
-```
-
-The corresponding manifest kind field is supported in an `exists` type and in a tuple checked against that type.
-This allows the kind prefix to surround a package whose remaining fields are synthesized normally:
-
-```zydeco
-begin
-  let VType = @(intrinsic(vtype)) in
-  let CType = @(intrinsic(ctype)) in
-  let types = pack
-      (= Thk as @(intrinsic(thk)) : CType -> VType)
-      (= Ret as @(intrinsic(ret)) : VType -> CType)
-      (= Int64 as @(intrinsic(i64)) : VType)
-  where
-    ()
-  end in
-  (
-    (VType, CType, types) : exists (VType as @(intrinsic(vtype)))
-      (CType as @(intrinsic(ctype)))
-    .
-      @[typeof] types
-  )
-end
-```
-
-Only the two kind fields require this explicit prefix.
-`@[typeof] types` preserves the inferred manifest type fields, so adding a numeric type changes one witness list.
-This pattern handles the current introduction limitation within one source file.
-The Builtin contract uses the same annotated-spine form for its surface, with every fixed-representation type
-as a manifest entry beside the two kinds.
-
-## Static package composition
-
-Packages are the module language
-and follow the shared [static elimination contract](../references/language.md#10-static-elimination).
-For packages, elaboration resolves type identities, named selections, and static function components,
-while retaining ordinary payload data and explicitly authored computations.
-Passing, returning, and nesting packages, including packages carrying [value functions](value-pi.md#static-elimination),
-are governed by this residual requirement.
-Current implementation restrictions are recorded [below](#current-implementation-and-validation).
-
-## Explicit runtime contracts
-
-A computation type describes the operations a runtime implementation supports,
-and `Thk` makes that implementation a value that can be stored, passed, returned, and selected dynamically.
-Runtime contracts may use ordinary computation arrows, `forall`, `codata`, and package-dependent computation `pi`.
-For example, a codata contract can group a polymorphic operation and an ordinary observation:
-
-```zydeco
-let Contract = codata
-  | .identity : forall (A : VType) . A -> Ret A
-  | .status : Ret Int64
-end that
-```
-
-An implementation has type `Thk Contract`.
-Its type abstractions and applications erase, but its method bodies and dynamic dispatch remain.
-The standard library's `Monad` contract already uses `forall` inside codata in this way.
-Thus a polymorphic runtime function is distinct from a `ValPi` function whose abstraction
-and applications must themselves be eliminated.
-
-An explicit adapter from a static package to `Thk Contract` is the runtime boundary.
-The adapter resolves static package selections and value functions while compiling the thunk body;
-the resulting thunk captures any required runtime data or operations.
-The runtime contract must expose representable arguments and results: a static-only `ValPi` component must be consumed
-during adaptation or given an explicitly thunked operation interface.
-A product of thunks remains a valid contract representation, but it is not the only one.
-These existing forms supply the semantics without requiring a new `dyn` primitive.
-
-A vtable is one implementation of such a contract.
-Current SPS lowering uses a closure with a destructor-tag dispatcher for thunked codata.
-A backend may instead split a shared environment from a table of method entry points,
-preserving captures, polymorphic calling conventions, and effect order.
-The source-level contract does not require either physical layout, nor does static type erasure promise
-that every runtime method call is direct.
-
-### Package-dependent runtime contracts
-
-A computation `pi` accepting a package is also a runtime contract.
-Its implementation may be stored as a thunk and selected dynamically; only its signature
-and the type evidence needed to instantiate that signature must be available during checking.
-Resolving an argument's static witnesses does not require resolving the called implementation's body.
-
-For a type witness `X : K`, a value-type family `A`, and a computation-type family `C`, the correspondence is:
-
-```text
-Sig = exists (X : K). A X
-
-pi ((X, x) : Sig). C X
-    <--> forall (X : K). A X -> C X
-```
-
-The left interface receives a witness and payload grouped as one package;
-the right receives the same witness and payload separately.
-`C X` may depend on the type witness but not on the arbitrary runtime value `x`.
-This grouping uses the witness-exposing elimination of `PackPi`; it does not add an unrestricted dependent projection
-from an ordinary sealed existential value. This is the type-witness instance of
-[dependent currying](https://leanprover-community.github.io/mathlib4_docs/Mathlib/Logic/Equiv/Basic.html#Equiv.piCurry).
-Manifest components substitute their disclosed definitions before this correspondence is applied;
-multiple abstract witnesses extend it in telescope order, preserving their shared identities.
-
-The following concrete interfaces and adapters also permit codata as the residual contract:
-
-```zydeco
-let Box = exists (X : VType) . X that
-let Methods (X : VType) = codata
-  | .get : Ret X
-  | .replace : X -> Ret X
-end that
-let Curried = forall (X : VType) . X -> Methods X that
-let Packaged = pi ((X, _) : Box) . Methods X that
-
-def curried : Thk Curried = {
-  fn (X : VType) (value : X) =>
-    comatch
-    | .get => ret value
-    | .replace replacement => ret replacement
-    end
-} that
-def packaged : Thk Packaged = {
-  fn ((X, value) : Box) => ! curried X value
-} that
-def restored : Thk Curried = {
-  fn (X : VType) (value : X) => ! packaged ((X, value) : Box)
-} that
-```
-
-Both adapters type-check with the current implementation.
-This proposal allows both interfaces through explicit adapters; it does not make `PackPi`
-and `Forall` definitionally equal or require their current argument layouts to coincide.
-The general correspondence is not a theorem identifying arbitrary effectful computations merely from their types.
-Any stronger observational equation must account for partial consumption of a computation protocol and effect order.
-
-Codata supplies the method alternatives; package `pi` supplies a grouped parameter telescope.
-A `pi` outside codata opens the package once for the residual protocol, as above.
-A `pi` inside a codata arm instead accepts a package for that particular observation.
-Both are allowed, but moving binders across method boundaries changes where witnesses and payloads are shared
-and is not an implicit conversion.
-
-An opening pattern that introduces abstract witnesses continues to synthesize a package-dependent arrow.
-A manifest-only domain introduces no abstract witnesses and may elaborate to a plain computation arrow.
-After its manifest fields erase, that arrow is admissible when its residual payload is representable;
-the absence of abstract witnesses is not a reason to reject it.
-An explicitly annotated `pi (pattern : Sig). C` remains available in either case.
-
-### Hidden types and scoped opening
-
-Runtime dispatch does not recover concrete types from runtime data.
-A call to `pi ((X, x) : Sig). C X` needs a witness identity available in its static scope to instantiate `C X`.
-An abstract identity obtained by an explicit package opening is sufficient;
-its concrete representation need not be known.
-A hidden witness must not escape that scope or be equated with an unrelated concrete type.
-When the provider chooses a private type at a dynamic boundary, the consumer needs scoped existential elimination,
-rather than a universal interface that lets the consumer choose that type.
-
-Private state can remain captured in a thunk when its type does not occur in the public contract.
-If the consumer must use a private type across several operations,
-a polymorphic callback can expose it within one opening.
-For example:
-
-```zydeco
-let Hidden = codata
-  | .open : forall (R : CType) .
-      Thk (forall (X : VType) . X -> Thk (X -> Ret Int64) -> R) -> R
-end that
-```
-
-The provider supplies its chosen `X`, a value, and an operation on that value.
-The callback must work for arbitrary `X`, and `R` is chosen outside its scope.
-The callback can invoke the supplied operation but cannot return the value
-as `Int64` solely by inspecting its abstract type.
-Package `pi` can also group this callback's witness and payload:
-
-```zydeco
-let Entry = exists (X : VType) . X * Thk (X -> Ret Int64) that
-let HiddenByPackage = codata
-  | .open : forall (R : CType) .
-      Thk (pi ((X, _, _) : Entry) . R) -> R
-end that
-```
-
-The provider calls the callback with an `Entry`, and the callback opens it once
-to use the value and operation at their shared abstract `X`.
-Both forms are supported runtime interfaces through explicit adapters.
-They are continuation interfaces for existential elimination;
-in an effectful language their types alone do not promise a pure package or a single callback invocation.
-
-### Module functors
-
-A *value functor* is a `val pi` from a package to a package, such as `builtin |> make_data`.
-Its application undergoes static elimination, including higher-order composition through package fields.
-A *computation functor* has a package-dependent computation arrow `pi (pattern : Sig). C`.
-It may have effects, and its thunk may remain a runtime callable just like a thunk
-of the corresponding `forall` interface.
-It is not restricted to the host boundary or to a statically known callee.
-
-### Current implementation and validation
-
-The compiler checks and executes thunked `forall` and codata contracts and the package-`pi` adapters above.
-Packages with representable payloads may be returned, stored in constructors,
-and passed through plain computation arrows.
-Static packages carrying value functions compose
-through the shared [static elaboration and residual validation](../references/compiler.md#static-elimination).
-Their known introductions and openings reduce while runtime package openings preserve the typed witness scope.
-
-The existential and package-`pi` regression tests retain unavailable-witness, abstract-type escape,
-and false-disclosure rejections beside the accepted runtime transport cases.
-The core runtime-contract fixtures exercise dynamically passed codata and package-`pi` thunks,
-both directions of the explicit `forall` adapters, and a callback that keeps a provider's representation type hidden.
-`static_elimination.rs` rejects attempts to retain a value function in a runtime payload,
-including a hidden existential, and pairs witness recovery through static forwarding with rejection
-of hidden runtime witnesses after forwarding or repacking.
-
-[High-SPS normalization](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand) exposes parameter
-demands when a known computation application reduces locally, allowing unused package fields to disappear.
-Applications that remain indirect conservatively demand their arguments whole.
-
-## Elaboration and runtime representation
-
-Selective package patterns elaborate to existing typed patterns.
-The opened static prefix becomes the same existential `SCons` pattern produced by explicit unpacking.
-Selected value fields become resolved structural projection patterns,
-and their semicolon group becomes the existing pattern-alias representation.
-Internal patterns occupy unselected static positions without introducing source names.
-
-Static witnesses and manifest equations erase as before.
-Value projections lower to ordinary tuple patterns with resolved physical paths.
-The Builtin materializer recursively follows the same nested product shape in the interpreter and Stack IR.
-Static composition requires no module object, field table, or new calling convention.
-Explicit runtime contracts retain their thunk or dictionary representation as described above;
-their implementation may be dynamic even though these package witnesses and projection paths are static.
-
-Term projection crosses manifest packages but not sealed ones: `builtin/fs` resolves
-through the manifest `system` group, while a field that only a package
-with abstract witnesses exposes is reported as present but not term-projectable.
-Opening such a package changes type identity and scope, so the source must show it with a pattern.
-This keeps ordinary `value/field` lookup simple and makes the one generative opening visible at the dependency boundary.
-Projection patterns do open nested packages: a group such
-as `let (/OS; /fs) = builtin in ...` gives both the abstract witness selected
-through `system` and the module value selected from its body one shared opening,
-exactly as surface selections share the leading telescope.
-
-At a package-dependent `param`, the checker maps the domain's abstract witnesses
-to the canonical witness telescope of the expected arrow.
-A selective parameter therefore checks against the same type as an explicit positional parameter.
-A whole alias retains the manifest prefix used by package application,
-so forwarding does not reconstruct or reopen the package.
-Leading manifest kind components such as Builtin's `VType` and `CType` participate
-in the same selection algorithm and remain erased.
-
-## Why ordinary `let` is sufficient
-
-`let` already states the relevant facts for a produced package: bind one provider term,
-eliminate its package in one pattern, and scope the selected names over the tail after `in`.
-`param` uses that same pattern for an incoming package.
-The semicolon group states that every selection and optional whole alias sees the same bindee.
-Adding `use package` would duplicate those binding and scoping rules while hiding the pattern that determines
-which members become local.
-
-The resulting convention stays within Zydeco's uniform term language:
-
-```zydeco
-let (/TypeField; /module_value) = package in body
-
-param (/TypeField; /module_value; whole) : Package in body
-```
-
-A module remains a value, a type field remains an existential component, and an import remains metadata on a hole.
-Package modularization is the selective use of those existing representations.
+Fixed representations such as `Int64` must agree across independently composed pure libraries.
+Giving each numeric operation package a fresh carrier would make equal machine representations incompatible
+and force arithmetic dependencies into interfaces that need only a type.
+Compiler-canonical intrinsic identities therefore belong in the shared Builtin surface.
+Provider-owned `Reader`, `Writer`, and `OS` remain abstract:
+their operations must use the capabilities supplied by the same provider opening.
+The [Builtin guide](../../lib/std/README.md#builtin-packages) owns the current field and topic inventory.
+
+The same distinction guides library dependencies.
+Pure data and numeric interfaces name the small canonical types they need;
+composition roots receive and forward resource capabilities.
+Topic packages assemble related operations without redefining primitive identities.
+A record's nested layout is organizational structure, while witness provenance determines compatibility.
+
+## Authored and inferred interfaces
+
+A final `pack` introduction can synthesize a package interface from explicit witness evidence and its payload.
+This avoids restating an implementation's complete export record.
+An explicit annotation or companion source is useful when an independently maintained contract must hide more detail
+or prescribe an abstract payload type.
+`@[typeof]` names a synthesized classifier when that is the desired contract.
+These choices serve different review needs; no companion-file convention should force duplicate declarations everywhere.
+
+Named products can synthesize types.
+Kind-bearing packages currently require an annotated introduction because `pack` introduces type witnesses only;
+see the [kind-field recipe](../../lib/std/README.md#package-composition).
+Computation application currently instantiates a leading existential prefix.
+Generalized witness routes beneath value products are tracked
+in [the boundary probe](../todos/reference-drift.md#compiler-boundary-probes), not promised by this design.
+
+## Static composition and runtime selection
+
+Value functors support total package assembly
+under the common [static-elimination contract](../references/language.md#10-static-elimination).
+When an implementation must remain dynamically selectable, an authored thunk exposes a computation protocol.
+Codata describes method alternatives, and package-dependent `pi` groups related type witnesses and payloads.
+Explicit adapters connect this form to a curried `forall` interface;
+[the library recipes](../../lib/std/README.md#explicit-runtime-contracts) explain where opening and sharing occur.
+
+This boundary makes runtime selection compatible with abstract types without recovering types from runtime data.
+A provider-chosen hidden witness is consumed through scoped existential elimination, such as a polymorphic callback.
+Its concrete identity cannot escape merely because several operations agree on it.
+The callback protocol itself does not imply purity, single invocation, or a native captured continuation.
+
+## Remaining questions
+
+The next interface decisions concern kind-witness introduction, generalized computation witness routes,
+and when an authored companion interface pays for its independent maintenance.
+Evaluate them with small packages that require the proposed distinction, including a consumer that must reject.
+Broader value-view syntax and coverage remain in [todos](../todos/deferred-designs.md#value-views).

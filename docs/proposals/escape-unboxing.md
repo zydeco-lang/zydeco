@@ -1,64 +1,23 @@
 # Escape Analysis and Unboxing for Zydeco
 
-## Summary
+## Motivation and boundary
 
-Zydeco's native backend allocates every escaping product, constructor,
-and closure package in a fixed two-space copying heap.
-The call-by-push-value pipeline already places control and continuation structure on the machine stack,
-but values that are created and consumed locally still consume region space.
-This proposal adds a constraint-based escape analysis over SPSLow and an unboxing rewrite
-that lets non-escaping values live as multiple stack or environment words instead of as region pointers.
+Local product and closure construction can often be eliminated when the value is immediately projected or forced.
+[C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)
+owns the implemented pack/unpack fusion and variable-level projection analysis.
+This proposal extends that boundary to constraint-based representation choices over SPSLow:
+unboxed fields, a frame-resident cell, or a managed heap cell.
+Stack-product allocation and interprocedural escape constraints are not implemented.
 
-The analysis classifies each value node and each value variable with a representation choice
-from `{unboxed, stack, region}`.
-SPSLow's single-occurrence invariant makes the analysis precise: every value node is consumed exactly once,
-and sharing is explicit through variables.
-The implementation covers direct pack/unpack fusion and variable-level unboxing for variables
-whose uses are all projections.
+SPSLow has explicit closure captures and a single lexical occurrence per value node; sharing uses named variables.
+That makes producer/consumer structure available before ZASM decomposes it into stack operations. The runtime's
+[tagged-word and collection contract](../references/compiler.md#c12-shared-native-model-allocation-and-collection)
+constrains boxed fields.
+Native [activation lifetime](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+constrains frame pointers.
+Neither contract by itself proves that a proposed stack cell cannot escape.
 
-## Motivation
-
-The current AMD64 backend lowers `PackProduct` to a call to `zydeco_alloc_scanned`.
-That is correct, but it is also unnecessary for values that never escape their creating frame.
-Two common patterns pay this cost today:
-
-```zydeco
-let x = (10, 0) in
-let (y, z) = x in
-...
-```
-
-and
-
-```zydeco
-do x <- ! { fn (x : Int64) => ret x } 0;
-! process/exit x
-```
-
-In both cases the value is constructed and immediately projected or forced.
-A stack machine already has the fields available; the heap cell only adds allocation and eventual copying work.
-Unboxing removes the cell and keeps the fields in the machine's natural stack-shaped representation.
-
-## Background
-
-Zydeco's compiler lowers checked CBPV through branch-join SPS into first-order SPSLow and then into ZASM.
-Relevant facts:
-
-- SPSLow is first-order.
-  Closures are explicit `ClosurePackage` values and continuations are explicit `ContinuationPackage` stacks.
-- `SpsLowValidator` enforces that every `ValueId`, `CompuId`, `StackId`,
-  and `VPatId` occurs exactly once in the lexical IR.
-  Sharing is represented by `LetValue` binders and `DefId` variables.
-- Assembly lowering turns every `VCons`, `Ctor`, and `ClosurePackage` into a `PackProduct` instruction.
-- The AMD64 emitter calls `zydeco_alloc_scanned` for every region-allocated `PackProduct`.
-- The runtime uses [native copying collection](../../DESIGN.md#native-garbage-collection)
-  when the active semispace fills.
-  SPSLow product layouts carry only their physical arity.
-  Odd runtime words are tagged immediates; aligned even words can be managed pointers,
-  so the collector needs no compiler-generated pointer maps.
-
-The CBPV value/computation distinction is what makes this design attractive: computation is already stack-shaped,
-while values are inert and can be flattened when they do not need a stable pointer identity.
+The analysis below is a design for extending local selection, not an account of the current implementation.
 
 ## Design
 
@@ -67,7 +26,7 @@ while values are inert and can be flattened when they do not need a stable point
 The analysis runs on SPSLow, before assembly lowering.
 SPSLow is the right boundary because:
 
-- it still has static types and product layouts;
+- it retains explicit product layouts and producer/consumer structure;
 - closure conversion is complete, so closure environments are explicit;
 - the single-occurrence invariant gives a precise producer/consumer relation;
 - a later rewrite can change value representation without fighting a control-flow graph.
@@ -110,8 +69,7 @@ fields(S) = {S, R}
 fields(R) = {R}
 ```
 
-If a value `w` has a field `v`, then the representation of `v` must be compatible
-with every possible representation of `w`:
+If a value `w` has a field `v`, propagate the remaining parent representation possibilities to that field:
 
 ```text
 Allowed(v) := Allowed(v) ∩ ⋃_{ℓ ∈ Allowed(w)} fields(ℓ)
@@ -185,8 +143,8 @@ in the current stack frame instead of calling `zydeco_alloc_scanned`.
 This representation requires the explicit lifetime and reclamation discipline described
 in [native activation frames](native-frames.md#frame-lifetime-and-entry-invariants),
 including proof that references cannot survive the owning frame.
-That proposal separately considers retaining caller environments across return continuations;
-choosing storage for an individual product remains a decision here.
+Native caller environments already survive return continuations; choosing storage
+for an individual product remains a decision here.
 It is not implemented; current lowering uses unboxed fields or a heap cell.
 
 ## Worked Example
@@ -245,36 +203,15 @@ pop code
 jump code
 ```
 
-## Implementation Status
+## Validation boundary
 
-The following is implemented:
-
-- Local `VCons` pack/unpack fusion for directly projected values.
-- `ClosurePackage` fusion for directly forced closures.
-- Variable-level expansion for `LetValue`-bound variables whose uses are all projections.
-
-The analysis lives in `lang/assembly/src/unbox.rs` and is consumed by `lang/assembly/src/lower.rs`.
-Stack-frame product allocation and interprocedural escape constraints remain planned.
-Implementing the stack representation requires tests for operand order, frame cleanup, call alignment,
-escaping references, and collection while a frame retains managed pointers.
-
-## File Touchpoints
-
-| Area | Change |
-| --- | --- |
-| `lang/assembly/src/unbox.rs` | representation analysis and variable expansion metadata |
-| `lang/assembly/src/lower.rs` | skip `PackProduct` / `UnpackProduct` for unboxed values; expand unboxed variables |
-| `lang/assembly/src/analyze.rs` | track product fields during stack analysis |
-| `lang/assembly/src/syntax.rs` | logical and physical product layouts |
-| `lang/amd64/src/emit.rs` | heap product allocation and field access |
-| `lang/tests/tests/core.rs` | regression fixtures for direct tuples and closures |
-
-## Validation
-
-- Existing interpreter and native tests must remain green.
-- Unit tests in `lang/assembly/src/unbox.rs` check the local analysis.
-- End-to-end tests cover direct tuple projection, direct closure forcing, and the existing variable-bound tuple fixture.
-- Manual ZASM inspection confirms that unboxed values no longer emit the corresponding `pack` / `unpack` instructions.
+Use [C10's implementation map](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)
+for current local unboxing.
+A stack-cell implementation additionally needs paired checks for operand order, frame cleanup, call alignment,
+escaping references, and collection while a retained frame holds managed pointers.
+Inspection must show the removed allocation, while unknown consumers retain boxing.
+Interprocedural constraints need recursive and indirect-call counterexamples
+before their results can select stack storage.
 
 ## Alternatives Considered
 
@@ -288,23 +225,23 @@ Allowed sets keep both dimensions explicit.
 
 **Reboxing at escape points.** A more aggressive design would allow a value to be unboxed
 on non-escaping paths and boxed again when it reaches an escaping sink.
-This proposal keeps the current implementation conservative and boxes from the start,
-avoiding duplicated representations.
+The proposed conservative choice boxes from the start on such paths, avoiding duplicated representations.
 
 ## Open Questions
 
 - How should unboxed values interact with host calls that expect pointer arguments?
-  The current implementation marks all extern arguments as `R`.
+  The proposed conservative constraint forces external arguments to `R`.
 - How much of the analysis must cross recursive `Fix` blocks before the results are useful?
 - How much fixed environment space should one function activation be allowed to use?
-  The current backend reuses the environment buffer on every block transfer,
-  so the largest local context determines this pressure.
-  The [retained-frame alternative](native-frames.md#collection-and-space-behavior) must also account
-  for suspended activations and their live data.
+  The current [retained-frame model](native-frames.md#collection-and-space-behavior) must account
+  for active and suspended activations, packed capacity, and their live data.
+  Retention does not authorize a raw frame pointer to escape its activation.
 
 ## Related Documents
 
 - The Stack IR phase boundaries in [`DESIGN.md`](../../DESIGN.md) record the SPSLow invariants this analysis builds on.
-- [Native activation frames](native-frames.md) owns the implemented activation lifetime, entry, reclamation,
-  and suspended-root invariants used by stack allocation.
-- `docs/legacy/ideas/products.md` explains the canonical product layouts that unboxing must respect.
+- [C11](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
+  and [C12](../references/compiler.md#environment-actions-and-roots) own current native lifetime and root contracts;
+  [native frame design](native-frames.md) keeps the alternative storage requirements.
+- [C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) owns current
+  product layouts; the older product exploration remains historical.

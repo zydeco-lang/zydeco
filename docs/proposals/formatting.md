@@ -293,29 +293,18 @@ so `zydeco fmt` and Cajun share one behavior and must not introduce independent 
 
 ## Verification and Extension
 
-The focused regression matrix covers every layout family in compact, source-broken, and width-broken forms.
-Each meta-rule has dedicated regression tests: the closer tiers are pinned
-by `placement_closes_at_the_binding_indentation`, `definition_separator_tiers_share_the_binding_indentation`,
-and `scope_separator_breaks_only_after_a_multiline_head`; the vertical-construct rule
-by `sequence_bindings_start_on_their_own_lines` and `arm_blocks_start_on_their_own_lines`;
-the joined-boundary nesting rule by `preserves_fitting_parameter_rows_inside_multiline_telescopes`;
-and the boundary-ownership rule by `removes_only_parentheses_allowed_by_the_grammar_context` together
-with the canonical-gap cases.
-A repository corpus test formats the maintained `.zy` sources under `lib/` and `docs/spell/`.
-It then reparses them, compares desugared structure, checks comment content, and verifies idempotence.
-Legacy examples and CLI fixtures are excluded because they contain earlier syntax or test-harness directives rather
-than current parser input.
+The regression matrix covers each layout family in compact, source-broken, and width-broken forms.
+Corpus checks reparse formatted source, compare desugared structure, preserve comments, and require idempotence.
+The current source corpus and runner boundaries belong
+to [C16](../references/compiler.md#source-fixtures-and-runtime-oracles);
+[CONTRIBUTING](../../CONTRIBUTING.md) owns formatting commands.
 
-When syntax is added, first identify the parser requirement for each child.
-Then choose the canonical spelling and an existing layout family for each boundary.
-A new primitive is warranted only when those choices introduce a new invariant.
-
-`NamedTermPunningAudit` is intentionally temporary.
-It records explicit term fields that canonical formatting can shorten and should disappear
-after the standard library is migrated.
+When syntax is added, first identify each child's parser requirement,
+then choose its canonical spelling and an existing layout family for each boundary.
+Add a new primitive only when those choices require a new invariant.
 Comments use entity anchors, typed arm and delimiter boundaries, and exclusion ranges.
-If future syntax permits truly floating comments, the model should add another typed trivia boundary instead
-of retaining raw whitespace or a second token tree.
+If future syntax permits floating comments, give them an explicit typed boundary rather
+than retaining a second token tree.
 
 ## Elaborated type rendering
 
