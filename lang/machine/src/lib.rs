@@ -11,6 +11,7 @@
 
 extern crate alloc;
 
+pub mod bytes;
 pub mod closure;
 pub mod frames;
 pub mod native;

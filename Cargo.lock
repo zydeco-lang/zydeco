@@ -2669,6 +2669,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zydeco-derive",
+ "zydeco-machine",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",

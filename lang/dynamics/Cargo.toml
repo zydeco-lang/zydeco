@@ -11,6 +11,7 @@ readme = { workspace = true }
 description = "dynamics for zydeco"
 
 [dependencies]
+zydeco-machine = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }

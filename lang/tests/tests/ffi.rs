@@ -182,23 +182,25 @@ fn native_c_boundary_executes_the_compositional_protocol() {
         TargetArchitecture::X86_64,
         operating_system,
     );
-    let backend = CommandCompiler::default().lower(&FfiCase::path("boundary.zy")).unwrap();
-    let executable = options
-        .link_amd64(
-            "ffi_program",
-            &backend.emit_amd64(operating_system),
-            &backend.foreign_libraries(),
-        )
-        .unwrap();
-    let output = Command::new(executable.path())
-        .env("LD_LIBRARY_PATH", directory.path())
-        .env("DYLD_LIBRARY_PATH", directory.path())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}\n{}",
-        output.status,
-        String::from_utf8_lossy(&output.stderr)
-    );
+    for fixture in ["boundary.zy", "representation.zy"] {
+        let backend = CommandCompiler::default().lower(&FfiCase::path(fixture)).unwrap();
+        let executable = options
+            .link_amd64(
+                "ffi_program",
+                &backend.emit_amd64(operating_system),
+                &backend.foreign_libraries(),
+            )
+            .unwrap();
+        let output = Command::new(executable.path())
+            .env("LD_LIBRARY_PATH", directory.path())
+            .env("DYLD_LIBRARY_PATH", directory.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{fixture}: {}\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }

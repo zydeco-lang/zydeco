@@ -119,6 +119,8 @@ impl BuiltinOperationAbi {
                         Self::branch([atom, atom])
                     }
                     | IntegerOperation::ToString => Self::pure([atom], Atom::String),
+                    | IntegerOperation::ToLeBytes => Self::pure([atom], Atom::Bytes),
+                    | IntegerOperation::FromLeBytes => Self::optional([Atom::Bytes], atom),
                 }
             }
             | Role::Float(float, operation) => {
@@ -132,6 +134,8 @@ impl BuiltinOperationAbi {
                         Self::branch([atom, atom])
                     }
                     | FloatOperation::ToString => Self::pure([atom], Atom::String),
+                    | FloatOperation::ToLeBytes => Self::pure([atom], Atom::Bytes),
+                    | FloatOperation::FromLeBytes => Self::optional([Atom::Bytes], atom),
                 }
             }
             | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], int64),
@@ -151,6 +155,7 @@ impl BuiltinOperationAbi {
             | Role::BytesToStr => Self::optional([Atom::Bytes], Atom::String),
             | Role::BytesGet => Self::optional([Atom::Bytes, int64], uint8),
             | Role::BytesSlice => Self::optional([Atom::Bytes, int64, int64], Atom::Bytes),
+            | Role::BytesAligned => Self::optional([Atom::Bytes, int64], Atom::Bytes),
             | Role::BytesSingleton => Self::pure([uint8], Atom::Bytes),
             | Role::BytesEq | Role::BytesLt => Self::branch([Atom::Bytes, Atom::Bytes]),
             | Role::Stdin => Self::pure([], Atom::Reader),

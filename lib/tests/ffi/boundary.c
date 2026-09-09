@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 uint64_t zyffi_zero(void) { return UINT64_MAX; }
 
@@ -25,4 +26,32 @@ uint64_t zyffi_three_bytes(const void *first, size_t first_length,
 uint64_t zyffi_six(uint64_t a, uint64_t b, uint64_t c,
                    uint64_t d, uint64_t e, uint64_t f) {
     return a + 3 * b + 5 * c + 7 * d + 11 * e + 13 * f;
+}
+
+/* Matches align 64 (product uint8 uint32) on the supported little-endian C targets. */
+struct zyffi_record {
+    _Alignas(64) uint8_t tag;
+    uint32_t payload;
+};
+_Static_assert(sizeof(struct zyffi_record) == 64, "record size");
+_Static_assert(offsetof(struct zyffi_record, payload) == 4, "field offset");
+
+uint64_t zyffi_record(const void *data, size_t length) {
+    if (length != sizeof(struct zyffi_record) || (uintptr_t)data % 64 != 0) {
+        return 0;
+    }
+    /* memcpy avoids imposing a C effective type on an immutable byte allocation. */
+    struct zyffi_record record;
+    const uint8_t *source = data;
+    memcpy(&record, data, sizeof(record));
+    if (record.tag != 7 || record.payload != UINT32_C(16909060)) {
+        return 0;
+    }
+    for (size_t index = 1; index < 4; ++index) {
+        if (source[index] != 0) return 0;
+    }
+    for (size_t index = 8; index < sizeof(record); ++index) {
+        if (source[index] != 0) return 0;
+    }
+    return 1;
 }

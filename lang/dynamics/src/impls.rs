@@ -1,11 +1,12 @@
 use crate::{
-    host::{HostIoErrorKind, HostRuntime, HostValue, ReaderHandle, SharedBytes, WriterHandle},
+    host::{HostIoErrorKind, HostRuntime, HostValue, ReaderHandle, WriterHandle},
     syntax::*,
 };
 use std::{
     io::{self, BufRead, Read, Write},
     rc::Rc,
 };
+use zydeco_machine::bytes::ByteBuffer;
 
 type ZValue = SemValue;
 type ZCompute = Computation;
@@ -72,7 +73,9 @@ macro_rules! integer_arithmetic_result {
             | IntegerOperation::Eq
             | IntegerOperation::Lt
             | IntegerOperation::Gt
-            | IntegerOperation::ToString => unreachable!(),
+            | IntegerOperation::ToString
+            | IntegerOperation::ToLeBytes
+            | IntegerOperation::FromLeBytes => unreachable!(),
         };
         Literal::Integer(IntegerLiteral::$variant(result)).into()
     }};
@@ -532,11 +535,11 @@ pub fn str_parse_int_branch(
 struct HostBytes;
 
 impl HostBytes {
-    fn value(bytes: impl Into<SharedBytes>) -> ZValue {
+    fn value(bytes: impl Into<ByteBuffer>) -> ZValue {
         HostValue::Bytes(bytes.into()).into()
     }
 
-    fn shared(value: &ZValue) -> &SharedBytes {
+    fn shared(value: &ZValue) -> &ByteBuffer {
         match value {
             | ZValue::Host(HostValue::Bytes(bytes)) => bytes,
             | _ => unreachable!("expected host byte buffer"),

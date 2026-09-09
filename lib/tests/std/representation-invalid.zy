@@ -1,0 +1,65 @@
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Bytes; /Int64;
+    /UInt8; /numeric; /bytes; /process; builtin) : @(import("../../std/builtin.zy")) that
+  let make_memory = @(import("../../std/memory/package.zy")) in
+  let (= Layout, = Representation, memory) = builtin |> make_memory in
+  let fail = { ! process/exit 1 } in
+  let ! rejected (A : VType) (layout : Layout A) (next : Thk OS) : OS =
+    ! memory/realize A OS layout next { fn _ => ! fail }
+  in
+  let ! bad_alignment (buffer : Bytes) (alignment : Int64) (next : Thk OS) : OS =
+    ! bytes/aligned OS buffer alignment next { fn _ => ! fail }
+  in
+  do buffer <- ! bytes/from_string "test";
+  ! bad_alignment buffer 0
+    {
+      ! bad_alignment buffer 3
+        {
+          ! bad_alignment buffer -8
+            {
+              ! rejected Unit (memory/padding -1)
+                {
+                  ! rejected Unit (memory/padding -9223372036854775808)
+                    {
+                      ! rejected Int64 (memory/align Int64 0 memory/int64)
+                        {
+                          ! rejected Int64 (memory/align Int64 3 memory/int64)
+                            {
+                              ! rejected Int64 (memory/align Int64 -8 memory/int64)
+                                {
+                                  ! rejected (Unit * UInt8)
+                                    (
+                                      memory/product Unit UInt8 (memory/padding 9223372036854775807)
+                                        memory/uint8
+                                    )
+                                    {
+                                      ! rejected Unit (
+                                        memory/align Unit 8 (memory/padding 9223372036854775807)
+                                      )
+                                        {
+                                          -- Maximum size is representable as metadata until rounding or adding overflows.
+                                          ! memory/realize Unit OS (
+                                            memory/padding 9223372036854775807
+                                          ) fail
+                                            {
+                                              fn (= Stored, repr) =>
+                                                ! numeric/int64/eq OS repr/size 9223372036854775807
+                                                  {
+                                                    -- Validation did not modify an aliased input buffer.
+                                                    do expected <- ! bytes/from_string "test";
+                                                    ! bytes/eq OS buffer expected {
+                                                      ! process/exit 0
+                                                    } fail
+                                                  } fail
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+end

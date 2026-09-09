@@ -1,0 +1,256 @@
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Bytes;
+    /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;
+    /Float32; /Float64; /numeric; /bytes; /process) : @(import("../../std/builtin.zy")) that
+  let fail = { ! process/exit 1 } in
+  def Octets : VType =
+    data
+    | +Nil : Unit
+    | +Cons : UInt8 * Octets
+    end
+  that
+  let fix buffer (octets : Octets) : Ret Bytes =
+    match octets
+    | +Nil() => ! bytes/empty
+    | +Cons(head, tail) =>
+      do first <- ! bytes/singleton head;
+      do rest <- ! buffer tail;
+      ! bytes/append first rest
+    end
+  in
+  let ! check_bits (A : VType)
+    (write : Thk (A -> Ret Bytes))
+    (read : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R))
+    (expected : Bytes) (next : Thk OS)
+  : OS =
+      ! read OS expected fail {
+        fn value =>
+          do actual <- ! write value;
+          ! bytes/eq OS actual expected {
+            do empty <- ! bytes/empty;
+            do zero <- ! bytes/singleton (0 : UInt8);
+            do too_long <- ! bytes/append expected zero;
+            ! read OS empty {
+              ! read OS too_long next { fn _ => ! fail }
+            } { fn _ => ! fail }
+          } fail
+      }
+  in
+  let ! check (A : VType)
+    (write : Thk (A -> Ret Bytes))
+    (read : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R))
+    (value : A) (octets : Octets) (next : Thk OS)
+  : OS =
+      do expected <- ! buffer octets;
+      do actual <- ! write value;
+      ! bytes/eq OS actual expected { ! check_bits A write read expected next } fail
+  in
+  ! check Int8 numeric/int8/to_le_bytes numeric/int8/from_le_bytes -128 +Cons(128, +Nil()) {
+    ! check Int16 numeric/int16/to_le_bytes numeric/int16/from_le_bytes -32768 (
+      +Cons(0, +Cons(128, +Nil()))
+    ) {
+      ! check Int32 numeric/int32/to_le_bytes numeric/int32/from_le_bytes -2147483648 (
+        +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))
+      ) {
+        ! check Int64 numeric/int64/to_le_bytes numeric/int64/from_le_bytes -9223372036854775808 (
+          +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))))))
+        ) {
+          ! check Int64 numeric/int64/to_le_bytes numeric/int64/from_le_bytes 9223372036854775807 (
+            +Cons(
+              255,
+              +Cons(
+                255,
+                +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(127, +Nil()))))))
+              )
+            )
+          ) {
+            ! check UInt8 numeric/uint8/to_le_bytes numeric/uint8/from_le_bytes 255 (
+              +Cons(255, +Nil())
+            ) {
+              ! check UInt16 numeric/uint16/to_le_bytes numeric/uint16/from_le_bytes 258 (
+                +Cons(2, +Cons(1, +Nil()))
+              ) {
+                ! check UInt32 numeric/uint32/to_le_bytes numeric/uint32/from_le_bytes 16909060 (
+                  +Cons(4, +Cons(3, +Cons(2, +Cons(1, +Nil()))))
+                ) {
+                  ! check UInt64 numeric/uint64/to_le_bytes numeric/uint64/from_le_bytes
+                    18446744073709551615 (
+                    +Cons(
+                      255,
+                      +Cons(
+                        255,
+                        +Cons(
+                          255,
+                          +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Nil())))))
+                        )
+                      )
+                    )
+                  ) {
+                    ! check UInt64 numeric/uint64/to_le_bytes numeric/uint64/from_le_bytes
+                      9223372036854775808 (
+                      +Cons(
+                        0,
+                        +Cons(
+                          0,
+                          +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))))
+                        )
+                      )
+                    ) {
+                      ! check Float32 numeric/float32/to_le_bytes numeric/float32/from_le_bytes 1.0
+                        +Cons(0, +Cons(0, +Cons(128, +Cons(63, +Nil())))) {
+                        ! check Float64 numeric/float64/to_le_bytes numeric/float64/from_le_bytes
+                          -2.0 (
+                          +Cons(
+                            0,
+                            +Cons(
+                              0,
+                              +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(192, +Nil()))))))
+                            )
+                          )
+                        ) {
+                          do expected <- ! buffer (
+                            +Cons(
+                              188,
+                              +Cons(
+                                154,
+                                +Cons(
+                                  120,
+                                  +Cons(86, +Cons(52, +Cons(18, +Cons(240, +Cons(127, +Nil())))))
+                                )
+                              )
+                            )
+                          );
+                          ! check_bits Float64 numeric/float64/to_le_bytes
+                            numeric/float64/from_le_bytes expected {
+                            do expected <- ! buffer (
+                              +Cons(
+                                188,
+                                +Cons(
+                                  154,
+                                  +Cons(
+                                    120,
+                                    +Cons(86, +Cons(52, +Cons(18, +Cons(248, +Cons(127, +Nil())))))
+                                  )
+                                )
+                              )
+                            );
+                            ! check_bits Float64 numeric/float64/to_le_bytes
+                              numeric/float64/from_le_bytes expected {
+                              do expected <- ! buffer (
+                                +Cons(
+                                  1,
+                                  +Cons(
+                                    0,
+                                    +Cons(
+                                      0,
+                                      +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Nil())))))
+                                    )
+                                  )
+                                )
+                              );
+                              ! check_bits Float64 numeric/float64/to_le_bytes
+                                numeric/float64/from_le_bytes expected {
+                                do expected <- ! buffer (
+                                  +Cons(
+                                    0,
+                                    +Cons(
+                                      0,
+                                      +Cons(
+                                        0,
+                                        +Cons(0, +Cons(0, +Cons(0, +Cons(240, +Cons(255, +Nil())))))
+                                      )
+                                    )
+                                  )
+                                );
+                                ! check_bits Float64 numeric/float64/to_le_bytes
+                                  numeric/float64/from_le_bytes expected {
+                                  do expected <- ! buffer (
+                                    +Cons(
+                                      0,
+                                      +Cons(
+                                        0,
+                                        +Cons(
+                                          0,
+                                          +Cons(
+                                            0,
+                                            +Cons(0, +Cons(0, +Cons(240, +Cons(127, +Nil()))))
+                                          )
+                                        )
+                                      )
+                                    )
+                                  );
+                                  ! check_bits Float64 numeric/float64/to_le_bytes
+                                    numeric/float64/from_le_bytes expected {
+                                    do expected <- ! buffer (
+                                      +Cons(
+                                        0,
+                                        +Cons(
+                                          0,
+                                          +Cons(
+                                            0,
+                                            +Cons(
+                                              0,
+                                              +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))
+                                            )
+                                          )
+                                        )
+                                      )
+                                    );
+                                    ! check_bits Float64 numeric/float64/to_le_bytes
+                                      numeric/float64/from_le_bytes expected {
+                                      do expected <- ! buffer (
+                                        +Cons(69, +Cons(35, +Cons(129, +Cons(127, +Nil()))))
+                                      );
+                                      ! check_bits Float32 numeric/float32/to_le_bytes
+                                        numeric/float32/from_le_bytes expected {
+                                        do expected <- ! buffer (
+                                          +Cons(69, +Cons(35, +Cons(193, +Cons(127, +Nil()))))
+                                        );
+                                        ! check_bits Float32 numeric/float32/to_le_bytes
+                                          numeric/float32/from_le_bytes expected {
+                                          do expected <- ! buffer (
+                                            +Cons(1, +Cons(0, +Cons(0, +Cons(0, +Nil()))))
+                                          );
+                                          ! check_bits Float32 numeric/float32/to_le_bytes
+                                            numeric/float32/from_le_bytes expected {
+                                            do expected <- ! buffer (
+                                              +Cons(0, +Cons(0, +Cons(128, +Cons(255, +Nil()))))
+                                            );
+                                            ! check_bits Float32 numeric/float32/to_le_bytes
+                                              numeric/float32/from_le_bytes expected {
+                                              do expected <- ! buffer (
+                                                +Cons(0, +Cons(0, +Cons(128, +Cons(127, +Nil()))))
+                                              );
+                                              ! check_bits Float32 numeric/float32/to_le_bytes
+                                                numeric/float32/from_le_bytes expected {
+                                                do expected <- ! buffer (
+                                                  +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))
+                                                );
+                                                ! check_bits Float32 numeric/float32/to_le_bytes
+                                                  numeric/float32/from_le_bytes expected {
+                                                  ! process/exit 0
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+end

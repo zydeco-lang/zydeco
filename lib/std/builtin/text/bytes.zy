@@ -47,4 +47,11 @@ begin
         )
       )
     )
+  * (
+      @[builtin(bytes_aligned)] (
+        #aligned :: Thk (
+          forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (Bytes -> R) -> R
+        )
+      )
+    )
 end

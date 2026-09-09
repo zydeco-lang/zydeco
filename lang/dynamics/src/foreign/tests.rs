@@ -1,6 +1,6 @@
 use super::*;
-use crate::host::SharedBytes;
 use std::{path::PathBuf, process::Command};
+use zydeco_machine::bytes::ByteBuffer;
 use zydeco_syntax::{ForeignParameter, ForeignTarget};
 
 struct ForeignFixture {
@@ -55,7 +55,7 @@ impl ForeignFixture {
     }
 
     fn bytes(value: &[u8]) -> ds::SemValue {
-        ds::SemValue::Host(HostValue::Bytes(SharedBytes::from_buffer(Rc::from(value))))
+        ds::SemValue::Host(HostValue::Bytes(ByteBuffer::with_buffer(Rc::from(value))))
     }
 
     fn call(
@@ -96,7 +96,7 @@ fn calls_c_with_zero_scalar_and_borrowed_arguments() {
 #[test]
 fn borrows_only_shared_byte_windows_after_the_parent_is_dropped() {
     let (window, nested, empty) = {
-        let parent = SharedBytes::from_buffer(Rc::from(b"..hello!!".as_slice()));
+        let parent = ByteBuffer::with_buffer(Rc::from(b"..hello!!".as_slice()));
         let window = parent.slice(2, 5).unwrap();
         let nested = window.slice(1, 3).unwrap();
         let empty = window.slice(5, 0).unwrap();
@@ -197,4 +197,23 @@ fn missing_symbol_does_not_poison_subsequent_calls() {
     );
     assert!(fixture.runtime.functions.is_empty());
     assert_eq!(fixture.call("zyffi_zero", vec![], vec![]), u64::MAX);
+}
+
+#[test]
+fn foreign_borrows_preserve_concrete_storage_alignment_and_contents() {
+    let mut fixture = ForeignFixture::new();
+    let mut octets = vec![0; 64];
+    octets[0] = 7;
+    octets[4..8].copy_from_slice(&16909060u32.to_le_bytes());
+    let buffer = ByteBuffer::from(octets).aligned(64).unwrap();
+    let call = |fixture: &mut ForeignFixture, buffer: ByteBuffer| {
+        fixture.call(
+            "zyffi_record",
+            vec![ForeignParameter::BorrowedBytes],
+            vec![ds::SemValue::Host(HostValue::Bytes(buffer))],
+        )
+    };
+    assert_eq!(call(&mut fixture, buffer.clone()), 1);
+    assert_eq!(call(&mut fixture, buffer.slice(1, 63).unwrap()), 0);
+    assert_eq!(call(&mut fixture, buffer), 1);
 }

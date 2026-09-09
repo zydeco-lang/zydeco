@@ -64,6 +64,7 @@ impl Builtin {
             | BuiltinValueRole::BytesToStr
             | BuiltinValueRole::BytesGet
             | BuiltinValueRole::BytesSlice
+            | BuiltinValueRole::BytesAligned
             | BuiltinValueRole::BytesEq
             | BuiltinValueRole::BytesLt
             | BuiltinValueRole::IoRead

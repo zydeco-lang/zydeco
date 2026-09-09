@@ -7,6 +7,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
+use zydeco_machine::bytes::ByteBuffer;
 #[cfg(not(feature = "compact-environments"))]
 use zydeco_machine::frames::Frames as NativeFrames;
 #[cfg(feature = "compact-environments")]
@@ -180,11 +181,19 @@ struct HostBytes;
 
 impl HostBytes {
     fn leak(bytes: Vec<u8>) -> Word {
+        Self::store(bytes.into())
+    }
+
+    fn store(bytes: ByteBuffer) -> Word {
         Box::into_raw(Box::new(bytes)) as Word
     }
 
+    unsafe fn buffer<'a>(raw: Word) -> &'a ByteBuffer {
+        unsafe { &*(raw as *const ByteBuffer) }
+    }
+
     unsafe fn borrow<'a>(raw: Word) -> &'a [u8] {
-        unsafe { &*(raw as *const Vec<u8>) }.as_slice()
+        unsafe { Self::buffer(raw) }.as_slice()
     }
 }
 
@@ -638,6 +647,108 @@ extern "sysv64" fn zydeco_str_get_branch(
         | Some(character) => {
             HostControl::with_one_argument(when_some, Immediate::expect_unsigned(character as Word))
         }
+    }
+}
+
+// Scalar representation leaves preserve every payload bit, including floating
+// NaN payloads. Product composition, padding, and field alignment are library code.
+macro_rules! scalar_bytes {
+    ($type:ty, $to:ident => $to_symbol:literal, $from:ident => $from_symbol:literal,
+     $decode:expr, $encode:expr) => {
+        #[unsafe(export_name = $to_symbol)]
+        extern "sysv64" fn $to(value: Word) -> Word {
+            let value: $type = ($decode)(value);
+            HostBytes::leak(value.to_le_bytes().to_vec())
+        }
+
+        #[unsafe(export_name = $from_symbol)]
+        extern "sysv64" fn $from(
+            bytes: Word, when_none: Word, when_some: Word, spare: *mut Word,
+        ) -> Word {
+            match unsafe { HostBytes::borrow(bytes) }.try_into() {
+                | Err(_) => HostControl::without_arguments(when_none),
+                | Ok(bytes) => {
+                    let value = <$type>::from_le_bytes(bytes);
+                    HostControl::with_one_argument(when_some, ($encode)(value, spare))
+                }
+            }
+        }
+    };
+}
+scalar_bytes!(
+    i8,
+    zydeco_int8_to_le_bytes => "\x01zydeco_int8_to_le_bytes",
+    zydeco_int8_from_le_bytes_branch => "\x01zydeco_int8_from_le_bytes_branch",
+    <i8 as RuntimeInteger>::decode, <i8 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    i16,
+    zydeco_int16_to_le_bytes => "\x01zydeco_int16_to_le_bytes",
+    zydeco_int16_from_le_bytes_branch => "\x01zydeco_int16_from_le_bytes_branch",
+    <i16 as RuntimeInteger>::decode, <i16 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    i32,
+    zydeco_int32_to_le_bytes => "\x01zydeco_int32_to_le_bytes",
+    zydeco_int32_from_le_bytes_branch => "\x01zydeco_int32_from_le_bytes_branch",
+    <i32 as RuntimeInteger>::decode, <i32 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    i64,
+    zydeco_int64_to_le_bytes => "\x01zydeco_int64_to_le_bytes",
+    zydeco_int64_from_le_bytes_branch => "\x01zydeco_int64_from_le_bytes_branch",
+    <i64 as RuntimeInteger>::decode, <i64 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    u8,
+    zydeco_uint8_to_le_bytes => "\x01zydeco_uint8_to_le_bytes",
+    zydeco_uint8_from_le_bytes_branch => "\x01zydeco_uint8_from_le_bytes_branch",
+    <u8 as RuntimeInteger>::decode, <u8 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    u16,
+    zydeco_uint16_to_le_bytes => "\x01zydeco_uint16_to_le_bytes",
+    zydeco_uint16_from_le_bytes_branch => "\x01zydeco_uint16_from_le_bytes_branch",
+    <u16 as RuntimeInteger>::decode, <u16 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    u32,
+    zydeco_uint32_to_le_bytes => "\x01zydeco_uint32_to_le_bytes",
+    zydeco_uint32_from_le_bytes_branch => "\x01zydeco_uint32_from_le_bytes_branch",
+    <u32 as RuntimeInteger>::decode, <u32 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    u64,
+    zydeco_uint64_to_le_bytes => "\x01zydeco_uint64_to_le_bytes",
+    zydeco_uint64_from_le_bytes_branch => "\x01zydeco_uint64_from_le_bytes_branch",
+    <u64 as RuntimeInteger>::decode, <u64 as RuntimeInteger>::encode
+);
+scalar_bytes!(
+    u32,
+    zydeco_float32_to_le_bytes => "\x01zydeco_float32_to_le_bytes",
+    zydeco_float32_from_le_bytes_branch => "\x01zydeco_float32_from_le_bytes_branch",
+    |word| Immediate::decode_unsigned(word) as u32,
+    |bits: u32, _spare| Immediate::expect_unsigned(bits as Word)
+);
+scalar_bytes!(
+    u64,
+    zydeco_float64_to_le_bytes => "\x01zydeco_float64_to_le_bytes",
+    zydeco_float64_from_le_bytes_branch => "\x01zydeco_float64_from_le_bytes_branch",
+    |word| OpaqueScalar::load(word) as u64,
+    |bits: u64, spare| OpaqueScalar::store(spare, bits as Word)
+);
+
+#[unsafe(export_name = "\x01zydeco_bytes_aligned_branch")]
+extern "sysv64" fn zydeco_bytes_aligned_branch(
+    bytes: Word, alignment: Word, when_none: Word, when_some: Word,
+) -> Word {
+    let alignment = <i64 as RuntimeInteger>::decode(alignment);
+    let aligned = usize::try_from(alignment)
+        .ok()
+        .and_then(|alignment| unsafe { HostBytes::buffer(bytes) }.aligned(alignment));
+    match aligned {
+        | None => HostControl::without_arguments(when_none),
+        | Some(bytes) => HostControl::with_one_argument(when_some, HostBytes::store(bytes)),
     }
 }
 

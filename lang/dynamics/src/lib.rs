@@ -16,6 +16,7 @@ pub mod foreign;
 pub use foreign::ForeignRuntimeError;
 /// Implementations of runtime builtin primitives.
 mod impls;
+mod representation;
 /// Linking from statics syntax to dynamic runtime syntax.
 pub mod link;
 pub use link::*;

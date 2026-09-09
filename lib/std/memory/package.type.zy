@@ -1,0 +1,33 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Unit = @(intrinsic(unit)) in
+  let Int64 = @(intrinsic(i64)) in
+  let Representation = @(import("representation.type.zy")) in
+  exists (= Layout : VType -> VType)
+    (= Representation as Representation : VType -> VType)
+  .
+      (#unit :: Layout Unit)
+    * (#padding :: val pi (count : Int64) . Layout Unit)
+    * (
+        #product :: val pi (A : VType) (B : VType) (left : Layout A) (right : Layout B) .
+          Layout (A * B)
+      )
+    * (#align :: val pi (A : VType) (boundary : Int64) (layout : Layout A) . Layout A)
+    * (
+        #realize :: Thk (
+          forall (A : VType) (R : CType) . Layout A -> Thk R -> Thk (Representation A -> R) -> R
+        )
+      )
+    * (#int8 :: Layout (@(intrinsic(i8))))
+    * (#int16 :: Layout (@(intrinsic(i16))))
+    * (#int32 :: Layout (@(intrinsic(i32))))
+    * (#int64 :: Layout Int64)
+    * (#uint8 :: Layout (@(intrinsic(u8))))
+    * (#uint16 :: Layout (@(intrinsic(u16))))
+    * (#uint32 :: Layout (@(intrinsic(u32))))
+    * (#uint64 :: Layout (@(intrinsic(u64))))
+    * (#float32 :: Layout (@(intrinsic(f32))))
+    * (#float64 :: Layout (@(intrinsic(f64))))
+end

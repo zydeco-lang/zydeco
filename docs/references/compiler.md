@@ -844,13 +844,32 @@ Returning and continuation-selecting operations have distinct host call plans.
 C8 owns arithmetic exposure and folding; C11–C13 own the resulting target words and calls.
 
 Strings are immutable UTF-8 text and bytes are immutable octets.
-The interpreter's `SharedBytes` stores `Rc<[u8]>` with a start and length;
-slicing creates a constant-time window whose `as_slice` remains contiguous for foreign borrowing.
-The Wasm host uses `Uint8Array` windows.
-Native byte slices currently copy their window into fresh host storage; that storage is outside the native collector.
-Equal octet sequences have equal observations regardless of sharing.
+Interpreter and native host bytes use the shared [ByteBuffer](../../lang/machine/src/bytes.rs):
+`Rc<[u8]>` with a visible start and length.
+Interpreter slicing creates a constant-time window whose `as_slice` remains contiguous for foreign borrowing.
+Native slicing still copies; native byte handles are leaked boxes outside the managed collector,
+with no managed references inside the byte storage.
+Realignment first accepts an already-aligned window or reserves `length + alignment - 1` bytes
+and selects an aligned window inside the final `Rc` allocation.
+Checked reservation and offset failures select the failure continuation.
+General allocation failure, including allocation of the `Rc` itself, retains the host's allocation failure behavior;
+this is not a fully fallible allocator interface.
+The Wasm test host uses `Uint8Array` windows and opaque host handles.
+It validates alignment requests and preserves contents, but exposes no borrowed C address.
+A future host pointer-export interface must establish the requested alignment when providing physical storage;
+the current Wasm test host does not establish a native address guarantee.
+Equal octet sequences compare equally regardless of sharing.
 The [library guide](../../lib/std/README.md#byte-operation-costs) records the resulting operation costs;
 [byte representation](../proposals/bytes.md) retains the alternatives.
+
+Scalar byte encoders return ordinary opaque byte handles.
+Decoders use a continuation-selecting host call, with a trailing spare box just like other numeric operations:
+opaque for `Int64`, `UInt64`, and `Float64`, unused for narrow results.
+Float adapters manipulate raw payload bits on every backend, including the Node host,
+so a round-trip does not canonicalize NaNs through a host floating-point conversion.
+The [source storage contract](../proposals/bytes.md#explicit-storage-contracts) composes these leaves
+without a new compiler IR layout form.
+Its stored buffers use the existing byte borrow at the foreign boundary.
 
 Host resource tables allocate monotonically increasing handle IDs and validate reader and writer operations.
 Closing removes the resource, so every alias subsequently observes `Closed`;

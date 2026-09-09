@@ -597,6 +597,22 @@ Float rendering uses the selected width's Rust Display spelling, including signe
 Negative or out-of-range positions, invalid Unicode scalars, and invalid UTF-8 select failure branches.
 The public library reifies these as `Option` or `Result`.
 
+Every scalar Builtin module provides `to_le_bytes : Thk (A -> Ret Bytes)`
+and `from_le_bytes : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R)`.
+They preserve exact little-endian bits and reject a decoder input whose length differs from the scalar width;
+float conversion preserves NaN payloads instead of performing arithmetic.
+`bytes/aligned R buffer alignment no yes` requests equal contents with positive power-of-two address alignment.
+Invalid requests and detected reservation failures select `no`; success supplies a buffer through `yes`.
+On interpreter and native C borrowing paths, the visible buffer address satisfies the requested alignment.
+A successful call may share the original allocation or copy; it does not mutate the input.
+Other byte operations do not promise to preserve address alignment.
+[C14](compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) describes target allocation limits.
+
+The ordinary [memory library](../../lib/std/memory/package.zy) composes these primitives
+into explicit storage contracts with abstract stored types.
+Its [layout laws](../proposals/bytes.md#layout-laws) own size, field placement, and padding;
+ordinary value typing and calling conventions do not change.
+
 I/O uses blocking byte streams and opaque reader/writer handles.
 Copying a handle aliases the same resource; closing it invalidates all aliases, whose later operations report `Closed`.
 Reserved standard streams are not closed by ordinary close operations.

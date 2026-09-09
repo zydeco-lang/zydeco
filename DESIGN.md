@@ -853,6 +853,11 @@ EOF, an empty line, and an I/O error have distinct results.
 The [text and library contracts](lib/std/README.md#text-model)
 and [filesystem design](docs/proposals/filesystem.md) describe these boundaries independently of runtime storage.
 
+Explicit storage is available through the ordinary [memory library](lib/std/memory/package.zy).
+Its [owning design](docs/proposals/bytes.md#explicit-storage-contracts) specifies typed storage,
+source-composed alignment and padding, and the boundary between logical values, concrete buffers,
+and existing foreign borrowing.
+
 ### Returning C Imports
 
 A foreign annotation supplies an implementation for a thunk.

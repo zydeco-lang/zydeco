@@ -383,6 +383,12 @@ class ZydecoHost {
         );
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(decode(word).toString()));
+      this.installScalarBytes(functions, name, width, decode, (bits, spare) => {
+        if (signed) return this.words.encodeSigned(BigInt.asIntN(width, bits), width, spare);
+        return bits <= IMMEDIATE_UNSIGNED_MAX
+          ? RuntimeWords.immediateUnsigned(bits)
+          : this.words.storeBits(spare, bits);
+      });
     }
 
     const floats = [
@@ -402,7 +408,30 @@ class ZydecoHost {
         );
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(FloatText.render(decode(word), width)));
+      // Preserve the IEEE payload, including NaNs, without converting through a JS Number.
+      this.installScalarBytes(functions, name, width,
+        (word) => width === 32 ? RuntimeWords.decodeImmediateUnsigned(word) : this.words.loadBits(word),
+        (bits, spare) => width === 32 ? RuntimeWords.immediateUnsigned(bits) : this.words.storeBits(spare, bits),
+      );
     }
+  }
+
+  installScalarBytes(functions, name, width, decode, encode) {
+    functions.set(`${name}_to_le_bytes`, (word) => {
+      const bits = BigInt.asUintN(width, decode(word));
+      const bytes = Array.from({ length: width / 8 }, (_, index) =>
+        Number((bits >> BigInt(index * 8)) & 255n),
+      );
+      return this.values.bytes(bytes);
+    });
+    functions.set(`${name}_from_le_bytes_branch`, (buffer, whenNone, whenSome, spare) => {
+      const bytes = this.values.getBytes(buffer);
+      if (bytes.length !== width / 8) {
+        return Transfers.withoutArguments(whenNone);
+      }
+      const bits = bytes.reduce((value, byte, index) => value | (BigInt(byte) << BigInt(index * 8)), 0n);
+      return Transfers.withOneArgument(whenSome, encode(bits, spare));
+    });
   }
 
   decodeFloat(word, width) {
@@ -541,6 +570,15 @@ class ZydecoHost {
         whenSome,
         this.values.bytes(view.subarray(offset, offset + Number(span))),
       );
+    });
+    functions.set("bytes_aligned_branch", (buffer, alignment, whenNone, whenSome) => {
+      const boundary = this.words.decodeSigned(alignment, 64);
+      if (boundary <= 0n || (boundary & (boundary - 1n)) !== 0n) {
+        return Transfers.withoutArguments(whenNone);
+      }
+      // These bytes are opaque host handles: this host exposes no borrowed C address.
+      // A host that adds pointer export must realize the requested alignment there.
+      return Transfers.withOneArgument(whenSome, buffer);
     });
     functions.set("bytes_singleton", (octet) =>
       this.values.bytes([Number(RuntimeWords.decodeImmediateUnsigned(octet))]),

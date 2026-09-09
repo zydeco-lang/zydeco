@@ -51,7 +51,7 @@ so importers splice the implementation without a companion annotation.
 Implementations annotate their parameters in place: the Builtin group through `builtin.zy`,
 and the shared algebraic base through `data/package.type.zy`.
 The implementation defines its topic's data types and operations in one dependency-scheduled block,
-so derived operations sit next to the types they observe and no per-module contract split remains.
+so derived operations sit next to the types they observe and no per-module contract split remains for those topics.
 `data/package.type.zy` names that shared base type directly, carrying the data topic's existential witnesses
 and module telescopes in one declaration.
 Type files bind `VType` and `CType` once at the top of the file and use those aliases in every classifier below.
@@ -59,6 +59,11 @@ Type files bind `VType` and `CType` once at the top of the file and use those al
 This separation keeps algebraic data in the language.
 The interpreter and native runtime only need to agree on the small Builtin ABI,
 while the files under `data/` and the derived operations in the topic packages remain ordinary Zydeco code.
+
+The optional `memory/package.zy` builder is imported directly, like the control libraries.
+Its explicit signature prescribes abstract layout and storage types; this is a representation contract rather
+than an interface inferred from the concrete byte implementation.
+See [explicit storage](#explicit-storage).
 
 ## Source layout
 
@@ -80,6 +85,10 @@ numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
 numeric/package.zy         the ten width modules and their capability dictionaries
 
 text/package.zy            cross-representation text operations
+
+memory/package.zy          layout composition and checked concrete storage
+memory/package.type.zy     abstract layout builder interface
+memory/representation.type.zy  per-realization abstract stored type and operations
 
 system/package.zy          system data types and capability-preserving assembly
 
@@ -263,6 +272,34 @@ For example, a combining mark occupies its own position.
 Grapheme segmentation and normalization should be added as a separate text layer rather than changing the meaning
 of these foundational operations.
 
+## Explicit storage
+
+Import [memory/package.zy](memory/package.zy) and apply it to the Builtin package:
+
+```zydeco
+let make_memory = @(import("memory/package.zy")) in
+let (= Layout, = Representation, memory) = builtin |> make_memory in
+let record = memory/align (UInt8 * UInt32) 16
+  (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
+! memory/realize (UInt8 * UInt32) OS record failure {
+  fn (= Stored, repr) =>
+    ! repr/store OS ((7 : UInt8), (16909060 : UInt32)) failure {
+      fn value =>
+        do buffer <- ! repr/bytes value;
+        ...
+    }
+}
+```
+
+The import path is relative to this directory.
+`failure` is a caller-supplied `Thk OS`; realization and storage also work with other computation types.
+`Stored` is local to the opened representation, and `repr/load` accepts that stored type.
+Use `repr/from_bytes` to validate external bytes against the contract.
+The [layout design](../../docs/proposals/bytes.md#explicit-storage-contracts) owns all layout laws,
+validation, address guarantees, and current costs.
+[The complete example](../tests/ffi/representation.zy) passes stored bytes to C
+through the existing borrowed-buffer interface.
+
 ## Byte operation costs
 
 These costs describe the current contiguous-buffer implementations, excluding general allocation/GC overhead.
@@ -275,6 +312,7 @@ owns backend storage; [text/package.zy](text/package.zy) defines the derived ope
 | `slice` | Constant-time window in the interpreter and Wasm host; native copies the selected length. |
 | `eq`, `lt` | At most the shorter buffer's length in byte comparisons, with early exit. |
 | `append` | Copies both inputs: O(n + m). |
+| Builtin `aligned` | Shares an already aligned window, or allocates and initializes O(n + alignment) bytes in interpreter/native execution. |
 | `to_list` | O(n) indexed observations and list cells. |
 | `from_list` | Repeated append of a singleton to the accumulated tail: O(n²) copied bytes. |
 | `concat` | Sum of the lengths copied by the right fold; quadratic for a list of equal-sized chunks. |

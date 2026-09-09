@@ -3,7 +3,7 @@ use crate::{
     syntax::{Computation, Prim, RcValue, RuntimeError, SemValue, Thunk, Value},
 };
 use std::io::{BufRead, Write};
-use zydeco_syntax::{BuiltinValueRole, FloatOperation, IntegerOperation};
+use zydeco_syntax::{BuiltinValueRole, FloatOperation, IntegerOperation, PrimitiveType};
 
 /// Typed access to host operations used to construct the Builtin package.
 pub struct BuiltinRuntime;
@@ -25,6 +25,7 @@ impl BuiltinRuntime {
         host: &mut HostRuntime,
     ) -> Result<Computation, BuiltinFailure> {
         use crate::impls::*;
+        use crate::representation::ScalarBytes;
         use BuiltinValueRole as Role;
 
         match role {
@@ -41,6 +42,10 @@ impl BuiltinRuntime {
                     integer_branch(integer, operation, args)
                 }
                 | IntegerOperation::ToString => integer_to_string(integer, args),
+                | IntegerOperation::ToLeBytes => ScalarBytes::encode(args),
+                | IntegerOperation::FromLeBytes => {
+                    ScalarBytes::decode(PrimitiveType::Integer(integer), args)
+                }
             },
             | Role::Float(float, operation) => match operation {
                 | FloatOperation::Add
@@ -51,6 +56,10 @@ impl BuiltinRuntime {
                     float_branch(float, operation, args)
                 }
                 | FloatOperation::ToString => float_to_string(float, args),
+                | FloatOperation::ToLeBytes => ScalarBytes::encode(args),
+                | FloatOperation::FromLeBytes => {
+                    ScalarBytes::decode(PrimitiveType::Float(float), args)
+                }
             },
             | Role::StrScalarLength => str_scalar_length(args, input, output, argv, host),
             | Role::StrByteLength => str_byte_length(args, input, output, argv, host),
@@ -72,6 +81,7 @@ impl BuiltinRuntime {
             | Role::BytesToStr => bytes_to_str_branch(args, input, output, argv, host),
             | Role::BytesGet => bytes_get_branch(args, input, output, argv, host),
             | Role::BytesSlice => bytes_slice_branch(args, input, output, argv, host),
+            | Role::BytesAligned => ScalarBytes::aligned(args),
             | Role::BytesSingleton => bytes_singleton(args, input, output, argv, host),
             | Role::BytesEq => bytes_eq_branch(args, input, output, argv, host),
             | Role::BytesLt => bytes_lt_branch(args, input, output, argv, host),

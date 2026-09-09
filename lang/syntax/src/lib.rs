@@ -403,6 +403,8 @@ pub enum IntegerOperation {
     Lt,
     Gt,
     ToString,
+    ToLeBytes,
+    FromLeBytes,
 }
 
 impl IntegerOperation {
@@ -418,12 +420,13 @@ impl IntegerOperation {
         match self {
             | Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod => 2,
             | Self::Eq | Self::Lt | Self::Gt => 4,
-            | Self::ToString => 1,
+            | Self::ToString | Self::ToLeBytes => 1,
+            | Self::FromLeBytes => 3,
         }
     }
 
     pub fn is_branch(self) -> bool {
-        matches!(self, Self::Eq | Self::Lt | Self::Gt)
+        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::FromLeBytes)
     }
 }
 
@@ -450,6 +453,8 @@ pub enum FloatOperation {
     Lt,
     Gt,
     ToString,
+    ToLeBytes,
+    FromLeBytes,
 }
 
 impl FloatOperation {
@@ -465,12 +470,13 @@ impl FloatOperation {
         match self {
             | Self::Add | Self::Sub | Self::Mul | Self::Div => 2,
             | Self::Eq | Self::Lt | Self::Gt => 4,
-            | Self::ToString => 1,
+            | Self::ToString | Self::ToLeBytes => 1,
+            | Self::FromLeBytes => 3,
         }
     }
 
     pub fn is_branch(self) -> bool {
-        matches!(self, Self::Eq | Self::Lt | Self::Gt)
+        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::FromLeBytes)
     }
 }
 
@@ -514,6 +520,7 @@ pub enum BuiltinValueRole {
     BytesToStr,
     BytesGet,
     BytesSlice,
+    BytesAligned,
     BytesSingleton,
     BytesEq,
     BytesLt,
@@ -621,6 +628,7 @@ impl BuiltinValueRole {
             | Self::BytesToStr => "bytes_to_str_branch".to_owned(),
             | Self::BytesGet => "bytes_get_branch".to_owned(),
             | Self::BytesSlice => "bytes_slice_branch".to_owned(),
+            | Self::BytesAligned => "bytes_aligned_branch".to_owned(),
             | Self::BytesEq => "bytes_eq_branch".to_owned(),
             | Self::BytesLt => "bytes_lt_branch".to_owned(),
             | Self::ReadLineAsInt => "read_line_as_int_branch".to_owned(),
@@ -667,6 +675,7 @@ impl BuiltinValueRole {
             | Self::StrEq
             | Self::StrGet
             | Self::BytesGet
+            | Self::BytesAligned
             | Self::BytesEq
             | Self::BytesLt
             | Self::IoRead
@@ -689,7 +698,8 @@ impl BuiltinValueRole {
                 | IntegerOperation::Sub
                 | IntegerOperation::Mul
                 | IntegerOperation::Div
-                | IntegerOperation::Mod,
+                | IntegerOperation::Mod
+                | IntegerOperation::FromLeBytes,
             ) => Some(if matches!(integer, IntegerType::Int64 | IntegerType::UInt64) {
                 SpareBox::Opaque
             } else {
@@ -700,7 +710,8 @@ impl BuiltinValueRole {
                 FloatOperation::Add
                 | FloatOperation::Sub
                 | FloatOperation::Mul
-                | FloatOperation::Div,
+                | FloatOperation::Div
+                | FloatOperation::FromLeBytes,
             ) => {
                 Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
             }
