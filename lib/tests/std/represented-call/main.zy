@@ -1,0 +1,81 @@
+begin
+  param (/VType; /CType; /Thk; /Ret; /OS; /UInt8; /UInt32; /Int64;
+    /numeric; /bytes; /args; /process; builtin) : @(import("../../../std/builtin.zy")) that
+  let make_memory = @(import("../../../std/memory/static-layout.zy")) in
+  let (= Plan, = Layout, memory) = builtin |> make_memory in
+  let (/Function; calls) = @(import("../../../std/memory/call.zy")) in
+  let Storage = @(import("../../../std/memory/storage.type.zy")) in
+  let make_worker = builtin |> (@(import("worker.zy"))) in
+  let Record = UInt8 * UInt32 in
+  let natural = memory/product UInt8 UInt32 memory/uint8 memory/uint32 in
+  let fail = { ! process/exit 1 } in
+  let fix repeat (A : VType) (count : Int64) (step : Thk (Function A A OS))
+    (value : A) (no : Thk OS) (yes : Thk (A -> OS))
+  : OS =
+      ! numeric/int64/eq OS count 0 { ! yes value } {
+        do rest <- ! numeric/int64/sub count 1;
+        ! step value no { fn next => ! repeat A rest step next no yes }
+      }
+  in
+  match (memory/align Record 16 natural, memory/align Record 64 natural)
+  | (+Ok(plan16), +Ok(plan64)) =>
+    let (#Stored = Small, small) = memory/realize Record plan16 in
+    let (#Stored = Large, large) = memory/realize Record plan64 in
+    let step = make_worker Small small in
+    let small_boundary = calls/between Record Record Small Small small small in
+    let large_step = make_worker Large large in
+    let enlarge = calls/convert Record Small Large small large OS in
+    let shrink = calls/convert Record Large Small large small OS in
+    let via_large = calls/compose Small Large Small OS enlarge
+      (
+        calls/compose Large Large Small OS large_step shrink
+      ) in
+    let Service = exists (Stored : VType) .
+      Storage Record Stored * Thk (
+        Function Stored Stored OS
+      ) in
+    let ! check_service (next : Thk OS) : OS =
+      do service <- ! args/at (Ret Service) 0
+        { ret ((Small, small, step) : Service) }
+        { fn _ => ret ((Large, large, large_step) : Service) };
+      let (Stored, storage, selected) = service in
+      let boundary = calls/between Record Record Stored Stored storage storage in
+      let logical = boundary/decode OS selected in
+      ! logical (7 : UInt8, 41 : UInt32) fail {
+        fn (tag, payload) =>
+          ! numeric/uint8/eq OS tag 7 {
+            ! numeric/uint32/eq OS payload 42 next fail
+          } fail
+      }
+    in
+    let ! run (selected : Thk (Function Small Small OS)) : OS =
+      ! small/store OS (7 : UInt8, 16909060 : UInt32) fail {
+        fn initial =>
+          ! step initial fail {
+            fn once =>
+              ! repeat Small 3 selected once fail {
+                fn result =>
+                  do actual <- ! small/bytes result;
+                  do expected <- ! bytes/from_string
+                    "\u{7}\0\0\0\u{8}\u{3}\u{2}\u{1}\0\0\0\0\0\0\0\0";
+                  ! bytes/eq OS actual expected {
+                    let logical = small_boundary/decode OS selected in
+                    ! logical (7 : UInt8, 41 : UInt32) fail {
+                      fn (tag, payload) =>
+                        ! numeric/uint8/eq OS tag 7 {
+                          ! numeric/uint32/eq OS payload 42 {
+                            ! check_service { ! process/exit 0 }
+                          } fail
+                        } fail
+                    }
+                  } fail
+              }
+          }
+      }
+    in
+    do selected <- ! args/at (Ret (Thk (Function Small Small OS))) 0
+      { ret step } { fn _ => ret via_large };
+    ! run selected
+  | _ => ! fail
+  end
+end

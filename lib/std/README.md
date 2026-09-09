@@ -99,8 +99,10 @@ memory/size.zy             total checked size and alignment calculations
 memory/shape.zy            inspectable scalar widths and product placement
 memory/allocation.zy       allocator service and allocation computations
 memory/access.zy           checked offset reads and caller-provided destinations
+memory/call.zy             stored call interfaces, composition, and conversion adapters
 memory/package.type.zy     abstract layout builder interface
 memory/representation.type.zy  per-realization abstract stored type and operations
+memory/storage.type.zy     storage dictionary parameterized by its shared carrier
 
 system/package.zy          system data types and capability-preserving assembly
 
@@ -312,7 +314,7 @@ Both `inspect` and `realize` are value functions.
 The [complete byte example](../tests/std/static-layout.zy), [buffer example](../tests/std/static-storage-access.zy),
 and [C example](../tests/ffi/static-layout.zy) exercise the resulting interface.
 [Static-plan rules and limits](../../docs/proposals/bytes.md#static-layout-plans) explain construction errors,
-runtime transport, and the remaining boundary before representation-aware calls.
+runtime transport, and the remaining boundary before layout-directed machine calls.
 
 Import [memory/package.zy](memory/package.zy) and apply it to the Builtin package:
 
@@ -339,6 +341,25 @@ The [layout design](../../docs/proposals/bytes.md#explicit-storage-contracts) ow
 validation, address guarantees, and current costs.
 [The complete example](../tests/ffi/representation.zy) passes stored bytes to C
 through the existing borrowed-buffer interface.
+
+[memory/call.zy](memory/call.zy) shares that opened carrier with callers and callees.
+Its `Function A B R` computation type takes an argument, a failure continuation, and a result continuation.
+Given an opened `repr : Storage Record Stored`, a logical worker can expose a stored interface:
+
+```zydeco
+let (/Function; calls) = @(import("memory/call.zy")) in
+let boundary = calls/between Record Record Stored Stored repr repr in
+let encoded = boundary/encode OS logical_worker in
+! encoded stored failure { fn result => ... }
+```
+
+`boundary/decode OS encoded` supplies the corresponding logical interface.
+`compose` connects calls sharing exactly the intermediate type; `convert` inserts explicit decoding
+and encoding when that intermediate representation changes.
+The [complete example](../tests/std/represented-call/main.zy) imports a generic worker,
+chooses thunks and provider packages at runtime, and converts between 16-byte and 64-byte aligned records.
+The [owning call design](../../docs/proposals/escape-unboxing.md#stored-call-interfaces) specifies identity agreement,
+sequencing, costs, and the boundary before changing physical call slots.
 
 Mutable construction uses the separate Builtin `buffer` capability: allocate a fixed-capacity destination,
 write checked ranges, then freeze it into immutable bytes or close it.

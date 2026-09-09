@@ -46,7 +46,10 @@ The static builder below performs the metadata calculation
 within [value functions](../references/language.md#8-value-functions-and-views).
 
 A successful realization supplies [Representation A](../../lib/std/memory/representation.type.zy),
-an existential package with an abstract `Stored : VType`, `size`, `alignment`, and four operations:
+an existential package `exists (= Stored : VType) . Storage A Stored`.
+[Storage A Stored](../../lib/std/memory/storage.type.zy) names its dictionary independently of the opening,
+so a consumer can receive the shared carrier and its operations as explicit parameters.
+The dictionary contains `size`, `alignment`, and four operations:
 
 | Operation | Contract |
 | --- | --- |
@@ -62,6 +65,8 @@ A caller can transfer storage between contracts by explicitly extracting bytes
 and validating them at the second contract.
 This scopes representation evidence with ordinary package abstraction;
 layouts are not runtime indices in the type system.
+The [call interface](escape-unboxing.md#stored-call-interfaces) uses the same opening to share stored argument
+and result types across separately checked workers, with explicit logical conversion between different carriers.
 The [module signature](../../lib/std/memory/package.type.zy) uses an expected existential annotation to prescribe
 that abstraction rather than attempting to infer it from the concrete byte implementation.
 
@@ -70,6 +75,9 @@ Consequently `load` retains a failure continuation even though these constructor
 Likewise, two independently opened contracts have no type-level proof that their runtime layouts agree.
 These are remaining expressiveness limits: the nominal storage boundary is enforced,
 while its byte-level laws are implemented and tested by the library rather than represented as value-dependent proofs.
+The public `Storage A Stored` type also permits caller-authored dictionaries.
+Its classifier specifies the operations; implementing one carries the same layout-law obligations as a builder.
+Reusing a carrier while silently changing its interpretation is not ruled out by a dependent proof.
 
 ### Static layout plans
 

@@ -58,7 +58,7 @@ and block expansion when a value is passed, aliased, captured, or retained by a 
 
 This evidence supports an opt-in closure experiment and a reusable comparison boundary.
 It does not establish a general speedup or justify a new default.
-Frame-resident products, mixed raw/reference fields, and representation-aware calls remain deferred:
+Frame-resident products, mixed raw/reference fields, and layout-directed machine calls remain deferred:
 they need lifetime or entry evidence that the current policy cannot supply.
 The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduction and validation commands.
 
@@ -67,13 +67,14 @@ The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduct
 The [explicit storage library](bytes.md#explicit-storage-contracts) raises a related question:
 can a caller use its chosen representation directly as a function argument or result?
 That would make representation choice part of an interface rather than merely an allocation optimization.
-The current implementation supplies useful storage evidence but does not yet supply a calling convention.
+The implemented source interface now shares storage evidence across calls using the existing word transport.
+Selecting a different physical calling convention remains a separate compiler extension.
 
 There are four different descriptions in the implementation:
 
 | Description | Evidence available today | What it does not establish |
 | --- | --- | --- |
-| Source `Representation A` | An abstract stored type, runtime size/alignment, and checked codecs | A statically selected argument width or register class |
+| Source `Representation A` and `Storage A Stored` | An abstract carrier shared by codecs and call signatures, runtime size/alignment | A statically selected argument width or register class |
 | Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
 | SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
 | Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
@@ -86,9 +87,85 @@ The caller and callee currently agree on the existing word convention in either 
 Local product unboxing can remove a cell while still passing tagged field words;
 it does not interpret the memory library's padding and alignment operations.
 
+### Stored call interfaces
+
+A consumer needs to name the chosen carrier without creating another abstract opening.
+The storage library therefore factors its existing package
+into `Representation A = exists (= Stored : VType) . Storage A Stored`.
+The [storage design](bytes.md#descriptions-computations-and-abstract-storage) owns that dictionary and its laws.
+A composition root opens a representation once and passes `Stored` and the dictionary to its workers.
+Those workers can live in separately checked sources and export `Thk` computations over that same carrier.
+
+The ordinary [call library](../../lib/std/memory/call.zy) defines the computation protocol:
+
+```zydeco
+Function A B R = A -> Thk R -> Thk (B -> R) -> R
+```
+
+It receives an argument, a failure continuation, and a continuation accepting its result.
+`R : CType` describes the required residual stack; using `OS` or `Ret Int64` does not require another adapter design.
+The protocol itself places no purity, termination, or single-invocation requirement on user-authored workers.
+The library's adapters perform the following sequences, forwarding the same failure continuation at every step:
+
+| Operation | Resulting interface | Sequence when each preceding stage succeeds |
+| --- | --- | --- |
+| `between A B Input Output input output`, then `encode R logical` | `Thk (Function Input Output R)` | Load input; invoke logical worker; store output; invoke result continuation |
+| The same boundary, then `decode R encoded` | `Thk (Function A B R)` | Store input; invoke stored worker; load output; invoke result continuation |
+| `compose A B C R first second` | `Thk (Function A C R)` | Invoke first; forward its result directly to second |
+| `convert A From To source target R` | `Thk (Function From To R)` | Load with source; store with target |
+
+Construction is by value functions; execution occurs only when the resulting thunk is forced.
+Runtime dictionaries and dynamically selected worker thunks may be captured by these adapters.
+No metadata arithmetic is needed to forward a stored value, and composition inserts no codec conversion itself.
+`convert` preserves the logical value through decoding and encoding; it does not reinterpret bytes or equate carriers.
+For a worker whose interface already uses the desired carriers, an ordinary call passes them directly.
+
+For example, after opening a representation of `Record = UInt8 * UInt32`:
+
+```zydeco
+let boundary = calls/between Record Record Stored Stored repr repr in
+let increment = boundary/encode OS {
+  fn (tag, payload) no yes =>
+    do next <- ! numeric/uint32/add payload 1;
+    ! yes (tag, next)
+} in
+! increment stored failure { fn result => ... }
+```
+
+Here the argument and result have the same abstract `Stored` type.
+The [checked example](../../lib/tests/std/represented-call/main.zy) imports this kind of worker,
+passes its result to recursive polymorphic code, and selects an alternative thunk at runtime.
+The alternative explicitly converts a 16-byte aligned record into a 64-byte aligned record and back.
+Both thunks expose the original carrier, so selection and continuation calls agree on their interface.
+The example also dynamically chooses a provider package of the ordinary form:
+
+```zydeco
+exists (Stored : VType) . Storage Record Stored * Thk (Function Stored Stored OS)
+```
+
+Opening that package gives its consumer a coherent codec and worker even when the provider's byte layout is unknown.
+Packaging preserves agreement by carrying both together; it does not recover an unknown witness from metadata.
+
+Identity is deliberately nominal at this boundary.
+Tests reject arguments, result continuations, and composed workers from independently opened representations,
+including different alignment, different field width, and identical placement opened twice.
+Matching callers share the opening; numerical equality of sizes, alignments, or shapes never introduces type equality.
+Caller-authored storage dictionaries still carry the law obligations documented in the storage design.
+The checker does not prove that two implementations at one carrier use identical codecs.
+
+The tests run direct calls and dynamic selection on the interpreter, AMD64, and both Wasm backends,
+including every configurable word policy on AMD64 and AM Wasm.
+They check canonical bytes after conversion and failure propagation through each adapter stage in `Ret Int64`.
+This establishes a usable source interface with conservative identity checking.
+It does not establish a new machine ABI: each stored value remains the existing immutable-buffer handle.
+An encoded logical worker still performs a load and a store, and its decoded wrapper adds a store and a load.
+Those explicit conversions may allocate and are not removed merely because the carriers match.
+
+### Remaining machine-call boundary
+
 The [local analysis](../../lang/assembly/src/unbox.rs) deliberately treats argument-stack uses of a variable
 as escapes, and the [lowerer](../../lang/assembly/src/lower.rs) consumes its local pack/unpack decisions.
-There is no shared representation-indexed entry contract for an indirect call or a returned product.
+SPSLow does not retain a source carrier's layout as a shared component contract for indirect calls or returns.
 Changing only the caller's packing would therefore change the stack shape expected by existing callees.
 
 Automatic layout-directed calls are deferred.
@@ -98,10 +175,11 @@ A modular extension needs the following boundaries in order:
    [static layout plans](bytes.md#static-layout-plans) calculate and validate scalar/product byte placement
    with ordinary value functions, expose its shape, and use the same codecs as runtime layout construction.
    They establish the source-calculation part of this prerequisite.
-   The remaining witness must distinguish particular representations in an interface
-   and describe reference-bearing components.
-   `Plan A` alone does neither: different placements for `A` share its type,
+   The stored-call interface supplies a shared nominal carrier for particular source contracts.
+   What remains is compiler-consumable placement evidence, including reference-bearing components.
+   `Plan A` alone supplies neither: different placements for `A` share its type,
    and a transported plan may have runtime metadata.
+   Abstract source carriers currently erase.
    An entry contract needs explicit evidence at the call boundary; a compiler policy cannot infer permission
    to change an ABI from an arbitrary `Int64` field.
 2. **One entry contract for both ends.** Extend the checked SPSLow boundary with ordered argument/result components
@@ -117,21 +195,18 @@ A modular extension needs the following boundaries in order:
    C aggregate classification remains the separate target ABI question
    in [the foreign-interface design](c-ffi.md#additional-abi-shapes).
 
-The first implementation should cover one fixed scalar product passed to and returned from a known function,
-then the same interface through a dynamically selected thunk.
-Tests must pair accepted matching representations with rejected width/alignment mismatches,
-retain managed fields across collection, and verify that padding or raw scalar bits never become roots.
-Polymorphic callers, recursive calls, and ordinary boxed adapters must continue to agree on the entry contract.
-Until these prerequisites are implemented, explicit buffers and typed codecs remain the accepted interface;
-the local optimization described below can progress independently.
+The stored-buffer experiment covers the first source agreement tests, including direct and dynamic calls,
+polymorphic callers, recursive calls, and logical adapters.
+Before accepting another machine transport, its tests must also retain managed fields
+across collection and verify that padding or raw scalar bits never become roots.
+The current experiment inherits the existing handle/root contract; it does not exercise mixed raw/reference slots.
 
-The next bounded experiment is a representation-indexed interface for one fixed scalar product,
-initially transported through the existing stored-buffer handle.
-That isolates identity agreement from target placement: matching interfaces should compose,
-and a different alignment or field width should fail before lowering.
-After that boundary is usable, the shared component contract can enable direct/indirect calls
-to choose another transport under the existing Rust policy configuration.
-Raw scalar slots and mixed reference layouts remain deferred until entry and tracing evidence agree.
+The next bounded compiler experiment should make the existing ordered word entry contract explicit in SPSLow
+and validate both calls and return continuations against it, before adding a second transport choice.
+That gives the Rust policy configuration an evidence-bearing selection boundary shared by both ends.
+Static layout identity by structural equality, dependent size proofs, raw scalar slots,
+mixed reference layouts, and C aggregate classification remain separate open work.
+The accepted source library needs none of those mechanisms to express stored interfaces today.
 
 ## Design
 

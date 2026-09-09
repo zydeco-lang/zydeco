@@ -1,0 +1,15 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
+  let Bytes = @(intrinsic(bytes)) in
+  let Int64 = @(intrinsic(i64)) in
+  fn (A : VType) (Stored : VType) =>
+      (#size :: Int64)
+    * (#alignment :: Int64)
+    * (#store :: Thk (forall (R : CType) . A -> Thk R -> Thk (Stored -> R) -> R))
+    * (#load :: Thk (forall (R : CType) . Stored -> Thk R -> Thk (A -> R) -> R))
+    * (#bytes :: Thk (Stored -> Ret Bytes))
+    * (#from_bytes :: Thk (forall (R : CType) . Bytes -> Thk R -> Thk (Stored -> R) -> R))
+end

@@ -861,8 +861,11 @@ Explicit storage is available through the ordinary [memory library](lib/std/memo
 The [static builder](lib/std/memory/static-layout.zy) computes checked plans with value functions,
 exposes their placement information, and shares codecs with the runtime builder.
 Its [owning design](docs/proposals/bytes.md#explicit-storage-contracts) specifies typed storage,
-source-composed alignment and padding, and the boundary between logical values, concrete buffers,
-and existing foreign borrowing.
+source-composed alignment and padding, and the boundary between logical values,
+concrete buffers, and existing foreign borrowing.
+The [stored-call interface](docs/proposals/escape-unboxing.md#stored-call-interfaces) shares abstract storage carriers
+across source modules and supplies ordinary CBPV call and conversion adapters.
+These calls use the existing runtime word transport.
 
 ### Returning C Imports
 
