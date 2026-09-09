@@ -159,10 +159,12 @@ to justify a later builder or offset-based codec without embedding layout policy
 It provides physical scalar and product storage, but does not change the tagged word convention for ordinary values,
 inline `Stored` in call frames, or offer arbitrary field pointers and mutation.
 Native host byte objects still live outside the managed collector and are not reclaimed by it.
-Allocation is still a host operation; a computation type does not yet express allocator choice or buffer lifetime.
+The original `store` operation still chooses host allocation internally.
+The allocator protocol below makes that choice explicit for buffer construction;
+lexical buffer lifetimes remain unexpressed.
 
-The next bounded step should make allocation and a borrowed region explicit
-in the computation protocol while retaining these layout laws.
+Allocator selection and checked mutable destination capabilities are implemented below.
+A borrowed region with a statically scoped lifetime remains a separate boundary.
 That would permit construction into caller-provided storage and field reads by verified offsets,
 followed by representation-aware native argument/result classification.
 Automatically changing all products or adding representation-polymorphic calls first would conflate storage,
@@ -172,6 +174,60 @@ The [focused tests](../../lang/tests/tests/representation.rs) cover all four exe
 exact integer and float bits, padding and size rejection, and abstract-type rejection.
 Shared buffer tests check address alignment and retained windows;
 the native C test additionally checks the actual foreign borrow.
+
+## Mutable destination capabilities
+
+Fixed-capacity destination storage extends the representation boundary with an explicit resource protocol.
+The host-owned `Buffer` capability and its operations are declared
+in [the Builtin buffer interface](../../lib/std/builtin/system/buffer.zy).
+They run in `OS`, whereas immutable byte observations remain returning computations.
+A source integer or immutable `Bytes` cannot stand in for a buffer handle.
+
+`allocate size alignment error success` creates zero-initialized storage
+with the requested nonnegative size and positive power-of-two alignment.
+`write handle offset bytes error done` replaces a checked range without resizing.
+`read handle offset length error success` returns a detached immutable snapshot of that range.
+An empty range at the end is valid.
+Negative or overflowing ranges are rejected before any byte is changed.
+
+`freeze handle error success` produces aligned immutable bytes and closes the handle on success.
+`close handle error done` frees mutable storage without producing bytes.
+Both transitions invalidate every alias.
+Closed handles are never reused, and read, write, freeze, or close through an old alias report `Closed`.
+A failed freeze leaves the handle open.
+Snapshots and frozen bytes remain immutable after later writes or close.
+These are resource-state guarantees, not a static uniqueness or lexical-lifetime claim.
+
+The stable error codes are `InvalidLayout = 0`, `Closed = 1`, `Bounds = 2`, and `AllocationFailed = 3`.
+Operations on a closed handle report `Closed` before inspecting their range.
+Detected allocation and layout failures create no handle; failed writes preserve all bytes.
+General host allocator aborts remain outside this fallible protocol, as for immutable storage.
+Native/interpreter buffers use real aligned allocations; the Wasm test host retains its opaque-address limitation.
+Reads and freeze currently copy, so no mutable foreign alias is introduced.
+
+### Choosing an allocator on the computation stack
+
+[allocation.zy](../../lib/std/memory/allocation.zy) defines an ordinary codata `Allocator`
+with an `.allocate` observation.
+`Allocate A` is a computation accepting that service, an error continuation, and a result continuation.
+`allocate size alignment : Allocate Buffer` requests storage from the supplied service rather
+than selecting an allocator inside the compiler.
+The heap provider delegates to Builtin; the `limited maximum parent` value function intercepts requests larger
+than its per-allocation ceiling and delegates the rest.
+This is a size policy, not a cumulative quota or a distinct physical allocator.
+A negative ceiling rejects every nonnegative request.
+
+Consumers may supply other source-defined services without changing the host ABI or the layout language.
+This makes allocator choice explicit at participating call sites; it does not prevent a program
+with Builtin access from calling the heap operation directly.
+[The checked example](../../lib/tests/std/buffer.zy) exercises the service, a restrictive provider,
+alias invalidation, detached snapshots, and failure without mutation on all backends.
+
+Lexically scoped borrowing and automatic cleanup are deferred.
+A thunk may be retained, invoked twice, or invoke its completion continuation zero or multiple times.
+A scope-shaped helper cannot derive single invocation or cleanup from these types.
+The current extension provides checked close and freeze; an affine completion protocol
+or an explicitly handled dynamic scope is needed before a stronger borrow-lifetime claim can be made.
 
 ## Alternatives and decision criteria
 

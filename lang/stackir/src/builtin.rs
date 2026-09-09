@@ -67,6 +67,11 @@ impl Builtin {
             | BuiltinValueRole::BytesAligned
             | BuiltinValueRole::BytesEq
             | BuiltinValueRole::BytesLt
+            | BuiltinValueRole::BufferAllocate
+            | BuiltinValueRole::BufferRead
+            | BuiltinValueRole::BufferWrite
+            | BuiltinValueRole::BufferFreeze
+            | BuiltinValueRole::BufferClose
             | BuiltinValueRole::IoRead
             | BuiltinValueRole::IoReadLine
             | BuiltinValueRole::IoReadAll

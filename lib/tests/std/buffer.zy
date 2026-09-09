@@ -1,0 +1,90 @@
+begin
+  param (/Thk; /OS; /Int64; /Buffer; /Bytes; /buffer; /bytes; /numeric; /process; builtin) :
+  @(import("../../std/builtin.zy")) that
+  let make_allocation = @(import("../../std/memory/allocation.zy")) in
+  let (= Allocator, = Allocate, allocation) = builtin |> make_allocation in
+  let fail = { ! process/exit 1 } in
+  let error = { fn (_ : Int64) => ! fail } in
+  let val expected_error (expected : Int64) (next : Thk OS) : Thk (Int64 -> OS) = {
+    fn code => ! numeric/int64/eq OS code expected next fail
+  } in
+  let small = allocation/limited 4 allocation/heap in
+  let ! check_invalid (next : Thk OS) : OS =
+    ! allocation/allocate 5 64 small (
+      expected_error 3 {
+        ! buffer/allocate -1 8 (
+          expected_error 0 {
+            ! buffer/allocate 4 3 (
+              expected_error 0 {
+                ! buffer/allocate 9223372036854775807 64 (expected_error 3 next) { fn _ => ! fail }
+              }
+            ) { fn _ => ! fail }
+          }
+        ) { fn _ => ! fail }
+      }
+    ) { fn _ => ! fail }
+  in
+  let ! check_closed (alias : Buffer) (initial : Bytes) (next : Thk OS) : OS =
+    ! buffer/read alias 0 4 (
+      expected_error 1 {
+        ! buffer/write alias 0 initial (
+          expected_error 1 {
+            ! buffer/freeze alias (
+              expected_error 1 {
+                ! buffer/close alias (expected_error 1 next) fail
+              }
+            ) { fn _ => ! fail }
+          }
+        ) fail
+      }
+    ) { fn _ => ! fail }
+  in
+  let ! check_empty (next : Thk OS) : OS =
+    ! buffer/allocate 0 64 error {
+      fn empty =>
+        do zero <- ! bytes/empty;
+        ! buffer/write empty 0 zero error {
+          ! buffer/read empty 0 0 error {
+            fn observed =>
+              ! bytes/eq OS observed zero { ! buffer/close empty error next } fail
+          }
+        }
+    }
+  in
+  let ! check_freeze (handle : Buffer) (initial : Bytes) (snapshot : Bytes) (next : Thk OS) : OS =
+    ! bytes/eq OS snapshot initial {
+      ! buffer/freeze handle error {
+        fn frozen =>
+          do expected <- ! bytes/from_string "aXYd";
+          ! bytes/eq OS frozen expected { ! check_closed handle initial next } fail
+      }
+    } fail
+  in
+  do initial <- ! bytes/from_string "abcd";
+  do changed <- ! bytes/from_string "XY";
+  ! check_invalid {
+    ! allocation/allocate 4 64 small error {
+      fn handle =>
+        let alias = handle in
+        ! buffer/write handle 0 initial error {
+          ! buffer/read handle 0 4 error {
+            fn snapshot =>
+              ! buffer/write alias 3 changed (
+                expected_error 2 {
+                  ! buffer/read handle 0 4 error {
+                    fn unchanged =>
+                      ! bytes/eq OS unchanged initial {
+                        ! buffer/write alias 1 changed error {
+                          ! check_freeze handle initial snapshot {
+                            ! check_empty { ! process/exit 0 }
+                          }
+                        }
+                      } fail
+                  }
+                }
+              ) fail
+          }
+        }
+    }
+  }
+end

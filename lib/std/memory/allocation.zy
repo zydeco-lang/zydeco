@@ -1,0 +1,29 @@
+-- Allocation requests are computations requiring an allocator service on their stack.
+begin
+  param val (/VType; /CType; /Thk; /OS; /Int64; /Buffer; /buffer; /numeric) : @(import(
+    "../builtin.zy"
+  )) that
+  let Allocator = (@(import("allocator.type.zy"))) Buffer OS in
+  let Allocate (A : VType) =
+    Thk Allocator -> Thk (Int64 -> OS) -> Thk (A -> OS) -> OS
+  in
+  let heap : Thk Allocator = {
+    comatch
+    | .allocate size alignment error success => ! buffer/allocate size alignment error success
+    end
+  } in
+  let val limited (maximum : Int64) (parent : Thk Allocator) : Thk Allocator = {
+    comatch
+    | .allocate size alignment error success =>
+      ! numeric/int64/gt OS size maximum { ! error 3 } {
+        ! parent .allocate size alignment error success
+      }
+    end
+  } in
+  let ! allocate (size : Int64) (alignment : Int64) : Allocate Buffer =
+    fn allocator error success => ! allocator .allocate size alignment error success
+  in
+  pack (= Allocator as Allocator : CType) (= Allocate as Allocate : VType -> CType)
+  where
+    = heap, = limited, = allocate end
+end

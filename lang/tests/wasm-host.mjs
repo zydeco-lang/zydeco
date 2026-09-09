@@ -327,6 +327,7 @@ class ZydecoHost {
     });
     functions.set("string_literal", (offset, length) => this.stringLiteral(offset, length));
     this.installNumeric(functions);
+    this.installBuffers(functions);
     this.installText(functions);
     this.installIo(functions);
     this.installProcess(functions);
@@ -597,6 +598,55 @@ class ZydecoHost {
           : whenFalse,
       ),
     );
+  }
+
+  installBuffers(functions) {
+    const failure = (continuation, code) => Transfers.withOneArgument(continuation, RuntimeWords.immediateSigned(code));
+    const integer = (word) => this.words.decodeSigned(word, 64);
+    const get = (handle) => this.values.load("buffer", handle);
+    functions.set("buffer_allocate", (size, alignment, error, success) => {
+      const length = integer(size);
+      const boundary = integer(alignment);
+      if (length < 0n || boundary <= 0n || (boundary & (boundary - 1n)) !== 0n) return failure(error, 0n);
+      if (length > BigInt(Number.MAX_SAFE_INTEGER)) return failure(error, 3n);
+      try {
+        const handle = this.values.store("buffer", { bytes: new Uint8Array(Number(length)), alignment: boundary });
+        return Transfers.withOneArgument(success, handle);
+      } catch (exception) {
+        if (exception instanceof RangeError) return failure(error, 3n);
+        throw exception;
+      }
+    });
+    functions.set("buffer_write", (handle, offset, source, error, success) => {
+      const buffer = get(handle);
+      if (buffer.bytes === null) return failure(error, 1n);
+      const start = integer(offset);
+      const bytes = this.values.getBytes(source);
+      if (start < 0n || start + BigInt(bytes.length) > BigInt(buffer.bytes.length)) return failure(error, 2n);
+      buffer.bytes.set(bytes, Number(start));
+      return Transfers.withoutArguments(success);
+    });
+    functions.set("buffer_read", (handle, offset, length, error, success) => {
+      const buffer = get(handle);
+      if (buffer.bytes === null) return failure(error, 1n);
+      const start = integer(offset);
+      const count = integer(length);
+      if (start < 0n || count < 0n || start + count > BigInt(buffer.bytes.length)) return failure(error, 2n);
+      return Transfers.withOneArgument(success, this.values.bytes(buffer.bytes.subarray(Number(start), Number(start + count))));
+    });
+    functions.set("buffer_freeze", (handle, error, success) => {
+      const buffer = get(handle);
+      if (buffer.bytes === null) return failure(error, 1n);
+      const bytes = this.values.bytes(buffer.bytes);
+      buffer.bytes = null;
+      return Transfers.withOneArgument(success, bytes);
+    });
+    functions.set("buffer_close", (handle, error, success) => {
+      const buffer = get(handle);
+      if (buffer.bytes === null) return failure(error, 1n);
+      buffer.bytes = null;
+      return Transfers.withoutArguments(success);
+    });
   }
 
   installIo(functions) {

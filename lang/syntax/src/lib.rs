@@ -163,6 +163,7 @@ impl std::fmt::Display for IntrinsicRole {
 )]
 #[strum(serialize_all = "lowercase")]
 pub enum BuiltinTypeRole {
+    Buffer,
     Reader,
     Writer,
     OS,
@@ -185,7 +186,7 @@ impl BuiltinTypeRole {
 
     pub fn universe(self) -> BuiltinTypeUniverse {
         match self {
-            | Self::Reader | Self::Writer => BuiltinTypeUniverse::Value,
+            | Self::Buffer | Self::Reader | Self::Writer => BuiltinTypeUniverse::Value,
             | Self::OS => BuiltinTypeUniverse::Computation,
         }
     }
@@ -524,6 +525,11 @@ pub enum BuiltinValueRole {
     BytesSingleton,
     BytesEq,
     BytesLt,
+    BufferAllocate,
+    BufferWrite,
+    BufferRead,
+    BufferFreeze,
+    BufferClose,
     Stdin,
     Stdout,
     Stderr,
@@ -663,6 +669,8 @@ impl BuiltinValueRole {
             | Self::CharFromCodepoint
             | Self::StrParseInt
             | Self::BytesToStr
+            | Self::BufferFreeze
+            | Self::BufferClose
             | Self::IoReadAll
             | Self::IoFlush
             | Self::IoCloseReader
@@ -678,10 +686,11 @@ impl BuiltinValueRole {
             | Self::BytesAligned
             | Self::BytesEq
             | Self::BytesLt
+            | Self::BufferAllocate
             | Self::IoRead
             | Self::IoReadLine
             | Self::IoWriteAll => 4,
-            | Self::BytesSlice => 5,
+            | Self::BytesSlice | Self::BufferRead | Self::BufferWrite => 5,
         }
     }
 

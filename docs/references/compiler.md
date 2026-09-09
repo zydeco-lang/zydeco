@@ -871,6 +871,15 @@ The [source storage contract](../proposals/bytes.md#explicit-storage-contracts) 
 without a new compiler IR layout form.
 Its stored buffers use the existing byte borrow at the foreign boundary.
 
+[BufferArena](../../lang/machine/src/buffer.rs) is shared by the interpreter and native host.
+It owns fixed-size mutable allocations behind non-reused handle IDs.
+Interpreter handles are typed host values; native handles use immediate words.
+Neither allocation payloads nor table entries contain managed Zydeco references.
+Close removes the allocation; freeze copies and aligns the immutable result before removing it.
+The Node host supplies corresponding checked handles and detached snapshots.
+[Buffer laws](../proposals/bytes.md#mutable-destination-capabilities) own the source-visible state transitions
+and errors.
+
 Host resource tables allocate monotonically increasing handle IDs and validate reader and writer operations.
 Closing removes the resource, so every alias subsequently observes `Closed`;
 identifiers are not source-visible pointers.

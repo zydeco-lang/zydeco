@@ -1,0 +1,25 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Int64 = @(intrinsic(i64)) in
+  let Bytes = @(intrinsic(bytes)) in
+  param Buffer : VType in
+  param OS : CType in
+  let Error = Thk (Int64 -> OS) in
+  let Done = Thk OS in
+  let Success (A : VType) = Thk (A -> OS) in
+    (
+      @[builtin(buffer_allocate)] (
+        #allocate :: Thk (Int64 -> Int64 -> Error -> Success Buffer -> OS)
+      )
+    )
+  * (@[builtin(buffer_write)] (#write :: Thk (Buffer -> Int64 -> Bytes -> Error -> Done -> OS)))
+  * (
+      @[builtin(buffer_read)] (
+        #read :: Thk (Buffer -> Int64 -> Int64 -> Error -> Success Bytes -> OS)
+      )
+    )
+  * (@[builtin(buffer_freeze)] (#freeze :: Thk (Buffer -> Error -> Success Bytes -> OS)))
+  * (@[builtin(buffer_close)] (#close :: Thk (Buffer -> Error -> Done -> OS)))
+end

@@ -36,7 +36,10 @@ A snapshot must remain unchanged after later writes; a freeze must define what e
 Specify close, repeated observation, failure, and buffer-transfer ownership together.
 The builder must not expose a mutable alias to storage already borrowed as immutable bytes by foreign code.
 Compare copying snapshots with a consuming freeze using workloads that construct many small chunks.
-No new primitive family or operation spelling is selected yet.
+The implemented [fixed-capacity Buffer](bytes.md#mutable-destination-capabilities) uses copying snapshots
+and closing freeze with checked alias invalidation.
+A growable memory-backed `Writer` remains separate; no spelling or integration
+with the stream capability is selected here.
 
 ## Other extensions
 

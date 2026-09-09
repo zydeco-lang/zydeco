@@ -22,6 +22,7 @@ pub enum BuiltinValueAtom {
     Char,
     String,
     Bytes,
+    Buffer,
     Reader,
     Writer,
 }
@@ -29,6 +30,7 @@ pub enum BuiltinValueAtom {
 impl BuiltinValueAtom {
     fn capability_role(self) -> Option<BuiltinTypeRole> {
         match self {
+            | Self::Buffer => Some(BuiltinTypeRole::Buffer),
             | Self::Reader => Some(BuiltinTypeRole::Reader),
             | Self::Writer => Some(BuiltinTypeRole::Writer),
             | Self::Integer(_) | Self::Float(_) | Self::Char | Self::String | Self::Bytes => None,
@@ -43,7 +45,7 @@ impl BuiltinValueAtom {
             | Self::Char => PrimitiveType::Char,
             | Self::String => PrimitiveType::String,
             | Self::Bytes => PrimitiveType::Bytes,
-            | Self::Reader | Self::Writer => return None,
+            | Self::Buffer | Self::Reader | Self::Writer => return None,
         })
     }
 }
@@ -158,6 +160,19 @@ impl BuiltinOperationAbi {
             | Role::BytesAligned => Self::optional([Atom::Bytes, int64], Atom::Bytes),
             | Role::BytesSingleton => Self::pure([uint8], Atom::Bytes),
             | Role::BytesEq | Role::BytesLt => Self::branch([Atom::Bytes, Atom::Bytes]),
+            | Role::BufferAllocate => {
+                Self::buffer_effect([int64, int64], Self::continuation(Atom::Buffer))
+            }
+            | Role::BufferWrite => {
+                Self::buffer_effect([Atom::Buffer, int64, Atom::Bytes], Self::os_continuation())
+            }
+            | Role::BufferRead => {
+                Self::buffer_effect([Atom::Buffer, int64, int64], Self::continuation(Atom::Bytes))
+            }
+            | Role::BufferFreeze => {
+                Self::buffer_effect([Atom::Buffer], Self::continuation(Atom::Bytes))
+            }
+            | Role::BufferClose => Self::buffer_effect([Atom::Buffer], Self::os_continuation()),
             | Role::Stdin => Self::pure([], Atom::Reader),
             | Role::Stdout | Role::Stderr => Self::pure([], Atom::Writer),
             | Role::IoRead => Self::io_effect(
@@ -305,6 +320,17 @@ impl BuiltinOperationAbi {
         success: BuiltinValueClassifier,
     ) -> BuiltinValueClassifier {
         Self::effect(parameters.into_iter().chain([Self::io_error_continuation(), success]))
+    }
+
+    fn buffer_effect(
+        parameters: impl IntoIterator<Item = BuiltinValueAtom>, success: BuiltinValueClassifier,
+    ) -> BuiltinValueClassifier {
+        Self::effect(
+            parameters.into_iter().map(Self::atom).chain([
+                Self::continuation(BuiltinValueAtom::Integer(IntegerType::Int64)),
+                success,
+            ]),
+        )
     }
 
     fn os_continuation() -> BuiltinValueClassifier {

@@ -7,6 +7,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
+use zydeco_machine::buffer::{BufferArena, BufferError, BufferHandle};
 use zydeco_machine::bytes::ByteBuffer;
 #[cfg(not(feature = "compact-environments"))]
 use zydeco_machine::frames::Frames as NativeFrames;
@@ -750,6 +751,94 @@ extern "sysv64" fn zydeco_bytes_aligned_branch(
         | None => HostControl::without_arguments(when_none),
         | Some(bytes) => HostControl::with_one_argument(when_some, HostBytes::store(bytes)),
     }
+}
+
+thread_local! {
+    static HOST_BUFFERS: RefCell<BufferArena> = RefCell::new(BufferArena::default());
+}
+
+struct BufferBranch;
+
+impl BufferBranch {
+    fn finish(result: Result<Option<Word>, BufferError>, error: Word, success: Word) -> Word {
+        match result {
+            | Ok(None) => HostControl::without_arguments(success),
+            | Ok(Some(value)) => HostControl::with_one_argument(success, value),
+            | Err(code) => {
+                HostControl::with_one_argument(error, Immediate::expect_signed(code as i64))
+            }
+        }
+    }
+
+    fn handle(word: Word) -> BufferHandle {
+        BufferHandle::with_raw(HostHandle::decode(word))
+    }
+}
+
+#[unsafe(export_name = "\x01zydeco_buffer_allocate")]
+extern "sysv64" fn zydeco_buffer_allocate(
+    size: Word, alignment: Word, error: Word, success: Word,
+) -> Word {
+    let result = HOST_BUFFERS.with(|arena| {
+        arena
+            .borrow_mut()
+            .allocate(
+                <i64 as RuntimeInteger>::decode(size),
+                <i64 as RuntimeInteger>::decode(alignment),
+            )
+            .map(|handle| Some(HostHandle::encode(handle.raw())))
+    });
+    BufferBranch::finish(result, error, success)
+}
+
+#[unsafe(export_name = "\x01zydeco_buffer_write")]
+extern "sysv64" fn zydeco_buffer_write(
+    buffer: Word, offset: Word, bytes: Word, error: Word, success: Word,
+) -> Word {
+    let result = HOST_BUFFERS.with(|arena| {
+        arena
+            .borrow_mut()
+            .write(BufferBranch::handle(buffer), <i64 as RuntimeInteger>::decode(offset), unsafe {
+                HostBytes::borrow(bytes)
+            })
+            .map(|()| None)
+    });
+    BufferBranch::finish(result, error, success)
+}
+
+#[unsafe(export_name = "\x01zydeco_buffer_read")]
+extern "sysv64" fn zydeco_buffer_read(
+    buffer: Word, offset: Word, length: Word, error: Word, success: Word,
+) -> Word {
+    let result = HOST_BUFFERS.with(|arena| {
+        arena
+            .borrow()
+            .read(
+                BufferBranch::handle(buffer),
+                <i64 as RuntimeInteger>::decode(offset),
+                <i64 as RuntimeInteger>::decode(length),
+            )
+            .map(|bytes| Some(HostBytes::store(bytes)))
+    });
+    BufferBranch::finish(result, error, success)
+}
+
+#[unsafe(export_name = "\x01zydeco_buffer_freeze")]
+extern "sysv64" fn zydeco_buffer_freeze(buffer: Word, error: Word, success: Word) -> Word {
+    let result = HOST_BUFFERS.with(|arena| {
+        arena
+            .borrow_mut()
+            .freeze(BufferBranch::handle(buffer))
+            .map(|bytes| Some(HostBytes::store(bytes)))
+    });
+    BufferBranch::finish(result, error, success)
+}
+
+#[unsafe(export_name = "\x01zydeco_buffer_close")]
+extern "sysv64" fn zydeco_buffer_close(buffer: Word, error: Word, success: Word) -> Word {
+    let result = HOST_BUFFERS
+        .with(|arena| arena.borrow_mut().close(BufferBranch::handle(buffer)).map(|()| None));
+    BufferBranch::finish(result, error, success)
 }
 
 macro_rules! integer_runtime {

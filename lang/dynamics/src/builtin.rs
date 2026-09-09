@@ -85,6 +85,11 @@ impl BuiltinRuntime {
             | Role::BytesSingleton => bytes_singleton(args, input, output, argv, host),
             | Role::BytesEq => bytes_eq_branch(args, input, output, argv, host),
             | Role::BytesLt => bytes_lt_branch(args, input, output, argv, host),
+            | Role::BufferAllocate
+            | Role::BufferWrite
+            | Role::BufferRead
+            | Role::BufferFreeze
+            | Role::BufferClose => crate::buffer::BufferRuntime::invoke(role, args, host),
             | Role::Stdin => stdin(args, input, output, argv, host),
             | Role::Stdout => stdout(args, input, output, argv, host),
             | Role::Stderr => stderr(args, input, output, argv, host),

@@ -3,12 +3,16 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufReader},
 };
-use zydeco_machine::bytes::ByteBuffer;
+use zydeco_machine::{
+    buffer::{BufferArena, BufferHandle},
+    bytes::ByteBuffer,
+};
 
 /// Opaque values whose representation belongs to the interpreter runtime.
 #[derive(Clone, Debug)]
 pub enum HostValue {
     Bytes(ByteBuffer),
+    Buffer(BufferHandle),
     Reader(ReaderHandle),
     Writer(WriterHandle),
 }
@@ -33,6 +37,7 @@ impl WriterHandle {
 /// File resources owned by one interpreter invocation.
 #[derive(Debug)]
 pub struct HostRuntime {
+    pub(crate) buffers: BufferArena,
     next_reader: usize,
     next_writer: usize,
     readers: HashMap<ReaderHandle, BufReader<File>>,
@@ -41,7 +46,13 @@ pub struct HostRuntime {
 
 impl HostRuntime {
     pub(crate) fn new() -> Self {
-        Self { next_reader: 1, next_writer: 2, readers: HashMap::new(), writers: HashMap::new() }
+        Self {
+            buffers: BufferArena::default(),
+            next_reader: 1,
+            next_writer: 2,
+            readers: HashMap::new(),
+            writers: HashMap::new(),
+        }
     }
 
     pub(crate) fn open_reader(&mut self, path: &str) -> io::Result<ReaderHandle> {

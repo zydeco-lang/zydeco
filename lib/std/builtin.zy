@@ -23,6 +23,8 @@ exists
   (= String as @(intrinsic(string)) : VType)
   (= Bytes as @(intrinsic(bytes)) : VType)
   -- Effect capabilities remain generative at the provider boundary.
+  @[builtin(buffer)]
+  (SystemBuffer : VType)
   @[builtin(reader)] (SystemReader : VType)
   @[builtin(writer)] (SystemWriter : VType)
   @[builtin(os)] (SystemOS : CType)
@@ -54,11 +56,13 @@ exists
     * (
         #system ::
         exists
+          (= Buffer as SystemBuffer : VType)
           (= Reader as SystemReader : VType)
           (= Writer as SystemWriter : VType)
           (= OS as SystemOS : CType)
         .
-            (#io :: (@(import("builtin/system/io.zy"))) SystemReader SystemWriter SystemOS)
+            (#buffer :: (@(import("builtin/system/buffer.zy"))) SystemBuffer SystemOS)
+          * (#io :: (@(import("builtin/system/io.zy"))) SystemReader SystemWriter SystemOS)
           * (#fs :: (@(import("builtin/system/fs.zy"))) SystemReader SystemWriter SystemOS)
           * (#stdio :: (@(import("builtin/system/stdio.zy"))) SystemReader SystemWriter SystemOS)
           * (#args :: @(import("builtin/system/args.zy")))

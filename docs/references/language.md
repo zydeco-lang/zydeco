@@ -570,7 +570,7 @@ REPL evaluation captures output and uses empty stdin and arguments.
 
 [Builtin](../../lib/std/builtin.zy) exposes canonical kinds and fixed-representation types as manifest fields.
 Repeating an intrinsic splice denotes the same canonical kind or type across independently checked sources.
-`Reader`, `Writer`, and `OS` are abstract provider capabilities sharing one opening.
+`Buffer`, `Reader`, `Writer`, and `OS` are abstract provider capabilities sharing one opening.
 The `numeric`, `text`, and `system` groups contain host operations.
 The [standard library](../../lib/std/README.md) assembles ordinary package functions and defines `Bool`,
 `Option`, `Result`, and `List`; host operations select continuations instead of constructing those types.
@@ -612,6 +612,12 @@ The ordinary [memory library](../../lib/std/memory/package.zy) composes these pr
 into explicit storage contracts with abstract stored types.
 Its [layout laws](../proposals/bytes.md#layout-laws) own size, field placement, and padding;
 ordinary value typing and calling conventions do not change.
+
+Mutable destination operations require the host's `Buffer` capability and `OS` computation protocol.
+The [buffer design](../proposals/bytes.md#mutable-destination-capabilities) owns allocation,
+checked ranges, snapshot/freeze behavior, alias invalidation, and error precedence.
+The source allocator service there demonstrates how a computation can require a caller-supplied allocation policy
+without a new compiler effect form.
 
 I/O uses blocking byte streams and opaque reader/writer handles.
 Copying a handle aliases the same resource; closing it invalidates all aliases, whose later operations report `Closed`.

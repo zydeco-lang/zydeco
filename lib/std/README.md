@@ -28,7 +28,7 @@ The available surface names are:
 | Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt64` |
 | Floating point | `Float32`, `Float64` |
 | Text and bytes | `Char`, `String`, `Bytes` |
-| Capabilities | `Reader`, `Writer`, `OS` |
+| Capabilities | `Buffer`, `Reader`, `Writer`, `OS` |
 
 Host operations live in the same contract under the `numeric`, `text`, and `system` groups, and the search descends
 through them: `param (/stdio; /process) : @(import("lib/std/builtin.zy")) in` selects two operations
@@ -87,6 +87,7 @@ numeric/package.zy         the ten width modules and their capability dictionari
 text/package.zy            cross-representation text operations
 
 memory/package.zy          layout composition and checked concrete storage
+memory/allocation.zy       allocator service and allocation computations
 memory/package.type.zy     abstract layout builder interface
 memory/representation.type.zy  per-realization abstract stored type and operations
 
@@ -110,7 +111,7 @@ constructors, and fixed-representation types — followed by the three generativ
 and its body groups the runtime operations:
 
 - Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the ten fixed-width numeric types, `Char`, `String`,
-  and `Bytes`, then abstract `Reader`, `Writer`, and `OS`.
+  and `Bytes`, then abstract `Buffer`, `Reader`, `Writer`, and `OS`.
 - `numeric`: exact-width arithmetic, branch comparisons, and rendering, one plain operation module per representation.
 - `text`: operations crossing `Char`, `String`, `Bytes`, and `Int64`.
 - `system`: the re-exposed capabilities plus I/O, filesystem, standard stream, argument,
@@ -299,6 +300,12 @@ The [layout design](../../docs/proposals/bytes.md#explicit-storage-contracts) ow
 validation, address guarantees, and current costs.
 [The complete example](../tests/ffi/representation.zy) passes stored bytes to C
 through the existing borrowed-buffer interface.
+
+Mutable construction uses the separate Builtin `buffer` capability: allocate a fixed-capacity destination,
+write checked ranges, then freeze it into immutable bytes or close it.
+`memory/allocation.zy` provides the source-defined allocator service and a per-request size-limiting provider.
+See [the owning buffer protocol](../../docs/proposals/bytes.md#mutable-destination-capabilities)
+for state transitions and [the example](../tests/std/buffer.zy) for complete use.
 
 ## Byte operation costs
 
