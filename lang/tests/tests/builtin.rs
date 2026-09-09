@@ -72,4 +72,42 @@ mod host_arguments {
     fn amd64() {
         program().test(TestBackend::Amd64);
     }
+
+    #[test]
+    fn wasm_am() {
+        program().test(TestBackend::WasmAm);
+    }
+
+    #[test]
+    fn wasm_sps() {
+        program().test(TestBackend::WasmSps);
+    }
+}
+
+mod argument_contract {
+    use super::*;
+
+    fn program() -> SourceProgram {
+        SourceProgram::setup("tests/builtin/argument-contract.zy").with_args(["alpha", "beta"])
+    }
+
+    #[test]
+    fn interpreter() {
+        program().test(TestBackend::Interpreter);
+    }
+
+    #[test]
+    fn amd64() {
+        program().test(TestBackend::Amd64);
+    }
+
+    #[test]
+    fn wasm_am() {
+        program().test(TestBackend::WasmAm);
+    }
+
+    #[test]
+    fn wasm_sps() {
+        program().test(TestBackend::WasmSps);
+    }
 }

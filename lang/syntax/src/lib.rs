@@ -549,7 +549,7 @@ pub enum BuiltinValueRole {
     ReadLine,
     ReadLineAsInt,
     ReadTillEof,
-    ArgList,
+    ArgAt,
     RandomInt,
     Exit,
 }
@@ -638,7 +638,6 @@ impl BuiltinValueRole {
             | Self::BytesEq => "bytes_eq_branch".to_owned(),
             | Self::BytesLt => "bytes_lt_branch".to_owned(),
             | Self::ReadLineAsInt => "read_line_as_int_branch".to_owned(),
-            | Self::ArgList => "arg_fold".to_owned(),
             | role => role.source_name(),
         }
     }
@@ -664,8 +663,8 @@ impl BuiltinValueRole {
             | Self::WriteStr
             | Self::WriteInt
             | Self::WriteLine
-            | Self::ReadLineAsInt
-            | Self::ArgList => 2,
+            | Self::ReadLineAsInt => 2,
+            | Self::ArgAt
             | Self::CharFromCodepoint
             | Self::StrParseInt
             | Self::BytesToStr

@@ -60,6 +60,12 @@ This separation keeps algebraic data in the language.
 The interpreter and native runtime only need to agree on the small Builtin ABI,
 while the files under `data/` and the derived operations in the topic packages remain ordinary Zydeco code.
 
+`system/arguments.zy` builds a lazy `fold` from the Builtin `args/at` lookup.
+Apply it to the Builtin package directly when a list is unnecessary; `process/arg_list` uses the same builder.
+Tails are ordinary reusable computations, and host runtimes need no special closure implementation.
+[Argument semantics](../../docs/references/language.md#13-primitive-values-and-capabilities) specify lookup failures
+and repeated forcing.
+
 The optional `memory/package.zy` builder is imported directly, like the control libraries.
 Its explicit signature prescribes abstract layout and storage types; this is a representation contract rather
 than an interface inferred from the concrete byte implementation.

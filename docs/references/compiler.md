@@ -766,7 +766,7 @@ experimental moving environments require a different relocation contract and are
 The [native stub](../../runtime/stub.rs) uses [CheneyHeap](../../runtime/gc.rs) with two fixed 1 MiB semispaces.
 The live graph, including headers, must fit in one space.
 Allocation receives a deferred root source: a successful fast allocation does not enumerate roots;
-collection requests the control-stack range, frame slots, and registered host roots and updates them in place.
+collection requests the control-stack range and live frame slots and updates them in place.
 An oversized request can fail before enumeration.
 Failure after collection still leaves the relocated live graph valid.
 
@@ -819,9 +819,9 @@ the host must not invent closure layouts or return unregistered control code.
 Native C imports are rejected by both emitters.
 
 The [Node test host](../../lang/tests/wasm-host.mjs) supplies captured I/O, resources, and scalar adapters.
-It does not provide a general deployment runtime: argument folds over two
-or more process arguments cannot currently construct the required lazy host tail,
-and randomness is deliberately restricted for tests.
+It does not provide a general deployment runtime, and randomness is deliberately restricted for tests.
+Argument lookup uses the invocation's supplied sequence; lazy folds use module-created source closures,
+so multi-argument traversal needs no host-created closure layout.
 [Backend strategy questions](../proposals/wasm-backends.md) retain default-target criteria and historical comparisons.
 Conformance tests should distinguish module emission, embedding failures, stack exhaustion, and source runtime failures.
 
@@ -879,6 +879,15 @@ Close removes the allocation; freeze copies and aligns the immutable result befo
 The Node host supplies corresponding checked handles and detached snapshots.
 [Buffer laws](../proposals/bytes.md#mutable-destination-capabilities) own the source-visible state transitions
 and errors.
+
+Argument lookup returns one string or selects the missing branch; it retains no Zydeco continuation.
+The native host caches argument strings outside the managed heap, with no managed references in the snapshot.
+The [source argument library](../../lib/std/system/arguments.zy) supplies traversal and lazy tails.
+These use the ordinary closure, activation, and collection protocols, including reuse and abandonment.
+The former native host closure and fixed host-root table have been removed.
+[Argument regressions](../../lib/tests/builtin/argument-contract.zy) exercise repeated forcing across collection,
+live captured wide integers, discarded tails, and invalid indices on all four backends.
+Source observations belong to [L13](language.md#13-primitive-values-and-capabilities).
 
 Host resource tables allocate monotonically increasing handle IDs and validate reader and writer operations.
 Closing removes the resource, so every alias subsequently observes `Closed`;

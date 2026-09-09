@@ -13,6 +13,8 @@ begin
       "../data/package.type.zy"
     ))
   ) that
+  let make_arguments = @(import("arguments.zy")) in
+  let arguments = builtin |> make_arguments in
   begin
     def IoErrorKind =
       data
@@ -470,7 +472,7 @@ begin
         ! stdio_write_line_to writer string continuation
     in
     let ! arg_list (continuation : Thk (List String -> OS)) : OS =
-      do arguments <- ! args/fold
+      do arguments <- ! arguments/fold
         (Ret (List String))
         { ! list/nil String }
         {

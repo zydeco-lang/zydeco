@@ -1,7 +1,9 @@
 begin
-  param (/Ret; /OS; /args; /process; /Char; /Int64; /numeric; /text; /system) : @(import(
+  param (/Ret; /OS; /args; /process; /Char; /Int64; /numeric; /text; /system; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
+  let make_arguments = @(import("../../std/system/arguments.zy")) in
+  let arguments = builtin |> make_arguments in
   let int64 = numeric/int64 that
   let char = text/char that
   let string = text/string that
@@ -29,7 +31,7 @@ begin
     0
     { ret ' ' }
     { fn character => ret character };
-  do fold_status <- ! args/fold
+  do fold_status <- ! arguments/fold
     (Ret Int64)
     { ret 0 }
     {

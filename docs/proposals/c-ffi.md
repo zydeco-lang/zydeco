@@ -14,6 +14,27 @@ but the entry's allocation roots, failure behavior, and repeated-call lifetime m
 An `OS` export instead needs a root-stack protocol and an explicit answer about process termination.
 Neither follows merely from reversing the current import marshalling.
 
+### Zydeco's own host interface
+
+An adapter implementing a Zydeco classifier must preserve the operations that classifier permits.
+The old native argument fold returned `Thk R` tails backed by a consumed Rust iterator and a freed environment.
+Repeated forcing could access a freed closure, while abandoning tails retained registered roots indefinitely.
+The Wasm host could not manufacture a corresponding tail for two or more arguments.
+
+The accepted extension moves traversal into [ordinary source computations](../../lib/std/system/arguments.zy)
+over a checked indexed host operation.
+[L13](../references/language.md#13-primitive-values-and-capabilities) owns lookup and reuse semantics;
+[C14](../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) owns the adapters.
+The host now supplies data and resumes supplied continuations without owning a lazy tail.
+This removes bespoke closure lifetime machinery while retaining the unrestricted computation interface.
+
+External entry remains deferred. The current native executable initializes process-global heap,
+frame, and transfer state and enters a root computation that ends through `OS`.
+An embeddable interface needs an explicit runtime instance, a return delimiter, root ownership for retained values,
+and entry/reentry rules before it can expose arbitrary Zydeco computations.
+A computation classifier describes the expected stack protocol; it does not itself provide a foreign runtime instance
+or a releasable handle to captured values.
+
 ## Closures, callbacks, and reentry
 
 A callback needs both executable code and its captured environment.

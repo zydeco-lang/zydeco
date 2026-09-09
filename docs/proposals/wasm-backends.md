@@ -78,7 +78,9 @@ The 2026-08-30 prototype record reported the following evidence; these counts an
 
 The current [source harness](../references/compiler.md#source-fixtures-and-runtime-oracles) also supports
 declared stdin, captured output, and expected exits across registered backends.
-That capability does not establish coverage of every embedding edge case, especially multi-argument process folds.
+That capability does not establish coverage of every embedding edge case.
+Multi-argument process folds now use the [source argument library](../../lib/std/system/arguments.zy)
+and execute in the focused argument regressions on both backends.
 The historical stress result demonstrates growth rather than an acceptable long-running memory policy.
 
 ## Alternatives Considered
@@ -124,7 +126,8 @@ First establish semantic parity with declared input, output, successful and fail
 numeric boxing boundaries, products, closures, continuations, and the shared host calling modes.
 Use [C16's runtime oracles](../references/compiler.md#source-fixtures-and-runtime-oracles)
 and identify the cases actually exercised on each backend; harness support alone is insufficient evidence.
-Multi-argument process folds remain a specific unresolved embedding boundary.
+Multi-argument process folds now pass the shared [argument regressions](../../lang/tests/tests/builtin.rs);
+continued conformance work should include reuse and abandonment of ordinary source continuations.
 
 Then compare module size and function count, compile and validation time, execution time,
 peak and retained linear memory, unsupported-form diagnostics, and host-interface stability.

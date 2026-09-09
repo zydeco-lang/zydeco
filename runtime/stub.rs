@@ -15,7 +15,7 @@ use zydeco_machine::frames::Frames as NativeFrames;
 use zydeco_machine::frames::fragments::Fragments as NativeFrames;
 use zydeco_machine::frames::{Action, FrameError, storage::Growable};
 use zydeco_machine::native::{
-    AllocationKind, Closure, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word, entry,
+    AllocationKind, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word, entry,
 };
 
 /// One full-width scalar payload in an opaque managed block.
@@ -437,65 +437,6 @@ impl OptionalPairBranch {
     }
 }
 
-struct ArgumentFold {
-    closure: Closure<Word>,
-    arguments: std::vec::IntoIter<String>,
-    when_empty: Word,
-    when_item: Word,
-}
-
-impl ArgumentFold {
-    fn from_process(when_empty: Word, when_item: Word) -> Self {
-        let arguments = std::env::args().skip(1).collect::<Vec<_>>().into_iter();
-        let closure = Closure { environment: 0, code: 0 };
-        Self { closure, arguments, when_empty, when_item }
-    }
-
-    fn into_thunk(self) -> Word {
-        let environment = Box::into_raw(Box::new(self));
-        // This host object outlives the callback that creates it. Register the two
-        // managed words it owns so a collection can rewrite them before the thunk
-        // is resumed.
-        let roots = unsafe {
-            [
-                std::ptr::addr_of_mut!((*environment).when_empty),
-                std::ptr::addr_of_mut!((*environment).when_item),
-            ]
-        };
-        unsafe { &mut *HOST_ROOTS.get() }
-            .register(&roots)
-            .unwrap_or_else(|error| out_of_host_roots(error));
-        unsafe {
-            (*environment).closure.environment = environment as Word;
-            (*environment).closure.code = rust_arg_fold_tail as *const () as Word;
-            std::ptr::addr_of_mut!((*environment).closure) as Word
-        }
-    }
-
-    unsafe fn from_environment(environment: *mut u8) -> Box<Self> {
-        let environment = environment.cast::<Self>();
-        let roots = unsafe {
-            [
-                std::ptr::addr_of_mut!((*environment).when_empty),
-                std::ptr::addr_of_mut!((*environment).when_item),
-            ]
-        };
-        unsafe { &mut *HOST_ROOTS.get() }.unregister(&roots);
-        unsafe { Box::from_raw(environment) }
-    }
-
-    fn resume(mut self) -> Word {
-        match self.arguments.next() {
-            | None => HostControl::without_arguments(self.when_empty),
-            | Some(argument) => {
-                let when_item = self.when_item;
-                let tail = self.into_thunk();
-                HostControl::with_two_arguments(when_item, HostString::leak(argument), tail)
-            }
-        }
-    }
-}
-
 #[unsafe(export_name = "\x01zydeco_abort")]
 extern "sysv64" fn zydeco_abort() -> ! {
     RuntimeFailure::PatternMatch.exit()
@@ -540,7 +481,6 @@ impl RootSource for GeneratedRoots {
     fn with_roots<T>(self, trace: impl FnOnce(Roots<'_>) -> T) -> T {
         let mut slots = unsafe { self.action.root_slots(&mut *FRAMES.get()) }
             .unwrap_or_else(|error| out_of_frames(error));
-        slots.extend(unsafe { &*HOST_ROOTS.get() }.slots.iter().copied());
         trace(Roots { stack: self.stack, slots: &mut slots })
     }
 }
@@ -612,11 +552,6 @@ foreign_integer!(u8, zydeco_ffi_decode_uint8, zydeco_ffi_encode_uint8);
 foreign_integer!(u16, zydeco_ffi_decode_uint16, zydeco_ffi_encode_uint16);
 foreign_integer!(u32, zydeco_ffi_decode_uint32, zydeco_ffi_encode_uint32);
 foreign_integer!(u64, zydeco_ffi_decode_uint64, zydeco_ffi_encode_uint64);
-
-unsafe extern "sysv64" {
-    #[link_name = "\x01rust_arg_fold_tail"]
-    fn rust_arg_fold_tail();
-}
 
 #[unsafe(export_name = "\x01zydeco_exit")]
 extern "sysv64" fn zydeco_exit(code: Word) -> ! {
@@ -1381,14 +1316,15 @@ extern "sysv64" fn zydeco_write_line(line: Word, continuation: Word) -> Word {
     HostControl::without_arguments(continuation)
 }
 
-#[unsafe(export_name = "\x01zydeco_arg_fold")]
-extern "sysv64" fn zydeco_arg_fold(when_empty: Word, when_item: Word) -> Word {
-    ArgumentFold::from_process(when_empty, when_item).resume()
-}
-
-#[unsafe(export_name = "\x01zydeco_arg_fold_resume")]
-extern "sysv64" fn zydeco_arg_fold_resume(environment: *mut u8) -> Word {
-    unsafe { ArgumentFold::from_environment(environment) }.resume()
+#[unsafe(export_name = "\x01zydeco_arg_at")]
+extern "sysv64" fn zydeco_arg_at(index: Word, when_none: Word, when_some: Word) -> Word {
+    let index = usize::try_from(<i64 as RuntimeInteger>::decode(index)).ok();
+    let argument =
+        HOST_ARGUMENTS.with(|arguments| index.and_then(|index| arguments.get(index)).copied());
+    match argument {
+        | Some(argument) => HostControl::with_one_argument(when_some, argument),
+        | None => HostControl::without_arguments(when_none),
+    }
 }
 
 #[unsafe(export_name = "\x01zydeco_random_int")]
@@ -1402,39 +1338,6 @@ extern "sysv64" fn zydeco_random_int(continuation: Word, spare: *mut Word) -> Wo
 
 const HEAP_SPACE_BYTES: usize = 1024 * 1024;
 const HEAP_INDEX_REGIONS: usize = HEAP_SPACE_BYTES.div_ceil(gc::INDEX_REGION_BYTES);
-const HOST_ROOT_CAPACITY: usize = 256;
-
-struct HostRoots {
-    slots: [*mut Word; HOST_ROOT_CAPACITY],
-}
-
-struct HostRootOverflow;
-
-impl HostRoots {
-    const fn new() -> Self {
-        Self { slots: [std::ptr::null_mut(); HOST_ROOT_CAPACITY] }
-    }
-
-    fn register(&mut self, roots: &[*mut Word]) -> Result<(), HostRootOverflow> {
-        if self.slots.iter().filter(|slot| slot.is_null()).count() < roots.len() {
-            return Err(HostRootOverflow);
-        }
-        roots.iter().for_each(|root| {
-            let slot = self.slots.iter_mut().find(|slot| slot.is_null()).unwrap();
-            *slot = *root;
-        });
-        Ok(())
-    }
-
-    fn unregister(&mut self, roots: &[*mut Word]) {
-        roots.iter().for_each(|root| {
-            let slot =
-                self.slots.iter_mut().find(|slot| **slot == *root).expect("unregistered host root");
-            *slot = std::ptr::null_mut();
-        });
-    }
-}
-
 fn out_of_memory(error: OutOfMemory) -> ! {
     let _ = writeln!(
         std::io::stderr().lock(),
@@ -1451,23 +1354,16 @@ fn out_of_frames(error: FrameError) -> ! {
     std::process::exit(1)
 }
 
-fn out_of_host_roots(_error: HostRootOverflow) -> ! {
-    let _ = writeln!(
-        std::io::stderr().lock(),
-        "Zydeco runtime: out of memory (host root table is full)",
-    );
-    std::process::exit(1)
-}
-
 static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>> =
     RuntimeCell::new(CheneyHeap::new());
 static FRAMES: RuntimeCell<NativeFrames<Growable>> = RuntimeCell::new(NativeFrames::EMPTY);
 static STACK_END: RuntimeCell<*mut Word> = RuntimeCell::new(std::ptr::null_mut());
-static HOST_ROOTS: RuntimeCell<HostRoots> = RuntimeCell::new(HostRoots::new());
 static CONTROL_TRANSFER: RuntimeCell<HostTransfer<Word>> =
     RuntimeCell::new(HostTransfer { resume: 0, closure: 0, first: 0, second: 0 });
 
 thread_local! {
+    // Host strings contain no managed references. Lookup returns the same stable snapshot.
+    static HOST_ARGUMENTS: Vec<Word> = std::env::args().skip(1).map(HostString::leak).collect();
     static HOST_IO: RefCell<HostIoRuntime> = RefCell::new(HostIoRuntime::new());
 }
 

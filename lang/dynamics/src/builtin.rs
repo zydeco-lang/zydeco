@@ -109,7 +109,7 @@ impl BuiltinRuntime {
             | Role::ReadLine => read_line(args, input, output, argv, host),
             | Role::ReadLineAsInt => read_line_as_int_branch(args, input, output, argv, host),
             | Role::ReadTillEof => read_till_eof(args, input, output, argv, host),
-            | Role::ArgList => arg_fold(args, input, output, argv, host),
+            | Role::ArgAt => arg_at(args, input, output, argv, host),
             | Role::RandomInt => random_int(args, input, output, argv, host),
             | Role::Exit => exit(args, input, output, argv, host),
         }

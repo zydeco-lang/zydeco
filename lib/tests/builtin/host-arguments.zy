@@ -1,10 +1,12 @@
 begin
-  param (/Ret; /OS; /args; /process; /Int64; /numeric; /text; /system) : @(import(
+  param (/Ret; /OS; /args; /process; /Int64; /numeric; /text; /system; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
+  let make_arguments = @(import("../../std/system/arguments.zy")) in
+  let arguments = builtin |> make_arguments in
   let int64 = numeric/int64 that
   let string = text/string that
-  do length <- ! args/fold
+  do length <- ! arguments/fold
     (Ret Int64)
     { ret 0 }
     {

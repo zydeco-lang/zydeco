@@ -1,7 +1,11 @@
 begin
-  param (/Ret; /OS; /args; /process; /String; /text; /system) : @(import("../../std/builtin.zy")) that
+  param (/Ret; /OS; /args; /process; /String; /text; /system; builtin) : @(import(
+    "../../std/builtin.zy"
+  )) that
+  let make_arguments = @(import("../../std/system/arguments.zy")) in
+  let arguments = builtin |> make_arguments in
   let string = text/string that
-  do joined <- ! args/fold
+  do joined <- ! arguments/fold
     (Ret String)
     { ret "" }
     {

@@ -1111,37 +1111,27 @@ pub fn read_till_eof(
     }
 }
 
-struct ArgumentFold;
-
-impl ArgumentFold {
-    fn tail(tail: ZCompute) -> RcValue {
-        mk_rc(Value::Thunk(Thunk(mk_rc(tail))))
-    }
-
-    fn item(step: &ZValue, argument: &str, tail: ZCompute) -> ZCompute {
-        let step: ZCompute = Force(mk_rc(step.clone().into())).into();
-        let with_argument = app(mk_rc(step), Literal::String(argument.into()).into());
-        App(mk_rc(with_argument), Self::tail(tail)).into()
-    }
-
-    fn build(argv: &[String], when_empty: &ZValue, when_item: &ZValue) -> ZCompute {
-        let empty: ZCompute = Force(mk_rc(when_empty.clone().into())).into();
-        argv.iter().rev().fold(empty, |tail, argument| Self::item(when_item, argument, tail))
-    }
-}
-
-/// Fold over command-line arguments without constructing a library-defined
-/// list. The item continuation receives the remaining fold as a thunk, so it
-/// may preserve the ordinary lazy right-fold behavior.
-pub fn arg_fold(
+/// Lookup in the invocation's stable argument sequence; tails are ordinary library computations.
+pub fn arg_at(
     args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, argv: &[String],
     _: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [when_empty @ ZValue::Thunk(_), when_item @ ZValue::Thunk(_)] => {
-            Ok(ArgumentFold::build(argv, when_empty, when_item))
+        | [
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
+            when_none,
+            when_some,
+        ] => {
+            let argument = usize::try_from(*index).ok().and_then(|index| argv.get(index));
+            Ok(match argument {
+                | Some(argument) => app(
+                    mk_rc(Force(mk_rc(when_some.clone().into())).into()),
+                    Literal::String(argument.as_str().into()).into(),
+                ),
+                | None => Force(mk_rc(when_none.clone().into())).into(),
+            })
         }
-        | _ => unreachable!(""),
+        | _ => unreachable!("checked argument lookup classifier"),
     }
 }
 

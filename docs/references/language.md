@@ -619,6 +619,15 @@ checked ranges, snapshot/freeze behavior, alias invalidation, and error preceden
 The source allocator service there demonstrates how a computation can require a caller-supplied allocation policy
 without a new compiler effect form.
 
+`args/at : Thk (forall (R : CType) . Int64 -> Thk R -> Thk (String -> R) -> R)` looks up a zero-based argument
+in the invocation's stable sequence, excluding the executable name.
+Negative and out-of-range indices select the first continuation; valid indices supply the string to the second.
+Lookup neither advances nor consumes the sequence.
+The [argument library](../../lib/std/system/arguments.zy) builds a lazy right fold in ordinary CBPV.
+Its item computation receives a reusable `Thk R`: discarding it skips the suffix,
+and forcing it repeatedly reruns that suffix computation, including its effects.
+The standard library's `process/arg_list` uses this fold to build its own `List String`.
+
 I/O uses blocking byte streams and opaque reader/writer handles.
 Copying a handle aliases the same resource; closing it invalidates all aliases, whose later operations report `Closed`.
 Reserved standard streams are not closed by ordinary close operations.

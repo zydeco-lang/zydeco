@@ -495,8 +495,6 @@ impl<'e> CompilerPass for Emitter<'e> {
             Instr::Extern(AllocationKind::Opaque.symbol().to_string()),
             Instr::Extern("zydeco_integer_division_by_zero".to_string()),
             Instr::Extern("zydeco_integer_remainder_by_zero".to_string()),
-            // host callback used by runtime-created argument-fold thunks
-            Instr::Extern("zydeco_arg_fold_resume".to_string()),
             // construct an owned host string from static UTF-8 bytes
             Instr::Extern("zydeco_string_literal".to_string()),
             // source-to-C marshalling helpers
@@ -563,26 +561,6 @@ impl<'e> CompilerPass for Emitter<'e> {
                 .text
                 .extend([Instr::Push(Arg32::Reg(Reg::Rsi)), Instr::Jmp(JmpArgs::Reg(Reg::Rax))]);
         }
-
-        // This tail is reached by a jump through a runtime-created closure, so
-        // its entry parity is not statically known.
-        self.stack_parity = StackParity::Unknown;
-        self.asm.text.extend([
-            Instr::Global("rust_arg_fold_tail".to_string()),
-            Instr::Label("rust_arg_fold_tail".to_string()),
-            Instr::Comment("pass the runtime-created thunk environment to Rust".to_string()),
-            Instr::Pop(Loc::Reg(Reg::Rdi)),
-        ]);
-        self.shift_stack_parity(-1);
-        self.emit_aligned_call(JmpArgs::Label("zydeco_arg_fold_resume".to_string()));
-        self.asm.text.extend([
-            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
-            Instr::Mov(MovArgs::ToReg(
-                Reg::Rax,
-                Arg64::Mem(MemRef { reg: Reg::Rdi, offset: TransferField::Resume.offset() as i32 }),
-            )),
-            Instr::Jmp(JmpArgs::Reg(Reg::Rax)),
-        ]);
 
         self.stack_parity =
             self.entry_parities.get(&self.root).copied().unwrap_or(StackParity::Unknown);

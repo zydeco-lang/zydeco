@@ -88,7 +88,7 @@ impl Builtin {
             | BuiltinValueRole::ReadLine
             | BuiltinValueRole::ReadLineAsInt
             | BuiltinValueRole::ReadTillEof
-            | BuiltinValueRole::ArgList
+            | BuiltinValueRole::ArgAt
             | BuiltinValueRole::RandomInt
             | BuiltinValueRole::Exit => Control,
             | _ => Returning,

@@ -793,20 +793,12 @@ class ZydecoHost {
   }
 
   installProcess(functions) {
-    functions.set("arg_fold", (whenEmpty, whenItem) => {
-      if (this.arguments.length === 0) {
-        return Transfers.withoutArguments(whenEmpty);
+    functions.set("arg_at", (index, whenNone, whenSome) => {
+      const offset = this.words.decodeSigned(index, 64);
+      if (offset < 0n || offset >= BigInt(this.arguments.length)) {
+        return Transfers.withoutArguments(whenNone);
       }
-      if (this.arguments.length === 1) {
-        return Transfers.withTwoArguments(
-          whenItem,
-          this.values.string(this.arguments[0]),
-          whenEmpty,
-        );
-      }
-      throw new Error(
-        "zydeco.arg_fold cannot represent a host-owned tail for two or more process arguments",
-      );
+      return Transfers.withOneArgument(whenSome, this.values.string(this.arguments[Number(offset)]));
     });
     functions.set("random_int", (continuation, spare) =>
       Transfers.withOneArgument(continuation, this.words.encodeSigned(0n, 64, spare)),

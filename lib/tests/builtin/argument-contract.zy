@@ -1,0 +1,50 @@
+begin
+  param (/Thk; /Ret; /Unit; /OS; /Int64; /String; /args; /process;
+    /int64; /string; builtin) : @(import("../../std/builtin.zy")) that
+  let make_arguments = @(import("../../std/system/arguments.zy")) in
+  let arguments = builtin |> make_arguments in
+  let fail = { ! process/exit 1 } in
+  def fix churn (remaining : Int64) : Ret Unit =
+    ! int64/eq (Ret Unit) remaining 0 { ret () } {
+      do next <- ! int64/sub remaining 1;
+      ! churn next
+    }
+  in
+  def fix discard (remaining : Int64) : Ret Int64 =
+    ! int64/eq (Ret Int64) remaining 0 { ret 0 } {
+      do first_length <- ! arguments/fold (Ret Int64) { ret 0 } {
+        fn argument tail => ! string/length argument
+      };
+      do next <- ! int64/sub remaining 1;
+      do rest <- ! discard next;
+      ! int64/add first_length rest
+    }
+  in
+  let check_indices : Thk OS = {
+    ! args/at OS -1 {
+      ! args/at OS 2 {
+        ! args/at OS 9223372036854775807 {
+          ! args/at OS 1 fail {
+            fn second => ! string/eq OS second "beta" { ! process/exit 0 } fail
+          }
+        } { fn _ => ! fail }
+      } { fn _ => ! fail }
+    } { fn _ => ! fail }
+  } in
+  do first <- ! args/at (Ret String) 0 { ret "" } { fn value => ret value };
+  do length <- ! string/length first;
+  do captured <- ! int64/mul length 1000000000000000000;
+  do folded <- ! arguments/fold (Ret Int64) { ret captured } {
+    fn argument tail =>
+      ! string/eq (Ret Int64) argument "alpha" {
+        do before <- ! tail;
+        do () <- ! churn 100000;
+        do after <- ! tail;
+        ! int64/eq (Ret Int64) before after { ret after } { ret 0 }
+      } { ! tail }
+  };
+  do discarded <- ! discard 300;
+  ! int64/eq OS folded 5000000000000000000 {
+    ! int64/eq OS discarded 1500 check_indices fail
+  } fail
+end

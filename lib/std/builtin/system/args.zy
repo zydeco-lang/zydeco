@@ -1,13 +1,11 @@
 begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
+  let Int64 = @(intrinsic(i64)) in
   let String = @(intrinsic(string)) in
-  @[builtin(arg_list)] (
-    #fold :: Thk (
-      forall (R : CType) .
-           Thk R
-        -> Thk (String -> Thk R -> R)
-        -> R
+  @[builtin(arg_at)] (
+    #at :: Thk (
+      forall (R : CType) . Int64 -> Thk R -> Thk (String -> R) -> R
     )
   )
 end

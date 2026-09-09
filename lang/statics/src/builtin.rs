@@ -213,7 +213,7 @@ impl BuiltinOperationAbi {
             | Role::ReadLineAsInt => {
                 Self::effect([Self::os_continuation(), Self::continuation(int64)])
             }
-            | Role::ArgList => Self::string_fold(),
+            | Role::ArgAt => Self::optional([int64], Atom::String),
             | Role::RandomInt => Self::effect([Self::continuation(int64)]),
             | Role::Exit => Self::effect([Self::atom(int64)]),
         };
@@ -273,17 +273,6 @@ impl BuiltinOperationAbi {
             parameters.into_iter().map(Self::atom).chain([when_none, when_some]),
             result,
         );
-        Self::thunk(BuiltinComputationClassifier::ForallCType(Box::new(body)))
-    }
-
-    fn string_fold() -> BuiltinValueClassifier {
-        let result = BuiltinComputationClassifier::Bound(0);
-        let when_empty = Self::thunk(result.clone());
-        let when_item = Self::thunk(Self::arrows(
-            [Self::atom(BuiltinValueAtom::String), Self::thunk(result.clone())],
-            result.clone(),
-        ));
-        let body = Self::arrows([when_empty, when_item], result);
         Self::thunk(BuiltinComputationClassifier::ForallCType(Box::new(body)))
     }
 
