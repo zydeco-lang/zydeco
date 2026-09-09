@@ -138,6 +138,48 @@ impl InternalTerm {
                 let ty = ss::PrimitiveTy(primitive).build(tycker, env);
                 TermAnnId::Type(ty, tycker.statics.type_kind(ty))
             }
+            | su::Internal::ValueInt64(operation) => {
+                let domain = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int64))
+                    .build(tycker, env);
+                let kind = ss::VType.build(tycker, env);
+                let variables = ["left", "right"].map(|name| {
+                    let definition =
+                        Alloc::alloc(tycker, ss::VarName(name.into()), AnnId::Type(domain), &());
+                    let binder =
+                        Alloc::alloc(tycker, ss::ValuePattern::Var(definition), domain, env);
+                    let value = Alloc::alloc(tycker, ss::Value::Var(definition), domain, env);
+                    (binder, value)
+                });
+                let mut body = Alloc::alloc(
+                    tycker,
+                    ss::Value::Int64Op(ss::Int64ValueOp {
+                        operation,
+                        operands: variables.map(|(_, value)| value),
+                    }),
+                    domain,
+                    env,
+                );
+                tycker.statics.terms.record(self.1, ss::TermId::Value(body));
+                let mut codomain = domain;
+                for (binder, _) in variables.into_iter().rev() {
+                    let classifier = ss::ValPi {
+                        binder: ss::ValPiBinder::Value(ss::ValueParameter {
+                            domain,
+                            witnesses: None,
+                            witness_projection: ss::PackageWitnessProjection::Ignore,
+                        }),
+                        codomain,
+                    };
+                    codomain = Alloc::alloc(tycker, classifier, kind, env);
+                    body = Alloc::alloc(
+                        tycker,
+                        ss::Abs(ss::ValBinder::Value(binder), body),
+                        codomain,
+                        env,
+                    );
+                }
+                TermAnnId::Value(body, codomain)
+            }
             | su::Internal::OS => self.builtin_type_k(tycker, env, ss::BuiltinTypeRole::OS)?,
             | su::Internal::Monad | su::Internal::Algebra => {
                 let term = crate::query::InternedTerm::new(tycker.db, self.1);
@@ -169,8 +211,9 @@ impl InternalTerm {
         let annotation = match synthesized {
             | TermAnnId::Kind(_) => AnnId::Set,
             | TermAnnId::Type(_, kind) => AnnId::Kind(kind),
-            | TermAnnId::Hole(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                unreachable!("internal terms synthesize only kinds and types")
+            | TermAnnId::Value(_, ty) => AnnId::Type(ty),
+            | TermAnnId::Hole(_) | TermAnnId::Compu(_, _) => {
+                unreachable!("internal terms synthesize kinds, types, and total value functions")
             }
         };
         let annotation = match switch {
@@ -181,6 +224,7 @@ impl InternalTerm {
         match (synthesized, annotation) {
             | (TermAnnId::Kind(kind), AnnId::Set) => Ok(TermAnnId::Kind(kind)),
             | (TermAnnId::Type(ty, _), AnnId::Kind(kind)) => Ok(TermAnnId::Type(ty, kind)),
+            | (TermAnnId::Value(value, _), AnnId::Type(ty)) => Ok(TermAnnId::Value(value, ty)),
             | _ => unreachable!("annotation reconciliation preserves the internal term sort"),
         }
     }

@@ -3,6 +3,74 @@
 use super::*;
 
 impl StaticElaborator<'_, '_> {
+    /// Select a value arm without entering computations or guessing an unknown tag.
+    pub(super) fn value_pattern(
+        &mut self, source: ValueId, pattern: VPatId, value: StaticValue, env: &mut Environment,
+        bindings: &mut Vec<Binding>,
+    ) -> ResultKont<bool> {
+        match self.tycker.statics.vpats[&pattern].clone() {
+            | ValuePattern::Ctor(Ctor(name, tail)) => {
+                let value = value.unnamed();
+                match &value.0.form {
+                    | ValueForm::Constructor(found, payload) if found == &name => {
+                        self.value_pattern(source, tail, payload.clone(), env, bindings)
+                    }
+                    | ValueForm::Constructor(..) => Ok(false),
+                    | _ => self.fail(StaticEliminationError::UnresolvedMatch {
+                        value: self.application_site.unwrap_or(source),
+                    }),
+                }
+            }
+            | ValuePattern::Lit(literal) => {
+                let value = value.unnamed();
+                if let ValueForm::Runtime(id) = value.0.form
+                    && let Value::Lit(found) = &self.tycker.statics.values[&id]
+                {
+                    Ok(found == &literal)
+                } else {
+                    self.fail(StaticEliminationError::UnresolvedMatch {
+                        value: self.application_site.unwrap_or(source),
+                    })
+                }
+            }
+            | ValuePattern::VCons(patterns) => {
+                let product = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
+                for (position, pattern) in patterns.into_iter().enumerate() {
+                    let field =
+                        self.project(value.clone(), product, position, value.0.source, bindings)?;
+                    if !self.value_pattern(source, pattern, field, env, bindings)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            | ValuePattern::Alias(Alias(patterns)) => {
+                for pattern in patterns {
+                    if !self.value_pattern(source, pattern, value.clone(), env, bindings)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            | ValuePattern::Named(Named(name, inner)) => {
+                let payload = self.open_named(pattern, name, inner, value, env, bindings)?;
+                self.value_pattern(source, inner, payload, env, bindings)
+            }
+            | ValuePattern::SCons(ConsN(prefix, inner)) => {
+                let payload = self.open_package(pattern, prefix, inner, value, env, bindings)?;
+                self.value_pattern(source, inner, payload, env, bindings)
+            }
+            | ValuePattern::View(view) => {
+                let viewed = self.view(view.function, value, env, bindings)?;
+                self.value_pattern(source, view.pattern, viewed, env, bindings)
+            }
+            | _ => {
+                self.bind(pattern, value, env, bindings)?;
+                Ok(true)
+            }
+        }
+    }
+
     pub(super) fn bind(
         &mut self, pattern: VPatId, value: StaticValue, env: &mut Environment,
         bindings: &mut Vec<Binding>,
@@ -178,11 +246,13 @@ impl StaticElaborator<'_, '_> {
             match self.tycker.statics.normalized_at(domain).cloned() {
                 | Some(Type::Exists(exists)) => {
                     let StaticTermId::Type(argument) = argument else { unreachable!() };
-                    assignments.push((exists.binder.witness, *argument));
+                    let payload = exists.binder.pattern.bind_argument_k(self.tycker, *argument)?;
+                    assignments.push((exists.binder.witness, payload));
                     if let StaticPatId::Type(pattern) = pattern
                         && let Some(witness) = self.pattern_witness(*pattern)
                     {
-                        assignments.push((witness, *argument));
+                        let payload = pattern.bind_argument_k(self.tycker, *argument)?;
+                        assignments.push((witness, payload));
                     }
                     domain = exists.body;
                 }

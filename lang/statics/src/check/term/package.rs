@@ -334,6 +334,7 @@ impl TermChecker<'_> {
                                                 pattern,
                                                 witness,
                                                 definition,
+                                                full_definition,
                                                 body,
                                                 body_ty,
                                             }
@@ -342,7 +343,7 @@ impl TermChecker<'_> {
                                             crate::query::PackSynArm::Sealed {
                                                 pattern,
                                                 witness,
-                                                definition,
+                                                full_definition,
                                                 body,
                                                 body_ty,
                                             }

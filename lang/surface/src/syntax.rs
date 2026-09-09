@@ -13,6 +13,7 @@ pub enum Internal {
     Ret,
     Unit,
     Primitive(zydeco_syntax::PrimitiveType),
+    ValueInt64(zydeco_syntax::ValueInt64Op),
     OS,
     Monad,
     Algebra,

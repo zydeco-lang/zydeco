@@ -1,9 +1,44 @@
-//! Typed arithmetic operations retained through instruction selection.
+//! Typed arithmetic for static value calculation and instruction selection.
 
 use crate::{
     BuiltinValueRole, FloatLiteral, FloatOperation, FloatType, IntegerLiteral, IntegerOperation,
     IntegerType, Literal,
 };
+
+/// Total integer leaves for value computation. Layout laws are source functions.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ValueInt64Op {
+    Add,
+    Sub,
+    And,
+    Compare,
+}
+
+impl ValueInt64Op {
+    pub const ALL: &[Self] = &[Self::Add, Self::Sub, Self::And, Self::Compare];
+
+    pub fn intrinsic_name(self) -> &'static str {
+        match self {
+            | Self::Add => "i64_add",
+            | Self::Sub => "i64_sub",
+            | Self::And => "i64_and",
+            | Self::Compare => "i64_compare",
+        }
+    }
+
+    pub fn evaluate(self, [left, right]: [i64; 2]) -> i64 {
+        match self {
+            | Self::Add => left.wrapping_add(right),
+            | Self::Sub => left.wrapping_sub(right),
+            | Self::And => left & right,
+            | Self::Compare => match left.cmp(&right) {
+                | std::cmp::Ordering::Less => -1,
+                | std::cmp::Ordering::Equal => 0,
+                | std::cmp::Ordering::Greater => 1,
+            },
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum IntegerArithmetic {

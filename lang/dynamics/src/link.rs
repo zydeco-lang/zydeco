@@ -194,6 +194,9 @@ impl Link for ss::ValueId {
         let value = match value {
             | Value::Hole(Hole) => Hole.into(),
             | Value::Var(def) => (*def).into(),
+            | Value::Match(_) | Value::Int64Op(_) => {
+                unreachable!("value matches and integer operations must be statically eliminated")
+            }
             | Value::Named(Named(_, inner)) => inner.link(statics).as_ref().to_owned(),
             | Value::Let(Let { binder, bindee, tail }) => {
                 let binder = binder.link(statics);

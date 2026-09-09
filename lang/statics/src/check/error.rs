@@ -703,9 +703,7 @@ impl<'a> Tycker<'a> {
                 use zydeco_utils::arena::ArenaAccess;
                 self.statics.abst_hints.get(abst).map(|hint| *hint.span(self))
             }
-            | TyckError::Coverage(error) => {
-                self.statics_term_source_span(error.computation().into())
-            }
+            | TyckError::Coverage(error) => self.statics_term_source_span(error.term()),
             | TyckError::StaticElimination(error) => self.statics_term_source_span(error.term()),
             | _ => None,
         }

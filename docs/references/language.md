@@ -350,6 +350,31 @@ and stored in intermediate structures, subject to §10.
 They may capture runtime values, but cannot execute computations to form their result.
 A thunk in the result keeps its computation suspended.
 
+`match` also produces a value when every arm produces a value of the same type.
+It uses the patterns and exhaustive coverage of §7; computation-producing arms keep their usual meaning.
+The four integer value intrinsics below have classifier `val pi (left : Int64) (right : Int64) . Int64`,
+where `Int64` denotes `@(intrinsic(i64))`:
+
+| Intrinsic | Result |
+| --- | --- |
+| `i64_add` | Addition wrapping modulo 2⁶⁴ |
+| `i64_sub` | Subtraction wrapping modulo 2⁶⁴ |
+| `i64_and` | Bitwise conjunction |
+| `i64_compare` | Signed comparison: −1, 0, or 1 |
+
+```zydeco check
+let Int64 = @(intrinsic(i64)) in
+let add = @(intrinsic(i64_add)) in
+let compare = @(intrinsic(i64_compare)) in
+let val maximum (left : Int64) (right : Int64) : Int64 =
+  match compare left right | -1 => right | _ => left end
+in
+ret (maximum 16 (add 5 11))
+```
+
+These total leaves allow checked arithmetic and layout construction in ordinary source functions.
+They obey §10's static requirements; returning numeric computations remain available for runtime inputs.
+
 A view pattern `f ~> p` applies the total value function `f` to its input, then matches `p` against the result.
 Only `p` introduces bindings.
 The source head is a variable, optionally with bracketed type arguments, as in `f[T] ~> p`.
@@ -462,10 +487,18 @@ Module factories and explicit dictionaries use these ordinary package and functi
 
 Before execution, value-function applications, views, and static package structure must reduce
 to a representable residual program.
-Reduction follows lexical bindings, type and value application, known constructors,
-projections, and package introduction/opening.
+Reduction follows lexical bindings, type and value application, known constructors, projections,
+package introduction/opening, value matches, and the integer value operations in §8.
 It preserves runtime value sharing and the order and multiplicity of effects.
 It never runs a computation, force, or general recursion to discover static information.
+
+Integer value operations require known integer operands.
+Value matches select the first matching arm without reducing unselected arm bodies.
+Every tag or literal needed to decide that choice must be known;
+the reducer cannot skip an undecidable earlier row to choose a later catch-all.
+Irrefutable patterns can forward unknown runtime payloads inside known structure.
+An unresolved integer operand or value-match choice reports `tyck.static-elimination` at a source site.
+Ordinary computation matches can still inspect runtime data.
 
 A library may export an unapplied value function.
 A residual runtime value cannot contain one:
@@ -705,7 +738,7 @@ A metadata expression is a name, string, integer, or a named application with co
 | Metadata | Meaning and valid use |
 | --- | --- |
 | `import(path-or-number)` | Replace a hole with an independently checked source term (§12) |
-| `intrinsic(role)` | Replace a hole with a canonical kind/type; roles include `vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`, `bytes` |
+| `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`, `bytes`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed package contract (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
 | `typeof` | Extract a synthesized classifier (§4); no arguments |

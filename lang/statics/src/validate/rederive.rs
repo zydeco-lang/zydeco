@@ -271,10 +271,14 @@ impl<'a> RederiveChecker<'a> {
         if !self.agreeing_types.insert((left, right)) {
             return true;
         }
-        match (self.filled_type(left).cloned(), self.filled_type(right).cloned()) {
+        let agrees = match (self.filled_type(left).cloned(), self.filled_type(right).cloned()) {
             | (Some(left), Some(right)) => self.type_forms_agree(&left, &right),
             | _ => false,
+        };
+        if !agrees {
+            self.agreeing_types.remove(&(left, right));
         }
+        agrees
     }
 
     fn type_forms_agree(&mut self, left: &Type, right: &Type) -> bool {
@@ -333,8 +337,22 @@ impl<'a> RederiveChecker<'a> {
                     && self.kinds_agree(left.definition, right.definition)
                     && self.type_ids_agree(left.body, right.body)
             }
-            | (T::Data(left), T::Data(right)) => left == right,
-            | (T::CoData(left), T::CoData(right)) => left == right,
+            | (T::Data(left), T::Data(right)) => {
+                let left = self.statics.datas[left].clone();
+                let right = self.statics.datas[right].clone();
+                left.len() == right.len()
+                    && left.into_iter().all(|(name, payload)| {
+                        right.get(&name).is_some_and(|other| self.type_ids_agree(payload, other))
+                    })
+            }
+            | (T::CoData(left), T::CoData(right)) => {
+                let left = self.statics.codatas[left].clone();
+                let right = self.statics.codatas[right].clone();
+                left.len() == right.len()
+                    && left.into_iter().all(|(name, payload)| {
+                        right.get(&name).is_some_and(|other| self.type_ids_agree(payload, other))
+                    })
+            }
             | _ => false,
         }
     }
@@ -676,6 +694,12 @@ impl<'a> RederiveChecker<'a> {
                     }
                 }
             }
+            | Type::Data(data) => self.statics.datas[data]
+                .iter()
+                .any(|(_, payload)| self.type_applies_instantiation(*payload, seen)),
+            | Type::CoData(codata) => self.statics.codatas[codata]
+                .iter()
+                .any(|(_, payload)| self.type_applies_instantiation(*payload, seen)),
             | Type::Var(_)
             | Type::Abst(_)
             | Type::Thk(_)
@@ -683,9 +707,7 @@ impl<'a> RederiveChecker<'a> {
             | Type::Unit(_)
             | Type::Opaque(_)
             | Type::Primitive(_)
-            | Type::OS(_)
-            | Type::Data(_)
-            | Type::CoData(_) => false,
+            | Type::OS(_) => false,
         }
     }
 
@@ -705,9 +727,11 @@ impl<'a> RederiveChecker<'a> {
             | Type::Unit(_)
             | Type::Opaque(_)
             | Type::Primitive(_)
-            | Type::OS(_)
-            | Type::Data(_)
-            | Type::CoData(_) => return false,
+            | Type::OS(_) => return false,
+            | Type::Data(data) => self.statics.datas[data].iter().map(|(_, ty)| *ty).collect(),
+            | Type::CoData(codata) => {
+                self.statics.codatas[codata].iter().map(|(_, ty)| *ty).collect()
+            }
             | Type::Named(Named(_, inner))
             | Type::Label(Label(_, inner))
             | Type::Proj(Proj(inner, _)) => vec![*inner],
@@ -997,6 +1021,19 @@ impl<'a> RederiveChecker<'a> {
                 let tail_scope =
                     self.binding_defs_scope(self.vpat_bound_defs(binder).into_iter(), scope);
                 self.check_value(tail, &tail_scope);
+            }
+            | Value::Match(Match { scrut, arms }) => {
+                self.check_value(scrut, scope);
+                for Matcher { binder, tail } in arms {
+                    let local =
+                        self.binding_defs_scope(self.vpat_bound_defs(binder).into_iter(), scope);
+                    self.check_value(tail, &local);
+                }
+            }
+            | Value::Int64Op(Int64ValueOp { operands, .. }) => {
+                for operand in operands {
+                    self.check_value(operand, scope);
+                }
             }
             | Value::ValAbs(Abs(binder, body)) => {
                 self.check_val_abs(value, recorded, binder, body, scope);

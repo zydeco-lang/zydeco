@@ -41,11 +41,11 @@ impl fmt::Display for CoveragePattern {
     }
 }
 
-/// A post-check coverage failure tied to one typed computation.
+/// A post-check coverage failure tied to one typed term.
 #[derive(Clone, Debug)]
 pub enum CoverageError {
     NonExhaustiveMatch {
-        computation: CompuId,
+        term: TermId,
         missing: Vec<CoveragePattern>,
         truncated: bool,
     },
@@ -65,12 +65,12 @@ pub enum CoverageError {
 }
 
 impl CoverageError {
-    pub fn computation(&self) -> CompuId {
+    pub fn term(&self) -> TermId {
         match self {
-            | Self::NonExhaustiveMatch { computation, .. }
+            | Self::NonExhaustiveMatch { term, .. } => *term,
             | Self::NonExhaustiveCopatternMatch { computation, .. }
             | Self::NonExhaustiveCoMatch { computation, .. }
-            | Self::DuplicateCoMatchArms { computation, .. } => *computation,
+            | Self::DuplicateCoMatchArms { computation, .. } => (*computation).into(),
         }
     }
 
@@ -131,6 +131,18 @@ impl<'a> CoverageChecker<'a> {
             .compus
             .iter()
             .flat_map(|(computation, term)| self.validate_computation(*computation, term))
+            .chain(self.statics.values.iter().flat_map(|(value, node)| {
+                let Value::Match(Match { scrut, arms }) = node else {
+                    return Vec::new();
+                };
+                let expected = self.statics.data_hints.get(scrut).copied().map(HeadSpace::Data);
+                self.validate_pattern_matrix(
+                    (*value).into(),
+                    arms.iter().map(|arm| arm.binder),
+                    expected,
+                    false,
+                )
+            }))
             .collect()
     }
 
@@ -149,7 +161,7 @@ impl<'a> CoverageChecker<'a> {
             .copied()
             .map(|binder| {
                 self.validate_pattern_matrix(
-                    computation,
+                    computation.into(),
                     std::iter::once(binder),
                     Some(HeadSpace::Package),
                     true,
@@ -164,7 +176,7 @@ impl<'a> CoverageChecker<'a> {
     ) -> Vec<CoverageError> {
         let expected = self.statics.data_hints.get(&scrutinee).copied().map(HeadSpace::Data);
         self.validate_pattern_matrix(
-            computation,
+            computation.into(),
             arms.iter().map(|Matcher { binder, .. }| *binder),
             expected,
             self.statics.copattern_matches.get(&computation).is_some(),
@@ -172,7 +184,7 @@ impl<'a> CoverageChecker<'a> {
     }
 
     fn validate_pattern_matrix(
-        &self, computation: CompuId, binders: impl IntoIterator<Item = VPatId>,
+        &self, term: TermId, binders: impl IntoIterator<Item = VPatId>,
         expected: Option<HeadSpace>, copattern: bool,
     ) -> Vec<CoverageError> {
         let matrix = binders
@@ -194,9 +206,18 @@ impl<'a> CoverageChecker<'a> {
         (!missing.is_empty())
             .then_some({
                 if copattern {
-                    CoverageError::NonExhaustiveCopatternMatch { computation, missing, truncated }
+                    {
+                        let TermId::Compu(computation) = term else {
+                            unreachable!("copatterns occur in computations")
+                        };
+                        CoverageError::NonExhaustiveCopatternMatch {
+                            computation,
+                            missing,
+                            truncated,
+                        }
+                    }
                 } else {
-                    CoverageError::NonExhaustiveMatch { computation, missing, truncated }
+                    CoverageError::NonExhaustiveMatch { term, missing, truncated }
                 }
             })
             .into_iter()

@@ -184,92 +184,68 @@ impl TermChecker<'_> {
                 | _ => {}
             }
             let mut matchers = Vec::new();
-            let mut arms_ty = Vec::new();
+            let mut result_type = None;
             for su::Matcher { binder, tail } in arms {
-                let binder_elaboration =
+                let binding =
                     self.mk(binder).tyck_k(tycker, PatternAction::ana(scrut_ty_unroll.into()))?;
-                let (binder, _ty) = binder_elaboration.try_as_value(
+                let (binder, _) = binding.try_as_value(
                     tycker,
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                match switch {
-                    | Switch::Syn => {
-                        let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
-                            .tyck_k(tycker, Action::syn())?;
-                        let TermAnnId::Compu(tail, ty) = tail_out_ann else {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        };
-                        binder_elaboration.close_scope_k(tycker, ty)?;
-                        matchers.push(ss::Matcher { binder, tail });
-                        arms_ty.push(ty);
-                    }
-                    | Switch::Ana(ana_ty) => {
-                        let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
-                            .tyck_k(tycker, Action::ana(ana_ty))?;
-                        let TermAnnId::Compu(tail, ty) = tail_out_ann else {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        };
-                        binder_elaboration.close_scope_k(tycker, ty)?;
-                        matchers.push(ss::Matcher { binder, tail });
-                        arms_ty.push(ty);
-                    }
-                }
+                let action = match switch {
+                    | Switch::Syn => Action::syn(),
+                    | Switch::Ana(annotation) => Action::ana(annotation),
+                };
+                let tail = TyEnvT::new(binding.info.clone(), tail).tyck_k(tycker, action)?;
+                let ty = match tail {
+                    | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => ty,
+                    | _ => tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                };
+                binding.close_scope_k(tycker, ty)?;
+                result_type = Some(match result_type {
+                    | Some(previous) => Lub::lub_k(previous, ty, tycker)?,
+                    | None => ty,
+                });
+                matchers.push((binder, tail));
             }
-            // Note: use hole
-            if arms_ty.is_empty() {
-                match switch {
-                    | Switch::Syn => tycker
-                        .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
-                    | Switch::Ana(ana_ty) => match ana_ty {
-                        | AnnId::Set | AnnId::Kind(_) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                        | AnnId::Type(ana_ty) => {
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                            let input = crate::query::InternedMatchInput::new(
-                                tycker.db,
-                                scrut,
-                                matchers
-                                    .iter()
-                                    .map(|matcher| (matcher.binder, matcher.tail))
-                                    .collect::<Vec<_>>(),
-                                ana_ty,
-                            );
-                            let Some(outcome) = crate::query::match_syn_judgment(
-                                tycker.db,
-                                tycker.data,
-                                term,
-                                input,
-                                tycker.site_occurrence(),
-                            ) else {
-                                unreachable!("the empty-arms match judgment is query-produced")
-                            };
-                            tycker.statics.compus.insert_new(outcome.id, outcome.compu);
-                            tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
-                            tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
-                            TermAnnId::Compu(outcome.id, outcome.ann)
-                        }
-                    },
+            let ty = match (result_type, switch) {
+                | (Some(ty), _) | (None, Switch::Ana(AnnId::Type(ty))) => ty,
+                | (None, Switch::Syn) => {
+                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
                 }
-            } else {
-                // make sure that each arm has the same type
-                let mut iter = arms_ty.into_iter();
-                let mut res = iter.next().unwrap();
-                for ty in iter {
-                    res = Lub::lub_k(res, ty, tycker)?;
-                }
-                let whole_ty = res;
-                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-                let input = crate::query::InternedMatchInput::new(
-                    tycker.db,
-                    scrut,
-                    matchers
-                        .iter()
-                        .map(|matcher| (matcher.binder, matcher.tail))
-                        .collect::<Vec<_>>(),
-                    whole_ty,
+                | _ => tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+            };
+            let kind = tycker.statics.type_kind(ty);
+            if matches!(tycker.kind_filled_k(&kind)?, ss::Kind::VType(_)) {
+                let arms: Vec<_> = matchers
+                    .into_iter()
+                    .map(|(binder, tail)| {
+                        let TermAnnId::Value(tail, _) = tail else {
+                            unreachable!("arm classifiers have the same kind")
+                        };
+                        ss::Matcher { binder, tail }
+                    })
+                    .collect();
+                let value = Alloc::alloc(
+                    tycker,
+                    ss::Value::Match(ss::Match { scrut, arms }),
+                    ty,
+                    &self.info,
                 );
+                TermAnnId::Value(value, ty)
+            } else {
+                let arms: Vec<_> = matchers
+                    .into_iter()
+                    .map(|(binder, tail)| {
+                        let TermAnnId::Compu(tail, _) = tail else {
+                            unreachable!("arm classifiers have the same kind")
+                        };
+                        (binder, tail)
+                    })
+                    .collect();
+                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
+                let input = crate::query::InternedMatchInput::new(tycker.db, scrut, arms, ty);
                 let Some(outcome) = crate::query::match_syn_judgment(
                     tycker.db,
                     tycker.data,

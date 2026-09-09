@@ -28,6 +28,9 @@ therefore reject valid programs.
 
 The current constructor-shape checks cover thunk, return, named-value, unit, and literal introductions.
 For an operand-dependent shape, the guard excludes abstract identities and type applications other than `Thk` and `Ret`.
+That guard follows data and codata payloads. Closed data/codata shapes compare their named arms structurally;
+distinct arena identities alone do not imply distinct types.
+Nominal identities still compare as abstract witnesses.
 Product shapes and general parent/child comparisons remain deferred
 because their components can carry distinct instantiations.
 Definition-reference scope also remains deferred across import and alias boundaries;

@@ -10,6 +10,65 @@ struct ResidualValues<'a> {
     computations: HashSet<CompuId>,
 }
 
+#[test]
+fn calculated_values_leave_only_literals_in_the_residual_program() {
+    let source = r#"
+let add = @(intrinsic(i64_add)) in
+let sub = @(intrinsic(i64_sub)) in
+let result = match add 12 4 | 16 => sub 16 16 | _ => 1 end in
+! exit result
+"#;
+    let (statics, root) = SourceCase::checked_arena(source).unwrap();
+    assert!(LintChecker::new(&statics).validate(root).is_empty());
+    assert!(statics.values.iter().any(|(_, node)| matches!(node, Value::Match(_))));
+    assert!(statics.values.iter().any(|(_, node)| matches!(node, Value::Int64Op(_))));
+    let Some(TermAnnId::Compu(root, _)) = statics.static_elaboration.as_ref().unwrap().residual
+    else {
+        panic!("calculation has an executable residual")
+    };
+    let mut reachable =
+        ResidualValues { statics: &statics, values: HashSet::new(), computations: HashSet::new() };
+    reachable.computation(root);
+    assert!(reachable.values.iter().any(|value| matches!(
+        statics.values[value],
+        Value::Lit(Literal::Integer(IntegerLiteral::Int64(0)))
+    )));
+}
+
+#[test]
+fn known_named_witnesses_bind_the_payload_type_during_static_elimination() {
+    let source = r#"
+let Package = exists (= Stored : VType) . (#value :: Stored) in
+let val package (A : VType) (value : A) : Package = (#Stored = A, #value = value) in
+let (= Stored, payload) = package Int64 0 in
+let consume : Thk (Stored -> Ret Stored) = { fn value => ret value } in
+do _ <- ! consume payload/value;
+let val identity ((#item = A) : (#item :: VType)) (value : A) : A = value in
+! exit (identity (#item = Int64) 0)
+"#;
+    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::run(source));
+    SourceCase::assert_accepted(SourceCase::lower(source));
+}
+
+#[test]
+fn pack_preserves_named_type_arguments_for_both_disclosed_and_sealed_evidence() {
+    for evidence in ["(= Item as Int64 : VType)", "(= Item : VType) is Int64"] {
+        let source = format!(
+            r#"
+let package = pack {evidence} where #value = (0 : Int64) end in
+let (= Item, fields) = package in
+let val keep (A : VType) (value : Unit) : Unit = value in
+let _ = keep Item () in
+! exit fields/value
+"#
+        );
+        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::run(&source));
+        SourceCase::assert_accepted(SourceCase::lower(&source));
+    }
+}
+
 impl ResidualValues<'_> {
     fn pattern(&self, pattern: VPatId) {
         match &self.statics.vpats[&pattern] {
@@ -32,8 +91,8 @@ impl ResidualValues<'_> {
             return;
         }
         match self.statics.values[&value].clone() {
-            | Value::ValAbs(_) | Value::ValApp(_) => {
-                panic!("a value function survived static elimination")
+            | Value::ValAbs(_) | Value::ValApp(_) | Value::Match(_) | Value::Int64Op(_) => {
+                panic!("a static value operation survived static elimination")
             }
             | Value::Named(Named(_, inner))
             | Value::Ctor(Ctor(_, inner))

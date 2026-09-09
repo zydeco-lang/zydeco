@@ -117,6 +117,10 @@ impl DeepClone for b::TermId {
                     | Internal::Primitive(primitive) => {
                         return desugarer.primitive(*primitive, prev);
                     }
+                    | Internal::ValueInt64(operation) => {
+                        return desugarer
+                            .intrinsic(zydeco_syntax::IntrinsicRole::ValueInt64(*operation), prev);
+                    }
                     | Internal::OS => {
                         return desugarer.os(prev);
                     }

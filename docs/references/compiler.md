@@ -261,6 +261,7 @@ and source occurrences are recorded in the [statics arena](../../lang/statics/sr
 | Nominal and abstract types | Seals, `AbstId`s, definition bodies, and witness scopes |
 | Ordinary CBPV functions | `Arrow`, `Forall`, abstractions, and value/type application |
 | Value functions | `ValPi`, its binder sort, and witness projections for structured arguments |
+| Value calculations | `Value::Match` with value arms and `Int64ValueOp` with two checked integer operands |
 | Packages | `Exists`, manifest equations, `ManifestKind`, and static-prefix patterns |
 | Dependent computation functions | `PackPi` with canonical witnesses and a dependent codomain |
 | Products and named fields | Component vectors, labels, and resolved routes with physical product positions |
@@ -399,10 +400,18 @@ and refutable conjunctions.
 
 [Static elaboration](../../lang/statics/src/elaborate/static_values) uses a lexical evaluator
 whose values can contain static closures, package structure, and shared references to runtime data.
-It reduces type/value applications, known constructors, projections, and package openings.
+It reduces type/value applications, known constructors, projections, package openings,
+value matches, and integer value operations.
 For example, applying `val x => (x, x)` to a runtime variable produces a shared residual binding and product;
 the runtime variable need not become a compile-time constant.
 Computation thunks remain suspended, and general computation execution supplies no static evidence.
+
+The frontend materializes each integer value intrinsic as a curried value abstraction around a typed leaf operation.
+Value-match checking infers the result sort from its arms, or from the expected classifier for an empty match;
+value and computation matches share coverage validation.
+Residualization evaluates the selected value arm in a cloned lexical environment and folds integer leaves to literals.
+Application-site provenance keeps failures in generated primitive bodies attached to source calls.
+The interpreter and compiled backends have no runtime case for these static operations.
 
 `StaticShape` supports witness inspection during dependent checking, including package and product structure.
 It exposes only caller-visible witnesses and returns opaque evidence when reduction cannot establish them.

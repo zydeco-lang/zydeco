@@ -298,6 +298,16 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
             | Value::Var(value) => value.pretty(f),
             | Value::Named(value) => value.pretty(f),
             | Value::Let(value) => value.pretty(f),
+            | Value::Match(value) => value.pretty(f),
+            | Value::Int64Op(Int64ValueOp { operation, operands: [left, right] }) => {
+                RcDoc::concat([
+                    RcDoc::text(operation.intrinsic_name()),
+                    RcDoc::space(),
+                    left.pretty(f),
+                    RcDoc::space(),
+                    right.pretty(f),
+                ])
+            }
             | Value::ValAbs(Abs(binder, body)) => RcDoc::concat([
                 RcDoc::text("val"),
                 RcDoc::space(),

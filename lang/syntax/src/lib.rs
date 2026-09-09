@@ -120,12 +120,16 @@ pub enum IntrinsicRole {
     Unit,
     #[strum(disabled)]
     Primitive(PrimitiveType),
+    #[strum(disabled)]
+    ValueInt64(ValueInt64Op),
 }
 
 impl IntrinsicRole {
     /// Every source-spellable intrinsic role, in completion order.
     pub fn all() -> impl Iterator<Item = Self> {
-        Self::iter().chain(PrimitiveType::all().map(Self::Primitive))
+        Self::iter()
+            .chain(PrimitiveType::all().map(Self::Primitive))
+            .chain(ValueInt64Op::ALL.iter().copied().map(Self::ValueInt64))
     }
 
     pub fn from_source_name(name: &str) -> Option<Self> {
@@ -135,6 +139,7 @@ impl IntrinsicRole {
     pub fn source_name(self) -> &'static str {
         match self {
             | Self::Primitive(primitive) => primitive.intrinsic_name(),
+            | Self::ValueInt64(operation) => operation.intrinsic_name(),
             | role => IntrinsicRoleDiscriminants::from(role).into(),
         }
     }

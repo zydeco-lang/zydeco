@@ -150,13 +150,16 @@ pub enum PackSynArm {
         pattern: ss::TPatId,
         witness: ss::AbstId,
         definition: ss::TypeId,
+        /// The complete argument includes the binder's named wrappers;
+        /// the manifest equation above records only their payload.
+        full_definition: ss::TypeId,
         body: ss::ValueId,
         body_ty: ss::TypeId,
     },
     Sealed {
         pattern: ss::TPatId,
         witness: ss::AbstId,
-        definition: ss::TypeId,
+        full_definition: ss::TypeId,
         body: ss::ValueId,
         body_ty: ss::TypeId,
     },
@@ -193,7 +196,7 @@ pub fn pack_syn_judgment<'db>(
     let site_raw = term.id(db).raw().into_u32();
     let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
     match input.arm(db) {
-        | PackSynArm::Package { pattern, witness, definition, body, body_ty } => {
+        | PackSynArm::Package { pattern, witness, definition, full_definition, body, body_ty } => {
             let exists_id: ss::TypeId = derived_id(key_space, 0);
             let cons_id: ss::ValueId = derived_id(key_space, 1);
             Some(PackSynOutcome::Package {
@@ -205,17 +208,17 @@ pub fn pack_syn_judgment<'db>(
                 )
                 .into(),
                 cons_id,
-                cons: ss::Value::SCons(ss::ConsN(vec![definition.into()], body)),
+                cons: ss::Value::SCons(ss::ConsN(vec![full_definition.into()], body)),
             })
         }
-        | PackSynArm::Sealed { pattern, witness, definition, body, body_ty } => {
+        | PackSynArm::Sealed { pattern, witness, full_definition, body, body_ty } => {
             let exists_id: ss::TypeId = derived_id(key_space, 0);
             let cons_id: ss::ValueId = derived_id(key_space, 1);
             Some(PackSynOutcome::Package {
                 exists_id,
                 exists: ss::Exists::new(ss::TypeBinder { pattern, witness }, body_ty).into(),
                 cons_id,
-                cons: ss::Value::SCons(ss::ConsN(vec![definition.into()], body)),
+                cons: ss::Value::SCons(ss::ConsN(vec![full_definition.into()], body)),
             })
         }
         | PackSynArm::PayloadNotValue => Some(PackSynOutcome::Error(

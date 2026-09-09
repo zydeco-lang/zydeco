@@ -622,6 +622,8 @@ pub enum Value {
     Let(Let<VPatId, ValueId, ValueId>),
     ValAbs(Abs<ValBinder, ValueId>),
     ValApp(App<ValueId, ValArgument>),
+    Match(Match<ValueId, VPatId, ValueId>),
+    Int64Op(Int64ValueOp),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
@@ -629,6 +631,13 @@ pub enum Value {
     SCons(ConsN<StaticTermId, ValueId>),
     Proj(Proj<ValueId, ResolvedField>),
     Lit(Literal),
+}
+
+/// A total primitive application whose operands must be known during static elimination.
+#[derive(Clone, Debug)]
+pub struct Int64ValueOp {
+    pub operation: zydeco_syntax::ValueInt64Op,
+    pub operands: [ValueId; 2],
 }
 
 /// A statically resolved named projection.

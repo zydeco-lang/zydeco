@@ -656,6 +656,17 @@ impl<'a> LintChecker<'a> {
             .into_iter()
             .flatten()
             .collect(),
+            | Value::Match(Match { scrut, arms }) => std::iter::once(LintNode::Value(*scrut))
+                .chain(
+                    arms.iter()
+                        .flat_map(|arm| [LintNode::VPat(arm.binder), LintNode::Value(arm.tail)]),
+                )
+                .filter_map(|node| self.require(referenced_by, node))
+                .collect(),
+            | Value::Int64Op(Int64ValueOp { operands, .. }) => operands
+                .iter()
+                .filter_map(|operand| self.require(referenced_by, LintNode::Value(*operand)))
+                .collect(),
             | Value::ValAbs(Abs(binder, body)) => [
                 match binder {
                     | ValBinder::Type(pat) => self.require(referenced_by, LintNode::TPat(*pat)),

@@ -40,6 +40,13 @@ impl ExecutionReadiness {
                     | Value::SCons(ConsN(_, body))
                     | Value::Proj(Proj(body, _))
                     | Value::ValAbs(Abs(_, body)) => pending.push((*body).into()),
+                    | Value::Match(Match { scrut, arms }) => {
+                        pending.push((*scrut).into());
+                        pending.extend(arms.iter().map(|arm| TermId::Value(arm.tail)));
+                    }
+                    | Value::Int64Op(Int64ValueOp { operands, .. }) => {
+                        pending.extend(operands.iter().map(|operand| TermId::Value(*operand)));
+                    }
                     | Value::Let(Let { bindee, tail, .. }) => {
                         pending.extend([TermId::from(*bindee), TermId::from(*tail)])
                     }

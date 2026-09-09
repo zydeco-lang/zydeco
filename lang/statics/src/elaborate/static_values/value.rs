@@ -31,7 +31,48 @@ impl StaticElaborator<'_, '_> {
             }
             | Value::ValApp(App(function, argument)) => {
                 let function = self.value(function, env, bindings)?;
-                return self.apply(function, argument, env, bindings);
+                return self.apply(source, function, argument, env, bindings);
+            }
+            | Value::Int64Op(Int64ValueOp { operation, operands }) => {
+                let operands = operands
+                    .into_iter()
+                    .map(|operand| {
+                        let operand = self.value(operand, env, bindings)?.unnamed();
+                        if let ValueForm::Runtime(id) = operand.0.form
+                            && let Value::Lit(Literal::Integer(IntegerLiteral::Int64(value))) =
+                                self.tycker.statics.values[&id]
+                        {
+                            Ok(value)
+                        } else {
+                            self.fail(StaticEliminationError::UnresolvedInteger {
+                                value: self.application_site.unwrap_or(source),
+                            })
+                        }
+                    })
+                    .collect::<ResultKont<Vec<_>>>()?;
+                let literal = Literal::Integer(IntegerLiteral::Int64(
+                    operation.evaluate([operands[0], operands[1]]),
+                ));
+                ValueForm::Runtime(self.alloc_value(source, Value::Lit(literal), ty))
+            }
+            | Value::Match(Match { scrut, arms }) => {
+                let value = self.value(scrut, env, bindings)?;
+                let value = self.share(value, bindings)?;
+                for Matcher { binder, tail } in arms {
+                    let mut local = env.clone();
+                    let mut selected_bindings = Vec::new();
+                    if self.value_pattern(
+                        source,
+                        binder,
+                        value.clone(),
+                        &mut local,
+                        &mut selected_bindings,
+                    )? {
+                        bindings.extend(selected_bindings);
+                        return self.value(tail, &local, bindings);
+                    }
+                }
+                return self.fail(StaticEliminationError::UnresolvedMatch { value: source });
             }
             | Value::Let(Let { binder, bindee, tail }) => {
                 let value = self.value(bindee, env, bindings)?;
@@ -127,11 +168,14 @@ impl StaticElaborator<'_, '_> {
     }
 
     fn apply(
-        &mut self, function: StaticValue, argument: ValArgument, caller: &Environment,
-        bindings: &mut Vec<Binding>,
+        &mut self, source: ValueId, function: StaticValue, argument: ValArgument,
+        caller: &Environment, bindings: &mut Vec<Binding>,
     ) -> ResultKont<StaticValue> {
         self.enter_reduction(function.0.source)?;
+        let previous = self.application_site;
+        self.application_site = previous.or(Some(source));
         let result = self.apply_inner(function, argument, caller, bindings);
+        self.application_site = previous;
         self.reduction_depth -= 1;
         result
     }
@@ -181,8 +225,11 @@ impl StaticElaborator<'_, '_> {
                     unreachable!()
                 };
                 let ValPiBinder::Type(binder) = &pi.binder else { unreachable!() };
-                let assignments = std::iter::once((binder.witness, argument))
-                    .chain(self.pattern_witness(*pattern).map(|witness| (witness, argument)));
+                let binder = binder.clone();
+                let payload = binder.pattern.bind_argument_k(self.tycker, argument)?;
+                let body_payload = pattern.bind_argument_k(self.tycker, argument)?;
+                let assignments = std::iter::once((binder.witness, payload))
+                    .chain(self.pattern_witness(*pattern).map(|witness| (witness, body_payload)));
                 local = local.with_types(assignments);
             }
             | (ValBinder::Value(pattern), ValArgument::Value(argument)) => {

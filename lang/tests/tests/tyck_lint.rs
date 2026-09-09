@@ -18,6 +18,61 @@ use zydeco_statics::{
 };
 use zydeco_tests::utils::SourceCase;
 
+#[test]
+fn named_data_shapes_compare_structure_and_still_reject_different_payloads() {
+    let source = r#"
+let I = @(intrinsic(i64)) in
+let item : data | +Ok : I | +Err : Unit end = +Ok(0) in
+let named : (#item :: data | +Ok : I | +Err : Unit end) = (#item = item) in
+let wrong : (#item :: data | +Ok : Unit | +Err : Unit end) = (#item = +Ok()) in
+ret (named, wrong)
+"#;
+    let (mut statics, root) = SourceCase::checked_arena(source).unwrap();
+    assert!(LintChecker::new(&statics).validate(root).is_empty());
+    let named: Vec<_> = statics
+        .values
+        .iter()
+        .filter_map(|(id, node)| matches!(node, Value::Named(_)).then_some(*id))
+        .collect();
+    let pair = named
+        .iter()
+        .find_map(|left| {
+            named.iter().find_map(|right| {
+                let left_ty = statics.annotations_value[left];
+                let right_ty = statics.annotations_value[right];
+                let Some(Type::Label(zydeco_statics::syntax::Label(_, left_data))) =
+                    statics.normalized_at(left_ty)
+                else {
+                    return None;
+                };
+                let Some(Type::Label(zydeco_statics::syntax::Label(_, right_data))) =
+                    statics.normalized_at(right_ty)
+                else {
+                    return None;
+                };
+                let Some(Type::Data(left_data)) = statics.normalized_at(*left_data) else {
+                    return None;
+                };
+                let Some(Type::Data(right_data)) = statics.normalized_at(*right_data) else {
+                    return None;
+                };
+                let left_payload = statics.datas[left_data]
+                    .get(&zydeco_statics::syntax::CtorName("+Ok".into()))?;
+                let right_payload = statics.datas[right_data]
+                    .get(&zydeco_statics::syntax::CtorName("+Ok".into()))?;
+                (matches!(statics.normalized_at(left_payload), Some(Type::Primitive(_)))
+                    && matches!(statics.normalized_at(right_payload), Some(Type::Unit(_))))
+                .then_some((*left, right_ty))
+            })
+        })
+        .expect("fixture contains labeled data with distinct payload types");
+    statics.annotations_value.replace_existing(pair.0, pair.1);
+    assert_reports(&statics, root, |error| {
+        matches!(error,
+        LintError::TypeMismatch { node: LintNode::Value(value), .. } if *value == pair.0)
+    });
+}
+
 // The `fn` parameters are annotated on purpose: an annotation-free parameter is
 // checked before its use sites and the check dies with `MissingSolution`.
 const FIXTURE: &str = r#"

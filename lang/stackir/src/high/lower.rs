@@ -18,15 +18,15 @@ use zydeco_utils::{
 /// Source-level static-elimination failures are reported by the shared checker.
 #[derive(Clone, Debug, Error)]
 pub enum SpsLowerError {
-    #[error("internal compiler error: a value function survived static elimination")]
-    ResidualValueFunction { value: ss::ValueId },
+    #[error("internal compiler error: a static value operation survived static elimination")]
+    ResidualStaticValue { value: ss::ValueId },
 }
 
 impl SpsLowerError {
     /// The typed node blamed for the failure.
     fn value(&self) -> ss::ValueId {
         match self {
-            | Self::ResidualValueFunction { value } => *value,
+            | Self::ResidualStaticValue { value } => *value,
         }
     }
 
@@ -616,8 +616,11 @@ impl Lower for ss::ValueId {
                     value: tail.value,
                 }
             }
-            | ss::Value::ValAbs(_) | ss::Value::ValApp(_) => {
-                lo.lower_errors.push(SpsLowerError::ResidualValueFunction { value: *self });
+            | ss::Value::ValAbs(_)
+            | ss::Value::ValApp(_)
+            | ss::Value::Match(_)
+            | ss::Value::Int64Op(_) => {
+                lo.lower_errors.push(SpsLowerError::ResidualStaticValue { value: *self });
                 ValuePlan::pure(Hole.build(lo, site))
             }
             | ss::Value::Thunk(Thunk(body)) => {
@@ -876,7 +879,7 @@ mod tests {
             .run()
             .expect_err("unelaborated static syntax cannot lower");
         assert!(
-            matches!(errors.as_slice(), [SpsLowerError::ResidualValueFunction { value }] if *value == abstraction)
+            matches!(errors.as_slice(), [SpsLowerError::ResidualStaticValue { value }] if *value == abstraction)
         );
         // Internal fixtures need a useful report even without source spans.
         let _ = errors[0].to_report(&spans, &scoped, &statics);

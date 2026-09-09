@@ -20,6 +20,8 @@ use zydeco_utils::{err::Errorable, prelude::ArenaAccess};
 #[derive(Clone, Debug)]
 pub enum StaticEliminationError {
     UnresolvedApplication { function: ValueId },
+    UnresolvedMatch { value: ValueId },
+    UnresolvedInteger { value: ValueId },
     RuntimeValue { value: ValueId, ty: TypeId },
     RuntimeComputation { computation: CompuId, ty: TypeId },
     ReductionLimit { function: ValueId },
@@ -31,7 +33,9 @@ impl StaticEliminationError {
             | Self::UnresolvedApplication { function } | Self::ReductionLimit { function } => {
                 (*function).into()
             }
-            | Self::RuntimeValue { value, .. } => (*value).into(),
+            | Self::RuntimeValue { value, .. }
+            | Self::UnresolvedMatch { value }
+            | Self::UnresolvedInteger { value } => (*value).into(),
             | Self::RuntimeComputation { computation, .. } => (*computation).into(),
         }
     }
@@ -42,6 +46,10 @@ impl StaticEliminationError {
                 "value-function implementation is unavailable to static reduction"
             }
             | Self::RuntimeValue { .. } => "static-only value remains in a runtime payload",
+            | Self::UnresolvedMatch { .. } => "value match requires a statically known choice",
+            | Self::UnresolvedInteger { .. } => {
+                "value integer operation requires statically known operands"
+            }
             | Self::RuntimeComputation { .. } => {
                 "runtime computation requires a static-only representation"
             }
@@ -199,6 +207,7 @@ pub(crate) struct StaticElaborator<'a, 'db> {
     remaining_reductions: usize,
     purpose: Purpose,
     aliases: HashSet<DefId>,
+    application_site: Option<ValueId>,
 }
 
 mod value;
@@ -220,6 +229,7 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
             remaining_reductions: Self::MAX_REDUCTIONS,
             purpose: Purpose::Residualize,
             aliases: HashSet::new(),
+            application_site: None,
         };
         let env = Environment::default();
         let residual = match root {
@@ -260,6 +270,7 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
             remaining_reductions: Self::MAX_REDUCTIONS,
             purpose: Purpose::Inspect,
             aliases: HashSet::new(),
+            application_site: None,
         };
         // An unresolved type or value means evidence is unavailable. The
         // application checker owns that diagnostic. This evidence query

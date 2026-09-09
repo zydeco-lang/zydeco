@@ -1653,6 +1653,30 @@ fn value_translation(
             }
             .mbuild(tycker, env)?
         }
+        | Value::Match(Match { scrut, arms }) => {
+            let (env, scrut) = value_translation(tycker, env, scrut)?;
+            let arms = arms
+                .into_iter()
+                .map(|Matcher { binder, tail }| {
+                    let (local, binder) = value_pattern_translation(tycker, env.clone(), binder)?;
+                    let (_, tail) = value_translation(tycker, local, tail)?;
+                    Ok(Matcher { binder, tail })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let value = Alloc::alloc(tycker, Value::Match(Match { scrut, arms }), ty_, &env.ty);
+            (env, value)
+        }
+        | Value::Int64Op(Int64ValueOp { operation, operands: [left, right] }) => {
+            let (env, left) = value_translation(tycker, env, left)?;
+            let (env, right) = value_translation(tycker, env, right)?;
+            let value = Alloc::alloc(
+                tycker,
+                Value::Int64Op(Int64ValueOp { operation, operands: [left, right] }),
+                ty_,
+                &env.ty,
+            );
+            (env, value)
+        }
         | Value::ValAbs(Abs(binder, body)) => {
             let (env, binder) = match binder {
                 | ValBinder::Type(pattern) => {
