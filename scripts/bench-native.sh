@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Measure native code quality and runtime for representative Zydeco programs.
 #
-# Usage: scripts/bench-native.sh [runs] [file...]
+# Usage: scripts/bench-native.sh [--representation boxed|direct|local|shared] [runs] [file...]
 #
 # For each file, this script:
 #   1. builds AMD64 assembly and reports the number of fixed-heap allocation calls
@@ -12,12 +12,20 @@
 # To compare against the previous implementation, run this script from two git
 # worktrees at the relevant commits and diff the output.
 #
-# Set ZYDECO_DISABLE_UNBOXING=1 to build the same source without the unboxing
-# optimization, providing an in-tree A/B baseline.
+# Select a representation policy explicitly for an in-tree comparison.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+representation="local"
+if [[ "${1:-}" == "--representation" ]]; then
+    representation="${2:?expected boxed, direct, local, or shared}"
+    shift 2
+fi
+case "$representation" in
+    boxed|direct|local|shared) ;;
+    *) echo "unknown representation: $representation" >&2; exit 1 ;;
+esac
 runs="${1:-5}"
 shift || true
 
@@ -46,13 +54,13 @@ for file in "${files[@]}"; do
     trap 'rm -rf "$build_dir"' EXIT
 
     asm_file="$build_dir/out.s"
-    if ! "$bin" build -t asm --target-arch x86-64 "$file" -b "$build_dir" >"$asm_file" 2>/dev/null; then
+    if ! "$bin" build -t asm --representation "$representation" --target-arch x86-64 "$file" -b "$build_dir" >"$asm_file" 2>/dev/null; then
         echo "assembly build failed: $file" >&2
         continue
     fi
     alloc_sites="$(grep -Ec 'call zydeco_alloc_(scanned|opaque)' "$asm_file" || true)"
 
-    if ! "$bin" build -t exe --target-arch x86-64 "$file" -b "$build_dir" >/dev/null 2>&1; then
+    if ! "$bin" build -t exe --representation "$representation" --target-arch x86-64 "$file" -b "$build_dir" >/dev/null 2>&1; then
         echo "executable build failed: $file" >&2
         continue
     fi
@@ -81,5 +89,5 @@ INNER
         fi
     done
 
-    printf '%-40s alloc=%-4s best_of_%s=%ss\n' "$file" "$alloc_sites" "$runs" "$best"
+    printf '%-40s policy=%-6s alloc=%-4s best_of_%s=%ss\n' "$file" "$representation" "$alloc_sites" "$runs" "$best"
 done

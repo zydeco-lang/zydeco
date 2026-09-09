@@ -17,7 +17,50 @@ Native [activation lifetime](../references/compiler.md#c11-native-preparation-ac
 constrains frame pointers.
 Neither contract by itself proves that a proposed stack cell cannot escape.
 
-The analysis below is a design for extending local selection, not an account of the current implementation.
+The constraint analysis below is a design for extending local selection.
+The following experiment evaluates the implemented local boundary before extending it.
+
+## Configurable local representation experiment
+
+Different layout preferences should reuse the same validity evidence.
+[C10's policy boundary](../references/compiler.md#policy-selection) now lets a Rust policy select
+among locally justified opportunities, using either a policy type or a per-compilation enum.
+This makes small experiments independently reviewable while preserving one lowerer and one tracing convention.
+It configures compiler choices for runtime values; it does not parameterize the type checker's Rust arenas.
+
+The accepted experimental extension is local closure splitting: retain the environment
+and code as separate field words when the closure is only opened locally.
+This reuses variable field slots and closure opening; it needs no new calling convention.
+The environment transported to the code entry remains an ordinary value.
+The existing default is retained because the benefit depends on what survives earlier SPS normalization.
+
+The [comparison program](../../cli/examples/representations.rs) lowers each source once to SPSLow,
+then measures the resulting portable assembly for all policies.
+It also composes `Shared` with a const-generic field limit.
+On the checked-in fixtures, product/closure allocation **sites** are:
+
+| Source fixture | Boxed | Direct | Local | Shared | Shared, maximum 1 field | Shared, maximum 4 fields |
+| --- | --- | --- | --- | --- | --- | --- |
+| `core/representation-policies.zy` | 14 | 14 | 14 | 13 | 14 | 13 |
+| `core/local-normalization.zy` | 2 | 2 | 2 | 2 | 2 | 2 |
+| `core/gc-stress.zy` | 28 | 28 | 28 | 28 | 28 | 28 |
+| `builtin/argument-contract.zy` | 59 | 59 | 59 | 59 | 59 | 59 |
+| `std/storage-access.zy` | 85 | 85 | 85 | 85 | 85 | 85 |
+
+These are code counts from this implementation, not runtime allocation or speed measurements.
+The first fixture loses one two-word closure cell in its recursive walker;
+the maximum-one-field policy declines that expansion.
+It retains a runtime-derived wide integer and a second captured scalar across repeated traversal,
+with enough environment allocations to exceed the native semispace capacity.
+Native and AM Wasm tests check all four enum policies against the interpreter's result.
+Local IR tests separately cover cases that earlier source normalization usually removes,
+and block expansion when a value is passed, aliased, captured, or retained by a continuation.
+
+This evidence supports an opt-in closure experiment and a reusable comparison boundary.
+It does not establish a general speedup or justify a new default.
+Frame-resident products, mixed raw/reference fields, and representation-aware calls remain deferred:
+they need lifetime or entry evidence that the current policy cannot supply.
+The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduction and validation commands.
 
 ## Representation contracts at call boundaries
 

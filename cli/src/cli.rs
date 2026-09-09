@@ -12,6 +12,15 @@ pub enum BuildTarget {
     Exe,
 }
 
+/// Command-line spelling, translated to the compiler's representation policy at entry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum RepresentationChoice {
+    Boxed,
+    Direct,
+    Local,
+    Shared,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum TargetArchitecture {
     #[value(alias = "x86", alias = "amd64")]
@@ -111,6 +120,9 @@ pub enum Commands {
         /// Target backend
         #[arg(short, long, default_value = "exe")]
         target: BuildTarget,
+        /// Local representation policy for zasm, asm, exe, or wasm-am
+        #[arg(long)]
+        representation: Option<RepresentationChoice>,
         /// Build Directory
         #[arg(short = 'b', long)]
         build_dir: Option<PathBuf>,

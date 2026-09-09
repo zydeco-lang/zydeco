@@ -48,12 +48,15 @@ impl<'a> Lowerer<'a> {
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
         sps_low: &'a SpsLowProgram,
     ) -> Self {
+        Self::with_policy(spans, scoped, statics, sps_low, &crate::representation::Local)
+    }
+
+    pub fn with_policy<P: crate::representation::RepresentationPolicy + ?Sized>(
+        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
+        sps_low: &'a SpsLowProgram, policy: &P,
+    ) -> Self {
         let arena = AssemblyArena::default();
-        let unboxing = if std::env::var_os("ZYDECO_DISABLE_UNBOXING").is_some() {
-            crate::unbox::LocalUnboxing::default()
-        } else {
-            crate::unbox::LocalUnboxing::collect(sps_low)
-        };
+        let unboxing = crate::unbox::LocalUnboxing::with_policy(sps_low, policy);
         Self {
             allocator: IdAllocator::new(),
             arena,

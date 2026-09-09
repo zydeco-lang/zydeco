@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zydeco_cli::{
     BackendProgram, BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError,
-    DiagnosticRenderer, DocumentationCommand, NativeError, SourceFormatError, SourceFormatOutcome,
-    SourceFormatter, TargetArchitecture, TargetOs, WasmBackendKind,
+    DiagnosticRenderer, DocumentationCommand, NativeError, RepresentationStrategy,
+    SourceFormatError, SourceFormatOutcome, SourceFormatter, TargetArchitecture, TargetOs,
+    WasmBackendKind,
     documentation::{DocumentationRenderError, DocumentationRenderer},
 };
 use zydeco_dynamics::ProgKont;
@@ -46,6 +47,7 @@ impl Application {
                 target_os,
                 target_arch,
                 target,
+                representation,
                 build_dir,
                 runtime_dir,
                 execute,
@@ -63,6 +65,7 @@ impl Application {
                         .map_err(NativeError::UnsupportedHostOperatingSystem)?,
                 ),
                 execute,
+                representation.map(Into::into),
             ),
         }
     }
@@ -226,10 +229,15 @@ impl Application {
 
     fn build_source(
         &self, path: &Path, target: BuildTarget, options: BuildOptions, execute: bool,
+        representation: Option<RepresentationStrategy>,
     ) -> Result<i32, ApplicationError> {
+        if representation.is_some() && matches!(target, BuildTarget::Zir | BuildTarget::WasmSps) {
+            return Err(ApplicationError::RepresentationTarget);
+        }
         let analysis = self.analyze(path)?;
         let executable = self.compiler.executable_program(&analysis)?;
-        let backend = BackendProgram::lower(executable)?;
+        let backend = BackendProgram::lower(executable)?
+            .with_representation(representation.unwrap_or_default());
         match target {
             | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
             | BuildTarget::Zasm if execute => println!("{}", backend.execute_assembly()?),
@@ -298,6 +306,10 @@ impl Application {
 
 #[derive(Debug, Error)]
 enum ApplicationError {
+    #[error(
+        "--representation applies to zasm, asm, exe, and wasm-am; this target does not use assembly representation analysis"
+    )]
+    RepresentationTarget,
     #[error("documentation worker failed: {0}")]
     DocumentationWorker(std::io::Error),
     #[error(transparent)]

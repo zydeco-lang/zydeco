@@ -116,6 +116,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --target-arch 'Target architecture (defaults to host architecture)'
             cand -t 'Target backend'
             cand --target 'Target backend'
+            cand --representation 'Local representation policy for zasm, asm, exe, or wasm-am'
             cand -b 'Build Directory'
             cand --build-dir 'Build Directory'
             cand -r 'Runtime directory'

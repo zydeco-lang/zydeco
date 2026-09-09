@@ -646,16 +646,53 @@ and collector interior-pointer handling together.
 
 [LocalUnboxing](../../lang/assembly/src/unbox.rs) runs over SPSLow
 while producer/consumer relationships remain explicit.
-It marks immediate product construction/elimination pairs, direct closure forcing,
-and variable-bound products whose uses are all suitable projections.
+It marks immediate product construction/elimination pairs, direct closure forcing, variable-bound products
+whose uses are all suitable projections, and local closure bindings whose uses all open the closure.
 Lowering then omits the corresponding pack/unpack pair or expands a variable into field slots.
-Alias uses and escaping or unknown consumers require conservative treatment.
+Alias uses and escaping or unknown consumers retain the ordinary boxed representation.
+Escape classification follows occurrences of the candidate variable through values and residual stacks;
+an unrelated primitive, constructor, or closed block does not constitute an escape.
+SPSLow's closed-block invariant places captures in explicit environments and continuation residuals.
+
+### Policy selection
+
+[RepresentationPolicy](../../lang/assembly/src/representation.rs) separates a preference
+from the analysis that justifies it.
+The collector first establishes a compatible producer/consumer shape and the required local use evidence,
+then asks the policy about an `UnboxingOpportunity`: its reason and field-word count.
+Accepting every opportunity cannot waive an escape, width, or calling-contract restriction.
+Rejecting a closure's expansion also prevents expansion of an environment transported inside that boxed closure.
+Fields retain their ordinary tagged-word representation; the policy cannot assign raw scalar or pointer layouts.
+
+| Policy | Selected opportunities |
+| --- | --- |
+| `Boxed` | Keep residual product and closure cells. Earlier SPS normalization still runs. |
+| `Direct` | Immediate product elimination and opening of a syntactic closure package. |
+| `Local` (default) | `Direct`, plus a variable-bound product used only through compatible projections. |
+| `Shared` (experimental) | `Local`, plus a variable-bound closure used only through closure openings. |
+
+Each policy is a Rust type. `RepresentationStrategy` selects the same policies through a runtime enum.
+`LoweringPipeline::with_representation` accepts a policy type or the enum and produces an immutable assembly program;
+the policy is consumed during compilation and adds no runtime representation dispatch.
+Custom Rust policies can restrict selection by reason or width without replacing the collector or the emitters.
+
+`CommandCompiler::with_representation` and `BackendProgram::with_representation` provide per-compilation enum selection.
+Changing a backend program's strategy invalidates its cached portable assembly.
+Native frame preparation consumes the same policy before establishing its frame and root maps.
+The CLI's `build --representation` applies to ZASM, AMD64 assembly/executables, and AM Wasm.
+An explicit selection for Zir or SPS Wasm is rejected because those paths do not consume this analysis.
+The old process-wide `ZYDECO_DISABLE_UNBOXING` switch has been removed; select `Boxed` explicitly instead.
 
 The delivered analysis is local representation selection.
 It does not implement the proposed three-way choice among unboxed fields, stack-allocated products,
 and region-allocated products, or interprocedural escape propagation.
 Those choices and their constraints remain in [escape and unboxing](../proposals/escape-unboxing.md).
 Local analysis tests and core execution cases should verify both allocation removal and the uses that retain boxing.
+The [policy experiment](../../cli/examples/representations.rs) compares residual allocation sites and field words,
+including a Rust const-generic width limit; these are static code counts, not executed allocations or peak memory.
+The [execution fixture](../../lib/tests/core/representation-policies.zy) exercises a locally opened recursive closure
+with live captured values.
+See [the contribution workflow](../../CONTRIBUTING.md#representation-experiments) for reproducible commands.
 
 ## C11. Native preparation, activation frames, and AMD64 emission
 

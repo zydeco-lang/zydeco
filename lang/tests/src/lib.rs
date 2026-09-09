@@ -8,7 +8,7 @@ pub mod utils {
     use walkdir::WalkDir;
     use zydeco_cli::{
         BuildOptions, CommandCompiler, CompileError, DiagnosticRenderer, NativeError,
-        TargetArchitecture, TargetOs, WasmBackendKind,
+        RepresentationStrategy, TargetArchitecture, TargetOs, WasmBackendKind,
     };
     use zydeco_session::{AnalysisError, DesugarError};
     use zydeco_statics::{TyckDiagnosticCode, syntax::TermAnnId};
@@ -47,6 +47,7 @@ pub mod utils {
         path: PathBuf,
         arguments: Vec<String>,
         standard_input: Option<String>,
+        representation: RepresentationStrategy,
     }
 
     /// A source fixture whose root is checked without imposing the executable contract.
@@ -94,7 +95,12 @@ pub mod utils {
     impl SourceProgram {
         pub fn setup(relative: impl Into<PathBuf>) -> Self {
             let path = Self::resolve(relative.into());
-            Self { path, arguments: Vec::new(), standard_input: None }
+            Self {
+                path,
+                arguments: Vec::new(),
+                standard_input: None,
+                representation: RepresentationStrategy::default(),
+            }
         }
 
         fn resolve(relative: PathBuf) -> PathBuf {
@@ -115,6 +121,12 @@ pub mod utils {
         /// Feed the program this standard input instead of immediate EOF.
         pub fn with_stdin(mut self, input: impl Into<String>) -> Self {
             self.standard_input = Some(input.into());
+            self
+        }
+
+        /// Select the representation policy for AMD64 and AM Wasm execution.
+        pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
+            self.representation = strategy;
             self
         }
 
@@ -196,7 +208,9 @@ pub mod utils {
                 TargetArchitecture::X86_64,
                 operating_system,
             );
-            let backend = CommandCompiler::default().lower(&self.path)?;
+            let backend = CommandCompiler::default()
+                .with_representation(self.representation)
+                .lower(&self.path)?;
             let assembly = backend.emit_amd64(operating_system);
             let foreign_libraries = backend.foreign_libraries();
             let executable = options.link_amd64("test", &assembly, &foreign_libraries)?;
@@ -208,7 +222,9 @@ pub mod utils {
 
         fn run_wasm(&self, backend_kind: WasmBackendKind) -> Result<TestRun, CaseError> {
             let build_directory = tempfile::tempdir()?;
-            let backend = CommandCompiler::default().lower(&self.path)?;
+            let backend = CommandCompiler::default()
+                .with_representation(self.representation)
+                .lower(&self.path)?;
             let module = match backend_kind {
                 | WasmBackendKind::AbstractMachine => backend.emit_wasm_am()?,
                 | WasmBackendKind::SpsLow => backend.emit_wasm_sps()?,

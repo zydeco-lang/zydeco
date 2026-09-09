@@ -1,4 +1,4 @@
-use crate::TargetOs;
+use crate::{RepresentationStrategy, TargetOs};
 use std::{
     path::Path,
     sync::{Arc, OnceLock},
@@ -23,6 +23,7 @@ use zydeco_utils::pass::CompilerPass;
 pub struct CommandCompiler {
     session: CompilerSession,
     lint_types: bool,
+    representation: RepresentationStrategy,
 }
 
 /// The interaction of a checked source run: its standard output, standard error, and exit status.
@@ -34,6 +35,12 @@ pub struct TestInteraction {
 }
 
 impl CommandCompiler {
+    /// Select local value representations for assembly-derived targets.
+    pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
+        self.representation = strategy;
+        self
+    }
+
     pub fn documentation_example_request(
         &self, example: &zydeco_session::source::DocumentationExample,
     ) -> Result<
@@ -182,6 +189,7 @@ impl CommandCompiler {
 
     pub fn lower(&self, path: &Path) -> Result<BackendProgram, CompileError> {
         BackendProgram::lower(self.executable(path)?)
+            .map(|program| program.with_representation(self.representation))
     }
 }
 
@@ -193,6 +201,7 @@ pub struct BackendProgram {
     pub sps_low: SpsLowProgram,
     /// Populated only when an assembly-derived target is requested.
     assembly: OnceLock<AssemblyProgram>,
+    representation: RepresentationStrategy,
 }
 
 /// One source-level SPS lowering failure with the provenance its reports need.
@@ -239,7 +248,28 @@ impl BackendProgram {
                 }
             };
         let sps_low = SpsLowPipeline::new(&scoped, &statics).run(stackir);
-        Ok(Self { spans, scoped, statics, sps_low, assembly: OnceLock::new() })
+        Ok(Self {
+            spans,
+            scoped,
+            statics,
+            sps_low,
+            assembly: OnceLock::new(),
+            representation: RepresentationStrategy::default(),
+        })
+    }
+
+    /// Reconfigure assembly lowering, invalidating any previously cached assembly.
+    /// SPSLow and its direct Wasm backend are independent of this local policy.
+    pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
+        if self.representation != strategy {
+            self.assembly.take();
+            self.representation = strategy;
+        }
+        self
+    }
+
+    pub fn representation(&self) -> RepresentationStrategy {
+        self.representation
     }
 
     pub fn render_sps_low(&self) -> String {
@@ -261,10 +291,12 @@ impl BackendProgram {
     }
 
     pub fn execute_assembly(self) -> Result<AssemblyOutcome, CompileError> {
-        let Self { spans, scoped, statics, sps_low, assembly } = self;
-        let assembly = assembly
-            .into_inner()
-            .unwrap_or_else(|| LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run());
+        let Self { spans, scoped, statics, sps_low, assembly, representation } = self;
+        let assembly = assembly.into_inner().unwrap_or_else(|| {
+            LoweringPipeline::new(&spans, &scoped, &statics, &sps_low)
+                .with_representation(representation)
+                .run()
+        });
         Self::validate_no_foreign_imports(&assembly, "ZASM interpreter")?;
         match zydeco_assembly::interp::Interpreter::new(assembly)
             .run()
@@ -277,6 +309,7 @@ impl BackendProgram {
 
     pub fn emit_amd64(&self, operating_system: TargetOs) -> String {
         let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low)
+            .with_representation(self.representation)
             .run_native()
             .expect("native lowering must establish valid frame entry contexts");
         let format = match operating_system {
@@ -321,9 +354,12 @@ impl BackendProgram {
             .map_err(CompileError::WasmSps)
     }
 
-    fn assembly(&self) -> &AssemblyProgram {
+    /// The immutable assembly product selected by this program's representation policy.
+    pub fn assembly(&self) -> &AssemblyProgram {
         self.assembly.get_or_init(|| {
-            LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low).run()
+            LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low)
+                .with_representation(self.representation)
+                .run()
         })
     }
 

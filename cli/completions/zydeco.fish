@@ -81,6 +81,10 @@ asm\t''
 wasm-am\t''
 wasm-sps\t''
 exe\t''"
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l representation -d 'Local representation policy for zasm, asm, exe, or wasm-am' -r -f -a "boxed\t''
+direct\t''
+local\t''
+shared\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'

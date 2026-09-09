@@ -534,6 +534,10 @@ Each completed representation has one selected program root and the storage need
 Phase-owned builders publish immutable products; later metadata lives in phase-local deltas.
 [C2](docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) defines allocation
 and provenance, and C8–C9 define lexical ownership before control-flow lowering.
+Local representation selection accepts a Rust policy type or a per-compilation strategy enum;
+[C10's policy boundary](docs/references/compiler.md#policy-selection) keeps preferences separate
+from the evidence that permits removing a cell.
+Policies feed assembly lowering before stack and frame validation.
 
 ### Query-Based Analysis
 
@@ -966,8 +970,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
   Both variants have growing, non-collecting heaps.
   The abstract-machine variant has a fixed one-megabyte operand/control stack;
   the SPS variant allocates persistent stack frames and boxes products without ZASM's local-unboxing analysis.
-  The shared control-transfer ABI cannot represent a host-created lazy tail closure for a multi-argument process fold.
-  The Node.js test host therefore rejects two or more arguments in that operation and uses deterministic randomness.
+  The Node.js test host uses deterministic randomness.
 - Native foreign imports support only the returning subset described above;
   callbacks and C-to-Zydeco exports are not implemented.
   Checking a source is not evidence that a foreign library can be loaded or linked.

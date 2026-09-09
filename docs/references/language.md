@@ -692,8 +692,7 @@ Interpreter byte slicing shares a window; native slicing currently copies.
 Repeated concatenation can be quadratic.
 Immutability guarantees observations, not identical costs on every backend.
 
-The supplied Node host is a test embedding: randomness is deterministic,
-and its process argument fold rejects two or more arguments.
+The supplied Node host is a test embedding: randomness is deterministic.
 Native FFI requires installed libraries, and the CLI does not execute Wasm modules.
 There are no source raw pointers, layout annotations, manual allocation, or primitive concurrency interfaces.
 Runtime-managed capabilities provide the current resource boundary.

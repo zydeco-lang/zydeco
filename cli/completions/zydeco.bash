@@ -141,7 +141,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-t -b -r -x -h --target-os --target-arch --target --build-dir --runtime-dir --execute --lint-types --help"
+            opts="-t -b -r -x -h --target-os --target-arch --target --representation --build-dir --runtime-dir --execute --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -161,6 +161,10 @@ _zydeco() {
                     ;;
                 -t)
                     COMPREPLY=($(compgen -W "zir zasm asm wasm-am wasm-sps exe" -- "${cur}"))
+                    return 0
+                    ;;
+                --representation)
+                    COMPREPLY=($(compgen -W "boxed direct local shared" -- "${cur}"))
                     return 0
                     ;;
                 --build-dir)

@@ -136,6 +136,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--target-arch', '--target-arch', [CompletionResultType]::ParameterName, 'Target architecture (defaults to host architecture)')
             [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Target backend')
             [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Target backend')
+            [CompletionResult]::new('--representation', '--representation', [CompletionResultType]::ParameterName, 'Local representation policy for zasm, asm, exe, or wasm-am')
             [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('--build-dir', '--build-dir', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Runtime directory')

@@ -152,8 +152,43 @@ node lang/tests/wasm-host.mjs build/main.am.wasm
 node lang/tests/wasm-host.mjs build/main.sps.wasm
 ```
 
-This is a test host: randomness is deterministic, and its argument fold rejects two or more program arguments.
+This is a test host: randomness is deterministic.
 See the [WebAssembly ABI and limitations](DESIGN.md#webassembly-backend) before writing another embedding.
+
+### Representation Experiments
+
+Select a local representation strategy per build:
+
+```sh
+zydeco build lib/tests/core/representation-policies.zy --target asm --target-arch x86-64 --representation shared
+zydeco build lib/tests/core/representation-policies.zy --target wasm-am --representation boxed
+```
+
+The available strategies are `boxed`, `direct`, `local` (default), and experimental `shared`.
+[Compiler policy selection](docs/references/compiler.md#policy-selection) owns their invariants and target scope.
+Earlier SPS normalization is common to all strategies, including `boxed`.
+
+Compare static allocation sites while reusing one checked SPSLow program for each source:
+
+```sh
+cargo run -p zydeco-cli --example representations -- \
+  lib/tests/core/representation-policies.zy lib/tests/core/gc-stress.zy
+```
+
+The CSV reports product/closure allocation sites and payload words, eliminated cells, and expanded variables.
+It also runs const-generic `FieldLimit<Shared, 1>` and `FieldLimit<Shared, 4>` policies
+to demonstrate extending selection in Rust.
+It does not measure executed allocations, peak memory, or runtime speed.
+For native timing, use `scripts/bench-native.sh --representation shared 5 path/to/main.zy`
+and record the runtime profile settings described above.
+
+Focused validation covers justified and blocked choices, cached selection, and execution:
+
+```sh
+cargo test -p zydeco-assembly --lib
+cargo test -p zydeco-cli --test representation
+cargo test -p zydeco-tests --test representation_policies
+```
 
 ## Use the Interactive REPL
 
