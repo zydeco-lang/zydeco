@@ -425,7 +425,7 @@ while its `that` variant contributes the same value parameter to the nearest `be
 Plain `param` continues to introduce type functions and computations.
 `let val` is ordinary non-recursive binding sugar.
 Juxtaposition, `value |> function`, `function <| value`, and the view pattern `function ~> pattern` are one operation;
-evaluating it does no more than move value data into its memory representation.
+application can rearrange values, select known alternatives, and calculate integers without entering computations.
 Only the nested pattern of a view contributes bindings and refutability.
 Static composition admits partial applications, products, constructors, packages, and higher-order parameters
 and results under the [shared residual contract](docs/references/language.md#10-static-elimination).
@@ -858,6 +858,8 @@ The [text and library contracts](lib/std/README.md#text-model)
 and [filesystem design](docs/proposals/filesystem.md) describe these boundaries independently of runtime storage.
 
 Explicit storage is available through the ordinary [memory library](lib/std/memory/package.zy).
+The [static builder](lib/std/memory/static-layout.zy) computes checked plans with value functions,
+exposes their placement information, and shares codecs with the runtime builder.
 Its [owning design](docs/proposals/bytes.md#explicit-storage-contracts) specifies typed storage,
 source-composed alignment and padding, and the boundary between logical values, concrete buffers,
 and existing foreign borrowing.

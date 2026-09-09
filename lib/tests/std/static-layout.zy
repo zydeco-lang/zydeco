@@ -1,0 +1,115 @@
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Bytes;
+    /UInt8; /UInt32; /Int64; /numeric; /bytes; /process; builtin) :
+  @(import("../../std/builtin.zy")) that
+  let make_memory = @(import("../../std/memory/static-layout.zy")) in
+  let (= Plan, = Layout, memory) = builtin |> make_memory in
+  let Representation = @(import("../../std/memory/representation.type.zy")) in
+  let int = numeric/int64 in
+  let fail = { ! process/exit 1 } in
+  let ! ensure (actual : Int64) (expected : Int64) (next : Thk OS) : OS =
+    ! int/eq OS actual expected next fail
+  in
+  let ! realize (A : VType) (R : CType) (layout : Layout A)
+    (no : Thk R) (yes : Thk (Representation A -> R))
+  : R =
+      match layout
+      | +Err(_) => ! no
+      | +Ok(plan) => ! yes (memory/realize A plan)
+      end
+  in
+  let ! check_padding (next : Thk OS) : OS =
+    ! realize Unit OS (memory/padding 3) fail {
+      fn (= Stored, repr) =>
+        ! repr/store OS () fail {
+          fn stored =>
+            do actual <- ! repr/bytes stored;
+            do expected <- ! bytes/from_string "\0\0\0";
+            ! bytes/eq OS actual expected {
+              ! realize Unit OS memory/unit fail {
+                fn (= Stored, repr) =>
+                  ! ensure repr/size 0 {
+                    ! repr/store OS () fail {
+                      fn stored =>
+                        do empty <- ! repr/bytes stored;
+                        do size <- ! bytes/length empty;
+                        ! ensure size 0 next
+                    }
+                  }
+              }
+            } fail
+        }
+    }
+  in
+  let record = memory/align (UInt8 * UInt32) 16
+    (
+      memory/product UInt8 UInt32 memory/uint8 memory/uint32
+    ) in
+  let verified =
+    match record
+    | +Err(_) => fail
+    | +Ok(plan) =>
+      let shape = memory/inspect (UInt8 * UInt32) plan in
+      let code =
+        match shape/form
+        | +Product(fields) =>
+          match (shape/size, shape/alignment, fields/offset, fields/left/size, fields/right/size)
+          | (16, 16, 4, 1, 4) => 0
+          | _ => 2
+          end
+        | _ => 3
+        end
+      in
+      {
+        ! ensure code 0 {
+          ! realize (UInt8 * UInt32) OS record fail {
+            fn (= Stored, repr) =>
+              ! ensure repr/size 16 {
+                ! ensure repr/alignment 16 {
+                  ! repr/store OS (7 : UInt8, 16909060 : UInt32) fail {
+                    fn stored =>
+                      do buffer <- ! repr/bytes stored;
+                      ! repr/load OS stored fail {
+                        fn (tag, payload) =>
+                          ! numeric/uint8/eq OS tag 7 {
+                            ! numeric/uint32/eq OS payload 16909060 {
+                              ! repr/from_bytes OS buffer fail {
+                                fn copied =>
+                                  do copy <- ! repr/bytes copied;
+                                  ! bytes/eq OS buffer copy {
+                                    do expected <- ! bytes/from_string
+                                      "\u{7}\0\0\0\u{4}\u{3}\u{2}\u{1}\0\0\0\0\0\0\0\0";
+                                    ! bytes/eq OS buffer expected {
+                                      do bad_gap <- ! bytes/from_string
+                                        "\u{7}X\0\0\u{4}\u{3}\u{2}\u{1}\0\0\0\0\0\0\0\0";
+                                      do bad_tail <- ! bytes/from_string
+                                        "\u{7}\0\0\0\u{4}\u{3}\u{2}\u{1}\0\0\0\0\0\0\0X";
+                                      do long <- ! bytes/append buffer buffer;
+                                      ! bytes/slice OS buffer 0 15 fail {
+                                        fn short =>
+                                          ! repr/from_bytes OS short {
+                                            ! repr/from_bytes OS long {
+                                              ! repr/from_bytes OS bad_gap {
+                                                ! repr/from_bytes OS bad_tail {
+                                                  ! check_padding { ! process/exit 0 }
+                                                } { fn _ => ! fail }
+                                              } { fn _ => ! fail }
+                                            } { fn _ => ! fail }
+                                          } { fn _ => ! fail }
+                                      }
+                                    } fail
+                                  } fail
+                              }
+                            } fail
+                          } fail
+                      }
+                  }
+                }
+              }
+          }
+        }
+      }
+    end
+  in
+  ! verified
+end

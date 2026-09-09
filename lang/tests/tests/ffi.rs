@@ -190,7 +190,9 @@ fn native_c_boundary_executes_the_compositional_protocol() {
         TargetArchitecture::X86_64,
         operating_system,
     );
-    for fixture in ["boundary.zy", "representation.zy", "storage-access.zy", "integers.zy"] {
+    for fixture in
+        ["boundary.zy", "representation.zy", "static-layout.zy", "storage-access.zy", "integers.zy"]
+    {
         let backend = CommandCompiler::default().lower(&FfiCase::path(fixture)).unwrap();
         let executable = options
             .link_amd64(

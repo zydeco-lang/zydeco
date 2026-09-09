@@ -67,9 +67,9 @@ Tails are ordinary reusable computations, and host runtimes need no special clos
 [Argument semantics](../../docs/references/language.md#13-primitive-values-and-capabilities) specify lookup failures
 and repeated forcing.
 
-The optional `memory/package.zy` builder is imported directly, like the control libraries.
-Its explicit signature prescribes abstract layout and storage types; this is a representation contract rather
-than an interface inferred from the concrete byte implementation.
+The optional `memory/package.zy` and `memory/static-layout.zy` builders are imported directly,
+like the control libraries.
+Their explicit signatures prescribe abstract layouts, plans, and storage types.
 See [explicit storage](#explicit-storage).
 
 ## Source layout
@@ -94,6 +94,9 @@ numeric/package.zy         the ten width modules and their capability dictionari
 text/package.zy            cross-representation text operations
 
 memory/package.zy          layout composition and checked concrete storage
+memory/static-layout.zy    value-calculated plans with inspectable placement
+memory/size.zy             total checked size and alignment calculations
+memory/shape.zy            inspectable scalar widths and product placement
 memory/allocation.zy       allocator service and allocation computations
 memory/access.zy           checked offset reads and caller-provided destinations
 memory/package.type.zy     abstract layout builder interface
@@ -282,6 +285,34 @@ Grapheme segmentation and normalization should be added as a separate text layer
 of these foundational operations.
 
 ## Explicit storage
+
+Two optional builders share the [layout laws](../../docs/proposals/bytes.md#layout-laws) and byte codecs.
+Use `memory/static-layout.zy` when source value functions can determine placement;
+use `memory/package.zy` when sizes and alignment come from runtime computations.
+
+The static builder returns a `Result` containing an opaque successful plan:
+
+```zydeco
+let make_memory = @(import("memory/static-layout.zy")) in
+let (= Plan, = Layout, memory) = builtin |> make_memory in
+let record = memory/align (UInt8 * UInt32) 16
+  (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
+match record
+| +Err(error) => ...
+| +Ok(plan) =>
+  let shape = memory/inspect (UInt8 * UInt32) plan in
+  let (= Stored, repr) = memory/realize (UInt8 * UInt32) plan in
+  ! repr/store OS ((7 : UInt8), (16909060 : UInt32)) failure { fn stored => ... }
+end
+```
+
+`shape` exposes `size`, `alignment`, and `form`. Product forms contain `offset`, `left`,
+and `right`; scalar forms retain their original `width` through alignment changes.
+Both `inspect` and `realize` are value functions.
+The [complete byte example](../tests/std/static-layout.zy), [buffer example](../tests/std/static-storage-access.zy),
+and [C example](../tests/ffi/static-layout.zy) exercise the resulting interface.
+[Static-plan rules and limits](../../docs/proposals/bytes.md#static-layout-plans) explain construction errors,
+runtime transport, and the remaining boundary before representation-aware calls.
 
 Import [memory/package.zy](memory/package.zy) and apply it to the Builtin package:
 

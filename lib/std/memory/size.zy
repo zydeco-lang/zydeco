@@ -1,0 +1,64 @@
+-- Total value calculations for nonnegative byte counts and power-of-two alignments.
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Int64 = @(intrinsic(i64)) in
+  let Result = @(import("../data/result.zy")) in
+  let Error = @(import("layout-error.zy")) in
+  let add_bits = @(intrinsic(i64_add)) in
+  let sub_bits = @(intrinsic(i64_sub)) in
+  let bit_and = @(intrinsic(i64_and)) in
+  let compare = @(intrinsic(i64_compare)) in
+
+  let val bind (A : VType) (B : VType) (result : Result A Error)
+    (next : val pi (value : A) . Result B Error)
+  : Result B Error =
+      match result
+      | +Err(error) => +Err(error)
+      | +Ok(value) => next value
+      end
+  in
+  let val maximum (left : Int64) (right : Int64) : Int64 =
+    match compare left right
+    | -1 => right
+    | _ => left
+    end
+  in
+  let val size (value : Int64) : Result Int64 Error =
+    match compare value 0
+    | -1 => +Err(+NegativeSize())
+    | _ => +Ok(value)
+    end
+  in
+  let val alignment (value : Int64) : Result Int64 Error =
+    match compare value 1
+    | -1 => +Err(+InvalidAlignment())
+    | _ =>
+      match bit_and value (sub_bits value 1)
+      | 0 => +Ok(value)
+      | _ => +Err(+InvalidAlignment())
+      end
+    end
+  in
+  let val add (left : Int64) (right : Int64) : Result Int64 Error =
+    bind Int64 Int64 (size left) (
+      val left =>
+        bind Int64 Int64 (size right) (
+          val right =>
+            match compare left (sub_bits 9223372036854775807 right)
+            | 1 => +Err(+SizeOverflow())
+            | _ => +Ok(add_bits left right)
+            end
+        )
+    )
+  in
+  let val round_up (count : Int64) (boundary : Int64) : Result Int64 Error =
+    bind Int64 Int64 (alignment boundary) (
+      val boundary =>
+        bind Int64 Int64 (add count (sub_bits boundary 1)) (
+          val rounded =>
+            +Ok(bit_and rounded (sub_bits 0 boundary))
+        )
+    )
+  in
+  (= bind, = maximum, = size, = alignment, = add, = round_up)
+end

@@ -1,0 +1,8 @@
+begin
+  let Unit = @(intrinsic(unit)) in
+  data
+  | +NegativeSize : Unit
+  | +InvalidAlignment : Unit
+  | +SizeOverflow : Unit
+  end
+end

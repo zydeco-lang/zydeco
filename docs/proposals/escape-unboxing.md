@@ -69,11 +69,12 @@ can a caller use its chosen representation directly as a function argument or re
 That would make representation choice part of an interface rather than merely an allocation optimization.
 The current implementation supplies useful storage evidence but does not yet supply a calling convention.
 
-There are three different descriptions in the implementation:
+There are four different descriptions in the implementation:
 
 | Description | Evidence available today | What it does not establish |
 | --- | --- | --- |
 | Source `Representation A` | An abstract stored type, runtime size/alignment, and checked codecs | A statically selected argument width or register class |
+| Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
 | SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
 | Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
 
@@ -93,12 +94,16 @@ Changing only the caller's packing would therefore change the stack shape expect
 Automatic layout-directed calls are deferred.
 A modular extension needs the following boundaries in order:
 
-1. **Static evidence from source composition.** Define a total, statically reducible representation description
-   whose normalization agrees with the [existing storage laws](bytes.md#layout-laws).
-   Its witness must identify the chosen representation, including field widths and reference-bearing fields.
-   Today's `Layout A` is a thunk and `realize` performs computation; a runtime `Int64` size field is not such a witness.
-   `Ret` alone does not authorize compile-time execution of an arbitrary realizer.
-   This stage should preserve ordinary source composition rather than assign layout through compiler annotations.
+1. **Representation identity from source composition.** The implemented
+   [static layout plans](bytes.md#static-layout-plans) calculate and validate scalar/product byte placement
+   with ordinary value functions, expose its shape, and use the same codecs as runtime layout construction.
+   They establish the source-calculation part of this prerequisite.
+   The remaining witness must distinguish particular representations in an interface
+   and describe reference-bearing components.
+   `Plan A` alone does neither: different placements for `A` share its type,
+   and a transported plan may have runtime metadata.
+   An entry contract needs explicit evidence at the call boundary; a compiler policy cannot infer permission
+   to change an ABI from an arbitrary `Int64` field.
 2. **One entry contract for both ends.** Extend the checked SPSLow boundary with ordered argument/result components
    and representation evidence shared by direct calls, indirect calls, closures, and return continuations.
    Unknown representations require a uniform transport or a checked adapter;
@@ -119,6 +124,14 @@ retain managed fields across collection, and verify that padding or raw scalar b
 Polymorphic callers, recursive calls, and ordinary boxed adapters must continue to agree on the entry contract.
 Until these prerequisites are implemented, explicit buffers and typed codecs remain the accepted interface;
 the local optimization described below can progress independently.
+
+The next bounded experiment is a representation-indexed interface for one fixed scalar product,
+initially transported through the existing stored-buffer handle.
+That isolates identity agreement from target placement: matching interfaces should compose,
+and a different alignment or field width should fail before lowering.
+After that boundary is usable, the shared component contract can enable direct/indirect calls
+to choose another transport under the existing Rust policy configuration.
+Raw scalar slots and mixed reference layouts remain deferred until entry and tracing evidence agree.
 
 ## Design
 

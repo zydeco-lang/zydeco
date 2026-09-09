@@ -1,0 +1,112 @@
+-- Codec construction consumes placements already established by a layout builder.
+begin
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Bytes; /Int64; /UInt8;
+    /numeric; /bytes) : @(import("../builtin.zy")) that
+  let int = numeric/int64 in
+  let Descriptor = @(import("descriptor.type.zy")) in
+  let Representation = @(import("representation.type.zy")) in
+  let fix zeros (count : Int64) : Ret Bytes =
+    ! int/eq (Ret Bytes) count 0 bytes/empty {
+      ! int/eq (Ret Bytes) count 1 { ! bytes/singleton (0 : UInt8) } {
+        do half <- ! int/div count 2;
+        do prefix <- ! zeros half;
+        do doubled <- ! bytes/append prefix prefix;
+        do remainder <- ! int/mod count 2;
+        ! int/eq (Ret Bytes) remainder 0 { ret doubled } {
+          do last <- ! bytes/singleton (0 : UInt8);
+          ! bytes/append doubled last
+        }
+      }
+    }
+  in
+  let ! extend (buffer : Bytes) (count : Int64) : Ret Bytes =
+    do padding <- ! zeros count;
+    ! bytes/append buffer padding
+  in
+  let val scalar (A : VType) (size : Int64)
+    (write : Thk (A -> Ret Bytes))
+    (read : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R))
+  : Descriptor A = (= size, #alignment = size, = write, = read) in
+  let val padding (count : Int64) : Descriptor Unit =
+    (#size = count, #alignment = 1,
+      #write = { fn _ => ! zeros count },
+      #read = { fn R _ _ yes => ! yes () })
+  in
+  let val product (A : VType) (B : VType) (left : Descriptor A) (right : Descriptor B)
+    (offset : Int64) (size : Int64) (alignment : Int64) (gap : Int64) (tail : Int64)
+  : Descriptor (A * B) =
+      (
+        = size,
+        = alignment,
+        #write = {
+          fn (a, b) =>
+            do first <- ! left/write a;
+            do prefix <- ! extend first gap;
+            do second <- ! right/write b;
+            do body <- ! bytes/append prefix second;
+            ! extend body tail
+        },
+        #read = {
+          fn R buffer no yes =>
+            ! bytes/slice R buffer 0 left/size no {
+              fn first =>
+                ! bytes/slice R buffer offset right/size no {
+                  fn second =>
+                    ! left/read R first no {
+                      fn a => ! right/read R second no { fn b => ! yes (a, b) }
+                    }
+                }
+            }
+        }
+      )
+  in
+  let val align (A : VType) (layout : Descriptor A) (size : Int64) (alignment : Int64)
+    (tail : Int64)
+  : Descriptor A =
+      (
+        = size,
+        = alignment,
+        #write = {
+          fn value =>
+            do body <- ! layout/write value;
+            ! extend body tail
+        },
+        #read = {
+          fn R buffer no yes =>
+            ! bytes/slice R buffer 0 layout/size no { fn body => ! layout/read R body no yes }
+        }
+      )
+  in
+  let val realize (A : VType) (layout : Descriptor A) : Representation A =
+    (
+      (
+        #Stored = Bytes,
+        (
+          #size = layout/size,
+          #alignment = layout/alignment,
+          #store = {
+            fn R value no yes =>
+              do buffer <- ! layout/write value;
+              ! bytes/aligned R buffer layout/alignment no yes
+          },
+          #load = layout/read,
+          #bytes = { fn buffer => ret buffer },
+          #from_bytes = {
+            fn R buffer no yes =>
+              do length <- ! bytes/length buffer;
+              ! int/eq R length layout/size {
+                ! layout/read R buffer no {
+                  fn value =>
+                    do canonical <- ! layout/write value;
+                    ! bytes/eq R buffer canonical {
+                      ! bytes/aligned R buffer layout/alignment no yes
+                    } no
+                }
+              } no
+          }
+        )
+      ) : Representation A
+    )
+  in
+  (= scalar, = padding, = product, = align, = realize)
+end

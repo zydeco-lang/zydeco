@@ -28,20 +28,22 @@ The [cost table](../../lib/std/README.md#byte-operation-costs) makes these targe
 A `Bytes` value alone does not say where fields live, how many bytes a scalar occupies,
 or which alignment a borrowed address satisfies.
 An ordinary Zydeco product also leaves its physical layout to the compiler.
-The implemented [memory library](../../lib/std/memory/package.zy) supplies a first explicit representation boundary:
-a logical type `A` has a source-authored `Layout A`, which can be realized into a storage contract.
+The implemented memory libraries supply an explicit representation boundary:
+a logical type `A` has a source-authored layout, which can be realized into a storage contract.
 The concrete stored payload is one contiguous immutable buffer, without retaining the original logical product.
 The surrounding runtime value remains a host handle.
 
 ### Descriptions, computations, and abstract storage
 
-`Layout A` is abstract. The library constructs layouts with ordinary total value functions:
-`product A B left right`, `padding count`, and `align A boundary layout`.
+The [runtime builder](../../lib/std/memory/package.zy) has an abstract `Layout A`.
+It constructs layouts with ordinary total value functions: `product A B left right`,
+`padding count`, and `align A boundary layout`.
 Their bodies construct thunks; applying these value functions does not execute numeric arithmetic during type checking.
 Forcing a layout through `realize A R layout no yes` calculates
 and validates its metadata using ordinary returning computations, then selects one of the supplied `R` continuations.
 The choice of `R : CType` belongs to the caller, so construction requires no `OS` stack.
-[Value functions](../references/language.md#8-value-functions-and-views) retain their existing static boundary.
+The static builder below performs the metadata calculation
+within [value functions](../references/language.md#8-value-functions-and-views).
 
 A successful realization supplies [Representation A](../../lib/std/memory/representation.type.zy),
 an existential package with an abstract `Stored : VType`, `size`, `alignment`, and four operations:
@@ -69,13 +71,83 @@ Likewise, two independently opened contracts have no type-level proof that their
 These are remaining expressiveness limits: the nominal storage boundary is enforced,
 while its byte-level laws are implemented and tested by the library rather than represented as value-dependent proofs.
 
+### Static layout plans
+
+Foreign records and fixed buffer operations often need placement before execution.
+The [static builder](../../lib/std/memory/static-layout.zy) answers that requirement using ordinary value functions.
+Its [signature](../../lib/std/memory/static-layout.type.zy) hides `Plan A`
+and discloses `Layout A = Result (Plan A) Error`.
+Constructors have the same composition syntax as the runtime builder: scalar leaves,
+`unit`, `padding`, `product`, and `align`.
+Each successful plan contains validated placement and the codecs derived from that placement.
+Callers cannot introduce a successful plan from a metadata record.
+
+```zydeco
+let make_memory = @(import("memory/static-layout.zy")) in
+let (= Plan, = Layout, memory) = builtin |> make_memory in
+let record = memory/align (UInt8 * UInt32) 16
+  (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
+match record
+| +Err(error) => ...
+| +Ok(plan) =>
+  let shape = memory/inspect (UInt8 * UInt32) plan in
+  let (= Stored, repr) = memory/realize (UInt8 * UInt32) plan in
+  ...
+end
+```
+
+`inspect` and `realize` are value functions.
+`inspect` returns a [Shape](../../lib/std/memory/shape.zy) with `size`, `alignment`, and `form`.
+A scalar form retains its original byte width, padding is a leaf,
+and a product form records the right `offset` and both child shapes.
+The left offset is zero.
+Raising alignment preserves that form, so an over-aligned scalar still exposes its original width
+and an over-aligned product retains its field offsets.
+For the example, the shape exposes size 16, alignment 16, and right offset 4.
+`realize` constructs the usual `Representation A`; it needs no failure continuation
+because metadata has already been checked.
+Its `store` and `from_bytes` operations still perform fallible backing allocation.
+
+[Size calculations](../../lib/std/memory/size.zy) are source-defined value functions returning `Result Int64 Error`.
+They check the nonnegative signed range, power-of-two alignment, and overflow,
+using only [L8's total integer leaves](../references/language.md#8-value-functions-and-views).
+`NegativeSize`, `InvalidAlignment`, and `SizeOverflow` are ordinary constructors
+in [Error](../../lib/std/memory/layout-error.zy); callers can handle them with value matches.
+Product construction propagates the left error before the right error;
+alignment validates the requested boundary before inspecting its input layout.
+No allocation or byte operation runs to calculate a plan, including a representable but impractically large plan.
+
+Both builders use the same [descriptor](../../lib/std/memory/descriptor.type.zy)
+and [codec implementation](../../lib/std/memory/codec.zy).
+They pass completed offsets, gaps, and tails to codecs, so byte writes do not repeat placement arithmetic.
+These internal codec constructors assume validated placement; only the public builders expose opaque successful plans.
+The common descriptor remains an internal implementation interface, not an independently checked proof
+of arbitrary user-supplied codecs.
+
+The [static elimination contract](../references/language.md#10-static-elimination) determines
+when a value calculation must resolve.
+A runtime size cannot supply a static `padding` calculation; the runtime builder supports that use.
+Validated plans themselves can be transported or selected at runtime,
+and `inspect` can forward their metadata as ordinary values.
+A runtime-selected plan does not thereby supply known integers to a later static calculation.
+Neither API executes `Ret` computations during checking.
+
+This is source-level construction evidence, with practical limits.
+All plans for one logical `A` have the same `Plan A` type; the type does not distinguish two different placements.
+`Shape` is an inspection result, not a dependent proof or a compiler calling-convention descriptor.
+It contains no managed-reference map or target register classification.
+The [call-boundary proposal](escape-unboxing.md#representation-contracts-at-call-boundaries) owns the
+additional evidence required before compiler policies may choose among source-constrained call layouts.
+The current Rust representation policies continue to govern only locally justified word representations.
+
 ### Layout laws
 
 All sizes and offsets are nonnegative `Int64` values.
-Alignment is a positive power of two. Arithmetic checks the `Int64` bound before adding or rounding;
-invalid inputs and overflow select `no` during realization, without allocating a payload.
+Alignment is a positive power of two.
+Arithmetic checks the `Int64` bound before adding or rounding; invalid inputs and overflow select `no`
+during runtime realization or return a static-construction `Err`, without allocating a payload.
 A representable size does not guarantee that storage can be allocated.
-These are dynamic checks; type checking enforces the logical type and abstract storage boundary.
+Type checking enforces the logical type and abstract storage boundary; the builders implement the arithmetic laws.
 
 The ten scalar leaves use explicit little-endian storage.
 Integers occupy their exact declared width, with signed integers using two's complement.
@@ -130,8 +202,9 @@ C code must initialize padding to the required value before importing a complete
 
 The sole allocation primitive added for composition is `bytes/aligned`, described
 in [L13](../references/language.md#13-primitive-values-and-capabilities).
-Numeric size calculation, power-of-two validation, field placement,
-and zero-padding construction remain library computations.
+Numeric size calculation, power-of-two validation, and field placement remain library code,
+using value functions or returning computations according to the builder.
+Zero-padding construction remains a suspended computation.
 No layout annotation or special compiler interpretation of `product`, `padding`, or `align` is involved.
 
 Interpreter and native realizations preserve the buffer's contents at a borrowed address divisible
@@ -148,8 +221,22 @@ This exercises byte borrowing through the existing FFI, not C aggregate argument
 The example's native scalar layout matches the supported little-endian targets;
 this is not a portable derivation of every platform's C ABI.
 C reads through `memcpy` to avoid assigning an effective C type to the byte allocation.
+The [static-plan variant](../../lib/tests/ffi/static-layout.zy) exercises the same C checks
+with placement calculated before execution.
 
 ### Costs and the next representation boundary
+
+The paired C examples perform the same 64-byte record store, import, and foreign checks.
+The [representation comparison tool](../../cli/examples/representations.rs) reports 138 product/closure allocation sites
+for `ffi/representation.zy` and 75 for `ffi/static-layout.zy` under the default `Local` policy (137
+and 74 under `Shared`).
+Placement calculations and their continuation structure disappear in the static variant.
+These are generated-code counts, not runtime allocation or speed measurements.
+Reproduce them with:
+
+```sh
+cargo run --example representations -- lib/tests/ffi/representation.zy lib/tests/ffi/static-layout.zy
+```
 
 Layout realization allocates ordinary closure metadata.
 Storage construction currently creates intermediate buffers and concatenates them; native field decoding copies slices.
@@ -176,6 +263,11 @@ The [focused tests](../../lang/tests/tests/representation.rs) cover all four exe
 exact integer and float bits, padding and size rejection, and abstract-type rejection.
 Shared buffer tests check address alignment and retained windows;
 the native C test additionally checks the actual foreign borrow.
+[Static-plan tests](../../lang/tests/tests/static_layout.rs) check signed-size limits, typed construction errors,
+plan abstraction, normalized placement, canonical bytes, and all four execution backends.
+The [buffer example](../../lib/tests/std/static-storage-access.zy) uses the inspected size, alignment,
+and right offset to allocate and write caller-provided storage, then validates and decodes it through the whole plan.
+The offset remains an ordinary integer; checked access does not yet constitute a statically typed field path.
 
 ## Mutable destination capabilities
 
