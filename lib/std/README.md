@@ -62,6 +62,7 @@ while the files under `data/` and the derived operations in the topic packages r
 
 `system/arguments.zy` builds a lazy `fold` from the Builtin `args/at` lookup.
 Apply it to the Builtin package directly when a list is unnecessary; `process/arg_list` uses the same builder.
+Callers of the former Builtin `args/fold` should instantiate this builder and call its `fold` field.
 Tails are ordinary reusable computations, and host runtimes need no special closure implementation.
 [Argument semantics](../../docs/references/language.md#13-primitive-values-and-capabilities) specify lookup failures
 and repeated forcing.

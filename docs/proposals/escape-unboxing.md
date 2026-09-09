@@ -19,6 +19,64 @@ Neither contract by itself proves that a proposed stack cell cannot escape.
 
 The analysis below is a design for extending local selection, not an account of the current implementation.
 
+## Representation contracts at call boundaries
+
+The [explicit storage library](bytes.md#explicit-storage-contracts) raises a related question:
+can a caller use its chosen representation directly as a function argument or result?
+That would make representation choice part of an interface rather than merely an allocation optimization.
+The current implementation supplies useful storage evidence but does not yet supply a calling convention.
+
+There are three different descriptions in the implementation:
+
+| Description | Evidence available today | What it does not establish |
+| --- | --- | --- |
+| Source `Representation A` | An abstract stored type, runtime size/alignment, and checked codecs | A statically selected argument width or register class |
+| SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
+| Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
+
+For example, the ordinary logical type `UInt8 * UInt32` can have natural storage of eight bytes,
+or a 64-byte aligned representation with tail padding.
+Choosing the latter storage contract does not change the logical function type,
+nor does it make a stored byte handle occupy 64 bytes in a Zydeco call frame.
+The caller and callee currently agree on the existing word convention in either case.
+Local product unboxing can remove a cell while still passing tagged field words;
+it does not interpret the memory library's padding and alignment operations.
+
+The [local analysis](../../lang/assembly/src/unbox.rs) deliberately treats argument-stack uses of a variable
+as escapes, and the [lowerer](../../lang/assembly/src/lower.rs) consumes its local pack/unpack decisions.
+There is no shared representation-indexed entry contract for an indirect call or a returned product.
+Changing only the caller's packing would therefore change the stack shape expected by existing callees.
+
+Automatic layout-directed calls are deferred.
+A modular extension needs the following boundaries in order:
+
+1. **Static evidence from source composition.** Define a total, statically reducible representation description
+   whose normalization agrees with the [existing storage laws](bytes.md#layout-laws).
+   Its witness must identify the chosen representation, including field widths and reference-bearing fields.
+   Today's `Layout A` is a thunk and `realize` performs computation; a runtime `Int64` size field is not such a witness.
+   `Ret` alone does not authorize compile-time execution of an arbitrary realizer.
+   This stage should preserve ordinary source composition rather than assign layout through compiler annotations.
+2. **One entry contract for both ends.** Extend the checked SPSLow boundary with ordered argument/result components
+   and representation evidence shared by direct calls, indirect calls, closures, and return continuations.
+   Unknown representations require a uniform transport or a checked adapter;
+   separate callers cannot independently infer a different number of stack slots.
+3. **Target placement and tracing.** Derive register/stack placement and exact live-reference maps together.
+   Raw integer bits cannot enter scanned tagged-word slots merely because they have the same machine width.
+   Native stack scanning and frame maps, and both Wasm backends, must consume the same component contract.
+4. **Explicit conversion boundaries.** Specify when ordinary values are encoded,
+   decoded, boxed, or copied at generic calls and escaped closures.
+   A direct specialized call can then remove conversion only when both ends retain the same evidence.
+   C aggregate classification remains the separate target ABI question
+   in [the foreign-interface design](c-ffi.md#additional-abi-shapes).
+
+The first implementation should cover one fixed scalar product passed to and returned from a known function,
+then the same interface through a dynamically selected thunk.
+Tests must pair accepted matching representations with rejected width/alignment mismatches,
+retain managed fields across collection, and verify that padding or raw scalar bits never become roots.
+Polymorphic callers, recursive calls, and ordinary boxed adapters must continue to agree on the entry contract.
+Until these prerequisites are implemented, explicit buffers and typed codecs remain the accepted interface;
+the local optimization described below can progress independently.
+
 ## Design
 
 ### Analysis site

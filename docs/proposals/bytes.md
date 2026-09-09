@@ -165,8 +165,10 @@ lexical buffer lifetimes remain unexpressed.
 
 Allocator selection and checked mutable destination capabilities are implemented below.
 A borrowed region with a statically scoped lifetime remains a separate boundary.
-Checked offset access into caller-provided storage is implemented below; statically verified field paths
-and representation-aware native argument/result classification remain separate extensions.
+Checked offset access into caller-provided storage is implemented below;
+statically verified field paths remain deferred here.
+[Representation-aware argument/result contracts](escape-unboxing.md#representation-contracts-at-call-boundaries)
+are deferred at their owning boundary, with static evidence, shared entry contracts, and tracing as prerequisites.
 Automatically changing all products or adding representation-polymorphic calls first would conflate storage,
 ownership, and the native calling convention before their boundaries are expressible.
 
