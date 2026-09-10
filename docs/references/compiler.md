@@ -584,6 +584,7 @@ An unobserved field becomes trivial only when its producer is discardable.
 Source value and parameter classifiers also contribute the [partial protocol evidence](#partial-source-protocols)
 retained across rebuilding.
 Discarded producers lose their evidence; whole retained values and parameters carry it to closure conversion.
+Codata tag producers and consumers use the canonical observation numbering defined at that same boundary.
 
 ### Primitive calls
 
@@ -711,7 +712,9 @@ In particular, an argument prefix followed by `cont(A)` does not bound the stack
 [ValueProtocol and StackProtocol](../../lang/stackir/src/protocol.rs) are owned IR data extracted
 from checked classifiers.
 Values retain unit, primitive, product, and thunk structure when known.
-Unresolved witnesses, existential carriers, recursive heads, codata, and unsupported forms contribute unknowns.
+Codata interfaces retain observation alternatives in an owned `ProtocolGraph` shared by the high and low arenas.
+Disclosed computation seals can lead back to existing graph nodes.
+Unresolved witnesses, existential carriers, and unsupported forms contribute unknowns.
 Erasing a universal type binder preserves any known argument prefix in its body;
 a bound computation variable remains an unknown remainder.
 
@@ -720,10 +723,26 @@ a bound computation variable remains an unknown remainder.
 | `?` | Unknown protocol; no statement about whether the stack is empty or how large it is |
 | `A :: S` | One argument classified by `A`, followed by protocol `S` |
 | `cont(A)` | An installed continuation accepting `A`, with its saved stack hidden |
+| `pN` | A program-local reference to a codata interface's observation alternatives |
+| `.d#i :: S` | A producer has supplied observation `.d`, with runtime tag `i`, above remainder `S` |
 
-High lowering records value and pattern protocols, plus the entry protocol of each recursive computation.
+Each codata declaration receives a graph reference before its observations are translated.
+Recursive occurrences reuse that reference, including cycles through argument prefixes or thunk components.
+This keeps a finite description even when executions accumulate an unbounded number of observations and arguments.
+The graph records no physical stack extent.
+Unsupported recursive paths remain unknown; the extractor does not instantiate recursive type families
+whose applications are still unresolved in the checked arena.
+
+Observation indices are the zero-based ranks of complete destructor names in lexicographic order within the interface.
+High lowering obtains both pushed tags and case tags from the descriptor's canonical ordering.
+Consequently, structurally equal codata interfaces agree on runtime indices even
+when their source declarations list observations in different orders.
+Both the name and index participate in low protocol checking.
+
+High lowering records value and pattern protocols, recursive entry protocols, and the interface of each codata case.
 Normalization copies facts for retained whole values and patterns into the fresh arena;
 discarded values and pruned product fields do not retain stale whole-value facts.
+Surviving cases keep their interface, and rebuilding shares the immutable graph while preserving its references.
 Primitive results can recover their scalar protocol from the typed operation itself.
 Closure conversion transfers these facts to the low arena and records an `EntryProtocol` for each block.
 Closures retain their incoming source stack protocol, and continuation entries retain the accepted value protocol.
@@ -740,19 +759,40 @@ An opened thunk supplies its code's protocol; an opened continuation supplies th
 while its restored stack becomes opaque to this analysis.
 The separate provenance check still associates that code with the exact restored stack.
 
+For a supplied observation, the verifier selects that alternative from the expected codata descriptor
+and checks its remainder.
+A retained case checks its supplied stack against the declared interface, validates branch coverage and tag indices,
+and checks each branch against the selected observation's protocol.
+This branch evidence remains available even when the ambient stack became opaque at a continuation opening.
+SPSLow publication validates graph references before examining transfers.
+
+Two codata descriptors are compared structurally using a set of already compared reference pairs.
+Revisiting a pair closes that recursive comparison; every other observation and its components must still agree.
+This is a coinductive check over finite descriptions, without unbounded unfolding or a runtime iteration bound.
+Unknown components remain local gaps in evidence, so compatibility is not transitive and cannot serve as equality.
+
 Unknown components are compatible with the existing word transport, and only known conflicts are rejected.
 This compatibility relation is not type equality and cannot authorize a different ABI.
-Abstract storage-carrier identity remains an upstream source typing property; recursive codata transitions,
-full polymorphic instantiation, and layout/reference-map evidence are not reconstructed.
+Abstract storage-carrier identity remains an upstream source typing property;
+full polymorphic instantiation and layout/reference-map evidence are not reconstructed.
 Host and C external transfers keep their existing signature checks.
 No frame-size, frame-lifetime, or stack-scanning plan is derived from these descriptors.
 
 `zydeco build --target zir` displays entries such as `closure[Int64 :: cont(Int64)]`
 and `continuation[Thk(Int64 :: cont(Int64))]` alongside their administrative word parameters.
+It also prints finite definitions such as:
+
+```text
+[protocol:p0] codata { .done#0: cont(Int64); .item#1: Int64 :: p0; }
+```
+
 [Protocol regressions](../../lang/tests/tests/stack_protocols.rs) check those surviving descriptions,
-rejected argument/result and entry-metadata conflicts, and a source computation
+rejected argument/result and observation conflicts, graph integrity, and a source computation
 that accumulates a runtime-dependent number of argument/tag frames before its installed continuation.
-That program also calls a returned worker through a recursive computation-polymorphic forwarder on all backends.
+That program dynamically selects and returns its codata consumer, and also calls a returned arithmetic worker
+through a recursive computation-polymorphic forwarder on all backends.
+The [declaration-order regression](../../lib/tests/core/codata-order.zy) exercises equal structural interfaces
+with reversed source ordering on all backends.
 
 ## C10. ZASM, stack analysis, and local representation choices
 

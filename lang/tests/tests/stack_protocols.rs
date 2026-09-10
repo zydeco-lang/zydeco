@@ -3,7 +3,7 @@ use zydeco_cli::CommandCompiler;
 use zydeco_stackir::{
     SpsLowError, SpsLowProgram,
     low::{protocols::ProtocolError, syntax::*},
-    protocol::{StackProtocol, ValueProtocol},
+    protocol::{CodataProtocolId, ProtocolGraphError, StackProtocol, ValueProtocol},
 };
 use zydeco_tests::utils::{SourceProgram, TestBackend};
 
@@ -30,15 +30,67 @@ impl Fixture {
     fn polymorphic_worker() -> StackProtocol {
         StackProtocol::Argument(Box::new(Self::integer()), Box::new(StackProtocol::Unknown))
     }
+
+    fn stream(arena: &SpsLowInnerArena) -> CodataProtocolId {
+        arena
+            .protocols
+            .iter()
+            .find_map(|(id, definition)| {
+                let [(done, result), (item, rest)] = definition.observations.as_slice() else {
+                    return None;
+                };
+                (item.name.0 == ".item"
+                    && item.idx == 1
+                    && done.name.0 == ".done"
+                    && done.idx == 0
+                    && *rest
+                        == StackProtocol::Argument(
+                            Box::new(Self::integer()),
+                            Box::new(StackProtocol::Codata(id)),
+                        )
+                    && *result == StackProtocol::Continuation(Box::new(Self::integer())))
+                .then_some(id)
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "the source stream must retain its recursive observation graph: {:?}",
+                    arena.protocols
+                )
+            })
+    }
+
+    fn item_jump(arena: &SpsLowInnerArena) -> (CompuId, StackId) {
+        arena
+            .compus
+            .iter()
+            .find_map(|(id, computation)| {
+                let Computation::Jump(Jump { stack, .. }) = computation else {
+                    return None;
+                };
+                let mut stack = *stack;
+                loop {
+                    match &arena.stacks[&stack] {
+                        | Stack::Tag(Cons(tag, _)) if tag.name.0 == ".item" => {
+                            return Some((*id, stack));
+                        }
+                        | Stack::Arg(Cons(_, rest)) | Stack::Tag(Cons(_, rest)) => stack = *rest,
+                        | _ => return None,
+                    }
+                }
+            })
+            .expect("the recursive caller must push an item observation")
+    }
 }
 
 #[test]
 fn source_protocols_survive_normalization_and_closure_conversion() {
     let program = Fixture::program();
     let entries = &program.arena().inner.entry_protocols;
+    let stream = StackProtocol::Codata(Fixture::stream(&program.arena().inner));
     for required in [
         EntryProtocol::Closure(Fixture::worker()),
         EntryProtocol::Continuation(ValueProtocol::Thunk(Box::new(Fixture::worker()))),
+        EntryProtocol::Continuation(ValueProtocol::Thunk(Box::new(stream.clone()))),
         EntryProtocol::Closure(StackProtocol::Argument(
             Box::new(Fixture::integer()),
             Box::new(StackProtocol::Argument(
@@ -46,13 +98,174 @@ fn source_protocols_survive_normalization_and_closure_conversion() {
                 Box::new(Fixture::polymorphic_worker()),
             )),
         )),
-        // Recursive codata keeps an opaque remainder, not a guessed stack extent.
+        // Recursion is a reference to an observation graph, with no extent bound.
         EntryProtocol::Closure(StackProtocol::Argument(
             Box::new(Fixture::integer()),
-            Box::new(StackProtocol::Unknown),
+            Box::new(stream),
         )),
     ] {
         assert!(entries.iter().any(|(_, entry)| entry == &required), "missing {required}");
+    }
+}
+
+#[test]
+fn recursive_observations_check_tags_payloads_and_residual_protocols() {
+    enum Corruption {
+        Name,
+        Index,
+        Payload,
+        Residual,
+    }
+    for corruption in
+        [Corruption::Name, Corruption::Index, Corruption::Payload, Corruption::Residual]
+    {
+        let (mut arena, root) = Fixture::program().into_parts();
+        let stream = Fixture::stream(&arena.inner);
+        let (jump, tag_id) = Fixture::item_jump(&arena.inner);
+        let Stack::Tag(Cons(_, argument)) = arena.inner.stacks[&tag_id].clone() else {
+            unreachable!()
+        };
+        let Stack::Arg(Cons(value, rest)) = arena.inner.stacks[&argument].clone() else {
+            unreachable!()
+        };
+        match corruption {
+            | Corruption::Name | Corruption::Index => {
+                let Stack::Tag(Cons(tag, _)) = &mut arena.inner.stacks[&tag_id] else {
+                    unreachable!()
+                };
+                if matches!(corruption, Corruption::Name) {
+                    tag.name = DtorName(".missing".into());
+                } else {
+                    tag.idx += 10;
+                }
+            }
+            | Corruption::Payload => {
+                arena.inner.values[&value] = Value::Literal(Literal::Char('x'))
+            }
+            | Corruption::Residual => {
+                let original = arena.inner.stacks[&rest].clone().build(&mut arena, None);
+                let extra: ValueId = Triv.build(&mut arena, None);
+                arena.inner.stacks[&rest] = Stack::Arg(Cons(extra, original));
+            }
+        }
+        let SpsLowError::Protocol(ProtocolError::Stack { compu, expected, found }) =
+            SpsLowProgram::try_new(arena, root).unwrap_err()
+        else {
+            panic!("a malformed recursive transfer must fail its protocol check")
+        };
+        assert_eq!(compu, jump);
+        assert_eq!(
+            expected,
+            StackProtocol::Argument(
+                Box::new(Fixture::integer()),
+                Box::new(StackProtocol::Argument(
+                    Box::new(ValueProtocol::Thunk(Box::new(StackProtocol::Codata(stream)))),
+                    Box::new(StackProtocol::Codata(stream))
+                ))
+            )
+        );
+        let StackProtocol::Argument(_, rest) = found else {
+            panic!("expected recursion's counter")
+        };
+        assert!(
+            matches!(*rest, StackProtocol::Argument(_, rest) if matches!(*rest, StackProtocol::Tag(_, _)))
+        );
+    }
+}
+
+#[test]
+fn codata_cases_retain_branch_protocols_and_complete_observations() {
+    for missing_arm in [false, true] {
+        let (mut arena, root) = Fixture::program().into_parts();
+        let stream = Fixture::stream(&arena.inner);
+        let case = *arena
+            .inner
+            .case_protocols
+            .iter()
+            .find(|(_, protocol)| **protocol == StackProtocol::Codata(stream))
+            .unwrap()
+            .0;
+        let Computation::CoCase(SCoMatch { arms, .. }) = &arena.inner.compus[&case] else {
+            unreachable!()
+        };
+        let item = arms.iter().find(|arm| arm.dtor.0.name.0 == ".item").unwrap().tail;
+        let Computation::LetArg(LetArg { binder: Cons(parameter, _), .. }) =
+            arena.inner.compus[&item]
+        else {
+            unreachable!()
+        };
+        let expected = if missing_arm {
+            let Computation::CoCase(SCoMatch { arms, .. }) = &mut arena.inner.compus[&case] else {
+                unreachable!()
+            };
+            arms.retain(|arm| arm.dtor.0.name.0 == ".item");
+            ProtocolError::Observations {
+                compu: case,
+                expected: arena
+                    .inner
+                    .protocols
+                    .get(stream)
+                    .unwrap()
+                    .observations
+                    .iter()
+                    .map(|(tag, _)| tag.clone())
+                    .collect(),
+                found: arms.iter().map(|arm| arm.dtor.0.clone()).collect(),
+            }
+        } else {
+            let expected = ValueProtocol::Primitive(PrimitiveType::Char);
+            arena.inner.pattern_protocols[&parameter] = expected.clone();
+            ProtocolError::Parameter { pattern: parameter, expected, found: Fixture::integer() }
+        };
+        assert_eq!(
+            SpsLowProgram::try_new(arena, root).unwrap_err(),
+            SpsLowError::Protocol(expected)
+        );
+    }
+}
+
+#[test]
+fn low_publication_rejects_a_missing_protocol_graph() {
+    let (mut arena, root) = Fixture::program().into_parts();
+    let stream = Fixture::stream(&arena.inner);
+    arena.inner.protocols = Default::default();
+    assert_eq!(
+        SpsLowProgram::try_new(arena, root).unwrap_err(),
+        SpsLowError::Protocol(ProtocolError::Graph(ProtocolGraphError::MissingDefinition(stream)))
+    );
+}
+
+#[test]
+fn equivalent_codata_interfaces_share_tag_numbers_across_declaration_orders() {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/tests/core/codata-order.zy");
+    let program = CommandCompiler::default().lower(&path).unwrap().sps_low;
+    let graph = &program.arena().inner.protocols;
+    let interfaces = graph
+        .iter()
+        .filter(|(_, definition)| {
+            definition.observations.iter().any(|(tag, _)| tag.name.0 == ".read")
+        })
+        .collect::<Vec<_>>();
+    assert!(interfaces.len() >= 2, "both structural declarations retain their descriptors");
+    for (id, definition) in &interfaces {
+        assert_eq!(
+            definition
+                .observations
+                .iter()
+                .map(|(tag, _)| (tag.idx, tag.name.0.as_str()))
+                .collect::<Vec<_>>(),
+            [(0, ".read"), (1, ".shift")]
+        );
+        assert!(
+            graph
+                .stacks_agree(&StackProtocol::Codata(*id), &StackProtocol::Codata(interfaces[0].0))
+        );
+    }
+    for backend in
+        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
+    {
+        SourceProgram::setup("tests/core/codata-order.zy").test(backend);
     }
 }
 

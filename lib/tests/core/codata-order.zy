@@ -1,0 +1,28 @@
+-- Structural codata interfaces agree even when their declarations order tags differently.
+begin
+  param (/Thk; /Ret; /Int64; /int64; /process) : @(import("../../std/builtin.zy")) that
+  let First =
+    codata
+    | .read : Ret Int64
+    | .shift : Int64 -> Ret Int64
+    end
+  that
+  let Second =
+    codata
+    | .shift : Int64 -> Ret Int64
+    | .read : Ret Int64
+    end
+  that
+  def ! relay (worker : Thk First) : Ret Int64 =
+    do value <- ! worker .read;
+    ! worker .shift value
+  that
+  let object : Thk Second = {
+    comatch
+    | .read => ret 12
+    | .shift value => ! int64/sub value 12
+    end
+  } in
+  do result <- ! relay object;
+  ! process/exit result
+end

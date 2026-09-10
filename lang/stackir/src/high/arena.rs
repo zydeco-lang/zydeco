@@ -104,9 +104,11 @@ pub struct StackirArena {
 
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackirInnerArena {
+    pub protocols: std::sync::Arc<crate::protocol::ProtocolGraph>,
     pub value_protocols: ArenaAssoc<ValueId, crate::protocol::ValueProtocol>,
     pub pattern_protocols: ArenaAssoc<VPatId, crate::protocol::ValueProtocol>,
-    pub fix_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
+    /// Intrinsic protocols of recursive entries and codata eliminations.
+    pub compu_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
     /// value pattern arena
     pub vpats: ArenaSparse<StackirScope, VPatId>,
     /// value arena
@@ -152,9 +154,13 @@ impl StackirProgram {
             terms: std::mem::take(&mut admin.terms),
             ..AdminArena::default()
         };
+        let protocols = inner.protocols.clone();
         StackirRebuild {
             source: StackirArena { admin: source_admin, inner },
-            target: StackirArena { admin, inner: StackirInnerArena::default() },
+            target: StackirArena {
+                admin,
+                inner: StackirInnerArena { protocols, ..Default::default() },
+            },
             root,
         }
     }

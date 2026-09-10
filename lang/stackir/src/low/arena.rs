@@ -97,9 +97,11 @@ impl Default for SpsLowAdminArena {
 
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SpsLowInnerArena {
+    pub protocols: std::sync::Arc<crate::protocol::ProtocolGraph>,
     pub value_protocols: ArenaAssoc<ValueId, crate::protocol::ValueProtocol>,
     pub pattern_protocols: ArenaAssoc<VPatId, crate::protocol::ValueProtocol>,
     pub entry_protocols: ArenaAssoc<ValueId, super::entry::EntryProtocol>,
+    pub case_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
     /// Capture ownership before conversion erased it into products and code.
     /// These references describe existing nodes; they do not add executable occurrences.
     pub continuations: ArenaAssoc<StackId, ContinuationEntry>,

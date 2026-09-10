@@ -524,7 +524,7 @@ and consumers before closure conversion constructs first-order SPSLow.
 SPSLow checks explicit environment/result entry roles and package provenance
 under the [word entry contract](docs/references/compiler.md#word-entry-contracts).
 It also preserves and checks [partial source protocols](docs/references/compiler.md#partial-source-protocols)
-through normalization, including returned thunks and unknown computation tails.
+through normalization, including recursive codata, returned thunks, and unknown computation tails.
 ZASM makes the control-flow graph explicit for assembly-derived targets.
 
 | Responsibility | Owning reference | Implementation |

@@ -16,10 +16,10 @@ begin
     | .done => ret total
     end
   in
-  def fix push (remaining : Int64) : Stream =
-    ! int64/eq Stream remaining 0 { ! consume 0 } {
+  def fix push (remaining : Int64) (sink : Thk Stream) : Stream =
+    ! int64/eq Stream remaining 0 { ! sink } {
       do next <- ! int64/sub remaining 1;
-      ! push next .item remaining
+      ! push next sink .item remaining
     }
   in
   def fix forward (R : CType) (remaining : Int64) (worker : Thk (Int64 -> R)) : Int64 -> R =
@@ -37,9 +37,20 @@ begin
       { ret { fn value => ! int64/add value 1 } }
       { ret { fn value => ! int64/sub value -1 } }
   in
+  def ! choose_stream (length : Int64) : Ret (Thk Stream) =
+    ! int64/eq (Ret (Thk Stream)) length 3
+      { ret { ! consume 0 } }
+      {
+        ret {
+          do zero <- ! int64/sub length length;
+          ! consume zero
+        }
+      }
+  in
   do input <- ! args/at (Ret String) 0 { ret "abc" } { fn value => ret value };
   do length <- ! string/length input;
-  do total <- ! push length .done;
+  do sink <- ! choose_stream length;
+  do total <- ! push length sink .done;
   do successor <- ! int64/add length 1;
   do product <- ! int64/mul length successor;
   do expected <- ! int64/div product 2;

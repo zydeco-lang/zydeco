@@ -78,7 +78,7 @@ The implementation carries several complementary descriptions:
 | Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
 | SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
 | SPSLow word entries | Ordered environment/result words and checked code/package provenance | Complete source stack protocols or a different component transport |
-| SPSLow partial source protocols | Known value components and argument/continuation protocols retained across normalization | Nominal storage identity, recursive codata transitions, or physical stack extent |
+| SPSLow partial source protocols | Known value components, argument/continuation protocols, and cyclic codata observations retained across normalization | Nominal storage identity, unresolved type-family instantiation, or physical stack extent |
 | Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
 
 For example, the ordinary logical type `UInt8 * UInt32` can have natural storage of eight bytes,
@@ -192,8 +192,8 @@ Source protocol evidence survives lowering, normalization, and closure conversio
 [C9's partial source protocols](../references/compiler.md#partial-source-protocols) own the descriptors,
 propagation, and validation rules.
 They require no new source annotations.
-This gives known scalar, product, and thunk components a checkable interface at direct and indirect transfers,
-while keeping unknown remainders explicit.
+This gives known scalar, product, thunk, and recursive codata components a checkable interface at direct
+and indirect transfers, while keeping unknown remainders explicit.
 
 The boundary deliberately preserves the distinction between a computation protocol and its physical stack extent.
 [Ret and stack extent](../references/language.md#ret-and-stack-extent) explains why a
@@ -205,12 +205,22 @@ The [source regression](../../lib/tests/core/stack-protocols.zy) defines a recur
 with `.item : Int64 -> Stream` and `.done : Ret Int64` observations.
 Its producer pushes a runtime-selected number of item arguments and tags,
 and its consumer drains them before delivering a result to the installed continuation.
-Codata recursion remains opaque in the partial descriptor; source typing still checks those observations.
+The retained graph connects the item observation back to the same stream interface.
+The consumer is selected at runtime, returned as a thunk, and passed into the recursive producer;
+the graph reference survives each of those boundaries.
 The same program returns a dynamically selected worker thunk and calls it
 through a recursive forwarder polymorphic in its residual computation protocol.
 Tests inspect retained entry evidence and execute different stack depths on the interpreter,
 AMD64, and both Wasm backends.
-Mutated low IR is rejected for known argument/result conflicts and inconsistent entry metadata.
+Mutated low IR is rejected for known argument/result conflicts, invalid observation names or indices,
+malformed recursive tails, incomplete cases, missing graph definitions, and inconsistent entry metadata.
+Graph comparisons exercise distinct but equivalent recursive descriptions, including cycles through returned thunks,
+and reject conflicts reached after a recursive back edge.
+
+The [declaration-order regression](../../lib/tests/core/codata-order.zy) exposed a related lowering defect:
+two structurally equal codata interfaces could assign different runtime indices to the same destructor.
+Canonical observation numbering now keeps those calls coherent across all backends.
+This is evidence for sharing one descriptor between producers and consumers, including the tag identity itself.
 
 This establishes partial source agreement through the existing word ABI.
 It does not select byte layouts or raw slots, equate abstract carriers, or infer physical stack size.
@@ -237,9 +247,10 @@ A modular extension needs the following boundaries in order:
    An entry contract needs explicit evidence at the call boundary; a compiler policy cannot infer permission
    to change an ABI from an arbitrary `Int64` field.
 2. **One entry contract for both ends.** The checked word entry experiment establishes administrative roles
-   and package agreement; partial source protocols now preserve known argument/result structure through normalization.
-   Extend that boundary with recursive observation protocols and representation evidence shared
-   by direct calls, indirect calls, closures, and return continuations.
+   and package agreement; partial source protocols now preserve known argument/result
+   and recursive observation structure.
+   Extend that boundary with representation evidence shared by direct calls,
+   indirect calls, closures, and return continuations.
    Unknown representations require a uniform transport or a checked adapter;
    separate callers cannot independently infer a different number of stack slots.
 3. **Target placement and tracing.** Derive register/stack placement and exact live-reference maps together.
@@ -257,10 +268,11 @@ Before accepting another machine transport, its tests must also retain managed f
 across collection and verify that padding or raw scalar bits never become roots.
 The current experiment inherits the existing handle/root contract; it does not exercise mixed raw/reference slots.
 
-The next protocol experiment should preserve codata observations and recursive protocol references
-without expanding them into a finite argument list.
-The recursive stream fixture supplies a concrete criterion: retain its observation transitions
-and reject known incompatible transfers while continuing to accept dynamic depth.
+The accepted recursive protocol experiment retains observation transitions
+and rejects incompatible known transfers while accepting dynamic depth.
+The remaining protocol gap is instantiation: unresolved computation/type witnesses
+and applied recursive families can still leave opaque components.
+Any extension should preserve their binding relationships without unbounded specialization of recursive applications.
 Representation identity and mixed reference layouts still need their own evidence
 before a Rust policy can choose another component transport;
 partial compatibility involving unknowns cannot justify specialization.

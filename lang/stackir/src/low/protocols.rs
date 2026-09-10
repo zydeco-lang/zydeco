@@ -1,11 +1,13 @@
 //! Check known source protocol components while leaving unknown stack extent opaque.
 
 use super::syntax::*;
-use crate::protocol::{StackProtocol, ValueProtocol};
+use crate::protocol::{ProtocolGraphError, StackProtocol, ValueProtocol};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ProtocolError {
+    #[error(transparent)]
+    Graph(#[from] ProtocolGraphError),
     #[error("entry {block:?} declares {found:?} protocol evidence for a {expected:?} entry")]
     EntryKind { block: ValueId, expected: EntryKind, found: EntryKind },
     #[error("computation {compu:?} requires stack protocol {expected}, found {found}")]
@@ -14,6 +16,12 @@ pub enum ProtocolError {
     Value { value: ValueId, expected: ValueProtocol, found: ValueProtocol },
     #[error("parameter {pattern:?} requires protocol {expected}, found {found}")]
     Parameter { pattern: VPatId, expected: ValueProtocol, found: ValueProtocol },
+    #[error("computation {compu:?} requires a codata protocol, found {found}")]
+    ExpectedCodata { compu: CompuId, found: StackProtocol },
+    #[error("computation {compu:?} expects observations {expected:?}, found {found:?}")]
+    Observations { compu: CompuId, expected: Vec<DtorIdx>, found: Vec<DtorIdx> },
+    #[error("computation {compu:?} has no branch for observation {tag:?}")]
+    MissingObservation { compu: CompuId, tag: DtorIdx },
 }
 
 #[derive(Clone, Default)]
@@ -63,13 +71,31 @@ impl<'a> ProtocolValidator<'a> {
     pub(super) fn validate(
         arena: &'a SpsLowInnerArena, root: CompuId,
     ) -> Result<(), ProtocolError> {
+        arena.protocols.validate()?;
+        for value in arena
+            .value_protocols
+            .iter()
+            .map(|(_, value)| value)
+            .chain(arena.pattern_protocols.iter().map(|(_, value)| value))
+        {
+            arena.protocols.validate_value(value)?;
+        }
+        for (_, entry) in arena.entry_protocols.iter() {
+            match entry {
+                | EntryProtocol::Closure(stack) => arena.protocols.validate_stack(stack)?,
+                | EntryProtocol::Continuation(value) => arena.protocols.validate_value(value)?,
+            }
+        }
+        for (_, stack) in arena.case_protocols.iter() {
+            arena.protocols.validate_stack(stack)?;
+        }
         Self { arena }.compu(root, Context::default())
     }
 
     fn check_stack(
-        compu: CompuId, expected: &StackProtocol, found: &StackProtocol,
+        &self, compu: CompuId, expected: &StackProtocol, found: &StackProtocol,
     ) -> Result<(), ProtocolError> {
-        if expected.agrees(found) {
+        if self.arena.protocols.stacks_agree(expected, found) {
             Ok(())
         } else {
             Err(ProtocolError::Stack { compu, expected: expected.clone(), found: found.clone() })
@@ -77,9 +103,9 @@ impl<'a> ProtocolValidator<'a> {
     }
 
     fn check_value(
-        value: ValueId, expected: &ValueProtocol, found: &ValueProtocol,
+        &self, value: ValueId, expected: &ValueProtocol, found: &ValueProtocol,
     ) -> Result<(), ProtocolError> {
-        if expected.agrees(found) {
+        if self.arena.protocols.values_agree(expected, found) {
             Ok(())
         } else {
             Err(ProtocolError::Value { value, expected: expected.clone(), found: found.clone() })
@@ -107,7 +133,7 @@ impl<'a> ProtocolValidator<'a> {
 
     fn parameter(&self, pattern: VPatId, found: &ValueProtocol) -> Result<(), ProtocolError> {
         if let Some(expected) = self.arena.pattern_protocols.get(&pattern)
-            && !expected.agrees(found)
+            && !self.arena.protocols.values_agree(expected, found)
         {
             return Err(ProtocolError::Parameter {
                 pattern,
@@ -233,7 +259,7 @@ impl<'a> ProtocolValidator<'a> {
         };
         if let Some(protocol) = self.arena.value_protocols.get(&id) {
             if matches!(self.arena.values[&id], Value::ClosurePackage(_)) {
-                Self::check_value(id, protocol, &fact.protocol)?;
+                self.check_value(id, protocol, &fact.protocol)?;
             }
             fact.protocol = fact.protocol.with_evidence(protocol);
             if fact.fields.is_empty() {
@@ -250,9 +276,8 @@ impl<'a> ProtocolValidator<'a> {
                 Box::new(self.value(*value, context)?.protocol),
                 Box::new(self.stack(*rest, context)?),
             ),
-            | Stack::Tag(Cons(_, rest)) => {
-                self.stack(*rest, context)?;
-                StackProtocol::Unknown
+            | Stack::Tag(Cons(tag, rest)) => {
+                StackProtocol::Tag(tag.clone(), Box::new(self.stack(*rest, context)?))
             }
             | Stack::ContinuationPackage(ContinuationPackage { code, residual }) => {
                 let code = self.value(*code, context)?;
@@ -264,6 +289,60 @@ impl<'a> ProtocolValidator<'a> {
                 StackProtocol::Continuation(Box::new(value))
             }
         })
+    }
+
+    fn case(&self, id: CompuId, case: &SCoMatch, context: Context) -> Result<(), ProtocolError> {
+        let SCoMatch { scrut, arms } = case;
+        let supplied = self.stack(*scrut, &context)?;
+        let expected = match self.arena.case_protocols.get(&id) {
+            | Some(expected) => {
+                self.check_stack(id, expected, &supplied)?;
+                expected
+            }
+            | None => &supplied,
+        };
+        let definition = match expected {
+            | StackProtocol::Codata(protocol) => {
+                let definition = self
+                    .arena
+                    .protocols
+                    .get(*protocol)
+                    .expect("protocol references were validated");
+                let expected =
+                    definition.observations.iter().map(|(tag, _)| tag.clone()).collect::<Vec<_>>();
+                let found = arms.iter().map(|arm| arm.dtor.0.clone()).collect::<Vec<_>>();
+                if expected.len() != found.len() || expected.iter().any(|tag| !found.contains(tag))
+                {
+                    return Err(ProtocolError::Observations { compu: id, expected, found });
+                }
+                Some(definition)
+            }
+            | StackProtocol::Tag(tag, _) => {
+                if !arms.iter().any(|arm| &arm.dtor.0 == tag) {
+                    return Err(ProtocolError::MissingObservation { compu: id, tag: tag.clone() });
+                }
+                None
+            }
+            | StackProtocol::Unknown => None,
+            | found => {
+                return Err(ProtocolError::ExpectedCodata { compu: id, found: found.clone() });
+            }
+        };
+        for CoMatcher { dtor: Cons(tag, _), tail } in arms {
+            let mut branch = context.clone();
+            let declared = definition
+                .and_then(|definition| definition.observation(tag))
+                .cloned()
+                .unwrap_or_default();
+            branch.stack = match &supplied {
+                | StackProtocol::Tag(selected, rest) if selected == tag => {
+                    rest.clone().with_evidence(&declared)
+                }
+                | _ => declared,
+            };
+            self.compu(*tail, branch)?;
+        }
+        Ok(())
     }
 
     fn compu(&self, mut id: CompuId, mut context: Context) -> Result<(), ProtocolError> {
@@ -283,10 +362,10 @@ impl<'a> ProtocolValidator<'a> {
                     let stack = self.stack(*stack, &context)?;
                     match code {
                         | EntryProtocol::Closure(expected) => {
-                            Self::check_stack(id, &expected, &stack)?
+                            self.check_stack(id, &expected, &stack)?
                         }
                         | EntryProtocol::Continuation(expected) => {
-                            Self::check_value(argument.word().1, &expected, &value.protocol)?
+                            self.check_value(argument.word().1, &expected, &value.protocol)?
                         }
                     }
                     return Ok(());
@@ -312,7 +391,7 @@ impl<'a> ProtocolValidator<'a> {
                 }
                 | Computation::LetArg(LetArg { binder: Cons(binder, _), bindee, tail }) => {
                     let stack = self.stack(*bindee, &context)?;
-                    Self::check_stack(
+                    self.check_stack(
                         id,
                         &StackProtocol::Argument(Box::default(), Box::default()),
                         &stack,
@@ -326,17 +405,10 @@ impl<'a> ProtocolValidator<'a> {
                     context.stack = rest;
                     id = *tail;
                 }
-                | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                    self.stack(*scrut, &context)?;
-                    context.stack = StackProtocol::Unknown;
-                    for CoMatcher { tail, .. } in arms {
-                        self.compu(*tail, context.clone())?;
-                    }
-                    return Ok(());
-                }
+                | Computation::CoCase(case) => return self.case(id, case, context),
                 | Computation::OpenClosure(OpenClosure { package, environment, code, body }) => {
                     let value = self.value(*package, &context)?.protocol;
-                    Self::check_value(*package, &ValueProtocol::Thunk(Box::default()), &value)?;
+                    self.check_value(*package, &ValueProtocol::Thunk(Box::default()), &value)?;
                     let protocol = match value {
                         | ValueProtocol::Thunk(stack) => *stack,
                         | _ => StackProtocol::Unknown,
@@ -351,7 +423,7 @@ impl<'a> ProtocolValidator<'a> {
                 }
                 | Computation::OpenContinuation(OpenContinuation { package, code, body }) => {
                     let stack = self.stack(*package, &context)?;
-                    Self::check_stack(id, &StackProtocol::Continuation(Box::default()), &stack)?;
+                    self.check_stack(id, &StackProtocol::Continuation(Box::default()), &stack)?;
                     let value = match stack {
                         | StackProtocol::Continuation(value) => *value,
                         | _ => ValueProtocol::Unknown,

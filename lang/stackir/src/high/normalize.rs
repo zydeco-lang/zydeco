@@ -798,8 +798,8 @@ impl Normalizer {
             }
         };
         let node = compu.build(self, site);
-        if let Some(protocol) = self.source.inner.fix_protocols.get(&id) {
-            self.arena.inner.fix_protocols.insert_new(node, protocol.clone());
+        if let Some(protocol) = self.source.inner.compu_protocols.get(&id) {
+            self.arena.inner.compu_protocols.insert_new(node, protocol.clone());
         }
         Residual { node, demands }
     }

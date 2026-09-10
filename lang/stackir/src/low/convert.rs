@@ -49,7 +49,10 @@ impl<'a> SpsLowConverter<'a> {
         let high::StackirRebuild { source, target, root } = program.into_program().into_rebuild();
         let arena = low::SpsLowArena {
             admin: low::SpsLowAdminArena::from_high(target.admin),
-            inner: low::SpsLowInnerArena::default(),
+            inner: low::SpsLowInnerArena {
+                protocols: target.inner.protocols,
+                ..Default::default()
+            },
         };
         Self {
             source,
@@ -363,7 +366,7 @@ impl<'a> SpsLowConverter<'a> {
             | high::Computation::Ret(ret) => self.translate_return(ret, env, site),
             | high::Computation::Fix(fix) => {
                 let protocol =
-                    self.source.inner.fix_protocols.get(&id).cloned().unwrap_or_default();
+                    self.source.inner.compu_protocols.get(&id).cloned().unwrap_or_default();
                 self.translate_fix(fix, protocol, env, site)
             }
             | high::Computation::ProductMatch(high::SProductMatch { scrut, binder, body }) => {
@@ -426,7 +429,11 @@ impl<'a> SpsLowConverter<'a> {
                         tail: self.translate_compu(tail, env),
                     })
                     .collect();
-                low::SCoMatch { scrut, arms }.build(self, site)
+                let case = low::SCoMatch { scrut, arms }.build(self, site);
+                if let Some(protocol) = self.source.inner.compu_protocols.get(&id) {
+                    self.arena.inner.case_protocols.insert_new(case, protocol.clone());
+                }
+                case
             }
             | high::Computation::ExternCall(high::ExternCall { function, stack }) => {
                 let stack = self.translate_stack(stack, env);

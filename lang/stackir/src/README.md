@@ -37,6 +37,7 @@ Both representations have one computation root rather than a top-level declarati
 - `low::syntax` and `low::arena` define first-order SPS with typed package forms.
 - `low::entry` defines the explicit environment/result word roles consumed by block entries and supplied by jumps.
 - `protocol` extracts partial source value/stack protocols.
+  A shared graph retains recursive codata observations and owns their canonical tag numbering.
   High rebuilding preserves retained evidence; closure conversion records it at low entries.
   `low::protocols` checks known call components
   under [partial source protocols](../../../docs/references/compiler.md#partial-source-protocols),

@@ -443,8 +443,9 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn finish(self, root: CompuId) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
+    fn finish(mut self, root: CompuId) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
         if self.lower_errors.is_empty() {
+            self.arena.inner.protocols = std::sync::Arc::new(self.protocols.graph);
             Ok(BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
                 .expect("stack-indexed lowering must construct branch-join SPS"))
         } else {
@@ -748,7 +749,7 @@ impl Lower for ss::CompuId {
                 let body_compu = body.lower(lo, body_stack);
                 let fix = SFix { param: def_id, stack, body: body_compu }.build(lo, site);
                 if let Some(&ty) = lo.statics.annotations_compu.get(self) {
-                    lo.arena.inner.fix_protocols.insert_new(fix, lo.protocols.stack(ty));
+                    lo.arena.inner.compu_protocols.insert_new(fix, lo.protocols.stack(ty));
                 }
                 fix
             }
@@ -834,25 +835,20 @@ impl Lower for ss::CompuId {
                     .map(|arm| {
                         let CoMatcher { dtor: name, tail } = arm;
                         let codata_id = lo.statics.codata_hints[self];
-                        let idx = lo.statics.codatas[&codata_id]
-                            .iter()
-                            .position(|(tag_branch, _ty)| tag_branch == &name)
-                            .expect("Destructor tag not found");
-                        let dtor_idx = DtorIdx { idx, name };
+                        let dtor_idx = lo.protocols.tag(codata_id, name);
                         let branch_stack = Bullet.build(lo, site);
                         let body_compu = tail.lower(lo, branch_stack);
                         CoMatcher { dtor: Cons(dtor_idx, Bullet), tail: body_compu }
                     })
                     .collect();
-                SCoMatch { scrut: stack, arms }.build(lo, site)
+                let case = SCoMatch { scrut: stack, arms }.build(lo, site);
+                let protocol = lo.protocols.codata(lo.statics.codata_hints[self]);
+                lo.arena.inner.compu_protocols.insert_new(case, protocol);
+                case
             }
             | Compu::Dtor(Dtor(body, name)) => {
                 let codata_id = lo.statics.codata_hints[&body];
-                let idx = lo.statics.codatas[&codata_id]
-                    .iter()
-                    .position(|(tag_branch, _ty)| tag_branch == &name)
-                    .expect("Destructor tag not found");
-                let dtor_idx = DtorIdx { idx, name };
+                let dtor_idx = lo.protocols.tag(codata_id, name);
                 let stack = Cons(dtor_idx, stack).build(lo, site);
                 body.lower(lo, stack)
             }
