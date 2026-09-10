@@ -4,6 +4,8 @@ use zydeco_statics::syntax as static_syntax;
 
 /// Syntax shared by high and low Stack IR.
 pub mod syntax;
+/// Partial source value and stack protocols, independent of physical frame extent.
+pub mod protocol;
 /// Shared builders and definition-name lookup for Stack IR.
 pub mod arena;
 /// Builtin definitions for externs in stack IR.

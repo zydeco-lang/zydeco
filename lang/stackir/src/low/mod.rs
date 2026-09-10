@@ -5,6 +5,7 @@ pub mod check;
 pub mod convert;
 pub mod contracts;
 pub mod entry;
+pub mod protocols;
 pub mod fmt;
 pub mod syntax;
 pub mod variables;

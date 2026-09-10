@@ -104,6 +104,9 @@ pub struct StackirArena {
 
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackirInnerArena {
+    pub value_protocols: ArenaAssoc<ValueId, crate::protocol::ValueProtocol>,
+    pub pattern_protocols: ArenaAssoc<VPatId, crate::protocol::ValueProtocol>,
+    pub fix_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
     /// value pattern arena
     pub vpats: ArenaSparse<StackirScope, VPatId>,
     /// value arena

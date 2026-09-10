@@ -63,7 +63,11 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.inner.values[self].pretty(f)
+        let value = f.inner.values[self].pretty(f);
+        match f.inner.entry_protocols.get(self) {
+            | Some(protocol) => RcDoc::text(format!("{protocol} ")).append(value),
+            | None => value,
+        }
     }
 }
 

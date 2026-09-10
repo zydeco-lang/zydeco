@@ -1,6 +1,33 @@
 //! Administrative value words shared by code entries and their callers.
 
 use super::syntax::{VPatId, ValueId};
+use crate::protocol::{StackProtocol, ValueProtocol};
+
+/// The source protocol at a code entry, after its administrative words are consumed.
+#[derive(Clone, Debug, Eq, PartialEq, derive_more::Display)]
+pub enum EntryProtocol {
+    #[display("closure[{_0}]")]
+    Closure(StackProtocol),
+    /// The accepted result only; the continuation hides its saved residual stack.
+    #[display("continuation[{_0}]")]
+    Continuation(ValueProtocol),
+}
+
+impl EntryProtocol {
+    pub fn unknown(kind: EntryKind) -> Self {
+        match kind {
+            | EntryKind::Closure => Self::Closure(StackProtocol::Unknown),
+            | EntryKind::Continuation => Self::Continuation(ValueProtocol::Unknown),
+        }
+    }
+
+    pub fn kind(&self) -> EntryKind {
+        match self {
+            | Self::Closure(_) => EntryKind::Closure,
+            | Self::Continuation(_) => EntryKind::Continuation,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EntryKind {

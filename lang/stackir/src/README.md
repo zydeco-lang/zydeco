@@ -36,6 +36,11 @@ Both representations have one computation root rather than a top-level declarati
   [residual normalization rules](../../../docs/references/compiler.md#c8-high-sps-lowering-normalization-and-demand).
 - `low::syntax` and `low::arena` define first-order SPS with typed package forms.
 - `low::entry` defines the explicit environment/result word roles consumed by block entries and supplied by jumps.
+- `protocol` extracts partial source value/stack protocols.
+  High rebuilding preserves retained evidence; closure conversion records it at low entries.
+  `low::protocols` checks known call components
+  under [partial source protocols](../../../docs/references/compiler.md#partial-source-protocols),
+  keeping continuation stack extent opaque.
 - `low::convert` performs fresh structural closure conversion; `low::check` validates lexical ownership,
   retained branch joins, and native continuation metadata.
   `low::contracts` checks code provenance and package agreement

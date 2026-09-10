@@ -1,4 +1,5 @@
 use super::{check::BranchJoinProgram, syntax::*};
+use crate::protocol::SourceProtocols;
 use ariadne::{Label, Report, ReportKind};
 use derive_more::{AsMut, AsRef};
 use std::ops::Range;
@@ -163,6 +164,7 @@ pub struct Lowerer<'a> {
     pub statics: &'a StaticsArena,
     /// Internal residual invariant failures collected during lowering.
     lower_errors: Vec<SpsLowerError>,
+    protocols: SourceProtocols<'a>,
 }
 
 /// Lowering pass for one checked computation root.
@@ -192,7 +194,14 @@ impl<'a> Lowerer<'a> {
     pub fn new(spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
         let arena = StackirArena::default();
         let lower_errors = Vec::new();
-        Self { arena, spans, scoped, statics, lower_errors }
+        Self {
+            arena,
+            spans,
+            scoped,
+            statics,
+            lower_errors,
+            protocols: SourceProtocols::new(statics),
+        }
     }
 
     fn product_arity(&self, ty: ss::TypeId) -> usize {
@@ -581,7 +590,11 @@ impl Lower for ss::VPatId {
             }
         };
         // Create new VPatId in stack arena and store the mapping
-        stack_vpat.build(lo, Some(ss_pat_id))
+        let pattern = stack_vpat.build(lo, Some(ss_pat_id));
+        if let Some(&ty) = lo.statics.annotations_vpat.get(self) {
+            lo.arena.inner.pattern_protocols.insert_new(pattern, lo.protocols.value(ty));
+        }
+        pattern
     }
 }
 
@@ -595,11 +608,14 @@ impl Lower for ss::ValueId {
             let stack = Bullet.build(lo, site);
             let body =
                 ExternCall { function: ExternalFunction::Foreign(import), stack }.build(lo, site);
-            return ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site));
+            let value = Closure { stack: Bullet, body }.build(lo, site);
+            let protocol = lo.protocols.value(lo.statics.annotations_value[self]);
+            lo.arena.inner.value_protocols.insert_new(value, protocol);
+            return ValuePlan::pure(value);
         }
         let value = lo.statics.values[self].clone();
         let site = Some(ss::TermId::Value(*self));
-        match value {
+        let plan = match value {
             | ss::Value::Hole(_) => ValuePlan::pure(Hole.build(lo, site)),
             | ss::Value::Var(def) => ValuePlan::pure(def.build(lo, site)),
             | ss::Value::Named(Named(_, inner)) => inner.lower(lo, ()),
@@ -656,7 +672,11 @@ impl Lower for ss::ValueId {
                 })
             }
             | ss::Value::Lit(lit) => ValuePlan::pure(lit.build(lo, site)),
+        };
+        if let Some(&ty) = lo.statics.annotations_value.get(self) {
+            let _ = lo.arena.inner.value_protocols.upsert(plan.value, lo.protocols.value(ty));
         }
+        plan
     }
 }
 
@@ -726,7 +746,11 @@ impl Lower for ss::CompuId {
                 };
                 let body_stack = Bullet.build(lo, site);
                 let body_compu = body.lower(lo, body_stack);
-                SFix { param: def_id, stack, body: body_compu }.build(lo, site)
+                let fix = SFix { param: def_id, stack, body: body_compu }.build(lo, site);
+                if let Some(&ty) = lo.statics.annotations_compu.get(self) {
+                    lo.arena.inner.fix_protocols.insert_new(fix, lo.protocols.stack(ty));
+                }
+                fix
             }
             | Compu::Force(Force(body)) => {
                 let body = body.lower(lo, ());

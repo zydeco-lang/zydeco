@@ -581,6 +581,10 @@ through one alias defeats selective pruning by another.
 Eliminating an unpack can also eliminate its shape demand.
 An unobserved field becomes trivial only when its producer is discardable.
 
+Source value and parameter classifiers also contribute the [partial protocol evidence](#partial-source-protocols)
+retained across rebuilding.
+Discarded producers lose their evidence; whole retained values and parameters carry it to closure conversion.
+
 ### Primitive calls
 
 A known primitive thunk initially has the form `closure • => extern f •`.
@@ -684,7 +688,8 @@ Stack operations retain evidence when their known pushes and pops cancel; a rema
 into the opaque restored stack loses the required agreement.
 
 These checks assume source typing and closure conversion establish the shapes of dynamically obtained packages.
-They do not recheck logical argument/result types, complete `CType` protocols, or continuation lifetime.
+The administrative checks are supplemented by the partial source protocol checks below.
+Neither establishes continuation lifetime or reconstructs complete source typing.
 Host and C external calls retain their own upstream signatures and transfer contracts.
 Local representation policies must preserve the ordinary word transport at this boundary;
 source storage alignment and padding alone cannot select a different call layout.
@@ -694,6 +699,60 @@ body, and ordered capture bindings.
 The verifier compares that metadata with the explicit continuation entry and its package
 before C11 replaces portable captures with retained slots.
 There is no second executable entry prologue to infer or keep synchronized.
+
+### Partial source protocols
+
+The compiler retains a partial description of the source stack protocol so
+that known call components can be checked after normalization.
+This description follows [Ret and stack extent](language.md#ret-and-stack-extent):
+an installed continuation hides its saved residual stack, and there is no end-of-frame constructor.
+In particular, an argument prefix followed by `cont(A)` does not bound the stack extent or allocation lifetime.
+
+[ValueProtocol and StackProtocol](../../lang/stackir/src/protocol.rs) are owned IR data extracted
+from checked classifiers.
+Values retain unit, primitive, product, and thunk structure when known.
+Unresolved witnesses, existential carriers, recursive heads, codata, and unsupported forms contribute unknowns.
+Erasing a universal type binder preserves any known argument prefix in its body;
+a bound computation variable remains an unknown remainder.
+
+| Stack descriptor | Interpretation |
+| --- | --- |
+| `?` | Unknown protocol; no statement about whether the stack is empty or how large it is |
+| `A :: S` | One argument classified by `A`, followed by protocol `S` |
+| `cont(A)` | An installed continuation accepting `A`, with its saved stack hidden |
+
+High lowering records value and pattern protocols, plus the entry protocol of each recursive computation.
+Normalization copies facts for retained whole values and patterns into the fresh arena;
+discarded values and pruned product fields do not retain stale whole-value facts.
+Primitive results can recover their scalar protocol from the typed operation itself.
+Closure conversion transfers these facts to the low arena and records an `EntryProtocol` for each block.
+Closures retain their incoming source stack protocol, and continuation entries retain the accepted value protocol.
+Recursive self labels inherit the same entry descriptor as their block.
+These descriptions come from checked classifiers, not a count of leading `LetArg` nodes.
+
+The [protocol verifier](../../lang/stackir/src/low/protocols.rs) checks known components before SPSLow is published.
+It compares a closure's protocol with the supplied argument stack,
+and a continuation's accepted value with the result delivered to it.
+Entry kinds agree with administrative roles; known incoming parameter protocols agree
+with their retained source pattern classifiers.
+Bindings, aliases, product projections, and package openings propagate local evidence.
+An opened thunk supplies its code's protocol; an opened continuation supplies the code's accepted value protocol
+while its restored stack becomes opaque to this analysis.
+The separate provenance check still associates that code with the exact restored stack.
+
+Unknown components are compatible with the existing word transport, and only known conflicts are rejected.
+This compatibility relation is not type equality and cannot authorize a different ABI.
+Abstract storage-carrier identity remains an upstream source typing property; recursive codata transitions,
+full polymorphic instantiation, and layout/reference-map evidence are not reconstructed.
+Host and C external transfers keep their existing signature checks.
+No frame-size, frame-lifetime, or stack-scanning plan is derived from these descriptors.
+
+`zydeco build --target zir` displays entries such as `closure[Int64 :: cont(Int64)]`
+and `continuation[Thk(Int64 :: cont(Int64))]` alongside their administrative word parameters.
+[Protocol regressions](../../lang/tests/tests/stack_protocols.rs) check those surviving descriptions,
+rejected argument/result and entry-metadata conflicts, and a source computation
+that accumulates a runtime-dependent number of argument/tag frames before its installed continuation.
+That program also calls a returned worker through a recursive computation-polymorphic forwarder on all backends.
 
 ## C10. ZASM, stack analysis, and local representation choices
 

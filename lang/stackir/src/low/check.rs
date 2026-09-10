@@ -35,6 +35,8 @@ pub enum SpsLowError {
     ContinuationContext { stack: StackId },
     #[error(transparent)]
     EntryContract(#[from] super::contracts::EntryContractError),
+    #[error(transparent)]
+    Protocol(#[from] super::protocols::ProtocolError),
 }
 
 impl SpsLowProgram {
@@ -46,6 +48,7 @@ impl SpsLowProgram {
             return Err(SpsLowError::OpenRoot { variables });
         }
         super::contracts::EntryValidator::validate(&arena.inner, root)?;
+        super::protocols::ProtocolValidator::validate(&arena.inner, root)?;
         Ok(Self { arena: FrozenArena::new(arena), root })
     }
 

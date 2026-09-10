@@ -78,6 +78,7 @@ The implementation carries several complementary descriptions:
 | Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
 | SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
 | SPSLow word entries | Ordered environment/result words and checked code/package provenance | Complete source stack protocols or a different component transport |
+| SPSLow partial source protocols | Known value components and argument/continuation protocols retained across normalization | Nominal storage identity, recursive codata transitions, or physical stack extent |
 | Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
 
 For example, the ordinary logical type `UInt8 * UInt32` can have natural storage of eight bytes,
@@ -173,8 +174,8 @@ before either assembly lowering or direct SPS Wasm emission.
 The useful distinction is between the environment/result words introduced by closure conversion
 and the source computation's remaining stack protocol.
 The former have fixed roles even when the source worker or its representation provider is selected at runtime.
-The latter requires information that high SPS currently erases.
-The accepted extension therefore exposes the administrative roles and checks package agreement first.
+The partial source protocol extension below supplies known parts of the latter.
+The administrative contract checks entry roles and package agreement independently of that source evidence.
 It leaves ordinary argument consumption in the block body and retains the current word transport.
 
 Direct entries, recursive labels, and package openings now supply code evidence to the verifier.
@@ -184,6 +185,35 @@ Aliases preserve the association when their producer is known.
 The existing execution fixtures exercise recursive and dynamic calls on all backends;
 policy tests keep wide captured values live across native collection.
 These checks improve the compiler boundary without making a new runtime representation or performance claim.
+
+### Partial source protocol experiment
+
+Source protocol evidence survives lowering, normalization, and closure conversion.
+[C9's partial source protocols](../references/compiler.md#partial-source-protocols) own the descriptors,
+propagation, and validation rules.
+They require no new source annotations.
+This gives known scalar, product, and thunk components a checkable interface at direct and indirect transfers,
+while keeping unknown remainders explicit.
+
+The boundary deliberately preserves the distinction between a computation protocol and its physical stack extent.
+[Ret and stack extent](../references/language.md#ret-and-stack-extent) explains why a
+return continuation cannot establish a frame boundary.
+The implemented descriptor records what that continuation accepts; its hidden saved stack contributes no size
+or allocation claim.
+
+The [source regression](../../lib/tests/core/stack-protocols.zy) defines a recursive codata protocol
+with `.item : Int64 -> Stream` and `.done : Ret Int64` observations.
+Its producer pushes a runtime-selected number of item arguments and tags,
+and its consumer drains them before delivering a result to the installed continuation.
+Codata recursion remains opaque in the partial descriptor; source typing still checks those observations.
+The same program returns a dynamically selected worker thunk and calls it
+through a recursive forwarder polymorphic in its residual computation protocol.
+Tests inspect retained entry evidence and execute different stack depths on the interpreter,
+AMD64, and both Wasm backends.
+Mutated low IR is rejected for known argument/result conflicts and inconsistent entry metadata.
+
+This establishes partial source agreement through the existing word ABI.
+It does not select byte layouts or raw slots, equate abstract carriers, or infer physical stack size.
 
 ### Remaining machine-call boundary
 
@@ -207,8 +237,8 @@ A modular extension needs the following boundaries in order:
    An entry contract needs explicit evidence at the call boundary; a compiler policy cannot infer permission
    to change an ABI from an arbitrary `Int64` field.
 2. **One entry contract for both ends.** The checked word entry experiment establishes administrative roles
-   and package agreement.
-   Extend that boundary with source argument/result components and representation evidence shared
+   and package agreement; partial source protocols now preserve known argument/result structure through normalization.
+   Extend that boundary with recursive observation protocols and representation evidence shared
    by direct calls, indirect calls, closures, and return continuations.
    Unknown representations require a uniform transport or a checked adapter;
    separate callers cannot independently infer a different number of stack slots.
@@ -227,15 +257,13 @@ Before accepting another machine transport, its tests must also retain managed f
 across collection and verify that padding or raw scalar bits never become roots.
 The current experiment inherits the existing handle/root contract; it does not exercise mixed raw/reference slots.
 
-The next bounded compiler experiment should retain source stack protocol evidence
-through high SPS normalization and closure conversion.
-Begin with fixed `A -> Ret B` protocols using ordinary word transport, and preserve explicit unknown tails
-for computation polymorphism and dynamically obtained interfaces.
-The same descriptor must reach the closure, its force sites, and the result continuation;
-inferring a signature from a block's leading `LetArg` nodes would lose forwarding and effect protocols.
-Acceptance requires matched direct, indirect, recursive, and returned-thunk cases,
-paired with rejected known protocol mismatches and conservative handling of unknown tails.
-Only after that evidence survives normalization should a Rust policy choose another component transport.
+The next protocol experiment should preserve codata observations and recursive protocol references
+without expanding them into a finite argument list.
+The recursive stream fixture supplies a concrete criterion: retain its observation transitions
+and reject known incompatible transfers while continuing to accept dynamic depth.
+Representation identity and mixed reference layouts still need their own evidence
+before a Rust policy can choose another component transport;
+partial compatibility involving unknowns cannot justify specialization.
 Static layout identity by structural equality, dependent size proofs, raw scalar slots,
 mixed reference layouts, and C aggregate classification remain separate open work.
 The accepted source library needs none of those mechanisms to express stored interfaces today.
@@ -340,10 +368,12 @@ For a field of a region value, the `fields(R)` rule already forces `R`.
 ### Interprocedural blocks
 
 SPSLow blocks are entered by `Jump` with an explicit stack.
-Each block entry is a sequence of `LetArg` patterns.
+Use the [word entry contract](../references/compiler.md#word-entry-contracts) for administrative parameters
+and [partial source protocols](../references/compiler.md#partial-source-protocols) for known argument components.
+Argument consumers in the body contribute local constraints; counting them cannot reconstruct an unknown interface.
 The analysis needs a worklist over blocks:
 
-1. Compute the constraints inside each block from its entry patterns.
+1. Compute the constraints inside each block from its entry patterns and argument consumers.
 2. For every `Jump` to a block, intersect the allowed sets of the supplied values
    with the block's current entry requirements.
 3. Repeat until no allowed set changes.

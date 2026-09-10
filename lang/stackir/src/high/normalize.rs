@@ -313,11 +313,18 @@ impl Normalizer {
             }
             | pattern => pattern,
         };
-        pattern.build(self, site)
+        let node = pattern.build(self, site);
+        if let Some(protocol) = self.source.inner.pattern_protocols.get(&id) {
+            self.arena.inner.pattern_protocols.insert_new(node, protocol.clone());
+        }
+        node
     }
 
     fn value(&mut self, id: ValueId, env: EnvId, demand: Demand) -> Residual<ValueId> {
         let site = self.source.admin.terms.back(&TermId::Value(id)).copied();
+        let protocol = matches!(demand, Demand::Used)
+            .then(|| self.source.inner.value_protocols.get(&id).cloned())
+            .flatten();
         if demand.is_absent() && self.discardable(id) {
             return Residual { node: Triv.build(self, site), demands: Demands::default() };
         }
@@ -376,7 +383,11 @@ impl Normalizer {
             }
             | value => (value, Demands::default()),
         };
-        Residual { node: value.build(self, site), demands }
+        let node = value.build(self, site);
+        if let Some(protocol) = protocol {
+            self.arena.inner.value_protocols.insert_new(node, protocol);
+        }
+        Residual { node, demands }
     }
 
     fn resolve_stack(&self, mut stack: ScopedStack) -> ScopedStack {
@@ -786,7 +797,11 @@ impl Normalizer {
                 return self.external_call(function, ScopedStack { node: stack, scope }, site);
             }
         };
-        Residual { node: compu.build(self, site), demands }
+        let node = compu.build(self, site);
+        if let Some(protocol) = self.source.inner.fix_protocols.get(&id) {
+            self.arena.inner.fix_protocols.insert_new(node, protocol.clone());
+        }
+        Residual { node, demands }
     }
 }
 

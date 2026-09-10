@@ -7,12 +7,13 @@ use crate::high::{
     syntax as high,
     variables::{FreeVars as _, Vars as _},
 };
+use crate::protocol::{StackProtocol, ValueProtocol};
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
 use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_syntax::VarName;
-use zydeco_utils::{context::Context, pass::CompilerPass};
+use zydeco_utils::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct RenameEnvId(usize);
@@ -182,7 +183,7 @@ impl<'a> SpsLowConverter<'a> {
 
     fn translate_pattern(&mut self, id: high::VPatId) -> PatternTranslation {
         let site = self.pattern_site(id);
-        match self.source.inner.vpats[&id].clone() {
+        let translated = match self.source.inner.vpats[&id].clone() {
             | high::ValuePattern::Hole(high::Hole) => {
                 PatternTranslation { pattern: low::Hole.build(self, site), bindings: Vec::new() }
             }
@@ -230,16 +231,25 @@ impl<'a> SpsLowConverter<'a> {
                     bindings: bindings.into_iter().flatten().collect(),
                 }
             }
+        };
+        if let Some(protocol) = self.source.inner.pattern_protocols.get(&id) {
+            self.arena.inner.pattern_protocols.insert_new(translated.pattern, protocol.clone());
         }
+        translated
     }
 
     fn translate_value(&mut self, id: high::ValueId, env: RenameEnvId) -> low::ValueId {
         let site = self.value_site(id);
-        match self.source.inner.values[&id].clone() {
+        let protocol = self.source.inner.value_protocols.get(&id).cloned();
+        let translated = match self.source.inner.values[&id].clone() {
             | high::Value::Hole(high::Hole) => low::Hole.build(self, site),
             | high::Value::Var(def) => self.translated_var(def, env, site),
             | high::Value::Closure(high::Closure { stack: high::Bullet, body }) => {
-                self.translate_closure(body, env, site)
+                let entry = match &protocol {
+                    | Some(ValueProtocol::Thunk(stack)) => *stack.clone(),
+                    | _ => StackProtocol::Unknown,
+                };
+                self.translate_closure(body, entry, env, site)
             }
             | high::Value::Ctor(high::Ctor(ctor, body)) => {
                 let body = self.translate_value(body, env);
@@ -255,11 +265,16 @@ impl<'a> SpsLowConverter<'a> {
                 let operands = operands.map(|operand| self.translate_value(operand, env));
                 low::Primitive { operation, operands }.build(self, site)
             }
+        };
+        if let Some(protocol) = protocol {
+            self.arena.inner.value_protocols.insert_new(translated, protocol);
         }
+        translated
     }
 
     fn translate_closure(
-        &mut self, body: high::CompuId, env: RenameEnvId, site: Option<ss::TermId>,
+        &mut self, body: high::CompuId, protocol: StackProtocol, env: RenameEnvId,
+        site: Option<ss::TermId>,
     ) -> low::ValueId {
         let captures = self.sorted_free_vars(body, Context::new());
         let capture_bindings = self.capture_bindings(&captures);
@@ -269,6 +284,7 @@ impl<'a> SpsLowConverter<'a> {
         let label = self.alloc_label("closure");
         let entry = low::EntryParameters::Closure { environment: environment_pattern };
         let code = low::Block { label, entry, body }.build(self, site);
+        self.arena.inner.entry_protocols.insert_new(code, low::EntryProtocol::Closure(protocol));
         let environment = self.captured_value_outside(&captures, env, site);
         low::ClosurePackage { environment, code }.build(self, site)
     }
@@ -296,6 +312,8 @@ impl<'a> SpsLowConverter<'a> {
         &mut self, binder: high::VPatId, body: high::CompuId, env: RenameEnvId,
         site: Option<ss::TermId>,
     ) -> low::StackId {
+        let protocol =
+            self.source.inner.pattern_protocols.get(&binder).cloned().unwrap_or_default();
         let captures = self.sorted_free_vars(body, binder.vars(&self.source));
         let capture_bindings = self.capture_bindings(&captures);
         let PatternTranslation { pattern: binder, bindings: binder_bindings } =
@@ -321,6 +339,10 @@ impl<'a> SpsLowConverter<'a> {
         let parameters =
             low::EntryParameters::Continuation { result: binder, environment: environment_pattern };
         let code = low::Block { label, entry: parameters, body }.build(self, site);
+        self.arena
+            .inner
+            .entry_protocols
+            .insert_new(code, low::EntryProtocol::Continuation(protocol));
 
         let environment = self.captured_value_outside(&captures, env, site);
         let ambient = low::Bullet.build(self, site);
@@ -339,7 +361,11 @@ impl<'a> SpsLowConverter<'a> {
             }
             | high::Computation::Force(force) => self.translate_force(force, env, site),
             | high::Computation::Ret(ret) => self.translate_return(ret, env, site),
-            | high::Computation::Fix(fix) => self.translate_fix(fix, env, site),
+            | high::Computation::Fix(fix) => {
+                let protocol =
+                    self.source.inner.fix_protocols.get(&id).cloned().unwrap_or_default();
+                self.translate_fix(fix, protocol, env, site)
+            }
             | high::Computation::ProductMatch(high::SProductMatch { scrut, binder, body }) => {
                 let scrut = self.translate_value(scrut, env);
                 let PatternTranslation { pattern: binder, bindings } =
@@ -440,7 +466,8 @@ impl<'a> SpsLowConverter<'a> {
     }
 
     fn translate_fix(
-        &mut self, fix: high::SFix, env: RenameEnvId, site: Option<ss::TermId>,
+        &mut self, fix: high::SFix, protocol: StackProtocol, env: RenameEnvId,
+        site: Option<ss::TermId>,
     ) -> low::CompuId {
         let stack = self.translate_stack(fix.stack, env);
         let captures = self.sorted_free_vars(fix.body, Context::singleton(fix.param));
@@ -463,6 +490,7 @@ impl<'a> SpsLowConverter<'a> {
         let environment_pattern = self.captured_pattern(&capture_bindings);
         let entry = low::EntryParameters::Closure { environment: environment_pattern };
         let block = low::Block { label, entry, body }.build(self, site);
+        self.arena.inner.entry_protocols.insert_new(block, low::EntryProtocol::Closure(protocol));
 
         let environment = self.captured_value_outside(&captures, env, site);
         let argument = low::EntryArgument::Closure { environment };
