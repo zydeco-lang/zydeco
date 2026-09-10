@@ -47,7 +47,7 @@ The metavariable $N$ ranges over unsorted terms.
     | "val pi"_(overline(alpha))(P : A_1) . A_2$],
   [], [], [$|$], [$"forall"_(alpha) (Q : K) . B$],
   [], [], [$|$], [$Pi^"pkg"_(alpha_1 dots.h.c alpha_n)(A\; B)$],
-  [], [], [$|$], [$A_1 times A_2 | "exists"_(alpha) (Q : K) . A$],
+  [], [], [$|$], [$op("Prod")(A_1, dots.h.c, A_n) | "exists"_(alpha) (Q : K) . A$],
   [], [], [$|$], [$"exists"_(alpha) (Q " as " S : K) . A
     | "exists" (R " as " K : "Set") . A$],
   [], [], [$|$], [$"data" { c_i : A_i }_(i in I) | "codata" { d_i : B_i }_(i in I)$],
@@ -56,10 +56,10 @@ The metavariable $N$ ranges over unsorted terms.
   [Type pattern], [$Q$], [$::=$], [$#text("_") | X | (ell = Q)$],
   [Static pattern], [$U$], [$::=$], [$R | Q$],
   [Value pattern], [$P$], [$::=$], [$#text("_") | x | (ell = P) | c space P | ()
-    | (P_1, P_2) | (U, P) | V space "~>" space P$],
+    | (P_1, dots.h.c, P_n) | (U, P) | V space "~>" space P$],
   [Static witness], [$W$], [$::=$], [$K | S$],
 
-  [Value], [$V$], [$::=$], [$x | (ell = V) | {M} | c space V | () | (V_1, V_2)
+  [Value], [$V$], [$::=$], [$x | (ell = V) | {M} | c space V | () | (V_1, dots.h.c, V_n)
     | (W, V) | V slash ell | "lit"$],
   [], [], [$|$], [$"val" space Q arrow.r V | "val" space P arrow.r V | V space S | V_1 space V_2$],
   [], [], [$|$], [$V_1 |> V_2 | V_1 <| V_2 | "let" P = V_1 " in " V_2$],
@@ -80,9 +80,13 @@ The metavariable $N$ ranges over unsorted terms.
 ]
 ]
 
-The host type symbol is $H_rho$, where $rho in {"int", "char", "string", "os"}$. A tuple is stored as an
-n-ary spine but is typed by repeated binary products. The same tuple syntax denotes a package when its expected
-type has a leading static package prefix.
+The host type symbol is $H_rho$, where $rho in {"int", "char", "string", "os"}$.
+Products preserve their arity and explicit nesting. Write $op("Prod")(A_1, dots.h.c, A_n)$ for one product node;
+the source spelling `A * B * C` denotes $op("Prod")(A, B, C)$, while `A * (B * C)` denotes
+$op("Prod")(A, op("Prod")(B, C))$. These types are distinct. Binary notation $A times B$ abbreviates
+$op("Prod")(A, B)$ only; it does not impose an association law.
+Source products have $n >= 2$; `()` has the separate type `Unit`, and `(N)` is grouping.
+The same tuple syntax denotes a package when its expected type has a leading static package prefix.
 
 Contexts and visible existential witnesses are
 
@@ -327,9 +331,8 @@ The checked classifier stores both $overline(alpha)$ and $op("route")_(A_1)(P)$.
 
 $
   frac(
-    Gamma \; Delta tack.r A_1 arrow.l.double "VType"
-    quad Gamma \; Delta tack.r A_2 arrow.l.double "VType",
-    Gamma \; Delta tack.r A_1 times A_2 arrow.r.double "VType",
+    n >= 2 quad (Gamma \; Delta tack.r A_i arrow.l.double "VType")_(i = 1 dots.h.c n),
+    Gamma \; Delta tack.r op("Prod")(A_1, dots.h.c, A_n) arrow.r.double "VType",
   ) quad #text(size: 6.5pt)[T-PROD]
 $
 
@@ -465,13 +468,19 @@ $
 
 $
   frac(
-    Gamma \; Delta tack.r P_1 arrow.l.double A_1 tack.l Gamma_1 \; Delta union Omega_1
-    quad Gamma_1 \; Delta union Omega_1 tack.r P_2 arrow.l.double A_2
-      tack.l Gamma_2 \; Delta union Omega_1 union Omega_2,
-    Gamma \; Delta tack.r (P_1, P_2) arrow.l.double A_1 times A_2
-      tack.l Gamma_2 \; Delta union Omega_1 union Omega_2,
+    #pad(bottom: 2pt, stack(
+      spacing: 9pt,
+      $n >= 2 quad Gamma_0 = Gamma quad Delta_0 = Delta$,
+      $(Gamma_(i - 1) \; Delta_(i - 1) tack.r P_i arrow.l.double A_i
+        tack.l Gamma_i \; Delta_i)_(i = 1 dots.h.c n)$,
+    )),
+    Gamma \; Delta tack.r (P_1, dots.h.c, P_n) arrow.l.double op("Prod")(A_1, dots.h.c, A_n)
+      tack.l Gamma_n \; Delta_n,
   ) quad #text(size: 6.5pt)[P-PROD]
 $
+
+Each $Delta_i$ extends $Delta_(i - 1)$ with the witnesses opened by $P_i$.
+The pattern and expected product have the same component count; a nested component uses P-PROD again.
 
 $
   frac(
@@ -581,9 +590,8 @@ $
 
 $
   frac(
-    Gamma \; Delta tack.r V_1 arrow.r.double A_1
-    quad Gamma \; Delta tack.r V_2 arrow.r.double A_2,
-    Gamma \; Delta tack.r (V_1, V_2) arrow.r.double A_1 times A_2,
+    n >= 2 quad (Gamma \; Delta tack.r V_i arrow.r.double A_i)_(i = 1 dots.h.c n),
+    Gamma \; Delta tack.r (V_1, dots.h.c, V_n) arrow.r.double op("Prod")(A_1, dots.h.c, A_n),
   ) quad #text(size: 6.5pt)[V-PROD]
 $
 
@@ -674,7 +682,7 @@ $
 $
 
 Let $op("field")(A_1, ell) = (j, A_2)$ when either $A_1 arrow.b.double ell :: A_2$ directly, or exactly one immediate
-component of the right-associated product spine of $A_1$ has that form; $j$ is `direct` or the physical component index.
+component of the n-ary product $A_1$ has that form; $j$ is `direct` or the component index.
 
 $
   frac(
@@ -1170,13 +1178,12 @@ $
   frac(
     #pad(bottom: 2pt, stack(
       spacing: 9pt,
-      $Gamma \; Delta tack.r P_1 arrow.r.double A_1
-        tack.l Gamma_1 \; Delta$,
-      $Gamma_1 \; Delta tack.r P_2 arrow.r.double A_2
-        tack.l Gamma_2 \; Delta$,
+      $n >= 2 quad Gamma_0 = Gamma$,
+      $(Gamma_(i - 1) \; Delta tack.r P_i arrow.r.double A_i
+        tack.l Gamma_i \; Delta)_(i = 1 dots.h.c n)$,
     )),
-    Gamma \; Delta tack.r (P_1, P_2) arrow.r.double A_1 times A_2
-      tack.l Gamma_2 \; Delta,
+    Gamma \; Delta tack.r (P_1, dots.h.c, P_n) arrow.r.double op("Prod")(A_1, dots.h.c, A_n)
+      tack.l Gamma_n \; Delta,
   ) quad #text(size: 6.5pt)[P-INF-PROD]
 $
 
@@ -1260,6 +1267,9 @@ $
     Gamma tack.r ?A_1 arrow.b.double ?A_2 times ?A_3,
   ) quad #text(size: 6.5pt)[REFINE-PROD]
 $
+
+REFINE-PROD records the current inference helper's two-component refinement of an unknown expected type.
+An already known product retains its component vector; refinement does not identify nested and flat products.
 
 No REFINE rule invents a data, codata, existential, package-dependent, or nominal shape.
 

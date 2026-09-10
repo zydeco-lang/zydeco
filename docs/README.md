@@ -35,3 +35,7 @@ Other documentation serves distinct purposes:
 
 Scratch records under [logs](logs) are supplementary; durable rules belong in their owning design document
 or completed reference chapter.
+
+[Binary products with right-spine layout](proposals/binary-products.md) preserves an unimplemented alternative
+to the current n-ary product semantics.
+It requires a separate design decision before adoption.

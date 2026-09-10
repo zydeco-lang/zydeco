@@ -2,18 +2,26 @@
 
 These are follow-ups from reference drafting on 2026-09-08: the language account was inspected against `289f2a14`,
 the compiler account against `fdc4eeee`, and the broader consolidation against `14e0410a`.
+The follow-up audit on 2026-09-10 inspected `e7a5a1cf`, including the intervening storage,
+static-calculation, argument-fold, FFI, and stack-protocol work.
+Product authority and the tutorial were repaired in this pass; the other findings below remain open.
 Keep the evidence and proposed repair together here; the reference chapters should contain the resulting account,
 not an editorial history.
 Checked entries record completed documentation repairs; unchecked entries remain follow-ups.
 
 ## Language accounts
 
-- [ ] **Product shape.** The [tutorial](../tutorial/zydeco-guide.md)
-  and [formal calculus](../../lang/statics/type-system.typ) describe binary right-associated product typing.
+- [x] **Product shape and proposal status.** The
+  [tutorial](../tutorial/zydeco-guide.md#4-products-named-fields-and-packages)
+  and [formal calculus](../../lang/statics/type-system.typ) had described binary right-associated product typing.
   The current [typed syntax](../../lang/statics/src/syntax.rs)
   and [product checker](../../lang/statics/src/check/pattern/product.rs) preserve n-ary arity and explicit nesting.
-  Revise the active accounts together, using `A * B * C` versus `A * (B * C)` as the distinguishing example.
-  Keep the [older product design](../legacy/ideas/products.md) historical.
+  The implementation remains canonical: both active accounts now distinguish `A * B * C` from `A * (B * C)`.
+  The binary design was a proposal, not an implemented historical semantics; it has been moved
+  from the legacy ideas directory into the [binary-product proposal](../proposals/binary-products.md),
+  retaining its suffix-pattern and layout alternatives.
+  The tutorial checks flat and nested introductions and rejects both a flat value at a nested type
+  and a suffix pattern at a flat type.
 
 - [ ] **Recursive-type admissibility.** The earlier term proposal required a chosen guardedness
   or positivity discipline.
@@ -41,12 +49,46 @@ Checked entries record completed documentation repairs; unchecked entries remain
   now uses the current interfaces and checked examples.
   The obsolete claims were not transferred.
 
-- [ ] **Tutorial examples and notation.** The [guide](../tutorial/zydeco-guide.md) includes `exists (X = def as X : K)`
-  and an older monadic-basis product opening.
-  Compare them with the [grammar](../../lang/surface/src/textual/parser/grammar.lalrpop),
-  [monadic basis](../../lib/std/control/monad.zy), and current examples.
-  Correct obsolete forms and make complete guide examples opt into documentation checking.
-  Rejoin the Builtin table's `surface` row, which is split across two Markdown lines.
+- [x] **Tutorial examples and notation.** The [guide](../tutorial/zydeco-guide.md) now uses manifest `as` syntax,
+  complete terms with guide-relative imports, and 21 accepted examples plus two specified rejections.
+  Its Builtin table is repaired and includes the current Buffer capability.
+  The review also corrected the executable entry boundary, import sugar, thunk-binding expansion,
+  the ill-kinded `Ret Counter`, projection from returned records, and unnecessary rewrapping of dictionary thunks.
+  Recursive codata uses a mobile sealed definition with its required explicit kind.
+  State, Exception, and StateExn publish manifest carrier equations; describing all three as abstract was incorrect.
+  The positional monadic-basis opening remains valid; the refreshed examples use projection groups
+  to select their dependencies without enumerating the package layout.
+  The guide now covers total value functions, value matches and integer calculations, current storage interfaces,
+  and the fixed-width/void C import subset, with links to their rule owners.
+
+- [ ] **Formal calculus beyond products.** The [calculus](../../lang/statics/type-system.typ) still
+  gives `field` an immediate-component search and explicitly excludes deeper traversal;
+  [field lookup](../../lang/statics/src/check/projection/field.rs) recursively searches named wrappers,
+  products, and package telescopes.
+  The function section also says witnesses beneath products or constructors are rejected at the binder,
+  whereas the nested-package probe below reaches an application failure.
+  Finally, the value grammar and rules omit value-producing matches
+  and integer value operations already covered by [L8](../references/language.md#8-value-functions-and-views)
+  and [static elimination](../references/compiler.md#static-elimination).
+  Reconcile these accounts separately; the product repair does not establish whole-calculus conformance.
+
+- [ ] **Literal-match result summary.** [L7](../references/language.md#7-patterns-and-coverage)
+  still says integer-literal matching remains a computation.
+  [L8](../references/language.md#8-value-functions-and-views)
+  and the tutorial's checked `maximum` example demonstrate a value-producing integer match.
+  Update the pattern summary to permit either result sort under the shared match and static-elimination rules.
+
+- [ ] **Execution-profile storage wording.** [L15](../references/language.md#15-execution-profiles)
+  still says there are no source layout annotations or manual allocation.
+  The [current storage interfaces](../../lib/std/README.md#explicit-storage) expose Buffer allocation and `close`,
+  allocator protocols, storage recipes, and static plans.
+  Scope the limitation to the compiler-managed representation of ordinary values,
+  and distinguish it from explicit source-managed storage.
+
+- [ ] **Import-sugar explanation.** [DESIGN.md](../../DESIGN.md#source-terms-and-imports)
+  explains the parenthesized metadata abbreviation by repeating `@(import("library.zy"))` on both sides.
+  The corresponding tutorial explanation now expands it to `@[import("library.zy")] _`.
+  Correct the remaining design summary against the grammar.
 
 - [x] **FFI example grouping.** The earlier FFI proposal's unparenthesized metadata-hole annotation failed parsing
   at `:` as a complete term.
@@ -72,7 +114,7 @@ Unchecked entries still need consolidation.
   The [matrix conversion](../../lang/statics/src/validate/coverage.rs) retains each typed component vector
   and uses its length as the head arity.
   The [compiler coverage account](../references/compiler.md#coverage) preserves explicit nesting;
-  the tutorial and formal-calculus follow-up above remains open.
+  the tutorial and formal-calculus product repair above now agrees with that account.
 
 - [x] **Primitive package layout.** Retired `primitive-packages.md` marked its five-group layout as superseded
   but retained `core`, `representations`, carrier-bearing numeric children, and an obsolete `Unit`-tail rationale.
@@ -112,8 +154,28 @@ Unchecked entries still need consolidation.
   size comparison, and hashes as historical evidence.
   [C16](../references/compiler.md#source-fixtures-and-runtime-oracles) owns the current harness's stdin,
   captured-output, and exit oracles.
-  The revised selection criteria distinguish that capability from actual case coverage;
-  the multi-argument process-fold embedding gap remains open.
+  The revised selection criteria distinguish that capability from actual case coverage.
+  At this repair's original baseline, multi-argument process folds still had an embedding gap;
+  the later status reconciliation is tracked separately below.
+
+- [ ] **Wasm argument-fold status.** `c6bacd1c` introduced indexed `args/at`
+  and the ordinary CBPV [argument fold](../../lib/std/system/arguments.zy);
+  the [Wasm proposal's validation criteria](../proposals/wasm-backends.md#criteria-for-selecting-wasm)
+  now report passing multi-argument regressions.
+  Its open questions still ask whether to choose an indexed API or a host-closure bridge.
+  Remove that superseded choice and audit related summaries; retain the independent continuation-reuse,
+  lifetime, and backend-selection questions.
+
+- [ ] **C ABI evidence and static plans.** The [C FFI proposal](../proposals/c-ffi.md#additional-abi-shapes)
+  still frames `Layout A` as a runtime recipe without explaining the later source-calculated `Plan A` path.
+  Distinguish static storage-plan evidence from runtime layouts and from target-specific ABI classification.
+  Static size and alignment calculations alone do not implement aggregate register splitting, memory arguments,
+  or hidden result pointers; those extensions remain open.
+
+- [ ] **Contribution-guide prelude references.** [CONTRIBUTING.md](../../CONTRIBUTING.md#check-and-run-source-terms)
+  checks `lib/std/prelude.zy`, which is absent at the audit baseline, and refers to its annotated kind prefix.
+  Replace the command with an existing independently checked source and link the package explanation
+  to the current [kind-prefix example](../../lib/std/README.md#package-composition).
 
 - [x] **Escape-analysis environment premise.** The [escape design](../proposals/escape-unboxing.md) now
   uses the retained native activation model and links delivered local unboxing to C10.
@@ -163,6 +225,25 @@ Unchecked entries still need consolidation.
 
 ## Compiler boundary probes
 
+- [ ] **N-ary product inference refinement.** The [refinement helper](../../lang/statics/src/normalize/inference.rs)
+  fills an unknown expected product with exactly two fresh component types.
+  The formal calculus retains this implementation detail in REFINE-PROD; it is not an association law.
+  This three-component use rejects with `tyck.type-expected` (expected matching components,
+  found `_ * _`) and a secondary `tyck.missing-solution`:
+
+  ```zydeco
+  begin
+    let first = { fn triple => let (head, _, _) = triple in ret head } that
+    ! first ((), (), ())
+  end
+  ```
+
+The two-component counterpart, using `(head, _)` and `((), ())`, passes.
+The three-component program also passes when `Unit = @(intrinsic(unit))` is bound
+and the function parameter is annotated `(triple : Unit * Unit * Unit)`.
+Review arity-directed refinement and retain all three probes when implementing a change.
+The product documentation repair leaves this inference behavior unchanged.
+
 - [ ] **Nested package witness diagnostic.** Computation binders can collect witnesses beneath product patterns,
   but [application instantiation](../../lang/statics/src/check/functions/application.rs)
   traverses a leading existential prefix.
@@ -181,6 +262,21 @@ and `! reveal (Unit, ())` in the same context.
 Give unsupported witness routes a diagnostic explaining their shape,
 or review generalized computation instantiation as a separate extension.
 Preserve this pair when implementing either change.
+
+## Verification of the product and tutorial repair
+
+The 2026-09-10 pass ran the tutorial through the documentation checker: all 23 guide examples passed (21 accepted terms
+and two expected product rejections), alongside two examples from the documentation fixture.
+The formal calculus compiled with Typst.
+The three product-inference probes above were checked separately; they remain evidence for an open implementation issue.
+
+```sh
+cargo run --quiet --bin zydeco -- doc check docs/examples/documentation/counter.zy --guide docs/tutorial/zydeco-guide.md
+typst compile --root . lang/statics/type-system.typ /tmp/zydeco-type-system.pdf
+```
+
+These checks validate example acceptance and document construction, not execution of every tutorial example
+or conformance of the remaining formal rules.
 
 ## Drafting corrections
 

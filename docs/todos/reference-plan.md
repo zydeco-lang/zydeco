@@ -181,8 +181,10 @@ recording a mismatch does not authorize a language or compiler behavior change.
    as their detailed owners are reviewed.
    Native frame alternatives, Wasm strategy comparisons,
    and tooling designs retain useful independent content beyond the reference summaries.
-2. Reconcile the tutorial and formal calculus with the source accounts,
-   including product shape and recursion boundaries.
+2. Reconcile the remaining formal-calculus rules with the source accounts,
+   including field search, package-witness boundaries, and value matches.
+   The tutorial refresh and n-ary product repair are recorded in the [drift list](reference-drift.md);
+   the binary alternative is retained as a proposal.
    Keep mathematical rules in one companion rather than copying a second calculus into the references.
 3. Audit historical measurements and remaining scratch records for durable evidence,
    then move that evidence to its owner.
