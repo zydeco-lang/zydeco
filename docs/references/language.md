@@ -285,6 +285,22 @@ Matching selects the first successful arm; partial binders may terminate executi
 terminates, aborts, or diverges; it has no ordinary source return.
 An explicit successor `Thk OS` is suspended code and need not be a captured machine continuation.
 
+### Ret and stack extent
+
+**`Ret A` describes an installed continuation accepting an `A`, not a stack-frame marker.**
+It specifies the return-address protocol at the point of use.
+`ret v` delivers `v` to that continuation, and `do p <- M; N` installs a continuation
+that binds `p` and resumes `N` against its saved residual stack.
+The continuation hides that residual stack's extent.
+
+A CBPV computation can push a runtime-dependent, unbounded number of arguments before transferring control;
+the number need not be predictable from its source syntax or a `Ret` occurrence.
+Consequently, `Ret` establishes neither a fixed frame size nor a boundary for stack allocation,
+scanning, or reclamation.
+A compiler may record a known argument prefix and the continuation's accepted value protocol,
+but must keep unknown or recursive stack structure explicit.
+Physical frame layout and lifetime require separate backend evidence.
+
 ## 7. Patterns and coverage
 
 Variables and holes match any input.

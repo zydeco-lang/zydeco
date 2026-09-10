@@ -37,6 +37,10 @@ Read `M : B` as saying that `M` can consume a stack with protocol `B`, not that 
 `Ret A` expects a return continuation accepting an `A`; `A -> B` expects an `A` argument above a residual `B` stack;
 codata describes alternatives of observable frames.
 
+> **`Ret` is an installed continuation, not a stack-frame marker.** Stack extent can depend on runtime control flow,
+> including an unbounded number of argument pushes. The [source rule](docs/references/language.md#ret-and-stack-extent)
+> forbids inferring a fixed frame size or an allocation/reclamation boundary from `Ret` alone.
+
 Stack shape is a typed control protocol, not a physical layout: native code may use the machine stack,
 while WebAssembly may use explicit frames and a trampoline.
 `Thk B` is suspended code compatible with a `B` stack, not the stack itself.
