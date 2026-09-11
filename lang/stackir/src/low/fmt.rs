@@ -284,11 +284,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
                 let (name, arity) = match function {
-                    | ExternalFunction::Host(function) => {
-                        (function.as_str(), f.admin.builtins[function].arity)
-                    }
+                    | ExternalFunction::Host(function) => (function.host_name(), function.arity()),
                     | ExternalFunction::Foreign(import) => {
-                        (import.target.symbol.as_str(), import.signature.parameters().len())
+                        (import.target.symbol.to_string(), import.signature.parameters().len())
                     }
                 };
                 RcDoc::concat([RcDoc::text(format!("<extern:{name}/{arity}> ")), stack.pretty(f)])
@@ -309,22 +307,14 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for SpsLowProgram {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let builtins = &f.admin.builtins;
-        let declarations = builtins
-            .iter()
-            .map(|(name, builtin)| {
-                RcDoc::text(format!("[function:{name}] {builtin}")).append(RcDoc::line())
-            })
-            .collect::<Vec<_>>();
-        RcDoc::concat(declarations)
-            .append(RcDoc::concat(f.inner.protocols.parameters().map(|(id, kind)| {
-                RcDoc::text(format!("[parameter:{id}] {kind}")).append(RcDoc::line())
-            })))
-            .append(RcDoc::concat(f.inner.protocols.iter().map(|(id, definition)| {
-                RcDoc::text(format!("[protocol:{id}] {definition}")).append(RcDoc::line())
-            })))
-            .append(RcDoc::text("[root]"))
-            .append(RcDoc::concat([RcDoc::line(), self.root().pretty(f)]).nest(f.indent))
-            .append(RcDoc::line())
+        RcDoc::concat(f.inner.protocols.parameters().map(|(id, kind)| {
+            RcDoc::text(format!("[parameter:{id}] {kind}")).append(RcDoc::line())
+        }))
+        .append(RcDoc::concat(f.inner.protocols.iter().map(|(id, definition)| {
+            RcDoc::text(format!("[protocol:{id}] {definition}")).append(RcDoc::line())
+        })))
+        .append(RcDoc::text("[root]"))
+        .append(RcDoc::concat([RcDoc::line(), self.root().pretty(f)]).nest(f.indent))
+        .append(RcDoc::line())
     }
 }

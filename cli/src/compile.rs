@@ -11,10 +11,9 @@ use zydeco_session::{
     ProgramAnalysis,
 };
 use zydeco_stackir::{
-    BuiltinPackageLowerError, BuiltinRootLowerError, BuiltinRootLowerer, SpsLowPipeline,
-    SpsLowProgram, SpsLowerError,
+    BuiltinRootLowerError, BuiltinRootLowerer, SpsLowPipeline, SpsLowProgram, SpsLowerError,
 };
-use zydeco_statics::{arena::StaticsArena, validate::LintChecker};
+use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
 use zydeco_utils::pass::CompilerPass;
 
@@ -408,7 +407,7 @@ pub enum CompileError {
     #[error(transparent)]
     BuiltinLink(BuiltinPackageError),
     #[error(transparent)]
-    BuiltinLower(BuiltinPackageLowerError),
+    BuiltinLower(BuiltinPackagePlanError),
     #[error("{0}")]
     SpsLower(SpsLowerFailure),
     #[error(transparent)]

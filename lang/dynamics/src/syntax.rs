@@ -63,10 +63,9 @@ pub enum Value {
 
 /* ------------------------------- Computation ------------------------------ */
 
-/// A typed host operation together with its runtime arity.
+/// A typed host operation.
 #[derive(Clone, Debug)]
 pub struct Prim {
-    pub arity: u64,
     pub role: BuiltinValueRole,
 }
 

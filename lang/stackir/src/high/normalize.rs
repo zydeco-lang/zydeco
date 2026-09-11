@@ -655,9 +655,8 @@ impl Normalizer {
     fn external_call(
         &mut self, function: ExternalFunction, stack: ScopedStack, site: Option<ss::TermId>,
     ) -> Residual<CompuId> {
-        if let ExternalFunction::Host(name) = &function
-            && let Some(builtin) = self.arena.admin.builtins.get(name)
-            && let Some(operation) = PrimitiveOp::from_builtin(builtin.role)
+        if let ExternalFunction::Host(role) = &function
+            && let Some(operation) = PrimitiveOp::from_builtin(*role)
         {
             return self.primitive_call(operation, stack, site);
         }
@@ -831,8 +830,13 @@ mod tests {
 
         fn primitive(&mut self) -> ValueId {
             let stack = self.build(Bullet);
-            let body = self
-                .build(ExternCall { function: ExternalFunction::Host("int64_add".into()), stack });
+            let body = self.build(ExternCall {
+                function: ExternalFunction::Host(BuiltinValueRole::Integer(
+                    IntegerType::Int64,
+                    IntegerOperation::Add,
+                )),
+                stack,
+            });
             self.build(Closure { stack: Bullet, body })
         }
 
@@ -852,9 +856,9 @@ mod tests {
             self.build(Closure { stack: Bullet, body })
         }
 
-        fn external(&mut self, name: &str) -> CompuId {
+        fn external(&mut self, role: BuiltinValueRole) -> CompuId {
             let stack = self.build(Bullet);
-            self.build(ExternCall { function: ExternalFunction::Host(name.into()), stack })
+            self.build(ExternCall { function: ExternalFunction::Host(role), stack })
         }
 
         fn trap(&mut self, operation: &str) -> ValueId {
@@ -872,13 +876,16 @@ mod tests {
         }
 
         fn effect_before_popping_argument(&mut self) -> CompuId {
-            let tail = self.external("after");
+            let tail = self.external(BuiltinValueRole::WriteLine);
             let binder = self.build(Hole);
             let ambient = self.build(Bullet);
             let body = self.build(Let { binder: Cons(binder, Bullet), bindee: ambient, tail });
             let binder = self.build(Hole);
             let stack = self.build(Kont { binder, body });
-            self.build(ExternCall { function: ExternalFunction::Host("before".into()), stack })
+            self.build(ExternCall {
+                function: ExternalFunction::Host(BuiltinValueRole::WriteStr),
+                stack,
+            })
         }
 
         fn ctor(index: usize) -> CtorIdx {
@@ -974,15 +981,14 @@ mod tests {
         ] {
             let mut fixture = Fixture::default();
             let role = PrimitiveOp::Integer(IntegerType::Int64, arithmetic).builtin();
-            let builtin = Builtin::for_role(&fixture.arena.admin.builtins, role).unwrap();
-            let thunk = builtin.make_function(&mut fixture.arena);
+            let thunk = ExternalFunction::Host(role).make_function(&mut fixture.arena);
             let first = if trapping_operand {
                 fixture.trap("operand")
             } else {
                 fixture.build(Literal::Integer(IntegerLiteral::Int64(7)))
             };
             let second = fixture.build(Literal::Integer(IntegerLiteral::Int64(divisor)));
-            let after = fixture.external("after");
+            let after = fixture.external(BuiltinValueRole::WriteLine);
             let binder = fixture.build(Hole);
             let rest = fixture.build(Kont { binder, body: after });
             let stack: StackId = fixture.build(Cons(second, rest));
@@ -990,8 +996,10 @@ mod tests {
             let call = fixture.build(SForce { thunk, stack });
             let binder = fixture.build(Hole);
             let stack = fixture.build(Kont { binder, body: call });
-            let root = fixture
-                .build(ExternCall { function: ExternalFunction::Host("before".into()), stack });
+            let root = fixture.build(ExternCall {
+                function: ExternalFunction::Host(BuiltinValueRole::WriteStr),
+                stack,
+            });
 
             let program = fixture.normalize(root);
             let arena = &program.arena().inner;
@@ -1002,7 +1010,7 @@ mod tests {
             else {
                 panic!("the preceding effect must remain first")
             };
-            assert_eq!(name, "before");
+            assert_eq!(*name, BuiltinValueRole::WriteStr);
             let Stack::Kont(Kont { body, .. }) = arena.stacks[stack] else {
                 panic!("the effect must resume its consumer")
             };
@@ -1021,7 +1029,7 @@ mod tests {
                 body
             };
             assert!(
-                matches!(&arena.compus[&body], Computation::ExternCall(ExternCall { function: ExternalFunction::Host(name), .. }) if name == "after")
+                matches!(&arena.compus[&body], Computation::ExternCall(ExternCall { function: ExternalFunction::Host(name), .. }) if *name == BuiltinValueRole::WriteLine)
             );
         }
     }
@@ -1071,8 +1079,10 @@ mod tests {
         let value: ValueId = fixture.build(Triv);
         let ambient = fixture.build(Bullet);
         let stack = fixture.build(Cons(value, ambient));
-        let body =
-            fixture.build(ExternCall { function: ExternalFunction::Host("effect".into()), stack });
+        let body = fixture.build(ExternCall {
+            function: ExternalFunction::Host(BuiltinValueRole::WriteStr),
+            stack,
+        });
         let thunk = fixture.build(Closure { stack: Bullet, body });
         let root = fixture.force(thunk);
 
@@ -1212,7 +1222,7 @@ mod tests {
         let left = fixture.build(Hole);
         let right = fixture.build(Hole);
         let binder = fixture.build(VCons::new(vec![left, right], ProductLayout { arity: 2 }));
-        let tail = fixture.external("after");
+        let tail = fixture.external(BuiltinValueRole::WriteLine);
         let root = fixture.build(Let { binder, bindee, tail });
         let program = fixture.normalize(root);
         let arena = program.arena();
@@ -1300,7 +1310,7 @@ mod tests {
         let ambient = fixture.build(Bullet);
         let body = fixture.build(Let { binder: Bullet, bindee: ambient, tail: branch });
         let thunk = fixture.build(Closure { stack: Bullet, body });
-        let after = fixture.external("after");
+        let after = fixture.external(BuiltinValueRole::WriteLine);
         let hole = fixture.build(Hole);
         let stack = fixture.build(Kont { binder: hole, body: after });
         let tail = fixture.build(SForce { thunk, stack });
@@ -1347,7 +1357,11 @@ mod tests {
             .map(|index| {
                 let payload = fixture.build(Hole);
                 let binder = fixture.build(Ctor(Fixture::ctor(index), payload));
-                let tail = fixture.external(if index == 1 { "selected" } else { "unreachable" });
+                let tail = fixture.external(if index == 1 {
+                    BuiltinValueRole::WriteStr
+                } else {
+                    BuiltinValueRole::WriteLine
+                });
                 Matcher { binder, tail }
             })
             .collect();
@@ -1376,11 +1390,11 @@ mod tests {
                 | Computation::ExternCall(ExternCall {
                     function: ExternalFunction::Host(name),
                     ..
-                }) => Some(name.as_str()),
+                }) => Some(*name),
                 | _ => None,
             })
             .collect::<Vec<_>>();
-        assert_eq!(calls, ["selected"]);
+        assert_eq!(calls, [BuiltinValueRole::WriteStr]);
     }
 
     #[test]

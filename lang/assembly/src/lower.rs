@@ -698,13 +698,12 @@ impl<'a> Lower<'a> for sk::CompuId {
                 ),
             | Compu::ExternCall(sk::ExternCall { function, stack }) => {
                 let external = match function {
-                    | sk::ExternalFunction::Host(function) => {
-                        let builtin = &lo.sps_low.admin.builtins[&function];
-                        let role = builtin.role;
-                        let arity = builtin.arity;
-                        let mode = ExternMode::from(builtin.mode);
-                        Extern::Host { role, name: function, arity, mode }
-                    }
+                    | sk::ExternalFunction::Host(role) => Extern::Host {
+                        role,
+                        name: role.host_name(),
+                        arity: role.arity(),
+                        mode: sk::HostCallMode::for_role(role).into(),
+                    },
                     | sk::ExternalFunction::Foreign(import) => Extern::Foreign(import),
                 };
                 if !lo.arena.externs.contains(&external) {

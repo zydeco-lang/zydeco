@@ -46,9 +46,8 @@ mod tests {
         }
 
         fn primitive(&mut self, role: BuiltinValueRole) -> ValueId {
-            let builtin = Builtin::for_role(&self.arena.admin.builtins, role).unwrap();
-            assert_eq!(builtin.mode, HostCallMode::Returning);
-            builtin.make_function(&mut self.arena)
+            assert_eq!(HostCallMode::for_role(role), HostCallMode::Returning);
+            ExternalFunction::Host(role).make_function(&mut self.arena)
         }
 
         fn literal(role: BuiltinValueRole, value: u8) -> Literal {

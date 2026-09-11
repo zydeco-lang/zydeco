@@ -15,7 +15,7 @@ pub enum BuiltinFailure {
 
 impl BuiltinRuntime {
     pub fn package_value(role: BuiltinValueRole) -> RcValue {
-        let primitive: Computation = Prim { arity: role.arity() as u64, role }.into();
+        let primitive: Computation = Prim { role }.into();
         std::rc::Rc::new(Value::Thunk(Thunk(std::rc::Rc::new(primitive))))
     }
 

@@ -37,7 +37,6 @@ pub struct SpsLowAdminArena {
     /// Names introduced by high and low Stack IR lowering. Source and typed-
     /// elaboration names stay in their immutable phase arenas.
     pub defs: ArenaSparse<ScopedScope, DefId>,
-    pub builtins: BuiltinMap,
     pub pats: ArenaForth<ss::PatId, VPatId>,
     pub terms: ArenaForth<ss::TermId, TermId>,
 }
@@ -48,19 +47,17 @@ impl SpsLowAdminArena {
             node_allocator: IdAllocator::new(),
             def_allocator: IdAllocator::new(),
             defs: ArenaSparse::default(),
-            builtins: Builtin::all(),
             pats: ArenaForth::new(),
             terms: ArenaForth::new(),
         }
     }
 
     pub(crate) fn from_high(admin: HighAdminArena) -> Self {
-        let HighAdminArena { allocator, defs, builtins, pats: _, terms: _ } = admin;
+        let HighAdminArena { allocator, defs, pats: _, terms: _ } = admin;
         Self {
             node_allocator: IdAllocator::new(),
             def_allocator: allocator,
             defs,
-            builtins,
             pats: ArenaForth::new(),
             terms: ArenaForth::new(),
         }

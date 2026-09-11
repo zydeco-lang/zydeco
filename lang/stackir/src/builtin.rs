@@ -1,28 +1,4 @@
-#![allow(unused)]
-
 use crate::high::syntax::*;
-use std::collections::HashMap;
-use zydeco_statics::surface_syntax::ScopedArena;
-use zydeco_syntax::{BuiltinValueRole, FloatOperation, IntegerOperation};
-
-pub type BuiltinMap = HashMap<String, Builtin>;
-
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum BuiltinPackageLowerError {
-    #[error(transparent)]
-    Plan(#[from] zydeco_statics::BuiltinPackagePlanError),
-    #[error("host operation `{role}` has no Stack IR implementation")]
-    UnsupportedOperation { role: BuiltinValueRole },
-}
-
-#[derive(Clone, Debug, derive_more::Display)]
-#[display("{name}/{arity}")]
-pub struct Builtin {
-    pub role: BuiltinValueRole,
-    pub name: String,
-    pub arity: usize,
-    pub mode: HostCallMode,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostCallMode {
@@ -32,15 +8,11 @@ pub enum HostCallMode {
     Control,
 }
 
-impl Builtin {
-    pub fn all() -> BuiltinMap {
-        BuiltinValueRole::all().map(Self::for_known_role).map(Self::generate).collect()
-    }
-
-    fn for_known_role(role: BuiltinValueRole) -> Self {
+impl HostCallMode {
+    pub fn for_role(role: BuiltinValueRole) -> Self {
         use HostCallMode::{Control, Returning};
 
-        let mode = match role {
+        match role {
             | BuiltinValueRole::Integer(_, operation) => {
                 if operation.is_branch() {
                     Control
@@ -92,46 +64,18 @@ impl Builtin {
             | BuiltinValueRole::RandomInt
             | BuiltinValueRole::Exit => Control,
             | _ => Returning,
-        };
-        Builtin { role, name: role.host_name(), arity: role.arity(), mode }
-    }
-
-    fn generate(self) -> (String, Self) {
-        (self.name.clone(), self)
-    }
-
-    pub fn for_role(
-        builtins: &BuiltinMap, role: BuiltinValueRole,
-    ) -> Result<Self, BuiltinPackageLowerError> {
-        builtins
-            .get(&role.host_name())
-            .cloned()
-            .ok_or(BuiltinPackageLowerError::UnsupportedOperation { role })
-    }
-
-    /// Wrap a builtin function definition with closure.
-    pub fn make_function<Arena>(&self, arena: &mut Arena) -> ValueId
-    where
-        Arena: AsMut<StackirArena>,
-    {
-        let function = ExternalFunction::Host(self.name.clone());
-        let stack = Bullet.build(arena, None);
-        let body = ExternCall { function, stack }.build(arena, None);
-        Closure { stack: Bullet, body }.build(arena, None)
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_builtin_role_has_a_stack_ir_package_implementation() {
-        let builtins = Builtin::all();
-        let missing = BuiltinValueRole::all()
-            .filter(|role| Builtin::for_role(&builtins, *role).is_err())
-            .collect::<Vec<_>>();
-
-        assert!(missing.is_empty(), "missing Stack IR Builtin roles: {missing:?}");
+impl ExternalFunction {
+    /// Wrap an external call in a high Stack IR closure.
+    pub fn make_function<Arena>(self, arena: &mut Arena) -> ValueId
+    where
+        Arena: AsMut<StackirArena>,
+    {
+        let stack = Bullet.build(arena, None);
+        let body = ExternCall { function: self, stack }.build(arena, None);
+        Closure { stack: Bullet, body }.build(arena, None)
     }
 }

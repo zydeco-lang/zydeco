@@ -1096,7 +1096,8 @@ The [syntax role catalog](../../lang/syntax/src/lib.rs) identifies intrinsics an
 [Builtin signature](../../lib/std/builtin.zy) against those roles.
 Interpreter linking and [SPS Builtin lowering](../../lang/stackir/src/builtin.rs) materialize
 the validated structural plan.
-Neither backend recovers an operation's meaning by parsing a field name.
+Host calls retain `BuiltinValueRole` through dynamic and Stack IR syntax.
+The role supplies arity and calling mode; emission derives the external symbol at the target ABI boundary.
 
 Canonical representation types have shared intrinsic identities;
 provider-owned resource capabilities acquire witnesses through their package opening.

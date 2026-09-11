@@ -68,15 +68,9 @@ impl SpsLowerError {
 #[derive(Debug, Error)]
 pub enum BuiltinRootLowerError {
     #[error(transparent)]
-    Package(#[from] BuiltinPackageLowerError),
+    Package(#[from] BuiltinPackagePlanError),
     #[error("static elimination left an invalid residual program")]
     Sps(Vec<SpsLowerError>),
-}
-
-impl From<BuiltinPackagePlanError> for BuiltinRootLowerError {
-    fn from(error: BuiltinPackagePlanError) -> Self {
-        Self::Package(error.into())
-    }
 }
 
 /// Lower typed syntax nodes into stack IR.
@@ -378,14 +372,12 @@ impl<'a> Lowerer<'a> {
                             integer_type,
                             zydeco_syntax::IntegerOperation::Eq,
                         );
-                        let builtin = Builtin::for_role(&self.arena.admin.builtins, role)
-                            .expect("the equality operator is a known builtin");
                         // The same host-function closure the Builtin package
                         // materializes for `eq`: the raw branch primitive
                         // `int64_eq_branch(a, b, then, else)`. Force it with
                         // the scrutinee and literal as operands and the two
                         // plans as continuations.
-                        let operator = builtin.make_function(self);
+                        let operator = ExternalFunction::Host(role).make_function(self);
                         let success_stack = Bullet.build(self, site);
                         let success_body = self.lower_match_plan(*success, success_stack, site);
                         let then = Closure { stack: Bullet, body: success_body }.build(self, site);
@@ -489,22 +481,19 @@ impl<'a> BuiltinRootLowerer<'a> {
 }
 
 impl BuiltinPackageLowering {
-    fn lower(
-        value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>,
-    ) -> Result<ValueId, BuiltinPackageLowerError> {
+    fn lower(value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>) -> ValueId {
         match value {
-            | BuiltinPackageValue::Unit => Ok(Triv.build(lowerer, None)),
+            | BuiltinPackageValue::Unit => Triv.build(lowerer, None),
             | BuiltinPackageValue::Operation(role) => {
-                let builtin = Builtin::for_role(&lowerer.arena.admin.builtins, role)?;
-                Ok(builtin.make_function(lowerer))
+                ExternalFunction::Host(role).make_function(lowerer)
             }
             | BuiltinPackageValue::Product(product) => {
                 let values = product
                     .into_iter()
                     .map(|value| Self::lower(value, lowerer))
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Vec<_>>();
                 let layout = ProductLayout { arity: values.len() };
-                Ok(VCons::new(values, layout).build(lowerer, None))
+                VCons::new(values, layout).build(lowerer, None)
             }
         }
     }
@@ -529,7 +518,7 @@ impl CompilerPass for BuiltinRootLowerer<'_> {
     fn run(self) -> Result<BranchJoinProgram, Self::Error> {
         let Self { mut lowerer, root, signature } = self;
         let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &signature)?;
-        let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer)?;
+        let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer);
         let stack = Cons(package, Bullet.build(&mut lowerer, None)).build(&mut lowerer, None);
         let root = root.lower(&mut lowerer, stack);
         lowerer.finish(root).map_err(BuiltinRootLowerError::Sps)

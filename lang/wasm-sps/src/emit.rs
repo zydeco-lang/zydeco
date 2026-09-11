@@ -12,7 +12,7 @@ use zydeco_stackir::{
         VPatId, ValueId, ValuePattern,
     },
 };
-use zydeco_syntax::{Literal, PrimitiveOp};
+use zydeco_syntax::{BuiltinValueRole, Literal, PrimitiveOp};
 use zydeco_wasm_common::{
     AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Limits, PointerLocal,
     ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
@@ -62,7 +62,7 @@ pub enum EmitError {
     #[error("SPS WebAssembly backend cannot find static string data for value {0:?}")]
     MissingString(ValueId),
     #[error("SPS WebAssembly backend cannot find host import `{0}`")]
-    MissingHostImport(String),
+    MissingHostImport(BuiltinValueRole),
     #[error("SPS WebAssembly backend cannot import native foreign symbol `{0}`")]
     UnsupportedForeignImport(String),
     #[error("invalid SPS coproduct match: constructor arms cannot be mixed with a catch-all arm")]
@@ -223,7 +223,7 @@ struct ModulePlan {
     static_data: Vec<u8>,
     string_literal_function: Option<u32>,
     host_imports: Vec<HostImport>,
-    host_functions: HashMap<String, usize>,
+    host_functions: HashMap<BuiltinValueRole, usize>,
     import_count: u32,
     layout: MemoryLayout,
     locals: LocalPlan,
@@ -284,35 +284,32 @@ impl ModulePlan {
             .iter()
             .filter_map(|(_, compu)| match compu {
                 | sps::Computation::ExternCall(sps::ExternCall {
-                    function: sps::ExternalFunction::Host(name),
+                    function: sps::ExternalFunction::Host(role),
                     ..
-                }) => Some(name),
+                }) => Some(*role),
                 | _ => None,
             })
             .collect::<std::collections::BTreeSet<_>>();
         let host_imports = builtins
-            .into_iter()
+            .iter()
+            .copied()
             .enumerate()
-            .map(|(offset, name)| {
-                let builtin = &arena.admin.builtins[name];
+            .map(|(offset, role)| {
                 let offset = Limits::u32(offset, "host import count")?;
                 Ok(HostImport {
                     function: first_host_function + offset,
-                    name: builtin.name.clone(),
-                    arity: builtin.arity,
-                    mode: match builtin.mode {
+                    name: role.host_name(),
+                    arity: role.arity(),
+                    mode: match HostCallMode::for_role(role) {
                         | HostCallMode::Returning => HostCallKind::Returning,
                         | HostCallMode::Control => HostCallKind::Control,
                     },
-                    spare: builtin.role.spare_box(),
+                    spare: role.spare_box(),
                 })
             })
             .collect::<Result<Vec<_>, EmitError>>()?;
-        let host_functions = host_imports
-            .iter()
-            .enumerate()
-            .map(|(index, import)| (import.name.clone(), index))
-            .collect();
+        let host_functions =
+            builtins.into_iter().enumerate().map(|(index, role)| (role, index)).collect();
         let import_count = first_host_function
             .checked_add(Limits::u32(host_imports.len(), "host import count")?)
             .ok_or(WasmEmitError::Limit { what: "host import count", value: host_imports.len() })?;
@@ -356,11 +353,11 @@ impl ModulePlan {
         self.strings.get(&value).copied().ok_or(EmitError::MissingString(value))
     }
 
-    fn host(&self, name: &str) -> Result<&HostImport, EmitError> {
+    fn host(&self, role: BuiltinValueRole) -> Result<&HostImport, EmitError> {
         self.host_functions
-            .get(name)
+            .get(&role)
             .map(|index| &self.host_imports[*index])
-            .ok_or_else(|| EmitError::MissingHostImport(name.to_owned()))
+            .ok_or(EmitError::MissingHostImport(role))
     }
 }
 
@@ -639,7 +636,7 @@ impl<'a> CaseEncoder<'a> {
                 | Computation::ExternCall(sps::ExternCall { function, stack }) => {
                     match function {
                         | sps::ExternalFunction::Host(function) => {
-                            self.emit_extern(&function, stack)?
+                            self.emit_extern(function, stack)?
                         }
                         | sps::ExternalFunction::Foreign(import) => {
                             return Err(EmitError::UnsupportedForeignImport(
@@ -883,8 +880,8 @@ impl<'a> CaseEncoder<'a> {
         Ok(())
     }
 
-    fn emit_extern(&mut self, name: &str, stack: StackId) -> Result<(), EmitError> {
-        let import = self.plan.host(name)?.clone();
+    fn emit_extern(&mut self, role: BuiltinValueRole, stack: StackId) -> Result<(), EmitError> {
+        let import = self.plan.host(role)?.clone();
         self.emit_stack(stack)?;
         self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_stack));
         for _ in 0..import.arity {

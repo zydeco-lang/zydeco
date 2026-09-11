@@ -343,11 +343,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
                 let (name, arity) = match function {
-                    | ExternalFunction::Host(function) => {
-                        (function.as_str(), f.admin.builtins[function].arity)
-                    }
+                    | ExternalFunction::Host(function) => (function.host_name(), function.arity()),
                     | ExternalFunction::Foreign(import) => {
-                        (import.target.symbol.as_str(), import.signature.parameters().len())
+                        (import.target.symbol.to_string(), import.signature.parameters().len())
                     }
                 };
                 let fun_str = format!("<extern:{name}/{arity}>");
@@ -369,20 +367,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for StackirProgram {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let mut doc = RcDoc::nil();
-        let builtins = &f.admin.builtins;
-
-        // Print all builtins
-        for (name, builtin) in builtins {
-            doc = doc.append(RcDoc::text(format!("[function:{}] {}", name, builtin)));
-            doc = doc.append(RcDoc::line());
-        }
-
-        doc = doc
-            .append(RcDoc::text("[root]"))
+        RcDoc::text("[root]")
             .append(RcDoc::concat([RcDoc::line(), self.root().pretty(f)]).nest(f.indent))
-            .append(RcDoc::line());
-
-        doc
+            .append(RcDoc::line())
     }
 }

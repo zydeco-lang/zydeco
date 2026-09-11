@@ -302,9 +302,9 @@ impl<'rt> Eval<'rt> for Computation {
                 runtime.stack.push_back_mut(SemCompu::Dtor(dtor));
                 Step::Step(body.as_ref().clone())
             }
-            | Computation::Prim(Prim { arity, role }) => {
+            | Computation::Prim(Prim { role }) => {
                 let mut args = Vec::new();
-                for _ in 0..arity {
+                for _ in 0..role.arity() {
                     let Some(SemCompu::App(arg)) = runtime.pop_stack() else {
                         panic!("Prim on non-Dtor")
                     };

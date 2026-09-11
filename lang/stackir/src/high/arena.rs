@@ -16,7 +16,7 @@ impl Allocates<StackId> for StackirScope {}
 impl Allocates<CompuId> for StackirScope {}
 impl Allocates<DefId> for StackirScope {}
 
-/// Builtins, generated definition names, and typed-source provenance for high Stack IR.
+/// Generated definition names and typed-source provenance for high Stack IR.
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct AdminArena {
     /// ID allocator shared by all stack-IR node categories.
@@ -25,9 +25,6 @@ pub struct AdminArena {
     /// Names introduced by Stack IR lowering. Source and typed-elaboration
     /// names stay in their immutable phase arenas.
     pub defs: ArenaSparse<ScopedScope, DefId>,
-
-    /// builtin operations and functions
-    pub builtins: BuiltinMap,
 
     /// One source pattern may originate multiple generated ZIR patterns; every
     /// generated pattern has at most one source pattern.
@@ -42,7 +39,6 @@ impl AdminArena {
         Self {
             allocator: IdAllocator::new(),
             defs: ArenaSparse::default(),
-            builtins: Builtin::all(),
             pats: ArenaForth::new(),
             terms: ArenaForth::new(),
         }
