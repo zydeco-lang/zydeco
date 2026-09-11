@@ -119,6 +119,7 @@ impl ProgramAnalysis {
 }
 
 /// A checked program whose immutable static arena is shared with the check memo.
+#[derive(Clone)]
 pub struct CheckedProgram {
     pub spans: Arc<SpanArena>,
     pub scoped: Arc<ScopedArena>,
