@@ -884,8 +884,10 @@ A byte buffer expands into a borrowed pointer and length, and the flattened C ca
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
 Both WebAssembly backends and the ZASM interpreter reject native foreign imports.
-The [returning C import design](docs/proposals/c-ffi.md) specifies the supported ABI, borrowing obligations,
-loader behavior, and acceptance and rejection tests.
+The [foreign-interface reference](docs/references/language.md#14-foreign-interfaces) owns the supported ABI
+and borrowing obligations.
+The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record, output-buffer,
+callback, and component examples to motivate the next extensions, starting with pointer-only read views.
 
 ## WebAssembly backend
 

@@ -205,6 +205,8 @@ It rejects truncated or oversized buffers and nonzero padding.
 The current implementation decodes and re-encodes to check canonical contents before aligning the supplied buffer.
 This deliberately distinguishes an accepted storage contract from arbitrary C struct bytes:
 C code must initialize padding to the required value before importing a complete object through this interface.
+Alternatively, a [foreign input decoder](c-ffi.md#valid-foreign-output-need-not-be-canonical-storage) can
+read the meaningful fields and use `store` to construct canonical storage.
 
 ### Address realization and FFI
 

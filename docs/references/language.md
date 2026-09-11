@@ -716,6 +716,7 @@ Missing libraries or symbols fail at loading/linking.
 Wasm and the ZASM interpreter reject native imports.
 Callbacks, C-to-Zydeco exports, floating-point or aggregate values, raw pointers,
 and larger signatures are outside this subset.
+[Concrete boundary examples](../proposals/c-ffi.md#examples-and-observed-gaps) motivate proposed extensions.
 
 ## 15. Execution profiles
 

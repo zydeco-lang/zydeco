@@ -1,0 +1,37 @@
+-- An example foreign decoder for the native little-endian record in contracts.c.
+-- It accepts arbitrary padding and returns logical fields for canonical storage construction.
+begin
+  param val (/VType; /CType; /Thk; /Ret; /UInt8; /UInt32; /Bytes;
+    /numeric; /bytes; builtin) : @(import("../../std/builtin.zy")) that
+  let make_memory = @(import("../../std/memory/static-layout.zy")) in
+  let (= Plan, = Layout, memory) = builtin |> make_memory in
+  let Record = UInt8 * UInt32 in
+  let Decoder = Thk (forall (R : CType) . Bytes -> Thk R -> Thk (Record -> R) -> R) in
+  let reject : Decoder = { fn R _ no _ => ! no } in
+  match memory/product UInt8 UInt32 memory/uint8 memory/uint32
+  | +Err(_) => reject
+  | +Ok(plan) =>
+    let shape = memory/inspect Record plan in
+    match shape/form
+    | +Product(fields) => {
+      fn (R : CType) (source : Bytes) (no : Thk R) (yes : Thk (Record -> R)) =>
+        do length <- ! bytes/length source;
+        ! numeric/int64/eq R length shape/size {
+          ! bytes/slice R source 0 fields/left/size no {
+            fn first =>
+              ! bytes/slice R source fields/offset fields/right/size no {
+                fn second =>
+                  ! numeric/uint8/from_le_bytes R first no {
+                    fn tag =>
+                      ! numeric/uint32/from_le_bytes R second no {
+                        fn payload => ! yes (tag, payload)
+                      }
+                  }
+              }
+          }
+        } no
+    }
+    | _ => reject
+    end
+  end
+end
