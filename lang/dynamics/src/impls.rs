@@ -48,11 +48,6 @@ fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
 fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
     App(body, mk_rc(arg.into())).into()
 }
-#[allow(unused)]
-/// Apply a destructor to a computation.
-fn dtor(body: Rc<ZCompute>, dtor: &str) -> ZCompute {
-    Dtor(body, DtorName(dtor.to_string())).into()
-}
 
 struct Branch;
 
@@ -191,9 +186,7 @@ pub fn float_to_string(float_type: FloatType, args: Vec<ZValue>) -> Result<ZComp
 
 // /* Strings */
 /// Return the number of Unicode scalar values in a string.
-pub fn str_scalar_length(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_scalar_length(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(a))] => {
             ret(Literal::Integer((a.scalar_len() as i64).into()).into())
@@ -203,9 +196,7 @@ pub fn str_scalar_length(
 }
 
 /// Return the number of bytes in a string's UTF-8 encoding.
-pub fn str_byte_length(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_byte_length(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(string))] => {
             ret(Literal::Integer((string.byte_len() as i64).into()).into())
@@ -215,9 +206,7 @@ pub fn str_byte_length(
 }
 
 /// Concatenate two string literals.
-pub fn str_append(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_append(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::String(b))] => {
             ret(Literal::String([a.as_str(), b.as_str()].concat().into()).into())
@@ -245,9 +234,7 @@ impl OptionalPairBranch {
 
 /// Split once and select a computation without constructing a
 /// library-defined optional pair.
-pub fn str_split_once_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_split_once_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
@@ -267,9 +254,7 @@ pub fn str_split_once_branch(
 
 /// Split at an index and select a computation without constructing a
 /// library-defined optional pair.
-pub fn str_split_at_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_split_at_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
@@ -286,9 +271,7 @@ pub fn str_split_at_branch(
 
 /// Select a computation according to string equality without constructing a
 /// library-defined Boolean value.
-pub fn str_eq_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_eq_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(a)),
@@ -317,9 +300,7 @@ impl OptionalValueBranch {
 }
 
 /// Safely index a string by Unicode scalar position and select a continuation.
-pub fn str_get_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_get_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
@@ -338,9 +319,7 @@ pub fn str_get_branch(
 }
 
 /// Convert a character literal to a single-character string.
-pub fn char_to_str(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn char_to_str(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Char(a))] => ret(Literal::String((*a).into()).into()),
         | _ => unreachable!(""),
@@ -348,9 +327,7 @@ pub fn char_to_str(
 }
 
 /// Convert a character literal to its integer codepoint.
-pub fn char_codepoint(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn char_codepoint(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Char(a))] => {
             ret(Literal::Integer((*a as u32 as i64).into()).into())
@@ -360,9 +337,7 @@ pub fn char_codepoint(
 }
 
 /// Validate an integer as a Unicode scalar value and select a continuation.
-pub fn char_from_codepoint_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn char_from_codepoint_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(codepoint))),
@@ -380,9 +355,7 @@ pub fn char_from_codepoint_branch(
 }
 
 /// Parse a string as an integer and select a continuation without panicking.
-pub fn str_parse_int_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn str_parse_int_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
@@ -421,9 +394,7 @@ impl HostBytes {
 }
 
 /// Construct an empty immutable byte buffer.
-pub fn bytes_empty(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_empty(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [] => ret(HostBytes::value(Vec::<u8>::new())),
         | _ => unreachable!(""),
@@ -431,9 +402,7 @@ pub fn bytes_empty(
 }
 
 /// Return the number of octets in a byte buffer.
-pub fn bytes_length(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_length(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [bytes] => ret(Literal::Integer((HostBytes::borrow(bytes).len() as i64).into()).into()),
         | _ => unreachable!(""),
@@ -441,9 +410,7 @@ pub fn bytes_length(
 }
 
 /// Concatenate two immutable byte buffers.
-pub fn bytes_append(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_append(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [first, second] => {
             let bytes = [HostBytes::borrow(first), HostBytes::borrow(second)].concat();
@@ -454,9 +421,7 @@ pub fn bytes_append(
 }
 
 /// Encode a UTF-8 string into bytes.
-pub fn bytes_from_str(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_from_str(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(string))] => {
             ret(HostBytes::value(string.as_str().as_bytes().to_vec()))
@@ -466,9 +431,7 @@ pub fn bytes_from_str(
 }
 
 /// Decode bytes as UTF-8 and select the valid or invalid continuation.
-pub fn bytes_to_str_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_to_str_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [bytes, when_invalid @ ZValue::Thunk(_), when_valid @ ZValue::Thunk(_)] => {
             let value = std::str::from_utf8(HostBytes::borrow(bytes))
@@ -481,9 +444,7 @@ pub fn bytes_to_str_branch(
 }
 
 /// Safely index a byte buffer and select a continuation with the octet.
-pub fn bytes_get_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_get_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             bytes,
@@ -502,9 +463,7 @@ pub fn bytes_get_branch(
 }
 
 /// Return the checked `[start, start + length)` window of a byte buffer.
-pub fn bytes_slice_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_slice_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             bytes,
@@ -528,9 +487,7 @@ pub fn bytes_slice_branch(
 }
 
 /// Build a one-octet buffer; every `UInt8` is a valid octet, so the input needs no check.
-pub fn bytes_singleton(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_singleton(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(octet)))] => {
             ret(HostBytes::value(vec![*octet]))
@@ -540,9 +497,7 @@ pub fn bytes_singleton(
 }
 
 /// Select a computation according to byte-wise structural equality.
-pub fn bytes_eq_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_eq_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] => {
             let equal = HostBytes::borrow(first) == HostBytes::borrow(second);
@@ -553,9 +508,7 @@ pub fn bytes_eq_branch(
 }
 
 /// Select a computation according to lexicographic byte order.
-pub fn bytes_lt_branch(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn bytes_lt_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] => {
             let less = HostBytes::borrow(first) < HostBytes::borrow(second);
@@ -620,9 +573,7 @@ impl WriterIo {
 }
 
 /// Return the interpreter's injected standard-input capability.
-pub fn stdin(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn stdin(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [] => ret(HostValue::Reader(ReaderHandle::STDIN).into()),
         | _ => unreachable!(""),
@@ -630,9 +581,7 @@ pub fn stdin(
 }
 
 /// Return the interpreter's injected standard-output capability.
-pub fn stdout(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn stdout(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [] => ret(HostValue::Writer(WriterHandle::STDOUT).into()),
         | _ => unreachable!(""),
@@ -640,9 +589,7 @@ pub fn stdout(
 }
 
 /// Return the interpreter's injected standard-error capability.
-pub fn stderr(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn stderr(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [] => ret(HostValue::Writer(WriterHandle::STDERR).into()),
         | _ => unreachable!(""),
@@ -651,8 +598,7 @@ pub fn stderr(
 
 /// Read at most the requested number of bytes from a capability.
 pub fn io_read(
-    args: Vec<ZValue>, input: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, input: &mut dyn BufRead, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -688,8 +634,7 @@ pub fn io_read(
 
 /// Read one byte line, distinguishing EOF from failure.
 pub fn io_read_line(
-    args: Vec<ZValue>, input: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, input: &mut dyn BufRead, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -718,8 +663,7 @@ pub fn io_read_line(
 
 /// Read all remaining bytes from a capability.
 pub fn io_read_all(
-    args: Vec<ZValue>, input: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, input: &mut dyn BufRead, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -740,8 +684,7 @@ pub fn io_read_all(
 
 /// Write an entire byte buffer to a capability.
 pub fn io_write_all(
-    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, stderr: &mut dyn Write,
-    _: &[String], host: &mut HostRuntime,
+    args: Vec<ZValue>, output: &mut dyn Write, stderr: &mut dyn Write, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -761,8 +704,7 @@ pub fn io_write_all(
 
 /// Flush buffered data through a writable capability.
 pub fn io_flush(
-    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, stderr: &mut dyn Write,
-    _: &[String], host: &mut HostRuntime,
+    args: Vec<ZValue>, output: &mut dyn Write, stderr: &mut dyn Write, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -778,9 +720,7 @@ pub fn io_flush(
 }
 
 /// Close a readable capability, preserving standard input as a process resource.
-pub fn io_close_reader(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], host: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn io_close_reader(args: Vec<ZValue>, host: &mut HostRuntime) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Host(HostValue::Reader(reader)),
@@ -796,8 +736,7 @@ pub fn io_close_reader(
 
 /// Close a writable capability after flushing it.
 pub fn io_close_writer(
-    args: Vec<ZValue>, _: &mut dyn BufRead, output: &mut dyn Write, stderr: &mut dyn Write,
-    _: &[String], host: &mut HostRuntime,
+    args: Vec<ZValue>, output: &mut dyn Write, stderr: &mut dyn Write, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
@@ -841,9 +780,7 @@ impl FileIo {
 }
 
 /// Open an existing file for buffered reading.
-pub fn fs_open_reader(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], host: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn fs_open_reader(args: Vec<ZValue>, host: &mut HostRuntime) -> Result<ZCompute, i32> {
     FileIo::open(
         &args,
         |host, path| host.open_reader(path).map(|handle| HostValue::Reader(handle).into()),
@@ -852,9 +789,7 @@ pub fn fs_open_reader(
 }
 
 /// Create or truncate a file for writing.
-pub fn fs_create_writer(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], host: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn fs_create_writer(args: Vec<ZValue>, host: &mut HostRuntime) -> Result<ZCompute, i32> {
     FileIo::open(
         &args,
         |host, path| host.create_writer(path).map(|handle| HostValue::Writer(handle).into()),
@@ -863,9 +798,7 @@ pub fn fs_create_writer(
 }
 
 /// Create or open a file for appending.
-pub fn fs_append_writer(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], host: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn fs_append_writer(args: Vec<ZValue>, host: &mut HostRuntime) -> Result<ZCompute, i32> {
     FileIo::open(
         &args,
         |host, path| host.append_writer(path).map(|handle| HostValue::Writer(handle).into()),
@@ -874,10 +807,7 @@ pub fn fs_append_writer(
 }
 
 /// Write a string to output and then force the provided continuation.
-pub fn write_str(
-    args: Vec<ZValue>, _r: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    _host: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn write_str(args: Vec<ZValue>, output: &mut dyn Write) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
             output
@@ -891,10 +821,7 @@ pub fn write_str(
 }
 
 /// Write an integer to output and then force the provided continuation.
-pub fn write_int(
-    args: Vec<ZValue>, _r: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    _host: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn write_int(args: Vec<ZValue>, output: &mut dyn Write) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(i))), e @ ZValue::Thunk(..)] => {
             write!(output, "{i}")
@@ -907,10 +834,7 @@ pub fn write_int(
 }
 
 /// Write a string and newline to output, then force the continuation.
-pub fn write_line(
-    args: Vec<ZValue>, _r: &mut dyn BufRead, output: &mut dyn Write, _: &[String],
-    _host: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn write_line(args: Vec<ZValue>, output: &mut dyn Write) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(line)), e @ ZValue::Thunk(..)] => {
             writeln!(output, "{line}")
@@ -924,8 +848,7 @@ pub fn write_line(
 
 /// Read a line from input and pass it to the continuation.
 pub fn read_line(
-    args: Vec<ZValue>, input: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, input: &mut dyn BufRead, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
@@ -943,8 +866,7 @@ pub fn read_line(
 /// Read a line and select either the failure continuation or the successful
 /// integer continuation without constructing a library-defined option value.
 pub fn read_line_as_int_branch(
-    args: Vec<ZValue>, input: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, input: &mut dyn BufRead, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [failure @ ZValue::Thunk(_), success @ ZValue::Thunk(_)] => {
@@ -964,8 +886,7 @@ pub fn read_line_as_int_branch(
 
 /// Read all remaining input and pass it to the continuation.
 pub fn read_till_eof(
-    args: Vec<ZValue>, input: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
-    host: &mut HostRuntime,
+    args: Vec<ZValue>, input: &mut dyn BufRead, host: &mut HostRuntime,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
@@ -981,10 +902,7 @@ pub fn read_till_eof(
 }
 
 /// Lookup in the invocation's stable argument sequence; tails are ordinary library computations.
-pub fn arg_at(
-    args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, argv: &[String],
-    _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn arg_at(args: Vec<ZValue>, argv: &[String]) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
@@ -1005,9 +923,7 @@ pub fn arg_at(
 }
 
 /// Produce a random integer literal and pass it to the continuation.
-pub fn random_int(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn random_int(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     use rand::RngExt;
     match args.as_slice() {
         | [k] => {
@@ -1020,9 +936,7 @@ pub fn random_int(
 }
 
 /// Exit evaluation with the provided integer exit code.
-pub fn exit(
-    args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String], _: &mut HostRuntime,
-) -> Result<ZCompute, i32> {
+pub fn exit(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(a)))] => Err(*a as i32),
         | _ => unreachable!(""),
