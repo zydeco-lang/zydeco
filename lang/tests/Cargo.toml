@@ -7,7 +7,7 @@ edition = { workspace = true }
 zydeco-machine = { workspace = true }
 zydeco-session = { workspace = true }
 zydeco-statics = { workspace = true }
-zydeco-cli = { path = "../../cli" }
+zydeco-cli = { workspace = true }
 zydeco-stackir = { workspace = true }
 thiserror = { workspace = true }
 tempfile = { workspace = true }
