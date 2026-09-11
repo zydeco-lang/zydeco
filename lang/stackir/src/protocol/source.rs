@@ -2,7 +2,7 @@
 
 use super::*;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     rc::Rc,
 };
 use zydeco_statics::{arena::StaticsArena, syntax as ss};
@@ -188,6 +188,7 @@ pub(crate) struct SourceProtocols<'a> {
     active: HashSet<ss::TypeId>,
     active_codatas: HashSet<ss::CoDataId>,
     codatas: HashMap<CodataInstance, CodataProtocolId>,
+    parameters: HashMap<ss::AbstId, ProtocolParameterId>,
     pub(crate) graph: ProtocolGraph,
 }
 
@@ -198,8 +199,25 @@ impl<'a> SourceProtocols<'a> {
             active: HashSet::new(),
             active_codatas: HashSet::new(),
             codatas: HashMap::new(),
+            parameters: HashMap::new(),
             graph: ProtocolGraph::default(),
         }
+    }
+
+    fn parameter(
+        &mut self, witness: ss::AbstId, kind: ProtocolParameterKind,
+    ) -> ProtocolParameterId {
+        *self.parameters.entry(witness).or_insert_with(|| self.graph.parameter(kind))
+    }
+
+    fn binder(&mut self, witness: ss::AbstId) -> Option<ProtocolParameterId> {
+        let kind = *self.resolver.statics.annotations_abst.get(&witness)?;
+        let kind = match self.resolver.statics.normalized_kind_at(kind)? {
+            | ss::Kind::VType(_) => ProtocolParameterKind::Value,
+            | ss::Kind::CType(_) => ProtocolParameterKind::Stack,
+            | _ => return None,
+        };
+        Some(self.parameter(witness, kind))
     }
 
     pub(crate) fn value(&mut self, ty: ss::TypeId) -> ValueProtocol {
@@ -215,6 +233,9 @@ impl<'a> SourceProtocols<'a> {
         let result = match head {
             | Head::Thunk(_, body) => ValueProtocol::Thunk(Box::new(self.stack_at(body))),
             | Head::Type(source) => match self.resolver.statics.normalized_at(ty).cloned() {
+                | Some(ss::Type::Abst(witness)) => {
+                    ValueProtocol::Parameter(self.parameter(witness, ProtocolParameterKind::Value))
+                }
                 | Some(ss::Type::Unit(_)) => ValueProtocol::Unit,
                 | Some(ss::Type::Primitive(ss::PrimitiveTy(ty))) => ValueProtocol::Primitive(ty),
                 | Some(ss::Type::Prod(Prod(fields))) => ValueProtocol::Product(
@@ -266,7 +287,18 @@ impl<'a> SourceProtocols<'a> {
                         Box::new(self.stack_at(rest)),
                     )
                 }
-                | Some(ss::Type::Forall(ss::Forall(_, body)))
+                | Some(ss::Type::Abst(witness)) => {
+                    StackProtocol::Parameter(self.parameter(witness, ProtocolParameterKind::Stack))
+                }
+                | Some(ss::Type::Forall(ss::Forall(binder, body))) => {
+                    let parameter = self.binder(binder.witness);
+                    let body = self.resolver.close(body, &source.bindings);
+                    let body = self.stack_at(body);
+                    match parameter {
+                        | Some(parameter) => StackProtocol::Forall(parameter, Box::new(body)),
+                        | None => body,
+                    }
+                }
                 | Some(ss::Type::Named(Named(_, body))) => {
                     let body = self.resolver.close(body, &source.bindings);
                     self.stack_at(body)

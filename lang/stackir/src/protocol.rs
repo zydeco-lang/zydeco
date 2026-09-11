@@ -5,16 +5,31 @@
 //! permission to specialize an ABI.
 
 use crate::syntax::DtorIdx;
-use std::{collections::HashSet, fmt};
+use std::fmt;
 use zydeco_syntax::PrimitiveType;
 
 mod source;
 pub(crate) use source::SourceProtocols;
+mod agreement;
+use agreement::Agreement;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, derive_more::Display)]
+#[display("a{_0}")]
+pub struct ProtocolParameterId(usize);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, derive_more::Display)]
+pub enum ProtocolParameterKind {
+    #[display("VType")]
+    Value,
+    #[display("CType")]
+    Stack,
+}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum ValueProtocol {
     #[default]
     Unknown,
+    Parameter(ProtocolParameterId),
     Unit,
     Primitive(PrimitiveType),
     Product(Vec<ValueProtocol>),
@@ -25,6 +40,10 @@ pub enum ValueProtocol {
 pub enum StackProtocol {
     #[default]
     Unknown,
+    Parameter(ProtocolParameterId),
+    /// A source type binder. Its occurrences share one argument at each use;
+    /// the binder itself consumes no runtime stack component.
+    Forall(ProtocolParameterId, Box<StackProtocol>),
     Argument(Box<ValueProtocol>, Box<StackProtocol>),
     /// An installed continuation. Its saved residual stack is existentially hidden.
     Continuation(Box<ValueProtocol>),
@@ -58,15 +77,50 @@ impl CodataProtocol {
 #[derive(Clone, Debug, Default)]
 pub struct ProtocolGraph {
     codatas: Vec<Option<CodataProtocol>>,
+    parameters: Vec<ProtocolParameterKind>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ProtocolGraphError {
     #[error("missing codata protocol definition {0}")]
     MissingDefinition(CodataProtocolId),
+    #[error("missing protocol parameter {0}")]
+    MissingParameter(ProtocolParameterId),
+    #[error("protocol parameter {parameter} has kind {found}, expected {expected}")]
+    ParameterKind {
+        parameter: ProtocolParameterId,
+        expected: ProtocolParameterKind,
+        found: ProtocolParameterKind,
+    },
 }
 
 impl ProtocolGraph {
+    fn parameter(&mut self, kind: ProtocolParameterKind) -> ProtocolParameterId {
+        let id = ProtocolParameterId(self.parameters.len());
+        self.parameters.push(kind);
+        id
+    }
+
+    pub fn parameter_kind(&self, id: ProtocolParameterId) -> Option<ProtocolParameterKind> {
+        self.parameters.get(id.0).copied()
+    }
+
+    pub fn parameters(&self) -> impl Iterator<Item = (ProtocolParameterId, ProtocolParameterKind)> {
+        self.parameters.iter().enumerate().map(|(id, kind)| (ProtocolParameterId(id), *kind))
+    }
+
+    fn validate_parameter(
+        &self, parameter: ProtocolParameterId, expected: ProtocolParameterKind,
+    ) -> Result<(), ProtocolGraphError> {
+        let found = self
+            .parameter_kind(parameter)
+            .ok_or(ProtocolGraphError::MissingParameter(parameter))?;
+        if found != expected {
+            return Err(ProtocolGraphError::ParameterKind { parameter, expected, found });
+        }
+        Ok(())
+    }
+
     fn reserve(&mut self) -> CodataProtocolId {
         let id = CodataProtocolId(self.codatas.len());
         self.codatas.push(None);
@@ -98,6 +152,13 @@ impl ProtocolGraph {
 
     pub fn validate_stack(&self, stack: &StackProtocol) -> Result<(), ProtocolGraphError> {
         match stack {
+            | StackProtocol::Parameter(id) => {
+                self.validate_parameter(*id, ProtocolParameterKind::Stack)
+            }
+            | StackProtocol::Forall(id, body) => {
+                self.parameter_kind(*id).ok_or(ProtocolGraphError::MissingParameter(*id))?;
+                self.validate_stack(body)
+            }
             | StackProtocol::Codata(id) => {
                 self.get(*id).map(|_| ()).ok_or(ProtocolGraphError::MissingDefinition(*id))
             }
@@ -113,6 +174,9 @@ impl ProtocolGraph {
 
     pub fn validate_value(&self, value: &ValueProtocol) -> Result<(), ProtocolGraphError> {
         match value {
+            | ValueProtocol::Parameter(id) => {
+                self.validate_parameter(*id, ProtocolParameterKind::Value)
+            }
             | ValueProtocol::Product(fields) => {
                 fields.iter().try_for_each(|field| self.validate_value(field))
             }
@@ -123,67 +187,11 @@ impl ProtocolGraph {
 
     /// Partial agreement between validated descriptors; unknowns never establish type or ABI identity.
     pub fn stacks_agree(&self, left: &StackProtocol, right: &StackProtocol) -> bool {
-        Agreement { graph: self, compared: HashSet::new() }.stack(left, right)
+        Agreement::new(self).stacks(left, right)
     }
 
     pub fn values_agree(&self, left: &ValueProtocol, right: &ValueProtocol) -> bool {
-        Agreement { graph: self, compared: HashSet::new() }.value(left, right)
-    }
-}
-
-struct Agreement<'a> {
-    graph: &'a ProtocolGraph,
-    compared: HashSet<(CodataProtocolId, CodataProtocolId)>,
-}
-
-impl Agreement<'_> {
-    fn value(&mut self, left: &ValueProtocol, right: &ValueProtocol) -> bool {
-        match (left, right) {
-            | (ValueProtocol::Unknown, _) | (_, ValueProtocol::Unknown) => true,
-            | (ValueProtocol::Unit, ValueProtocol::Unit) => true,
-            | (ValueProtocol::Primitive(a), ValueProtocol::Primitive(b)) => a == b,
-            | (ValueProtocol::Product(a), ValueProtocol::Product(b)) => {
-                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| self.value(a, b))
-            }
-            | (ValueProtocol::Thunk(a), ValueProtocol::Thunk(b)) => self.stack(a, b),
-            | _ => false,
-        }
-    }
-
-    fn stack(&mut self, left: &StackProtocol, right: &StackProtocol) -> bool {
-        match (left, right) {
-            | (StackProtocol::Unknown, _) | (_, StackProtocol::Unknown) => true,
-            | (StackProtocol::Argument(a, rest), StackProtocol::Argument(b, tail)) => {
-                self.value(a, b) && self.stack(rest, tail)
-            }
-            | (StackProtocol::Continuation(a), StackProtocol::Continuation(b)) => self.value(a, b),
-            | (StackProtocol::Tag(a, rest), StackProtocol::Tag(b, tail)) => {
-                a == b && self.stack(rest, tail)
-            }
-            | (StackProtocol::Codata(a), StackProtocol::Codata(b)) => {
-                let (Some(left), Some(right)) = (self.graph.get(*a), self.graph.get(*b)) else {
-                    return false;
-                };
-                // Every recursive edge crosses an observation. Repeated pairs close the
-                // coinductive comparison; all other observations still have to agree.
-                if !self.compared.insert((*a, *b)) {
-                    return true;
-                }
-                left.observations.len() == right.observations.len()
-                    && left
-                        .observations
-                        .iter()
-                        .zip(&right.observations)
-                        .all(|((a, rest), (b, tail))| a == b && self.stack(rest, tail))
-            }
-            | (StackProtocol::Codata(id), StackProtocol::Tag(tag, rest))
-            | (StackProtocol::Tag(tag, rest), StackProtocol::Codata(id)) => self
-                .graph
-                .get(*id)
-                .and_then(|definition| definition.observation(tag))
-                .is_some_and(|expected| self.stack(expected, rest)),
-            | _ => false,
-        }
+        Agreement::new(self).values(left, right)
     }
 }
 
@@ -210,6 +218,14 @@ impl ValueProtocol {
 }
 
 impl StackProtocol {
+    /// Type binders erase before a computation consumes its next runtime component.
+    pub(crate) fn runtime_head(&self) -> &Self {
+        match self {
+            | Self::Forall(_, body) => body.runtime_head(),
+            | _ => self,
+        }
+    }
+
     pub(crate) fn with_evidence(self, evidence: &Self) -> Self {
         match (self, evidence) {
             | (Self::Unknown, evidence) => evidence.clone(),
@@ -229,6 +245,7 @@ impl fmt::Display for ValueProtocol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             | Self::Unknown => f.write_str("?"),
+            | Self::Parameter(parameter) => write!(f, "{parameter}"),
             | Self::Unit => f.write_str("Unit"),
             | Self::Primitive(ty) => write!(f, "{ty}"),
             | Self::Thunk(stack) => write!(f, "Thk({stack})"),
@@ -250,6 +267,8 @@ impl fmt::Display for StackProtocol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             | Self::Unknown => f.write_str("?"),
+            | Self::Parameter(parameter) => write!(f, "{parameter}"),
+            | Self::Forall(parameter, body) => write!(f, "forall {parameter} . {body}"),
             | Self::Argument(value, rest) => write!(f, "{value} :: {rest}"),
             | Self::Continuation(value) => write!(f, "cont({value})"),
             | Self::Codata(id) => write!(f, "{id}"),

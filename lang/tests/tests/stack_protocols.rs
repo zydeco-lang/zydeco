@@ -3,7 +3,10 @@ use zydeco_cli::CommandCompiler;
 use zydeco_stackir::{
     SpsLowError, SpsLowProgram,
     low::{protocols::ProtocolError, syntax::*},
-    protocol::{CodataProtocolId, ProtocolGraphError, StackProtocol, ValueProtocol},
+    protocol::{
+        CodataProtocolId, ProtocolGraphError, ProtocolParameterId, ProtocolParameterKind,
+        StackProtocol, ValueProtocol,
+    },
 };
 use zydeco_tests::utils::{SourceProgram, TestBackend};
 
@@ -31,8 +34,17 @@ impl Fixture {
         )
     }
 
-    fn polymorphic_worker() -> StackProtocol {
-        StackProtocol::Argument(Box::new(Self::integer()), Box::new(StackProtocol::Unknown))
+    fn polymorphic_worker(arena: &SpsLowInnerArena) -> (ProtocolParameterId, StackProtocol) {
+        arena
+            .value_protocols
+            .iter()
+            .find_map(|(_, value)| {
+                let ValueProtocol::Thunk(stack) = value else { return None };
+                let StackProtocol::Argument(input, rest) = &**stack else { return None };
+                let StackProtocol::Parameter(parameter) = **rest else { return None };
+                (**input == Self::integer()).then(|| (parameter, *stack.clone()))
+            })
+            .expect("the forwarder's worker must retain its computation parameter")
     }
 
     fn stream(arena: &SpsLowInnerArena) -> CodataProtocolId {
@@ -182,19 +194,129 @@ fn parameterized_and_growing_protocols_execute_on_every_backend() {
 }
 
 #[test]
+fn erased_polymorphic_calls_check_repeated_value_parameters_together() {
+    let program = Fixture::source("symbolic-protocols.zy");
+    assert!(
+        program.arena().inner.entry_protocols.iter().any(|(_, entry)| {
+            let EntryProtocol::Closure(StackProtocol::Forall(a, body)) = entry else {
+                return false;
+            };
+            let StackProtocol::Forall(r, body) = &**body else { return false };
+            let StackProtocol::Argument(count, body) = &**body else { return false };
+            let expected = StackProtocol::Argument(
+                Box::new(ValueProtocol::Parameter(*a)),
+                Box::new(StackProtocol::Argument(
+                    Box::new(ValueProtocol::Parameter(*a)),
+                    Box::new(StackProtocol::Argument(
+                        Box::new(ValueProtocol::Thunk(Box::new(StackProtocol::Argument(
+                            Box::new(ValueProtocol::Parameter(*a)),
+                            Box::new(StackProtocol::Argument(
+                                Box::new(ValueProtocol::Parameter(*a)),
+                                Box::new(StackProtocol::Parameter(*r)),
+                            )),
+                        )))),
+                        Box::new(StackProtocol::Parameter(*r)),
+                    )),
+                )),
+            );
+            **count == Fixture::integer() && **body == expected
+        }),
+        "both binders and all of their related occurrences must survive SPS"
+    );
+    let (mut arena, root) = program.into_parts();
+    let (jump, second) = arena
+        .inner
+        .compus
+        .iter()
+        .find_map(|(id, compu)| {
+            let Computation::Jump(Jump { stack, .. }) = compu else { return None };
+            let Stack::Arg(Cons(_, rest)) = &arena.inner.stacks[stack] else { return None };
+            let Stack::Arg(Cons(first, rest)) = &arena.inner.stacks[rest] else { return None };
+            let Stack::Arg(Cons(second, _)) = &arena.inner.stacks[rest] else { return None };
+            matches!(
+                (&arena.inner.values[first], &arena.inner.values[second]),
+                (
+                    Value::Literal(Literal::Integer(IntegerLiteral::Int64(5))),
+                    Value::Literal(Literal::Integer(IntegerLiteral::Int64(7)))
+                ),
+            )
+            .then_some((*id, *second))
+        })
+        .expect("the generic relay receives two concrete integer arguments");
+    arena.inner.values[&second] = Value::Literal(Literal::Char('x'));
+    let SpsLowError::Protocol(ProtocolError::Stack { compu, expected, found }) =
+        SpsLowProgram::try_new(arena, root).unwrap_err()
+    else {
+        panic!("conflicting instantiations of the same parameter must reject the transfer")
+    };
+    assert_eq!(compu, jump);
+    assert!(matches!(expected, StackProtocol::Forall(_, _)));
+    let StackProtocol::Argument(_, rest) = found else { unreachable!() };
+    let StackProtocol::Argument(first, rest) = *rest else { unreachable!() };
+    let StackProtocol::Argument(second, _) = *rest else { unreachable!() };
+    assert_eq!(*first, Fixture::integer());
+    assert_eq!(*second, ValueProtocol::Primitive(PrimitiveType::Char));
+}
+
+#[test]
+fn low_publication_checks_parameter_kinds_before_transfers() {
+    let (mut arena, root) = Fixture::source("symbolic-protocols.zy").into_parts();
+    let (parameter, _) = arena
+        .inner
+        .protocols
+        .parameters()
+        .find(|(_, kind)| *kind == ProtocolParameterKind::Value)
+        .unwrap();
+    let block = *arena
+        .inner
+        .entry_protocols
+        .iter()
+        .find(|(_, entry)| matches!(entry, EntryProtocol::Closure(_)))
+        .unwrap()
+        .0;
+    arena.inner.entry_protocols[&block] =
+        EntryProtocol::Closure(StackProtocol::Parameter(parameter));
+    assert_eq!(
+        SpsLowProgram::try_new(arena, root).unwrap_err(),
+        SpsLowError::Protocol(ProtocolError::Graph(ProtocolGraphError::ParameterKind {
+            parameter,
+            expected: ProtocolParameterKind::Stack,
+            found: ProtocolParameterKind::Value
+        },))
+    );
+}
+
+#[test]
+fn polymorphic_calls_choose_independent_instantiations_on_every_backend() {
+    for backend in
+        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
+    {
+        for input in ["", "abc"] {
+            SourceProgram::setup("tests/core/symbolic-protocols.zy")
+                .with_args([input])
+                .test(backend);
+        }
+    }
+}
+
+#[test]
 fn source_protocols_survive_normalization_and_closure_conversion() {
     let program = Fixture::program();
     let entries = &program.arena().inner.entry_protocols;
     let stream = StackProtocol::Codata(Fixture::stream(&program.arena().inner));
+    let (parameter, worker) = Fixture::polymorphic_worker(&program.arena().inner);
     for required in [
         EntryProtocol::Closure(Fixture::worker()),
         EntryProtocol::Continuation(ValueProtocol::Thunk(Box::new(Fixture::worker()))),
         EntryProtocol::Continuation(ValueProtocol::Thunk(Box::new(stream.clone()))),
-        EntryProtocol::Closure(StackProtocol::Argument(
-            Box::new(Fixture::integer()),
+        EntryProtocol::Closure(StackProtocol::Forall(
+            parameter,
             Box::new(StackProtocol::Argument(
-                Box::new(ValueProtocol::Thunk(Box::new(Fixture::polymorphic_worker()))),
-                Box::new(Fixture::polymorphic_worker()),
+                Box::new(Fixture::integer()),
+                Box::new(StackProtocol::Argument(
+                    Box::new(ValueProtocol::Thunk(Box::new(worker.clone()))),
+                    Box::new(worker),
+                )),
             )),
         )),
         // Recursion is a reference to an observation graph, with no extent bound.
@@ -435,7 +557,8 @@ fn entry_protocols_agree_with_their_roles_and_result_parameters() {
 #[test]
 fn an_indirect_worker_rejects_an_incompatible_argument_prefix() {
     let (mut arena, root) = Fixture::program().into_parts();
-    let expected_value = ValueProtocol::Thunk(Box::new(Fixture::polymorphic_worker()));
+    let (_, worker) = Fixture::polymorphic_worker(&arena.inner);
+    let expected_value = ValueProtocol::Thunk(Box::new(worker.clone()));
     let jump = arena
         .inner
         .compus
@@ -460,7 +583,7 @@ fn an_indirect_worker_rejects_an_incompatible_argument_prefix() {
         panic!("expected a stack protocol mismatch")
     };
     assert_eq!(compu, jump);
-    assert_eq!(expected, Fixture::polymorphic_worker());
+    assert_eq!(expected, worker);
     assert!(
         matches!(found, StackProtocol::Argument(value, _) if *value == ValueProtocol::Primitive(PrimitiveType::Char))
     );

@@ -271,7 +271,7 @@ impl<'a> ProtocolValidator<'a> {
 
     fn stack(&self, id: StackId, context: &Context) -> Result<StackProtocol, ProtocolError> {
         Ok(match &self.arena.stacks[&id] {
-            | Stack::Var(_) => context.stack.clone(),
+            | Stack::Var(_) => context.stack.runtime_head().clone(),
             | Stack::Arg(Cons(value, rest)) => StackProtocol::Argument(
                 Box::new(self.value(*value, context)?.protocol),
                 Box::new(self.stack(*rest, context)?),
@@ -301,7 +301,7 @@ impl<'a> ProtocolValidator<'a> {
             }
             | None => &supplied,
         };
-        let definition = match expected {
+        let definition = match expected.runtime_head() {
             | StackProtocol::Codata(protocol) => {
                 let definition = self
                     .arena
@@ -323,7 +323,7 @@ impl<'a> ProtocolValidator<'a> {
                 }
                 None
             }
-            | StackProtocol::Unknown => None,
+            | StackProtocol::Unknown | StackProtocol::Parameter(_) => None,
             | found => {
                 return Err(ProtocolError::ExpectedCodata { compu: id, found: found.clone() });
             }

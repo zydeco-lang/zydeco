@@ -317,6 +317,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for SpsLowProgram {
             })
             .collect::<Vec<_>>();
         RcDoc::concat(declarations)
+            .append(RcDoc::concat(f.inner.protocols.parameters().map(|(id, kind)| {
+                RcDoc::text(format!("[parameter:{id}] {kind}")).append(RcDoc::line())
+            })))
             .append(RcDoc::concat(f.inner.protocols.iter().map(|(id, definition)| {
                 RcDoc::text(format!("[protocol:{id}] {definition}")).append(RcDoc::line())
             })))

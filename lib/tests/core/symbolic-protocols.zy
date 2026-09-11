@@ -1,0 +1,24 @@
+-- One erased polymorphic worker is called at different value and stack protocols.
+begin
+  param (/VType; /CType; /Int64; /Char; /String; /Thk; /Ret; /OS;
+    /int64; /char; /string; /args; /process) : @(import("../../std/builtin.zy")) that
+  def fix relay (A : VType) (R : CType) (remaining : Int64)
+    (first : A) (second : A) (next : Thk (A -> A -> R))
+  : R =
+      ! int64/eq R remaining 0
+        { ! next first second }
+        {
+          do remaining <- ! int64/sub remaining 1;
+          ! relay A R remaining first second next
+        }
+  in
+  do input <- ! args/at (Ret String) 0 { ret "abc" } { fn value => ret value };
+  do length <- ! string/length input;
+  do total <- ! relay Int64 (Ret Int64) length 5 7 { fn first second => ! int64/add first second };
+  do last <- ! relay Char (Ret Char) length 'a' 'c' { fn first second => ret second };
+  ! int64/eq OS total 12 {
+    do codepoint <- ! char/codepoint last;
+    do difference <- ! int64/sub codepoint 99;
+    ! process/exit difference
+  } { ! process/exit 1 }
+end

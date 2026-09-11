@@ -242,24 +242,27 @@ fn value_type_applications_preserve_product_and_thunk_components() {
 fn opaque_arguments_preserve_the_interface_without_equating_witnesses() {
     let mut fixture = Fixture::new();
     let stream = fixture.stream(false);
-    let (_, first) = fixture.witness();
-    let (_, second) = fixture.witness();
-    let (_, result) = fixture.witness();
+    let (first_witness, first) = fixture.witness();
+    let (second_witness, second) = fixture.witness();
+    let (result_witness, result) = fixture.witness();
     let first = fixture.instantiate(stream, first, result);
     let second = fixture.instantiate(stream, second, result);
     let mut source = SourceProtocols::new(&fixture.statics);
+    let first_parameter = source.parameter(first_witness, ProtocolParameterKind::Value);
+    let second_parameter = source.parameter(second_witness, ProtocolParameterKind::Value);
+    let result_parameter = source.parameter(result_witness, ProtocolParameterKind::Stack);
     let a = Fixture::check_stream(
         &mut source,
         first,
-        ValueProtocol::Unknown,
-        StackProtocol::Unknown,
+        ValueProtocol::Parameter(first_parameter),
+        StackProtocol::Parameter(result_parameter),
         false,
     );
     let b = Fixture::check_stream(
         &mut source,
         second,
-        ValueProtocol::Unknown,
-        StackProtocol::Unknown,
+        ValueProtocol::Parameter(second_parameter),
+        StackProtocol::Parameter(result_parameter),
         false,
     );
     assert_ne!(a, b, "the same partial evidence must not merge different source arguments");
@@ -282,16 +285,22 @@ fn partial_application_captures_the_lexical_argument_and_respects_rebinding() {
     let quantified = fixture.ty(ss::Type::Forall(ss::Forall(binder, body)));
     let outer_quantified = fixture.function(a, quantified);
     let quantified = fixture.apply(outer_quantified, fixture.integer);
+    fixture
+        .statics
+        .kinds_pre
+        .insert_new(fixture.kind, ss::Fillable::Done(ss::Kind::VType(ss::VType)));
+    fixture.statics.annotations_abst.insert_new(a, fixture.kind);
     let mut source = SourceProtocols::new(&fixture.statics);
     assert_eq!(source.stack(integer), StackProtocol::Continuation(Box::new(Fixture::integer())));
     assert_eq!(
         source.stack(character),
         StackProtocol::Continuation(Box::new(Fixture::character()))
     );
-    assert_eq!(
-        source.stack(quantified),
-        StackProtocol::Continuation(Box::new(ValueProtocol::Unknown))
-    );
+    let StackProtocol::Forall(parameter, body) = source.stack(quantified) else {
+        panic!("the source universal binder must survive")
+    };
+    assert_eq!(*body, StackProtocol::Continuation(Box::new(ValueProtocol::Parameter(parameter))));
+    source.graph.validate().unwrap();
 }
 
 #[test]

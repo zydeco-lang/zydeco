@@ -78,7 +78,7 @@ The implementation carries several complementary descriptions:
 | Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
 | SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
 | SPSLow word entries | Ordered environment/result words and checked code/package provenance | Complete source stack protocols or a different component transport |
-| SPSLow partial source protocols | Known value components, argument/continuation protocols, and instantiated recursive codata retained across normalization | Nominal storage identity, general polymorphic/nonregular protocols, or physical stack extent |
+| SPSLow partial source protocols | Known components, scoped value/computation parameters, and instantiated recursive codata retained across normalization | Nominal storage identity, explicit type-application choices, general nonregular protocols, or physical stack extent |
 | Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
 
 For example, the ordinary logical type `UInt8 * UInt32` can have natural storage of eight bytes,
@@ -233,6 +233,25 @@ The [growing-family example](../../lib/tests/core/growing-protocols.zy) delibera
 to `A * A` at each observation and remains executable with a conservative unknown tail.
 Both examples run on all four backends.
 
+The accepted symbolic extension retains first-order parameter occurrences and universal scopes.
+The [polymorphic relay](../../lib/tests/core/symbolic-protocols.zy) receives two values
+of one abstract type `A` and a callback consuming both under a shared computation protocol `R`.
+It invokes the same recursive worker separately at `Int64`/`Ret Int64` and `Char`/`Ret Char`.
+Replacing one integer argument with a character in low IR now fails the transfer check;
+the earlier independent unknowns admitted that inconsistent combination.
+Parameter constraints are fresh for each comparison and universal occurrence,
+so checking one use does not specialize later uses of the worker.
+Tests also distinguish captured parameters from nested binders, retain conflicts in partial product shapes,
+and relate parameters across recursive observations.
+
+This remains a check of shape consistency, with the limits owned
+by [C9's partial source protocols](../references/compiler.md#partial-source-protocols).
+Universal binders introduced inside codata observations remain symbolically recorded,
+but their parameter correlations are conservatively omitted from agreement for now.
+Treating such a binder as one instantiation shared by every observation would be incorrect.
+Tracking explicit type-argument choices through SPS rewriting and rechecking generic-body parametricity are deferred;
+source typing continues to own those obligations.
+
 This establishes partial source agreement through the existing word ABI.
 It does not select byte layouts or raw slots, equate abstract carriers, or infer physical stack size.
 
@@ -281,10 +300,10 @@ The current experiment inherits the existing handle/root contract; it does not e
 
 The accepted recursive protocol experiment retains observation transitions and regular type-family instances,
 and rejects incompatible known transfers while accepting dynamic depth.
-Unresolved computation/type witnesses still lose their binding relationships in the published descriptors;
-nonregular recursion and some finite nested applications also retain opaque components.
-A further protocol extension should express parameters and substitution in a finite description,
-with a sound comparison rule for changing arguments, before attempting broader specialization.
+First-order parameters now retain their binding relationships, while higher-kinded applications,
+nonregular recursion, and some finite nested applications still retain opaque components.
+A further extension should retain explicit type applications through rewriting
+and support fresh instantiation inside recursive observations before attempting broader specialization.
 Representation identity and mixed reference layouts still need their own evidence
 before a Rust policy can choose another component transport;
 partial compatibility involving unknowns cannot justify specialization.

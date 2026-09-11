@@ -714,13 +714,15 @@ from checked classifiers.
 Values retain unit, primitive, product, and thunk structure when known.
 Codata interfaces retain observation alternatives in an owned `ProtocolGraph` shared by the high and low arenas.
 Disclosed seals and applied type functions can lead back to existing graph instances.
-Unresolved witnesses, existential carriers, and unsupported forms contribute unknowns.
-Erasing a universal type binder preserves any known argument prefix in its body;
-a bound computation variable remains an unknown remainder.
+Unresolved first-order value and computation witnesses retain program-local parameter names and their kinds.
+Universal binders retain their scope in the descriptor, while captured parameters can occur freely in local entries.
+Unsupported higher-kinded applications, existential carriers, and other unsupported forms contribute unknowns.
 
 | Stack descriptor | Interpretation |
 | --- | --- |
 | `?` | Unknown protocol; no statement about whether the stack is empty or how large it is |
+| `aN` | A named computation parameter; repeated occurrences retain a relationship |
+| `forall aN . S` | A source type binder around `S`, consuming no runtime stack component |
 | `A :: S` | One argument classified by `A`, followed by protocol `S` |
 | `cont(A)` | An installed continuation accepting `A`, with its saved stack hidden |
 | `pN` | A program-local reference to a codata interface's observation alternatives |
@@ -753,7 +755,7 @@ the current observation retains its known payload and the changing tail remains 
 The same guard covers growth through returned thunks.
 Repeated source nodes along unguarded reduction or value/argument paths also stop conservatively.
 These guards impose no unfolding-depth limit, but can lose evidence for finite nested applications too.
-General nonregular recursion and symbolic polymorphic binding relationships are not reconstructed.
+General nonregular recursion remains outside this instantiation procedure.
 
 Observation indices are the zero-based ranks of complete destructor names in lexicographic order within the interface.
 High lowering obtains both pushed tags and case tags from the descriptor's canonical ordering.
@@ -786,17 +788,41 @@ and checks its remainder.
 A retained case checks its supplied stack against the declared interface, validates branch coverage and tag indices,
 and checks each branch against the selected observation's protocol.
 This branch evidence remains available even when the ambient stack became opaque at a continuation opening.
-SPSLow publication validates graph references before examining transfers.
+SPSLow publication validates graph and parameter references, including parameter kinds, before examining transfers.
 
-Two codata descriptors are compared structurally using a set of already compared reference pairs.
-Revisiting a pair closes that recursive comparison; every other observation and its components must still agree.
-This is a coinductive check over finite descriptions, without unbounded unfolding or a runtime iteration bound.
-Unknown components remain local gaps in evidence, so compatibility is not transitive and cannot serve as equality.
+The [agreement checker](../../lang/stackir/src/protocol/agreement.rs) compares the whole transfer
+with a fresh constraint set.
+Each side has its own parameter namespace, and each universal occurrence gets a fresh scope.
+Within a scope, repeated occurrences of a parameter share constraints.
+For example, `forall A . A -> Ret A` agrees with `Int64 :: cont(Int64)` but rejects `Int64 :: cont(Char)`.
+Two separately quantified thunk components can each instantiate the same source binder differently.
+A computation parameter can relate a callback's required protocol to the stack supplied after it.
+The SPS verifier skips leading universal binders when inspecting the next runtime stack component;
+these binders never add a physical stack word.
+
+Parameter constraints retain every known partial shape rather than selecting one representative.
+For example, observations of `(?)`, `(Int64)`, and `(Char)` for one value parameter must still reject:
+the unknown field cannot discard the later concrete conflict.
+Ordinary unknown occurrences remain independent gaps, including repeated visits to an unknown codata payload.
+For a computation parameter, different supplied tags can select different alternatives of the same interface;
+a known complete interface must admit each supplied observation with its proper index and remainder.
+
+Comparison builds finite local graphs keyed by codata reference and relevant captured parameter bindings.
+Already compared graph components close recursive comparisons, while every other observation remains checked.
+Parameters bound outside a recursive interface stay related across its observations.
+A universal binder introduced inside a codata interface is retained in the published descriptor,
+but its parameter positions are treated as unknown during agreement.
+Fresh instantiation at each observation needs a further comparison extension;
+reusing one inferred argument for every visit would reject valid polymorphic observations.
+Fixed components and recursive observation coverage remain checkable under this conservative treatment.
+Changing captured bindings along a recursive comparison also leaves an opaque component.
+There is no unfolding-depth limit or runtime iteration bound.
 
 Unknown components are compatible with the existing word transport, and only known conflicts are rejected.
-This compatibility relation is not type equality and cannot authorize a different ABI.
-Abstract storage-carrier identity remains an upstream source typing property;
-full polymorphic instantiation and layout/reference-map evidence are not reconstructed.
+This relation is nontransitive; successful agreement cannot establish type equality or authorize a different ABI.
+Abstract storage-carrier identity remains an upstream source typing property; agreement checks consistent known shapes,
+without reconstructing the explicit type arguments erased before SPS or proving parametricity of a generic body.
+Those remain upstream typing obligations. Layout/reference-map evidence is not reconstructed.
 Host and C external transfers keep their existing signature checks.
 No frame-size, frame-lifetime, or stack-scanning plan is derived from these descriptors.
 
@@ -807,6 +833,11 @@ It also prints finite definitions such as:
 ```text
 [protocol:p0] codata { .done#0: cont(Int64); .item#1: Int64 :: p0; }
 ```
+
+Parameter declarations print their kinds, for example `[parameter:a0] VType` and `[parameter:a1] CType`.
+A polymorphic relay can retain an entry such
+as `closure[forall a0 . forall a1 . Int64 :: a0 :: a0 :: Thk(a0 :: a0 :: a1) :: a1]`.
+These names describe source relationships and convey no representation size or allocation policy.
 
 [Protocol regressions](../../lang/tests/tests/stack_protocols.rs) check those surviving descriptions,
 rejected argument/result and observation conflicts, graph integrity, and a source computation
@@ -820,6 +851,9 @@ with both `Int64` and `Char`, including a dynamically selected and returned stre
 Low mutation tests reject an incompatible payload after the first recursive observation.
 The [growing-family regression](../../lib/tests/core/growing-protocols.zy) checks
 that conservative extraction still permits successive observations with larger product types on all backends.
+The [symbolic relay](../../lib/tests/core/symbolic-protocols.zy) calls one recursive worker
+at different value and computation types on all backends.
+Its low mutation test rejects conflicting arguments for one parameter.
 
 ## C10. ZASM, stack analysis, and local representation choices
 
