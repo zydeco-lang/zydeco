@@ -1107,6 +1107,7 @@ and [package rationale](../proposals/package-modularization.md#primitive-identit
 explains dependency choices.
 Returning and continuation-selecting operations have distinct host call plans.
 C8 owns arithmetic exposure and folding; C11–C13 own the resulting target words and calls.
+The dynamic and ZASM interpreters share `PrimitiveOp::evaluate` with constant folding.
 
 Strings are immutable UTF-8 text and bytes are immutable octets.
 Interpreter and native host bytes use the shared [ByteBuffer](../../lang/machine/src/bytes.rs):

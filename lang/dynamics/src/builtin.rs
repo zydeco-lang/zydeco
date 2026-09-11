@@ -3,7 +3,10 @@ use crate::{
     syntax::{Computation, Prim, RcValue, RuntimeError, SemValue, Thunk, Value},
 };
 use std::io::{BufRead, Write};
-use zydeco_syntax::{BuiltinValueRole, FloatOperation, IntegerOperation, PrimitiveType};
+use zydeco_syntax::{
+    BuiltinValueRole, FloatOperation, IntegerOperation, PrimitiveError, PrimitiveOp, PrimitiveType,
+    Return,
+};
 
 /// Typed access to host operations used to construct the Builtin package.
 pub struct BuiltinRuntime;
@@ -28,6 +31,10 @@ impl BuiltinRuntime {
         use crate::representation::ScalarBytes;
         use BuiltinValueRole as Role;
 
+        if let Some(operation) = PrimitiveOp::from_builtin(role) {
+            return Self::arithmetic(operation, args).map_err(BuiltinFailure::Runtime);
+        }
+
         match role {
             | Role::Integer(integer, operation) => match operation {
                 | IntegerOperation::Add
@@ -35,8 +42,7 @@ impl BuiltinRuntime {
                 | IntegerOperation::Mul
                 | IntegerOperation::Div
                 | IntegerOperation::Mod => {
-                    return integer_arithmetic(integer, operation, args)
-                        .map_err(BuiltinFailure::Runtime);
+                    unreachable!("arithmetic roles dispatch through PrimitiveOp")
                 }
                 | IntegerOperation::Eq | IntegerOperation::Lt | IntegerOperation::Gt => {
                     integer_branch(integer, operation, args)
@@ -51,7 +57,9 @@ impl BuiltinRuntime {
                 | FloatOperation::Add
                 | FloatOperation::Sub
                 | FloatOperation::Mul
-                | FloatOperation::Div => float_arithmetic(float, operation, args),
+                | FloatOperation::Div => {
+                    unreachable!("arithmetic roles dispatch through PrimitiveOp")
+                }
                 | FloatOperation::Eq | FloatOperation::Lt | FloatOperation::Gt => {
                     float_branch(float, operation, args)
                 }
@@ -114,5 +122,88 @@ impl BuiltinRuntime {
             | Role::Exit => exit(args, input, output, argv, host),
         }
         .map_err(BuiltinFailure::Exit)
+    }
+
+    fn arithmetic(
+        operation: PrimitiveOp, args: Vec<SemValue>,
+    ) -> Result<Computation, RuntimeError> {
+        let [SemValue::Literal(first), SemValue::Literal(second)] = args.as_slice() else {
+            unreachable!("checked arithmetic receives two literal operands")
+        };
+        match operation.evaluate(&[first.clone(), second.clone()]) {
+            | Ok(value) => Ok(Return(std::rc::Rc::new(Value::Lit(value))).into()),
+            | Err(PrimitiveError::DivisionByZero) => Err(RuntimeError::IntegerDivisionByZero),
+            | Err(PrimitiveError::RemainderByZero) => Err(RuntimeError::IntegerRemainderByZero),
+            | Err(PrimitiveError::OperandType) => {
+                unreachable!("checked arithmetic receives operands of its declared type")
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zydeco_syntax::{IntegerLiteral, IntegerType, Literal};
+
+    #[test]
+    fn arithmetic_reports_zero_divisors_without_host_effects() {
+        for integer in [
+            IntegerType::Int8,
+            IntegerType::Int16,
+            IntegerType::Int32,
+            IntegerType::Int64,
+            IntegerType::UInt8,
+            IntegerType::UInt16,
+            IntegerType::UInt32,
+            IntegerType::UInt64,
+        ] {
+            for operation in [IntegerOperation::Div, IntegerOperation::Mod] {
+                for divisor in [0, 2] {
+                    let args = [7, divisor]
+                        .map(|value| {
+                            SemValue::Literal(Literal::Integer(IntegerLiteral::from_value(
+                                value, integer,
+                            )))
+                        })
+                        .to_vec();
+                    let mut input = std::io::Cursor::new(b"unread");
+                    let mut output = Vec::new();
+                    let mut error_output = Vec::new();
+                    let result = BuiltinRuntime::invoke(
+                        BuiltinValueRole::Integer(integer, operation),
+                        args,
+                        &mut input,
+                        &mut output,
+                        &mut error_output,
+                        &[],
+                        &mut HostRuntime::new(),
+                    );
+                    match (divisor, operation, result) {
+                        | (
+                            0,
+                            IntegerOperation::Div,
+                            Err(BuiltinFailure::Runtime(RuntimeError::IntegerDivisionByZero)),
+                        )
+                        | (
+                            0,
+                            IntegerOperation::Mod,
+                            Err(BuiltinFailure::Runtime(RuntimeError::IntegerRemainderByZero)),
+                        ) => {}
+                        | (2, operation, Ok(Computation::Ret(Return(value)))) => {
+                            let Value::Lit(Literal::Integer(value)) = value.as_ref() else {
+                                panic!("arithmetic must return an integer literal")
+                            };
+                            let expected = if operation == IntegerOperation::Div { 3 } else { 1 };
+                            assert_eq!(*value, IntegerLiteral::from_value(expected, integer));
+                        }
+                        | _ => panic!("arithmetic returned the wrong result or failure"),
+                    }
+                    assert_eq!(input.position(), 0);
+                    assert!(output.is_empty());
+                    assert!(error_output.is_empty());
+                }
+            }
+        }
     }
 }
