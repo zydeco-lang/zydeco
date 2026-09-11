@@ -98,7 +98,7 @@ ariadne = { version = "0.6", features = ["auto-color"] }
 # parsing
 regex = "1"
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
-sha3 = "0.10"
+sha3 = "0.12"
 url = "2.5"
 logos = "0.16"
 lalrpop = "0.23"
