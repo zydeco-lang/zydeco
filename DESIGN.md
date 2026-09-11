@@ -966,7 +966,6 @@ and `memory`, but the embedding must supply the imports before invoking either f
 | `editor/tree-sitter-zydeco/` | Editor grammar and its conformance checks. |
 | `editor/vscode/`, `editor/zed/` | Client integrations with their own build workflows. |
 | `docs/` | Tutorials, executable literate chapters, proposals, and exploratory notes. |
-| `web/` | Older browser frontend, excluded from the active workspace. |
 
 ## Current Limitations
 

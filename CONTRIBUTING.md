@@ -24,7 +24,6 @@ Additional tools depend on the work:
 The interpreter's returning C imports and their platform requirements are described
 in the [C FFI design](docs/proposals/c-ffi.md).
 Installing an external library is necessary only for programs that import it.
-The old `web/` frontend is outside the active workspace; its README is not a supported build workflow for this checkout.
 
 ## Build the CLI
 
