@@ -1,7 +1,6 @@
 //! Checker lifecycle, allocation sites, finalization, and diagnostic guards.
 
 use super::*;
-use crate::check::intrinsics::InternalTerm;
 use crate::check::judgment::Action;
 use crate::check::projection::DeferredEnvMaterializationCache;
 use crate::check::source::{
@@ -17,6 +16,7 @@ impl<'a> Tycker<'a> {
     ) -> Self {
         let mut statics = StaticsArena::default();
         statics.reserve(scoped);
+        let intrinsics = IntrinsicStatics::new(db, data, &mut statics);
         let source_contexts = TermContexts::collect(scoped, data.root(db));
         Self {
             allocator: DerivedAllocator::new(),
@@ -26,6 +26,7 @@ impl<'a> Tycker<'a> {
             scoped,
             source_contexts,
             statics,
+            intrinsics,
             tasks: rpds::VectorSync::new_sync(),
             check_counts: ArenaAssoc::default(),
             checked_terms: CheckedTermRepository::default(),
@@ -116,9 +117,6 @@ impl<'a> Tycker<'a> {
 
     /// Check a source while retaining static facts from a rejected term.
     pub fn check_source_outcome(mut self, root: su::TermId) -> SourceCheckOutcome {
-        // The intrinsic singletons are query-owned: materialize them before any
-        // judgment so every `Construct::build` cache read hits.
-        InternalTerm::fill_intrinsics(&mut self);
         match self.run_source_k(root) {
             | Ok(root) => {
                 self.strip_checker_state();

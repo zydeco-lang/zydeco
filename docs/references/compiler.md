@@ -168,7 +168,9 @@ and immutable outcomes from explicit inputs.
 The checker inserts those outcomes into its materialized arena.
 The [intrinsic singleton query](../../lang/statics/src/query/intrinsic.rs) derives identities
 from a synthetic check-wide site, independent of the first source occurrence naming an intrinsic.
-The checker materializes those singletons before judgments read `IntrinsicStatics`.
+`Tycker::new` materializes those singletons and retains their complete `IntrinsicStatics` identities
+for construction during checking.
+Finished arenas retain the nodes while dropping this construction-only table.
 Unification, fill resolution, substitutions, package opening, copattern elaboration,
 and recursive-group processing retain a checker-owned algorithmic core.
 Their intermediate results depend on mutable inference state; replaying a site alone cannot reconstruct that state.

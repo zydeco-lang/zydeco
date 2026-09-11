@@ -39,8 +39,8 @@ pub struct InternedIntrinsic<'db> {
 }
 
 /// The singleton nodes of one intrinsic kind or type, produced by a query and
-/// materialized by the checker before any judgment reads the `IntrinsicStatics`
-/// cache. See the query/checker boundary in `docs/references/compiler.md`.
+/// materialized by `Tycker::new` before any judgment reads `IntrinsicStatics`.
+/// See the query/checker boundary in `docs/references/compiler.md`.
 #[derive(Clone, Debug)]
 pub enum IntrinsicSingleton {
     Kind { id: ss::KindId, kind: ss::Kind },

@@ -38,8 +38,7 @@ mod functions;
 mod term;
 /// Intrinsic and foreign attachment points.
 mod intrinsics;
-pub(crate) use intrinsics::InternalTerm;
-use intrinsics::PendingForeignImport;
+use intrinsics::{IntrinsicStatics, PendingForeignImport};
 /// Monadic basis checking and algebra translation.
 mod monadic;
 
@@ -80,6 +79,7 @@ pub struct Tycker<'a> {
     #[as_ref(StaticsArena)]
     #[as_mut(StaticsArena)]
     pub statics: StaticsArena,
+    pub(crate) intrinsics: IntrinsicStatics,
     /// call stack for debugging tycker and error tracking
     pub tasks: rpds::VectorSync<TyckTask>,
     /// how many times each scoped entity has been checked; supplies the

@@ -61,60 +61,73 @@ impl BuiltinTypeResolution {
 /// meaning without routing it through a source-level definition name.
 pub(crate) struct InternalTerm(pub(super) su::Internal, pub(super) su::TermId);
 
-impl InternalTerm {
-    /// Materialize the query-owned intrinsic singletons into `IntrinsicStatics`.
-    pub(crate) fn fill_intrinsics(tycker: &mut Tycker<'_>) {
-        use zydeco_syntax::PrimitiveType;
-        let mut keys = vec![
-            crate::query::IntrinsicKey::VType,
-            crate::query::IntrinsicKey::CType,
-            crate::query::IntrinsicKey::Thk,
-            crate::query::IntrinsicKey::Ret,
-            crate::query::IntrinsicKey::Unit,
-        ];
-        keys.extend(PrimitiveType::all().map(crate::query::IntrinsicKey::Primitive));
-        for key in keys {
-            let interned = crate::query::InternedIntrinsic::new(tycker.db, key);
-            let singleton = crate::query::intrinsic_singleton(tycker.db, tycker.data, interned);
-            match singleton {
-                | crate::query::IntrinsicSingleton::Kind { id, kind } => {
-                    tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
-                    match key {
-                        | crate::query::IntrinsicKey::VType => {
-                            tycker.statics.intrinsics.vtype = Some(id)
-                        }
-                        | crate::query::IntrinsicKey::CType => {
-                            tycker.statics.intrinsics.ctype = Some(id)
-                        }
-                        | _ => {}
-                    }
-                }
-                | crate::query::IntrinsicSingleton::Type { kinds, ty: (ty, ty_node), ann } => {
-                    for (id, kind) in kinds {
-                        tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
-                    }
-                    tycker.statics.types_pre.insert_new(ty, ss::Fillable::Done(ty_node), ann);
-                    tycker.store_env(ty, &TyEnv::default());
-                    match key {
-                        | crate::query::IntrinsicKey::Thk => {
-                            tycker.statics.intrinsics.thk = Some(ty)
-                        }
-                        | crate::query::IntrinsicKey::Ret => {
-                            tycker.statics.intrinsics.ret = Some(ty)
-                        }
-                        | crate::query::IntrinsicKey::Unit => {
-                            tycker.statics.intrinsics.unit = Some(ty)
-                        }
-                        | crate::query::IntrinsicKey::Primitive(primitive) => {
-                            tycker.statics.intrinsics.primitives.insert(primitive, ty);
-                        }
-                        | _ => {}
-                    }
-                }
-            }
+/// Intrinsic identities installed before a checker can construct typed nodes.
+pub(crate) struct IntrinsicStatics {
+    pub(crate) vtype: KindId,
+    pub(crate) ctype: KindId,
+    pub(crate) thk: TypeId,
+    pub(crate) ret: TypeId,
+    pub(crate) unit: TypeId,
+    pub(crate) primitives: std::collections::BTreeMap<ss::PrimitiveType, TypeId>,
+}
+
+impl IntrinsicStatics {
+    pub(super) fn new<'db>(
+        db: &'db dyn crate::query::TyckDb, data: crate::query::ScopedData<'db>,
+        statics: &mut StaticsArena,
+    ) -> Self {
+        use crate::query::IntrinsicKey;
+        let mut materializer = IntrinsicMaterializer { db, data, statics };
+        Self {
+            vtype: materializer.kind(IntrinsicKey::VType),
+            ctype: materializer.kind(IntrinsicKey::CType),
+            thk: materializer.ty(IntrinsicKey::Thk),
+            ret: materializer.ty(IntrinsicKey::Ret),
+            unit: materializer.ty(IntrinsicKey::Unit),
+            primitives: ss::PrimitiveType::all()
+                .map(|primitive| (primitive, materializer.ty(IntrinsicKey::Primitive(primitive))))
+                .collect(),
         }
     }
+}
 
+struct IntrinsicMaterializer<'arena, 'db> {
+    db: &'db dyn crate::query::TyckDb,
+    data: crate::query::ScopedData<'db>,
+    statics: &'arena mut StaticsArena,
+}
+
+impl IntrinsicMaterializer<'_, '_> {
+    fn singleton(&self, key: crate::query::IntrinsicKey) -> crate::query::IntrinsicSingleton {
+        let key = crate::query::InternedIntrinsic::new(self.db, key);
+        crate::query::intrinsic_singleton(self.db, self.data, key)
+    }
+
+    fn kind(&mut self, key: crate::query::IntrinsicKey) -> KindId {
+        let crate::query::IntrinsicSingleton::Kind { id, kind } = self.singleton(key) else {
+            unreachable!("an intrinsic kind key produces a kind singleton")
+        };
+        self.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
+        id
+    }
+
+    fn ty(&mut self, key: crate::query::IntrinsicKey) -> TypeId {
+        let crate::query::IntrinsicSingleton::Type { kinds, ty: (ty, node), ann } =
+            self.singleton(key)
+        else {
+            unreachable!("an intrinsic type key produces a type singleton")
+        };
+        for (id, kind) in kinds {
+            self.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
+        }
+        self.statics.types_pre.insert_new(ty, ss::Fillable::Done(node), ann);
+        let env = self.statics.intern_env(&TyEnv::default());
+        self.statics.env_type.insert_new(ty, env);
+        ty
+    }
+}
+
+impl InternalTerm {
     #[track_caller]
     pub(super) fn tyck_k(
         self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, switch: Switch<AnnId>,

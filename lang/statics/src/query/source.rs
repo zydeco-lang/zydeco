@@ -117,7 +117,6 @@ impl<'db> SourceCheckRequest<'db> {
         if let Some(completion) = self.completion {
             tycker.set_completion_target(completion.target(db));
         }
-        crate::check::InternalTerm::fill_intrinsics(&mut tycker);
         let root = tycker.run_judgments_k(data.root(db)).ok();
         tycker.finish_judgments();
         tycker.resolve_holes_and_collect();

@@ -239,7 +239,6 @@ impl Tycker<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::check::intrinsics::InternalTerm;
     use crate::check::tests::{TestDb, with_tycker};
     use std::sync::Arc;
 
@@ -321,7 +320,6 @@ mod tests {
                 (root, (provider, first, second))
             },
             |tycker, (provider, first, second)| {
-                InternalTerm::fill_intrinsics(tycker);
                 let root = tycker.data.root(tycker.db);
 
                 let checked =
@@ -359,7 +357,6 @@ mod tests {
                 (provider, provider)
             },
             |tycker, provider| {
-                InternalTerm::fill_intrinsics(tycker);
                 let environment = TyEnv::new();
 
                 let checked = tycker
@@ -393,7 +390,6 @@ mod tests {
                 (query, (query, operand, definition))
             },
             |tycker, (query, operand, definition)| {
-                InternalTerm::fill_intrinsics(tycker);
                 let original =
                     TyEnvT::new(TyEnv::new(), query).tyck_k(tycker, Action::syn()).unwrap();
                 let TermAnnId::Type(ty, _) = original else {

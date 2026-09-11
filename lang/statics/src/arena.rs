@@ -136,18 +136,6 @@ impl BuiltinRoles {
     }
 }
 
-/// Canonical static identities for the CBPV structure built into the
-/// language.
-#[derive(Clone, Debug, Default)]
-pub struct IntrinsicStatics {
-    pub(crate) vtype: Option<KindId>,
-    pub(crate) ctype: Option<KindId>,
-    pub(crate) thk: Option<TypeId>,
-    pub(crate) ret: Option<TypeId>,
-    pub(crate) unit: Option<TypeId>,
-    pub(crate) primitives: std::collections::BTreeMap<zydeco_syntax::PrimitiveType, TypeId>,
-}
-
 /// Compact owning storage for pre-normalization kinds.
 ///
 /// `VType` and `CType` dominate this arena and carry no payload. Sparse hash
@@ -642,8 +630,6 @@ pub struct StaticsIndexes {
     pub abst_hints: ArenaAssoc<AbstId, DefId>,
     /// abstract types introduced by existential elimination
     pub existential_skolems: ArenaAssoc<AbstId, ()>,
-    /// canonical identities for intrinsic kinds and type constructors
-    pub intrinsics: IntrinsicStatics,
     /// Builtin roles attached to existential witnesses and named value entries.
     pub builtin_roles: BuiltinRoles,
     /// Foreign implementations whose classifiers have a supported marshalling protocol.
