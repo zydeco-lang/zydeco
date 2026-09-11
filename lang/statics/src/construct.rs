@@ -570,12 +570,6 @@ where
         Alloc::alloc(tycker, Exists::new(binder, ty), vtype, env)
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for OSTy {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.os.get()] else { unreachable!() };
-        ty
-    }
-}
 impl<'a> Construct<Tycker<'a>, TypeId> for cs::TopTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
         let ctype = CType.build(tycker, env);
@@ -664,38 +658,6 @@ where
         Alloc::alloc(tycker, App(ret, arg), ctype, env)
     }
 }
-impl<'a> Construct<Tycker<'a>, TypeId> for syntax::MonadTy {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.monad.get()] else { unreachable!() };
-        ty
-    }
-}
-impl<'a, M> Construct<Tycker<'a>, TypeId> for cs::Monad<M>
-where
-    M: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let cs::Monad(monad_ty) = self;
-        App(cs::MonadTy, monad_ty).build(tycker, env)
-    }
-}
-impl<'a> Construct<Tycker<'a>, TypeId> for syntax::AlgebraTy {
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.algebra.get()] else { unreachable!() };
-        ty
-    }
-}
-impl<'a, M, R> Construct<Tycker<'a>, TypeId> for cs::Algebra<M, R>
-where
-    M: Construct<Tycker<'a>, TypeId>,
-    R: Construct<Tycker<'a>, TypeId>,
-{
-    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let cs::Algebra(monad_ty, carrier) = self;
-        App(App(cs::AlgebraTy, monad_ty), carrier).build(tycker, env)
-    }
-}
-
 impl<'a> Tycker<'a> {
     /// generates `Thunk B`
     pub fn thk_arg(&mut self, env: &TyEnv, arg: TypeId) -> TypeId {
@@ -715,12 +677,6 @@ impl<'a> Tycker<'a> {
     }
     pub fn type_top(&mut self, env: &TyEnv) -> TypeId {
         cs::TopTy.build(self, env)
-    }
-    pub fn monad_mo(&mut self, env: &TyEnv, monad_ty: TypeId) -> TypeId {
-        cs::Monad(monad_ty).build(self, env)
-    }
-    pub fn algebra_mo_car(&mut self, env: &TyEnv, monad_ty: TypeId, carrier: TypeId) -> TypeId {
-        cs::Algebra(monad_ty, carrier).build(self, env)
     }
 }
 

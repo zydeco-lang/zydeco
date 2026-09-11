@@ -28,8 +28,7 @@ impl Fixture {
     }
 
     fn complete(self) -> CompletionResolution {
-        Resolver::new(&self.spans, self.bitter.arena, self.bitter.prim)
-            .run_completion(self.bitter.root, self.target)
+        Resolver::new(&self.spans, self.bitter.arena).run_completion(self.bitter.root, self.target)
     }
 }
 
@@ -107,7 +106,7 @@ fn unbound_references_are_diagnosed_and_replaced_only_for_completion() {
     );
 
     let strict = Fixture::new(source);
-    let error = Resolver::new(&strict.spans, strict.bitter.arena, strict.bitter.prim)
+    let error = Resolver::new(&strict.spans, strict.bitter.arena)
         .run_source(strict.bitter.root)
         .err()
         .expect("strict resolution must reject the first unbound reference");
@@ -120,7 +119,7 @@ fn a_cursor_identity_from_another_parse_cannot_match_an_equal_span() {
     let old = Fixture::new("fn value => ¦").target;
     let current = Fixture::new("fn value => ¦");
     assert_ne!(old, current.target);
-    let completion = Resolver::new(&current.spans, current.bitter.arena, current.bitter.prim)
+    let completion = Resolver::new(&current.spans, current.bitter.arena)
         .run_completion(current.bitter.root, old);
     assert!(completion.site.is_none());
     assert!(completion.program.is_ok());

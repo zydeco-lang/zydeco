@@ -156,8 +156,7 @@ Dependency cycles are diagnosed before checking.
 The independence of provider inference and source scope is specified in [L12](language.md#12-sources-imports-and-entry).
 
 `CompilerSession` is the Salsa database and revision owner.
-[ScopedData](../../lang/statics/src/query/input.rs) connects the resolved root,
-primitive definitions, scoped arena, and spans to `TyckDb`.
+[ScopedData](../../lang/statics/src/query/input.rs) connects the resolved root, scoped arena and spans to `TyckDb`.
 The coarse [check_source query](../../lang/statics/src/query/source.rs) runs the mutable checker, finalization,
 coverage, and static elaboration together, then publishes an `Arc<StaticsArena>` and a checked or rejected outcome.
 Splitting those phases into separately copied arenas would multiply the dominant materialization cost.

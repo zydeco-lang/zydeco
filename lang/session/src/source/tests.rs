@@ -59,10 +59,10 @@ enum TestPipelineError {
 
 impl ScopedProgram {
     fn check(self) -> Result<SourceChecked, zydeco_statics::TyckDiagnostics> {
-        let Self { spans, arena, prim, root } = self;
+        let Self { spans, arena, root } = self;
         let session = super::CompilerSession::default();
         let spans = spans.into_inner();
-        let output = session.check_resolved(spans.clone(), prim, arena.into_inner(), root);
+        let output = session.check_resolved(spans.clone(), arena.into_inner(), root);
         let checked = output.outcome.into_result()?;
         Ok(SourceChecked {
             spans: Arc::new(spans),

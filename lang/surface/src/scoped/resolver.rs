@@ -66,7 +66,6 @@ pub struct Resolver<'a> {
     pub spans: &'a SpanArena,
     pub bitter: FrozenArena<BitterArena>,
     pub origins: TextualOrigins,
-    pub prim_def: PrimDefs,
 
     // arenas
     pub defs: ArenaSparse<ScopedScope, DefId>,
@@ -82,20 +81,12 @@ pub struct Resolver<'a> {
 
 /// Output of name resolution for one complete source term.
 pub struct ResolveSourceOut {
-    pub prim: PrimDefs,
     pub arena: FrozenArena<ScopedArena>,
     pub root: TermId,
 }
 
-struct ResolvedProgram {
-    prim: PrimDefs,
-    arena: ScopedArena,
-}
-
 impl<'a> Resolver<'a> {
-    pub fn new(
-        spans: &'a SpanArena, bitter: FrozenArena<BitterArena>, _prim_term: PrimTerms,
-    ) -> Self {
+    pub fn new(spans: &'a SpanArena, bitter: FrozenArena<BitterArena>) -> Self {
         let BitterArena { defs, pats: bitter_pats, terms: bitter_terms, origins, partial_binders } =
             bitter.into_inner();
         let bitter = FrozenArena::new(BitterArena {
@@ -125,7 +116,6 @@ impl<'a> Resolver<'a> {
             spans,
             bitter,
             origins,
-            prim_def: PrimDefs::default(),
 
             defs: ArenaSparse::default(),
             pats,
@@ -142,8 +132,8 @@ impl<'a> Resolver<'a> {
     /// Run name resolution over one complete source term.
     pub fn run_source(mut self, root: TermId) -> Result<ResolveSourceOut> {
         root.resolve(&mut self, (Local::for_body(), &Global::default()))?;
-        let ResolvedProgram { prim, arena } = self.finish()?;
-        Ok(ResolveSourceOut { prim, arena: FrozenArena::new(arena), root })
+        let arena = self.finish();
+        Ok(ResolveSourceOut { arena: FrozenArena::new(arena), root })
     }
 
     /// Resolve a recovered source while preserving the exact cursor's lexical scope.
@@ -155,9 +145,9 @@ impl<'a> Resolver<'a> {
         self.completion = Some(CompletionCapture { target, site: None, unbound: Vec::new() });
         let resolved = root.resolve(&mut self, (Local::for_body(), &Global::default()));
         let CompletionCapture { site, unbound, .. } = self.completion.take().unwrap();
-        let program = resolved.and_then(|()| {
-            let ResolvedProgram { prim, arena } = self.finish()?;
-            Ok(ResolveSourceOut { prim, arena: FrozenArena::new(arena), root })
+        let program = resolved.map(|()| {
+            let arena = self.finish();
+            ResolveSourceOut { arena: FrozenArena::new(arena), root }
         });
         CompletionResolution { site, unbound, program }
     }
@@ -173,13 +163,12 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn finish(self) -> Result<ResolvedProgram> {
+    fn finish(self) -> ScopedArena {
         let Resolver {
             allocator,
             spans: _,
             bitter,
             origins,
-            prim_def: prim,
 
             defs,
             pats,
@@ -194,19 +183,16 @@ impl<'a> Resolver<'a> {
         let _ = allocator;
         assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
         let partial_binders = bitter.into_inner().partial_binders;
-        Ok(ResolvedProgram {
-            prim,
-            arena: ScopedArena {
-                defs,
-                pats,
-                terms,
-                origins,
-                partial_binders,
-                users,
-                blocks,
-                documentation_scopes,
-            },
-        })
+        ScopedArena {
+            defs,
+            pats,
+            terms,
+            origins,
+            partial_binders,
+            users,
+            blocks,
+            documentation_scopes,
+        }
     }
 
     fn add_dependency(&mut self, local: &Local, dependency: BindingSite) {

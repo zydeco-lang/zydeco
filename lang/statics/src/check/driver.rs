@@ -13,7 +13,7 @@ impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
     pub fn new(
         db: &'a dyn crate::query::TyckDb, data: crate::query::ScopedData<'a>, spans: &'a SpanArena,
-        prim: &'a PrimDefs, scoped: &'a ScopedArena,
+        scoped: &'a ScopedArena,
     ) -> Self {
         let mut statics = StaticsArena::default();
         statics.reserve(scoped);
@@ -23,7 +23,6 @@ impl<'a> Tycker<'a> {
             db,
             data,
             spans,
-            prim,
             scoped,
             source_contexts,
             statics,

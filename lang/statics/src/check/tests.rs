@@ -40,16 +40,14 @@ pub(super) fn with_tycker<T>(
     let (root, context) = build(&mut allocator, &mut scoped);
 
     let spans = su::SpanArena::default();
-    let prim = su::PrimDefs::default();
     let db = TestDb::default();
     *db.pending.lock().unwrap() = Some(Arc::new(crate::query::PendingParts {
         spans: spans.clone(),
-        prim: prim.clone(),
         scoped: scoped.clone(),
         root,
     }));
     let data = crate::query::intern_pending(&db);
-    let mut tycker = Tycker::new(&db, data, &spans, &prim, &scoped);
+    let mut tycker = Tycker::new(&db, data, &spans, &scoped);
     test(&mut tycker, context);
 }
 

@@ -6,7 +6,7 @@ use {
         syntax::{AbstId, AnnId, FillId, Fillable, InferenceSite, PatAnnId, TermAnnId},
         *,
     },
-    crate::surface_syntax::{PrimDefs, ScopedArena, SpanArena, TermContexts},
+    crate::surface_syntax::{ScopedArena, SpanArena, TermContexts},
     crate::validate::CoverageChecker,
     zydeco_surface::metadata::{BuiltinMeta, FfiMeta, MetadataKind},
     zydeco_utils::prelude::ArenaAccess,
@@ -74,7 +74,6 @@ pub struct Tycker<'a> {
     /// The name-resolved program snapshot being checked.
     pub data: crate::query::ScopedData<'a>,
     pub spans: &'a SpanArena,
-    pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
     pub scoped: &'a ScopedArena,
     source_contexts: TermContexts,

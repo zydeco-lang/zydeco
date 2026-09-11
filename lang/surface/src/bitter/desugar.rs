@@ -23,7 +23,6 @@ pub struct Desugarer<'a> {
     #[as_ref(b::BitterArena)]
     #[as_mut(b::BitterArena)]
     pub bitter: b::BitterArena,
-    pub prim: b::PrimTerms,
     /// Desugared roots already materialized from the textual term DAG.
     terms: HashMap<t::TermId, b::TermId>,
 }
@@ -99,7 +98,6 @@ impl<'a> Desugarer<'a> {
             spans,
             textual,
             bitter: b::BitterArena::default(),
-            prim: b::PrimTerms::default(),
             terms: HashMap::new(),
         }
     }
@@ -122,7 +120,6 @@ impl<'a> SourceUnitDesugarer<'a> {
 /// Output of desugaring one complete source term.
 pub struct SourceDesugarOut {
     pub arena: FrozenArena<b::BitterArena>,
-    pub prim: b::PrimTerms,
     pub root: b::TermId,
 }
 
@@ -355,8 +352,8 @@ impl CompilerPass for SourceUnitDesugarer<'_> {
     fn run(self) -> Result<SourceDesugarOut> {
         let SourceUnitDesugarer { mut desugarer, unit } = self;
         let root = unit.root.desugar(&mut desugarer)?;
-        let Desugarer { bitter: arena, prim, .. } = desugarer;
-        Ok(SourceDesugarOut { arena: FrozenArena::new(arena), prim, root })
+        let Desugarer { bitter: arena, .. } = desugarer;
+        Ok(SourceDesugarOut { arena: FrozenArena::new(arena), root })
     }
 }
 
@@ -1135,36 +1132,28 @@ mod impls {
         }
 
         pub(crate) fn vtype(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::VType.into(), prev);
-            *self.prim.vtype.extend_one(term)
+            Alloc::alloc(self, b::Internal::VType.into(), prev)
         }
         pub(crate) fn ctype(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::CType.into(), prev);
-            *self.prim.ctype.extend_one(term)
+            Alloc::alloc(self, b::Internal::CType.into(), prev)
         }
         pub(crate) fn thunk(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Thk.into(), prev);
-            *self.prim.thk.extend_one(term)
+            Alloc::alloc(self, b::Internal::Thk.into(), prev)
         }
         pub(crate) fn ret(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Ret.into(), prev);
-            *self.prim.ret.extend_one(term)
+            Alloc::alloc(self, b::Internal::Ret.into(), prev)
         }
         pub(crate) fn unit(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Unit.into(), prev);
-            *self.prim.unit.extend_one(term)
+            Alloc::alloc(self, b::Internal::Unit.into(), prev)
         }
         pub(crate) fn os(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::OS.into(), prev);
-            *self.prim.os.extend_one(term)
+            Alloc::alloc(self, b::Internal::OS.into(), prev)
         }
         pub(crate) fn monad(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Monad.into(), prev);
-            *self.prim.monad.extend_one(term)
+            Alloc::alloc(self, b::Internal::Monad.into(), prev)
         }
         pub(crate) fn algebra(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Algebra.into(), prev);
-            *self.prim.algebra.extend_one(term)
+            Alloc::alloc(self, b::Internal::Algebra.into(), prev)
         }
     }
 }

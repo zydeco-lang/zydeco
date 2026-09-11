@@ -5,7 +5,6 @@ pub use zydeco_utils::span::{Sp, Span};
 
 use crate::textual::syntax as t;
 use derive_more::From;
-use zydeco_utils::cells::MultiCell;
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -325,33 +324,4 @@ mod term_layout_tests {
 pub struct RecursiveDefinition {
     pub binder: PatId,
     pub bindee: TermId,
-}
-
-/* -------------------------------- Primitive ------------------------------- */
-
-/// Internal terms introduced while desugaring one source unit.
-///
-/// The terms remain explicit nodes through name resolution. This inventory is
-/// retained for compatibility with monadic transformations that still carry
-/// legacy primitive-definition metadata.
-#[derive(Clone, Default, derive_more::AddAssign)]
-pub struct PrimTerms {
-    /// VType kind
-    pub vtype: MultiCell<TermId>,
-    /// CType kind
-    pub ctype: MultiCell<TermId>,
-    /// Thk type
-    pub thk: MultiCell<TermId>,
-    /// Ret type
-    pub ret: MultiCell<TermId>,
-    /// Unit type
-    pub unit: MultiCell<TermId>,
-    /// Top type
-    pub top: MultiCell<TermId>,
-    /// OS type
-    pub os: MultiCell<TermId>,
-    /// Monad type
-    pub monad: MultiCell<TermId>,
-    /// Algebra type
-    pub algebra: MultiCell<TermId>,
 }

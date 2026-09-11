@@ -16,9 +16,9 @@ textual (parser output) -> bitter (desugared surface) -> scoped (name resolution
 `bitter` is intentionally still "surface-shaped" (it keeps source-level names),
 but removes syntactic sugar and inserts explicit nodes the later passes rely on.
 
-Term-level splices are resolved before this pass: the compiler session's assembly phase
-replaces `@[import(...)]` holes with source boundaries and `@[literal]` holes with string literals,
-so bitter only ever sees ordinary `Lit` nodes for embedded text.
+Term-level splices are resolved before this pass: the compiler session's assembly phase replaces `@[import(...)]` holes
+with source boundaries and `@[literal]` holes with string literals, so bitter only ever sees ordinary `Lit` nodes
+for embedded text.
 
 ## Data model
 
@@ -27,8 +27,8 @@ so bitter only ever sees ordinary `Lit` nodes for embedded text.
 - `DefId`, `PatId`, and `TermId`: arena-backed IDs.
 - `BitterArena`: holds arenas for definitions, patterns, and terms plus a `textual` mapping (`ArenaForth`)
   that links bitter nodes back to the original textual entity IDs.
-- `PrimTerms`: collects the inserted internal terms (like `VType`, `CType`, `Thk`, `Ret`,
-  etc.) so name resolution can treat them as primitives and avoid capture.
+- `Internal`: explicit intrinsic nodes, such as `VType`, `CType`, `Thk`, and `Ret`,
+  whose identities do not depend on lexical names.
 
 This pass keeps names as `VarName` in `Term` until the `scoped` pass rewrites them to bound variables.
 
@@ -43,7 +43,7 @@ It:
 - Inserts type annotations for literals, `ret`, and `thunk` so later phases see explicit types.
 - Consumes `@[monadic]` metadata into a monadic-translation node while preserving the annotated payload term.
 - Wraps definitions in `Sealed` when they should not be expanded accidentally.
-- Builds `PrimTerms` by inserting the internal kind/type terms and storing their `TermId`s in a `MultiCell`.
+- Preserves explicit intrinsic nodes through name resolution.
 
 `Alloc` centralizes allocation into `BitterArena` while recording the textual-to-bitter mapping.
 `DeepClone` is used to duplicate nodes while preserving their original source linkage.

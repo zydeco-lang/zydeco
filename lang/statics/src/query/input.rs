@@ -20,7 +20,6 @@ pub trait TyckDb: salsa::Database {
 /// the query graph through [`intern_pending`].
 pub struct PendingParts {
     pub spans: su::SpanArena,
-    pub prim: su::PrimDefs,
     pub scoped: su::ScopedArena,
     pub root: su::TermId,
 }
@@ -35,10 +34,6 @@ pub struct ScopedData<'db> {
     #[no_eq]
     #[returns(ref)]
     pub spans: std::sync::Arc<su::SpanArena>,
-    #[tracked]
-    #[no_eq]
-    #[returns(ref)]
-    pub prim: su::PrimDefs,
     #[tracked]
     #[no_eq]
     #[returns(ref)]

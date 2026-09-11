@@ -48,7 +48,6 @@ pub fn intern_pending<'db>(db: &'db dyn TyckDb) -> ScopedData<'db> {
     ScopedData::new(
         db,
         std::sync::Arc::new(parts.spans),
-        parts.prim,
         std::sync::Arc::new(parts.scoped),
         parts.root,
     )
@@ -114,7 +113,7 @@ impl<'db> SourceCheckRequest<'db> {
         // arena across every boundary, which dominated check memory.
         let data = self.data;
         let scoped = std::sync::Arc::clone(data.scoped(db));
-        let mut tycker = Tycker::new(db, data, data.spans(db), data.prim(db), &scoped);
+        let mut tycker = Tycker::new(db, data, data.spans(db), &scoped);
         if let Some(completion) = self.completion {
             tycker.set_completion_target(completion.target(db));
         }

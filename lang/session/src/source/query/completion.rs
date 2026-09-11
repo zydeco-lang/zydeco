@@ -147,11 +147,11 @@ fn complete_source(
     let Some(target) = target else {
         return Ok(None);
     };
-    let BitterProgram { spans, arena, prim, root } = program.desugar().map_err(|failure| {
+    let BitterProgram { spans, arena, root } = program.desugar().map_err(|failure| {
         AnalysisError::Desugar { error: failure.error, spans: Arc::new(failure.spans.into_inner()) }
     })?;
     let CompletionResolution { site: resolved, program, .. } =
-        Resolver::new(&spans, arena, prim).run_completion(root, target);
+        Resolver::new(&spans, arena).run_completion(root, target);
     let Some(resolved) = resolved else {
         return Ok(None);
     };
@@ -165,7 +165,6 @@ fn complete_source(
         let data = ScopedData::new(
             db,
             Arc::new(spans.into_inner()),
-            program.prim,
             Arc::new(program.arena.into_inner()),
             program.root,
         );

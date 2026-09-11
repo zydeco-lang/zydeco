@@ -439,7 +439,6 @@ where
     }
 }
 impl_mon_construct_from_construct! {
-    impl MonConstruct<TypeId> for OSTy;
     impl MonConstruct<TypeId> for cs::TopTy;
 }
 impl<F, T> MonConstruct<TypeId> for cs::CoData<CoDataId, F>

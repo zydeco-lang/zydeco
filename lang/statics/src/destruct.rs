@@ -325,49 +325,6 @@ impl TypeId {
             | _ => None,
         }
     }
-    pub fn destruct_monad(&self, env: &TyEnv, tycker: &mut Tycker) -> Option<TypeId> {
-        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
-        if a_tys.len() != 1 {
-            None?;
-        }
-        let res = match tycker.type_filled(&f_ty).ok()?.to_owned() {
-            | Type::Abst(abst) => {
-                let AnnId::Type(id) = env[tycker.prim.monad.get()] else { unreachable!() };
-                let Type::Abst(monad_real) = tycker.type_filled(&id).ok()?.to_owned() else {
-                    unreachable!()
-                };
-                if abst != monad_real {
-                    None?;
-                }
-                a_tys.into_iter().next()?
-            }
-            | _ => None?,
-        };
-        Some(res)
-    }
-    pub fn destruct_algebra(&self, env: &TyEnv, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
-        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
-        if a_tys.len() != 2 {
-            None?;
-        }
-        let res = match tycker.type_filled(&f_ty).ok()?.to_owned() {
-            | Type::Abst(abst) => {
-                let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
-                let Type::Abst(algebra_real) = tycker.type_filled(&id).ok()?.to_owned() else {
-                    unreachable!()
-                };
-                if abst != algebra_real {
-                    None?;
-                }
-                let mut iter = a_tys.into_iter();
-                let mo_ty = iter.next()?;
-                let carrier_ty = iter.next()?;
-                (mo_ty, carrier_ty)
-            }
-            | _ => None?,
-        };
-        Some(res)
-    }
     pub fn destruct_data<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t Data> {
         use zydeco_utils::arena::ArenaAccess;
         match tycker.type_filled(self).ok()?.to_owned() {

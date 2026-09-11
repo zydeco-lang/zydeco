@@ -1,14 +1,12 @@
 use crate::source::TextualProgram;
 use zydeco_surface::{
     bitter::{
-        DesugarError, SourceDesugarOut, SourceUnitDesugarer,
-        arena::BitterArena,
-        syntax::{PrimTerms, TermId as BitterTermId},
+        DesugarError, SourceDesugarOut, SourceUnitDesugarer, arena::BitterArena,
+        syntax::TermId as BitterTermId,
     },
     scoped::{
-        ResolveError, ResolveSourceOut, Resolver,
-        arena::ScopedArena,
-        syntax::{PrimDefs, TermId as ScopedTermId},
+        ResolveError, ResolveSourceOut, Resolver, arena::ScopedArena,
+        syntax::TermId as ScopedTermId,
     },
     textual::syntax as t,
 };
@@ -18,7 +16,6 @@ use zydeco_utils::pass::CompilerPass;
 pub(crate) struct BitterProgram {
     pub spans: FrozenArena<t::SpanArena>,
     pub arena: FrozenArena<BitterArena>,
-    pub prim: PrimTerms,
     pub root: BitterTermId,
 }
 
@@ -32,7 +29,6 @@ pub(crate) struct DesugarFailure {
 pub(crate) struct ScopedProgram {
     pub spans: FrozenArena<t::SpanArena>,
     pub arena: FrozenArena<ScopedArena>,
-    pub prim: PrimDefs,
     pub root: ScopedTermId,
 }
 
@@ -40,9 +36,7 @@ impl TextualProgram {
     pub(crate) fn desugar(self) -> Result<BitterProgram, DesugarFailure> {
         let TextualProgram { spans, arena: textual, unit } = self;
         match SourceUnitDesugarer::new(&spans, &textual, unit).run() {
-            | Ok(SourceDesugarOut { arena, prim, root }) => {
-                Ok(BitterProgram { spans, arena, prim, root })
-            }
+            | Ok(SourceDesugarOut { arena, root }) => Ok(BitterProgram { spans, arena, root }),
             | Err(error) => Err(DesugarFailure { error: Box::new(error), spans }),
         }
     }
@@ -58,12 +52,10 @@ pub(crate) struct ResolveFailure {
 
 impl BitterProgram {
     pub(crate) fn resolve(self) -> Result<ScopedProgram, ResolveFailure> {
-        let Self { spans, arena, prim, root } = self;
-        let resolved = Resolver::new(&spans, arena, prim).run_source(root);
+        let Self { spans, arena, root } = self;
+        let resolved = Resolver::new(&spans, arena).run_source(root);
         match resolved {
-            | Ok(ResolveSourceOut { prim, arena, root }) => {
-                Ok(ScopedProgram { spans, arena, prim, root })
-            }
+            | Ok(ResolveSourceOut { arena, root }) => Ok(ScopedProgram { spans, arena, root }),
             | Err(error) => Err(ResolveFailure { error, spans }),
         }
     }

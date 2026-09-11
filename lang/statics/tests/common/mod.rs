@@ -1,6 +1,6 @@
 use zydeco_statics::{
     Alloc, Tycker,
-    surface_syntax::{PrimDefs, ScopedArena, SpanArena},
+    surface_syntax::{ScopedArena, SpanArena},
     syntax::*,
 };
 use zydeco_utils::prelude::IdAllocator;
@@ -42,7 +42,6 @@ pub struct TestFixture;
 impl TestFixture {
     pub fn run(test: impl FnOnce(&mut Tycker<'_>)) {
         let spans = SpanArena::new();
-        let prim = PrimDefs::default();
         let mut scoped = ScopedArena {
             partial_binders: Default::default(),
             defs: Default::default(),
@@ -59,12 +58,11 @@ impl TestFixture {
         *db.pending.lock().unwrap() =
             Some(std::sync::Arc::new(zydeco_statics::query::PendingParts {
                 spans: spans.clone(),
-                prim: prim.clone(),
                 scoped: scoped.clone(),
                 root,
             }));
         let data = zydeco_statics::query::intern_pending(&db);
-        test(&mut Tycker::new(&db, data, &spans, &prim, &scoped));
+        test(&mut Tycker::new(&db, data, &spans, &scoped));
     }
 
     pub fn kinds(tycker: &mut Tycker<'_>) -> (KindId, KindId) {

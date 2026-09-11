@@ -415,12 +415,11 @@ impl CompilerSession {
     /// Intended for tests and tools that own the intermediate arenas.
     pub fn check_resolved(
         &self, spans: zydeco_surface::textual::syntax::SpanArena,
-        prim: zydeco_surface::scoped::syntax::PrimDefs,
         scoped: zydeco_surface::scoped::arena::ScopedArena,
         root: zydeco_surface::scoped::syntax::TermId,
     ) -> zydeco_statics::query::TyckOutput {
         *self.pending.lock().expect("pending check slot poisoned") =
-            Some(Arc::new(zydeco_statics::query::PendingParts { spans, prim, scoped, root }));
+            Some(Arc::new(zydeco_statics::query::PendingParts { spans, scoped, root }));
         let data = zydeco_statics::query::intern_pending(self);
         zydeco_statics::query::check_source(self, data)
     }
@@ -584,7 +583,7 @@ fn resolved_data<'db>(
         error: failure.error,
         spans: Arc::new(failure.spans.into_inner()),
     })?;
-    let ScopedProgram { spans, arena, prim, root } =
+    let ScopedProgram { spans, arena, root } =
         bitter.resolve().map_err(|failure| AnalysisError::Resolve {
             error: failure.error,
             graph,
@@ -593,7 +592,6 @@ fn resolved_data<'db>(
     Ok(zydeco_statics::query::ScopedData::new(
         db,
         Arc::new(spans.into_inner()),
-        prim,
         Arc::new(arena.into_inner()),
         root,
     ))

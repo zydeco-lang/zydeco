@@ -253,16 +253,14 @@ mod tests {
         scoped.terms.insert_new(boundary, su::SourceBoundary(hole).into());
 
         let spans = su::SpanArena::default();
-        let prim = su::PrimDefs::default();
         let db = TestDb::default();
         *db.pending.lock().unwrap() = Some(Arc::new(crate::query::PendingParts {
             spans: spans.clone(),
-            prim: prim.clone(),
             scoped: scoped.clone(),
             root: boundary,
         }));
         let data = crate::query::intern_pending(&db);
-        let mut tycker = Tycker::new(&db, data, &spans, &prim, &scoped);
+        let mut tycker = Tycker::new(&db, data, &spans, &scoped);
         let env = TyEnv::default();
         let expected = Alloc::alloc(&mut tycker, ss::VType, (), &());
         let checked = TyEnvT::new(env, boundary).tyck_k(&mut tycker, Action::ana(expected.into()));
@@ -287,16 +285,14 @@ mod tests {
         scoped.terms.insert_new(boundary, su::SourceBoundary(hole).into());
 
         let spans = su::SpanArena::default();
-        let prim = su::PrimDefs::default();
         let db = TestDb::default();
         *db.pending.lock().unwrap() = Some(Arc::new(crate::query::PendingParts {
             spans: spans.clone(),
-            prim: prim.clone(),
             scoped: scoped.clone(),
             root: boundary,
         }));
         let data = crate::query::intern_pending(&db);
-        let mut tycker = Tycker::new(&db, data, &spans, &prim, &scoped);
+        let mut tycker = Tycker::new(&db, data, &spans, &scoped);
         let result =
             TyEnvT::new(TyEnv::default(), boundary).tyck_k(&mut tycker, Action::ana(AnnId::Set));
 

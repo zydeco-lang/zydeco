@@ -3,8 +3,6 @@ pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 pub use crate::textual::syntax::SpanArena;
 
-use zydeco_utils::cells::SingCell;
-
 /* --------------------------- Contextual program --------------------------- */
 
 /// The term site that contributed a binding to a contextual term.
@@ -106,23 +104,3 @@ pub type Context = zydeco_utils::context::Context<DefId>;
 
 /// CoContext is what variables we *have used* at a given term site.
 pub type CoContext = zydeco_utils::context::CoContext<DefId>;
-
-/* -------------------------------- Primitive ------------------------------- */
-
-/// Legacy lexical identities consulted by a few internal monadic
-/// transformations.
-///
-/// The canonical Builtin signature introduces intrinsic constructors and
-/// assigns host types through typed roles, so name resolution does not
-/// populate these cells from distinguished source spellings.
-#[derive(Clone, Default)]
-pub struct PrimDefs {
-    pub vtype: SingCell<DefId>,
-    pub ctype: SingCell<DefId>,
-    pub thk: SingCell<DefId>,
-    pub ret: SingCell<DefId>,
-    pub unit: SingCell<DefId>,
-    pub os: SingCell<DefId>,
-    pub monad: SingCell<DefId>,
-    pub algebra: SingCell<DefId>,
-}
