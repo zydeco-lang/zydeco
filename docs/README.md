@@ -39,3 +39,7 @@ or completed reference chapter.
 [Binary products with right-spine layout](proposals/binary-products.md) preserves an unimplemented alternative
 to the current n-ary product semantics.
 It requires a separate design decision before adoption.
+
+[Reachability and regions for SPSLow](proposals/reachability-regions.typ) formalizes proposed value support,
+environment and stack dependencies, explicit arena operations, and the obligations for safe region retirement.
+It is a design draft; the current compiler does not implement these rules.

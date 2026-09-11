@@ -11,6 +11,9 @@ Portable ZASM and WebAssembly retain capture-based lowering.
 This record owns the reasons for retaining frames, the lifetime requirements any alternative must meet,
 and the experimental storage choices.
 [Escape and unboxing](escape-unboxing.md) owns individual value representations.
+The [reachability and regions formalization](reachability-regions.typ) proposes general support typing
+for values and captured storage.
+Relating that proposal to physical activation lifetimes remains a lowering obligation.
 The [runtime study](../ideas/cbpv-runtime-evaluation.md) keeps dated evidence and measurement limits;
 source computation protocols belong to [L6](../references/language.md#6-computations-and-control).
 

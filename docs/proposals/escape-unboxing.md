@@ -17,6 +17,10 @@ Native [activation lifetime](../references/compiler.md#c11-native-preparation-ac
 constrains frame pointers.
 Neither contract by itself proves that a proposed stack cell cannot escape.
 
+The [reachability and regions formalization](reachability-regions.typ) proposes the complementary safety boundary:
+typed dependencies of value representations, environments, and residual stacks, with explicit region retirement.
+This proposal continues to own representation selection; those lifetime rules are not implemented by the local analysis.
+
 The constraint analysis below is a design for extending local selection.
 The following experiment evaluates the implemented local boundary before extending it.
 
