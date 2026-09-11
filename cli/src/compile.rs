@@ -322,18 +322,10 @@ impl BackendProgram {
             | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
             | TargetOs::Macos => zydeco_amd64::TargetFormat::MachO,
         };
-        let assembly = match zydeco_amd64::Emitter::new(
-            &self.spans,
-            &self.scoped,
-            &self.statics,
-            &native,
-            format,
-        )
-        .run()
-        {
-            | Ok(assembly) => assembly.to_string(),
-            | Err(never) => match never {},
-        };
+        let assembly =
+            zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, &native, format)
+                .run()
+                .to_string();
         let foreign_libraries = native
             .assembly()
             .arena()

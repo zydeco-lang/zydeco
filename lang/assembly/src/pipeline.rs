@@ -3,7 +3,6 @@ use crate::{analyze::StackAnalyzer, lower::Lowerer, syntax::AssemblyProgram};
 use zydeco_stackir::SpsLowProgram;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
-use zydeco_utils::pass::CompilerPass;
 
 /// Lower Stack IR and establish the stack-layout invariants required by backends.
 pub struct LoweringPipeline<'a, P = Local> {
@@ -40,10 +39,8 @@ impl<'a, P: RepresentationPolicy> LoweringPipeline<'a, P> {
         let mut assembly =
             Lowerer::with_policy(self.spans, self.scoped, self.statics, self.sps_low, &self.policy)
                 .run();
-        match StackAnalyzer::new(&mut assembly).run() {
-            | Ok(_) => assembly.finish(),
-            | Err(never) => match never {},
-        }
+        StackAnalyzer::new(&mut assembly).run();
+        assembly.finish()
     }
 
     pub fn run_native(self) -> Result<crate::frames::NativeProgram, crate::frames::FramePlanError> {
@@ -51,9 +48,7 @@ impl<'a, P: RepresentationPolicy> LoweringPipeline<'a, P> {
             Lowerer::with_policy(self.spans, self.scoped, self.statics, self.sps_low, &self.policy)
                 .with_native_frames()
                 .run();
-        match StackAnalyzer::new(&mut assembly).run() {
-            | Ok(_) => crate::frames::NativeProgram::prepare(assembly),
-            | Err(never) => match never {},
-        }
+        StackAnalyzer::new(&mut assembly).run();
+        crate::frames::NativeProgram::prepare(assembly)
     }
 }

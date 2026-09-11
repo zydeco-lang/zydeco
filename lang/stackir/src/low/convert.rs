@@ -9,11 +9,11 @@ use crate::high::{
 };
 use crate::protocol::{StackProtocol, ValueProtocol};
 use derive_more::{AsMut, AsRef};
-use std::{collections::HashMap, convert::Infallible};
+use std::collections::HashMap;
 use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_syntax::VarName;
-use zydeco_utils::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
+use zydeco_utils::{arena::ArenaAccess as _, context::Context};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct RenameEnvId(usize);
@@ -502,15 +502,6 @@ impl<'a> SpsLowConverter<'a> {
         let environment = self.captured_value_outside(&captures, env, site);
         let argument = low::EntryArgument::Closure { environment };
         low::Jump { target: block, argument, stack }.build(self, site)
-    }
-}
-
-impl CompilerPass for SpsLowConverter<'_> {
-    type Out = SpsLowProgram;
-    type Error = Infallible;
-
-    fn run(self) -> Result<Self::Out, Self::Error> {
-        Ok(self.convert())
     }
 }
 

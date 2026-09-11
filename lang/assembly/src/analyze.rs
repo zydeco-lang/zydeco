@@ -1,6 +1,5 @@
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
-use zydeco_utils::pass::CompilerPass;
 
 zydeco_utils::new_key_type! {
     pub struct SlotId;
@@ -64,14 +63,6 @@ pub struct StackAnalyzer<'a> {
     pub inlined: ArenaAssoc<SlotId, bool>,
 }
 
-/// Durable results of stack analysis; the temporary slot issuer has been dropped.
-pub struct StackAnalysis<'a> {
-    pub arena: &'a mut AssemblyArena,
-    pub layouts: ArenaAssoc<ProgId, Layout>,
-    pub slots: ArenaSparse<StackAnalysisScope, SlotId>,
-    pub inlined: ArenaAssoc<SlotId, bool>,
-}
-
 impl<'a> StackAnalyzer<'a> {
     pub(crate) fn new(program: &'a mut AssemblyBuild) -> Self {
         let AssemblyBuild { arena, root } = program;
@@ -105,10 +96,8 @@ impl<'a> StackAnalyzer<'a> {
     }
 }
 
-impl<'a> CompilerPass for StackAnalyzer<'a> {
-    type Out = StackAnalysis<'a>;
-    type Error = std::convert::Infallible;
-    fn run(mut self) -> Result<Self::Out, Self::Error> {
+impl StackAnalyzer<'_> {
+    pub(crate) fn run(mut self) {
         let symbol_programs: Vec<_> = self
             .arena
             .symbols
@@ -138,8 +127,6 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
             prog.stack_inline(&mut self);
         }
         self.root.stack_inline(&mut self);
-        let Self { arena, root: _, allocator: _, layouts, slots, inlined } = self;
-        Ok(StackAnalysis { arena, layouts, slots, inlined })
     }
 }
 

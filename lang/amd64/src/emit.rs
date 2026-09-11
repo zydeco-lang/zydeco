@@ -15,7 +15,6 @@ use zydeco_machine::native::{
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
-use zydeco_utils::pass::CompilerPass;
 
 pub const ENV_REG: Reg = Reg::Rbp;
 
@@ -482,10 +481,8 @@ impl<'e> Emitter<'e> {
     }
 }
 
-impl<'e> CompilerPass for Emitter<'e> {
-    type Out = AsmFile;
-    type Error = std::convert::Infallible;
-    fn run(mut self) -> Result<Self::Out, Self::Error> {
+impl Emitter<'_> {
+    pub fn run(mut self) -> AsmFile {
         self.asm.text.extend([
             Instr::Extern(STEP_SYMBOL.to_string()),
             // zydeco_abort
@@ -631,7 +628,7 @@ impl<'e> CompilerPass for Emitter<'e> {
             .collect::<Vec<_>>();
         self.asm.rodata.extend(string_literals);
 
-        Ok(self.asm)
+        self.asm
     }
 }
 

@@ -238,7 +238,7 @@ impl TestPipeline {
         } else {
             zydeco_amd64::TargetFormat::Elf
         };
-        let assembly = match zydeco_amd64::Emitter::new(
+        let assembly = zydeco_amd64::Emitter::new(
             &lowered.spans,
             &lowered.scoped,
             &lowered.statics,
@@ -246,10 +246,7 @@ impl TestPipeline {
             target,
         )
         .run()
-        {
-            | Ok(assembly) => assembly.to_string(),
-            | Err(never) => match never {},
-        };
+        .to_string();
         Ok(NativePackage { name, assembly })
     }
 
