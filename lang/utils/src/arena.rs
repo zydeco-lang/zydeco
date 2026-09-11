@@ -335,34 +335,6 @@ where
     marker: PhantomData<fn() -> Scope>,
 }
 
-/// Sparse owning storage whose externally-issued IDs are dense inside each
-/// key space.
-///
-/// Query-derived IDs use one key space per checking site and sequential raw
-/// slots inside that site. Grouping those slots into pages stores the key
-/// space once per site instead of once per arena item.
-#[derive(Debug)]
-pub struct ArenaPaged<Scope, Id>
-where
-    Id: ArenaId,
-    Scope: ArenaSchema<Id>,
-{
-    pages: HashMap<KeySpaceId, Vec<Option<Scope::Item>>>,
-    len: usize,
-    marker: PhantomData<fn() -> (Scope, Id)>,
-}
-
-impl<Scope, Id> Clone for ArenaPaged<Scope, Id>
-where
-    Id: ArenaId,
-    Scope: ArenaSchema<Id>,
-    Scope::Item: Clone,
-{
-    fn clone(&self) -> Self {
-        Self { pages: self.pages.clone(), len: self.len, marker: PhantomData }
-    }
-}
-
 impl<Scope, Id> Clone for ArenaSparse<Scope, Id>
 where
     Id: ArenaId,
@@ -395,7 +367,7 @@ pub struct ArenaPagedAssoc<Id: ArenaId, T> {
 /// The paged index costs one compact optional `u32` per raw ID slot, while the
 /// full items occupy a dense vector with no gaps or repeated IDs. This is the
 /// useful middle ground when IDs are sparse across categories but the payloads
-/// are too large for [`ArenaPaged`] and too numerous for [`ArenaSparse`].
+/// are too large to leave gaps in storage and too numerous for [`ArenaSparse`].
 #[derive(Debug)]
 pub struct ArenaIndexed<Scope, Id>
 where
@@ -531,64 +503,12 @@ pub struct ArenaForth<P, Q> {
     backward: ArenaAssoc<Q, P>,
 }
 
-/// A bidirectional multi-to-single-map; a "narrowing" map.
-#[derive(Debug, Clone, IntoIterator)]
-pub struct ArenaBack<P, Q> {
-    #[into_iterator(owned, ref)]
-    forward: ArenaAssoc<P, Q>,
-    backward: ArenaAssoc<Q, OneOrMany<P>>,
-}
-
 /// A bidirectional bijective map.
 #[derive(Debug, Clone, IntoIterator)]
 pub struct ArenaBijective<P, Q> {
     #[into_iterator(owned, ref)]
     forward: ArenaAssoc<P, Q>,
     backward: ArenaAssoc<Q, P>,
-}
-
-/// A bidirectional multi-map.
-#[derive(Debug, Clone)]
-pub struct ArenaBipartite<P, Q> {
-    forward: ArenaAssoc<P, OneOrMany<Q>>,
-    backward: ArenaAssoc<Q, OneOrMany<P>>,
-}
-
-/// An arena of equivalence classes, designed for types, and structurally shared
-/// `data` and `codata` definitions.
-pub struct ArenaEquiv<Scope, Id, Query>
-where
-    Id: ArenaId,
-    Scope: ArenaSchema<Id>,
-{
-    /// arena for definitions
-    pub defs: ArenaDense<Scope, Id>,
-    /// arena for query hashmap
-    pub tbls: ArenaAssoc<Id, Query>,
-    /// arena for equivalence classes
-    pub eqs: ArenaAssoc<Query, Id>,
-}
-impl<Scope, Id, Query> ArenaEquiv<Scope, Id, Query>
-where
-    Id: ArenaId,
-    Scope: ArenaSchema<Id>,
-    Query: Clone + Eq + std::hash::Hash,
-{
-    pub fn new() -> Self {
-        Self { defs: ArenaDense::new(), tbls: ArenaAssoc::new(), eqs: ArenaAssoc::new() }
-    }
-    pub fn lookup_or_alloc(&mut self, def: Scope::Item, query: Query) -> Id {
-        if let Some(id) = self.eqs.get(&query) {
-            // if the query is already registered, just return the id
-            *id
-        } else {
-            // else, register the query
-            let id = self.defs.alloc(def);
-            self.tbls.insert_new(id, query.clone());
-            self.eqs.insert_new(query, id);
-            id
-        }
-    }
 }
 
 mod impls {
@@ -1021,123 +941,6 @@ mod impls {
         }
     }
 
-    /* ------------------------------- ArenaPaged ------------------------------- */
-
-    impl<Scope, Id> Default for ArenaPaged<Scope, Id>
-    where
-        Id: ArenaId,
-        Scope: ArenaSchema<Id>,
-    {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl<Scope, Id> Index<&Id> for ArenaPaged<Scope, Id>
-    where
-        Id: ArenaId,
-        Scope: ArenaSchema<Id>,
-    {
-        type Output = Scope::Item;
-
-        fn index(&self, id: &Id) -> &Self::Output {
-            self.get(id).unwrap()
-        }
-    }
-
-    impl<Scope, Id> IndexMut<&Id> for ArenaPaged<Scope, Id>
-    where
-        Id: ArenaId,
-        Scope: ArenaSchema<Id>,
-    {
-        fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
-            self.get_mut(id).unwrap()
-        }
-    }
-
-    impl<Scope, Id> ArenaPaged<Scope, Id>
-    where
-        Id: ArenaId,
-        Scope: ArenaSchema<Id>,
-    {
-        pub fn new() -> Self {
-            Self { pages: HashMap::default(), len: 0, marker: PhantomData }
-        }
-
-        /// Insert a value whose externally-issued ID must not already be present.
-        pub fn insert_new(&mut self, id: Id, val: Scope::Item) {
-            let index = id.raw().into_u32() as usize;
-            let page = self.pages.entry(id.key_space()).or_default();
-            PageSlots::ensure(page, index + 1);
-            assert!(page[index].is_none(), "duplicate key in paged arena");
-            page[index] = Some(val);
-            self.len += 1;
-        }
-
-        pub fn iter(&self) -> impl Iterator<Item = (Id, &Scope::Item)> {
-            self.pages.iter().flat_map(|(key_space, page)| {
-                let key_space = *key_space;
-                page.iter().enumerate().filter_map(move |(raw, value)| {
-                    let value = value.as_ref()?;
-                    let raw = u32::try_from(raw).expect("arena page exceeded the raw ID range");
-                    let id = Id::from_raw_parts(ArenaIdToken(()), key_space, RawIdx::from_u32(raw));
-                    Some((id, value))
-                })
-            })
-        }
-
-        pub fn len(&self) -> usize {
-            self.len
-        }
-
-        /// Reserve every page to the greatest supplied raw ID without filling
-        /// its gaps. This is useful when a pass knows its complete external ID
-        /// domain before it starts inserting owned items.
-        pub fn reserve_ids(&mut self, ids: impl IntoIterator<Item = Id>) {
-            PageSlots::reserve_ids(&mut self.pages, ids);
-        }
-
-        /// Reserve outer page entries, one per expected key space.
-        pub fn reserve_pages(&mut self, additional: usize) {
-            self.pages.reserve(additional);
-        }
-
-        /// Replace an existing owned item.
-        pub fn replace_existing(&mut self, id: Id, val: Scope::Item) {
-            let Some(slot) = self
-                .pages
-                .get_mut(&id.key_space())
-                .and_then(|page| page.get_mut(id.raw().into_u32() as usize))
-            else {
-                panic!("key not found");
-            };
-            let Some(existing) = slot.as_mut() else {
-                panic!("key not found");
-            };
-            *existing = val;
-        }
-    }
-
-    impl<Scope, Id> ArenaAccess<&Id, Scope::Item> for ArenaPaged<Scope, Id>
-    where
-        Id: ArenaId,
-        Scope: ArenaSchema<Id>,
-    {
-        fn get(&self, id: &Id) -> Option<&Scope::Item> {
-            self.pages.get(&id.key_space())?.get(id.raw().into_u32() as usize)?.as_ref()
-        }
-    }
-
-    impl<Scope, Id> ArenaAccessMut<&Id, Scope::Item> for ArenaPaged<Scope, Id>
-    where
-        Id: ArenaId,
-        Scope: ArenaSchema<Id>,
-    {
-        fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
-            self.pages.get_mut(&id.key_space())?.get_mut(id.raw().into_u32() as usize)?.as_mut()
-        }
-    }
-
     /* ---------------------------- ArenaPagedAssoc ----------------------------- */
 
     impl<Id: ArenaId, T> Default for ArenaPagedAssoc<Id, T> {
@@ -1506,126 +1309,6 @@ mod impls {
         }
     }
 
-    /* -------------------------------- ArenaBack ------------------------------- */
-
-    impl<P, Q> ArenaBack<P, Q> {
-        pub fn new() -> Self {
-            ArenaBack { forward: ArenaAssoc::new(), backward: ArenaAssoc::new() }
-        }
-        pub fn iter(&self) -> impl Iterator<Item = (&P, &Q)> {
-            self.into_iter()
-        }
-    }
-
-    impl<P, Q> Default for ArenaBack<P, Q> {
-        fn default() -> Self {
-            Self { forward: Default::default(), backward: Default::default() }
-        }
-    }
-
-    impl<P, Q> ArenaBack<P, Q>
-    where
-        P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
-    {
-        pub fn insert_new(&mut self, p: P, q: Q) {
-            assert!(self.forward.get(&p).is_none(), "source key already has a target");
-            self.forward.insert_new(p.clone(), q.clone());
-            self.backward
-                .map
-                .entry(q)
-                .and_modify(|values| values.push(p.clone()))
-                .or_insert_with(|| OneOrMany::One(p));
-        }
-    }
-
-    impl<P, Q> Index<&P> for ArenaBack<P, Q>
-    where
-        P: Eq + Hash + Clone,
-    {
-        type Output = Q;
-        fn index(&self, p: &P) -> &Self::Output {
-            &self.forward[p]
-        }
-    }
-
-    impl<P, Q> Index<&P> for Forth<'_, ArenaBack<P, Q>>
-    where
-        P: Eq + Hash + Clone,
-    {
-        type Output = Q;
-        fn index(&self, p: &P) -> &Self::Output {
-            let Forth(arena) = self;
-            arena.forth(p)
-        }
-    }
-
-    impl<P, Q> Index<&Q> for Back<'_, ArenaBack<P, Q>>
-    where
-        Q: Eq + Hash + Clone,
-    {
-        type Output = [P];
-        fn index(&self, q: &Q) -> &Self::Output {
-            let Back(arena) = self;
-            arena.back(q).unwrap()
-        }
-    }
-
-    impl<P, Q> ArenaBack<P, Q>
-    where
-        P: Eq + Hash + Clone,
-    {
-        pub fn forth(&self, p: &P) -> &Q {
-            self.forward.get(p).unwrap()
-        }
-        pub fn try_forth(&self, p: &P) -> Option<&Q> {
-            self.forward.get(p)
-        }
-    }
-
-    impl<P, Q> ArenaBack<P, Q>
-    where
-        Q: Eq + Hash + Clone,
-    {
-        pub fn back(&self, q: &Q) -> Option<&[P]> {
-            self.backward.get(q).map(OneOrMany::as_slice)
-        }
-    }
-
-    impl<P, Q> FromIterator<(P, Q)> for ArenaBack<P, Q>
-    where
-        P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
-    {
-        fn from_iter<I: IntoIterator<Item = (P, Q)>>(iter: I) -> Self {
-            let mut arena = Self::new();
-            arena.extend(iter);
-            arena
-        }
-    }
-
-    impl<P, Q> Extend<(P, Q)> for ArenaBack<P, Q>
-    where
-        P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
-    {
-        fn extend<I: IntoIterator<Item = (P, Q)>>(&mut self, iter: I) {
-            for (p, q) in iter {
-                self.insert_new(p, q);
-            }
-        }
-    }
-
-    impl<P, Q> AddAssign for ArenaBack<P, Q>
-    where
-        P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
-    {
-        fn add_assign(&mut self, rhs: ArenaBack<P, Q>) {
-            self.extend(rhs);
-        }
-    }
-
     /* ----------------------------- ArenaBijective ----------------------------- */
 
     impl<P, Q> ArenaBijective<P, Q> {
@@ -1743,139 +1426,6 @@ mod impls {
     {
         fn add_assign(&mut self, rhs: ArenaBijective<P, Q>) {
             self.extend(rhs);
-        }
-    }
-
-    /* ----------------------------- ArenaBipartite ----------------------------- */
-
-    impl<P, Q> ArenaBipartite<P, Q> {
-        pub fn new() -> Self {
-            ArenaBipartite { forward: ArenaAssoc::new(), backward: ArenaAssoc::new() }
-        }
-        pub fn iter(&self) -> impl Iterator<Item = (&P, &[Q])> {
-            self.forward.iter().map(|(p, qs)| (p, qs.as_slice()))
-        }
-    }
-
-    impl<P, Q> Default for ArenaBipartite<P, Q> {
-        fn default() -> Self {
-            Self { forward: Default::default(), backward: Default::default() }
-        }
-    }
-
-    impl<P, Q> ArenaBipartite<P, Q>
-    where
-        P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
-    {
-        pub fn insert_new(&mut self, p: P, q: Q) {
-            assert!(
-                !self.forward.get(&p).is_some_and(|qs| qs.as_slice().contains(&q)),
-                "duplicate many-to-many edge"
-            );
-            self.forward
-                .map
-                .entry(p.clone())
-                .and_modify(|values| values.push(q.clone()))
-                .or_insert_with(|| OneOrMany::One(q.clone()));
-            self.backward
-                .map
-                .entry(q)
-                .and_modify(|values| values.push(p.clone()))
-                .or_insert_with(|| OneOrMany::One(p));
-        }
-
-        /// Ensure that an edge exists, without duplicating an existing edge.
-        pub fn ensure(&mut self, p: P, q: Q) {
-            if self.forward.get(&p).is_some_and(|qs| qs.as_slice().contains(&q)) {
-                return;
-            }
-            self.forward
-                .map
-                .entry(p.clone())
-                .and_modify(|values| values.push(q.clone()))
-                .or_insert_with(|| OneOrMany::One(q.clone()));
-            self.backward
-                .map
-                .entry(q)
-                .and_modify(|values| values.push(p.clone()))
-                .or_insert_with(|| OneOrMany::One(p));
-        }
-    }
-
-    impl<P, Q> Index<&P> for ArenaBipartite<P, Q>
-    where
-        P: Eq + Hash + Clone,
-    {
-        type Output = [Q];
-        fn index(&self, p: &P) -> &Self::Output {
-            self.forward.get(p).map(OneOrMany::as_slice).unwrap_or_default()
-        }
-    }
-
-    impl<P, Q> Index<&P> for Forth<'_, ArenaBipartite<P, Q>>
-    where
-        P: Eq + Hash + Clone,
-    {
-        type Output = [Q];
-        fn index(&self, p: &P) -> &Self::Output {
-            let Forth(arena) = self;
-            arena.forth(p)
-        }
-    }
-
-    impl<P, Q> Index<&Q> for Back<'_, ArenaBipartite<P, Q>>
-    where
-        Q: Eq + Hash + Clone,
-    {
-        type Output = [P];
-        fn index(&self, q: &Q) -> &Self::Output {
-            let Back(arena) = self;
-            arena.back(q)
-        }
-    }
-
-    impl<P, Q> ArenaBipartite<P, Q>
-    where
-        P: Eq + Hash + Clone,
-    {
-        pub fn forth(&self, p: &P) -> &[Q] {
-            self.forward.get(p).map(OneOrMany::as_slice).unwrap_or_default()
-        }
-    }
-
-    impl<P, Q> ArenaBipartite<P, Q>
-    where
-        Q: Eq + Hash + Clone,
-    {
-        pub fn back(&self, q: &Q) -> &[P] {
-            self.backward.get(q).map(OneOrMany::as_slice).unwrap_or_default()
-        }
-    }
-
-    impl<P, Q> Extend<(P, Vec<Q>)> for ArenaBipartite<P, Q>
-    where
-        P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
-    {
-        fn extend<I: IntoIterator<Item = (P, Vec<Q>)>>(&mut self, iter: I) {
-            for (p, qs) in iter {
-                for q in qs {
-                    self.insert_new(p.clone(), q);
-                }
-            }
-        }
-    }
-
-    impl<P, Q> AddAssign for ArenaBipartite<P, Q>
-    where
-        P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
-    {
-        fn add_assign(&mut self, rhs: ArenaBipartite<P, Q>) {
-            rhs.forward.into_iter().for_each(|(p, qs)| {
-                qs.into_iter().for_each(|q| self.insert_new(p.clone(), q));
-            });
         }
     }
 }
@@ -2038,27 +1588,6 @@ mod tests {
     }
 
     #[test]
-    fn paged_storage_groups_dense_slots_without_conflating_key_spaces() {
-        let left_space = KeySpaceId::derive(1, 2, 3, 4);
-        let right_space = KeySpaceId::derive(5, 6, 7, 8);
-        let left_first = derived_id::<SparseId>(left_space, 0);
-        let left_gap = derived_id::<SparseId>(left_space, 3);
-        let right_first = derived_id::<SparseId>(right_space, 0);
-        let mut arena = ArenaPaged::<TestScope, SparseId>::new();
-
-        arena.insert_new(left_first, "left first");
-        arena.insert_new(left_gap, "left gap");
-        arena.insert_new(right_first, "right first");
-
-        assert_eq!(arena.len(), 3);
-        assert_eq!(arena.get(&left_first), Some(&"left first"));
-        assert_eq!(arena.get(&derived_id::<SparseId>(left_space, 1)), None);
-        assert_eq!(arena.get(&left_gap), Some(&"left gap"));
-        assert_eq!(arena.get(&right_first), Some(&"right first"));
-        assert_eq!(arena.iter().count(), 3);
-    }
-
-    #[test]
     fn indexed_storage_keeps_sparse_identity_and_dense_payloads() {
         let left_space = KeySpaceId::derive(1, 2, 3, 6);
         let right_space = KeySpaceId::derive(5, 6, 7, 10);
@@ -2096,38 +1625,6 @@ mod tests {
     fn indexed_storage_rejects_duplicate_ids_without_appending_payloads() {
         let id = derived_id::<SparseId>(KeySpaceId::derive(1, 1, 1, 2), 0);
         let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
-        arena.insert_new(id, "first");
-        arena.insert_new(id, "second");
-    }
-
-    #[test]
-    fn paged_storage_uses_known_id_extents_without_growth_slack() {
-        let left_space = KeySpaceId::derive(1, 2, 3, 5);
-        let right_space = KeySpaceId::derive(5, 6, 7, 9);
-        let left_first = derived_id::<SparseId>(left_space, 0);
-        let left_last = derived_id::<SparseId>(left_space, 95);
-        let right_last = derived_id::<SparseId>(right_space, 2);
-        let mut arena = ArenaPaged::<TestScope, SparseId>::new();
-
-        arena.reserve_ids([left_last, right_last, left_first]);
-        let left_capacity = arena.pages[&left_space].capacity();
-        let right_capacity = arena.pages[&right_space].capacity();
-        assert!(left_capacity >= 96);
-        assert!(right_capacity >= 3);
-
-        arena.insert_new(left_first, "left first");
-        arena.insert_new(left_last, "left last");
-        arena.insert_new(right_last, "right last");
-
-        assert_eq!(arena.pages[&left_space].capacity(), left_capacity);
-        assert_eq!(arena.pages[&right_space].capacity(), right_capacity);
-    }
-
-    #[test]
-    #[should_panic(expected = "duplicate key in paged arena")]
-    fn paged_storage_rejects_duplicate_ids() {
-        let id = derived_id::<SparseId>(KeySpaceId::derive(1, 1, 1, 1), 0);
-        let mut arena = ArenaPaged::<TestScope, SparseId>::new();
         arena.insert_new(id, "first");
         arena.insert_new(id, "second");
     }
@@ -2220,19 +1717,6 @@ mod tests {
     }
 
     #[test]
-    fn back_relation_is_many_sources_to_one_derived_node() {
-        let mut relation = ArenaBack::new();
-        relation.insert_new("inner", 1);
-        relation.insert_new("outer", 1);
-        assert_eq!(relation.back(&1), Some(["inner", "outer"].as_slice()));
-
-        let conflict = catch_unwind(AssertUnwindSafe(|| relation.insert_new("inner", 2)));
-        assert!(conflict.is_err());
-        assert_eq!(relation.try_forth(&"inner"), Some(&1));
-        assert_eq!(relation.back(&2), None);
-    }
-
-    #[test]
     fn bijection_checks_both_sides_before_mutating() {
         let mut relation = ArenaBijective::new();
         relation.insert_new("left", 1);
@@ -2241,18 +1725,6 @@ mod tests {
         assert!(conflict.is_err());
         assert_eq!(relation.try_forth(&"other"), None);
         assert_eq!(relation.try_back(&1), Some(&"left"));
-    }
-
-    #[test]
-    fn bipartite_ensure_is_idempotent() {
-        let mut relation = ArenaBipartite::new();
-        relation.ensure("source", 1);
-        relation.ensure("source", 1);
-        relation.ensure("source", 2);
-        relation.ensure("other", 1);
-
-        assert_eq!(relation.forth(&"source"), &[1, 2]);
-        assert_eq!(relation.back(&1), &["source", "other"]);
     }
 }
 
