@@ -84,16 +84,17 @@ fn xxhash_binding_reaches_the_native_c_call_boundary() {
 
     assert!(backend.render_sps_low().contains("<extern:XXH64/2>"));
     assert!(backend.render_sps_low().contains("<extern:XXH3_64bits/1>"));
-    let assembly = backend.emit_amd64(TargetOs::Linux);
+    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries } =
+        backend.emit_amd64(TargetOs::Linux);
     assert!(assembly.contains("extern XXH64"));
     assert!(assembly.contains("call XXH64"));
     assert!(assembly.contains("call XXH3_64bits"));
     assert!(assembly.contains("call zydeco_ffi_borrow_bytes"));
     assert_eq!(
-        backend.foreign_libraries().iter().map(|library| library.as_str()).collect::<Vec<_>>(),
+        foreign_libraries.iter().map(|library| library.as_str()).collect::<Vec<_>>(),
         ["xxhash"]
     );
-    let macho = backend.emit_amd64(TargetOs::Macos);
+    let macho = backend.emit_amd64(TargetOs::Macos).assembly;
     assert!(macho.contains("call _XXH64"));
     assert!(macho.contains("call _XXH3_64bits"));
 }
@@ -146,11 +147,12 @@ fn rejects_unsupported_classifier_components_with_specific_diagnostics() {
 #[test]
 fn boundary_fixture_lowers_without_xxhash_specific_shapes() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("boundary.zy")).unwrap();
-    let assembly = backend.emit_amd64(TargetOs::Linux);
+    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries } =
+        backend.emit_amd64(TargetOs::Linux);
     for name in ["zero", "echo", "bytes", "mixed", "three_bytes", "six"] {
         assert!(assembly.contains(&format!("call zyffi_{name}")));
     }
-    assert_eq!(backend.foreign_libraries()[0].as_str(), "zyffi_boundary");
+    assert_eq!(foreign_libraries[0].as_str(), "zyffi_boundary");
 }
 
 #[test]
@@ -194,13 +196,9 @@ fn native_c_boundary_executes_the_compositional_protocol() {
         ["boundary.zy", "representation.zy", "static-layout.zy", "storage-access.zy", "integers.zy"]
     {
         let backend = CommandCompiler::default().lower(&FfiCase::path(fixture)).unwrap();
-        let executable = options
-            .link_amd64(
-                "ffi_program",
-                &backend.emit_amd64(operating_system),
-                &backend.foreign_libraries(),
-            )
-            .unwrap();
+        let native = backend.emit_amd64(operating_system);
+        let executable =
+            options.link_amd64("ffi_program", &native.assembly, &native.foreign_libraries).unwrap();
         let output = Command::new(executable.path())
             .env("LD_LIBRARY_PATH", directory.path())
             .env("DYLD_LIBRARY_PATH", directory.path())

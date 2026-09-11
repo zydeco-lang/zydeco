@@ -929,6 +929,10 @@ The checked product contains activation ownership, entry contracts, initialized 
 continuation provenance, packed frame slots, and root/suspension maps.
 Invalid preparation is a `FramePlanError`; emission cannot silently fall back to an unchecked environment layout.
 
+`BackendProgram::emit_amd64` returns an `Amd64Artifact` containing assembly text
+and the foreign libraries collected from that same native program.
+CLI and test builds link this artifact after one lowering pass.
+
 | Entry role | Required transition |
 | --- | --- |
 | Local branch | Keep the current activation and its established bindings. |

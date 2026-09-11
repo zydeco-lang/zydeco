@@ -248,7 +248,7 @@ impl Application {
                         NativeError::UnsupportedAmd64Architecture(options.architecture).into()
                     );
                 }
-                println!("{}", backend.emit_amd64(options.operating_system));
+                println!("{}", backend.emit_amd64(options.operating_system).assembly);
             }
             | BuildTarget::WasmAm => {
                 if execute {
@@ -271,9 +271,9 @@ impl Application {
             }
             | BuildTarget::Exe => {
                 let artifact = Self::artifact_name(path)?;
-                let assembly = backend.emit_amd64(options.operating_system);
-                let foreign_libraries = backend.foreign_libraries();
-                let executable = options.link_amd64(&artifact, &assembly, &foreign_libraries)?;
+                let native = backend.emit_amd64(options.operating_system);
+                let executable =
+                    options.link_amd64(&artifact, &native.assembly, &native.foreign_libraries)?;
                 if execute {
                     return Ok(Self::process_exit_code(executable.run(&[])?));
                 }

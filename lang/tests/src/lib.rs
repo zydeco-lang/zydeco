@@ -211,9 +211,9 @@ pub mod utils {
             let backend = CommandCompiler::default()
                 .with_representation(self.representation)
                 .lower(&self.path)?;
-            let assembly = backend.emit_amd64(operating_system);
-            let foreign_libraries = backend.foreign_libraries();
-            let executable = options.link_amd64("test", &assembly, &foreign_libraries)?;
+            let native = backend.emit_amd64(operating_system);
+            let executable =
+                options.link_amd64("test", &native.assembly, &native.foreign_libraries)?;
             let mut command = std::process::Command::new(executable.path());
             command.args(&self.arguments);
             let output = self.execute(command).map_err(CaseError::Io)?;

@@ -20,8 +20,8 @@ fn packaged_model_links_and_a_mismatched_model_cannot_publish_an_executable() {
     let backend = CommandCompiler::default()
         .lower(&workspace.join("lib/tests/builtin/host-runtime.zy"))
         .unwrap();
-    let assembly = backend.emit_amd64(operating_system);
-    let libraries = backend.foreign_libraries();
+    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries: libraries } =
+        backend.emit_amd64(operating_system);
     let executable = options.link_amd64("matching", &assembly, &libraries).unwrap();
     let output = Command::new(executable.path()).stdin(Stdio::null()).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
@@ -68,7 +68,7 @@ fn returning_calls_retain_slots_without_heap_capture_products() {
     // Portable conversion still spells out the capture environment. Native
     // preparation must remove its allocation, even for nonempty captures.
     assert!(backend.render_sps_low().contains("pack-continuation("));
-    let assembly = backend.emit_amd64(TargetOs::host().unwrap());
+    let assembly = backend.emit_amd64(TargetOs::host().unwrap()).assembly;
     assert!(assembly.contains("retain activation slots for return"));
     assert!(!assembly.contains("pack_product"), "{assembly}");
     assert!(!assembly.contains("call zydeco_alloc_scanned"), "{assembly}");
@@ -120,9 +120,9 @@ fn compact_environments_execute_the_same_generated_actions() {
     ] {
         let path = workspace.join("lib/tests").join(source);
         let backend = CommandCompiler::default().lower(&path).unwrap();
-        let assembly = backend.emit_amd64(operating_system);
+        let native = backend.emit_amd64(operating_system);
         let executable =
-            options.link_amd64("compact", &assembly, &backend.foreign_libraries()).unwrap();
+            options.link_amd64("compact", &native.assembly, &native.foreign_libraries).unwrap();
         let output = Command::new(executable.path()).stdin(Stdio::null()).output().unwrap();
         let expected = CommandCompiler::default().test_io(&path, &[], "").unwrap();
         assert_eq!(output.status.code(), Some(expected.code), "{source}: {output:?}");

@@ -228,6 +228,13 @@ impl std::fmt::Debug for SpsLowerFailure {
     }
 }
 
+/// Assembly text and linker dependencies from one native lowering pass.
+#[derive(Debug)]
+pub struct Amd64Artifact {
+    pub assembly: String,
+    pub foreign_libraries: Vec<zydeco_syntax::ForeignLibraryName>,
+}
+
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
@@ -306,7 +313,7 @@ impl BackendProgram {
         }
     }
 
-    pub fn emit_amd64(&self, operating_system: TargetOs) -> String {
+    pub fn emit_amd64(&self, operating_system: TargetOs) -> Amd64Artifact {
         let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low)
             .with_representation(self.representation)
             .run_native()
@@ -315,16 +322,20 @@ impl BackendProgram {
             | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
             | TargetOs::Macos => zydeco_amd64::TargetFormat::MachO,
         };
-        match zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, &native, format)
-            .run()
+        let assembly = match zydeco_amd64::Emitter::new(
+            &self.spans,
+            &self.scoped,
+            &self.statics,
+            &native,
+            format,
+        )
+        .run()
         {
             | Ok(assembly) => assembly.to_string(),
             | Err(never) => match never {},
-        }
-    }
-
-    pub fn foreign_libraries(&self) -> Vec<zydeco_syntax::ForeignLibraryName> {
-        self.assembly()
+        };
+        let foreign_libraries = native
+            .assembly()
             .arena()
             .externs
             .iter()
@@ -336,7 +347,8 @@ impl BackendProgram {
             })
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
-            .collect()
+            .collect();
+        Amd64Artifact { assembly, foreign_libraries }
     }
 
     pub fn emit_wasm_am(&self) -> Result<Vec<u8>, CompileError> {

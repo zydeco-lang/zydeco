@@ -14,7 +14,10 @@ pub use crate::{
         BuildTarget, Cli, Commands, DocumentationCommand, RepresentationChoice, TargetArchitecture,
         TargetOs,
     },
-    compile::{AssemblyOutcome, BackendProgram, CommandCompiler, CompileError, TestInteraction},
+    compile::{
+        Amd64Artifact, AssemblyOutcome, BackendProgram, CommandCompiler, CompileError,
+        TestInteraction,
+    },
     diagnostics::DiagnosticRenderer,
     format::{SourceFormatError, SourceFormatOutcome, SourceFormatter},
     native::{BuildOptions, Executable, NativeError, WasmArtifact, WasmBackendKind},

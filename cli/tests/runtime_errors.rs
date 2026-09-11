@@ -165,7 +165,7 @@ fn amd64_arithmetic_uses_machine_instructions_without_runtime_arithmetic_calls()
         let host_call = format!("<extern:{}_{operation}/2>", ty.to_lowercase());
         assert!(!low.contains(&host_call), "{low}");
         for target in [TargetOs::Linux, TargetOs::Macos] {
-            let assembly = backend.emit_amd64(target);
+            let assembly = backend.emit_amd64(target).assembly;
             let count = assembly.lines().filter(|line| line.trim() == instruction).count();
             assert_eq!(count, 1, "{ty}/{operation}: {assembly}");
             let host_call = format!("call zydeco_{}_{operation}", ty.to_lowercase());
