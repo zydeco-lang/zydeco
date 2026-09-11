@@ -713,7 +713,7 @@ In particular, an argument prefix followed by `cont(A)` does not bound the stack
 from checked classifiers.
 Values retain unit, primitive, product, and thunk structure when known.
 Codata interfaces retain observation alternatives in an owned `ProtocolGraph` shared by the high and low arenas.
-Disclosed computation seals can lead back to existing graph nodes.
+Disclosed seals and applied type functions can lead back to existing graph instances.
 Unresolved witnesses, existential carriers, and unsupported forms contribute unknowns.
 Erasing a universal type binder preserves any known argument prefix in its body;
 a bound computation variable remains an unknown remainder.
@@ -726,12 +726,34 @@ a bound computation variable remains an unknown remainder.
 | `pN` | A program-local reference to a codata interface's observation alternatives |
 | `.d#i :: S` | A producer has supplied observation `.d`, with runtime tag `i`, above remainder `S` |
 
-Each codata declaration receives a graph reference before its observations are translated.
-Recursive occurrences reuse that reference, including cycles through argument prefixes or thunk components.
+Each codata instance receives a graph reference before its observations are translated.
+Recursive occurrences with the same captured arguments reuse that reference,
+including cycles through argument prefixes or thunk components.
 This keeps a finite description even when executions accumulate an unbounded number of observations and arguments.
 The graph records no physical stack extent.
-Unsupported recursive paths remain unknown; the extractor does not instantiate recursive type families
-whose applications are still unresolved in the checked arena.
+
+The [source extractor](../../lang/stackir/src/protocol/source.rs) interprets disclosed type-function applications
+against the frozen checked arena, without allocating substituted types or rerunning the checker.
+A source expression carries lexical bindings for the witnesses that its supported structure uses freely.
+Applying a checked type abstraction binds the argument to its witness;
+a named binder projects its payload, while a plain binder keeps the whole argument.
+Nested abstractions capture the outer arguments they use.
+Known named projections, value products, thunk protocols, and computation arguments use these bindings as well.
+For example, `Stream A R = codata .item : A -> Stream A R; .done : R end` retains an `Int64` payload
+and `cont(Int64)` result when applied to `Int64` and `Ret Int64`.
+Applying the same family to `Char` preserves a separate instance.
+
+Instance keys contain the source codata identity and its captured source expressions and bindings.
+They do not use partial protocol compatibility to equate arguments; distinct unresolved witnesses remain distinct keys.
+Only an existing exact instance closes a recursive edge.
+When a source codata is already being translated under different arguments,
+a new application contributes unknown instead of starting another specialization.
+For `Growing A` whose next observation requires `Growing (A * A)`,
+the current observation retains its known payload and the changing tail remains opaque.
+The same guard covers growth through returned thunks.
+Repeated source nodes along unguarded reduction or value/argument paths also stop conservatively.
+These guards impose no unfolding-depth limit, but can lose evidence for finite nested applications too.
+General nonregular recursion and symbolic polymorphic binding relationships are not reconstructed.
 
 Observation indices are the zero-based ranks of complete destructor names in lexicographic order within the interface.
 High lowering obtains both pushed tags and case tags from the descriptor's canonical ordering.
@@ -793,6 +815,11 @@ That program dynamically selects and returns its codata consumer, and also calls
 through a recursive computation-polymorphic forwarder on all backends.
 The [declaration-order regression](../../lib/tests/core/codata-order.zy) exercises equal structural interfaces
 with reversed source ordering on all backends.
+The [parameterized regression](../../lib/tests/core/parameterized-protocols.zy) instantiates one recursive family
+with both `Int64` and `Char`, including a dynamically selected and returned stream thunk.
+Low mutation tests reject an incompatible payload after the first recursive observation.
+The [growing-family regression](../../lib/tests/core/growing-protocols.zy) checks
+that conservative extraction still permits successive observations with larger product types on all backends.
 
 ## C10. ZASM, stack analysis, and local representation choices
 

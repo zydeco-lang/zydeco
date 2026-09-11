@@ -11,8 +11,12 @@ struct Fixture;
 
 impl Fixture {
     fn program() -> SpsLowProgram {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/tests/core/stack-protocols.zy");
+        Self::source("stack-protocols.zy")
+    }
+
+    fn source(name: &str) -> SpsLowProgram {
+        let path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/tests/core").join(name);
         CommandCompiler::default().lower(&path).unwrap().sps_low
     }
 
@@ -32,6 +36,10 @@ impl Fixture {
     }
 
     fn stream(arena: &SpsLowInnerArena) -> CodataProtocolId {
+        Self::stream_with(arena, Self::integer())
+    }
+
+    fn stream_with(arena: &SpsLowInnerArena, input: ValueProtocol) -> CodataProtocolId {
         arena
             .protocols
             .iter()
@@ -45,10 +53,10 @@ impl Fixture {
                     && done.idx == 0
                     && *rest
                         == StackProtocol::Argument(
-                            Box::new(Self::integer()),
+                            Box::new(input.clone()),
                             Box::new(StackProtocol::Codata(id)),
                         )
-                    && *result == StackProtocol::Continuation(Box::new(Self::integer())))
+                    && *result == StackProtocol::Continuation(Box::new(input.clone())))
                 .then_some(id)
             })
             .unwrap_or_else(|| {
@@ -79,6 +87,97 @@ impl Fixture {
                 }
             })
             .expect("the recursive caller must push an item observation")
+    }
+}
+
+#[test]
+fn instantiated_recursive_interfaces_survive_entries_and_returned_thunks() {
+    let program = Fixture::source("parameterized-protocols.zy");
+    let arena = &program.arena().inner;
+    let integer = Fixture::stream(arena);
+    let character = Fixture::stream_with(arena, ValueProtocol::Primitive(PrimitiveType::Char));
+    assert_ne!(integer, character);
+    assert!(
+        !arena
+            .protocols
+            .stacks_agree(&StackProtocol::Codata(integer), &StackProtocol::Codata(character),)
+    );
+    for (input, expected) in
+        [(Fixture::integer(), integer), (ValueProtocol::Primitive(PrimitiveType::Char), character)]
+    {
+        assert!(
+            arena.entry_protocols.iter().any(|(_, entry)| {
+                let EntryProtocol::Closure(StackProtocol::Argument(found, rest)) = entry else {
+                    return false;
+                };
+                **found == input
+                    && matches!(**rest, StackProtocol::Codata(_))
+                    && arena.protocols.stacks_agree(rest, &StackProtocol::Codata(expected))
+            }),
+            "the specialized consumer must retain its input and recursive remainder"
+        );
+    }
+    assert!(
+        arena.entry_protocols.iter().any(|(_, entry)| {
+            let EntryProtocol::Continuation(ValueProtocol::Thunk(rest)) = entry else {
+                return false;
+            };
+            matches!(**rest, StackProtocol::Codata(_))
+                && arena.protocols.stacks_agree(rest, &StackProtocol::Codata(integer))
+        }),
+        "a dynamically returned thunk must retain its instantiated interface"
+    );
+}
+
+#[test]
+fn an_instantiated_recursive_transfer_checks_arguments_after_the_first_observation() {
+    let (mut arena, root) = Fixture::source("parameterized-protocols.zy").into_parts();
+    let (jump, second_argument) = arena
+        .inner
+        .compus
+        .iter()
+        .find_map(|(id, compu)| {
+            let Computation::Jump(Jump { stack, .. }) = compu else { return None };
+            let Stack::Tag(Cons(first, argument)) = &arena.inner.stacks[stack] else { return None };
+            let Stack::Arg(Cons(_, rest)) = &arena.inner.stacks[argument] else { return None };
+            let Stack::Tag(Cons(second, argument)) = &arena.inner.stacks[rest] else { return None };
+            (first.name.0 == ".item" && second == first).then_some((*id, *argument))
+        })
+        .expect("the returned stream receives two consecutive item observations");
+    let Stack::Arg(Cons(value, _)) = arena.inner.stacks[&second_argument] else { unreachable!() };
+    assert!(matches!(arena.inner.values[&value], Value::Literal(Literal::Integer(_))));
+    arena.inner.values[&value] = Value::Literal(Literal::Char('x'));
+    let graph = arena.inner.protocols.clone();
+    let SpsLowError::Protocol(ProtocolError::Stack { compu, expected, found }) =
+        SpsLowProgram::try_new(arena, root).unwrap_err()
+    else {
+        panic!("the recursive application must retain its known payload requirement")
+    };
+    assert_eq!(compu, jump);
+    let StackProtocol::Codata(id) = expected else { panic!("expected the instantiated interface") };
+    assert_eq!(
+        graph.get(id).unwrap().observations[0].1,
+        StackProtocol::Continuation(Box::new(Fixture::integer()))
+    );
+    let StackProtocol::Tag(_, first) = found else { unreachable!() };
+    let StackProtocol::Argument(input, rest) = *first else { unreachable!() };
+    assert_eq!(*input, Fixture::integer(), "the first observation remains well typed");
+    let StackProtocol::Tag(_, second) = *rest else { unreachable!() };
+    let StackProtocol::Argument(input, _) = *second else { unreachable!() };
+    assert_eq!(*input, ValueProtocol::Primitive(PrimitiveType::Char));
+}
+
+#[test]
+fn parameterized_and_growing_protocols_execute_on_every_backend() {
+    for backend in
+        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
+    {
+        for input in ["", "abc"] {
+            SourceProgram::setup("tests/core/parameterized-protocols.zy")
+                .with_args([input])
+                .test(backend);
+        }
+        SourceProgram::setup("tests/core/growing-protocols.zy").test(backend);
     }
 }
 

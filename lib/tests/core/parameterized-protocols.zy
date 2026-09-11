@@ -1,0 +1,45 @@
+-- One recursive interface instantiated with both value and computation arguments.
+begin
+  param (/VType; /CType; /Int64; /Char; /String; /Thk; /Ret;
+    /int64; /char; /string; /args; /process) : @(import("../../std/builtin.zy")) that
+  def Stream (A : VType) (R : CType) : CType =
+    codata
+    | .item : A -> Stream A R
+    | .done : R
+    end
+  that
+  def fix integers (total : Int64) : Stream Int64 (Ret Int64) =
+    comatch
+    | .item value =>
+      do next <- ! int64/add total value;
+      ! integers next
+    | .done => ret total
+    end
+  in
+  def fix characters (last : Char) : Stream Char (Ret Char) =
+    comatch
+    | .item value => ! characters value
+    | .done => ret last
+    end
+  in
+  def ! choose (selector : Int64) : Ret (Thk (Stream Int64 (Ret Int64))) =
+    ! int64/eq (Ret (Thk (Stream Int64 (Ret Int64)))) selector 0
+      { ret { ! integers 0 } }
+      {
+        ret {
+          do zero <- ! int64/sub selector selector;
+          ! integers zero
+        }
+      }
+  in
+  do input <- ! args/at (Ret String) 0 { ret "abc" } { fn value => ret value };
+  do selector <- ! string/length input;
+  do sink <- ! choose selector;
+  do total <- ! sink .item 5 .item 7 .done;
+  do last <- ! characters 'a' .item 'b' .item 'c' .done;
+  do codepoint <- ! char/codepoint last;
+  do character_difference <- ! int64/sub codepoint 99;
+  do difference <- ! int64/sub total 12;
+  do difference <- ! int64/add difference character_difference;
+  ! process/exit difference
+end

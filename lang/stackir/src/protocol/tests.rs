@@ -1,6 +1,9 @@
 use super::*;
-use zydeco_statics::arena::StaticsScope;
-use zydeco_syntax::{DtorName, IntegerType};
+use zydeco_statics::{
+    arena::{StaticsArena, StaticsScope},
+    syntax as ss,
+};
+use zydeco_syntax::{Arrow, DtorName, IntegerType};
 use zydeco_utils::prelude::IdAllocator;
 
 struct Fixture;

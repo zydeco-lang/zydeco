@@ -1,0 +1,21 @@
+-- Successive observations change the argument type; this is not a regular cycle.
+begin
+  param (/VType; /CType; /Int64; /Ret; /int64; /process) : @(import("../../std/builtin.zy")) that
+  def Growing (A : VType) : CType =
+    codata
+    | .step : A -> Growing (A * A)
+    | .done : Ret Int64
+    end
+  that
+  def fix consume (A : VType) (count : Int64) : Growing A =
+    comatch
+    | .step _ =>
+      do next <- ! int64/add count 1;
+      ! consume (A * A) next
+    | .done => ret count
+    end
+  in
+  do count <- ! consume Int64 0 .step 0 .step (1, 2) .step ((3, 4), (5, 6)) .done;
+  do difference <- ! int64/sub count 3;
+  ! process/exit difference
+end

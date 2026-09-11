@@ -78,7 +78,7 @@ The implementation carries several complementary descriptions:
 | Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
 | SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
 | SPSLow word entries | Ordered environment/result words and checked code/package provenance | Complete source stack protocols or a different component transport |
-| SPSLow partial source protocols | Known value components, argument/continuation protocols, and cyclic codata observations retained across normalization | Nominal storage identity, unresolved type-family instantiation, or physical stack extent |
+| SPSLow partial source protocols | Known value components, argument/continuation protocols, and instantiated recursive codata retained across normalization | Nominal storage identity, general polymorphic/nonregular protocols, or physical stack extent |
 | Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
 
 For example, the ordinary logical type `UInt8 * UInt32` can have natural storage of eight bytes,
@@ -222,6 +222,17 @@ two structurally equal codata interfaces could assign different runtime indices 
 Canonical observation numbering now keeps those calls coherent across all backends.
 This is evidence for sharing one descriptor between producers and consumers, including the tag identity itself.
 
+The accepted instantiation extension interprets available type definitions with captured source arguments.
+The [parameterized stream](../../lib/tests/core/parameterized-protocols.zy) exercises `Stream A R`
+at `Int64`/`Ret Int64` and `Char`/`Ret Char`.
+Previously, its recursive `.item` tails and returned stream thunk became unknown during extraction.
+They now retain their instantiated interfaces, so a wrong second item is rejected after following the recursive edge.
+This supplies evidence for ordinary generic source definitions without changing their representation
+or requiring annotations.
+The [growing-family example](../../lib/tests/core/growing-protocols.zy) deliberately changes its argument from `A`
+to `A * A` at each observation and remains executable with a conservative unknown tail.
+Both examples run on all four backends.
+
 This establishes partial source agreement through the existing word ABI.
 It does not select byte layouts or raw slots, equate abstract carriers, or infer physical stack size.
 
@@ -268,11 +279,12 @@ Before accepting another machine transport, its tests must also retain managed f
 across collection and verify that padding or raw scalar bits never become roots.
 The current experiment inherits the existing handle/root contract; it does not exercise mixed raw/reference slots.
 
-The accepted recursive protocol experiment retains observation transitions
+The accepted recursive protocol experiment retains observation transitions and regular type-family instances,
 and rejects incompatible known transfers while accepting dynamic depth.
-The remaining protocol gap is instantiation: unresolved computation/type witnesses
-and applied recursive families can still leave opaque components.
-Any extension should preserve their binding relationships without unbounded specialization of recursive applications.
+Unresolved computation/type witnesses still lose their binding relationships in the published descriptors;
+nonregular recursion and some finite nested applications also retain opaque components.
+A further protocol extension should express parameters and substitution in a finite description,
+with a sound comparison rule for changing arguments, before attempting broader specialization.
 Representation identity and mixed reference layouts still need their own evidence
 before a Rust policy can choose another component transport;
 partial compatibility involving unknowns cannot justify specialization.

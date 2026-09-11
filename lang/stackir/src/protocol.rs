@@ -5,13 +5,11 @@
 //! permission to specialize an ABI.
 
 use crate::syntax::DtorIdx;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-};
-use zydeco_statics::{arena::StaticsArena, syntax as ss};
-use zydeco_syntax::{App, Arrow, DtorName, Named, PrimitiveType, Prod};
-use zydeco_utils::arena::ArenaAccess as _;
+use std::{collections::HashSet, fmt};
+use zydeco_syntax::PrimitiveType;
+
+mod source;
+pub(crate) use source::SourceProtocols;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum ValueProtocol {
@@ -267,119 +265,6 @@ impl fmt::Display for CodataProtocol {
             write!(f, " {}#{}: {stack};", tag.name.0, tag.idx)?;
         }
         f.write_str(" }")
-    }
-}
-
-/// Translate only structure whose runtime interpretation is already established.
-/// Disclosed codata seals become shared references. Unsupported forms stay unknown.
-pub(crate) struct SourceProtocols<'a> {
-    statics: &'a StaticsArena,
-    active: HashSet<ss::TypeId>,
-    codatas: HashMap<ss::CoDataId, CodataProtocolId>,
-    pub(crate) graph: ProtocolGraph,
-}
-
-impl<'a> SourceProtocols<'a> {
-    pub(crate) fn new(statics: &'a StaticsArena) -> Self {
-        Self {
-            statics,
-            active: HashSet::new(),
-            codatas: HashMap::new(),
-            graph: ProtocolGraph::default(),
-        }
-    }
-
-    pub(crate) fn value(&mut self, ty: ss::TypeId) -> ValueProtocol {
-        if !self.active.insert(ty) {
-            return ValueProtocol::Unknown;
-        }
-        let result = match self.statics.normalized_at(ty).cloned() {
-            | Some(ss::Type::Unit(_)) => ValueProtocol::Unit,
-            | Some(ss::Type::Primitive(ss::PrimitiveTy(ty))) => ValueProtocol::Primitive(ty),
-            | Some(ss::Type::Prod(Prod(fields))) => {
-                ValueProtocol::Product(fields.into_iter().map(|ty| self.value(ty)).collect())
-            }
-            | Some(ss::Type::Named(Named(_, inner))) => self.value(inner),
-            | Some(ss::Type::App(App(head, body)))
-                if matches!(self.statics.normalized_at(head), Some(ss::Type::Thk(_))) =>
-            {
-                ValueProtocol::Thunk(Box::new(self.stack(body)))
-            }
-            | _ => ValueProtocol::Unknown,
-        };
-        self.active.remove(&ty);
-        result
-    }
-
-    pub(crate) fn stack(&mut self, ty: ss::TypeId) -> StackProtocol {
-        // Resolve disclosed heads before the path guard, so a recursive occurrence
-        // can find the codata reference reserved before walking its observations.
-        let mut ty = ty;
-        let mut heads = HashSet::new();
-        while heads.insert(ty) {
-            match self.statics.normalized_at(ty) {
-                | Some(ss::Type::Abst(witness)) => match self.statics.seals.get(witness) {
-                    | Some(body) => ty = *body,
-                    | None => return StackProtocol::Unknown,
-                },
-                | Some(ss::Type::Named(Named(_, body))) => ty = *body,
-                | Some(ss::Type::CoData(id)) => return self.codata(*id),
-                | _ => break,
-            }
-        }
-        if !self.active.insert(ty) {
-            return StackProtocol::Unknown;
-        }
-        let result = match self.statics.normalized_at(ty).cloned() {
-            | Some(ss::Type::Arrow(Arrow(input, rest))) => {
-                StackProtocol::Argument(Box::new(self.value(input)), Box::new(self.stack(rest)))
-            }
-            | Some(ss::Type::Forall(ss::Forall(_, body)))
-            | Some(ss::Type::Named(Named(_, body))) => self.stack(body),
-            | Some(ss::Type::App(App(head, body)))
-                if matches!(self.statics.normalized_at(head), Some(ss::Type::Ret(_))) =>
-            {
-                StackProtocol::Continuation(Box::new(self.value(body)))
-            }
-            | _ => StackProtocol::Unknown,
-        };
-        self.active.remove(&ty);
-        result
-    }
-
-    pub(crate) fn codata(&mut self, source: ss::CoDataId) -> StackProtocol {
-        if let Some(id) = self.codatas.get(&source) {
-            return StackProtocol::Codata(*id);
-        }
-        let id = self.graph.reserve();
-        self.codatas.insert(source, id);
-        let mut arms = self.statics.codatas[&source].clone().into_iter().collect::<Vec<_>>();
-        arms.sort_by(|(left, _), (right, _)| left.cmp(right));
-        // Crossing an observation permits revisiting a surrounding argument prefix.
-        // The reserved codata reference now guards that cycle; path guards still
-        // stop unsupported recursion that never reaches a codata definition.
-        let active = std::mem::take(&mut self.active);
-        let observations = arms
-            .into_iter()
-            .enumerate()
-            .map(|(idx, (name, ty))| (DtorIdx { idx, name }, self.stack(ty)))
-            .collect();
-        self.active = active;
-        self.graph.codatas[id.0] = Some(CodataProtocol { observations });
-        StackProtocol::Codata(id)
-    }
-
-    /// Both tag producers and consumers use the numbering owned by the descriptor.
-    pub(crate) fn tag(&mut self, source: ss::CoDataId, name: DtorName) -> DtorIdx {
-        let StackProtocol::Codata(id) = self.codata(source) else { unreachable!() };
-        self.graph
-            .get(id)
-            .expect("source codata extraction completed")
-            .observations
-            .iter()
-            .find(|(tag, _)| tag.name == name)
-            .map(|(tag, _)| tag.clone())
-            .expect("checked observation belongs to its codata")
     }
 }
 
