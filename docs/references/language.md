@@ -592,7 +592,8 @@ Import cycles are rejected.
 A `foo.zy` implementation may have an independently checked `foo.zyi` type companion.
 The pair behaves as an annotation of the implementation by that type.
 Companions can import other sources and be imported themselves; discovery does not apply to `.zydeco` roots.
-There is no implicit prelude, authored project manifest, distinguished `main`, or separate-compilation interface.
+There is no implicit prelude, distinguished `main`, or separate-compilation interface.
+A whole file is already a source package; annotations can also register named terms as described below.
 
 `@[typeof] @(import("library.zy"))` extracts the provider's complete classifier.
 For a builder, querying a particular result requires applying the builder in the operand.
@@ -614,6 +615,224 @@ Its root commands are `@[type] e`, `@[run] e`, `@(help)`, and `@(quit)`.
 By default it inspects kinds/types and evaluates values or directly returning computations.
 Explicit execution can supply Builtin.
 REPL evaluation captures output and uses empty stdin and arguments.
+
+### Source packages
+
+Packages make source terms easy to reuse, run, and test.
+A complete file is already a library package, addressed by its path; no annotation or manifest is required.
+Prefer a complete file as the entry point for each library or binary,
+using a bare path such as `library.zy` or `main.zy`.
+The `#name` suffix is optional and selects a term explicitly named in package metadata,
+independently of fields or bindings.
+To declare a different role or associate other packages with it, annotate the file root:
+
+```zydeco
+@[package(library, test("smoke.zy"))]
+(#answer = 42)
+```
+
+The first argument is the role `library`, `binary`, or `test`.
+Plain `test` needs no subject; `test(of("source", ...))` optionally names the packages it tests.
+Subsequent arguments are an optional `name("id")` and typed relationships, written `kind("source")`.
+A test is a package in its own right.
+The role describes intended use, independently of the relationships.
+Libraries may expose any source classifier; `package check` additionally validates the executable Builtin/OS contract
+for binaries and tests.
+
+#### Optional named registrations
+
+When several terms need to be independently selectable in the same file,
+give their package meta annotations explicit names.
+The annotated term can have any ordinary shape; it need not be a field or a binding.
+For example, a concluding file can collect imported terms:
+
+```zydeco
+let library = @[package(library, name("math"))] @(import("math.zy")) in
+let hello = { @[package(binary, name("hello"))] @(import("main.zy")) } in
+let smoke = {
+  @[package(test(of("packages.zy#math")), name("smoke"))] @(import("smoke.zy"))
+} in
+(library, hello, smoke)
+```
+
+The local variable names, thunks, and tuple have their ordinary language meanings.
+Renaming or reorganizing them does not change the package identifiers in the meta annotations.
+
+This is an alternative to the usual whole-file library and binary entry points.
+Here `packages.zy` is an ordinary filename, not a required convention.
+The implementation files need no package annotations.
+Registrations may instead be spread across files, such as `libraries.zy` and `testing.zy`;
+relationships address the appropriate file and package name.
+Local registrations are always available to package operations.
+Additional files can be discovered through the explicit scope described below;
+there is no implicit directory scan or registry evaluation.
+
+A registration describes its own selected term.
+It does not globally change the role or relationships of a file that it imports.
+For example, the library above is tested through `packages.zy#math`;
+using `math.zy` directly addresses the whole-file package with its own annotations, if any.
+Tests may import the implementation directly or the registered library term.
+
+Package names are unique within a source file, regardless of role or nesting.
+They are nonempty strings of ASCII letters, digits, `_`, and `-`.
+A nested package annotation needs `name("id")`; an annotation on the file root needs no name.
+The name option occurs at most once and is not a relationship.
+Ordinary field and binding names do not participate in this namespace.
+
+A named entry selects the annotated term, including its payload.
+Put any required type or meta annotations inside that term; its enclosing field,
+binding, or other context is not selected.
+For a file-root annotation, the complete file term, including surrounding transparent wrappers, is retained.
+
+#### One source address
+
+Imports and package operations use the same address notation:
+
+```zydeco
+@(import("math.zy"))
+@(import("packages.zy#math"))
+```
+
+The first is the preferred form and selects the complete file; the second selects the term registered
+by `name("math")`, without projecting or checking the whole registration file.
+Omitting `#name` always selects the complete file, even when it contains named registrations;
+it does not search for a `main` field or infer a named entry point.
+The `#` separator is reserved in source-reference strings.
+The path must be nonempty; if the suffix is present, its name must also be nonempty.
+Relative paths resolve from the referencing file.
+Code imports accept any package role, subject to the term's ordinary classifier.
+They do not automatically apply a factory.
+
+Named selection parses the containing file but loads and checks only the selected term's code closure.
+Unrelated terms and imports need not check; syntax and package-annotation errors still reject the file.
+Checking the complete registration file retains ordinary whole-term semantics and checks all its code components.
+
+During ordinary file compilation, valid package annotations leave type inference,
+lexical scope, and runtime structure unchanged.
+A local annotated term may use enclosing bindings just as it would without the annotation.
+Annotating it does not turn it into an import or insert an independent checking boundary.
+
+Explicitly selecting that term as a package entry is a separate operation: like a file import (§12),
+the selected root must synthesize under an empty context.
+It does not implicitly capture enclosing bindings; put required imports and parameters inside the selected term,
+or use the complete file as the entry point.
+Thus a term can be valid in its containing file but unavailable as a self-contained entry.
+Graph identity is the canonical path and selected root term.
+Repeated explicit imports and canonical path aliases share that root; ordinary local occurrences remain ordinary syntax.
+The imported file behind a registration retains its usual shared identity.
+Imported computations still execute at each dynamic occurrence.
+A `.zyi` companion applies to the complete file only; a nested entry's contract belongs inside its annotated term.
+
+#### Explicit discovery scope
+
+A test-side `of` association lets a new test join a library's suite without editing the library's relationships.
+Finding those tests requires a bounded set of candidate files.
+The containing file may declare that set with one file-root `discover` meta annotation:
+
+```zydeco
+@[discover(include("tests/**/*.zy", "testing.zy"), exclude("tests/fixtures/**"))]
+(#answer = 42)
+```
+
+For `package test library.zy`, the scope consists of `library.zy`, any registrations
+in that file, and the selected additional files.
+Named selection uses the same containing file's scope.
+A discovered file can register named packages or be a package itself:
+
+```zydeco
+-- tests/smoke.zy
+@[package(test(of("../library.zy")))]
+param (/process) : @(import("../builtin.zy")) in
+let library = @(import("../library.zy")) in
+! process/exit 0
+```
+
+The `of` association and the code import answer different questions:
+which suite selects this test, and which code the test uses.
+Neither declaration implies the other. Plain `@[package(test)]` remains valid and independently runnable;
+discovery lists it but does not assign it to every library in scope.
+
+`include` and `exclude` each take one or more quoted glob patterns, processed in source order.
+A later matching rule wins, so a later include may re-add a previously excluded file.
+The rules select additional files; they do not remove the containing file's local registrations.
+Patterns are relative to that file's directory: `*` matches within a path component,
+`?` matches one character, and a whole-component `**` matches zero or more path components.
+Literal filenames are also valid.
+Absolute paths, parent traversal, backslashes, `#`, brackets, and braces are rejected.
+Only `.zy`, `.zyi`, and `.zydeco` files are candidates; missing matches select nothing.
+
+Only `package show` and `package test` expand discovery.
+Each include starts at its literal directory prefix, with traversal depth bounded unless it uses `**`.
+An exact filename needs no directory enumeration; excludes never initiate a scan.
+Subtree excludes ending in `/**` prune matching directories before enumeration.
+Symbolic links are not followed. Broad recursive patterns explicitly opt into broad traversal.
+Matched files are parsed for registrations, but their own discovery annotations are not expanded.
+There is no parent-directory search or discovery inherited from code dependencies.
+Without includes, only the containing file is inspected for reverse associations.
+
+Directory membership is read afresh for each package operation, and matching editor overlays also participate.
+Source text follows the ordinary compiler-session snapshot and disk-refresh contract.
+Unreadable directories and invalid matched sources fail discovery before testing starts.
+Ordinary checking, imports, running, and building validate annotation syntax but never expand discovery.
+
+#### Typed relationships and operations
+
+A call such as `test("smoke.zy")` or `documentation("docs.zy#manual")` declares a typed association.
+The initial meanings are:
+
+| Kind | Meaning |
+| --- | --- |
+| `code` | Inferred from ordinary imports; required to check or use the term |
+| `test` | Authored association selecting a companion test when testing this package |
+| `of` under `test(...)` | Test-side association naming a subject whose suite selects this test within its discovery scope |
+| Other valid names | Retained and displayed as unsupported; no operation is inferred |
+
+Code dependencies come from the program, so explicitly writing `code("...")` is rejected.
+Relationship kind names use the same spelling rules as package names.
+Trailing relationship calls take exactly one quoted source address.
+The optional `of(...)` field under the test role takes one or more; `test()` also means plain `test`.
+The `of` field cannot be written as a trailing relationship or attached to a different role.
+Identical repeated relationships are errors.
+For the first library example, a standalone test file can be:
+
+```zydeco
+@[package(test)]
+param (/process) : @(import("builtin.zy")) in
+let math = @(import("math.zy")) in
+let answer : @(intrinsic(i64)) = math/answer in
+! process/exit 0
+```
+
+The test imports the library, while the library associates the test.
+Only imports and companion signatures participate in code-cycle checking.
+Ordinary library use never loads, checks, or executes associated test targets.
+A test physically inside another term remains ordinary code in that term; annotation alone does not defer execution.
+Use an ordinary thunk or a separate file when the containing program should not execute it directly.
+
+`package test SOURCE` checks the requested package and its directly associated tests: forward `test("source")` targets,
+plus tests in the containing file's discovery scope whose `of` names that exact package address.
+An implementation file and a registration importing it remain distinct subjects.
+If the requested package has the test role, it is also selected.
+Every activated target must have the test role, whether declared on a file root or an explicitly named term.
+Planning does not recursively activate relationships on code dependencies or selected tests.
+It canonicalizes and deduplicates target addresses, orders them by source/name,
+and checks all executables before running any of them.
+Tests run sequentially with empty stdin and no arguments; exit zero passes.
+Nonzero exits report captured output and allow the remaining suite to run.
+Source, role, contract, and runtime errors fail the command.
+
+Unknown relationship kinds on the requested package make test planning fail before execution.
+This prevents a misspelled requirement from silently yielding an incomplete successful run.
+Ordinary code checking does not interpret such relationships, and inspection never loads their targets.
+
+`package show FILE...` lists local and explicitly discovered registrations in source/name order,
+with roles, locations, and relationships.
+A file without registrations is shown as one library package.
+`package check SOURCE` checks a complete file or a named registration and its code requirements.
+The [package workflow](../../CONTRIBUTING.md#use-source-packages) shows running and building selected binaries.
+
+Local checkouts and copied sources provide distribution without an additional hosted service.
+Remote fetching, locks, versions, compatibility checking, and programmable relationship handlers remain deferred.
 
 ## 13. Primitive values and capabilities
 
@@ -769,7 +988,9 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 
 | Meta annotation | Meaning and valid use |
 | --- | --- |
-| `import(path-or-number)` | Replace a hole with an independently checked source term (§12) |
+| `import(source)` | Replace a hole with an independently checked source term; select a file, `file#name` package, or positive input number (§12) |
+| `package(role, ...)` | Register the annotated term with a role, optional metadata name, and typed relationships (§12) |
+| `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare ordered file-root discovery rules for package inspection and testing (§12) |
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed package contract (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |

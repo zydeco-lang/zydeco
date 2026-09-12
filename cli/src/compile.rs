@@ -38,6 +38,24 @@ pub struct TestInteraction {
 }
 
 impl CommandCompiler {
+    pub fn packages(
+        &self, path: &Path,
+    ) -> Result<Vec<zydeco_session::source::Package>, zydeco_session::source::SourceLoadError> {
+        self.session.packages(path)
+    }
+
+    pub fn package(
+        &self, id: &zydeco_session::source::PackageId,
+    ) -> Result<zydeco_session::source::Package, zydeco_session::source::SourceLoadError> {
+        self.session.package(id)
+    }
+
+    pub fn package_tests(
+        &self, id: &zydeco_session::source::PackageId,
+    ) -> Result<zydeco_session::source::PackageTestPlan, zydeco_session::source::SourceLoadError>
+    {
+        self.session.package_tests(id)
+    }
     /// Select optional high-SPS transformations for subsequent compilations.
     pub fn with_sps_passes(mut self, plan: HighSpsPlan) -> Self {
         self.sps_passes = plan;
@@ -85,6 +103,19 @@ impl CommandCompiler {
 
     pub fn analyze(&self, path: &Path) -> Result<Arc<ProgramAnalysis>, CompileError> {
         let analysis = self.session.analyze(path).map_err(CompileError::Analysis)?;
+        self.accept_analysis(analysis)
+    }
+
+    pub fn analyze_package(
+        &self, id: &zydeco_session::source::PackageId,
+    ) -> Result<Arc<ProgramAnalysis>, CompileError> {
+        let analysis = self.session.analyze_package(id).map_err(CompileError::Analysis)?;
+        self.accept_analysis(analysis)
+    }
+
+    fn accept_analysis(
+        &self, analysis: Arc<ProgramAnalysis>,
+    ) -> Result<Arc<ProgramAnalysis>, CompileError> {
         match analysis.outcome() {
             | AnalysisOutcome::Checked { .. } => {
                 if self.lint_types {
@@ -180,6 +211,13 @@ impl CommandCompiler {
         &self, path: &Path, arguments: &[String], input: &str,
     ) -> Result<TestInteraction, CompileError> {
         let executable = self.executable(path)?;
+        Self::test_io_program(executable, arguments, input)
+    }
+
+    /// Execute the already preflighted program; no source is reloaded after suite validation.
+    pub fn test_io_program(
+        executable: ExecutableProgram, arguments: &[String], input: &str,
+    ) -> Result<TestInteraction, CompileError> {
         let dynamics = BuiltinRootLinker {
             scoped: executable.scoped,
             statics: executable.statics,

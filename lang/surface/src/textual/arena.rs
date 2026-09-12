@@ -165,7 +165,7 @@ impl TextArena {
 
     /// Allocations can outlive a popped parser stack entry. Only nodes reachable
     /// from the returned root belong to that parse tree.
-    pub(crate) fn reachable_from(&self, root: EntityId) -> HashSet<EntityId> {
+    pub fn reachable_from(&self, root: EntityId) -> HashSet<EntityId> {
         let mut reached = HashSet::new();
         let mut pending = vec![root];
         while let Some(entity) = pending.pop() {
@@ -187,6 +187,22 @@ impl TextArena {
                 callee,
                 args.iter().map(|argument| self.semantic_meta(*argument)),
             ),
+        }
+    }
+
+    /// Find an annotation on a term through wrappers that preserve its source boundary.
+    pub(super) fn annotation(
+        &self, mut term: TermId, kind: crate::metadata::MetadataKind,
+    ) -> Option<MetaId> {
+        loop {
+            term = match &self.terms[&term] {
+                | Term::Meta(MetaTerm(meta, _)) if self.metas[meta].is(kind.name()) => {
+                    return Some(*meta);
+                }
+                | Term::Meta(MetaTerm(_, payload)) | Term::Ann(Ann { tm: payload, .. }) => *payload,
+                | Term::Paren(Paren(terms)) if terms.len() == 1 => terms[0],
+                | _ => return None,
+            };
         }
     }
 }

@@ -48,11 +48,10 @@ impl SourceGraph {
             .into_iter()
             .flat_map(|source| {
                 let file = &self.sources[&source];
-                file.documentation.iter().map(move |site| RepositoryDocumentationEntry {
-                    source,
-                    file,
-                    site,
-                })
+                file.documentation
+                    .iter()
+                    .filter(|site| file.contains_range(&file.spans[&site.term.into()].range()))
+                    .map(move |site| RepositoryDocumentationEntry { source, file, site })
             })
             .collect()
     }

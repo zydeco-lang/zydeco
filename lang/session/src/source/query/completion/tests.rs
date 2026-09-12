@@ -82,6 +82,16 @@ fn names_follow_lexical_proximity_and_shadowing() {
 }
 
 #[test]
+fn package_annotation_preserves_its_cursor_and_enclosing_bindings() {
+    let fixture = Fixture::new(
+        r#"let outer = 1 in
+        (#lib = @[package(library, name("lib"))] val (inner : @(intrinsic(i64))) => ¦)"#,
+    );
+    assert_eq!(fixture.names(), ["inner", "outer"]);
+    assert!(fixture.annotation("inner").is_some());
+}
+
+#[test]
 fn sequential_bindees_and_annotations_exclude_the_new_binder() {
     for source in [
         "let earlier = 1 in let later = ¦ in later",

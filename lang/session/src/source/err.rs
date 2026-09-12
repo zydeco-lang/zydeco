@@ -11,7 +11,7 @@ use thiserror::Error;
 use zydeco_statics::syntax::TermAnnId;
 use zydeco_surface::textual::{
     BuiltinDirectiveError, ImportDirectiveError, IntrinsicDirectiveError, LiteralDirectiveError,
-    ParseError, SourceNumber, syntax::SpanArena,
+    PackageDirectiveError, ParseError, SourceNumber, syntax::SpanArena,
 };
 use zydeco_utils::span::Span;
 
@@ -41,9 +41,26 @@ impl SourceDiagnosticSite {
     }
 }
 
+impl Display for SourceDiagnosticSite {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}:{}..{}", self.path.display(), self.range.start, self.range.end)
+    }
+}
+
 /// A deterministic source-template error suitable for memoized parsing.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceParseError {
+    #[error("invalid discovery declaration in `{}`: {error}", path.display())]
+    DiscoveryDirective {
+        path: PathBuf,
+        error: Box<zydeco_surface::textual::DiscoveryDirectiveError>,
+    },
+    #[error("invalid package declaration in `{}`: {error}", path.display())]
+    PackageDirective {
+        path: PathBuf,
+        #[source]
+        error: Box<PackageDirectiveError>,
+    },
     #[error("cannot parse source: {error}")]
     Parse {
         #[source]
@@ -88,6 +105,8 @@ impl SourceParseError {
             | Self::BuiltinDirective { path, error } => (path, error.span().range()),
             | Self::IntrinsicDirective { path, error } => (path, error.span().range()),
             | Self::LiteralDirective { path, error } => (path, error.span().range()),
+            | Self::DiscoveryDirective { path, error } => (path, error.span().range()),
+            | Self::PackageDirective { path, error } => (path, error.span().range()),
         };
         Some(SourceDiagnosticSite::new(path.clone(), range))
     }
@@ -95,6 +114,15 @@ impl SourceParseError {
 
 #[derive(Clone, Debug, Error)]
 pub enum SourceLoadError {
+    #[error(transparent)]
+    Package(Box<super::PackageError>),
+    #[error("cannot resolve package import from `{}` at {span}: {error}", importer.display())]
+    PackageImport {
+        importer: PathBuf,
+        span: Span,
+        #[source]
+        error: Box<SourceLoadError>,
+    },
     #[error("cannot resolve root source `{}`: {source}", path.display())]
     RootPath {
         path: PathBuf,
@@ -136,6 +164,10 @@ pub enum SourceLoadError {
 impl SourceLoadError {
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         match self {
+            | Self::Package(error) => error.diagnostic_site(),
+            | Self::PackageImport { importer, span, error } => error
+                .diagnostic_site()
+                .or_else(|| Some(SourceDiagnosticSite::new(importer.clone(), span.range()))),
             | Self::RootPath { .. } | Self::Read { .. } => None,
             | Self::ImportPath { importer, span, .. }
             | Self::ImportInput { importer, span, .. } => {
@@ -150,6 +182,12 @@ impl SourceLoadError {
                 SourceDiagnosticSite::new(path.clone(), step.span.range())
             }),
         }
+    }
+}
+
+impl From<super::PackageError> for SourceLoadError {
+    fn from(error: super::PackageError) -> Self {
+        Self::Package(Box::new(error))
     }
 }
 

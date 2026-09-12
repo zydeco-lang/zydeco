@@ -971,14 +971,14 @@ fn program_assembly_rebases_every_nested_metadata_span() {
     use zydeco_surface::textual::syntax::{EntityId, MetaNode, MetaTerm, Term};
 
     let fixture = SourceFixture::new();
-    let source = r#"@(package(name("root"),nested("value")))"#;
+    let source = r#"@(custom(name("root"),nested("value")))"#;
     let root = fixture.write("main.zy", source);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let Term::Meta(MetaTerm(metadata, _)) = &program.arena.terms[&program.unit.root] else {
         panic!("expected metadata to remain in the assembled program")
     };
     let MetaNode::Apply { args, .. } = &program.arena.metas[metadata] else {
-        panic!("expected package metadata")
+        panic!("expected custom metadata")
     };
     let [name, nested] = args.as_slice() else { panic!("expected two package fields") };
     let MetaNode::Apply { args, .. } = &program.arena.metas[nested] else {
@@ -987,7 +987,7 @@ fn program_assembly_rebases_every_nested_metadata_span() {
     let [value] = args.as_slice() else { panic!("expected one nested value") };
 
     [
-        (*metadata, r#"package(name("root"),nested("value"))"#),
+        (*metadata, r#"custom(name("root"),nested("value"))"#),
         (*name, r#"name("root")"#),
         (*nested, r#"nested("value")"#),
         (*value, r#""value""#),

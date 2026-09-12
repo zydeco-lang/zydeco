@@ -74,7 +74,10 @@ impl SourceGraph {
             .into_iter()
             .flat_map(|source| {
                 let file = &self.sources[&source];
-                file.warnings.iter().map(move |warning| SourceWarningSite { source, file, warning })
+                file.warnings
+                    .iter()
+                    .filter(|warning| file.contains_range(warning.range()))
+                    .map(move |warning| SourceWarningSite { source, file, warning })
             })
             .collect()
     }

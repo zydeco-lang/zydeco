@@ -87,6 +87,16 @@ every import occurrence is an edge to that checked root.
 A source boundary prevents free names and mobile block bindings from crossing between the two terms.
 Sharing is static: an imported computation is still evaluated at every dynamic occurrence.
 
+Every file is a source package; a `package` meta annotation declares a library, binary, or test role.
+Prefer complete files as library and binary entry points, addressed by bare paths.
+An optional `#name` selects a term named in package metadata;
+concluding files can collect such registrations when needed.
+Annotations preserve ordinary local scoping and structure; only explicit imports introduce source boundaries.
+Typed relationships separate code requirements from operation-specific associations such as companion tests.
+Tests may declare their subjects with an optional `of` field; file-root discovery rules bound reverse lookup.
+The session owns term selection and test planning; the CLI executes the selected operation.
+The [source-package rules](docs/references/language.md#source-packages) define identities, roles, and relationships.
+
 An implementation source `foo.zy` may have an adjacent companion `foo.zyi`.
 The companion contains one ordinary type term and must itself synthesize a type.
 Source assembly treats the pair as the annotated term `(contents-of-foo.zy : contents-of-foo.zyi)`.

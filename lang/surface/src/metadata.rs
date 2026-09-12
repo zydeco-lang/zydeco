@@ -8,6 +8,11 @@ use zydeco_syntax::{
 
 use crate::textual::fmt::{IndentWidth, LayoutIntentions, Parentheses};
 
+mod package;
+pub use package::*;
+mod discovery;
+pub use discovery::*;
+
 /// A compiler-recognized metadata annotation.
 ///
 /// This enum is the closed catalog used by both metadata decoders and editor
@@ -29,6 +34,8 @@ use crate::textual::fmt::{IndentWidth, LayoutIntentions, Parentheses};
 pub enum MetadataKind {
     Doc,
     Import,
+    Package,
+    Discover,
     Literal,
     Intrinsic,
     Builtin,
@@ -53,7 +60,13 @@ impl MetadataKind {
     fn build_definition(self) -> MetadataDefinition {
         let description = match self {
             | Self::Doc => "Attach documentation metadata to an expression.",
-            | Self::Import => "Import a source file or numbered interactive input.",
+            | Self::Import => {
+                "Import a source file; #name optionally selects a registered term. Numbered inputs are also accepted."
+            }
+            | Self::Package => {
+                "Assign a role and relationships to this term; prefer complete files for libraries and binaries."
+            }
+            | Self::Discover => "Declare the file-level, ordered scope for package discovery.",
             | Self::Literal => "Splice an attached text block as a string literal.",
             | Self::Intrinsic => "Splice a compiler-defined CBPV intrinsic.",
             | Self::Builtin => "Assign a compiler-defined Builtin package role.",
@@ -68,8 +81,10 @@ impl MetadataKind {
             | Self::Doc | Self::Debug => MetadataArguments::Arbitrary { label: "value" },
             | Self::Import => MetadataArguments::Positional(vec![MetadataParameter::new(
                 "source",
-                MetadataValue::Source,
+                MetadataValue::Source { inputs: true },
             )]),
+            | Self::Package => MetadataArguments::Package,
+            | Self::Discover => MetadataArguments::Discovery,
             | Self::Literal | Self::Monadic | Self::TypeOf | Self::Partial => {
                 MetadataArguments::None
             }
@@ -120,6 +135,67 @@ static METADATA_DEFINITIONS: LazyLock<Vec<MetadataDefinition>> = LazyLock::new(|
 pub struct MetadataCatalog;
 
 impl MetadataCatalog {
+    pub fn test_role() -> &'static MetadataDefinition {
+        static DEFINITION: LazyLock<MetadataDefinition> = LazyLock::new(|| {
+            MetadataDefinition::new(
+                "test",
+                "Declare a test and optionally the packages it is of.",
+                MetadataArguments::Options(vec![MetadataDefinition::new(
+                    "of",
+                    "Declare this test's subjects.",
+                    MetadataArguments::Variadic(MetadataParameter::new(
+                        "source",
+                        MetadataValue::Source { inputs: false },
+                    )),
+                )]),
+            )
+        });
+        &DEFINITION
+    }
+
+    pub fn discovery_rules() -> &'static [MetadataDefinition] {
+        static DEFINITIONS: LazyLock<Vec<MetadataDefinition>> = LazyLock::new(|| {
+            ["include", "exclude"]
+                .into_iter()
+                .map(|name| {
+                    MetadataDefinition::new(
+                        name,
+                        "Add or remove matching sources in declaration order.",
+                        MetadataArguments::Variadic(MetadataParameter::new(
+                            "glob",
+                            MetadataValue::Glob,
+                        )),
+                    )
+                })
+                .collect()
+        });
+        &DEFINITIONS
+    }
+
+    pub fn package_options() -> &'static [MetadataDefinition] {
+        static DEFINITIONS: LazyLock<Vec<MetadataDefinition>> = LazyLock::new(|| {
+            vec![
+                MetadataDefinition::new(
+                    "name",
+                    "Name this package independently of fields or bindings.",
+                    MetadataArguments::Positional(vec![MetadataParameter::new(
+                        "name",
+                        MetadataValue::String,
+                    )]),
+                ),
+                MetadataDefinition::new(
+                    "test",
+                    "Select a companion test package.",
+                    MetadataArguments::Positional(vec![MetadataParameter::new(
+                        "source",
+                        MetadataValue::Source { inputs: false },
+                    )]),
+                ),
+            ]
+        });
+        &DEFINITIONS
+    }
+
     pub fn definitions() -> &'static [MetadataDefinition] {
         METADATA_DEFINITIONS.as_slice()
     }
@@ -166,6 +242,18 @@ impl MetadataDefinition {
                     .zip(arguments)
                     .try_for_each(|(parameter, argument)| parameter.validate(self.name, argument))
             }
+            | MetadataArguments::Discovery => DiscoveryRule::decode(arguments)
+                .map(|_| ())
+                .map_err(MetadataValidationError::Discovery),
+            | MetadataArguments::Variadic(parameter) => {
+                if arguments.is_empty() {
+                    return self.validate_arity(arguments, 1);
+                }
+                arguments.iter().try_for_each(|argument| parameter.validate(self.name, argument))
+            }
+            | MetadataArguments::Package => PackageAnnotation::decode(arguments)
+                .map(|_| ())
+                .map_err(|(_, error)| MetadataValidationError::Package(error)),
             | MetadataArguments::Options(options) => {
                 let mut seen = HashSet::new();
                 arguments.iter().try_for_each(|argument| {
@@ -219,9 +307,15 @@ impl MetadataDefinition {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MetadataArguments {
     None,
-    Arbitrary { label: &'static str },
+    Arbitrary {
+        label: &'static str,
+    },
     Positional(Vec<MetadataParameter>),
+    Variadic(MetadataParameter),
     Options(Vec<MetadataDefinition>),
+    /// A role followed by open-ended, typed source relationships.
+    Package,
+    Discovery,
 }
 
 /// One positional metadata argument.
@@ -277,9 +371,16 @@ impl MetadataParameter {
                     found: argument.clone(),
                 }),
             },
-            | MetadataValue::Source => match argument {
-                | Meta::String(path) if !path.is_empty() => Ok(()),
-                | Meta::Integer(number) if *number > 0 => Ok(()),
+            | MetadataValue::Glob => match argument {
+                | Meta::String(pattern) if pattern.parse::<DiscoveryGlob>().is_ok() => Ok(()),
+                | _ => Err(MetadataValidationError::ExpectedGlob {
+                    definition,
+                    found: argument.clone(),
+                }),
+            },
+            | MetadataValue::Source { inputs } => match argument {
+                | Meta::String(path) if path.parse::<SourceReference>().is_ok() => Ok(()),
+                | Meta::Integer(number) if *inputs && *number > 0 => Ok(()),
                 | _ => Err(MetadataValidationError::ExpectedSource {
                     definition,
                     parameter: self.label,
@@ -306,14 +407,23 @@ pub enum MetadataValue {
     Identifier(Vec<String>),
     String,
     Integer,
-    /// A quoted source path or a positive numbered-input identity.
-    Source,
+    Glob,
+    /// A quoted file or file#name reference, optionally allowing numbered inputs.
+    Source {
+        inputs: bool,
+    },
     Call(Box<MetadataDefinition>),
 }
 
 /// A structural mismatch against a [`MetadataDefinition`].
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum MetadataValidationError {
+    #[error(transparent)]
+    Package(#[from] PackageAnnotationError),
+    #[error(transparent)]
+    Discovery(#[from] DiscoveryAnnotationError),
+    #[error("`{definition}` expects a quoted relative glob, but found `{found}`")]
+    ExpectedGlob { definition: &'static str, found: Meta },
     #[error("`{definition}` expects {expected} arguments, but found {found}")]
     Arity { definition: &'static str, expected: usize, found: usize },
     #[error("`{definition}` parameter `{parameter}` expects an identifier, but found `{found}`")]

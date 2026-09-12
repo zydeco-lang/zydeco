@@ -38,6 +38,11 @@ pub mod textual {
     /// Complete term source units and typed source-level directives.
     pub mod source;
     pub use source::*;
+    /// Declarative package entries extracted without checking or evaluating source terms.
+    mod package;
+    pub use package::*;
+    mod discovery;
+    pub use discovery::*;
 
     /// A formatter built on top of the textual syntax.
     /// Introduces the ugly syntax.

@@ -132,3 +132,28 @@ fn scratch_source_preserves_import_context_without_changing_other_strings() {
     let invalid = Fixture::new("```zydeco check\nlet broken =\n```");
     assert!(invalid.examples()[0].scratch_source().is_err());
 }
+
+#[test]
+fn package_scratch_imports_preserve_source_context_and_package_names() {
+    let mut fixture = Fixture::new("```zydeco check\n@(import(\"package.zy#main\"))\n```");
+    fixture
+        .session
+        .set_overlay(
+            fixture.path.with_file_name("package.zy"),
+            r#"(#main = @[package(library, name("main"))] 42)"#.into(),
+        )
+        .unwrap();
+    let example = &fixture.examples()[0];
+    assert!(example.request(&fixture.session).unwrap().check().status.is_passed());
+    let scratch = example.scratch_source().unwrap();
+    assert!(scratch.contains("package.zy#main"));
+    let other = tempfile::tempdir().unwrap();
+    let path = other.path().join("scratch.zydeco");
+    fixture.session.set_overlay(&path, scratch).unwrap();
+    assert!(fixture.session.analyze(path).unwrap().outcome().root().is_some());
+    let numbered = Fixture::new("```zydeco check\n@(import(1))\n```");
+    assert!(matches!(
+        numbered.examples()[0].scratch_source(),
+        Err(DocumentationScratchError::NumberedImport)
+    ));
+}

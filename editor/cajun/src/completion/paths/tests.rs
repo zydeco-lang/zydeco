@@ -62,6 +62,34 @@ impl Fixture {
 }
 
 #[test]
+fn package_import_and_relationship_paths_complete_but_names_do_not() {
+    for marked in [
+        r#"@(import("lib¦#main"))"#,
+        r#"@[package(library, test("lib¦"))] ()"#,
+        r#"@[package(library, documentation("lib¦"))] ()"#,
+        r#"@[package(test(of("lib¦")))] ()"#,
+        r#"@[package(test(of("other.zy", "lib¦")))] ()"#,
+    ] {
+        let fixture = Fixture::new(marked);
+        fixture.write("library.zy");
+        assert_eq!(fixture.labels(), ["library.zy"], "{marked}");
+    }
+    for marked in [
+        r#"@(import("package.zy#lib¦"))"#,
+        r#"@[package("lib¦")] ()"#,
+        r#"@[package(library, name("lib¦"))] ()"#,
+        r#"@[package(library, test("tests.zy#lib¦"))] ()"#,
+        r#"@[package(test(of("tests.zy#lib¦")))] ()"#,
+        r#"@[discover(include("lib¦"))] ()"#,
+        r#"@[discover(exclude("lib¦"))] ()"#,
+    ] {
+        let fixture = Fixture::new(marked);
+        fixture.write("library.zy");
+        assert!(fixture.items().is_none(), "{marked}");
+    }
+}
+
+#[test]
 fn import_paths_complete_both_annotation_forms_and_unfinished_strings() {
     for marked in [
         r#"@[import("¦")] _"#,
@@ -196,7 +224,7 @@ fn escaped_path_components_round_trip_through_import_parsing() {
         let imports = source.imports(&parser.arena, &parser.spans).unwrap();
         assert_eq!(
             imports[0].directive.target,
-            zydeco_surface::textual::ImportTarget::Path(PathBuf::from(name))
+            zydeco_surface::textual::ImportTarget::Source(name.parse().unwrap())
         );
     }
 

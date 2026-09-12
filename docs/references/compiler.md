@@ -334,6 +334,25 @@ with explicit source and signature boundaries.
 Dependency cycles are diagnosed before checking.
 The independence of provider inference and source scope is specified in [L12](language.md#12-sources-imports-and-entry).
 
+[Package selection](../../lang/session/src/source/package.rs) uses one source-reference type with a file path
+and an optional `#name` selection; the ordinary entry point is the complete file.
+Registrations take explicit names from meta annotations; file roots need no name.
+The surface decoder indexes annotations by name and retains their term identity, role, and relationships.
+Inspection shares the parsed containing file and extracts each selected root's direct code edges;
+it does not construct a separate source template or compiler graph per registration.
+The loader keys checked roots by canonical path and textual term and follows ordinary imports only.
+Local package annotations are ordinary metadata; they neither partition the source nor create import edges.
+Each graph node stores its selected term ID and shares the containing file's parsed template.
+Only that term's code is assembled; documentation and warnings are filtered to its source range.
+The source queries retain the selected package name through analysis and arena rematerialization.
+Several roots can share a file; `SourceGraph::source_inputs` and the merged span map deduplicate file inputs.
+Typed relationships are stored separately from code edges.
+Test planning combines forward associations and reverse `of` associations within the containing file's scope.
+The surface layer decodes ordered include/exclude globs; session package operations expand them separately
+from source-graph loading.
+Ordinary source loading neither expands discovery nor follows association targets.
+The [source-package section](language.md#source-packages) owns boundary and operation rules.
+
 `CompilerSession` is the Salsa database and revision owner.
 [ScopedData](../../lang/statics/src/query/input.rs) connects the resolved root, scoped arena and spans to `TyckDb`.
 The coarse [check_source query](../../lang/statics/src/query/source.rs) runs the mutable checker, finalization,

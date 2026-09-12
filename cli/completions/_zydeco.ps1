@@ -26,6 +26,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('package', 'package', [CompletionResultType]::ParameterValue, 'Inspect, check, or test source packages')
             [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected high-SPS plan')
             [CompletionResult]::new('__doc-example-worker', '__doc-example-worker', [CompletionResultType]::ParameterValue, '__doc-example-worker')
             [CompletionResult]::new('doc', 'doc', [CompletionResultType]::ParameterValue, 'Read, search, generate, or verify project documentation')
@@ -35,6 +36,53 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('repl', 'repl', [CompletionResultType]::ParameterValue, 'Start the declaration-free terminal REPL')
             [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'External text is parsed into phase-owned plan types before source loading')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;package' {
+            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Inspect packages from one or more source files without checking or executing code')
+            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check one package and its code dependencies, without following test associations')
+            [CompletionResult]::new('test', 'test', [CompletionResultType]::ParameterValue, 'Run a test package or the selected package''s direct test companions with empty stdin')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;package;show' {
+            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'zydeco;package;check' {
+            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'zydeco;package;test' {
+            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'zydeco;package;help' {
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Inspect packages from one or more source files without checking or executing code')
+            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check one package and its code dependencies, without following test associations')
+            [CompletionResult]::new('test', 'test', [CompletionResultType]::ParameterValue, 'Run a test package or the selected package''s direct test companions with empty stdin')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;package;help;show' {
+            break
+        }
+        'zydeco;package;help;check' {
+            break
+        }
+        'zydeco;package;help;test' {
+            break
+        }
+        'zydeco;package;help;help' {
             break
         }
         'zydeco;passes' {
@@ -161,6 +209,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;help' {
+            [CompletionResult]::new('package', 'package', [CompletionResultType]::ParameterValue, 'Inspect, check, or test source packages')
             [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected high-SPS plan')
             [CompletionResult]::new('__doc-example-worker', '__doc-example-worker', [CompletionResultType]::ParameterValue, '__doc-example-worker')
             [CompletionResult]::new('doc', 'doc', [CompletionResultType]::ParameterValue, 'Read, search, generate, or verify project documentation')
@@ -170,6 +219,21 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('repl', 'repl', [CompletionResultType]::ParameterValue, 'Start the declaration-free terminal REPL')
             [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'External text is parsed into phase-owned plan types before source loading')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;help;package' {
+            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Inspect packages from one or more source files without checking or executing code')
+            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check one package and its code dependencies, without following test associations')
+            [CompletionResult]::new('test', 'test', [CompletionResultType]::ParameterValue, 'Run a test package or the selected package''s direct test companions with empty stdin')
+            break
+        }
+        'zydeco;help;package;show' {
+            break
+        }
+        'zydeco;help;package;check' {
+            break
+        }
+        'zydeco;help;package;test' {
             break
         }
         'zydeco;help;passes' {

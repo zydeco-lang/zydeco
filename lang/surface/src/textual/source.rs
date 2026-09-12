@@ -3,6 +3,7 @@ use crate::metadata::{
     BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError, LiteralMeta,
     LiteralMetaError, MetadataKind, MetadataValidationError,
 };
+pub use crate::metadata::{SourceReference, SourceReferenceError};
 use std::{
     collections::HashSet,
     num::NonZeroU64,
@@ -52,9 +53,18 @@ pub struct LiteralSite {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImportTarget {
     /// A disk or overlay source addressed by a quoted path.
-    Path(PathBuf),
+    Source(SourceReference),
     /// A numbered source retained by an interactive compiler session.
     Input(SourceNumber),
+}
+
+impl std::fmt::Display for ImportTarget {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            | Self::Source(reference) => write!(formatter, "{:?}", reference.to_string()),
+            | Self::Input(input) => input.fmt(formatter),
+        }
+    }
 }
 
 /// A nonzero interactive source identity written without quotes in metadata.
@@ -136,7 +146,9 @@ pub enum BuiltinLocation {
 pub enum ImportDirectiveError {
     #[error("import at {span} expects one source argument, but found {found}")]
     TargetArity { term: TermId, span: Span, found: usize },
-    #[error("import source at {span} must be a path string or positive input number")]
+    #[error(
+        "import source at {span} must be a file or file#name string, or a positive input number"
+    )]
     UnsupportedTarget { term: TermId, span: Span },
     #[error("import path at {span} must not be empty")]
     EmptyPath { term: TermId, span: Span },
@@ -144,6 +156,8 @@ pub enum ImportDirectiveError {
     NonPositiveInput { term: TermId, span: Span },
     #[error("import at {span} must annotate a hole expression")]
     PayloadNotHole { term: TermId, span: Span },
+    #[error("invalid import source at {span}: {source}")]
+    InvalidSource { term: TermId, span: Span, source: SourceReferenceError },
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -198,6 +212,7 @@ impl ImportDirectiveError {
             | Self::UnsupportedTarget { span, .. }
             | Self::EmptyPath { span, .. }
             | Self::NonPositiveInput { span, .. }
+            | Self::InvalidSource { span, .. }
             | Self::PayloadNotHole { span, .. } => *span,
         }
     }
@@ -233,6 +248,26 @@ impl LiteralDirectiveError {
 }
 
 impl SourceUnit {
+    /// Reachable annotations of one kind and their terms, in source order.
+    pub(super) fn annotations(
+        &self, kind: MetadataKind, arena: &TextArena, spans: &SpanArena,
+    ) -> Vec<(MetaId, TermId)> {
+        let reachable = arena.reachable_from(self.root.into());
+        let mut annotations = arena
+            .terms
+            .iter()
+            .filter(|(term, _)| reachable.contains(&(**term).into()))
+            .filter_map(|(term, syntax)| match syntax {
+                | Term::Meta(MetaTerm(meta, _)) if arena.metas[meta].is(kind.name()) => {
+                    Some((*meta, *term))
+                }
+                | _ => None,
+            })
+            .collect::<Vec<_>>();
+        annotations.sort_by_key(|(meta, _)| spans[&EntityId::Meta(*meta)].lo());
+        annotations
+    }
+
     /// Collect every explicitly documented term in this source unit.
     ///
     /// Text blocks remain parser trivia. The `@[doc]` annotation
@@ -445,7 +480,7 @@ impl ImportSite {
                 MetadataKind::Import.definition().validate_arguments(semantic.arguments())
             {
                 return Err(match error {
-                    | MetadataValidationError::Arity { found, .. } => {
+                    | MetadataValidationError::Arity { definition: "import", found, .. } => {
                         ImportDirectiveError::TargetArity { term, span: meta_span, found }
                     }
                     | MetadataValidationError::ExpectedSource { .. } => {
@@ -460,19 +495,26 @@ impl ImportSite {
                             | MetaNode::Integer(_) => {
                                 ImportDirectiveError::NonPositiveInput { term, span }
                             }
-                            | MetaNode::Ident(_) | MetaNode::String(_) | MetaNode::Apply { .. } => {
+                            | MetaNode::String(text) => ImportDirectiveError::InvalidSource {
+                                term,
+                                span,
+                                source: text.parse::<SourceReference>().unwrap_err(),
+                            },
+                            | MetaNode::Ident(_) | MetaNode::Apply { .. } => {
                                 ImportDirectiveError::UnsupportedTarget { term, span }
                             }
                         }
                     }
-                    | _ => unreachable!("import has one source argument"),
+                    | _ => unreachable!("import validates arity and source only"),
                 });
             }
             let [argument] = metadata.arguments() else {
                 unreachable!("the import metadata contract validates one source")
             };
             let target = match &arena.metas[argument] {
-                | MetaNode::String(path) => ImportTarget::Path(PathBuf::from(path)),
+                | MetaNode::String(path) => {
+                    ImportTarget::Source(path.parse().expect("validated source reference"))
+                }
                 | MetaNode::Integer(number) => ImportTarget::Input(
                     SourceNumber::new(
                         u64::try_from(*number)

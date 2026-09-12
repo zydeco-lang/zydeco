@@ -10,6 +10,7 @@ use zydeco_statics::{fmt::Formatter, syntax::DefId};
 use zydeco_surface::{
     metadata::{
         MetadataArguments, MetadataCatalog, MetadataDefinition, MetadataParameter, MetadataValue,
+        PackageRole,
     },
     textual::{Lexer, LexicalTokens, Tok},
 };
@@ -161,6 +162,16 @@ impl MetadataCompleter {
                 .filter(|identifier| identifier.starts_with(cursor.prefix.as_str()))
                 .map(|identifier| Self::identifier_item(identifier, range))
                 .collect(),
+            | CompletionScope::PackageOptions { named } => MetadataCatalog::package_options()
+                .iter()
+                .filter(|definition| !named || definition.name() != "name")
+                .filter(|definition| definition.name().starts_with(&cursor.prefix))
+                .map(|definition| self.definition_item(definition, range))
+                .collect(),
+            | CompletionScope::PackageRole => PackageRole::all()
+                .filter(|role| role.name().starts_with(&cursor.prefix))
+                .map(|role| Self::identifier_item(role.name(), range))
+                .collect(),
             | CompletionScope::Source => return None,
         };
         Some(CompletionResponse::Array(items))
@@ -209,6 +220,8 @@ enum CompletionScope<'catalog> {
     Definitions(Vec<&'catalog MetadataDefinition>),
     Identifiers(Vec<&'catalog str>),
     Source,
+    PackageOptions { named: bool },
+    PackageRole,
 }
 
 impl CompletionScope<'static> {
@@ -216,8 +229,14 @@ impl CompletionScope<'static> {
         path.into_iter().try_fold(
             Self::Definitions(MetadataCatalog::definitions().iter().collect()),
             |scope, call| {
-                let Self::Definitions(definitions) = scope else {
-                    return None;
+                let definitions = match scope {
+                    | Self::Definitions(definitions) => definitions,
+                    | Self::PackageRole => vec![MetadataCatalog::test_role()],
+                    | Self::PackageOptions { .. } => {
+                        return (call.callee != "name" && call.argument == 0)
+                            .then_some(Self::Source);
+                    }
+                    | _ => return None,
                 };
                 let definition =
                     definitions.into_iter().find(|definition| definition.name() == call.callee)?;
@@ -234,6 +253,14 @@ impl CompletionScope<'static> {
                     .filter(|option| !call.completed_names.iter().any(|name| name == option.name()))
                     .collect(),
             )),
+            | MetadataArguments::Package if call.argument == 0 => Some(Self::PackageRole),
+            | MetadataArguments::Discovery => {
+                Some(Self::Definitions(MetadataCatalog::discovery_rules().iter().collect()))
+            }
+            | MetadataArguments::Variadic(parameter) => Self::for_parameter(parameter),
+            | MetadataArguments::Package => Some(Self::PackageOptions {
+                named: call.completed_names.iter().any(|name| name == "name"),
+            }),
             | MetadataArguments::Positional(parameters) => {
                 Self::for_parameter(parameters.get(call.argument)?)
             }
@@ -247,8 +274,8 @@ impl CompletionScope<'static> {
                 Some(Self::Identifiers(identifiers.iter().map(String::as_str).collect()))
             }
             | MetadataValue::Call(definition) => Some(Self::Definitions(vec![definition.as_ref()])),
-            | MetadataValue::Source => Some(Self::Source),
-            | MetadataValue::String | MetadataValue::Integer => None,
+            | MetadataValue::Source { .. } => Some(Self::Source),
+            | MetadataValue::String | MetadataValue::Integer | MetadataValue::Glob => None,
         }
     }
 }
@@ -270,6 +297,9 @@ impl<'definition> MetadataSignature<'definition> {
         let arguments = match definition.arguments() {
             | MetadataArguments::None => return definition.name().to_owned(),
             | MetadataArguments::Arbitrary { label } => format!("{label}, ..."),
+            | MetadataArguments::Package => "role, name(id), kind(source), ...".to_owned(),
+            | MetadataArguments::Discovery => "include(glob), exclude(glob), ...".to_owned(),
+            | MetadataArguments::Variadic(parameter) => format!("{}, ...", parameter.label()),
             | MetadataArguments::Options(_) => "option, ...".to_owned(),
             | MetadataArguments::Positional(parameters) => parameters
                 .iter()
@@ -277,8 +307,9 @@ impl<'definition> MetadataSignature<'definition> {
                     | MetadataValue::Call(definition) => Self::call(definition),
                     | MetadataValue::Identifier(_)
                     | MetadataValue::String
+                    | MetadataValue::Glob
                     | MetadataValue::Integer
-                    | MetadataValue::Source => parameter.label().to_owned(),
+                    | MetadataValue::Source { .. } => parameter.label().to_owned(),
                 })
                 .collect::<Vec<_>>()
                 .join(", "),
@@ -300,6 +331,9 @@ impl MetadataSnippet {
         let arguments = match definition.arguments() {
             | MetadataArguments::None => return definition.name().to_owned(),
             | MetadataArguments::Arbitrary { label } => self.placeholder(label),
+            | MetadataArguments::Package => self.placeholder("library"),
+            | MetadataArguments::Discovery => self.placeholder("include"),
+            | MetadataArguments::Variadic(parameter) => self.parameter(parameter),
             | MetadataArguments::Options(_) => self.placeholder("option"),
             | MetadataArguments::Positional(parameters) => parameters
                 .iter()
@@ -318,8 +352,10 @@ impl MetadataSnippet {
             | MetadataValue::Identifier(_) | MetadataValue::Integer => {
                 self.placeholder(parameter.label())
             }
-            | MetadataValue::String => format!("\"{}\"", self.placeholder(parameter.label())),
-            | MetadataValue::Source => format!("\"{}\"", self.placeholder("path")),
+            | MetadataValue::String | MetadataValue::Glob => {
+                format!("\"{}\"", self.placeholder(parameter.label()))
+            }
+            | MetadataValue::Source { .. } => format!("\"{}\"", self.placeholder("path")),
             | MetadataValue::Call(definition) => self.definition(definition),
         }
     }
@@ -640,6 +676,60 @@ mod tests {
             CompletionFixture::new("@[ffi(c, library(\"xxhash\"), |)] _").labels().unwrap(),
             vec!["symbol"],
         );
+    }
+
+    #[test]
+    fn package_completions_offer_a_role_then_relationships() {
+        assert_eq!(
+            CompletionFixture::new("@[package(|)] ()").labels().unwrap(),
+            ["library", "binary", "test"]
+        );
+        assert_eq!(
+            CompletionFixture::new(r#"@[package(library, test("tests.zy"), |)] ()"#)
+                .labels()
+                .unwrap(),
+            ["name", "test"]
+        );
+        let items = CompletionFixture::new("@[package(library, te|)] ()").items().unwrap();
+        let Some(CompletionTextEdit::Edit(edit)) = &items[0].text_edit else {
+            panic!("expected snippet")
+        };
+        assert_eq!(edit.new_text, r#"test("${1:path}")"#);
+        let items = CompletionFixture::new("@[package(library, na|)] ()").items().unwrap();
+        let Some(CompletionTextEdit::Edit(edit)) = &items[0].text_edit else {
+            panic!("name snippet")
+        };
+        assert_eq!(edit.new_text, r#"name("${1:name}")"#);
+        assert_eq!(
+            CompletionFixture::new(r#"@[package(library, name("api"), |)] ()"#).labels().unwrap(),
+            ["test"]
+        );
+        assert!(CompletionFixture::new(r#"@(import(pa|))"#).items().is_none());
+    }
+
+    #[test]
+    fn test_subjects_and_repeatable_discovery_rules_have_contextual_completions() {
+        assert_eq!(CompletionFixture::new("@[package(test(|))] ()").labels().unwrap(), ["of"]);
+        assert_eq!(
+            CompletionFixture::new(r#"@[package(test(of("lib.zy"), |))] ()"#).labels().unwrap(),
+            Vec::<String>::new()
+        );
+        let items = CompletionFixture::new("@[package(te|)] ()").items().unwrap();
+        let Some(CompletionTextEdit::Edit(edit)) = &items[0].text_edit else { panic!("role edit") };
+        assert_eq!(edit.new_text, "test", "plain test is the default insertion");
+        assert_eq!(
+            CompletionFixture::new(
+                r#"@[discover(include("tests/*.zy"), exclude("tests/fixtures/**"), |)] ()"#
+            )
+            .labels()
+            .unwrap(),
+            ["include", "exclude"]
+        );
+        let items = CompletionFixture::new("@[discover(in|)] ()").items().unwrap();
+        let Some(CompletionTextEdit::Edit(edit)) = &items[0].text_edit else {
+            panic!("glob snippet")
+        };
+        assert_eq!(edit.new_text, r#"include("${1:glob}")"#);
     }
 
     #[test]

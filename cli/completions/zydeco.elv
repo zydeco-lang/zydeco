@@ -23,6 +23,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
             cand -V 'Print version'
             cand --version 'Print version'
+            cand package 'Inspect, check, or test source packages'
             cand passes 'List optional compiler passes or explain a selected high-SPS plan'
             cand __doc-example-worker '__doc-example-worker'
             cand doc 'Read, search, generate, or verify project documentation'
@@ -32,6 +33,44 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand repl 'Start the declaration-free terminal REPL'
             cand build 'External text is parsed into phase-owned plan types before source loading'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;package'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+            cand show 'Inspect packages from one or more source files without checking or executing code'
+            cand check 'Check one package and its code dependencies, without following test associations'
+            cand test 'Run a test package or the selected package''s direct test companions with empty stdin'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;package;show'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;package;check'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;package;test'= {
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'zydeco;package;help'= {
+            cand show 'Inspect packages from one or more source files without checking or executing code'
+            cand check 'Check one package and its code dependencies, without following test associations'
+            cand test 'Run a test package or the selected package''s direct test companions with empty stdin'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;package;help;show'= {
+        }
+        &'zydeco;package;help;check'= {
+        }
+        &'zydeco;package;help;test'= {
+        }
+        &'zydeco;package;help;help'= {
         }
         &'zydeco;passes'= {
             cand --sps-passes 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize'
@@ -139,6 +178,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;help'= {
+            cand package 'Inspect, check, or test source packages'
             cand passes 'List optional compiler passes or explain a selected high-SPS plan'
             cand __doc-example-worker '__doc-example-worker'
             cand doc 'Read, search, generate, or verify project documentation'
@@ -148,6 +188,17 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand repl 'Start the declaration-free terminal REPL'
             cand build 'External text is parsed into phase-owned plan types before source loading'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;help;package'= {
+            cand show 'Inspect packages from one or more source files without checking or executing code'
+            cand check 'Check one package and its code dependencies, without following test associations'
+            cand test 'Run a test package or the selected package''s direct test companions with empty stdin'
+        }
+        &'zydeco;help;package;show'= {
+        }
+        &'zydeco;help;package;check'= {
+        }
+        &'zydeco;help;package;test'= {
         }
         &'zydeco;help;passes'= {
         }

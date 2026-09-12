@@ -48,6 +48,7 @@ impl SourcePathCursor {
         }
 
         let mut replacement = start..end;
+        let mut followed_by_separator = false;
         let mut chars = LiteralEscapes::new(&source[start..end]);
         let mut unit_start = start;
         while let Some(decoded) = chars.next() {
@@ -56,11 +57,19 @@ impl SourcePathCursor {
             if unit_start < offset && offset < unit_end {
                 return None;
             }
+            if decoded == '#' {
+                if unit_start < offset {
+                    return None;
+                }
+                replacement.end = unit_start;
+                break;
+            }
             if std::path::is_separator(decoded) {
                 if unit_end <= offset {
                     replacement.start = unit_end;
                 } else {
                     replacement.end = unit_start;
+                    followed_by_separator = true;
                     break;
                 }
             }
@@ -72,7 +81,6 @@ impl SourcePathCursor {
         }
         let directory = LiteralEscapes::string(&source[start..replacement.start]).ok()?;
         let prefix = LiteralEscapes::string(&source[replacement.start..offset]).ok()?;
-        let followed_by_separator = replacement.end < end;
         Some(Self {
             directory: PathBuf::from(directory),
             prefix,

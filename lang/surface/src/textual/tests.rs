@@ -577,8 +577,8 @@ fn source_unit_decodes_relative_and_absolute_imports() {
         assert_eq!(
             targets,
             [
-                &ImportTarget::Path(std::path::PathBuf::from("../library.zy")),
-                &ImportTarget::Path(std::path::PathBuf::from("/opt/zydeco/core.zy")),
+                &ImportTarget::Source("../library.zy".parse().unwrap()),
+                &ImportTarget::Source("/opt/zydeco/core.zy".parse().unwrap()),
             ],
             "spelling `{source}` decoded to different import targets"
         );

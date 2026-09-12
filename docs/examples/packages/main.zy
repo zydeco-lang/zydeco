@@ -1,0 +1,4 @@
+@[package(binary)]
+param (/stdio; /process) : @(import("../../../lib/std/builtin.zy")) in
+let library = @(import("library.zy")) in
+! stdio/write_line library/message { ! process/exit 0 }

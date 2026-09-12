@@ -83,6 +83,43 @@ in place or let `pack` synthesize an existential package type.
 The [package design](lib/std/README.md#package-composition) explains the prelude's annotated kind prefix
 and its use of `@[typeof]` to reuse the remaining package type.
 
+## Use Source Packages
+
+A source file is already a library package.
+Prefer a complete file as the entry point for each library or binary, and address it by its path.
+A root `@[package(binary)]` or `@[package(test)]` annotation declares its role.
+The [language reference](docs/references/language.md#source-packages) owns the notation and relationship rules.
+
+The [example library](docs/examples/packages/library.zy) declares an include/exclude discovery scope for test files;
+the [binary](docs/examples/packages/main.zy) imports that library directly.
+The smoke test names its subject with `@[package(test(of("../library.zy")))]`:
+
+```sh
+zydeco package show docs/examples/packages/library.zy docs/examples/packages/main.zy
+zydeco package check docs/examples/packages/library.zy
+zydeco package test docs/examples/packages/library.zy
+zydeco run docs/examples/packages/main.zy
+zydeco build docs/examples/packages/main.zy --target wasm-sps --build-dir build
+```
+
+`show` accepts several files, so package declarations can remain modular while CLI inspection is centralized.
+It lists roles and typed relationships without loading their targets or checking code.
+Both `show` and `test` expand only the supplied file's explicit discovery rules, not rules in matched files.
+`check` follows code requirements only.
+`test` validates the requested package and all directly selected tests before executing them.
+Plain `@[package(test)]` is also supported: run it directly with `package test PATH`,
+or select it through a subject's `test("PATH")` relationship.
+Tests run sequentially with empty stdin and no arguments.
+Nonzero exits report captured output and fail the suite; compiler and runtime errors also fail the command.
+Unsupported relationship kinds are displayed by `show` and rejected by `test`.
+
+Whole-file builds use the filename, so this example produces `main.sps.wasm`.
+If several packages need to share a file, give their meta annotations explicit names such
+as `@[package(test, name("smoke"))]`, and select them with `zydeco package test tests.zy#smoke`.
+Names do not come from fields or bindings, and annotations preserve the file's ordinary scoping.
+Named binary entry points remain available to `run` and `build`; their artifacts use the package name.
+Selecting a term as a separate entry requires its imports and parameters to be inside that term.
+
 ## Compile Programs
 
 `zydeco build` first checks the same executable source boundary as `run`, then selects a lowering target:

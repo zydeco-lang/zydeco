@@ -44,8 +44,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#build-the-cli) for release builds and addi
 
 ## Source Files and Libraries
 
-A source file contains one complete term. Imports are relative to the importing file;
-there is no implicit prelude, distinguished `main` declaration, or authored project manifest.
+A source file contains one complete term.
+Imports are relative to the importing file; there is no implicit prelude or distinguished `main` declaration.
 The example above explicitly accepts the host's Builtin package and selects the operations it needs.
 The launcher supplies that package when running the program.
 
@@ -62,6 +62,20 @@ fn (value : Int64) => (ret value : Ret Int64)
 a pure function or `ret 1` can pass checking without being a runnable file root.
 The [standard library guide](lib/std/README.md) describes the package boundary, library assembly,
 and available operations.
+
+A file is already a library package.
+Prefer complete files as library and binary entry points, addressed by plain paths such as `library.zy` and `main.zy`.
+Use `@[package(binary)]` or `@[package(test)]` on the file root to declare another role.
+Tests can name their subjects with `@[package(test(of("../library.zy")))]`;
+a file-root `@[discover(include("tests/**/*.zy"), exclude("tests/fixtures/**"))]` supplies an explicit discovery scope.
+Plain `@[package(test)]` remains independently runnable.
+Inspect the [example library](docs/examples/packages/library.zy)
+with `zydeco package show docs/examples/packages/library.zy`,
+or run the [example binary](docs/examples/packages/main.zy) with `zydeco run docs/examples/packages/main.zy`.
+An optional `#name` suffix selects a term explicitly named in package metadata,
+such as `@[package(test, name("smoke"))]`; omit it for the usual whole-file entry point.
+Package names are independent of fields and bindings, and annotations leave ordinary file scoping unchanged.
+See the [package workflow](CONTRIBUTING.md#use-source-packages) for checking, building, and tests.
 
 ## Interactive REPL
 

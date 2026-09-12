@@ -24,8 +24,9 @@ pub(crate) trait SourceProvider {
 pub(crate) struct SourceGraphLoader<Provider> {
     sources: ArenaDense<SourceGraphScope, SourceId>,
     imports: ArenaDense<SourceGraphScope, SourceImportId>,
-    seen: HashMap<PathBuf, SourceId>,
+    seen: HashMap<(PathBuf, t::TermId), SourceId>,
     provider: Provider,
+    templates: HashMap<PathBuf, Arc<SourceTemplate>>,
 }
 
 impl SourceTemplate {
@@ -59,6 +60,12 @@ impl SourceTemplate {
         let literals = unit.literals(&parser.arena, &parser.spans).map_err(|error| {
             SourceParseError::LiteralDirective { path: path.clone(), error: Box::new(error) }
         })?;
+        let package_sites = unit.packages(&parser.arena, &parser.spans).map_err(|error| {
+            SourceParseError::PackageDirective { path: path.clone(), error: Box::new(error) }
+        })?;
+        let discovery = unit.discovery(&parser.arena, &parser.spans).map_err(|error| {
+            SourceParseError::DiscoveryDirective { path: path.clone(), error: Box::new(error) }
+        })?;
         let (spans, arena) = parser.finish();
         Ok(Self {
             path,
@@ -71,20 +78,21 @@ impl SourceTemplate {
             warnings,
             import_sites,
             literals,
+            package_sites,
+            discovery,
         })
     }
 }
 
-impl<Provider> SourceGraphLoader<Provider>
-where
-    Provider: SourceProvider,
-{
-    pub(crate) fn load_root(mut self, root: &Path) -> Result<SourceGraph, SourceLoadError> {
+impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
+    pub(crate) fn load_root(
+        mut self, root: &Path, package: Option<&super::PackageName>,
+    ) -> Result<SourceGraph, SourceLoadError> {
         let canonical = SourcePath::identity(root).map_err(|source| SourceLoadError::RootPath {
             path: root.to_path_buf(),
             source: source.into(),
         })?;
-        let root = self.load_canonical(canonical).map_err(|error| match error {
+        let root = self.load_canonical(canonical, package).map_err(|error| match error {
             | SourceLoadError::Read { source, .. } => {
                 SourceLoadError::RootPath { path: root.to_path_buf(), source }
             }
@@ -105,36 +113,44 @@ where
             imports: ArenaDense::new(),
             seen: HashMap::new(),
             provider,
+            templates: HashMap::new(),
         }
     }
 
-    fn load_canonical(&mut self, path: PathBuf) -> Result<SourceId, SourceLoadError> {
-        if let Some(source) = self.seen.get(&path) {
-            return Ok(*source);
-        }
-
-        let template = self.provider.load(&path)?;
-        self.load_template(path, template)
+    fn load_canonical(
+        &mut self, path: PathBuf, package: Option<&super::PackageName>,
+    ) -> Result<SourceId, SourceLoadError> {
+        let template = match self.templates.get(&path) {
+            | Some(template) => template.clone(),
+            | None => {
+                let template = self.provider.load(&path)?;
+                self.templates.insert(path, template.clone());
+                template
+            }
+        };
+        self.load_template(template, package)
     }
 
     fn load_template(
-        &mut self, path: PathBuf, template: Arc<SourceTemplate>,
+        &mut self, template: Arc<SourceTemplate>, package: Option<&super::PackageName>,
     ) -> Result<SourceId, SourceLoadError> {
-        if let Some(source) = self.seen.get(&path) {
+        let root = template.package_site(package)?.map_or(template.unit.root, |site| site.term);
+        let path = template.path.clone();
+        let key = (path.clone(), root);
+        if let Some(source) = self.seen.get(&key) {
             return Ok(*source);
         }
-
-        let import_sites = template.import_sites.clone();
-
+        // A file companion describes the complete file term, never an arbitrary nested package.
+        let companion = root == template.unit.root;
+        let import_sites = template.code_sites(root);
         let source_id =
-            self.sources.alloc(SourceFile { template, imports: Vec::new(), signature: None });
-        self.seen.insert(path.clone(), source_id);
-
+            self.sources.alloc(SourceFile { template, root, imports: Vec::new(), signature: None });
+        self.seen.insert(key, source_id);
         let imports = import_sites
             .into_iter()
             .map(|site| self.load_import(source_id, &path, site))
             .collect::<Result<Vec<_>, _>>()?;
-        let signature = self.load_signature(&path)?;
+        let signature = if companion { self.load_signature(&path)? } else { None };
         self.sources[&source_id].imports = imports;
         self.sources[&source_id].signature = signature;
         Ok(source_id)
@@ -143,49 +159,64 @@ where
     fn load_signature(
         &mut self, implementation: &Path,
     ) -> Result<Option<SourceId>, SourceLoadError> {
-        let Some(requested) = SourceKind::companion(implementation) else {
-            return Ok(None);
-        };
+        let Some(requested) = SourceKind::companion(implementation) else { return Ok(None) };
         let signature = SourcePath::identity(&requested)
             .map_err(|source| SourceLoadError::Read { path: requested, source: source.into() })?;
-        if let Some(source) = self.seen.get(&signature) {
-            return Ok(Some(*source));
-        }
-        let Some(template) = self.provider.load_optional(&signature)? else {
-            return Ok(None);
+        let template = match self.templates.get(&signature) {
+            | Some(template) => template.clone(),
+            | None => {
+                let Some(template) = self.provider.load_optional(&signature)? else {
+                    return Ok(None);
+                };
+                self.templates.insert(signature, template.clone());
+                template
+            }
         };
-        self.load_template(signature, template).map(Some)
+        self.load_template(template, None).map(Some)
     }
 
     fn load_import(
         &mut self, importer: SourceId, importer_path: &Path, site: ImportSite,
     ) -> Result<SourceImportId, SourceLoadError> {
-        let parent = importer_path.parent().expect("a canonical source path must have a parent");
+        let parent = importer_path.parent().expect("a source file has a parent");
         let target = site.directive.target;
-        let requested = match &target {
-            | ImportTarget::Path(written) if written.is_absolute() => written.clone(),
-            | ImportTarget::Path(written) => parent.join(written),
-            | ImportTarget::Input(number) => number.overlay_path(parent),
+        let (requested, package) = match &target {
+            | ImportTarget::Input(number) => (number.overlay_path(parent), None),
+            | ImportTarget::Source(reference) => {
+                (parent.join(&reference.path), reference.name.as_ref())
+            }
         };
-        let import_error = |source| match &target {
-            | ImportTarget::Path(_) => SourceLoadError::ImportPath {
-                importer: importer_path.to_path_buf(),
-                requested: requested.clone(),
-                span: Box::new(site.directive.span),
-                source,
-            },
-            | ImportTarget::Input(input) => SourceLoadError::ImportInput {
-                importer: importer_path.to_path_buf(),
-                input: *input,
-                span: Box::new(site.directive.span),
-                source,
-            },
-        };
-        let canonical =
-            SourcePath::identity(&requested).map_err(|source| import_error(source.into()))?;
-        let imported = self.load_canonical(canonical).map_err(|error| match error {
-            | SourceLoadError::Read { source, .. } => import_error(source),
-            | error => error,
+        let imported = (|| {
+            let canonical = SourcePath::identity(&requested).map_err(|source| {
+                SourceLoadError::Read { path: requested.clone(), source: source.into() }
+            })?;
+            self.load_canonical(canonical, package)
+        })()
+        .map_err(|error| match (&target, error) {
+            | (ImportTarget::Source(reference), error) if reference.name.is_some() => {
+                SourceLoadError::PackageImport {
+                    importer: importer_path.to_path_buf(),
+                    span: site.directive.span,
+                    error: Box::new(error),
+                }
+            }
+            | (ImportTarget::Source(_), SourceLoadError::Read { source, .. }) => {
+                SourceLoadError::ImportPath {
+                    importer: importer_path.to_path_buf(),
+                    requested,
+                    span: Box::new(site.directive.span),
+                    source,
+                }
+            }
+            | (ImportTarget::Input(input), SourceLoadError::Read { source, .. }) => {
+                SourceLoadError::ImportInput {
+                    importer: importer_path.to_path_buf(),
+                    input: *input,
+                    span: Box::new(site.directive.span),
+                    source,
+                }
+            }
+            | (_, error) => error,
         })?;
         Ok(self.imports.alloc(SourceImport {
             importer,

@@ -140,7 +140,7 @@ fn complete_source(
     let provider =
         CompletionSourceProvider { root: Arc::new(template), ordinary: QuerySourceProvider { db } };
     let graph = SourceGraphLoader::with_provider(provider)
-        .load_root(&path)
+        .load_root(&path, None)
         .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
     let (program, target) =
         graph.parse_completion(target).map_err(|error| AnalysisError::TextualProgram { error })?;

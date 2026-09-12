@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use tower_lsp::lsp_types::{DocumentLink, Position, Range, Url};
-use zydeco_session::{SourceGraph, source::SourceFile};
+use zydeco_session::{
+    SourceGraph,
+    source::{SourceFile, SourceId},
+};
 use zydeco_surface::textual::{
     ImportSite, ImportTarget, LexicalToken, LexicalTokenKind, LexicalTokens,
 };
@@ -19,29 +22,64 @@ impl<'graph> ImportDocumentLinks<'graph> {
 
     pub(crate) fn for_file(&self, path: &Path) -> Vec<DocumentLink> {
         let path = Self::normalize_path(path);
-        let Some((source, file)) =
-            self.graph.sources.iter().find(|(_, file)| Self::normalize_path(&file.path) == path)
-        else {
-            return Vec::new();
-        };
+        let mut links = self
+            .graph
+            .sources
+            .iter()
+            .filter(|(_, file)| Self::normalize_path(&file.path) == path)
+            .flat_map(|(source, file)| self.source_links(source, file))
+            .collect::<Vec<_>>();
+        links.sort_by_key(|link| {
+            (
+                link.range.start.line,
+                link.range.start.character,
+                link.range.end.line,
+                link.range.end.character,
+            )
+        });
+        links.dedup_by(|left, right| left.range == right.range);
+        links
+    }
+
+    fn source_links(&self, source: SourceId, file: &SourceFile) -> Vec<DocumentLink> {
         let strings = LexicalTokens::new(&file.source)
             .filter(|token| token.kind == LexicalTokenKind::String)
             .collect::<Vec<_>>();
 
-        file.imports
+        let imports = file.imports.iter().filter_map(|import| {
+            let edge = &self.graph.imports[import];
+            debug_assert_eq!(edge.importer, source);
+            let site = file.import_sites.iter().find(|site| site.term == edge.term)?;
+            let target = match &site.directive.target {
+                | ImportTarget::Source(_) => self.graph.sources[&edge.imported].path.clone(),
+                | ImportTarget::Input(_) => return None,
+            };
+            let range = Self::argument_range(file, site, &strings)?;
+            let target = Url::from_file_path(target).ok()?;
+            Some(DocumentLink { range, target: Some(target), tooltip: None, data: None })
+        });
+        let relationships = file
+            .package_sites
             .iter()
-            .filter_map(|import| {
-                let edge = &self.graph.imports[import];
-                debug_assert_eq!(edge.importer, source);
-                let site = file.import_sites.iter().find(|site| site.term == edge.term)?;
-                let ImportTarget::Path(_) = &site.directive.target else {
-                    return None;
-                };
-                let range = Self::argument_range(file, site, &strings)?;
-                let target = Url::from_file_path(&self.graph.sources[&edge.imported].path).ok()?;
-                Some(DocumentLink { range, target: Some(target), tooltip: None, data: None })
-            })
-            .collect()
+            .filter(|site| file.contains_range(&site.span.range()))
+            .flat_map(|site| &site.relations)
+            .filter_map(|relation| {
+                let span = relation.info.range();
+                // Each relationship has one source-reference string.
+                let literal = strings
+                    .iter()
+                    .find(|token| span.start <= token.range.start && token.range.end <= span.end)?;
+                let range =
+                    Self::byte_range(&file.file, literal.range.start + 1..literal.range.end - 1)?;
+                let path = Self::normalize_path(&file.path.parent()?.join(&relation.target.path));
+                Some(DocumentLink {
+                    range,
+                    target: Some(Url::from_file_path(path).ok()?),
+                    tooltip: Some(format!("{} relationship", relation.kind)),
+                    data: None,
+                })
+            });
+        imports.chain(relationships).collect()
     }
 
     fn argument_range(
@@ -124,5 +162,72 @@ mod tests {
             Some(Url::from_file_path(leaf.canonicalize().unwrap()).unwrap())
         );
         assert!(links.iter().all(|link| link.tooltip.is_none() && link.data.is_none()));
+    }
+
+    #[test]
+    fn package_import_links_its_source_without_treating_the_package_name_as_a_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let packages = directory.path().join("package.zy");
+        let root = directory.path().join("main.zy");
+        let source = r#"@(import("package.zy#main"))"#;
+        std::fs::write(&packages, r#"(#main = @[package(library, name("main"))] 1)"#).unwrap();
+        std::fs::write(&root, source).unwrap();
+        let graph = CompilerSession::default().graph(&root).unwrap();
+        let links = ImportDocumentLinks::new(&graph).for_file(&root);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].range, source_range(source, "package.zy#main"));
+        assert_eq!(
+            links[0].target,
+            Some(Url::from_file_path(packages.canonicalize().unwrap()).unwrap())
+        );
+    }
+
+    #[test]
+    fn package_links_cover_multiple_roots_and_unloaded_relationship_targets() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("packages.zy");
+        let first = directory.path().join("one.zy");
+        let second = directory.path().join("two.zy");
+        let source = r#"(
+            #one = @[package(library, test("missing.zy#smoke"), name("one"))] @(import("one.zy")),
+            #two = @[package(library, name("two"))] @(import("two.zy"))
+        )"#;
+        std::fs::write(&root, source).unwrap();
+        std::fs::write(&first, "1").unwrap();
+        std::fs::write(&second, "2").unwrap();
+        let graph = CompilerSession::default().graph(&root).unwrap();
+        let links = ImportDocumentLinks::new(&graph).for_file(&root);
+        assert_eq!(links.len(), 3);
+        for (index, text) in ["missing.zy#smoke", "one.zy", "two.zy"].into_iter().enumerate() {
+            assert_eq!(links[index].range, source_range(source, text));
+        }
+        assert_eq!(links[0].tooltip.as_deref(), Some("test relationship"));
+        assert!(links[0].target.as_ref().unwrap().path().ends_with("missing.zy"));
+        let main = directory.path().join("main.zy");
+        std::fs::write(&main, r#"@(import("packages.zy#one"))"#).unwrap();
+        let graph = CompilerSession::default().graph(&main).unwrap();
+        let links = ImportDocumentLinks::new(&graph).for_file(&root);
+        assert_eq!(links.len(), 2, "a selected root does not link unrelated registrations");
+        assert_eq!(links[0].range, source_range(source, "missing.zy#smoke"));
+        assert_eq!(links[1].range, source_range(source, "one.zy"));
+    }
+
+    #[test]
+    fn test_subjects_link_each_address_without_loading_subjects_or_discovery() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("test.zy");
+        let source =
+            r#"@[discover(include("*.zy"))] @[package(test(of("one.zy#lib", "two.zy")))] 1"#;
+        std::fs::write(&root, source).unwrap();
+        let graph = CompilerSession::default().graph(&root).unwrap();
+        let links = ImportDocumentLinks::new(&graph).for_file(&root);
+        assert_eq!(links.len(), 2);
+        for (link, text) in links.iter().zip(["one.zy#lib", "two.zy"]) {
+            assert_eq!(link.range, source_range(source, text));
+            assert_eq!(link.tooltip.as_deref(), Some("of relationship"));
+            assert!(
+                link.target.as_ref().unwrap().path().ends_with(text.split('#').next().unwrap())
+            );
+        }
     }
 }

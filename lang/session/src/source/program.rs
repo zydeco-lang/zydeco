@@ -66,13 +66,19 @@ impl<'graph> TextualProgramBuilder<'graph> {
     /// after the dummy position `0`.
     fn assign_bases(graph: &'graph SourceGraph) -> HashMap<SourceId, BytePos> {
         let mut base = 1u32;
+        let mut files = HashMap::new();
         graph
             .provider_order()
             .into_iter()
             .map(|source| {
+                let path = &graph.sources[&source].path;
+                if let Some(assigned) = files.get(path) {
+                    return (source, *assigned);
+                }
                 let len = graph.sources[&source].source.len();
                 let assigned = BytePos(base);
                 base += u32::try_from(len).expect("program address space exceeds u32");
+                files.insert(path.clone(), assigned);
                 (source, assigned)
             })
             .collect()
@@ -108,6 +114,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
     fn bases_order(&self) -> Vec<SourceId> {
         let mut order: Vec<_> = self.graph.provider_order();
         order.sort_by_key(|source| self.bases[source]);
+        order.dedup_by_key(|source| self.bases[source]);
         order
     }
 
@@ -116,7 +123,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
             return Ok(*root);
         }
         let file = &self.graph.sources[&source];
-        let root = file.unit.root;
+        let root = file.root;
         let kind = file.kind();
         let signature = file.signature;
         let body = self.term(source, root)?;
@@ -130,7 +137,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
             | None => body,
             | Some(signature) => {
                 let ty = self.source(signature)?;
-                let signature_root = self.graph.sources[&signature].unit.root;
+                let signature_root = self.graph.sources[&signature].root;
                 self.parser.term(
                     self.span(signature, signature_root.into())
                         .make(t::Ann { tm: body, ty }.into()),
@@ -462,7 +469,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
         };
         let copied = self.parser.term(self.span(source, term.into()).make(syntax));
         if let Some(completion) = &mut self.completion
-            && source == self.graph.root
+            && file.path == self.graph.sources[&self.graph.root].path
             && term == completion.target
         {
             completion.copied = Some(copied);

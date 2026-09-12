@@ -12,8 +12,8 @@ pub use zydeco_stackir::passes::{HighSpsInspection, HighSpsPass, HighSpsPlan, Hi
 
 pub use crate::{
     cli::{
-        BuildTarget, Cli, Commands, DocumentationCommand, RepresentationChoice, TargetArchitecture,
-        TargetOs,
+        BuildTarget, Cli, Commands, DocumentationCommand, PackageCommand, RepresentationChoice,
+        TargetArchitecture, TargetOs,
     },
     compile::{
         Amd64Artifact, AssemblyOutcome, BackendProgram, CommandCompiler, CompileError,

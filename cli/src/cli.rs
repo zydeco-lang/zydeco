@@ -70,6 +70,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Inspect, check, or test source packages
+    Package {
+        #[command(subcommand)]
+        command: PackageCommand,
+    },
     /// List optional compiler passes or explain a selected high-SPS plan
     Passes {
         /// Explain `default`, `none`, or a comma-separated list such as normalize,normalize
@@ -95,8 +100,8 @@ pub enum Commands {
     },
     /// Run a zydeco program
     Run {
-        /// Path to the file to run
-        #[arg(value_name = "FILE")]
+        /// File path (preferred); append #NAME only to select a registered term
+        #[arg(value_name = "SOURCE")]
         file: PathBuf,
         /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
@@ -107,15 +112,15 @@ pub enum Commands {
     },
     /// Check a zydeco program
     Check {
-        /// Path to the file to check
-        #[arg(value_name = "FILE")]
+        /// File path (preferred); append #NAME only to select a registered term
+        #[arg(value_name = "SOURCE")]
         file: PathBuf,
     },
     /// Start the declaration-free terminal REPL
     Repl,
     Build {
-        /// Path to the file to compile
-        #[arg(value_name = "FILE")]
+        /// File path (preferred); append #NAME only to select a registered term
+        #[arg(value_name = "SOURCE")]
         file: PathBuf,
         /// Target OS (defaults to host OS)
         #[arg(long)]
@@ -140,6 +145,27 @@ pub enum Commands {
         /// Run the program after building
         #[arg(short = 'x', long, default_value_t = false)]
         execute: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum PackageCommand {
+    /// Inspect packages from one or more source files without checking or executing code
+    Show {
+        #[arg(value_name = "FILE", required = true)]
+        files: Vec<PathBuf>,
+    },
+    /// Check one package and its code dependencies, without following test associations
+    Check {
+        /// File path (preferred); append #NAME only to select a registered term
+        #[arg(value_name = "SOURCE")]
+        file: PathBuf,
+    },
+    /// Run a test package or the selected package's direct test companions with empty stdin
+    Test {
+        /// File path (preferred); append #NAME only to select a registered term
+        #[arg(value_name = "SOURCE")]
+        file: PathBuf,
     },
 }
 

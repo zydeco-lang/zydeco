@@ -2,7 +2,7 @@ use crate::source::{SourceCycle, SourceCycleStep, SourceDependencyKind, SourceWa
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,
-    ops::Deref,
+    ops::{Deref, Range},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -39,6 +39,9 @@ pub struct SourceTemplate {
     pub warnings: Vec<SourceWarning>,
     pub import_sites: Vec<ImportSite>,
     pub literals: Vec<LiteralSite>,
+    pub package_sites: Vec<zydeco_surface::textual::PackageSite>,
+    /// File-level scope, retained when selecting a named package.
+    pub discovery: Vec<zydeco_utils::span::Sp<zydeco_surface::metadata::DiscoveryRule>>,
 }
 
 /// The role inferred from a source file's extension.
@@ -56,15 +59,26 @@ impl SourcePath {
         path.canonicalize().or_else(|_| {
             let absolute = std::path::absolute(path)?;
             let mut ancestor = absolute.as_path();
-            let mut suffix = PathBuf::new();
+            let mut suffix = Vec::new();
             loop {
                 if let Ok(canonical) = ancestor.canonicalize() {
-                    return Ok(canonical.join(suffix));
+                    // Unsaved files may have nonexistent parents. Resolve their remaining
+                    // components lexically after canonicalizing the existing prefix.
+                    return Ok(suffix.into_iter().rev().fold(canonical, |mut path, part| {
+                        match part {
+                            | std::path::Component::ParentDir => {
+                                path.pop();
+                            }
+                            | std::path::Component::CurDir => {}
+                            | part => path.push(part),
+                        }
+                        path
+                    }));
                 }
-                let Some(name) = ancestor.file_name() else {
+                let Some(part) = ancestor.components().next_back() else {
                     return Ok(absolute);
                 };
-                suffix = PathBuf::from(name).join(suffix);
+                suffix.push(part);
                 let Some(parent) = ancestor.parent() else {
                     return Ok(absolute);
                 };
@@ -104,9 +118,18 @@ impl SourceTemplate {
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     pub template: Arc<SourceTemplate>,
+    /// The selected term; syntax and meta annotations remain shared with the containing file.
+    pub root: t::TermId,
     pub imports: Vec<SourceImportId>,
     /// The optional `.zyi` type annotation paired with this `.zy` implementation.
     pub signature: Option<SourceId>,
+}
+
+impl SourceFile {
+    pub fn contains_range(&self, range: &Range<usize>) -> bool {
+        let root = self.spans[&self.root.into()].range();
+        self.root == self.unit.root || (root.start <= range.start && range.end <= root.end)
+    }
 }
 
 impl Deref for SourceFile {
@@ -133,6 +156,13 @@ pub struct SourceGraph {
 }
 
 impl SourceGraph {
+    pub fn source_inputs(&self) -> impl Iterator<Item = &SourceTemplate> {
+        let mut seen = HashSet::new();
+        self.sources
+            .iter()
+            .map(|(_, source)| source.template.as_ref())
+            .filter(move |source| seen.insert(source.path.as_path()))
+    }
     pub fn provider_order(&self) -> Vec<SourceId> {
         ProviderOrder::new(self).run()
     }
@@ -158,7 +188,7 @@ impl SourceGraph {
                                 kind: SourceDependencyKind::Signature,
                                 dependent: self.sources[&implementation].path.clone(),
                                 dependency: signature.path.clone(),
-                                span: signature.spans[&signature.unit.root.into()],
+                                span: signature.spans[&signature.root.into()],
                             }
                         }
                     })

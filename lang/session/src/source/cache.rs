@@ -40,9 +40,8 @@ impl SourceCaches {
     > {
         Self::from_sources(
             graph
-                .sources
-                .iter()
-                .map(|(_, source)| (source.path.clone(), source.source.clone()))
+                .source_inputs()
+                .map(|source| (source.path.clone(), source.source.clone()))
                 .collect(),
         )
     }

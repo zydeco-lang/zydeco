@@ -1,0 +1,5 @@
+@[package(test(of("../library.zy")))]
+param (/process) : @(import("../../../../lib/std/builtin.zy")) in
+let library = @(import("../library.zy")) in
+let message : @(intrinsic(string)) = library/message in
+! process/exit 0

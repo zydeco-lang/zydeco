@@ -87,8 +87,11 @@ impl DocumentationExample {
         let mut replacements = sites
             .iter()
             .map(|site| {
-                let ImportTarget::Path(path) = &site.directive.target else {
-                    return Err(DocumentationScratchError::NumberedImport);
+                let reference = match &site.directive.target {
+                    | ImportTarget::Source(reference) => reference,
+                    | ImportTarget::Input(_) => {
+                        return Err(DocumentationScratchError::NumberedImport);
+                    }
                 };
                 let span = site.directive.span.range();
                 let token = strings
@@ -96,9 +99,15 @@ impl DocumentationExample {
                     .find(|token| span.start <= token.range.start && token.range.end <= span.end)
                     .ok_or(DocumentationScratchError::MissingPathToken)?;
                 let origin = std::path::absolute(&self.path)?;
-                let target =
-                    origin.parent().ok_or(DocumentationScratchError::MissingDirectory)?.join(path);
+                let target = origin
+                    .parent()
+                    .ok_or(DocumentationScratchError::MissingDirectory)?
+                    .join(&reference.path);
                 let text = target.to_str().ok_or(DocumentationScratchError::NonUtf8Path)?;
+                let text = match &reference.name {
+                    | Some(name) => format!("{text}#{name}"),
+                    | None => text.to_owned(),
+                };
                 Ok((token.range.clone(), format!("{text:?}")))
             })
             .collect::<Result<Vec<_>, DocumentationScratchError>>()?;
