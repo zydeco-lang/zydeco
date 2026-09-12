@@ -18,6 +18,43 @@ impl MemoryRuntime {
     ) -> Result<Computation, i32> {
         let arena = &mut host.buffers;
         let result = match role {
+            | BuiltinValueRole::MemoryAllocate => arena
+                .allocate_uninitialized(Self::integer(&args[0]), Self::integer(&args[1]))
+                .map_err(MemoryError::from)
+                .map(|handle| Some(HostValue::Buffer(handle).into())),
+            | BuiltinValueRole::MemoryClose => {
+                arena.close(Self::buffer(&args[0])).map_err(MemoryError::from).map(|()| None)
+            }
+            | BuiltinValueRole::MemoryFreeze => arena
+                .freeze_memory(Self::buffer(&args[0]))
+                .map(|handle| Some(HostValue::Access(handle).into())),
+            | BuiltinValueRole::MemoryImmutableLength => arena
+                .immutable_length(Self::access(&args[0]))
+                .map(|value| Some(Literal::Integer(IntegerLiteral::Int64(value)).into())),
+            | BuiltinValueRole::MemoryCheckWrite => arena
+                .check_write(
+                    Self::access(&args[0]),
+                    Self::address(&args[1]),
+                    Self::integer(&args[2]),
+                    Self::integer(&args[3]),
+                )
+                .map(|()| None),
+            | BuiltinValueRole::MemoryFromString => {
+                let SemValue::Literal(Literal::String(string)) = &args[0] else {
+                    unreachable!("checked string")
+                };
+                arena
+                    .import_memory(string.as_str().as_bytes())
+                    .map(|handle| Some(HostValue::Access(handle).into()))
+            }
+            | BuiltinValueRole::MemoryToString => arena
+                .read_memory(
+                    Self::access(&args[0]),
+                    Self::address(&args[1]),
+                    Self::integer(&args[2]),
+                )
+                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|_| MemoryError::InvalidValue))
+                .map(|string| Some(Literal::String(string.into()).into())),
             | BuiltinValueRole::MemoryGrant => Permission::try_from(Self::integer(&args[3]))
                 .and_then(|permission| {
                     arena.grant(
@@ -47,21 +84,9 @@ impl MemoryRuntime {
                     Self::integer(&args[3]),
                 )
                 .map(|()| None),
-            | BuiltinValueRole::MemoryLoadI64 => arena
-                .load_i64(Self::access(&args[0]), Self::address(&args[1]))
-                .map(|value| Some(Literal::Integer(IntegerLiteral::Int64(value)).into())),
-            | BuiltinValueRole::MemoryLoadU8 => arena
-                .load_u8(Self::access(&args[0]), Self::address(&args[1]))
-                .map(|value| Some(Literal::Integer(IntegerLiteral::UInt8(value)).into())),
             | BuiltinValueRole::MemoryLoadAddr => arena
                 .load_address(Self::access(&args[0]), Self::address(&args[1]))
                 .map(|handle| Some(HostValue::Address(handle).into())),
-            | BuiltinValueRole::MemoryStoreI64 => arena
-                .store_i64(Self::access(&args[0]), Self::address(&args[1]), Self::integer(&args[2]))
-                .map(|()| None),
-            | BuiltinValueRole::MemoryStoreU8 => arena
-                .store_u8(Self::access(&args[0]), Self::address(&args[1]), Self::octet(&args[2]))
-                .map(|()| None),
             | BuiltinValueRole::MemoryStoreAddr => arena
                 .store_address(
                     Self::access(&args[0]),
@@ -74,7 +99,7 @@ impl MemoryRuntime {
         Ok(Self::finish(result, &args[args.len() - 2], &args[args.len() - 1]))
     }
 
-    fn finish(
+    pub(crate) fn finish(
         result: Result<Option<SemValue>, MemoryError>, error: &SemValue, success: &SemValue,
     ) -> Computation {
         let (continuation, argument) = match result {
@@ -97,23 +122,16 @@ impl MemoryRuntime {
         *value
     }
 
-    fn octet(value: &SemValue) -> u8 {
-        let SemValue::Literal(Literal::Integer(IntegerLiteral::UInt8(value))) = value else {
-            unreachable!("checked memory operation requires UInt8")
-        };
-        *value
-    }
-
-    fn address(value: &SemValue) -> AddressHandle {
-        let SemValue::Host(HostValue::Address(value)) = value else {
-            unreachable!("checked memory operation requires Addr")
-        };
-        *value
-    }
-
-    fn access(value: &SemValue) -> AccessHandle {
+    pub(crate) fn access(value: &SemValue) -> AccessHandle {
         let SemValue::Host(HostValue::Access(value)) = value else {
             unreachable!("checked memory operation requires Access")
+        };
+        *value
+    }
+
+    pub(crate) fn address(value: &SemValue) -> AddressHandle {
+        let SemValue::Host(HostValue::Address(value)) = value else {
+            unreachable!("checked memory operation requires Addr")
         };
         *value
     }

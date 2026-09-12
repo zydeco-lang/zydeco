@@ -8,8 +8,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
-use zydeco_machine::buffer::{BufferArena, BufferError, BufferHandle};
-use zydeco_machine::bytes::ByteBuffer;
+use zydeco_machine::buffer::{BufferArena, BufferHandle};
 #[cfg(not(feature = "compact-environments"))]
 use zydeco_machine::frames::Frames as NativeFrames;
 #[cfg(feature = "compact-environments")]
@@ -179,34 +178,6 @@ impl HostFloat32 {
     }
 }
 
-struct HostBytes;
-
-impl HostBytes {
-    fn leak(bytes: Vec<u8>) -> Word {
-        Self::store(bytes.into())
-    }
-
-    fn store(bytes: ByteBuffer) -> Word {
-        Box::into_raw(Box::new(bytes)) as Word
-    }
-
-    unsafe fn buffer<'a>(raw: Word) -> &'a ByteBuffer {
-        unsafe { &*(raw as *const ByteBuffer) }
-    }
-
-    unsafe fn borrow<'a>(raw: Word) -> &'a [u8] {
-        unsafe { Self::buffer(raw) }.as_slice()
-    }
-}
-
-/// Borrowed view passed across the C ABI for the duration of one foreign call.
-#[derive(Clone, Copy)]
-#[repr(C)]
-struct ForeignBytes {
-    pointer: *const u8,
-    length: usize,
-}
-
 const STDIN_HANDLE: Word = 0;
 const STDOUT_HANDLE: Word = 0;
 const STDERR_HANDLE: Word = 1;
@@ -338,6 +309,17 @@ impl HostIoErrorKind {
 struct HostIoError;
 
 impl HostIoError {
+    fn memory(error: zydeco_machine::memory::MemoryError) -> io::Error {
+        let kind = match error {
+            | zydeco_machine::memory::MemoryError::Closed => io::ErrorKind::NotConnected,
+            | zydeco_machine::memory::MemoryError::Permission => io::ErrorKind::PermissionDenied,
+            | zydeco_machine::memory::MemoryError::Uninitialized => io::ErrorKind::InvalidData,
+            | zydeco_machine::memory::MemoryError::AllocationFailed => io::ErrorKind::OutOfMemory,
+            | _ => io::ErrorKind::InvalidInput,
+        };
+        io::Error::new(kind, error.message())
+    }
+
     fn closed() -> io::Error {
         io::Error::new(io::ErrorKind::NotConnected, "I/O capability is closed")
     }
@@ -346,6 +328,13 @@ impl HostIoError {
 struct IoBranch;
 
 impl IoBranch {
+    fn memory(bytes: &[u8]) -> io::Result<Word> {
+        HOST_BUFFERS
+            .with(|arena| arena.borrow_mut().import_memory(bytes))
+            .map(|access| HostHandle::encode(access.raw()))
+            .map_err(HostIoError::memory)
+    }
+
     fn error(continuation: Word, error: io::Error) -> Word {
         HostControl::with_two_arguments(
             continuation,
@@ -455,6 +444,7 @@ extern "sysv64" fn zydeco_integer_remainder_by_zero() -> ! {
 
 enum RuntimeFailure {
     PatternMatch,
+    ForeignMemory(zydeco_machine::memory::MemoryError),
     IntegerDivisionByZero,
     IntegerRemainderByZero,
 }
@@ -463,6 +453,7 @@ impl RuntimeFailure {
     fn exit(self) -> ! {
         let message = match self {
             | Self::PatternMatch => "pattern match failed",
+            | Self::ForeignMemory(error) => error.message(),
             | Self::IntegerDivisionByZero => "integer division by zero",
             | Self::IntegerRemainderByZero => "integer remainder by zero",
         };
@@ -524,10 +515,22 @@ extern "sysv64" fn zydeco_frame_step(action: &'static Action<Word>, token: Word)
     unsafe { action.apply(&mut *FRAMES.get(), token) }.unwrap_or_else(|error| out_of_frames(error))
 }
 
-#[unsafe(export_name = "\x01zydeco_ffi_borrow_bytes")]
-extern "sysv64" fn zydeco_ffi_borrow_bytes(bytes: Word) -> ForeignBytes {
-    let bytes = unsafe { HostBytes::borrow(bytes) };
-    ForeignBytes { pointer: bytes.as_ptr(), length: bytes.len() }
+#[unsafe(export_name = "\x01zydeco_ffi_borrow_memory")]
+extern "sysv64" fn zydeco_ffi_borrow_memory(window: Word) -> *const u8 {
+    // The checked classifier fixes this ordinary product's three word fields.
+    let fields = unsafe { std::slice::from_raw_parts(window as *const Word, 3) };
+    HOST_BUFFERS
+        .with(|arena| {
+            arena
+                .borrow()
+                .read_memory(
+                    memory::MemoryBranch::access(fields[0]),
+                    memory::MemoryBranch::address(fields[1]),
+                    <i64 as RuntimeInteger>::decode(fields[2]),
+                )
+                .map(|bytes| bytes.as_ptr())
+        })
+        .unwrap_or_else(|error| RuntimeFailure::ForeignMemory(error).exit())
 }
 
 macro_rules! foreign_integer {
@@ -601,194 +604,8 @@ extern "sysv64" fn zydeco_str_get_branch(
     }
 }
 
-// Scalar representation leaves preserve every payload bit, including floating
-// NaN payloads. Product composition, padding, and field alignment are library code.
-macro_rules! scalar_bytes {
-    ($type:ty, $to:ident => $to_symbol:literal, $from:ident => $from_symbol:literal,
-     $decode:expr, $encode:expr) => {
-        #[unsafe(export_name = $to_symbol)]
-        extern "sysv64" fn $to(value: Word) -> Word {
-            let value: $type = ($decode)(value);
-            HostBytes::leak(value.to_le_bytes().to_vec())
-        }
-
-        #[unsafe(export_name = $from_symbol)]
-        extern "sysv64" fn $from(
-            bytes: Word, when_none: Word, when_some: Word, spare: *mut Word,
-        ) -> Word {
-            match unsafe { HostBytes::borrow(bytes) }.try_into() {
-                | Err(_) => HostControl::without_arguments(when_none),
-                | Ok(bytes) => {
-                    let value = <$type>::from_le_bytes(bytes);
-                    HostControl::with_one_argument(when_some, ($encode)(value, spare))
-                }
-            }
-        }
-    };
-}
-scalar_bytes!(
-    i8,
-    zydeco_int8_to_le_bytes => "\x01zydeco_int8_to_le_bytes",
-    zydeco_int8_from_le_bytes_branch => "\x01zydeco_int8_from_le_bytes_branch",
-    <i8 as RuntimeInteger>::decode, <i8 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    i16,
-    zydeco_int16_to_le_bytes => "\x01zydeco_int16_to_le_bytes",
-    zydeco_int16_from_le_bytes_branch => "\x01zydeco_int16_from_le_bytes_branch",
-    <i16 as RuntimeInteger>::decode, <i16 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    i32,
-    zydeco_int32_to_le_bytes => "\x01zydeco_int32_to_le_bytes",
-    zydeco_int32_from_le_bytes_branch => "\x01zydeco_int32_from_le_bytes_branch",
-    <i32 as RuntimeInteger>::decode, <i32 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    i64,
-    zydeco_int64_to_le_bytes => "\x01zydeco_int64_to_le_bytes",
-    zydeco_int64_from_le_bytes_branch => "\x01zydeco_int64_from_le_bytes_branch",
-    <i64 as RuntimeInteger>::decode, <i64 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    u8,
-    zydeco_uint8_to_le_bytes => "\x01zydeco_uint8_to_le_bytes",
-    zydeco_uint8_from_le_bytes_branch => "\x01zydeco_uint8_from_le_bytes_branch",
-    <u8 as RuntimeInteger>::decode, <u8 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    u16,
-    zydeco_uint16_to_le_bytes => "\x01zydeco_uint16_to_le_bytes",
-    zydeco_uint16_from_le_bytes_branch => "\x01zydeco_uint16_from_le_bytes_branch",
-    <u16 as RuntimeInteger>::decode, <u16 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    u32,
-    zydeco_uint32_to_le_bytes => "\x01zydeco_uint32_to_le_bytes",
-    zydeco_uint32_from_le_bytes_branch => "\x01zydeco_uint32_from_le_bytes_branch",
-    <u32 as RuntimeInteger>::decode, <u32 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    u64,
-    zydeco_uint64_to_le_bytes => "\x01zydeco_uint64_to_le_bytes",
-    zydeco_uint64_from_le_bytes_branch => "\x01zydeco_uint64_from_le_bytes_branch",
-    <u64 as RuntimeInteger>::decode, <u64 as RuntimeInteger>::encode
-);
-scalar_bytes!(
-    u32,
-    zydeco_float32_to_le_bytes => "\x01zydeco_float32_to_le_bytes",
-    zydeco_float32_from_le_bytes_branch => "\x01zydeco_float32_from_le_bytes_branch",
-    |word| Immediate::decode_unsigned(word) as u32,
-    |bits: u32, _spare| Immediate::expect_unsigned(bits as Word)
-);
-scalar_bytes!(
-    u64,
-    zydeco_float64_to_le_bytes => "\x01zydeco_float64_to_le_bytes",
-    zydeco_float64_from_le_bytes_branch => "\x01zydeco_float64_from_le_bytes_branch",
-    |word| OpaqueScalar::load(word) as u64,
-    |bits: u64, spare| OpaqueScalar::store(spare, bits as Word)
-);
-
-#[unsafe(export_name = "\x01zydeco_bytes_aligned_branch")]
-extern "sysv64" fn zydeco_bytes_aligned_branch(
-    bytes: Word, alignment: Word, when_none: Word, when_some: Word,
-) -> Word {
-    let alignment = <i64 as RuntimeInteger>::decode(alignment);
-    let aligned = usize::try_from(alignment)
-        .ok()
-        .and_then(|alignment| unsafe { HostBytes::buffer(bytes) }.aligned(alignment));
-    match aligned {
-        | None => HostControl::without_arguments(when_none),
-        | Some(bytes) => HostControl::with_one_argument(when_some, HostBytes::store(bytes)),
-    }
-}
-
 thread_local! {
     static HOST_BUFFERS: RefCell<BufferArena> = RefCell::new(BufferArena::default());
-}
-
-struct BufferBranch;
-
-impl BufferBranch {
-    fn finish(result: Result<Option<Word>, BufferError>, error: Word, success: Word) -> Word {
-        match result {
-            | Ok(None) => HostControl::without_arguments(success),
-            | Ok(Some(value)) => HostControl::with_one_argument(success, value),
-            | Err(code) => {
-                HostControl::with_one_argument(error, Immediate::expect_signed(code as i64))
-            }
-        }
-    }
-
-    fn handle(word: Word) -> BufferHandle {
-        BufferHandle::with_raw(HostHandle::decode(word))
-    }
-}
-
-#[unsafe(export_name = "\x01zydeco_buffer_allocate")]
-extern "sysv64" fn zydeco_buffer_allocate(
-    size: Word, alignment: Word, error: Word, success: Word,
-) -> Word {
-    let result = HOST_BUFFERS.with(|arena| {
-        arena
-            .borrow_mut()
-            .allocate(
-                <i64 as RuntimeInteger>::decode(size),
-                <i64 as RuntimeInteger>::decode(alignment),
-            )
-            .map(|handle| Some(HostHandle::encode(handle.raw())))
-    });
-    BufferBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_buffer_write")]
-extern "sysv64" fn zydeco_buffer_write(
-    buffer: Word, offset: Word, bytes: Word, error: Word, success: Word,
-) -> Word {
-    let result = HOST_BUFFERS.with(|arena| {
-        arena
-            .borrow_mut()
-            .write(BufferBranch::handle(buffer), <i64 as RuntimeInteger>::decode(offset), unsafe {
-                HostBytes::borrow(bytes)
-            })
-            .map(|()| None)
-    });
-    BufferBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_buffer_read")]
-extern "sysv64" fn zydeco_buffer_read(
-    buffer: Word, offset: Word, length: Word, error: Word, success: Word,
-) -> Word {
-    let result = HOST_BUFFERS.with(|arena| {
-        arena
-            .borrow()
-            .read(
-                BufferBranch::handle(buffer),
-                <i64 as RuntimeInteger>::decode(offset),
-                <i64 as RuntimeInteger>::decode(length),
-            )
-            .map(|bytes| Some(HostBytes::store(bytes)))
-    });
-    BufferBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_buffer_freeze")]
-extern "sysv64" fn zydeco_buffer_freeze(buffer: Word, error: Word, success: Word) -> Word {
-    let result = HOST_BUFFERS.with(|arena| {
-        arena
-            .borrow_mut()
-            .freeze(BufferBranch::handle(buffer))
-            .map(|bytes| Some(HostBytes::store(bytes)))
-    });
-    BufferBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_buffer_close")]
-extern "sysv64" fn zydeco_buffer_close(buffer: Word, error: Word, success: Word) -> Word {
-    let result = HOST_BUFFERS
-        .with(|arena| arena.borrow_mut().close(BufferBranch::handle(buffer)).map(|()| None));
-    BufferBranch::finish(result, error, success)
 }
 
 macro_rules! integer_runtime {
@@ -986,100 +803,6 @@ extern "sysv64" fn zydeco_str_parse_int_branch(
     }
 }
 
-#[unsafe(export_name = "\x01zydeco_bytes_empty")]
-extern "sysv64" fn zydeco_bytes_empty() -> Word {
-    HostBytes::leak(Vec::new())
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_length")]
-extern "sysv64" fn zydeco_bytes_length(bytes: Word) -> Word {
-    Immediate::expect_signed(unsafe { HostBytes::borrow(bytes) }.len() as i64)
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_append")]
-extern "sysv64" fn zydeco_bytes_append(first: Word, second: Word) -> Word {
-    HostBytes::leak(
-        [unsafe { HostBytes::borrow(first) }, unsafe { HostBytes::borrow(second) }].concat(),
-    )
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_from_str")]
-extern "sysv64" fn zydeco_bytes_from_str(string: Word) -> Word {
-    HostBytes::leak(unsafe { HostString::borrow(string) }.as_bytes().to_vec())
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_to_str_branch")]
-extern "sysv64" fn zydeco_bytes_to_str_branch(
-    bytes: Word, when_invalid: Word, when_valid: Word,
-) -> Word {
-    match std::str::from_utf8(unsafe { HostBytes::borrow(bytes) }) {
-        | Err(_) => HostControl::without_arguments(when_invalid),
-        | Ok(string) => {
-            HostControl::with_one_argument(when_valid, HostString::leak(string.to_string()))
-        }
-    }
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_get_branch")]
-extern "sysv64" fn zydeco_bytes_get_branch(
-    bytes: Word, index: Word, when_none: Word, when_some: Word,
-) -> Word {
-    let index = <i64 as RuntimeInteger>::decode(index);
-    let octet = usize::try_from(index)
-        .ok()
-        .and_then(|index| unsafe { HostBytes::borrow(bytes) }.get(index).copied());
-    match octet {
-        | None => HostControl::without_arguments(when_none),
-        | Some(octet) => HostControl::with_one_argument(
-            when_some,
-            <u8 as RuntimeInteger>::encode(octet, std::ptr::null_mut()),
-        ),
-    }
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_slice_branch")]
-extern "sysv64" fn zydeco_bytes_slice_branch(
-    bytes: Word, start: Word, length: Word, when_none: Word, when_some: Word,
-) -> Word {
-    let start = <i64 as RuntimeInteger>::decode(start);
-    let length = <i64 as RuntimeInteger>::decode(length);
-    let window = usize::try_from(start).ok().and_then(|start| {
-        usize::try_from(length).ok().and_then(|length| {
-            let end = start.checked_add(length)?;
-            let source = unsafe { HostBytes::borrow(bytes) };
-            (end <= source.len()).then(|| source[start..end].to_vec())
-        })
-    });
-    match window {
-        | None => HostControl::without_arguments(when_none),
-        | Some(window) => HostControl::with_one_argument(when_some, HostBytes::leak(window)),
-    }
-}
-
-/// Build a one-octet buffer; every `UInt8` word is a valid octet, so no branch is needed.
-#[unsafe(export_name = "\x01zydeco_bytes_singleton")]
-extern "sysv64" fn zydeco_bytes_singleton(octet: Word) -> Word {
-    HostBytes::leak(vec![<u8 as RuntimeInteger>::decode(octet)])
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_eq_branch")]
-extern "sysv64" fn zydeco_bytes_eq_branch(
-    first: Word, second: Word, when_true: Word, when_false: Word,
-) -> Word {
-    let condition = unsafe { HostBytes::borrow(first) } == unsafe { HostBytes::borrow(second) };
-    Branch::select(condition, when_true, when_false)
-}
-
-#[unsafe(export_name = "\x01zydeco_bytes_lt_branch")]
-extern "sysv64" fn zydeco_bytes_lt_branch(
-    first: Word, second: Word, when_true: Word, when_false: Word,
-) -> Word {
-    let condition = unsafe { HostBytes::borrow(first) } < unsafe { HostBytes::borrow(second) };
-    Branch::select(condition, when_true, when_false)
-}
-
-/* -------------------------------- Branches -------------------------------- */
-
 #[unsafe(export_name = "\x01zydeco_str_eq_branch")]
 extern "sysv64" fn zydeco_str_eq_branch(
     first: Word, second: Word, when_true: Word, when_false: Word,
@@ -1145,7 +868,7 @@ extern "sysv64" fn zydeco_io_read(
         runtime.borrow_mut().read(reader, |reader| {
             let mut bytes = Vec::new();
             reader.take(count).read_to_end(&mut bytes)?;
-            Ok(HostBytes::leak(bytes))
+            IoBranch::memory(&bytes)
         })
     });
     IoBranch::value(result, when_error, when_success)
@@ -1171,7 +894,7 @@ extern "sysv64" fn zydeco_io_read_line(
     });
     match result {
         | Ok((0, _)) => HostControl::without_arguments(when_eof),
-        | Ok((_, bytes)) => HostControl::with_one_argument(when_line, HostBytes::leak(bytes)),
+        | Ok((_, bytes)) => IoBranch::value(IoBranch::memory(&bytes), when_error, when_line),
         | Err(error) => IoBranch::error(when_error, error),
     }
 }
@@ -1183,7 +906,7 @@ extern "sysv64" fn zydeco_io_read_all(reader: Word, when_error: Word, when_succe
         runtime.borrow_mut().read(reader, |reader| {
             let mut bytes = Vec::new();
             reader.read_to_end(&mut bytes)?;
-            Ok(HostBytes::leak(bytes))
+            IoBranch::memory(&bytes)
         })
     });
     IoBranch::value(result, when_error, when_success)
@@ -1191,13 +914,19 @@ extern "sysv64" fn zydeco_io_read_all(reader: Word, when_error: Word, when_succe
 
 #[unsafe(export_name = "\x01zydeco_io_write_all")]
 extern "sysv64" fn zydeco_io_write_all(
-    writer: Word, bytes: Word, when_error: Word, when_success: Word,
+    writer: Word, access: Word, address: Word, length: Word, when_error: Word, when_success: Word,
 ) -> Word {
     let writer = HostHandle::decode(writer);
-    let result = HOST_IO.with(|runtime| {
-        runtime
-            .borrow_mut()
-            .write(writer, |writer| writer.write_all(unsafe { HostBytes::borrow(bytes) }))
+    let result = HOST_BUFFERS.with(|arena| {
+        let arena = arena.borrow();
+        let bytes = arena
+            .read_memory(
+                memory::MemoryBranch::access(access),
+                memory::MemoryBranch::address(address),
+                <i64 as RuntimeInteger>::decode(length),
+            )
+            .map_err(HostIoError::memory)?;
+        HOST_IO.with(|runtime| runtime.borrow_mut().write(writer, |writer| writer.write_all(bytes)))
     });
     IoBranch::unit(result, when_error, when_success)
 }

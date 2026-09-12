@@ -1,14 +1,9 @@
 begin
-  param val (
-    (
-      /VType; /CType; /Thk; /Ret; /Unit;
-      /Char; /String; /Bytes; /UInt8; /Int64;
-      /numeric;
-      /char; /string; /bytes;
-      builtin
-    ) : @(import("../builtin.zy")),
-    (/Bool; /Option; /List; /bool; /option; /list) : @(import("../data/package.type.zy"))
-  ) that
+  param val (/VType; /CType; /Thk; /Ret; /Unit;
+    /Char; /String; /UInt8; /Int64; /Addr; /Access;
+    /numeric; /char; /string; builtin) : @(import("../builtin.zy")) that
+  param val (/Bytes; /bytes) : (@(import("bytes.type.zy"))) Addr Access in
+  param val (/Bool; /Option; /List; /bool; /option; /list) : @(import("../data/package.type.zy")) in
   let int64 = numeric/int64 in
   let ! compare (A : VType)
     (

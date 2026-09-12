@@ -17,8 +17,9 @@ impl LayoutCase {
             .unwrap();
         format!(
             r#"
+let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{directory}/../text/bytes.zy"))) in
 let make_memory = @(import("{directory}/static-layout.zy")) in
-let (= Plan, = Layout, memory) = builtin |> make_memory in
+let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
 let size = @(import("{directory}/size.zy")) in
 {body}
 "#,

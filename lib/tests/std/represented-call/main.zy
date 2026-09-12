@@ -1,11 +1,13 @@
 begin
   param (/VType; /CType; /Thk; /Ret; /OS; /UInt8; /UInt32; /Int64;
-    /numeric; /bytes; /args; /process; builtin) : @(import("../../../std/builtin.zy")) that
+    /numeric; /args; /process; builtin) : @(import("../../../std/builtin.zy")) that
+  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../../std/text/bytes.zy"))) in
+
   let make_memory = @(import("../../../std/memory/static-layout.zy")) in
-  let (= Plan, = Layout, memory) = builtin |> make_memory in
-  let (/Function; calls) = @(import("../../../std/memory/call.zy")) in
-  let Storage = @(import("../../../std/memory/storage.type.zy")) in
-  let make_worker = builtin |> (@(import("worker.zy"))) in
+  let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
+  let (/Function; calls) = (@(import("../../../std/memory/call.zy"))) Bytes in
+  let Storage = (@(import("../../../std/memory/storage.type.zy"))) Bytes in
+  let make_worker = (builtin |> (@(import("worker.zy")))) Bytes in
   let Record = UInt8 * UInt32 in
   let natural = memory/product UInt8 UInt32 memory/uint8 memory/uint32 in
   let fail = { ! process/exit 1 } in

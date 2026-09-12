@@ -265,12 +265,12 @@ begin
   def selective = {
     fn ((
       /VType = SelectedVType;
-      /Bytes = SelectedBytes;
-      /bytes;
+      /String = SelectedString;
+      /string;
       builtin
     ) : Builtin) =>
-      let Selected : SelectedVType = SelectedBytes in
-      ! bytes/empty
+      let Selected : SelectedVType = SelectedString in
+      ! string/append "" ""
   } that
 
   selective

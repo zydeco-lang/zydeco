@@ -1,10 +1,13 @@
 -- An example foreign decoder for the native little-endian record in contracts.c.
 -- It accepts arbitrary padding and returns logical fields for canonical storage construction.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /UInt8; /UInt32; /Bytes;
-    /numeric; /bytes; builtin) : @(import("../../std/builtin.zy")) that
+  param val (/Access; /Addr; /VType; /CType; /Thk; /Ret; /UInt8; /UInt32; /numeric; builtin) :
+  @(import("../../std/builtin.zy")) that
+  param val (/Bytes; /bytes; byte_package) : (@(import("../../std/text/bytes.type.zy"))) Addr Access that
+  let codecs = (builtin |> (@(import("../../std/numeric/codecs.zy")))) byte_package in
+
   let make_memory = @(import("../../std/memory/static-layout.zy")) in
-  let (= Plan, = Layout, memory) = builtin |> make_memory in
+  let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
   let Record = UInt8 * UInt32 in
   let Decoder = Thk (forall (R : CType) . Bytes -> Thk R -> Thk (Record -> R) -> R) in
   let reject : Decoder = { fn R _ no _ => ! no } in
@@ -21,9 +24,9 @@ begin
             fn first =>
               ! bytes/slice R source fields/offset fields/right/size no {
                 fn second =>
-                  ! numeric/uint8/from_le_bytes R first no {
+                  ! codecs/uint8/from_le_bytes R first no {
                     fn tag =>
-                      ! numeric/uint32/from_le_bytes R second no {
+                      ! codecs/uint32/from_le_bytes R second no {
                         fn payload => ! yes (tag, payload)
                       }
                   }

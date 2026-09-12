@@ -1,6 +1,7 @@
 begin
   let VType = @(intrinsic(vtype)) in
-  let Storage = @(import("storage.type.zy")) in
+  param Bytes : VType in
+  let Storage = (@(import("storage.type.zy"))) Bytes in
   fn (A : VType) =>
     exists (= Stored : VType) . Storage A Stored
 end

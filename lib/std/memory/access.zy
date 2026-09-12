@@ -1,9 +1,11 @@
 -- Storage access bridges immutable representation contracts and mutable destinations.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /OS; /Int64; /Bytes; /Buffer; /bytes; /buffer) : @(import(
+  param val (/Addr; /Access; /VType; /CType; /Thk; /Ret; /OS; /Int64; /Buffer; builtin) : @(import(
     "../builtin.zy"
   )) that
-  let Representation = @(import("representation.type.zy")) in
+  param val (/Bytes; /bytes; byte_package) : (@(import("../text/bytes.type.zy"))) Addr Access that
+  let buffer = (builtin |> (@(import("buffer.zy")))) byte_package in
+  let Representation = (@(import("representation.type.zy"))) Bytes in
   let ! read_at (A : VType) (R : CType)
     (representation : Representation A)
     (source : Bytes) (offset : Int64) (no : Thk R) (yes : Thk (A -> R))

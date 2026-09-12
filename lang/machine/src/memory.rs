@@ -1,6 +1,6 @@
 //! Checked addresses and revocable range grants over owned buffer allocations.
 
-use crate::buffer::{Buffer, BufferArena, BufferHandle};
+use crate::buffer::{Buffer, BufferArena, BufferError, BufferHandle};
 use alloc::collections::BTreeMap;
 use core::ops::Range;
 
@@ -16,6 +16,34 @@ pub enum MemoryError {
     Uninitialized = 5,
     InvalidValue = 6,
     Unavailable = 7,
+    AllocationFailed = 8,
+}
+
+impl MemoryError {
+    pub fn message(self) -> &'static str {
+        match self {
+            | Self::Closed => "memory capability is closed",
+            | Self::Bounds => "memory access is out of bounds",
+            | Self::Permission => "memory permission denied",
+            | Self::Overflow => "memory address or size overflow",
+            | Self::Alignment => "memory alignment is invalid",
+            | Self::Uninitialized => "memory is not initialized",
+            | Self::InvalidValue => "invalid memory value or layout",
+            | Self::Unavailable => "memory service is unavailable",
+            | Self::AllocationFailed => "memory allocation failed",
+        }
+    }
+}
+
+impl From<BufferError> for MemoryError {
+    fn from(error: BufferError) -> Self {
+        match error {
+            | BufferError::InvalidLayout => Self::InvalidValue,
+            | BufferError::Closed => Self::Closed,
+            | BufferError::Bounds => Self::Bounds,
+            | BufferError::AllocationFailed => Self::AllocationFailed,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,6 +97,13 @@ struct Grant {
     allocation: BufferHandle,
     range: Range<usize>,
     permission: Permission,
+    owner: OwnerState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OwnerState {
+    Mutable,
+    Frozen,
 }
 
 /// Host handles retain allocation identities, even when a machine address is reused.
@@ -81,6 +116,18 @@ pub(crate) struct MemoryState {
 }
 
 impl MemoryState {
+    fn grant(&mut self, grant: Grant) -> Result<AccessHandle, MemoryError> {
+        let next = self
+            .next_grant
+            .checked_add(1)
+            .filter(|next| *next <= i64::MAX as usize / 2)
+            .ok_or(MemoryError::Overflow)?;
+        let handle = AccessHandle(self.next_grant);
+        self.grants.insert(handle, grant);
+        self.next_grant = next;
+        Ok(handle)
+    }
+
     fn intern(&mut self, address: Address) -> Result<AddressHandle, MemoryError> {
         if let Some(handle) = self.address_handles.get(&address) {
             return Ok(*handle);
@@ -122,6 +169,53 @@ impl Buffer {
 }
 
 impl BufferArena {
+    /// Transfer initialized storage into an immutable owner. Old mutable grants
+    /// and every Buffer alias close; the new read grant retains the frozen owner.
+    pub fn freeze_memory(&mut self, owner: BufferHandle) -> Result<AccessHandle, MemoryError> {
+        let buffer = self.buffers.get(&owner).ok_or(MemoryError::Closed)?;
+        if !buffer.initialized.iter().all(|value| *value) {
+            return Err(MemoryError::Uninitialized);
+        }
+        let access = self.memory.grant(Grant {
+            allocation: owner,
+            range: 0..buffer.len,
+            permission: Permission::Read,
+            owner: OwnerState::Frozen,
+        })?;
+        let buffer = self.buffers.remove(&owner).expect("checked owner");
+        self.frozen.insert(owner, buffer);
+        Ok(access)
+    }
+
+    pub fn immutable_length(&self, access: AccessHandle) -> Result<i64, MemoryError> {
+        let grant = self.live_grant(access)?;
+        if grant.owner != OwnerState::Frozen {
+            return Err(MemoryError::Permission);
+        }
+        i64::try_from(grant.range.len()).map_err(|_| MemoryError::Overflow)
+    }
+
+    /// Import initialized octets from a host service into retained immutable memory.
+    pub fn import_memory(&mut self, bytes: &[u8]) -> Result<AccessHandle, MemoryError> {
+        let size = i64::try_from(bytes.len()).map_err(|_| MemoryError::Overflow)?;
+        let owner = self.allocate(size, 1)?;
+        self.write(owner, 0, bytes).expect("allocated extent matches source");
+        match self.freeze_memory(owner) {
+            | Ok(access) => Ok(access),
+            | Err(error) => {
+                self.buffers.remove(&owner);
+                Err(error)
+            }
+        }
+    }
+
+    fn allocation(&self, identity: BufferHandle) -> Result<&Buffer, MemoryError> {
+        self.buffers
+            .get(&identity)
+            .or_else(|| self.frozen.get(&identity))
+            .ok_or(MemoryError::Closed)
+    }
+
     pub fn grant(
         &mut self, allocation: BufferHandle, offset: i64, length: i64, permission: Permission,
     ) -> Result<AccessHandle, MemoryError> {
@@ -132,25 +226,28 @@ impl BufferArena {
         if end > buffer.len {
             return Err(MemoryError::Bounds);
         }
-        let next = self
-            .memory
-            .next_grant
-            .checked_add(1)
-            .filter(|next| *next <= i64::MAX as usize / 2)
-            .ok_or(MemoryError::Overflow)?;
-        let handle = AccessHandle(self.memory.next_grant);
-        self.memory.grants.insert(handle, Grant { allocation, range: start..end, permission });
-        self.memory.next_grant = next;
-        Ok(handle)
+        self.memory.grant(Grant {
+            allocation,
+            range: start..end,
+            permission,
+            owner: OwnerState::Mutable,
+        })
     }
 
     pub fn revoke(&mut self, access: AccessHandle) -> Result<(), MemoryError> {
+        if self.memory.grants.get(&access).is_some_and(|grant| grant.owner == OwnerState::Frozen) {
+            return Err(MemoryError::Permission);
+        }
         self.memory.grants.remove(&access).map(|_| ()).ok_or(MemoryError::Closed)
     }
 
     fn live_grant(&self, access: AccessHandle) -> Result<&Grant, MemoryError> {
         let grant = self.memory.grants.get(&access).ok_or(MemoryError::Closed)?;
-        if !self.buffers.contains_key(&grant.allocation) {
+        let allocations = match grant.owner {
+            | OwnerState::Mutable => &self.buffers,
+            | OwnerState::Frozen => &self.frozen,
+        };
+        if !allocations.contains_key(&grant.allocation) {
             return Err(MemoryError::Closed);
         }
         Ok(grant)
@@ -210,7 +307,7 @@ impl BufferArena {
         if end > grant.range.end {
             return Err(MemoryError::Bounds);
         }
-        self.buffers[&address.allocation].check_memory(address.offset, size, alignment)?;
+        self.allocation(address.allocation)?.check_memory(address.offset, size, alignment)?;
         Ok(address)
     }
 
@@ -221,11 +318,46 @@ impl BufferArena {
         self.checked_address(access, address, size, alignment, false).map(|_| ())
     }
 
+    pub fn check_write(
+        &self, access: AccessHandle, address: AddressHandle, size: i64, alignment: i64,
+    ) -> Result<(), MemoryError> {
+        self.checked_address(access, address, size, alignment, true).map(|_| ())
+    }
+
+    /// Validate an initialized readable window before handing it to a host service.
+    pub fn read_memory(
+        &self, access: AccessHandle, handle: AddressHandle, size: i64,
+    ) -> Result<&[u8], MemoryError> {
+        let address = self.checked_address(access, handle, size, 1, false)?;
+        let buffer = self.allocation(address.allocation)?;
+        let range = address.offset..address.offset + size as usize;
+        if !buffer.initialized[range.clone()].iter().all(|value| *value) {
+            return Err(MemoryError::Uninitialized);
+        }
+        Ok(&buffer.allocation[buffer.start + range.start..buffer.start + range.end])
+    }
+
+    /// Store a scalar's bytes after validating its full extent. Cell alignment is
+    /// imposed separately; portable byte codecs may use unaligned windows.
+    pub fn write_memory(
+        &mut self, access: AccessHandle, handle: AddressHandle, bytes: &[u8],
+    ) -> Result<(), MemoryError> {
+        let size = i64::try_from(bytes.len()).map_err(|_| MemoryError::Overflow)?;
+        let address = self.checked_address(access, handle, size, 1, true)?;
+        let buffer = self.buffers.get_mut(&address.allocation).expect("checked mutable grant");
+        let range = address.offset..address.offset + bytes.len();
+        buffer.invalidate_pointers(range.clone());
+        buffer.initialized[range.clone()].fill(true);
+        buffer.allocation[buffer.start + range.start..buffer.start + range.end]
+            .copy_from_slice(bytes);
+        Ok(())
+    }
+
     fn load<const N: usize>(
         &self, access: AccessHandle, handle: AddressHandle,
     ) -> Result<[u8; N], MemoryError> {
         let address = self.checked_address(access, handle, N as i64, N as i64, false)?;
-        let buffer = &self.buffers[&address.allocation];
+        let buffer = self.allocation(address.allocation)?;
         let range = address.offset..address.offset + N;
         if !buffer.initialized[range.clone()].iter().all(|value| *value) {
             return Err(MemoryError::Uninitialized);
@@ -275,7 +407,8 @@ impl BufferArena {
     ) -> Result<AddressHandle, MemoryError> {
         self.load::<8>(access, handle)?;
         let address = self.memory.addresses[&handle];
-        let target = self.buffers[&address.allocation]
+        let target = self
+            .allocation(address.allocation)?
             .pointers
             .get(&address.offset)
             .copied()
@@ -289,7 +422,7 @@ impl BufferArena {
         // Validate both addresses before changing bytes or pointer-slot information.
         self.checked_address(access, handle, 8, 8, true)?;
         let target = *self.memory.addresses.get(&value).ok_or(MemoryError::InvalidValue)?;
-        let buffer = self.buffers.get(&target.allocation).ok_or(MemoryError::Closed)?;
+        let buffer = self.allocation(target.allocation)?;
         let pointer = buffer.allocation.as_ptr().wrapping_add(buffer.start + target.offset);
         let address = self.store(access, handle, (pointer as usize as u64).to_ne_bytes())?;
         self.buffers
@@ -307,6 +440,30 @@ mod tests {
     use crate::buffer::BufferError;
 
     #[test]
+    fn freezing_retains_storage_and_revokes_every_mutable_owner_alias() {
+        let mut arena = BufferArena::default();
+        let owner = arena.allocate_uninitialized(8, 64).unwrap();
+        let access = arena.grant(owner, 0, 8, Permission::ReadWrite).unwrap();
+        let original_address = arena.base_address(access).unwrap();
+        assert_eq!(arena.freeze_memory(owner), Err(MemoryError::Uninitialized));
+        assert_eq!(arena.immutable_length(access), Err(MemoryError::Permission));
+        arena.store_i64(access, original_address, 42).unwrap();
+        let frozen = arena.freeze_memory(owner).unwrap();
+        let address = arena.base_address(frozen).unwrap();
+        assert_eq!(address, original_address);
+        assert_eq!(arena.immutable_length(frozen), Ok(8));
+        assert_eq!(arena.check_access(frozen, address, 8, 64), Ok(()));
+        assert_eq!(arena.load_i64(frozen, address), Ok(42));
+        assert_eq!(arena.store_i64(frozen, address, 0), Err(MemoryError::Permission));
+        assert_eq!(arena.revoke(frozen), Err(MemoryError::Permission));
+        assert_eq!(arena.load_i64(access, original_address), Err(MemoryError::Closed));
+        assert_eq!(arena.write(owner, 0, &[0]), Err(BufferError::Closed));
+        assert_eq!(arena.close(owner), Err(BufferError::Closed));
+        assert_eq!(arena.grant(owner, 0, 8, Permission::ReadWrite), Err(MemoryError::Closed));
+        assert_eq!(arena.load_i64(frozen, address), Ok(42));
+    }
+
+    #[test]
     fn footprint_checks_allow_padding_but_leaf_reads_require_initialization() {
         let mut arena = BufferArena::default();
         let owner = arena.allocate_uninitialized(64, 64).unwrap();
@@ -314,7 +471,7 @@ mod tests {
         let base = arena.base_address(access).unwrap();
         assert_eq!(arena.check_access(access, base, 64, 64), Ok(()));
         assert_eq!(arena.load_i64(access, base), Err(MemoryError::Uninitialized));
-        assert_eq!(arena.freeze(owner), Err(BufferError::Uninitialized));
+        assert_eq!(arena.freeze_memory(owner), Err(MemoryError::Uninitialized));
         arena.store_i64(access, base, i64::MIN).unwrap();
         assert_eq!(arena.load_i64(access, base), Ok(i64::MIN));
         let second = arena.offset_address(access, base, 8).unwrap();
@@ -322,9 +479,10 @@ mod tests {
         assert_eq!(arena.check_access(access, base, 65, 64), Err(MemoryError::Bounds));
         assert_eq!(arena.check_access(access, base, 8, 3), Err(MemoryError::Alignment));
         assert_eq!(arena.load_i64(access, second), Err(MemoryError::Uninitialized));
-        assert_eq!(arena.read(owner, 0, 8).unwrap().as_slice(), &i64::MIN.to_ne_bytes());
+        assert_eq!(arena.read_memory(access, base, 8).unwrap(), &i64::MIN.to_ne_bytes());
         arena.write(owner, 8, &[0; 56]).unwrap();
-        assert_eq!(arena.freeze(owner).unwrap().len(), 64);
+        let frozen = arena.freeze_memory(owner).unwrap();
+        assert_eq!(arena.immutable_length(frozen), Ok(64));
         assert_eq!(arena.check_access(access, base, 0, 1), Err(MemoryError::Closed));
     }
 
@@ -366,11 +524,11 @@ mod tests {
         let target = arena.offset_address(access, slot, 8).unwrap();
         arena.store_address(access, slot, target).unwrap();
         assert_eq!(arena.load_address(access, slot), Ok(target));
-        let bits = arena.read(owner, 0, 8).unwrap();
+        let bits = arena.read_memory(access, slot, 8).unwrap().to_vec();
         assert_eq!(arena.write(owner, 23, &[1, 2]), Err(BufferError::Bounds));
         assert_eq!(arena.load_address(access, slot), Ok(target));
         // Rewriting identical bytes still cannot establish a pointer value.
-        arena.write(owner, 1, &bits.as_slice()[1..2]).unwrap();
+        arena.write(owner, 1, &bits[1..2]).unwrap();
         assert_eq!(arena.load_address(access, slot), Err(MemoryError::InvalidValue));
         arena.store_address(access, slot, target).unwrap();
         arena.store_i64(access, slot, 0).unwrap();
@@ -411,6 +569,9 @@ mod tests {
         assert_eq!(arena.offset_address(access, base, i64::MAX), Err(MemoryError::Bounds));
         assert_eq!(arena.load_u8(access, base), Err(MemoryError::Bounds));
         assert_eq!(arena.grant(owner, 0, 1, Permission::Read), Err(MemoryError::Bounds));
+        let frozen = arena.freeze_memory(owner).unwrap();
+        assert_eq!(arena.read_memory(frozen, base, 0), Ok(&[][..]));
+        assert_eq!(arena.check_access(frozen, base, 0, 4096), Ok(()));
         assert_eq!(Permission::try_from(0), Err(MemoryError::InvalidValue));
         assert_eq!(Permission::try_from(4), Err(MemoryError::InvalidValue));
     }

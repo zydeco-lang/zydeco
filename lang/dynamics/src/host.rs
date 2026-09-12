@@ -5,14 +5,12 @@ use std::{
 };
 use zydeco_machine::{
     buffer::{BufferArena, BufferHandle},
-    bytes::ByteBuffer,
-    memory::{AccessHandle, AddressHandle},
+    memory::{AccessHandle, AddressHandle, MemoryError},
 };
 
 /// Opaque values whose representation belongs to the interpreter runtime.
 #[derive(Clone, Debug)]
 pub enum HostValue {
-    Bytes(ByteBuffer),
     Buffer(BufferHandle),
     Address(AddressHandle),
     Access(AccessHandle),
@@ -55,6 +53,26 @@ impl HostRuntime {
             next_writer: 2,
             readers: HashMap::new(),
             writers: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn import_memory(&mut self, bytes: &[u8]) -> io::Result<AccessHandle> {
+        self.buffers.import_memory(bytes).map_err(HostIoError::memory)
+    }
+
+    pub(crate) fn write_memory(
+        &mut self, writer: WriterHandle, access: AccessHandle, address: AddressHandle, length: i64,
+        output: &mut dyn io::Write, stderr: &mut dyn io::Write,
+    ) -> io::Result<()> {
+        use io::Write;
+        let bytes =
+            self.buffers.read_memory(access, address, length).map_err(HostIoError::memory)?;
+        match writer {
+            | WriterHandle::STDOUT => output.write_all(bytes),
+            | WriterHandle::STDERR => stderr.write_all(bytes),
+            | writer => {
+                self.writers.get_mut(&writer).ok_or_else(HostIoError::closed)?.write_all(bytes)
+            }
         }
     }
 
@@ -147,6 +165,17 @@ impl HostIoErrorKind {
 struct HostIoError;
 
 impl HostIoError {
+    fn memory(error: MemoryError) -> io::Error {
+        let kind = match error {
+            | MemoryError::Closed => io::ErrorKind::NotConnected,
+            | MemoryError::Permission => io::ErrorKind::PermissionDenied,
+            | MemoryError::Uninitialized => io::ErrorKind::InvalidData,
+            | MemoryError::AllocationFailed => io::ErrorKind::OutOfMemory,
+            | _ => io::ErrorKind::InvalidInput,
+        };
+        io::Error::new(kind, error.message())
+    }
+
     fn closed() -> io::Error {
         io::Error::new(io::ErrorKind::NotConnected, "I/O capability is closed")
     }

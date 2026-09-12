@@ -4,8 +4,9 @@ use crate::{arena::StaticsArena, syntax as ss};
 use std::collections::HashSet;
 use thiserror::Error;
 use zydeco_syntax::{
-    App, Arrow, ForeignImport, ForeignParameter, ForeignResult, ForeignSignature,
-    ForeignSignatureError, ForeignTarget, Named, PrimitiveType,
+    App, Arrow, BuiltinRole, BuiltinTypeRole, ForeignImport, ForeignParameter, ForeignResult,
+    ForeignSignature, ForeignSignatureError, ForeignTarget, IntegerType, Named, PrimitiveType,
+    Prod,
 };
 use zydeco_utils::prelude::ArenaAccess;
 
@@ -14,7 +15,9 @@ use zydeco_utils::prelude::ArenaAccess;
 pub enum ForeignClassifierError {
     #[error("C ffi requires a thunk classified by `Thk (A1 -> ... -> Ret B)`")]
     ExpectedThunk { classifier: ss::TypeId },
-    #[error("C ffi argument {index} must have type `Bytes` or a fixed-width integer")]
+    #[error(
+        "C ffi argument {index} must be a readable `Access * Addr * Int64` window or a fixed-width integer"
+    )]
     UnsupportedParameter { index: usize, classifier: ss::TypeId },
     #[error("C ffi computation must end in `Ret B`")]
     ExpectedReturn { classifier: ss::TypeId },
@@ -50,8 +53,8 @@ impl<'a> ForeignClassifier<'a> {
                 break;
             };
             let representation = match self.primitive(parameter) {
-                | Some(PrimitiveType::Bytes) => ForeignParameter::BorrowedBytes,
                 | Some(PrimitiveType::Integer(integer)) => ForeignParameter::Integer(integer),
+                | _ if self.memory_window(parameter) => ForeignParameter::BorrowedMemory,
                 | _ => {
                     return Err(ForeignClassifierError::UnsupportedParameter {
                         index: parameters.len() + 1,
@@ -74,6 +77,25 @@ impl<'a> ForeignClassifier<'a> {
         };
         let signature = ForeignSignature::new(parameters, representation)?;
         Ok(ForeignImport { target, signature })
+    }
+
+    fn memory_window(&self, ty: ss::TypeId) -> bool {
+        let Some(ss::Type::Prod(Prod(fields))) = self.type_view(ty) else {
+            return false;
+        };
+        let [access, address, length] = fields.as_slice() else {
+            return false;
+        };
+        self.capability(*access, BuiltinTypeRole::Access)
+            && self.capability(*address, BuiltinTypeRole::Addr)
+            && self.primitive(*length) == Some(PrimitiveType::Integer(IntegerType::Int64))
+    }
+
+    fn capability(&self, ty: ss::TypeId, role: BuiltinTypeRole) -> bool {
+        let Some(ss::Type::Abst(witness)) = self.type_view(ty) else {
+            return false;
+        };
+        self.statics.builtin_roles.witness(witness) == Some(BuiltinRole::Type(role))
     }
 
     fn unary_application(

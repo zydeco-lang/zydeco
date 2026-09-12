@@ -1,0 +1,220 @@
+-- Immutable sequences are source values retaining an immutable memory grant.
+begin
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /String;
+    /Addr; /Access; /Buffer; /numeric; builtin) : @(import("../builtin.zy")) that
+  let (/Fault; /Fat; /views; /memory; native) = builtin |> (@(import("../memory/native.zy"))) in
+  let Package = @(import("bytes.type.zy")) in
+  let int = numeric/int64 in
+  let octet = numeric/uint8 in
+  let Bytes =
+    data
+    | +Empty : Unit
+    | +Window : Access * Fat Int64
+    end
+  in
+  let view = views/fat Int64 in
+  let empty : Thk (Ret Bytes) = { ret +Empty() } in
+  let panic : Thk (Ret Bytes) = {
+    @[partial]
+    let 0 = 1 in
+    ! empty
+  } in
+  let length : Thk (Bytes -> Ret Int64) = {
+    fn value =>
+      match value
+      | +Empty() => ret 0
+      | +Window(_, handle) => ret handle/runtime_metadata
+      end
+  } in
+  let from_immutable : Thk (
+    forall (R : CType) . Access -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
+  ) = {
+    fn R access no yes =>
+      ! native/immutable_length R access no {
+        fn count =>
+          ! native/base R access no {
+            fn address => ! yes +Window(access, views/with_runtime_metadata Int64 address count)
+          }
+      }
+  } in
+  let build : Thk (
+    forall (R : CType) .
+      Int64 -> Int64 -> Thk (Access -> Addr -> Thk (Fault -> R) -> Thk R -> R) -> Thk (
+        Fault -> R
+      ) -> Thk (Bytes -> R) -> R
+  ) = {
+    fn R count alignment fill no yes =>
+      ! native/allocate R count alignment no {
+        fn owner =>
+          let fail = { fn fault => ! native/close R owner { fn _ => ! no fault } { ! no fault } } in
+          ! native/grant R owner 0 count +ReadWrite() fail {
+            fn access =>
+              ! native/base R access fail {
+                fn address =>
+                  ! fill access address fail {
+                    ! native/freeze R owner fail {
+                      fn immutable => ! from_immutable R immutable no yes
+                    }
+                  }
+              }
+          }
+      }
+  } in
+  let with_window : Thk (
+    forall (R : CType) . Bytes -> Thk (Fault -> R) -> Thk (Access -> Addr -> Int64 -> R) -> R
+  ) = {
+    fn R value no yes =>
+      match value
+      | +Window(access, handle) => ! yes access handle/address handle/runtime_metadata
+      | +Empty() =>
+        ! build R 0 1 { fn _ _ _ done => ! done } no {
+          fn value =>
+            match value
+            | +Window(access, handle) => ! yes access handle/address 0
+            | +Empty() => ! no +InvalidValue()
+            end
+        }
+      end
+  } in
+  let read : Thk (
+    forall (R : CType) . Bytes -> Int64 -> Thk (Fault -> R) -> Thk (UInt8 -> R) -> R
+  ) = {
+    fn R value index no yes =>
+      match value
+      | +Empty() => ! no +Bounds()
+      | +Window(access, handle) =>
+        ! views/index (Fat Int64) UInt8 R view views/uint8 access handle index { ! memory R } no yes
+      end
+  } in
+  let get : Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (UInt8 -> R) -> R) = {
+    fn R value index no yes => ! read R value index { fn _ => ! no } yes
+  } in
+  let copy_to : Thk (
+    forall (R : CType) . Bytes -> Access -> Addr -> Thk (Fault -> R) -> Thk R -> R
+  ) = {
+    fn R value access address no yes =>
+      do count <- ! length value;
+      ! native/check_write R access address count 1 no {
+        let fix copy (index : Int64) : R =
+          ! int/eq R index count yes {
+            ! read R value index no {
+              fn byte =>
+                ! memory R .offset access address index no {
+                  fn target =>
+                    ! native/store_u8 R access target byte no {
+                      do next <- ! int/add index 1;
+                      ! copy next
+                    }
+                }
+            }
+          }
+        in
+        ! copy 0
+      }
+  } in
+  let slice : Thk (forall (R : CType) . Bytes -> Int64 -> Int64 -> Thk R -> Thk (Bytes -> R) -> R) =
+    {
+      fn R value start count no yes =>
+        do size <- ! length value;
+        ! int/lt R start 0 no {
+          ! int/lt R count 0 no {
+            ! int/gt R start size no {
+              do remaining <- ! int/sub size start;
+              ! int/gt R count remaining no {
+                match value
+                | +Empty() => ! yes value
+                | +Window(access, handle) =>
+                  ! memory R .offset access handle/address start { fn _ => ! no } {
+                    fn address =>
+                      ! yes +Window(access, views/with_runtime_metadata Int64 address count)
+                  }
+                end
+              }
+            }
+          }
+        }
+    }
+  in
+  let singleton : Thk (UInt8 -> Ret Bytes) = {
+    fn byte =>
+      ! build (Ret Bytes) 1 1 {
+        fn access address no yes => ! native/store_u8 (Ret Bytes) access address byte no yes
+      } { fn _ => ! panic } { fn value => ret value }
+  } in
+  let from_string : Thk (String -> Ret Bytes) = {
+    fn string =>
+      ! native/from_string (Ret Bytes) string { fn _ => ! panic } {
+        fn access =>
+          ! from_immutable (Ret Bytes) access { fn _ => ! panic } { fn value => ret value }
+      }
+  } in
+  let to_string : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (String -> R) -> R) = {
+    fn R value no yes =>
+      ! with_window R value { fn _ => ! no } {
+        fn access address count => ! native/to_string R access address count { fn _ => ! no } yes
+      }
+  } in
+  let append : Thk (Bytes -> Bytes -> Ret Bytes) = {
+    fn left right =>
+      do first <- ! length left;
+      do second <- ! length right;
+      do remaining <- ! int/sub 9223372036854775807 first;
+      ! int/gt (Ret Bytes) second remaining panic {
+        do count <- ! int/add first second;
+        ! build (Ret Bytes) count 1 {
+          fn access address no yes =>
+            ! copy_to (Ret Bytes) left access address no {
+              ! memory (Ret Bytes) .offset access address first no {
+                fn target => ! copy_to (Ret Bytes) right access target no yes
+              }
+            }
+        } { fn _ => ! panic } { fn value => ret value }
+      }
+  } in
+  let aligned : Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (Bytes -> R) -> R) = {
+    fn R value alignment no yes =>
+      do count <- ! length value;
+      ! build R count alignment {
+        fn access address no yes => ! copy_to R value access address no yes
+      }
+        { fn _ => ! no } yes
+  } in
+  let compare : Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> Thk R -> R) = {
+    fn R left right less equal greater =>
+      do first <- ! length left;
+      do second <- ! length right;
+      let fix at (index : Int64) : R =
+        ! int/eq R index first { ! int/eq R index second equal less } {
+          ! int/eq R index second greater {
+            ! get R left index greater {
+              fn a =>
+                ! get R right index less {
+                  fn b =>
+                    ! octet/eq R a b {
+                      do next <- ! int/add index 1;
+                      ! at next
+                    } {
+                      ! octet/lt R a b less greater
+                    }
+                }
+            }
+          }
+        }
+      in
+      ! at 0
+  } in
+  let eq : Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R) = {
+    fn R left right yes no => ! compare R left right no yes no
+  } in
+  let lt : Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R) = {
+    fn R left right yes no => ! compare R left right yes no no
+  } in
+  let package : Package Addr Access = (
+    = Bytes,
+    (
+      #bytes = (= empty, = length, = append, = from_string, = singleton, = to_string,
+        = get, = slice, = eq, = lt, = aligned, = from_immutable, = with_window, = copy_to, = build)
+    )
+  ) in
+  package
+end

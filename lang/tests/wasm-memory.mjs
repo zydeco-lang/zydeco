@@ -22,21 +22,41 @@ export class CheckedMemory {
       alignment,
       base,
       pointers: new Map(),
+      frozen: false,
     };
     this.nextBase = end + 1n;
     return buffer;
   }
 
   static grant(buffer, start, length, permission) {
-    if (buffer.bytes === null) throw new MemoryFault(0n);
+    if (buffer.bytes === null || buffer.frozen) throw new MemoryFault(0n);
     const end = start + length;
     if (start < 0n || length < 0n || end > BigInt(buffer.bytes.length)) throw new MemoryFault(1n);
     if (![1n, 2n, 3n].includes(permission)) throw new MemoryFault(6n);
-    return { buffer, start, end, permission, live: true };
+    return { buffer, start, end, permission, live: true, frozen: false };
+  }
+
+  static freeze(buffer) {
+    if (buffer.bytes === null || buffer.frozen) throw new MemoryFault(0n);
+    if (!buffer.initialized.every((value) => value !== 0)) throw new MemoryFault(5n);
+    buffer.frozen = true;
+    return { buffer, start: 0n, end: BigInt(buffer.bytes.length), permission: 1n, live: true, frozen: true };
+  }
+
+  static immutableLength(access) {
+    CheckedMemory.live(access);
+    if (!access.frozen) throw new MemoryFault(2n);
+    return access.end - access.start;
+  }
+
+  import(bytes) {
+    const buffer = this.allocate(BigInt(bytes.length), 1n, true);
+    buffer.bytes.set(bytes);
+    return CheckedMemory.freeze(buffer);
   }
 
   static live(access) {
-    if (!access.live || access.buffer.bytes === null) throw new MemoryFault(0n);
+    if (!access.live || access.buffer.bytes === null || access.frozen !== access.buffer.frozen) throw new MemoryFault(0n);
   }
 
   static base(access) {
@@ -45,6 +65,7 @@ export class CheckedMemory {
   }
 
   static revoke(access) {
+    if (access.frozen) throw new MemoryFault(2n);
     if (!access.live) throw new MemoryFault(0n);
     access.live = false;
   }
@@ -90,6 +111,19 @@ export class CheckedMemory {
     const start = address.offset;
     if (!CheckedMemory.initialized(address.buffer, start, start + size)) throw new MemoryFault(5n);
     return new DataView(address.buffer.bytes.buffer, Number(start), Number(size));
+  }
+
+  static readMemory(access, address, size) {
+    CheckedMemory.check(access, address, size, 1n);
+    if (!CheckedMemory.initialized(address.buffer, address.offset, address.offset + size)) throw new MemoryFault(5n);
+    return address.buffer.bytes.subarray(Number(address.offset), Number(address.offset + size));
+  }
+
+  static writeMemory(access, address, bytes) {
+    const size = BigInt(bytes.length);
+    CheckedMemory.check(access, address, size, 1n, true);
+    CheckedMemory.invalidate(address.buffer, address.offset, address.offset + size);
+    address.buffer.bytes.set(bytes, Number(address.offset));
   }
 
   static loadI64(access, address) {

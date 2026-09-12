@@ -28,7 +28,7 @@ impl BuiltinRuntime {
         host: &mut HostRuntime,
     ) -> Result<Computation, BuiltinFailure> {
         use crate::impls::*;
-        use crate::representation::ScalarBytes;
+        use crate::representation::ScalarMemory;
         use BuiltinValueRole as Role;
 
         if let Some(operation) = PrimitiveOp::from_builtin(role) {
@@ -48,9 +48,9 @@ impl BuiltinRuntime {
                     integer_branch(integer, operation, args)
                 }
                 | IntegerOperation::ToString => integer_to_string(integer, args),
-                | IntegerOperation::ToLeBytes => ScalarBytes::encode(args),
-                | IntegerOperation::FromLeBytes => {
-                    ScalarBytes::decode(PrimitiveType::Integer(integer), args)
+                | IntegerOperation::StoreLe => ScalarMemory::store(args, host),
+                | IntegerOperation::LoadLe => {
+                    ScalarMemory::load(PrimitiveType::Integer(integer), args, host)
                 }
             },
             | Role::Float(float, operation) => match operation {
@@ -64,9 +64,9 @@ impl BuiltinRuntime {
                     float_branch(float, operation, args)
                 }
                 | FloatOperation::ToString => float_to_string(float, args),
-                | FloatOperation::ToLeBytes => ScalarBytes::encode(args),
-                | FloatOperation::FromLeBytes => {
-                    ScalarBytes::decode(PrimitiveType::Float(float), args)
+                | FloatOperation::StoreLe => ScalarMemory::store(args, host),
+                | FloatOperation::LoadLe => {
+                    ScalarMemory::load(PrimitiveType::Float(float), args, host)
                 }
             },
             | Role::StrScalarLength => str_scalar_length(args),
@@ -80,33 +80,19 @@ impl BuiltinRuntime {
             | Role::CharCodepoint => char_codepoint(args),
             | Role::CharFromCodepoint => char_from_codepoint_branch(args),
             | Role::StrParseInt => str_parse_int_branch(args),
-            | Role::BytesEmpty => bytes_empty(args),
-            | Role::BytesLength => bytes_length(args),
-            | Role::BytesAppend => bytes_append(args),
-            | Role::BytesFromStr => bytes_from_str(args),
-            | Role::BytesToStr => bytes_to_str_branch(args),
-            | Role::BytesGet => bytes_get_branch(args),
-            | Role::BytesSlice => bytes_slice_branch(args),
-            | Role::BytesAligned => ScalarBytes::aligned(args),
-            | Role::BytesSingleton => bytes_singleton(args),
-            | Role::BytesEq => bytes_eq_branch(args),
-            | Role::BytesLt => bytes_lt_branch(args),
             | Role::MemoryAllocate
-            | Role::BufferAllocate
-            | Role::BufferWrite
-            | Role::BufferRead
-            | Role::BufferFreeze
-            | Role::BufferClose => crate::buffer::BufferRuntime::invoke(role, args, host),
+            | Role::MemoryClose
+            | Role::MemoryFreeze
+            | Role::MemoryImmutableLength
+            | Role::MemoryCheckWrite
+            | Role::MemoryFromString
+            | Role::MemoryToString
             | Role::MemoryGrant
             | Role::MemoryRevoke
             | Role::MemoryBase
             | Role::MemoryOffset
             | Role::MemoryCheck
-            | Role::MemoryLoadI64
-            | Role::MemoryLoadU8
             | Role::MemoryLoadAddr
-            | Role::MemoryStoreI64
-            | Role::MemoryStoreU8
             | Role::MemoryStoreAddr => crate::memory::MemoryRuntime::invoke(role, args, host),
             | Role::Stdin => stdin(args),
             | Role::Stdout => stdout(args),

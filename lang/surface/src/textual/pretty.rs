@@ -3734,7 +3734,7 @@ mod tests {
         let source = concat!(
             "begin\n",
             "  param (\n",
-            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Float64; /Char; /String; /Bytes; /Reader; /Writer; /OS) :\n",
+            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Float64; /Char; /String; /Addr; /Access; /Reader; /Writer; /OS) :\n",
             "    @(import(\"package.zy\"))\n",
             "  ) in\n",
             "  _\n",

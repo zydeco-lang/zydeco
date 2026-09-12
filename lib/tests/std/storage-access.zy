@@ -1,12 +1,15 @@
 begin
-  param (/Thk; /Ret; /OS; /Int64; /UInt8; /UInt32; /Bytes; /Buffer;
-    /buffer; /bytes; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /Ret; /OS; /Int64; /UInt8; /UInt32; /Buffer;
+    /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+  let buffer = (builtin |> (@(import("../../std/memory/buffer.zy")))) byte_package in
+
   let make_memory = @(import("../../std/memory/package.zy")) in
   let make_access = @(import("../../std/memory/access.zy")) in
   let make_allocation = @(import("../../std/memory/allocation.zy")) in
-  let (= Layout, = Representation, memory) = builtin |> make_memory in
-  let (= Allocator, = Allocate, allocation) = builtin |> make_allocation in
-  let access = builtin |> make_access in
+  let (= Layout, = Representation, memory) = (builtin |> make_memory) byte_package in
+  let (= Allocator, = Allocate, allocation) = (builtin |> make_allocation) byte_package in
+  let access = (builtin |> make_access) byte_package in
   let fail = { ! process/exit 1 } in
   let error = { fn (_ : Int64) => ! fail } in
   let ! check_reads (byte_repr : Representation UInt8) (word_repr : Representation UInt32)

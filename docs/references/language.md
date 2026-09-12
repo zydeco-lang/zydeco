@@ -623,8 +623,8 @@ Repeating an intrinsic splice denotes the same canonical kind or type across ind
 `Addr` and `Access` support [source-defined memory views](../proposals/bytes.md#addresses-cells-and-views);
 their kinds remain `VType`, and the view constructors add no compiler type forms.
 The `numeric`, `text`, and `system` groups contain host operations.
-The [standard library](../../lib/std/README.md) assembles ordinary package functions and defines `Bool`,
-`Option`, `Result`, and `List`; host operations select continuations instead of constructing those types.
+The [standard library](../../lib/std/README.md) assembles ordinary package functions and defines `Bool`, `Option`,
+`Result`, `List`, and abstract `Bytes`; host operations select continuations instead of constructing those types.
 
 | Family | Source behavior |
 | --- | --- |
@@ -632,7 +632,6 @@ The [standard library](../../lib/std/README.md) assembles ordinary package funct
 | `Float32`, `Float64` | IEEE 754 arithmetic at the chosen width |
 | `Char` | One Unicode scalar, excluding surrogates |
 | `String` | Immutable valid UTF-8; indexed operations count Unicode scalars |
-| `Bytes` | Immutable octets; lengths and positions count bytes |
 
 Integer and float literals default to `Int64` and `Float64`.
 An expected primitive type selects another width; integers must fit and floats round to that width.
@@ -643,28 +642,31 @@ by `-1` wraps, with remainder zero.
 Float rendering uses the selected width's Rust Display spelling, including signed zero, `inf`, `-inf`, and `NaN`.
 
 `String` indices are scalar positions, not byte offsets or grapheme clusters; `byte_length` observes UTF-8 bytes.
-`Bytes` equality compares contents and ordering is lexicographic.
+The source-defined `Bytes` type contains immutable octets.
+Equality compares contents and ordering is lexicographic.
 `bytes/slice buffer start length` uses a start and length; an empty window at the end is valid.
 Negative or out-of-range positions, invalid Unicode scalars, and invalid UTF-8 select failure branches.
 The public library reifies these as `Option` or `Result`.
 
-Every scalar Builtin module provides `to_le_bytes : Thk (A -> Ret Bytes)`
-and `from_le_bytes : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R)`.
-They preserve exact little-endian bits and reject a decoder input whose length differs from the scalar width;
-float conversion preserves NaN payloads instead of performing arithmetic.
-`bytes/aligned R buffer alignment no yes` requests equal contents with positive power-of-two address alignment.
-Invalid requests and detected reservation failures select `no`; success supplies a buffer through `yes`.
-On interpreter and native C borrowing paths, the visible buffer address satisfies the requested alignment.
-A successful call may share the original allocation or copy; it does not mutate the input.
-Other byte operations do not promise to preserve address alignment.
-[C14](compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) describes target allocation limits.
+Every scalar Builtin module provides checked `store_le` and `load_le` operations over `Access` and `Addr`.
+They preserve exact little-endian bits; float loads and stores preserve NaN payloads without arithmetic.
+The [source codecs](../../lib/std/numeric/codecs.zy) provide `to_le_bytes` and `from_le_bytes`,
+and std includes them in its numeric modules.
+Decoders require the exact scalar width.
+
+Source `bytes/aligned R buffer alignment no yes` requests equal contents with positive power-of-two alignment.
+Invalid requests and detected reservation failures select `no`; success supplies a copied immutable buffer.
+The [byte and memory design](../proposals/bytes.md#immutable-owners-and-source-bytes) owns these library algorithms,
+immutable ownership, and alignment guarantees.
+No `Bytes` compiler intrinsic or byte operation role remains.
 
 The ordinary [memory library](../../lib/std/memory/package.zy) composes these primitives
 into explicit storage contracts with abstract stored types.
 Its [layout laws](../proposals/bytes.md#layout-laws) own size, field placement, and padding;
 ordinary value typing and calling conventions do not change.
 
-Mutable destination operations require the host's `Buffer` capability and `OS` computation protocol.
+Mutable destination operations require the host's `Buffer` capability.
+General memory operations accept the caller's answer protocol; the source buffer convenience API uses `OS`.
 The [buffer design](../proposals/bytes.md#mutable-destination-capabilities) owns allocation,
 checked ranges, snapshot/freeze behavior, alias invalidation, and error precedence.
 The source allocator service there demonstrates how a computation can require a caller-supplied allocation policy
@@ -693,20 +695,26 @@ The [library guide](../../lib/std/README.md) is the operation inventory.
 A foreign implementation is an annotated hole:
 
 ```zydeco check
-param val (/Thk; /Ret; /Bytes; /UInt64) : @(import("../../lib/std/builtin.zy")) in
-(@(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk (Bytes -> Ret UInt64))
+param val (/Thk; /Ret; /Access; /Addr; /Int64; /UInt64) : @(import("../../lib/std/builtin.zy")) in
+(@(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk ((Access * Addr * Int64) -> Int64 -> Ret UInt64))
 ```
 
 The supported classifier is `Thk (A1 -> ... -> An -> Ret B)`, including zero arguments.
 Each fixed-width integer (`Int8` through `Int64`, `UInt8` through `UInt64`) contributes the matching C `intN_t`
-or `uintN_t`; each `Bytes` contributes a `const void *` and `size_t`, in source order.
+or `uintN_t`.
+An explicit product `Access * Addr * Int64` contributes one `const void *`;
+its count states the readable extent checked before C entry.
+Any C length parameter is a separate integer argument.
 The result `B` is a fixed-width integer or `Unit`; `Ret Unit` calls a C `void` function
 and resumes the Zydeco continuation with `()`.
 The declaration specifies exact widths: C `int`, `long`, enums, and typedefs require platform-specific agreement.
 At most six flattened C arguments are accepted.
 Integer results preserve the declared width and signedness when re-encoded.
 
-A byte argument lends its visible contiguous window for the duration of the call.
+A readable-window argument lends its contiguous memory for the duration of the call.
+The adapter checks liveness, read permission, bounds, and initialization before C entry.
+The binding validates any stronger alignment, element format, and relationship between extent and explicit length;
+a mismatched C length is still an incorrect trusted declaration or adapter.
 The callee must neither modify nor retain the pointer, and must not dereference it for a zero-length window.
 The declaration author is responsible for the actual symbol's signature and these borrowing obligations.
 A returning call must use the C return protocol; unwinding, nonlocal jumps, and reentry into Zydeco are unsupported.
@@ -716,7 +724,7 @@ Checking validates the declared classifier without loading a library or inspecti
 The Unix interpreter loads symbols lazily; native AMD64 links the named library.
 Missing libraries or symbols fail at loading/linking.
 Wasm and the ZASM interpreter reject native imports.
-Callbacks, C-to-Zydeco exports, floating-point or aggregate values, raw pointers,
+Callbacks, C-to-Zydeco exports, floating-point or aggregate values, ungranted or mutable pointers,
 and larger signatures are outside this subset.
 [Concrete boundary examples](../proposals/c-ffi.md#examples-and-observed-gaps) motivate proposed extensions.
 
@@ -740,13 +748,14 @@ Wasm trampolines avoid growth of the host call stack without guaranteeing consta
 
 Static value-function application expands residual bodies and can increase code size.
 Product and thunk allocation depends on optimization.
-Interpreter byte slicing shares a window; native slicing currently copies.
+Source byte slicing shares retained immutable storage on every backend.
 Repeated concatenation can be quadratic.
 Immutability guarantees observations, not identical costs on every backend.
 
 The supplied Node host is a test embedding: randomness is deterministic.
 Native FFI requires installed libraries, and the CLI does not execute Wasm modules.
-There are no source raw pointers, layout annotations, manual allocation, or primitive concurrency interfaces.
+Source memory capabilities support checked allocation and addresses;
+layout annotations and primitive concurrency remain absent.
 Runtime-managed capabilities provide the current resource boundary.
 
 ## Meta annotations (compile-time metadata)
@@ -761,7 +770,7 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 | Meta annotation | Meaning and valid use |
 | --- | --- |
 | `import(path-or-number)` | Replace a hole with an independently checked source term (§12) |
-| `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`, `bytes`) or an integer value function (§8) |
+| `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed package contract (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
 | `typeof` | Extract a synthesized classifier (§4); no arguments |

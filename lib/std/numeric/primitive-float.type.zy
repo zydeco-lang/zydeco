@@ -3,7 +3,6 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let Bytes = @(intrinsic(bytes)) in
   param Floating : VType in
   param String : VType in
     (#add :: Thk (Floating -> Floating -> Ret Floating))
@@ -29,6 +28,4 @@ begin
       )
     )
   * (#to_string :: Thk (Floating -> Ret String))
-  * (#to_le_bytes :: Thk (Floating -> Ret Bytes))
-  * (#from_le_bytes :: Thk (forall (R : CType) . Bytes -> Thk R -> Thk (Floating -> R) -> R))
 end

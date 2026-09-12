@@ -29,8 +29,7 @@ begin
     (#address :: Addr) * (#runtime_metadata :: RuntimeMetadata)
   in
   let View (Handle : VType) (RuntimeMetadata : VType) =
-      (#carrier :: Cell Handle)
-    * (#open :: Thk (forall (R : CType) . Access -> Handle -> Mem (Addr * RuntimeMetadata) R))
+    (#open :: Thk (forall (R : CType) . Access -> Handle -> Mem (Addr * RuntimeMetadata) R))
   in
   let uint8 : Cell UInt8 =
     (#size = 1, #alignment = 1,
@@ -95,14 +94,12 @@ begin
           )
       )
   in
-  let val thin (carrier : Cell Addr) : View Addr Unit =
-    (= carrier,
-      #open = { fn R _ payload _ _ yes => ! yes (payload, ()) })
+  let thin : View Addr Unit =
+    (#open = { fn R _ payload _ _ yes => ! yes (payload, ()) })
   in
-  let val fat (RuntimeMetadata : VType) (carrier : Cell (Fat RuntimeMetadata)) :
+  let val fat (RuntimeMetadata : VType) :
     View (Fat RuntimeMetadata) RuntimeMetadata =
       (
-        = carrier,
         #open = {
           fn R _ handle _ _ yes => ! yes (handle/address, handle/runtime_metadata)
         }
@@ -115,11 +112,10 @@ begin
   in
   let val runtime_metadata (RuntimeMetadata : VType) (handle : Fat RuntimeMetadata) :
     RuntimeMetadata = handle/runtime_metadata in
-  let val indirect (RuntimeMetadata : VType) (carrier : Cell Addr) (runtime : Cell RuntimeMetadata)
+  let val indirect (RuntimeMetadata : VType) (runtime : Cell RuntimeMetadata)
     (runtime_offset : Int64) (data_offset : Int64)
   : View Addr RuntimeMetadata =
       (
-        = carrier,
         #open = {
           fn R access origin memory no yes =>
             ! memory .offset access origin runtime_offset no {
@@ -221,8 +217,8 @@ begin
       }
     )
   ) in
-  let val slice (H : VType) (A : VType) (view : View H Int64) (element : Cell A) :
-    exists (= Slice : VType) .
+  let val slice (H : VType) (A : VType) (carrier : Cell H) (view : View H Int64) (element : Cell A)
+  : exists (= Slice : VType) .
         (#from_handle :: val pi (handle : H) . Slice)
       * (#handle_of :: val pi (slice : Slice) . H)
       * (#slice_cell :: Cell Slice)
@@ -232,7 +228,7 @@ begin
     (
       #from_handle = val handle => handle,
       #handle_of = val slice => slice,
-      #slice_cell = view/carrier,
+      #slice_cell = carrier,
       #get = {
         fn R access slice position memory no yes =>
           ! index H A R view element access slice position memory no yes

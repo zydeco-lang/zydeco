@@ -1,11 +1,12 @@
 begin
   let VType = @(intrinsic(vtype)) in
+  param Bytes : VType in
   let Unit = @(intrinsic(unit)) in
   let Int64 = @(intrinsic(i64)) in
   let Error = @(import("layout-error.zy")) in
   let Shape = @(import("shape.zy")) in
   let Result = @(import("../data/result.zy")) in
-  let Representation = @(import("representation.type.zy")) in
+  let Representation = (@(import("representation.type.zy"))) Bytes in
   exists (= Plan : VType -> VType)
     (= Layout as fn (A : VType) => Result (Plan A) Error : VType -> VType)
   .

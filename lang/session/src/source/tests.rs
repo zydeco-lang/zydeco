@@ -1848,7 +1848,6 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
         ExpectedField::ManifestType,
         ExpectedField::ManifestType,
         ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
         ExpectedField::Abstract(BuiltinTypeRole::Addr),
         ExpectedField::Abstract(BuiltinTypeRole::Access),
         ExpectedField::Abstract(BuiltinTypeRole::Buffer),

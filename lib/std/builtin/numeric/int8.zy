@@ -4,7 +4,9 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let String = @(intrinsic(string)) in
-  let Bytes = @(intrinsic(bytes)) in
+  let Int64 = @(intrinsic(i64)) in
+  param Addr : VType in
+  param Access : VType in
   let Binary (A : VType) = Thk (A -> A -> Ret A) in
   let Branch (A : VType) = Thk (
     forall (R : CType) . A -> A -> Thk R -> Thk R -> R
@@ -20,11 +22,17 @@ begin
   * (@[builtin(int8_lt)] (#lt :: Branch Int8))
   * (@[builtin(int8_gt)] (#gt :: Branch Int8))
   * (@[builtin(int8_to_string)] (#to_string :: Render Int8))
-  * (@[builtin(int8_to_le_bytes)] (#to_le_bytes :: Thk (Int8 -> Ret Bytes)))
   * (
-      @[builtin(int8_from_le_bytes)] (
-        #from_le_bytes :: Thk (
-          forall (R : CType) . Bytes -> Thk R -> Thk (Int8 -> R) -> R
+      @[builtin(int8_store_le)] (
+        #store_le :: Thk (
+          forall (R : CType) . Access -> Addr -> Int8 -> Thk (Int64 -> R) -> Thk R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(int8_load_le)] (
+        #load_le :: Thk (
+          forall (R : CType) . Access -> Addr -> Thk (Int64 -> R) -> Thk (Int8 -> R) -> R
         )
       )
     )

@@ -1,0 +1,105 @@
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /String; /Addr; /Access; /OS;
+  /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/Bytes; /bytes) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+let (/Fault; native) = builtin |> (@(import("../../std/memory/native.zy"))) in
+let int = numeric/int64 in
+let exit = process/exit in
+let no = { ! exit 1 } in
+let ! assert (actual : Int64) (expected : Int64) : Ret Unit =
+  do delta <- ! int/sub actual expected;
+  @[partial]
+  let 0 = delta in
+  ret ()
+in
+let ! found (value : Bytes) (index : Int64) : Ret Int64 =
+  ! bytes/get (Ret Int64) value index { ret 0 } { fn _ => ret 1 }
+in
+let ! slice_ok (value : Bytes) (start : Int64) (count : Int64) : Ret Int64 =
+  ! bytes/slice (Ret Int64) value start count { ret 0 } { fn _ => ret 1 }
+in
+do rejected <- ! native/allocate (Ret Int64) 1 1 { fn _ => ret 0 } {
+  fn owner =>
+    ! native/grant (Ret Int64) owner 0 1 +Read() { fn _ => ret 0 } {
+      fn access =>
+        ! bytes/from_immutable (Ret Int64) access {
+          fn fault =>
+            match fault
+            | +Permission() => ! native/close (Ret Int64) owner { fn _ => ret 0 } { ret 1 }
+            | _ => ret 0
+            end
+        } { fn _ => ret 0 }
+    }
+};
+do _ <- ! assert rejected 1;
+do empty <- ! bytes/empty;
+do size <- ! bytes/length empty;
+do _ <- ! assert size 0;
+do source <- ! bytes/from_string "abc";
+do size <- ! bytes/length source;
+do _ <- ! assert size 3;
+do valid <- ! found source 2;
+do _ <- ! assert valid 1;
+do valid <- ! found source 3;
+do _ <- ! assert valid 0;
+do valid <- ! found source -1;
+do _ <- ! assert valid 0;
+do valid <- ! slice_ok source 3 0;
+do _ <- ! assert valid 1;
+do valid <- ! slice_ok source 0 -1;
+do _ <- ! assert valid 0;
+do valid <- ! slice_ok source 1 9223372036854775807;
+do _ <- ! assert valid 0;
+do valid <- ! slice_ok source 9223372036854775807 1;
+do _ <- ! assert valid 0;
+do valid <- ! slice_ok source -1 0;
+do _ <- ! assert valid 0;
+do one <- ! bytes/singleton (255 : UInt8);
+do utf8 <- ! bytes/to_string (Ret Int64) one { ret 0 } { fn _ => ret 1 };
+do _ <- ! assert utf8 0;
+do suffix <- ! bytes/from_string "d";
+do joined <- ! bytes/append source suffix;
+do expected <- ! bytes/from_string "abcd";
+do same <- ! bytes/eq (Ret Int64) joined expected { ret 1 } { ret 0 };
+do _ <- ! assert same 1;
+do ordered <- ! bytes/lt (Ret Int64) source joined { ret 1 } { ret 0 };
+do _ <- ! assert ordered 1;
+do ordered <- ! bytes/lt (Ret Int64) joined source { ret 1 } { ret 0 };
+do _ <- ! assert ordered 0;
+do aligned <- ! bytes/aligned (Ret Int64) source 3 { ret 0 } { fn _ => ret 1 };
+do _ <- ! assert aligned 0;
+do copied <- ! bytes/build (Ret Bytes) 3 64 {
+  fn access address fail done =>
+    ! bytes/copy_to (Ret Bytes) source access address fail {
+      do result <- ! done;
+      -- The fill continuation resumes after freezing; its writable alias has closed.
+      do closed <- ! native/store_u8 (Ret Int64) access address (120 : UInt8) {
+        fn fault =>
+          match fault
+          | +Closed() => ret 1
+          | _ => ret 0
+          end
+      } { ret 0 };
+      do _ <- ! assert closed 1;
+      ret result
+    }
+} {
+  fn _ =>
+    @[partial]
+    let 0 = 1 in
+    ret empty
+} { fn value => ret value };
+do same <- ! bytes/eq (Ret Int64) copied source { ret 1 } { ret 0 };
+do _ <- ! assert same 1;
+! bytes/with_window OS copied { fn _ => ! no } {
+  fn access address count =>
+    ! native/memory OS .check access address count 64 { fn _ => ! no } {
+      ! bytes/slice OS copied 1 2 no {
+        fn tail =>
+          ! bytes/to_string OS tail no {
+            fn text =>
+              let (/string) = builtin in
+              ! string/eq OS text "bc" { ! exit 0 } no
+          }
+      }
+    }
+}

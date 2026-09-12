@@ -40,10 +40,10 @@ impl ForeignExamples {
         let library = Self::library();
         format!(
             r#"
+let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{library}/std/text/bytes.zy"))) in
 let make_memory = @(import("{library}/std/memory/static-layout.zy")) in
-let (= Plan, = Layout, memory) = builtin |> make_memory in
-let decode = builtin |> (@(import("{library}/tests/ffi/record-input.zy"))) in
-let (/bytes; _) = builtin in
+let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
+let decode = (builtin |> (@(import("{library}/tests/ffi/record-input.zy")))) byte_package in
 let Record = UInt8 * UInt32 in
 let fail = {{ ! exit 1 }} in
 match memory/product UInt8 UInt32 memory/uint8 memory/uint32
@@ -62,36 +62,29 @@ end
 fn checksum_has_a_direct_foreign_classifier() {
     SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
         "sample_checksum",
-        "Thk (Bytes -> UInt64 -> Ret UInt64)",
+        "Thk ((Access * Addr * Int64) -> Int64 -> UInt64 -> Ret UInt64)",
     )));
 }
 
 #[test]
-fn a_pointer_only_record_cannot_reuse_the_bytes_expansion() {
-    // The C function has six components. Bytes would add an unwanted length.
-    ForeignExamples::rejects(
-        &ForeignExamples::declaration(
-            "sample_inspect_with_options",
-            "Thk (Bytes -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64)",
-        ),
-        "needs 7",
-    );
-    SourceCase::assert_accepted(SourceCase::check(&ForeignExamples::declaration(
+fn pointer_only_record_imports_have_no_implicit_length_argument() {
+    SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
         "sample_inspect_with_options",
-        "Thk (UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64)",
+        "Thk ((Access * Addr * Int64) -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64)",
     )));
-    // That accepted declaration describes six integers, not a borrowed record.
-    // Never execute it: checking trusts the declaration and does not inspect C.
 }
 
 #[test]
-fn storage_can_wrap_a_bytes_import_but_cannot_directly_classify_it() {
+fn storage_can_supply_a_window_but_cannot_directly_classify_the_foreign_import() {
     let wrapper = ForeignExamples::record(
         r#"
-let raw : Thk (Bytes -> Ret UInt64) =
+let raw : Thk ((Access * Addr * Int64) -> Int64 -> Ret UInt64) =
   @(ffi(c, library("zyffi_examples"), symbol("sample_inspect_bytes"))) in
 let inspect : Thk (Stored -> Ret UInt64) = {
-  fn value => do bytes <- ! storage/bytes value; ! raw bytes
+  fn value => do encoded <- ! storage/bytes value;
+    ! bytes/with_window (Ret UInt64) encoded
+      { fn _ => @[partial] let 0 = 1 in ret (0 : UInt64) }
+      { fn access address length => ! raw (access, address, length) length }
 } in
 ! storage/store OS (7 : UInt8, 16909060 : UInt32) fail {
   fn value => do _ <- ! inspect value; ! exit 0
@@ -135,7 +128,7 @@ fn mutable_destinations_and_capturing_callbacks_need_new_contracts() {
     ForeignExamples::rejects(
         &ForeignExamples::declaration(
             "sample_visit",
-            "Thk (Bytes -> Thk (Int64 -> Ret Int64) -> Ret Int64)",
+            "Thk ((Access * Addr * Int64) -> Thk (Int64 -> Ret Int64) -> Ret Int64)",
         ),
         "argument 2",
     );
@@ -187,7 +180,7 @@ do foreign <- ! bytes/from_string "{literal}";
     std::fs::write(
         &program,
         format!(
-            "param (/VType; /CType; /Thk; /Ret; /OS; /Bytes; /UInt8; /UInt32; \
+            "param (/VType; /CType; /Thk; /Ret; /OS; /UInt8; /UInt32; \
              /numeric; /process; builtin) : @(import(\"{}/std/builtin.zy\")) in \
              let exit = process/exit in {source}",
             ForeignExamples::library().display()

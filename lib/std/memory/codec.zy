@@ -1,10 +1,11 @@
 -- Codec construction consumes placements already established by a layout builder.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Bytes; /Int64; /UInt8;
-    /numeric; /bytes) : @(import("../builtin.zy")) that
+  param val (/Addr; /Access; /VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8;
+    /numeric; builtin) : @(import("../builtin.zy")) that
+  param val (/Bytes; /bytes; byte_package) : (@(import("../text/bytes.type.zy"))) Addr Access that
   let int = numeric/int64 in
-  let Descriptor = @(import("descriptor.type.zy")) in
-  let Representation = @(import("representation.type.zy")) in
+  let Descriptor = (@(import("descriptor.type.zy"))) Bytes in
+  let Representation = (@(import("representation.type.zy"))) Bytes in
   let fix zeros (count : Int64) : Ret Bytes =
     ! int/eq (Ret Bytes) count 0 bytes/empty {
       ! int/eq (Ret Bytes) count 1 { ! bytes/singleton (0 : UInt8) } {

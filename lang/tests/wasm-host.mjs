@@ -14,16 +14,6 @@ class ExitSignal extends Error {
   }
 }
 
-function compareBytes(first, second) {
-  const shared = Math.min(first.length, second.length);
-  for (let index = 0; index < shared; index += 1) {
-    if (first[index] !== second[index]) {
-      return first[index] < second[index] ? -1 : 1;
-    }
-  }
-  return Math.sign(first.length - second.length);
-}
-
 class RuntimeWords {
   constructor(memory) {
     this.memory = memory;
@@ -142,14 +132,6 @@ class HostValues {
 
   getString(handle) {
     return this.load("string", handle);
-  }
-
-  bytes(value) {
-    return this.store("bytes", Uint8Array.from(value));
-  }
-
-  getBytes(handle) {
-    return this.load("bytes", handle);
   }
 }
 
@@ -329,7 +311,6 @@ class ZydecoHost {
     });
     functions.set("string_literal", (offset, length) => this.stringLiteral(offset, length));
     this.installNumeric(functions);
-    this.installBuffers(functions);
     this.installMemory(functions);
     this.installText(functions);
     this.installIo(functions);
@@ -387,7 +368,7 @@ class ZydecoHost {
         );
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(decode(word).toString()));
-      this.installScalarBytes(functions, name, width, decode, (bits, spare) => {
+      this.installScalarMemory(functions, name, width, decode, (bits, spare) => {
         if (signed) return this.words.encodeSigned(BigInt.asIntN(width, bits), width, spare);
         return bits <= IMMEDIATE_UNSIGNED_MAX
           ? RuntimeWords.immediateUnsigned(bits)
@@ -413,29 +394,34 @@ class ZydecoHost {
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(FloatText.render(decode(word), width)));
       // Preserve the IEEE payload, including NaNs, without converting through a JS Number.
-      this.installScalarBytes(functions, name, width,
+      this.installScalarMemory(functions, name, width,
         (word) => width === 32 ? RuntimeWords.decodeImmediateUnsigned(word) : this.words.loadBits(word),
         (bits, spare) => width === 32 ? RuntimeWords.immediateUnsigned(bits) : this.words.storeBits(spare, bits),
       );
     }
   }
 
-  installScalarBytes(functions, name, width, decode, encode) {
-    functions.set(`${name}_to_le_bytes`, (word) => {
-      const bits = BigInt.asUintN(width, decode(word));
-      const bytes = Array.from({ length: width / 8 }, (_, index) =>
-        Number((bits >> BigInt(index * 8)) & 255n),
-      );
-      return this.values.bytes(bytes);
-    });
-    functions.set(`${name}_from_le_bytes_branch`, (buffer, whenNone, whenSome, spare) => {
-      const bytes = this.values.getBytes(buffer);
-      if (bytes.length !== width / 8) {
-        return Transfers.withoutArguments(whenNone);
+  installScalarMemory(functions, name, width, decode, encode) {
+    const access = (word) => this.values.load("access", word);
+    const address = (word) => this.values.load("address", word);
+    const branch = (action, error) => {
+      try { return action(); }
+      catch (exception) {
+        if (exception instanceof MemoryFault) return Transfers.withOneArgument(error, RuntimeWords.immediateSigned(exception.code));
+        throw exception;
       }
+    };
+    functions.set(`${name}_store_le_branch`, (grant, pointer, word, error, success) => branch(() => {
+      const bits = BigInt.asUintN(width, decode(word));
+      const bytes = Array.from({ length: width / 8 }, (_, index) => Number((bits >> BigInt(index * 8)) & 255n));
+      CheckedMemory.writeMemory(access(grant), address(pointer), bytes);
+      return Transfers.withoutArguments(success);
+    }, error));
+    functions.set(`${name}_load_le_branch`, (grant, pointer, error, success, spare) => branch(() => {
+      const bytes = CheckedMemory.readMemory(access(grant), address(pointer), BigInt(width / 8));
       const bits = bytes.reduce((value, byte, index) => value | (BigInt(byte) << BigInt(index * 8)), 0n);
-      return Transfers.withOneArgument(whenSome, encode(bits, spare));
-    });
+      return Transfers.withOneArgument(success, encode(bits, spare));
+    }, error));
   }
 
   decodeFloat(word, width) {
@@ -528,133 +514,6 @@ class ZydecoHost {
       }
       return Transfers.withOneArgument(whenSome, this.words.encodeSigned(parsed, 64, spare));
     });
-    functions.set("bytes_empty", () => this.values.bytes([]));
-    functions.set("bytes_length", (bytes) =>
-      RuntimeWords.immediateSigned(BigInt(this.values.getBytes(bytes).length)),
-    );
-    functions.set("bytes_append", (first, second) =>
-      this.values.bytes([...this.values.getBytes(first), ...this.values.getBytes(second)]),
-    );
-    functions.set("bytes_from_str", (string) =>
-      this.values.bytes(this.utf8.encode(this.values.getString(string))),
-    );
-    functions.set("bytes_to_str_branch", (bytes, whenInvalid, whenValid) => {
-      try {
-        return Transfers.withOneArgument(
-          whenValid,
-          this.values.string(this.utf8Decoder.decode(this.values.getBytes(bytes))),
-        );
-      } catch (error) {
-        if (error instanceof TypeError) {
-          return Transfers.withoutArguments(whenInvalid);
-        }
-        throw error;
-      }
-    });
-    functions.set("bytes_get_branch", (bytes, index, whenNone, whenSome) => {
-      const view = this.values.getBytes(bytes);
-      const decoded = this.words.decodeSigned(index, 64);
-      if (decoded < 0n || decoded >= BigInt(view.length)) {
-        return Transfers.withoutArguments(whenNone);
-      }
-      return Transfers.withOneArgument(
-        whenSome,
-        RuntimeWords.immediateUnsigned(BigInt(view[Number(decoded)])),
-      );
-    });
-    functions.set("bytes_slice_branch", (bytes, start, length, whenNone, whenSome) => {
-      const view = this.values.getBytes(bytes);
-      const from = this.words.decodeSigned(start, 64);
-      const span = this.words.decodeSigned(length, 64);
-      if (from < 0n || span < 0n || from + span > BigInt(view.length)) {
-        return Transfers.withoutArguments(whenNone);
-      }
-      const offset = Number(from);
-      return Transfers.withOneArgument(
-        whenSome,
-        this.values.bytes(view.subarray(offset, offset + Number(span))),
-      );
-    });
-    functions.set("bytes_aligned_branch", (buffer, alignment, whenNone, whenSome) => {
-      const boundary = this.words.decodeSigned(alignment, 64);
-      if (boundary <= 0n || (boundary & (boundary - 1n)) !== 0n) {
-        return Transfers.withoutArguments(whenNone);
-      }
-      // These bytes are opaque host handles: this host exposes no borrowed C address.
-      // A host that adds pointer export must realize the requested alignment there.
-      return Transfers.withOneArgument(whenSome, buffer);
-    });
-    functions.set("bytes_singleton", (octet) =>
-      this.values.bytes([Number(RuntimeWords.decodeImmediateUnsigned(octet))]),
-    );
-    functions.set("bytes_eq_branch", (first, second, whenTrue, whenFalse) =>
-      Transfers.withoutArguments(
-        compareBytes(this.values.getBytes(first), this.values.getBytes(second)) === 0
-          ? whenTrue
-          : whenFalse,
-      ),
-    );
-    functions.set("bytes_lt_branch", (first, second, whenTrue, whenFalse) =>
-      Transfers.withoutArguments(
-        compareBytes(this.values.getBytes(first), this.values.getBytes(second)) < 0
-          ? whenTrue
-          : whenFalse,
-      ),
-    );
-  }
-
-  installBuffers(functions) {
-    const failure = (continuation, code) => Transfers.withOneArgument(continuation, RuntimeWords.immediateSigned(code));
-    const integer = (word) => this.words.decodeSigned(word, 64);
-    const get = (handle) => this.values.load("buffer", handle);
-    const allocate = (initialized) => (size, alignment, error, success) => {
-      const length = integer(size);
-      const boundary = integer(alignment);
-      if (length < 0n || boundary <= 0n || (boundary & (boundary - 1n)) !== 0n) return failure(error, 0n);
-      if (length > BigInt(Number.MAX_SAFE_INTEGER)) return failure(error, 3n);
-      try {
-        const handle = this.values.store("buffer", this.checkedMemory.allocate(length, boundary, initialized));
-        return Transfers.withOneArgument(success, handle);
-      } catch (exception) {
-        if (exception instanceof RangeError) return failure(error, 3n);
-        throw exception;
-      }
-    };
-    functions.set("buffer_allocate", allocate(true));
-    functions.set("memory_allocate", allocate(false));
-    functions.set("buffer_write", (handle, offset, source, error, success) => {
-      const buffer = get(handle);
-      if (buffer.bytes === null) return failure(error, 1n);
-      const start = integer(offset);
-      const bytes = this.values.getBytes(source);
-      if (start < 0n || start + BigInt(bytes.length) > BigInt(buffer.bytes.length)) return failure(error, 2n);
-      CheckedMemory.invalidate(buffer, start, start + BigInt(bytes.length));
-      buffer.bytes.set(bytes, Number(start));
-      return Transfers.withoutArguments(success);
-    });
-    functions.set("buffer_read", (handle, offset, length, error, success) => {
-      const buffer = get(handle);
-      if (buffer.bytes === null) return failure(error, 1n);
-      const start = integer(offset);
-      const count = integer(length);
-      if (start < 0n || count < 0n || start + count > BigInt(buffer.bytes.length)) return failure(error, 2n);
-      if (!CheckedMemory.initialized(buffer, start, start + count)) return failure(error, 4n);
-      return Transfers.withOneArgument(success, this.values.bytes(buffer.bytes.subarray(Number(start), Number(start + count))));
-    });
-    functions.set("buffer_freeze", (handle, error, success) => {
-      const buffer = get(handle);
-      if (buffer.bytes === null) return failure(error, 1n);
-      if (!CheckedMemory.initialized(buffer, 0n, BigInt(buffer.bytes.length))) return failure(error, 4n);
-      const bytes = this.values.bytes(buffer.bytes);
-      buffer.bytes = null;
-      return Transfers.withOneArgument(success, bytes);
-    });
-    functions.set("buffer_close", (handle, error, success) => {
-      const buffer = get(handle);
-      if (buffer.bytes === null) return failure(error, 1n);
-      buffer.bytes = null;
-      return Transfers.withoutArguments(success);
-    });
   }
 
   installMemory(functions) {
@@ -672,6 +531,35 @@ class ZydecoHost {
         throw exception;
       }
     };
+    functions.set("memory_allocate", (size, alignment, error, success) => branch(() => {
+      const length = integer(size), boundary = integer(alignment);
+      if (length < 0n || boundary <= 0n || (boundary & (boundary - 1n)) !== 0n) throw new MemoryFault(6n);
+      if (length > BigInt(Number.MAX_SAFE_INTEGER)) throw new MemoryFault(8n);
+      try { return this.values.store("buffer", this.checkedMemory.allocate(length, boundary, false)); }
+      catch (exception) { if (exception instanceof RangeError) throw new MemoryFault(8n); throw exception; }
+    }, error, success));
+    functions.set("memory_close", (buffer, error, success) => branch(() => {
+      const owner = this.values.load("buffer", buffer);
+      if (owner.bytes === null || owner.frozen) throw new MemoryFault(0n);
+      owner.bytes = null;
+    }, error, success));
+    functions.set("memory_freeze", (buffer, error, success) => branch(
+      () => this.values.store("access", CheckedMemory.freeze(this.values.load("buffer", buffer))), error, success));
+    functions.set("memory_immutable_length", (grant, error, success, spare) => branch(
+      () => this.words.encodeSigned(CheckedMemory.immutableLength(access(grant)), 64, spare), error, success));
+    functions.set("memory_check_write", (grant, pointer, size, alignment, error, success) => branch(
+      () => CheckedMemory.check(access(grant), address(pointer), integer(size), integer(alignment), true), error, success));
+    functions.set("memory_from_string", (string, error, success) => branch(
+      () => {
+        try { return this.values.store("access", this.checkedMemory.import(this.utf8.encode(this.values.getString(string)))); }
+        catch (exception) { if (exception instanceof RangeError) throw new MemoryFault(8n); throw exception; }
+      }, error, success));
+    functions.set("memory_to_string", (grant, pointer, size, error, success) => branch(
+      () => {
+        const bytes = CheckedMemory.readMemory(access(grant), address(pointer), integer(size));
+        try { return this.values.string(this.utf8Decoder.decode(bytes)); }
+        catch (exception) { if (exception instanceof TypeError) throw new MemoryFault(6n); throw exception; }
+      }, error, success));
     functions.set("memory_grant", (buffer, start, length, permission, error, success) => branch(
       () => this.values.store("access", CheckedMemory.grant(this.values.load("buffer", buffer), integer(start), integer(length), integer(permission))), error, success));
     functions.set("memory_revoke", (grant, error, success) => branch(
@@ -682,21 +570,14 @@ class ZydecoHost {
       () => this.values.store("address", CheckedMemory.offset(access(grant), address(pointer), integer(displacement))), error, success));
     functions.set("memory_check", (grant, pointer, size, alignment, error, success) => branch(
       () => CheckedMemory.check(access(grant), address(pointer), integer(size), integer(alignment)), error, success));
-    functions.set("memory_load_i64", (grant, pointer, error, success, spare) => branch(
-      () => this.words.encodeSigned(CheckedMemory.loadI64(access(grant), address(pointer)), 64, spare), error, success));
-    functions.set("memory_load_u8", (grant, pointer, error, success) => branch(
-      () => RuntimeWords.immediateUnsigned(BigInt(CheckedMemory.loadU8(access(grant), address(pointer)))), error, success));
     functions.set("memory_load_addr", (grant, pointer, error, success) => branch(
       () => this.values.store("address", CheckedMemory.loadAddress(access(grant), address(pointer))), error, success));
-    functions.set("memory_store_i64", (grant, pointer, value, error, success) => branch(
-      () => CheckedMemory.storeI64(access(grant), address(pointer), integer(value)), error, success));
-    functions.set("memory_store_u8", (grant, pointer, value, error, success) => branch(
-      () => CheckedMemory.storeU8(access(grant), address(pointer), Number(RuntimeWords.decodeImmediateUnsigned(value))), error, success));
     functions.set("memory_store_addr", (grant, pointer, value, error, success) => branch(
       () => CheckedMemory.storeAddress(access(grant), address(pointer), address(value)), error, success));
   }
 
   installIo(functions) {
+    const immutable = (bytes) => this.values.store("access", this.checkedMemory.import(bytes));
     functions.set("stdin", () => HostIo.encodeHandle(0));
     functions.set("stdout", () => HostIo.encodeHandle(0));
     functions.set("stderr", () => HostIo.encodeHandle(1));
@@ -710,7 +591,7 @@ class ZydecoHost {
         }
         return Transfers.withOneArgument(
           whenSuccess,
-          this.values.bytes(this.io.reader(reader).read(Number(decoded))),
+          immutable(this.io.reader(reader).read(Number(decoded))),
         );
       }),
     );
@@ -719,16 +600,21 @@ class ZydecoHost {
         const input = this.io.reader(reader);
         return input.eof
           ? Transfers.withoutArguments(whenEof)
-          : Transfers.withOneArgument(whenLine, this.values.bytes(input.readLine()));
+          : Transfers.withOneArgument(whenLine, immutable(input.readLine()));
       }),
     );
     functions.set("io_read_all", (reader, whenError, whenSuccess) =>
       this.ioControl(whenError, () =>
-        Transfers.withOneArgument(whenSuccess, this.values.bytes(this.io.reader(reader).readAll())),
+        Transfers.withOneArgument(whenSuccess, immutable(this.io.reader(reader).readAll())),
       ),
     );
-    functions.set("io_write_all", (writer, bytes, whenError, whenSuccess) =>
-      this.ioUnit(whenError, whenSuccess, () => this.io.write(writer, this.values.getBytes(bytes))),
+    functions.set("io_write_all", (writer, grant, pointer, length, whenError, whenSuccess) =>
+      this.ioUnit(whenError, whenSuccess, () => {
+        const bytes = CheckedMemory.readMemory(
+          this.values.load("access", grant), this.values.load("address", pointer), this.words.decodeSigned(length, 64),
+        );
+        this.io.write(writer, bytes);
+      }),
     );
     functions.set("io_flush", (writer, whenError, whenSuccess) =>
       this.ioUnit(whenError, whenSuccess, () => this.io.flush(writer)),
@@ -817,6 +703,7 @@ class ZydecoHost {
   }
 
   ioErrorKind(error) {
+    if (error instanceof MemoryFault) return new Map([[0n, 6], [2n, 1], [5n, 4], [8n, 7]]).get(error.code) ?? 3;
     switch (error?.code) {
       case "ENOENT":
         return 0;

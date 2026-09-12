@@ -1,8 +1,12 @@
 -- Allocation requests are computations requiring an allocator service on their stack.
 begin
-  param val (/VType; /CType; /Thk; /OS; /Int64; /Buffer; /buffer; /numeric) : @(import(
+  param val (/Access; /Addr; /VType; /CType; /Thk; /OS; /Int64; /Buffer; /numeric; builtin) :
+  @(import(
     "../builtin.zy"
   )) that
+  param val (/Bytes; /bytes; byte_package) : (@(import("../text/bytes.type.zy"))) Addr Access that
+  let buffer = (builtin |> (@(import("buffer.zy")))) byte_package in
+
   let Allocator = (@(import("allocator.type.zy"))) Buffer OS in
   let Allocate (A : VType) =
     Thk Allocator -> Thk (Int64 -> OS) -> Thk (A -> OS) -> OS

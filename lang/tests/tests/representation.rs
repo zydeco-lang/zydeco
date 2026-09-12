@@ -3,7 +3,7 @@ use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{e2e_sources, utils::SourceCase};
 
 e2e_sources!({
-    scalar_bytes => "tests/builtin/scalar-bytes.zy",
+    scalar_bytes => "tests/std/scalar-bytes.zy",
     representation => "tests/std/representation.zy",
     representation_invalid => "tests/std/representation-invalid.zy",
 });
@@ -18,14 +18,16 @@ impl RepresentationCase {
             .unwrap();
         format!(
             r#"
-let make_memory = @(import("{}")) in
-let (= Layout, = Representation, memory) = builtin |> make_memory in
+let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{}/../text/bytes.zy"))) in
+let make_memory = @(import("{}/package.zy")) in
+let (= Layout, = Representation, memory) = (builtin |> make_memory) byte_package in
 let fail = {{ ! exit 1 }} in
 ! memory/realize UInt8 OS memory/uint8 fail {{ fn (= Stored, repr) =>
   {body}
 }}
 "#,
-            library.display()
+            library.parent().unwrap().display(),
+            library.parent().unwrap().display()
         )
     }
 
@@ -52,7 +54,7 @@ fn storage_rejects_a_value_with_the_wrong_logical_type() {
 #[test]
 fn bytes_cannot_bypass_storage_validation() {
     RepresentationCase::rejected(
-        "do bytes <- ! numeric/uint8/to_le_bytes 7; \
+        "do bytes <- ! bytes/singleton 7; \
          ! repr/load OS bytes fail { fn _ => ! exit 0 }",
     );
 }

@@ -1,15 +1,31 @@
 begin
-  param (/Thk; /Ret; /OS; /Int64; /Bytes; /UInt8; /UInt32; /UInt64;
-    /buffer; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+  param (/Access; /Addr; /Thk; /Ret; /OS; /Int64; /UInt8; /UInt32; /UInt64;
+    /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+  let buffer = (builtin |> (@(import("../../std/memory/buffer.zy")))) byte_package in
+
   let make_memory = @(import("../../std/memory/package.zy")) in
   let make_access = @(import("../../std/memory/access.zy")) in
   let make_allocation = @(import("../../std/memory/allocation.zy")) in
-  let (= Layout, = Representation, memory) = builtin |> make_memory in
-  let access = builtin |> make_access in
-  let (= Allocator, = Allocate, allocation) = builtin |> make_allocation in
-  let inspect = (
-    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_record"))) : Thk (Bytes -> Ret UInt64)
+  let (= Layout, = Representation, memory) = (builtin |> make_memory) byte_package in
+  let access = (builtin |> make_access) byte_package in
+  let (= Allocator, = Allocate, allocation) = (builtin |> make_allocation) byte_package in
+  let inspect_raw = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_record"))) : Thk (
+      Access * Addr * Int64 -> Int64 -> Ret UInt64
+    )
   ) in
+  let inspect : Thk (Bytes -> Ret UInt64) = {
+    fn value =>
+      ! bytes/with_window (Ret UInt64) value
+        {
+          fn _ =>
+            @[partial]
+            let 0 = 1 in
+            ret (0 : UInt64)
+        }
+        { fn access address length => ! inspect_raw (access, address, length) length }
+  } in
   let fail = { ! process/exit 1 } in
   let error = { fn (_ : Int64) => ! fail } in
   ! memory/realize UInt8 OS memory/uint8 fail {

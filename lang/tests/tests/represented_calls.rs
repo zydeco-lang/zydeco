@@ -37,10 +37,11 @@ impl CallCase {
             .unwrap();
         format!(
             r#"
+let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{directory}/../text/bytes.zy"))) in
 let make_memory = @(import("{directory}/static-layout.zy")) in
-let (= Plan, = Layout, memory) = builtin |> make_memory in
-let Storage = @(import("{directory}/storage.type.zy")) in
-let (/Function; calls) = @(import("{directory}/call.zy")) in
+let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
+let Storage = (@(import("{directory}/storage.type.zy"))) Bytes in
+let (/Function; calls) = (@(import("{directory}/call.zy"))) Bytes in
 let Record = UInt8 * UInt32 in
 let natural = memory/product UInt8 UInt32 memory/uint8 memory/uint32 in
 let fail = {{ ! exit 1 }} in
@@ -82,7 +83,7 @@ fn logical_values_and_bytes_cannot_bypass_the_call_contract() {
     for body in [
         "let logical : Record = (7 : UInt8, 42 : UInt32) in \
          ! identity logical fail { fn _ => ! exit 0 }",
-        "do bytes <- ! numeric/uint8/to_le_bytes 7; ! identity bytes fail { fn _ => ! exit 0 }",
+        "do bytes <- ! bytes/singleton 7; ! identity bytes fail { fn _ => ! exit 0 }",
         "let broken : Thk (Function Stored Stored OS) = { \
          fn value no yes => let logical : Record = (7 : UInt8, 42 : UInt32) in \
          ! yes logical } in ! exit 0",

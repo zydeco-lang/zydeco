@@ -23,34 +23,192 @@ begin
   let float32 = numeric/float32 in
   let float64 = numeric/float64 in
   let (/operations = int8_module; /dictionary = int8_dictionary) =
-    (builtin, bool, int8, 0, 1) |> make_integer Bool Int8 String
+    (
+      builtin,
+      bool,
+      (
+        #add = int8/add,
+        #sub = int8/sub,
+        #mul = int8/mul,
+        #div = int8/div,
+        #mod = int8/mod,
+        #eq = int8/eq,
+        #lt = int8/lt,
+        #gt = int8/gt,
+        #to_string = int8/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool Int8 String
   in
   let (/operations = int16_module; /dictionary = int16_dictionary) =
-    (builtin, bool, int16, 0, 1) |> make_integer Bool Int16 String
+    (
+      builtin,
+      bool,
+      (
+        #add = int16/add,
+        #sub = int16/sub,
+        #mul = int16/mul,
+        #div = int16/div,
+        #mod = int16/mod,
+        #eq = int16/eq,
+        #lt = int16/lt,
+        #gt = int16/gt,
+        #to_string = int16/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool Int16 String
   in
   let (/operations = int32_module; /dictionary = int32_dictionary) =
-    (builtin, bool, int32, 0, 1) |> make_integer Bool Int32 String
+    (
+      builtin,
+      bool,
+      (
+        #add = int32/add,
+        #sub = int32/sub,
+        #mul = int32/mul,
+        #div = int32/div,
+        #mod = int32/mod,
+        #eq = int32/eq,
+        #lt = int32/lt,
+        #gt = int32/gt,
+        #to_string = int32/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool Int32 String
   in
   let (/operations = int64_module; /dictionary = int64_dictionary) =
-    (builtin, bool, int64, 0, 1) |> make_integer Bool Int64 String
+    (
+      builtin,
+      bool,
+      (
+        #add = int64/add,
+        #sub = int64/sub,
+        #mul = int64/mul,
+        #div = int64/div,
+        #mod = int64/mod,
+        #eq = int64/eq,
+        #lt = int64/lt,
+        #gt = int64/gt,
+        #to_string = int64/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool Int64 String
   in
   let (/operations = uint8_module; /dictionary = uint8_dictionary) =
-    (builtin, bool, uint8, 0, 1) |> make_integer Bool UInt8 String
+    (
+      builtin,
+      bool,
+      (
+        #add = uint8/add,
+        #sub = uint8/sub,
+        #mul = uint8/mul,
+        #div = uint8/div,
+        #mod = uint8/mod,
+        #eq = uint8/eq,
+        #lt = uint8/lt,
+        #gt = uint8/gt,
+        #to_string = uint8/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool UInt8 String
   in
   let (/operations = uint16_module; /dictionary = uint16_dictionary) =
-    (builtin, bool, uint16, 0, 1) |> make_integer Bool UInt16 String
+    (
+      builtin,
+      bool,
+      (
+        #add = uint16/add,
+        #sub = uint16/sub,
+        #mul = uint16/mul,
+        #div = uint16/div,
+        #mod = uint16/mod,
+        #eq = uint16/eq,
+        #lt = uint16/lt,
+        #gt = uint16/gt,
+        #to_string = uint16/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool UInt16 String
   in
   let (/operations = uint32_module; /dictionary = uint32_dictionary) =
-    (builtin, bool, uint32, 0, 1) |> make_integer Bool UInt32 String
+    (
+      builtin,
+      bool,
+      (
+        #add = uint32/add,
+        #sub = uint32/sub,
+        #mul = uint32/mul,
+        #div = uint32/div,
+        #mod = uint32/mod,
+        #eq = uint32/eq,
+        #lt = uint32/lt,
+        #gt = uint32/gt,
+        #to_string = uint32/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool UInt32 String
   in
   let (/operations = uint64_module; /dictionary = uint64_dictionary) =
-    (builtin, bool, uint64, 0, 1) |> make_integer Bool UInt64 String
+    (
+      builtin,
+      bool,
+      (
+        #add = uint64/add,
+        #sub = uint64/sub,
+        #mul = uint64/mul,
+        #div = uint64/div,
+        #mod = uint64/mod,
+        #eq = uint64/eq,
+        #lt = uint64/lt,
+        #gt = uint64/gt,
+        #to_string = uint64/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool UInt64 String
   in
   let (/operations = float32_module; /dictionary = float32_dictionary) =
-    (builtin, bool, float32, 0.0, 1.0) |> make_float Bool Float32 String
+    (
+      builtin,
+      bool,
+      (
+        #add = float32/add,
+        #sub = float32/sub,
+        #mul = float32/mul,
+        #div = float32/div,
+        #eq = float32/eq,
+        #lt = float32/lt,
+        #gt = float32/gt,
+        #to_string = float32/to_string
+      ),
+      0.0,
+      1.0
+    ) |> make_float Bool Float32 String
   in
   let (/operations = float64_module; /dictionary = float64_dictionary) =
-    (builtin, bool, float64, 0.0, 1.0) |> make_float Bool Float64 String
+    (
+      builtin,
+      bool,
+      (
+        #add = float64/add,
+        #sub = float64/sub,
+        #mul = float64/mul,
+        #div = float64/div,
+        #eq = float64/eq,
+        #lt = float64/lt,
+        #gt = float64/gt,
+        #to_string = float64/to_string
+      ),
+      0.0,
+      1.0
+    ) |> make_float Bool Float64 String
   in
   (
     #int8 = int8_module,

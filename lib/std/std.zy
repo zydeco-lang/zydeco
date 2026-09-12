@@ -12,9 +12,12 @@ begin
   let (/Bool; /Option; /Result; /List; /bool; /option; /result; /list; base) =
     builtin |> make_data
   in
-  let (/char; /string; /bytes; text) = (builtin, base) |> make_text in
+  let (/Bytes; byte_package) = builtin |> (@(import("text/bytes.zy"))) in
+  let codecs = (builtin |> (@(import("numeric/codecs.zy")))) byte_package in
+  let buffer = (builtin |> (@(import("memory/buffer.zy")))) byte_package in
+  let (/char; /string; /bytes; text) = (builtin |> make_text) byte_package base in
   let (/Path; /IoErrorKind; /IoError; /io; /fs; /stdio; /process; system) =
-    (builtin, base) |> make_system
+    (builtin |> make_system) byte_package base
   in
   let (
     /int8;
@@ -36,6 +39,7 @@ begin
       (= Bool as Bool : VType)
       (= Option as Option : VType -> VType)
       (= Result as Result : VType -> VType -> VType)
+      (= Bytes : VType) is Bytes
       (= List : VType -> VType) is List
       (= Path : VType) is Path
       (= IoErrorKind : VType) is IoErrorKind
@@ -53,19 +57,19 @@ begin
       = list
     ),
     (
-      = int8,
-      = int16,
-      = int32,
-      = int64,
-      = uint8,
-      = uint16,
-      = uint32,
-      = uint64,
-      = float32,
-      = float64
+      #int8 = (int8, codecs/int8),
+      #int16 = (int16, codecs/int16),
+      #int32 = (int32, codecs/int32),
+      #int64 = (int64, codecs/int64),
+      #uint8 = (uint8, codecs/uint8),
+      #uint16 = (uint16, codecs/uint16),
+      #uint32 = (uint32, codecs/uint32),
+      #uint64 = (uint64, codecs/uint64),
+      #float32 = (float32, codecs/float32),
+      #float64 = (float64, codecs/float64)
     ),
     (
-      = dictionaries
+      = dictionaries, = buffer
     ),
     (
       = char,

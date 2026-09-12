@@ -5,7 +5,7 @@ The current [library interface](../../lib/std/README.md#text-model) supplies tho
 [C14](../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls)
 owns their backend storage.
 This record owns the source-level layout laws for explicit storage, the rationale for byte representation,
-and the proposed address, cell, and memory-view interfaces below.
+and the implemented address, cell, and memory-view interfaces below.
 The public classifiers live in the library sources; C14 owns host storage and ABI mechanics.
 
 ## Design constraints
@@ -20,8 +20,9 @@ A start-and-length window matches the explicit pointer-and-length foreign borrow
 
 Contiguous storage gives constant-time indexing and avoids flattening before each foreign borrow.
 Shared windows also make decomposition cheap, but a small retained window can keep a large parent alive.
-Native host allocation currently copies slices and does not participate in the collector;
-sharing there needs an ownership and reclamation account, not just a changed slice operation.
+Slices share retained immutable allocations on every backend.
+The runtime arena retains these allocations for its lifetime;
+dropping a source window does not currently reclaim its owner.
 The [cost table](../../lib/std/README.md#byte-operation-costs) makes these target differences explicit.
 
 ## Explicit storage contracts
@@ -32,7 +33,7 @@ An ordinary Zydeco product also leaves its physical layout to the compiler.
 The implemented memory libraries supply an explicit representation boundary:
 a logical type `A` has a source-authored layout, which can be realized into a storage contract.
 The concrete stored payload is one contiguous immutable buffer, without retaining the original logical product.
-The surrounding runtime value remains a host handle.
+The surrounding runtime value is an ordinary source value retaining its immutable memory grant.
 
 ### Descriptions, computations, and abstract storage
 
@@ -94,7 +95,8 @@ Callers cannot introduce a successful plan from a layout-information record.
 
 ```zydeco
 let make_memory = @(import("memory/static-layout.zy")) in
-let (= Plan, = Layout, memory) = builtin |> make_memory in
+let (/Bytes; byte_package) = builtin |> (@(import("text/bytes.zy"))) in
+let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
 let record = memory/align (UInt8 * UInt32) 16
   (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
 match record
@@ -164,7 +166,8 @@ Integers occupy their exact declared width, with signed integers using two's com
 `Float32` and `Float64` occupy their IEEE bit patterns, including signed zero and NaN payloads.
 Scalar size and alignment are both the width in bytes.
 Each scalar decoder accepts exactly that many bytes.
-The [scalar primitives](../../lib/std/builtin/numeric) implement only these leaves.
+The [scalar primitives](../../lib/std/builtin/numeric) load and store exact-width bits through checked memory.
+[Source codecs](../../lib/std/numeric/codecs.zy) construct immutable byte results and enforce exact decoder widths.
 
 `unit` has size zero and alignment one.
 `padding n : Layout Unit` has size `n` and alignment one, and stores exactly `n` zero octets.
@@ -212,8 +215,7 @@ read the meaningful fields and use `store` to construct canonical storage.
 
 ### Address realization and FFI
 
-The sole allocation primitive added for composition is `bytes/aligned`, described
-in [L13](../references/language.md#13-primitive-values-and-capabilities).
+Alignment is implemented by source `bytes/aligned` using the general memory allocator and byte copying.
 Numeric size calculation, power-of-two validation, and field placement remain library code,
 using value functions or returning computations according to the builder.
 Zero-padding construction remains a suspended computation.
@@ -221,10 +223,11 @@ No layout annotation or special compiler interpretation of `product`, `padding`,
 
 Interpreter and native realizations preserve the buffer's contents at a borrowed address divisible
 by the contract's alignment.
-Exporting the returned `Bytes` to the existing C pointer-and-length argument preserves that address and length.
+`bytes/with_window` supplies the retained access, address, and byte count;
+the binding passes its explicit readable window as one C pointer and supplies a separate length if required.
 Subsequent byte transformations produce ordinary buffers and carry no stored-type proof;
 re-import them through the contract to reestablish its invariants.
-The Wasm test host has opaque host-owned bytes and no native C pointer export; see C14 for that target limit.
+The Wasm test host models checked memory and alignment in a virtual address space, with no native C pointer export.
 
 The [C example](../../lib/tests/ffi/representation.zy) constructs an over-aligned record
 and passes it to a [C fixture](../../lib/tests/ffi/boundary.c) that checks address alignment,
@@ -239,25 +242,23 @@ with placement calculated before execution.
 ### Costs and the next representation boundary
 
 The paired C examples perform the same 64-byte record store, import, and foreign checks.
-The [representation comparison tool](../../cli/examples/representations.rs) reports 138 product/closure allocation sites
-for `ffi/representation.zy` and 75 for `ffi/static-layout.zy` under the default `Local` policy (137
-and 74 under `Shared`).
 Placement calculations and their continuation structure disappear in the static variant.
-These are generated-code counts, not runtime allocation or speed measurements.
-Reproduce them with:
+The [representation comparison tool](../../cli/examples/representations.rs) reports current generated allocation sites;
+these counts do not measure runtime allocation or speed:
 
 ```sh
 cargo run --example representations -- lib/tests/ffi/representation.zy lib/tests/ffi/static-layout.zy
 ```
 
 Layout realization allocates ordinary closure environments.
-Storage construction currently creates intermediate buffers and concatenates them; native field decoding copies slices.
+Storage construction currently creates intermediate buffers and concatenates them; field decoding shares slices.
 Deeply nested composition can therefore copy a payload repeatedly.
 Import validation also re-encodes. This implementation establishes the semantics needed
 to justify a later builder or offset-based codec without embedding layout policy in the compiler.
 It provides physical scalar and product storage, but does not change the tagged word convention for ordinary values,
-inline `Stored` in call frames, or offer arbitrary field pointers and mutation.
-Native host byte objects still live outside the managed collector and are not reclaimed by it.
+inline `Stored` in call frames, or derive typed field pointers from `Stored`.
+The address and cell layer below provides explicit checked access.
+Retained memory allocations live outside the managed collector and are not reclaimed when a source window dies.
 The original `store` operation still chooses host allocation internally.
 The allocator protocol below makes that choice explicit for buffer construction;
 lexical buffer lifetimes remain unexpressed.
@@ -284,9 +285,11 @@ The offset remains an ordinary integer; checked access does not yet constitute a
 ## Mutable destination capabilities
 
 Fixed-capacity destination storage extends the representation boundary with an explicit resource protocol.
-The host-owned `Buffer` capability and its operations are declared
-in [the Builtin buffer interface](../../lib/std/builtin/system/buffer.zy).
-They run in `OS`, whereas immutable byte observations remain returning computations.
+The host-owned `Buffer` capability supplies allocation identity.
+The [source buffer interface](../../lib/std/memory/buffer.zy) composes the general memory provider
+and one shared byte package.
+Its convenience operations run in `OS`;
+the underlying memory operations accept the caller's answer protocol `R : CType`.
 A source integer or immutable `Bytes` cannot stand in for a buffer handle.
 
 `allocate size alignment error success` creates zero-initialized storage
@@ -308,10 +311,10 @@ The stable error codes are `InvalidLayout = 0`, `Closed = 1`, `Bounds = 2`,
 `AllocationFailed = 3`, and `Uninitialized = 4`.
 The last applies to buffers created by the uninitialized memory allocator described below.
 Operations on a closed handle report `Closed` before inspecting their range.
-Detected allocation and layout failures create no handle; failed writes preserve all bytes.
+Detected allocation and layout failures create no returned handle; range and capability rejections precede copying.
 General host allocator aborts remain outside this fallible protocol, as for immutable storage.
 Native/interpreter buffers use real aligned allocations; the Wasm test host retains its opaque-address limitation.
-Reads and freeze currently copy, so no mutable foreign alias is introduced.
+Reads copy a detached snapshot; freeze transfers the initialized allocation under the immutable-owner rule below.
 
 ### Choosing an allocator on the computation stack
 
@@ -320,7 +323,8 @@ with an `.allocate` observation.
 `Allocate A` is a computation accepting that service, an error continuation, and a result continuation.
 `allocate size alignment : Allocate Buffer` requests storage from the supplied service rather
 than selecting an allocator inside the compiler.
-The heap provider delegates to Builtin; the `limited maximum parent` value function intercepts requests larger
+The heap provider delegates to the source zeroing buffer allocator;
+the `limited maximum parent` value function intercepts requests larger
 than its per-allocation ceiling and delegates the rest.
 This is a size policy, not a cumulative quota or a distinct physical allocator.
 A negative ceiling rejects every nonnegative request.
@@ -370,7 +374,7 @@ These explicit checked offset operations remain useful without claiming those pr
 and failed writes preserving other fields on all backends.
 [The C construction example](../../lib/tests/ffi/storage-access.zy) creates the existing 64-byte-aligned record
 by writing fields into one destination and freezing it before foreign borrowing.
-Reads may copy windows, and writes currently allocate temporary encodings;
+Reads share byte windows, and writes currently allocate temporary encodings;
 a direct destination codec is a later optimization that must preserve these failure and canonical-padding contracts.
 
 ## Alternatives and decision criteria
@@ -402,7 +406,7 @@ The [native provider](../../lib/std/memory/native.zy) binds them to checked host
 The [bounded model](../../lib/tests/ffi/views/model.zy) supplies a deterministic alternative provider
 for [source composition and phase tests](../../lang/tests/tests/memory_views.rs).
 The WebAssembly test host models addresses in its own virtual address space and exposes no C pointer.
-The current `Bytes` and `Storage` interfaces still use their existing host-owned immutable storage.
+The source `Bytes` and `Storage` interfaces use this same memory provider and its retained immutable-owner transition.
 
 ### The primitive boundary
 
@@ -410,12 +414,12 @@ The Builtin provider exposes two abstract value types:
 
 | Type | Meaning | Runtime responsibility |
 | --- | --- | --- |
-| `Addr : VType` | An opaque data address. It carries no element type, length, capacity, ownership, or permission. | The implemented native address cell occupies one 8-byte pointer slot. Copying an address does not keep its allocation alive; foreign-call transport is a separate extension. |
+| `Addr : VType` | An opaque data address. It carries no element type, length, capacity, ownership, or permission. | The implemented native address cell occupies one 8-byte pointer slot. Copying an address does not keep its allocation alive; the explicit readable-window transport supplies one C pointer. |
 | `Access : VType` | Authority to access a live allocation or granted range with particular permissions. | The checked implementation identifies an owned allocation and a revocable range grant, checks liveness and bounds, and rejects invalid operations. |
 
 Keep `Access` separate from `Addr`, so a thin external handle can remain one pointer.
 A source wrapper can retain both when it should own or retain the resource.
-The implemented grants come from `Buffer` owners.
+Mutable grants come from `Buffer` owners; frozen grants retain immutable allocations.
 Extending grants to foreign storage will require a trusted binding's explicit extent, permissions, and release contract.
 A length read from an arbitrary address cannot grant authority to read that address or its surrounding allocation.
 Revocation invalidates every alias of a grant; copying the handle does not duplicate ownership or release rights.
@@ -459,16 +463,18 @@ The native provider checks initialization for every loaded leaf.
 Its `check` operation validates the complete footprint and alignment without reading padding
 or requiring padding bytes to be initialized.
 
-The native module also exports `allocate`, `grant`, `base`, `revoke`,
-and the typed operations `store_i64`, `store_u8`, and `store_addr`.
+The native module also exports `allocate`, `close`, `freeze`, `immutable_length`, `grant`, `base`,
+`revoke`, and the typed operations `store_i64`, `store_u8`, and `store_addr`.
 Allocation returns a `Buffer` owner and starts uninitialized; the existing `buffer/allocate` remains zero-initializing.
 `grant R owner offset length permission no yes` creates a range grant
 with ordinary source permissions `Read`, `Write`, or `ReadWrite`.
 A grant does not embed itself in an address. `base` obtains the grant's first address,
 and `revoke` invalidates every copy of that grant without closing the allocation or independent grants.
-Closing or successfully freezing the buffer invalidates all its grants and addresses.
+Closing invalidates all mutable grants. Freezing transfers the allocation to an immutable owner,
+invalidates the old grants, and returns a new retained grant as specified below.
+Address identity is preserved across that transfer; using an address still requires a valid grant.
 Failed writes leave bytes, initialization information, and pointer slots unchanged.
-Freezing an incompletely initialized buffer reports buffer error 4 and preserves the live owner.
+Freezing an incompletely initialized buffer reports `Uninitialized` and preserves the live owner.
 
 Integer and byte stores initialize their footprint.
 Pointer stores additionally record the target's allocation identity and offset
@@ -501,8 +507,7 @@ let Cell (A : VType) =
 let Fat (RuntimeMetadata : VType) =
   (#address :: Addr) * (#runtime_metadata :: RuntimeMetadata) in
 let View (Handle : VType) (RuntimeMetadata : VType) =
-    (#carrier :: Cell Handle)
-  * (#open :: Thk (forall (R : CType) . Access -> Handle -> Mem (Addr * RuntimeMetadata) R)) in
+  (#open :: Thk (forall (R : CType) . Access -> Handle -> Mem (Addr * RuntimeMetadata) R)) in
 ...
 ```
 
@@ -510,6 +515,7 @@ The three questions have different answers: `Handle` is the value being passed,
 `Cell Handle` describes its explicit stored form, and `open` obtains a payload address
 and runtime metadata from that handle.
 A view descriptor is an ordinary reusable dictionary; it need not be stored inside each handle.
+Opening a logical handle requires no physical `Cell Handle`; the caller supplies a cell separately when storing it.
 `Fat M` permits any representable `M`.
 Its fields are logical source fields until a `Cell (Fat M)` or call adapter supplies physical placement.
 A source product alone does not promise adjacent native words.
@@ -558,7 +564,7 @@ The source constructors use the following representations.
 The last three are applications of one source constructor:
 
 ```zydeco
-indirect M pointer_cell runtime_cell runtime_offset data_offset
+indirect M runtime_cell runtime_offset data_offset
 ```
 
 It offsets to the runtime metadata, reads it through `runtime_cell`, offsets to the payload,
@@ -600,13 +606,13 @@ For byte slices the element is `UInt8` with stride one.
 Runtime checks and numeric arithmetic are computations; the length does not become a dependent integer index such
 as `Slice A n`.
 
-The source factories `pointer A carrier element` and `slice H A view element` export an abstract `Ptr`
+The source factories `pointer A carrier element` and `slice H A carrier view element` export an abstract `Ptr`
 or `Slice` together with operations specialized to the chosen element cell.
 The pointer factory provides `from_address`, `address_of`, `pointer_cell`, and `get`;
 the slice factory provides `from_handle`, `handle_of`, `slice_cell`, and indexed `get`.
 Their expected existential signatures hide the selected handle representation
 while sharing its witness with the returned operations.
-For example, `let (= Slice, slices) = views/slice H A view element in ...` opens the slice factory once,
+For example, `let (= Slice, slices) = views/slice H A carrier view element in ...` opens the slice factory once,
 and `slices/get` receives that opening's `Slice`.
 Constructing a wrapper only preserves the handle; access still validates the grant when `get` runs.
 This binds the chosen representation to an API without a compiler builtin for `Slice`.
@@ -620,28 +626,51 @@ manages initialized elements, and supplies a writable grant for mutations.
 Copying its runtime metadata proves none of those facts and does not authorize a write.
 The same separation supports runtime strides, allocator records, and application-specific tags.
 
-`Bytes` should be an ordinary std abstraction combining a byte-slice handle with a retained immutable owner.
-Its length, bounds checks, slicing, comparison, singleton construction, concatenation,
-and collection conversions are source algorithms over these layers.
-Compiler recognition of a universal `Bytes` layout is unnecessary; an FFI adapter should choose its pointer
-and length transport explicitly.
+### Immutable owners and source Bytes
 
-The remaining primitive question is how an allocation becomes an immutable owner.
-A read-only grant over a mutable buffer is insufficient: another grant or owner alias can still write or close it.
-A freeze transition must invalidate writable aliases and transfer the storage
-to an immutable owner retained by every shared slice.
-Copying foreign mutable storage is another valid way to establish this invariant.
-Initialization checks remain at the primitive boundary, and no wrapper can establish pointer provenance
-by decoding ordinary octets.
+[`text/bytes.zy`](../../lib/std/text/bytes.zy) defines `Bytes` as an ordinary abstract std type.
+Its private representation is either an allocation-free empty value
+or a retained immutable `Access` paired with `Fat Int64`.
+The fat handle carries the visible address and byte count.
+Length, indexing, slicing, comparisons, singleton construction, concatenation, and copying are source algorithms.
+The compiler has no `Bytes` intrinsic, byte-sequence operation roles, or special byte foreign classifier.
 
-Moving the current builtin implementation therefore requires one coordinated migration:
-define the std type and algorithms; have codecs, UTF-8 conversion, and I/O exchange generic storage windows;
-and replace the special `Bytes -> (pointer, length)` foreign classifier with an explicit view adapter.
-Remove the old byte roles and compiler primitive in that same change.
-The present memory provider supplies checked owned mutable storage; it does not
-yet supply the retained immutable-owner transition.
-Existing builtin `Bytes` remains implemented until that ownership and caller migration is complete,
-with no parallel public std replacement.
+`freeze R owner no yes` checks that the entire allocation is initialized before changing ownership.
+Success transfers the same allocation to retained immutable storage and returns a new read grant.
+Every old `Buffer` alias and mutable-owner grant becomes closed.
+The new grant cannot be revoked, used for writes, or used to obtain a mutable owner.
+Its address identity and physical alignment are preserved.
+Failed freeze leaves the original owner, grants, contents, and initialization state unchanged.
+The runtime arena retains frozen allocations for its lifetime; per-value reclamation remains open.
+
+A read-only grant over mutable storage is insufficient for `Bytes`: other grants may still write or close it.
+`from_immutable R access no yes` checks the immutable-owner state before constructing a byte value.
+`build R count alignment fill no yes` allocates a private owner, gives `fill` a writable range,
+and freezes after `fill` invokes its completion.
+Failure closes the private mutable owner.
+A retained writable alias therefore fails after a successful build.
+Completion is reusable at the type level; repeated completion encounters the checked closed state
+and does not recreate mutation authority.
+
+`slice` checks its bounds and shares the immutable owner without copying its contents.
+`copy_to` validates the full destination extent and write permission before its first write.
+`aligned` allocates with the requested alignment and copies the visible bytes before freezing.
+`with_window R value no yes` exposes retained access, visible address, and count to a source adapter;
+an allocation-free empty value obtains a valid empty immutable allocation when a window is requested.
+A zero-length window grants no readable octet and need not have a null address.
+
+The [byte package signature](../../lib/std/text/bytes.type.zy) shares one abstract `Bytes` witness
+with all its operations.
+A composition root passes that package to text, system, buffer, layout, and codec builders;
+independently opened byte packages cannot exchange their abstract values without an explicit conversion.
+The assembled std package exports that same type with its convenient `Option` and `Bool` operations.
+
+Scalar leaves exchange checked memory through `store_le` and `load_le`, preserving exact bits;
+source codecs provide `to_le_bytes` and `from_le_bytes` with exact-width validation.
+UTF-8 conversion and primitive I/O exchange immutable grants or explicit readable windows.
+These boundary operations need no knowledge of the source byte representation.
+The [C adapter](c-ffi.md#source-defined-views-at-foreign-boundaries) consumes an explicit readable window
+as one pointer; a separate integer argument supplies a C length when the binding requires it.
 
 ### Compile-time and runtime behavior
 
@@ -678,10 +707,9 @@ and [fault](../../lib/tests/std/memory-faults.zy) examples exercise checked owne
 The Rust model also verifies allocation identity, revocation, initialization, pointer-slot invalidation,
 and failure-before-mutation invariants.
 
-The next ownership boundary is the immutable owner needed to move `Bytes` into std, described above.
-The [foreign adapter](c-ffi.md#source-defined-views-at-foreign-boundaries) separately specifies whether
-an address-bearing handle supplies one pointer, several scalar arguments, or an aggregate by value.
-Foreign grants and native `Addr` arguments are not yet part of that implemented ABI.
+The immutable owner transition, source byte algorithms, memory-based scalar leaves,
+and explicit read-only [C window adapter](c-ffi.md#source-defined-views-at-foreign-boundaries) are implemented.
+Foreign-owned grants, mutable or retained C pointers, and aggregate-by-value transport remain separate extensions.
 Data addresses and callable code require different leaves: a proposed `Code S : VType` is indexed
 by an abstract static foreign-signature witness `S : VType`, and uses the matching call adapter.
 A code address is not a `Thk`, which may capture an environment,
@@ -691,6 +719,6 @@ Code-pointer loading and callbacks follow the FFI design.
 ## Remaining questions
 
 - Should ordered collections receive a three-way primitive comparison, or derive a library `Order` value?
-- Which workloads justify a non-contiguous representation or native shared-window ownership?
+- Which workloads justify a non-contiguous representation?
 - How should native text and byte storage be reclaimed alongside, or separately from, the managed heap?
   [Native memory](native-frames.md#collection-and-space-behavior) supplies the surrounding lifetime constraints.

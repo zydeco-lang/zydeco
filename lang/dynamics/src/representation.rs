@@ -1,13 +1,16 @@
 //! Primitive scalar storage operations. Layout composition belongs to Zydeco code.
 
-use crate::{host::HostValue, syntax::*};
-use std::rc::Rc;
+use crate::memory::MemoryRuntime;
+use crate::{host::HostRuntime, syntax::*};
 
-pub(crate) struct ScalarBytes;
+pub(crate) struct ScalarMemory;
 
-impl ScalarBytes {
-    pub(crate) fn encode(arguments: Vec<SemValue>) -> Result<Computation, i32> {
-        let [SemValue::Literal(literal)] = arguments.as_slice() else {
+impl ScalarMemory {
+    pub(crate) fn store(
+        arguments: Vec<SemValue>, host: &mut HostRuntime,
+    ) -> Result<Computation, i32> {
+        let [access, address, SemValue::Literal(literal), error, success] = arguments.as_slice()
+        else {
             unreachable!("checked scalar encoder received a non-scalar")
         };
         let bytes = match literal {
@@ -26,19 +29,36 @@ impl ScalarBytes {
             | Literal::Float(FloatLiteral::Float64(bits)) => bits.to_le_bytes().to_vec(),
             | _ => unreachable!("checked encoder received a non-numeric literal"),
         };
-        let value: SemValue = HostValue::Bytes(bytes.into()).into();
-        Ok(Return(Rc::new(value.into())).into())
+        let result = host
+            .buffers
+            .write_memory(MemoryRuntime::access(access), MemoryRuntime::address(address), &bytes)
+            .map(|()| None);
+        Ok(MemoryRuntime::finish(result, error, success))
     }
 
-    pub(crate) fn decode(
-        primitive: PrimitiveType, arguments: Vec<SemValue>,
+    pub(crate) fn load(
+        primitive: PrimitiveType, arguments: Vec<SemValue>, host: &mut HostRuntime,
     ) -> Result<Computation, i32> {
-        let [SemValue::Host(HostValue::Bytes(bytes)), when_none, when_some] = arguments.as_slice()
-        else {
-            unreachable!("checked decoder received invalid arguments")
+        let [access, address, error, success] = arguments.as_slice() else {
+            unreachable!("checked scalar load received invalid arguments")
         };
-        let value = Self::literal(primitive, bytes.as_slice()).map(SemValue::from);
-        Ok(Self::optional(value, when_none, when_some))
+        let width = match primitive {
+            | PrimitiveType::Integer(integer) => integer.bits() / 8,
+            | PrimitiveType::Float(FloatType::Float32) => 4,
+            | PrimitiveType::Float(FloatType::Float64) => 8,
+            | _ => unreachable!("only numeric primitives have scalar loads"),
+        };
+        let result = host
+            .buffers
+            .read_memory(
+                MemoryRuntime::access(access),
+                MemoryRuntime::address(address),
+                i64::from(width),
+            )
+            .map(|bytes| {
+                Some(Self::literal(primitive, bytes).expect("checked scalar width").into())
+            });
+        Ok(MemoryRuntime::finish(result, error, success))
     }
 
     fn literal(primitive: PrimitiveType, bytes: &[u8]) -> Option<Literal> {
@@ -68,34 +88,5 @@ impl ScalarBytes {
             }
             | _ => unreachable!("only numeric primitives have scalar byte operations"),
         })
-    }
-
-    pub(crate) fn aligned(arguments: Vec<SemValue>) -> Result<Computation, i32> {
-        let [
-            SemValue::Host(HostValue::Bytes(bytes)),
-            SemValue::Literal(Literal::Integer(IntegerLiteral::Int64(alignment))),
-            when_none,
-            when_some,
-        ] = arguments.as_slice()
-        else {
-            unreachable!("checked alignment operation received invalid arguments")
-        };
-        let value = usize::try_from(*alignment)
-            .ok()
-            .and_then(|alignment| bytes.aligned(alignment))
-            .map(|bytes| HostValue::Bytes(bytes).into());
-        Ok(Self::optional(value, when_none, when_some))
-    }
-
-    fn optional(
-        value: Option<SemValue>, when_none: &SemValue, when_some: &SemValue,
-    ) -> Computation {
-        match value {
-            | None => Force(Rc::new(when_none.clone().into())).into(),
-            | Some(value) => {
-                let function: Computation = Force(Rc::new(when_some.clone().into())).into();
-                App(Rc::new(function), Rc::new(value.into())).into()
-            }
-        }
     }
 }

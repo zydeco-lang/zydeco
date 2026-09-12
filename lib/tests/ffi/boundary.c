@@ -1,6 +1,20 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
+
+uint64_t zyffi_first(const void *data) { return ((const uint8_t *)data)[0]; }
+
+uint64_t zyffi_options(const void *data, uint64_t a, uint64_t b,
+                        uint64_t c, uint64_t d, uint64_t e) {
+    return zyffi_first(data) + a + 3 * b + 5 * c + 7 * d + 11 * e;
+}
+
+uint64_t zyffi_must_not_run(const void *data) {
+    (void)data;
+    puts("unexpected foreign effect");
+    return 0;
+}
 
 uint64_t zyffi_zero(void) { return UINT64_MAX; }
 

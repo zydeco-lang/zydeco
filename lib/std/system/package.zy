@@ -1,18 +1,11 @@
 begin
-  param val (
-    (
-      /VType; /CType; /Thk; /Ret; /Unit;
-      /Int64; /String; /Bytes;
-      /Reader; /Writer; /OS;
-      /io; /fs; /stdio; /args; /random; /process;
-      /int64;
-      /bytes;
-      builtin
-    ) : @(import("../builtin.zy")),
-    (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) : @(import(
-      "../data/package.type.zy"
-    ))
-  ) that
+  param val (/VType; /CType; /Thk; /Ret; /Unit;
+    /Int64; /String; /Addr; /Access; /Reader; /Writer; /OS;
+    /io; /fs; /stdio; /args; /random; /process; /int64; builtin) : @(import("../builtin.zy")) that
+  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr Access in
+  param val (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) : @(import(
+    "../data/package.type.zy"
+  )) in
   let make_arguments = @(import("arguments.zy")) in
   let arguments = builtin |> make_arguments in
   begin
@@ -176,7 +169,12 @@ begin
         reader
         count
         { fn code message => ! continue_host_error Bytes continuation code message }
-        { fn chunk => ! continue_io_ok Bytes continuation chunk }
+        {
+          fn access =>
+            ! bytes/from_immutable OS access
+              { fn _ => ! continue_host_error Bytes continuation 4 "invalid immutable I/O storage" }
+              { fn chunk => ! continue_io_ok Bytes continuation chunk }
+        }
     in
     let ! io_read_line (reader : Reader)
       (continuation : Thk (Result (Option Bytes) IoError -> OS))
@@ -191,9 +189,18 @@ begin
           ! continue_io_ok (Option Bytes) continuation absent
         }
         {
-          fn chunk =>
-            do present <- ! option/some Bytes chunk;
-            ! continue_io_ok (Option Bytes) continuation present
+          fn access =>
+            ! bytes/from_immutable OS access
+              {
+                fn _ =>
+                  ! continue_host_error (Option Bytes) continuation 4
+                    "invalid immutable I/O storage"
+              }
+              {
+                fn chunk =>
+                  do present <- ! option/some Bytes chunk;
+                  ! continue_io_ok (Option Bytes) continuation present
+              }
         }
     in
     let ! io_read_all (reader : Reader)
@@ -201,16 +208,24 @@ begin
     : OS = ! io/read_all
         reader
         { fn code message => ! continue_host_error Bytes continuation code message }
-        { fn chunk => ! continue_io_ok Bytes continuation chunk }
+        {
+          fn access =>
+            ! bytes/from_immutable OS access
+              { fn _ => ! continue_host_error Bytes continuation 4 "invalid immutable I/O storage" }
+              { fn chunk => ! continue_io_ok Bytes continuation chunk }
+        }
     in
     let ! io_write_all (writer : Writer)
       (chunk : Bytes)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = ! io/write_all
-        writer
-        chunk
-        { fn code message => ! continue_host_error Unit continuation code message }
-        { ! continue_io_ok Unit continuation () }
+    : OS = ! bytes/with_window OS chunk
+        { fn _ => ! continue_host_error Unit continuation 4 "invalid byte storage" }
+        {
+          fn access address count =>
+            ! io/write_all writer access address count
+              { fn code message => ! continue_host_error Unit continuation code message }
+              { ! continue_io_ok Unit continuation () }
+        }
     in
     let ! io_flush (writer : Writer)
       (continuation : Thk (Result Unit IoError -> OS))

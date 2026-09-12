@@ -339,7 +339,6 @@ pub enum PrimitiveType {
     Float(FloatType),
     Char,
     String,
-    Bytes,
 }
 
 impl PrimitiveType {
@@ -378,7 +377,6 @@ impl PrimitiveType {
             | Self::Float(float) => float.type_name(),
             | Self::Char => "Char",
             | Self::String => "String",
-            | Self::Bytes => "Bytes",
         }
     }
 }
@@ -413,8 +411,8 @@ pub enum IntegerOperation {
     Lt,
     Gt,
     ToString,
-    ToLeBytes,
-    FromLeBytes,
+    StoreLe,
+    LoadLe,
 }
 
 impl IntegerOperation {
@@ -430,13 +428,14 @@ impl IntegerOperation {
         match self {
             | Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod => 2,
             | Self::Eq | Self::Lt | Self::Gt => 4,
-            | Self::ToString | Self::ToLeBytes => 1,
-            | Self::FromLeBytes => 3,
+            | Self::ToString => 1,
+            | Self::StoreLe => 5,
+            | Self::LoadLe => 4,
         }
     }
 
     pub fn is_branch(self) -> bool {
-        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::FromLeBytes)
+        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::StoreLe | Self::LoadLe)
     }
 }
 
@@ -463,8 +462,8 @@ pub enum FloatOperation {
     Lt,
     Gt,
     ToString,
-    ToLeBytes,
-    FromLeBytes,
+    StoreLe,
+    LoadLe,
 }
 
 impl FloatOperation {
@@ -480,13 +479,14 @@ impl FloatOperation {
         match self {
             | Self::Add | Self::Sub | Self::Mul | Self::Div => 2,
             | Self::Eq | Self::Lt | Self::Gt => 4,
-            | Self::ToString | Self::ToLeBytes => 1,
-            | Self::FromLeBytes => 3,
+            | Self::ToString => 1,
+            | Self::StoreLe => 5,
+            | Self::LoadLe => 4,
         }
     }
 
     pub fn is_branch(self) -> bool {
-        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::FromLeBytes)
+        matches!(self, Self::Eq | Self::Lt | Self::Gt | Self::StoreLe | Self::LoadLe)
     }
 }
 
@@ -523,34 +523,20 @@ pub enum BuiltinValueRole {
     CharCodepoint,
     CharFromCodepoint,
     StrParseInt,
-    BytesEmpty,
-    BytesLength,
-    BytesAppend,
-    BytesFromStr,
-    BytesToStr,
-    BytesGet,
-    BytesSlice,
-    BytesAligned,
-    BytesSingleton,
-    BytesEq,
-    BytesLt,
     MemoryAllocate,
+    MemoryClose,
+    MemoryFreeze,
+    MemoryImmutableLength,
+    MemoryCheckWrite,
+    MemoryFromString,
+    MemoryToString,
     MemoryGrant,
     MemoryRevoke,
     MemoryBase,
     MemoryOffset,
     MemoryCheck,
-    MemoryLoadI64,
-    MemoryLoadU8,
     MemoryLoadAddr,
-    MemoryStoreI64,
-    MemoryStoreU8,
     MemoryStoreAddr,
-    BufferAllocate,
-    BufferWrite,
-    BufferRead,
-    BufferFreeze,
-    BufferClose,
     Stdin,
     Stdout,
     Stderr,
@@ -652,12 +638,6 @@ impl BuiltinValueRole {
             | Self::StrGet => "str_get_branch".to_owned(),
             | Self::CharFromCodepoint => "char_from_codepoint_branch".to_owned(),
             | Self::StrParseInt => "str_parse_int_branch".to_owned(),
-            | Self::BytesToStr => "bytes_to_str_branch".to_owned(),
-            | Self::BytesGet => "bytes_get_branch".to_owned(),
-            | Self::BytesSlice => "bytes_slice_branch".to_owned(),
-            | Self::BytesAligned => "bytes_aligned_branch".to_owned(),
-            | Self::BytesEq => "bytes_eq_branch".to_owned(),
-            | Self::BytesLt => "bytes_lt_branch".to_owned(),
             | Self::ReadLineAsInt => "read_line_as_int_branch".to_owned(),
             | role => role.source_name(),
         }
@@ -667,20 +647,16 @@ impl BuiltinValueRole {
         match self {
             | Self::Integer(_, operation) => operation.arity(),
             | Self::Float(_, operation) => operation.arity(),
-            | Self::BytesEmpty | Self::Stdin | Self::Stdout | Self::Stderr => 0,
+            | Self::Stdin | Self::Stdout | Self::Stderr => 0,
             | Self::StrScalarLength
             | Self::StrByteLength
             | Self::CharToStr
             | Self::CharCodepoint
-            | Self::BytesLength
-            | Self::BytesFromStr
-            | Self::BytesSingleton
             | Self::ReadLine
             | Self::ReadTillEof
             | Self::RandomInt
             | Self::Exit => 1,
             | Self::StrAppend
-            | Self::BytesAppend
             | Self::WriteStr
             | Self::WriteInt
             | Self::WriteLine
@@ -688,41 +664,31 @@ impl BuiltinValueRole {
             | Self::ArgAt
             | Self::CharFromCodepoint
             | Self::StrParseInt
-            | Self::BytesToStr
-            | Self::BufferFreeze
-            | Self::BufferClose
             | Self::IoReadAll
             | Self::IoFlush
             | Self::IoCloseReader
             | Self::IoCloseWriter
             | Self::FsOpenReader
             | Self::FsCreateWriter
-            | Self::FsAppendWriter => 3,
+            | Self::FsAppendWriter
+            | Self::MemoryClose
+            | Self::MemoryFreeze
+            | Self::MemoryImmutableLength
+            | Self::MemoryFromString
+            | Self::MemoryRevoke
+            | Self::MemoryBase => 3,
             | Self::StrSplitOnce
             | Self::StrSplitAt
             | Self::StrEq
             | Self::StrGet
-            | Self::BytesGet
-            | Self::BytesAligned
-            | Self::BytesEq
-            | Self::BytesLt
-            | Self::BufferAllocate
             | Self::IoRead
             | Self::IoReadLine
-            | Self::IoWriteAll => 4,
-            | Self::BytesSlice | Self::BufferRead | Self::BufferWrite => 5,
-            | Self::MemoryAllocate => 4,
-            | Self::MemoryGrant => 6,
-            | Self::MemoryRevoke => 3,
-            | Self::MemoryBase => 3,
-            | Self::MemoryOffset => 5,
-            | Self::MemoryCheck => 6,
-            | Self::MemoryLoadI64 => 4,
-            | Self::MemoryLoadU8 => 4,
+            | Self::MemoryAllocate
             | Self::MemoryLoadAddr => 4,
-            | Self::MemoryStoreI64 => 5,
-            | Self::MemoryStoreU8 => 5,
-            | Self::MemoryStoreAddr => 5,
+            | Self::MemoryOffset | Self::MemoryToString | Self::MemoryStoreAddr => 5,
+            | Self::MemoryCheck | Self::MemoryCheckWrite | Self::MemoryGrant | Self::IoWriteAll => {
+                6
+            }
         }
     }
 
@@ -740,7 +706,7 @@ impl BuiltinValueRole {
                 | IntegerOperation::Mul
                 | IntegerOperation::Div
                 | IntegerOperation::Mod
-                | IntegerOperation::FromLeBytes,
+                | IntegerOperation::LoadLe,
             ) => Some(if matches!(integer, IntegerType::Int64 | IntegerType::UInt64) {
                 SpareBox::Opaque
             } else {
@@ -752,13 +718,14 @@ impl BuiltinValueRole {
                 | FloatOperation::Sub
                 | FloatOperation::Mul
                 | FloatOperation::Div
-                | FloatOperation::FromLeBytes,
+                | FloatOperation::LoadLe,
             ) => {
                 Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
             }
-            | Self::MemoryLoadI64 | Self::StrParseInt | Self::ReadLineAsInt | Self::RandomInt => {
-                Some(SpareBox::Opaque)
-            }
+            | Self::MemoryImmutableLength
+            | Self::StrParseInt
+            | Self::ReadLineAsInt
+            | Self::RandomInt => Some(SpareBox::Opaque),
             | _ => None,
         }
     }
@@ -916,35 +883,30 @@ pub struct ForeignTarget {
 /// One source-level parameter whose C representation is known to the compiler.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ForeignParameter {
-    /// Borrow an immutable `Bytes` value as `const void *` plus `size_t` for the duration of a call.
-    BorrowedBytes,
+    /// Borrow a checked `Access * Addr * Int64` window as one `const void *`.
+    BorrowedMemory,
     Integer(IntegerType),
 }
 
 impl ForeignParameter {
     pub fn components(self) -> impl Iterator<Item = ForeignComponent> {
-        match self {
-            | Self::BorrowedBytes => {
-                [Some(ForeignComponent::BytesPointer), Some(ForeignComponent::BytesLength)]
-            }
-            | Self::Integer(integer) => [Some(ForeignComponent::Integer(integer)), None],
-        }
-        .into_iter()
-        .flatten()
+        core::iter::once(match self {
+            | Self::BorrowedMemory => ForeignComponent::MemoryPointer,
+            | Self::Integer(integer) => ForeignComponent::Integer(integer),
+        })
     }
 }
 
 /// A scalar C argument extracted from one source value, in declaration order.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ForeignComponent {
-    BytesPointer,
-    BytesLength,
+    MemoryPointer,
     Integer(IntegerType),
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ForeignArgument {
-    /// Zero-based source parameter index; a byte borrow contributes two C arguments.
+    /// Zero-based source parameter index. A window supplies one pointer; length is explicit.
     pub parameter: usize,
     pub component: ForeignComponent,
 }

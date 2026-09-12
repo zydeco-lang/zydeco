@@ -6,7 +6,6 @@ use std::{
     io::{self, BufRead, Read, Write},
     rc::Rc,
 };
-use zydeco_machine::bytes::ByteBuffer;
 
 type ZValue = SemValue;
 type ZCompute = Computation;
@@ -373,155 +372,19 @@ pub fn str_parse_int_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     }
 }
 
-// /* Bytes */
-struct HostBytes;
-
-impl HostBytes {
-    fn value(bytes: impl Into<ByteBuffer>) -> ZValue {
-        HostValue::Bytes(bytes.into()).into()
-    }
-
-    fn shared(value: &ZValue) -> &ByteBuffer {
-        match value {
-            | ZValue::Host(HostValue::Bytes(bytes)) => bytes,
-            | _ => unreachable!("expected host byte buffer"),
-        }
-    }
-
-    fn borrow(value: &ZValue) -> &[u8] {
-        HostBytes::shared(value).as_slice()
-    }
-}
-
-/// Construct an empty immutable byte buffer.
-pub fn bytes_empty(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [] => ret(HostBytes::value(Vec::<u8>::new())),
-        | _ => unreachable!(""),
-    }
-}
-
-/// Return the number of octets in a byte buffer.
-pub fn bytes_length(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [bytes] => ret(Literal::Integer((HostBytes::borrow(bytes).len() as i64).into()).into()),
-        | _ => unreachable!(""),
-    }
-}
-
-/// Concatenate two immutable byte buffers.
-pub fn bytes_append(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [first, second] => {
-            let bytes = [HostBytes::borrow(first), HostBytes::borrow(second)].concat();
-            ret(HostBytes::value(bytes))
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Encode a UTF-8 string into bytes.
-pub fn bytes_from_str(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [ZValue::Literal(Literal::String(string))] => {
-            ret(HostBytes::value(string.as_str().as_bytes().to_vec()))
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Decode bytes as UTF-8 and select the valid or invalid continuation.
-pub fn bytes_to_str_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [bytes, when_invalid @ ZValue::Thunk(_), when_valid @ ZValue::Thunk(_)] => {
-            let value = std::str::from_utf8(HostBytes::borrow(bytes))
-                .ok()
-                .map(|string| Literal::String(string.into()).into());
-            OptionalValueBranch::select(value, when_invalid, when_valid)
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Safely index a byte buffer and select a continuation with the octet.
-pub fn bytes_get_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [
-            bytes,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
-            when_none @ ZValue::Thunk(_),
-            when_some @ ZValue::Thunk(_),
-        ] => {
-            let octet = usize::try_from(*index)
-                .ok()
-                .and_then(|index| HostBytes::borrow(bytes).get(index).copied())
-                .map(|octet| Literal::Integer(IntegerLiteral::UInt8(octet)).into());
-            OptionalValueBranch::select(octet, when_none, when_some)
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Return the checked `[start, start + length)` window of a byte buffer.
-pub fn bytes_slice_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [
-            bytes,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(start))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(length))),
-            when_none @ ZValue::Thunk(_),
-            when_some @ ZValue::Thunk(_),
-        ] => {
-            let window = usize::try_from(*start)
-                .ok()
-                .and_then(|start| {
-                    usize::try_from(*length).ok().and_then(|length| {
-                        HostBytes::shared(bytes).slice(start, length).map(HostValue::Bytes)
-                    })
-                })
-                .map(ZValue::from);
-            OptionalValueBranch::select(window, when_none, when_some)
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Build a one-octet buffer; every `UInt8` is a valid octet, so the input needs no check.
-pub fn bytes_singleton(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(octet)))] => {
-            ret(HostBytes::value(vec![*octet]))
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Select a computation according to byte-wise structural equality.
-pub fn bytes_eq_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] => {
-            let equal = HostBytes::borrow(first) == HostBytes::borrow(second);
-            Branch::select(equal, when_true, when_false)
-        }
-        | _ => unreachable!(""),
-    }
-}
-
-/// Select a computation according to lexicographic byte order.
-pub fn bytes_lt_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        | [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] => {
-            let less = HostBytes::borrow(first) < HostBytes::borrow(second);
-            Branch::select(less, when_true, when_false)
-        }
-        | _ => unreachable!(""),
-    }
-}
-
 // /* IO */
 struct HostContinuation;
 
 impl HostContinuation {
+    fn memory(
+        host: &mut HostRuntime, bytes: Vec<u8>, error: &ZValue, success: &ZValue,
+    ) -> Result<ZCompute, i32> {
+        match host.import_memory(&bytes) {
+            | Ok(access) => Ok(Self::one(success, HostValue::Access(access).into())),
+            | Err(fault) => Self::io_error(error, fault),
+        }
+    }
+
     fn force(continuation: &ZValue) -> ZCompute {
         Force(mk_rc(continuation.clone().into())).into()
     }
@@ -624,7 +487,7 @@ pub fn io_read(
                 reader.take(count).read_to_end(&mut bytes)?;
                 Ok(bytes)
             }) {
-                | Ok(bytes) => Ok(HostContinuation::one(when_success, HostBytes::value(bytes))),
+                | Ok(bytes) => HostContinuation::memory(host, bytes, when_error, when_success),
                 | Err(error) => HostContinuation::io_error(when_error, error),
             }
         }
@@ -654,7 +517,7 @@ pub fn io_read_line(
             Ok((read, bytes))
         }) {
             | Ok((0, _)) => Ok(HostContinuation::force(when_eof)),
-            | Ok((_, bytes)) => Ok(HostContinuation::one(when_line, HostBytes::value(bytes))),
+            | Ok((_, bytes)) => HostContinuation::memory(host, bytes, when_error, when_line),
             | Err(error) => HostContinuation::io_error(when_error, error),
         },
         | _ => unreachable!(""),
@@ -675,7 +538,7 @@ pub fn io_read_all(
             reader.read_to_end(&mut bytes)?;
             Ok(bytes)
         }) {
-            | Ok(bytes) => Ok(HostContinuation::one(when_success, HostBytes::value(bytes))),
+            | Ok(bytes) => HostContinuation::memory(host, bytes, when_error, when_success),
             | Err(error) => HostContinuation::io_error(when_error, error),
         },
         | _ => unreachable!(""),
@@ -689,12 +552,12 @@ pub fn io_write_all(
     match args.as_slice() {
         | [
             ZValue::Host(HostValue::Writer(writer)),
-            bytes,
+            ZValue::Host(HostValue::Access(access)),
+            ZValue::Host(HostValue::Address(address)),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(length))),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
-        ] => match WriterIo::run(*writer, output, stderr, host, |writer| {
-            writer.write_all(HostBytes::borrow(bytes))
-        }) {
+        ] => match host.write_memory(*writer, *access, *address, *length, output, stderr) {
             | Ok(()) => Ok(HostContinuation::force(when_success)),
             | Err(error) => HostContinuation::io_error(when_error, error),
         },

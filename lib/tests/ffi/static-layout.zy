@@ -1,11 +1,40 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /Bytes;
-    /UInt8; /UInt32; /UInt64; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+  param (
+    /Int64;
+    /Access;
+    /Addr;
+    /VType;
+    /CType;
+    /Thk;
+    /Ret;
+    /OS;
+    /UInt8;
+    /UInt32;
+    /UInt64;
+    /numeric;
+    /process;
+    builtin
+  ) : @(import("../../std/builtin.zy")) that
+  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+
   let make_memory = @(import("../../std/memory/static-layout.zy")) in
-  let (= Plan, = Layout, memory) = builtin |> make_memory in
-  let inspect = (
-    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_record"))) : Thk (Bytes -> Ret UInt64)
+  let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
+  let inspect_raw = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_record"))) : Thk (
+      Access * Addr * Int64 -> Int64 -> Ret UInt64
+    )
   ) in
+  let inspect : Thk (Bytes -> Ret UInt64) = {
+    fn value =>
+      ! bytes/with_window (Ret UInt64) value
+        {
+          fn _ =>
+            @[partial]
+            let 0 = 1 in
+            ret (0 : UInt64)
+        }
+        { fn access address length => ! inspect_raw (access, address, length) length }
+  } in
   let fail = { ! process/exit 1 } in
   let layout = memory/align (UInt8 * UInt32) 64
     (

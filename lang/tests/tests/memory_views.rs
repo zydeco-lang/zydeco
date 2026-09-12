@@ -33,16 +33,16 @@ let no = {{ fn (_ : Fault) => ! fail }} in
 #[test]
 fn source_view_interfaces_check_with_explicit_address_and_access_types() {
     SourceCase::assert_accepted(SourceCase::check_linted(&ViewCase::source(
-        "let view : View Int64 Unit = views/thin pointer in ! exit 0",
+        "let view : View Int64 Unit = views/thin in ! exit 0",
     )));
 }
 
 #[test]
 fn view_carriers_and_runtime_metadata_types_must_match() {
     for body in [
-        "let view : View (Fat Int64) Unit = views/thin pointer in ! exit 0",
+        "let view : View (Fat Int64) Unit = views/thin in ! exit 0",
         "let handle : Fat Unit = views/with_runtime_metadata Int64 8 3 in ! exit 0",
-        "let view : View Int64 Unit = views/indirect Int64 pointer views/int64 -8 0 in ! exit 0",
+        "let view : View Int64 Unit = views/indirect Int64 views/int64 -8 0 in ! exit 0",
     ] {
         SourceCase::assert_rejected(
             SourceCase::check(&ViewCase::source(body)),
@@ -69,6 +69,21 @@ do result <- ! copy 8 3;
 }
 
 #[test]
+fn fat_views_open_closure_metadata_without_a_storage_cell() {
+    ViewCase::runs(
+        r#"
+let handle = views/with_runtime_metadata (Thk (Ret Int64)) 8 { ret 3 } in
+let view = views/fat (Thk (Ret Int64)) in
+! view/open OS +Live() handle { ! unavailable OS } no {
+  fn (address, metadata) =>
+    do length <- ! metadata;
+    match (address, length) | (8, 3) => ! exit 0 | _ => ! fail end
+}
+"#,
+    );
+}
+
+#[test]
 fn runtime_sizes_cannot_drive_static_cell_placement() {
     SourceCase::assert_rejected(
         SourceCase::check(&ViewCase::source(
@@ -92,7 +107,7 @@ fn reading_a_header_does_not_make_its_runtime_length_static() {
     SourceCase::assert_rejected(
         SourceCase::check(&ViewCase::source(
             r#"
-let prefix = views/indirect Int64 pointer views/int64 -8 0 in
+let prefix = views/indirect Int64 views/int64 -8 0 in
 ! prefix/open OS +Live() 8 { ! memory OS } no {
   fn (_, length) =>
     match views/product Int64 Int64 (views/address length 8) views/int64
@@ -112,7 +127,7 @@ fn runtime_offsets_remain_captured_in_view_computations() {
         r#"
 let read : Thk (Int64 -> OS) = {
   fn displacement =>
-    let view = views/indirect Int64 pointer views/int64 displacement 0 in
+    let view = views/indirect Int64 views/int64 displacement 0 in
     ! view/open OS +Live() 8 { ! memory OS } no {
       fn (address, length) =>
         match (address, length) | (8, 3) => ! exit 0 | _ => ! fail end
@@ -180,14 +195,14 @@ end
 fn thin_and_fat_open_do_not_access_memory() {
     ViewCase::runs(
         r#"
-let thin = views/thin pointer in
+let thin = views/thin in
 ! thin/open OS +Closed() 8 { ! unavailable OS } no {
   fn (address, ()) =>
     ! int64/eq OS address 8 {
       match views/fat_cell Int64 pointer views/int64
       | +Err(_) => ! fail
       | +Ok(carrier) =>
-        let fat = views/fat Int64 carrier in
+        let fat = views/fat Int64 in
         ! fat/open OS +Closed() (views/with_runtime_metadata Int64 address 3)
           { ! unavailable OS } no {
           fn (address, length) =>
@@ -210,7 +225,7 @@ fn indirect_views_report_provider_faults_before_exposing_a_result() {
         (8, "+Live()", -8, "unavailable", "+Unavailable()"),
     ] {
         ViewCase::runs(&format!(
-            "let view = views/indirect Int64 pointer views/int64 {delta} 0 in \
+            "let view = views/indirect Int64 views/int64 {delta} 0 in \
              ! view/open OS {access} {origin} {{ ! {provider} OS }} \
              {{ fn fault => match fault | {fault} => ! exit 0 | _ => ! fail end }} \
              {{ fn _ => ! fail }}"
@@ -222,9 +237,9 @@ fn indirect_views_report_provider_faults_before_exposing_a_result() {
 fn runtime_selected_prefix_inline_and_object_views_execute_on_every_backend() {
     let source = ViewCase::source(
         r#"
-let prefix = views/indirect Int64 pointer views/int64 -8 0 in
-let inline = views/indirect Int64 pointer views/int64 0 8 in
-let object = views/indirect Int64 pointer pointer 0 0 in
+let prefix = views/indirect Int64 views/int64 -8 0 in
+let inline = views/indirect Int64 views/int64 0 8 in
+let object = views/indirect Int64 pointer 0 0 in
 let Opened = Int64 * Int64 in
 let open : Thk (Int64 -> Ret Opened) = {
   fn choice =>
@@ -308,7 +323,7 @@ fn padding_alignment_and_full_footprint_checks_precede_field_reads() {
 #[test]
 fn typed_slice_indexing_checks_lengths_indices_stride_overflow_and_extent() {
     ViewCase::runs(
-        "let view = views/indirect Int64 pointer views/int64 0 8 in \
+        "let view = views/indirect Int64 views/int64 0 8 in \
          ! views/index Int64 Int64 OS view views/int64 +Live() 0 0 \
          { ! memory OS } no { fn value => ! int64/eq OS value 5 { ! exit 0 } fail }",
     );
@@ -324,7 +339,7 @@ fn typed_slice_indexing_checks_lengths_indices_stride_overflow_and_extent() {
         ViewCase::runs(&format!(
             "match views/fat_cell Int64 pointer views/int64 \
              | +Err(_) => ! fail | +Ok(carrier) => \
-             let view = views/fat Int64 carrier in \
+             let view = views/fat Int64 in \
              ! views/index (Fat Int64) Int64 OS view (views/address {stride} 8) \
                +Live() (views/with_runtime_metadata Int64 0 {length}) {index} \
                {{ ! memory OS }} \
@@ -341,8 +356,8 @@ fn pointer_and_slice_factories_bind_an_abstract_handle_to_its_element_operations
          let pointer : Ptr = pointers/from_address 0 in \
          ! pointers/get OS +Live() pointer { ! memory OS } no { fn value => \
            ! int64/eq OS value 3 { \
-             let view = views/indirect Int64 (views/address 8 8) views/int64 0 8 in \
-             let (= Slice, slices) = views/slice Int64 Int64 view views/int64 in \
+             let view = views/indirect Int64 views/int64 0 8 in \
+             let (= Slice, slices) = views/slice Int64 Int64 (views/address 8 8) view views/int64 in \
              let slice : Slice = slices/from_handle 0 in \
              ! slices/get OS +Live() slice 0 { ! memory OS } no { fn value => \
                ! int64/eq OS value 5 { ! exit 0 } fail } \

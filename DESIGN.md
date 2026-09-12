@@ -474,7 +474,8 @@ of `lib/std/builtin.zy`, the launcher-supplied package contract, so selecting `I
 `Thk`, or `Ret` is one field search and every selection shares one intrinsic identity.
 Its operation groups are `numeric`, `text`, and `system`, and the field search descends through them,
 so a source selects `(/stdio; /process)` without naming the enclosing group.
-Fixed-width numbers, `Char`, `String`, and `Bytes` are compiler-canonical types.
+Fixed-width numbers, `Char`, and `String` are compiler-canonical types.
+`Bytes` is an abstract source-defined std type.
 `Reader`, `Writer`, and `OS` are abstract provider capabilities whose uses share one generative opening.
 This separates stable data representations from runtime ownership.
 The [language reference](docs/references/language.md#13-primitive-values-and-capabilities) defines
@@ -889,7 +890,9 @@ the workspace runs those tests through the `native_gc` target in `zydeco-tests`.
 String indices and lengths count Unicode scalar values; `byte_length` measures its UTF-8 encoding.
 These are distinct from grapheme clusters and from compiler source spans, which use byte offsets.
 `Char` is one Unicode scalar value.
-`Bytes` is an immutable octet sequence with no implicit encoding, and its indices and lengths count bytes.
+Source-defined `Bytes` is an immutable octet sequence with no implicit encoding; its indices and lengths count bytes.
+Its [ownership and composition rules](docs/proposals/bytes.md#immutable-owners-and-source-bytes) use retained
+immutable memory grants, with source slicing, comparison, copying, and scalar codecs.
 
 String and character literals share the escapes `\\`, `\"`, `\'`, `\n`, `\r`, `\t`, and `\0`.
 Unicode escapes use `\u{...}` with one to six hexadecimal digits denoting a Unicode scalar value;
@@ -918,8 +921,9 @@ These calls use the existing runtime word transport.
 
 A foreign annotation supplies an implementation for a thunk.
 The supported classifier has the form `Thk (A1 -> ... -> An -> Ret B)`, with each argument either a fixed-width integer
-or `Bytes`, and result `B` a fixed-width integer or `Unit` (C `void`).
-A byte buffer expands into a borrowed pointer and length, and the flattened C call admits at most six arguments.
+or explicit `Access * Addr * Int64` readable windows, and result `B` a fixed-width integer or `Unit` (C `void`).
+A checked window supplies one C pointer; the binding supplies any length separately.
+The C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
 Both WebAssembly backends and the ZASM interpreter reject native foreign imports.

@@ -1,12 +1,14 @@
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Bytes;
+  param val (/Addr; /Access; /VType; /CType; /Thk; /Ret; /Unit;
     /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;
-    /Float32; /Float64; /numeric; /bytes; builtin) : @(import("../builtin.zy")) that
+    /Float32; /Float64; /numeric; builtin) : @(import("../builtin.zy")) that
+  param val (/Bytes; /bytes; byte_package) : (@(import("../text/bytes.type.zy"))) Addr Access that
+  let codecs = (builtin |> (@(import("../numeric/codecs.zy")))) byte_package in
   let int = numeric/int64 in
-  let Representation = @(import("representation.type.zy")) in
-  let Descriptor = @(import("descriptor.type.zy")) in
+  let Representation = (@(import("representation.type.zy"))) Bytes in
+  let Descriptor = (@(import("descriptor.type.zy"))) Bytes in
   let make_codec = @(import("codec.zy")) in
-  let codec = builtin |> make_codec in
+  let codec = (builtin |> make_codec) byte_package in
   let Layout (A : VType) =
     Thk (forall (R : CType) . Thk R -> Thk (Descriptor A -> R) -> R)
   in
@@ -101,17 +103,17 @@ begin
       = Representation,
       (
         #unit = padding 0, = padding, = product, = align, = realize,
-        #int8 = scalar Int8 1 numeric/int8/to_le_bytes numeric/int8/from_le_bytes,
-        #int16 = scalar Int16 2 numeric/int16/to_le_bytes numeric/int16/from_le_bytes,
-        #int32 = scalar Int32 4 numeric/int32/to_le_bytes numeric/int32/from_le_bytes,
-        #int64 = scalar Int64 8 numeric/int64/to_le_bytes numeric/int64/from_le_bytes,
-        #uint8 = scalar UInt8 1 numeric/uint8/to_le_bytes numeric/uint8/from_le_bytes,
-        #uint16 = scalar UInt16 2 numeric/uint16/to_le_bytes numeric/uint16/from_le_bytes,
-        #uint32 = scalar UInt32 4 numeric/uint32/to_le_bytes numeric/uint32/from_le_bytes,
-        #uint64 = scalar UInt64 8 numeric/uint64/to_le_bytes numeric/uint64/from_le_bytes,
-        #float32 = scalar Float32 4 numeric/float32/to_le_bytes numeric/float32/from_le_bytes,
-        #float64 = scalar Float64 8 numeric/float64/to_le_bytes numeric/float64/from_le_bytes
+        #int8 = scalar Int8 1 codecs/int8/to_le_bytes codecs/int8/from_le_bytes,
+        #int16 = scalar Int16 2 codecs/int16/to_le_bytes codecs/int16/from_le_bytes,
+        #int32 = scalar Int32 4 codecs/int32/to_le_bytes codecs/int32/from_le_bytes,
+        #int64 = scalar Int64 8 codecs/int64/to_le_bytes codecs/int64/from_le_bytes,
+        #uint8 = scalar UInt8 1 codecs/uint8/to_le_bytes codecs/uint8/from_le_bytes,
+        #uint16 = scalar UInt16 2 codecs/uint16/to_le_bytes codecs/uint16/from_le_bytes,
+        #uint32 = scalar UInt32 4 codecs/uint32/to_le_bytes codecs/uint32/from_le_bytes,
+        #uint64 = scalar UInt64 8 codecs/uint64/to_le_bytes codecs/uint64/from_le_bytes,
+        #float32 = scalar Float32 4 codecs/float32/to_le_bytes codecs/float32/from_le_bytes,
+        #float64 = scalar Float64 8 codecs/float64/to_le_bytes codecs/float64/from_le_bytes
       )
-    ) : @(import("package.type.zy"))
+    ) : (@(import("package.type.zy"))) Bytes
   )
 end

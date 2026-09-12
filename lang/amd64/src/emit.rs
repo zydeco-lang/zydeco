@@ -408,7 +408,7 @@ impl<'e> Emitter<'e> {
                 Arg64::Mem(MemRef { reg: Reg::Rsp, offset: scratch_bytes + (index * 8) as i32 }),
             )));
             let helper = match parameter {
-                | ForeignParameter::BorrowedBytes => "zydeco_ffi_borrow_bytes".to_string(),
+                | ForeignParameter::BorrowedMemory => "zydeco_ffi_borrow_memory".to_string(),
                 | ForeignParameter::Integer(integer) => {
                     format!("zydeco_ffi_decode_{}", integer.source_name())
                 }
@@ -421,10 +421,9 @@ impl<'e> Emitter<'e> {
                     .filter(|(_, argument)| argument.parameter == index)
                     .map(|(slot, argument)| {
                         let register = match argument.component {
-                            | ForeignComponent::BytesPointer | ForeignComponent::Integer(_) => {
+                            | ForeignComponent::MemoryPointer | ForeignComponent::Integer(_) => {
                                 Reg::Rax
                             }
-                            | ForeignComponent::BytesLength => Reg::Rdx,
                         };
                         Instr::Mov(MovArgs::ToMem(
                             MemRef { reg: Reg::Rsp, offset: (slot * 8) as i32 },
@@ -495,7 +494,7 @@ impl Emitter<'_> {
             // construct an owned host string from static UTF-8 bytes
             Instr::Extern("zydeco_string_literal".to_string()),
             // source-to-C marshalling helpers
-            Instr::Extern("zydeco_ffi_borrow_bytes".to_string()),
+            Instr::Extern("zydeco_ffi_borrow_memory".to_string()),
         ]);
         for integer in <IntegerType as strum::VariantArray>::VARIANTS {
             for operation in ["decode", "encode"] {

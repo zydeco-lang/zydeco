@@ -1,5 +1,8 @@
 param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /OS; /Addr; /Access; /Buffer;
-  /buffer; /bytes; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+  /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+let buffer = (builtin |> (@(import("../../std/memory/buffer.zy")))) byte_package in
+
 let (/Fault; /views; /memory; /address_cell; native) =
   builtin |> (@(import("../../std/memory/native.zy")))
 in
@@ -43,7 +46,7 @@ let expect : Thk (
     let 0 = difference in
     ret ()
 } in
-! native/allocate 16 64 no {
+! native/allocate OS 16 64 no {
   fn owner =>
     do access <- ! require Access {
       fn error yes =>

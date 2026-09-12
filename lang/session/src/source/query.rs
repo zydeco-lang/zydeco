@@ -978,7 +978,7 @@ param (
   /VType; /CType; /Thk; /Ret; /Unit;
   /Int8; /Int16; /Int32; /Int64;
   /UInt8; /UInt16; /UInt32; /UInt64;
-  /Float32; /Float64; /Char; /String; /Bytes;
+  /Float32; /Float64; /Char; /String; /Addr; /Access;
   /Reader; /Writer; /OS; /numeric; /process; builtin
 ) : Builtin in
 let int64 = numeric/int64 in

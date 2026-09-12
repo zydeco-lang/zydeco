@@ -1,8 +1,11 @@
 begin
-  param (/Thk; /OS; /Int64; /Buffer; /Bytes; /buffer; /bytes; /numeric; /process; builtin) :
+  param (/Thk; /OS; /Int64; /Buffer; /numeric; /process; builtin) :
   @(import("../../std/builtin.zy")) that
+  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+  let buffer = (builtin |> (@(import("../../std/memory/buffer.zy")))) byte_package in
+
   let make_allocation = @(import("../../std/memory/allocation.zy")) in
-  let (= Allocator, = Allocate, allocation) = builtin |> make_allocation in
+  let (= Allocator, = Allocate, allocation) = (builtin |> make_allocation) byte_package in
   let fail = { ! process/exit 1 } in
   let error = { fn (_ : Int64) => ! fail } in
   let val expected_error (expected : Int64) (next : Thk OS) : Thk (Int64 -> OS) = {

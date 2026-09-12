@@ -3,7 +3,7 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let Bytes = @(intrinsic(bytes)) in
+  param Bytes : VType in
   let Int64 = @(intrinsic(i64)) in
   fn (A : VType) (Stored : VType) =>
       (#size :: Int64)

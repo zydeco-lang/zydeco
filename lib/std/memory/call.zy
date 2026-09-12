@@ -1,8 +1,9 @@
 begin
   let VType = @(intrinsic(vtype)) in
+  param val Bytes : VType in
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
-  let Storage = @(import("storage.type.zy")) in
+  let Storage = (@(import("storage.type.zy"))) Bytes in
   let Function (A : VType) (B : VType) (R : CType) =
     A -> Thk R -> Thk (B -> R) -> R
   in

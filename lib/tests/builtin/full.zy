@@ -25,7 +25,6 @@ param (
   /Float64;
   /Char;
   /String;
-  /Bytes;
   /numeric;
   /text;
   /system
@@ -33,6 +32,5 @@ param (
 let int64 = numeric/int64 in
 let char = text/char in
 let string = text/string in
-let bytes = text/bytes in
 do zero <- ! int64/add 0 0;
 ! process/exit zero

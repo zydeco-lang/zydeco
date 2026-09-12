@@ -1,8 +1,32 @@
 begin
-  param val (/Thk; /Ret; /UInt64; /Bytes) : @(import("../std/builtin.zy")) that
-
+  param val (/Thk; /Ret; /UInt64; /Int64; /Addr; /Access; builtin) : @(import("../std/builtin.zy")) that
+  param val (/Bytes; /bytes) : (@(import("../std/text/bytes.type.zy"))) Addr Access in
+  let Window = Access * Addr * Int64 in
+  let hash64 : Thk (Window -> Int64 -> UInt64 -> Ret UInt64) =
+    @(ffi(c, library("xxhash"), symbol("XXH64")))
+  in
+  let hash3 : Thk (Window -> Int64 -> Ret UInt64) =
+    @(ffi(c, library("xxhash"), symbol("XXH3_64bits")))
+  in
+  let Fault = @(import("../std/memory/fault.zy")) in
+  let fail : Thk (Fault -> Ret UInt64) = {
+    fn _ =>
+      @[partial]
+      let 0 = 1 in
+      ret (0 : UInt64)
+  } in
   (
-    #xxh64 = @(ffi(c, library("xxhash"), symbol("XXH64"))) : Thk (Bytes -> UInt64 -> Ret UInt64),
-    #xxh3_64bits = @(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk (Bytes -> Ret UInt64)
+    #xxh64 = {
+      fn (value : Bytes) (seed : UInt64) =>
+        ! bytes/with_window (Ret UInt64) value fail {
+          fn access address length => ! hash64 (access, address, length) length seed
+        }
+    },
+    #xxh3_64bits = {
+      fn (value : Bytes) =>
+        ! bytes/with_window (Ret UInt64) value fail {
+          fn access address length => ! hash3 (access, address, length) length
+        }
+    }
   )
 end

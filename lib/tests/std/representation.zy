@@ -1,9 +1,22 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Bytes;
-    /UInt8; /UInt32; /Int64; /numeric; /bytes; /process; builtin) :
-  @(import("../../std/builtin.zy")) that
+  param (
+    /VType;
+    /CType;
+    /Thk;
+    /Ret;
+    /Unit;
+    /OS;
+    /UInt8;
+    /UInt32;
+    /Int64;
+    /numeric;
+    /process;
+    builtin
+  ) : @(import("../../std/builtin.zy")) that
+  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+
   let make_memory = @(import("../../std/memory/package.zy")) in
-  let (= Layout, = Representation, memory) = builtin |> make_memory in
+  let (= Layout, = Representation, memory) = (builtin |> make_memory) byte_package in
   let int = numeric/int64 in
   let fail = { ! process/exit 1 } in
   let ! ensure (actual : Int64) (expected : Int64) (next : Thk OS) : OS =

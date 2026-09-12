@@ -1,0 +1,56 @@
+-- An immutable byte sequence; memory capabilities are supplied by its provider.
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
+  let Int64 = @(intrinsic(i64)) in
+  let UInt8 = @(intrinsic(u8)) in
+  let String = @(intrinsic(string)) in
+  let Fault = @(import("../memory/fault.zy")) in
+  param Addr : VType in
+  param Access : VType in
+  exists (= Bytes : VType) .
+    (
+      #bytes ::
+        (#empty :: Thk (Ret Bytes))
+      * (#length :: Thk (Bytes -> Ret Int64))
+      * (#append :: Thk (Bytes -> Bytes -> Ret Bytes))
+      * (#from_string :: Thk (String -> Ret Bytes))
+      * (#singleton :: Thk (UInt8 -> Ret Bytes))
+      * (#to_string :: Thk (forall (R : CType) . Bytes -> Thk R -> Thk (String -> R) -> R))
+      * (#get :: Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (UInt8 -> R) -> R))
+      * (
+          #slice :: Thk (
+            forall (R : CType) . Bytes -> Int64 -> Int64 -> Thk R -> Thk (Bytes -> R) -> R
+          )
+        )
+      * (#eq :: Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R))
+      * (#lt :: Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R))
+      * (#aligned :: Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (Bytes -> R) -> R))
+      * (
+          #from_immutable :: Thk (
+            forall (R : CType) . Access -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
+          )
+        )
+      * (
+          #with_window :: Thk (
+            forall (R : CType) .
+              Bytes -> Thk (Fault -> R) -> Thk (Access -> Addr -> Int64 -> R) -> R
+          )
+        )
+      * (
+          #copy_to :: Thk (
+            forall (R : CType) . Bytes -> Access -> Addr -> Thk (Fault -> R) -> Thk R -> R
+          )
+        )
+      * (
+          #build :: Thk (
+            forall (R : CType) .
+              Int64 -> Int64 -> Thk (Access -> Addr -> Thk (Fault -> R) -> Thk R -> R) -> Thk (
+                Fault -> R
+              ) -> Thk (Bytes -> R) -> R
+          )
+        )
+    )
+end

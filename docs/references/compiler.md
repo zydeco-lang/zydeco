@@ -1120,42 +1120,36 @@ Returning and continuation-selecting operations have distinct host call plans.
 C8 owns arithmetic exposure and folding; C11–C13 own the resulting target words and calls.
 The dynamic and ZASM interpreters share `PrimitiveOp::evaluate` with constant folding.
 
-Strings are immutable UTF-8 text and bytes are immutable octets.
-Interpreter and native host bytes use the shared [ByteBuffer](../../lang/machine/src/bytes.rs):
-`Rc<[u8]>` with a visible start and length.
-Interpreter slicing creates a constant-time window whose `as_slice` remains contiguous for foreign borrowing.
-Native slicing still copies; native byte handles are leaked boxes outside the managed collector,
-with no managed references inside the byte storage.
-Realignment first accepts an already-aligned window or reserves `length + alignment - 1` bytes
-and selects an aligned window inside the final `Rc` allocation.
-Checked reservation and offset failures select the failure continuation.
-General allocation failure, including allocation of the `Rc` itself, retains the host's allocation failure behavior;
-this is not a fully fallible allocator interface.
-The Wasm test host uses `Uint8Array` windows and opaque host handles.
-It validates alignment requests and preserves contents, but exposes no borrowed C address.
-A future host pointer-export interface must establish the requested alignment when providing physical storage;
-the current Wasm test host does not establish a native address guarantee.
-Equal octet sequences compare equally regardless of sharing.
-The [library guide](../../lib/std/README.md#byte-operation-costs) records the resulting operation costs;
-[byte representation](../proposals/bytes.md) retains the alternatives.
+Strings are immutable UTF-8 text. `Bytes` is a source-defined abstraction
+whose [owning design](../proposals/bytes.md#immutable-owners-and-source-bytes) specifies its representation
+and operations.
+The compiler and host recognize general memory capabilities, without a byte-sequence type or operation family.
 
-Scalar byte encoders return ordinary opaque byte handles.
-Decoders use a continuation-selecting host call, with a trailing spare box just like other numeric operations:
-opaque for `Int64`, `UInt64`, and `Float64`, unused for narrow results.
-Float adapters manipulate raw payload bits on every backend, including the Node host,
+[BufferArena](../../lang/machine/src/buffer.rs) and its [memory model](../../lang/machine/src/memory.rs) are shared
+by the interpreter and native host.
+Non-reused handles identify allocations, addresses, and access grants.
+Native allocation uses a checked reservation with an aligned visible range,
+initialized-byte tracking, and pointer-slot provenance.
+Freezing transfers storage to the arena's retained immutable-owner table; source slices retain
+that grant and never copy the visible payload merely to change a window.
+The arena retains frozen storage until runtime teardown.
+It contains no managed Zydeco references.
+The Node test host supplies the same capability checks with virtual addresses and no native C pointer export.
+[Memory laws](../proposals/bytes.md#addresses-cells-and-views) own the source-visible permissions,
+state transitions, alignment, initialization, and failure-before-mutation guarantees.
+
+Scalar `store_le` and `load_le` operations access a checked extent of the scalar's exact width at byte alignment.
+Native cells impose stronger alignment through an explicit preflight check.
+Loads use a continuation-selecting host call and a trailing spare box: opaque for `Int64`,
+`UInt64`, and `Float64`, unused for narrow results.
+Float adapters manipulate raw payload bits on every backend, including Node,
 so a round-trip does not canonicalize NaNs through a host floating-point conversion.
-The [source storage contract](../proposals/bytes.md#explicit-storage-contracts) composes these leaves
-without a new compiler IR layout form.
-Its stored buffers use the existing byte borrow at the foreign boundary.
+Source byte codecs allocate and freeze storage, and reject windows of the wrong length before loading.
 
-[BufferArena](../../lang/machine/src/buffer.rs) is shared by the interpreter and native host.
-It owns fixed-size mutable allocations behind non-reused handle IDs.
-Interpreter handles are typed host values; native handles use immediate words.
-Neither allocation payloads nor table entries contain managed Zydeco references.
-Close removes the allocation; freeze copies and aligns the immutable result before removing it.
-The Node host supplies corresponding checked handles and detached snapshots.
-[Buffer laws](../proposals/bytes.md#mutable-destination-capabilities) own the source-visible state transitions
-and errors.
+String conversion imports UTF-8 into immutable memory or validates a checked window before producing a string.
+Primitive I/O reads likewise return an immutable grant; writes receive `Access`, `Addr`,
+and byte count, and validate readability and initialization before the stream effect.
+The source system library converts between these windows and its shared byte package.
 
 Argument lookup returns one string or selects the missing branch; it retains no Zydeco continuation.
 The native host caches argument strings outside the managed heap, with no managed references in the snapshot.
@@ -1179,12 +1173,13 @@ Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resou
 ### Foreign calls
 
 [ForeignSignature](../../lang/statics/src/foreign.rs) is a checked call plan for a returning C thunk.
-Arguments are fixed-width integers or `Bytes`; a byte buffer flattens into borrowed pointer
-and length, with at most six flattened arguments.
+Arguments are fixed-width integers or an explicit `Access * Addr * Int64` readable window.
+A window contributes one borrowed pointer; its integer is a checked extent, not an implicit C length argument.
+Bindings supply any length as a separate integer. At most six C arguments are accepted.
 Results are fixed-width integers or `Unit` (C `void`).
 Its constructor enforces the flattened bound, and the validated fields remain private.
 Expansion yields ordered `ForeignArgument` entries identifying the source parameter and its integer,
-pointer, or length component; both execution paths consume that plan.
+or pointer component; both execution paths consume that plan.
 Checking validates the declared shape, not the external symbol's actual ABI.
 The trust and borrowing obligations belong to [L14](language.md#14-foreign-interfaces).
 
@@ -1201,7 +1196,9 @@ leaves excess integer register bits unspecified.
 Only 64-bit integer results need a spare opaque box; narrow integers and unit fit immediate words.
 The libffi adapter uses exact scalar storage and return types for integers,
 and its explicit void-return operation avoids reading nonexistent result storage.
-Marshalling helpers do not collect.
+Marshalling validates every window's live grant, read permission, bounds, and initialization before C entry.
+Invalid memory fails without calling C. The arena retains each borrowed allocation
+across the synchronous call; marshalling helpers do not collect.
 Native linking uses the library's linker name; interpreter loading uses platform shared-library names.
 Native foreign imports are unsupported in Wasm and the ZASM interpreter.
 

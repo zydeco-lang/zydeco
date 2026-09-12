@@ -33,29 +33,20 @@ impl HostCallMode {
             | BuiltinValueRole::StrGet
             | BuiltinValueRole::CharFromCodepoint
             | BuiltinValueRole::StrParseInt
-            | BuiltinValueRole::BytesToStr
-            | BuiltinValueRole::BytesGet
-            | BuiltinValueRole::BytesSlice
-            | BuiltinValueRole::BytesAligned
-            | BuiltinValueRole::BytesEq
-            | BuiltinValueRole::BytesLt
+            | BuiltinValueRole::MemoryClose
+            | BuiltinValueRole::MemoryFreeze
+            | BuiltinValueRole::MemoryImmutableLength
+            | BuiltinValueRole::MemoryCheckWrite
+            | BuiltinValueRole::MemoryFromString
+            | BuiltinValueRole::MemoryToString
             | BuiltinValueRole::MemoryAllocate
             | BuiltinValueRole::MemoryGrant
             | BuiltinValueRole::MemoryRevoke
             | BuiltinValueRole::MemoryBase
             | BuiltinValueRole::MemoryOffset
             | BuiltinValueRole::MemoryCheck
-            | BuiltinValueRole::MemoryLoadI64
-            | BuiltinValueRole::MemoryLoadU8
             | BuiltinValueRole::MemoryLoadAddr
-            | BuiltinValueRole::MemoryStoreI64
-            | BuiltinValueRole::MemoryStoreU8
             | BuiltinValueRole::MemoryStoreAddr
-            | BuiltinValueRole::BufferAllocate
-            | BuiltinValueRole::BufferRead
-            | BuiltinValueRole::BufferWrite
-            | BuiltinValueRole::BufferFreeze
-            | BuiltinValueRole::BufferClose
             | BuiltinValueRole::IoRead
             | BuiltinValueRole::IoReadLine
             | BuiltinValueRole::IoReadAll

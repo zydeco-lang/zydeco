@@ -1,7 +1,9 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Bytes;
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS;
     /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;
-    /Float32; /Float64; /numeric; /bytes; /process) : @(import("../../std/builtin.zy")) that
+    /Float32; /Float64; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+  let codecs = (builtin |> (@(import("../../std/numeric/codecs.zy")))) byte_package in
   let fail = { ! process/exit 1 } in
   def Octets : VType =
     data
@@ -45,17 +47,17 @@ begin
       do actual <- ! write value;
       ! bytes/eq OS actual expected { ! check_bits A write read expected next } fail
   in
-  ! check Int8 numeric/int8/to_le_bytes numeric/int8/from_le_bytes -128 +Cons(128, +Nil()) {
-    ! check Int16 numeric/int16/to_le_bytes numeric/int16/from_le_bytes -32768 (
+  ! check Int8 codecs/int8/to_le_bytes codecs/int8/from_le_bytes -128 +Cons(128, +Nil()) {
+    ! check Int16 codecs/int16/to_le_bytes codecs/int16/from_le_bytes -32768 (
       +Cons(0, +Cons(128, +Nil()))
     ) {
-      ! check Int32 numeric/int32/to_le_bytes numeric/int32/from_le_bytes -2147483648 (
+      ! check Int32 codecs/int32/to_le_bytes codecs/int32/from_le_bytes -2147483648 (
         +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))
       ) {
-        ! check Int64 numeric/int64/to_le_bytes numeric/int64/from_le_bytes -9223372036854775808 (
+        ! check Int64 codecs/int64/to_le_bytes codecs/int64/from_le_bytes -9223372036854775808 (
           +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))))))
         ) {
-          ! check Int64 numeric/int64/to_le_bytes numeric/int64/from_le_bytes 9223372036854775807 (
+          ! check Int64 codecs/int64/to_le_bytes codecs/int64/from_le_bytes 9223372036854775807 (
             +Cons(
               255,
               +Cons(
@@ -64,16 +66,16 @@ begin
               )
             )
           ) {
-            ! check UInt8 numeric/uint8/to_le_bytes numeric/uint8/from_le_bytes 255 (
+            ! check UInt8 codecs/uint8/to_le_bytes codecs/uint8/from_le_bytes 255 (
               +Cons(255, +Nil())
             ) {
-              ! check UInt16 numeric/uint16/to_le_bytes numeric/uint16/from_le_bytes 258 (
+              ! check UInt16 codecs/uint16/to_le_bytes codecs/uint16/from_le_bytes 258 (
                 +Cons(2, +Cons(1, +Nil()))
               ) {
-                ! check UInt32 numeric/uint32/to_le_bytes numeric/uint32/from_le_bytes 16909060 (
+                ! check UInt32 codecs/uint32/to_le_bytes codecs/uint32/from_le_bytes 16909060 (
                   +Cons(4, +Cons(3, +Cons(2, +Cons(1, +Nil()))))
                 ) {
-                  ! check UInt64 numeric/uint64/to_le_bytes numeric/uint64/from_le_bytes
+                  ! check UInt64 codecs/uint64/to_le_bytes codecs/uint64/from_le_bytes
                     18446744073709551615 (
                     +Cons(
                       255,
@@ -86,7 +88,7 @@ begin
                       )
                     )
                   ) {
-                    ! check UInt64 numeric/uint64/to_le_bytes numeric/uint64/from_le_bytes
+                    ! check UInt64 codecs/uint64/to_le_bytes codecs/uint64/from_le_bytes
                       9223372036854775808 (
                       +Cons(
                         0,
@@ -96,9 +98,9 @@ begin
                         )
                       )
                     ) {
-                      ! check Float32 numeric/float32/to_le_bytes numeric/float32/from_le_bytes 1.0
+                      ! check Float32 codecs/float32/to_le_bytes codecs/float32/from_le_bytes 1.0
                         +Cons(0, +Cons(0, +Cons(128, +Cons(63, +Nil())))) {
-                        ! check Float64 numeric/float64/to_le_bytes numeric/float64/from_le_bytes
+                        ! check Float64 codecs/float64/to_le_bytes codecs/float64/from_le_bytes
                           -2.0 (
                           +Cons(
                             0,
@@ -120,8 +122,8 @@ begin
                               )
                             )
                           );
-                          ! check_bits Float64 numeric/float64/to_le_bytes
-                            numeric/float64/from_le_bytes expected {
+                          ! check_bits Float64 codecs/float64/to_le_bytes
+                            codecs/float64/from_le_bytes expected {
                             do expected <- ! buffer (
                               +Cons(
                                 188,
@@ -134,8 +136,8 @@ begin
                                 )
                               )
                             );
-                            ! check_bits Float64 numeric/float64/to_le_bytes
-                              numeric/float64/from_le_bytes expected {
+                            ! check_bits Float64 codecs/float64/to_le_bytes
+                              codecs/float64/from_le_bytes expected {
                               do expected <- ! buffer (
                                 +Cons(
                                   1,
@@ -148,8 +150,8 @@ begin
                                   )
                                 )
                               );
-                              ! check_bits Float64 numeric/float64/to_le_bytes
-                                numeric/float64/from_le_bytes expected {
+                              ! check_bits Float64 codecs/float64/to_le_bytes
+                                codecs/float64/from_le_bytes expected {
                                 do expected <- ! buffer (
                                   +Cons(
                                     0,
@@ -162,8 +164,8 @@ begin
                                     )
                                   )
                                 );
-                                ! check_bits Float64 numeric/float64/to_le_bytes
-                                  numeric/float64/from_le_bytes expected {
+                                ! check_bits Float64 codecs/float64/to_le_bytes
+                                  codecs/float64/from_le_bytes expected {
                                   do expected <- ! buffer (
                                     +Cons(
                                       0,
@@ -179,8 +181,8 @@ begin
                                       )
                                     )
                                   );
-                                  ! check_bits Float64 numeric/float64/to_le_bytes
-                                    numeric/float64/from_le_bytes expected {
+                                  ! check_bits Float64 codecs/float64/to_le_bytes
+                                    codecs/float64/from_le_bytes expected {
                                     do expected <- ! buffer (
                                       +Cons(
                                         0,
@@ -196,38 +198,38 @@ begin
                                         )
                                       )
                                     );
-                                    ! check_bits Float64 numeric/float64/to_le_bytes
-                                      numeric/float64/from_le_bytes expected {
+                                    ! check_bits Float64 codecs/float64/to_le_bytes
+                                      codecs/float64/from_le_bytes expected {
                                       do expected <- ! buffer (
                                         +Cons(69, +Cons(35, +Cons(129, +Cons(127, +Nil()))))
                                       );
-                                      ! check_bits Float32 numeric/float32/to_le_bytes
-                                        numeric/float32/from_le_bytes expected {
+                                      ! check_bits Float32 codecs/float32/to_le_bytes
+                                        codecs/float32/from_le_bytes expected {
                                         do expected <- ! buffer (
                                           +Cons(69, +Cons(35, +Cons(193, +Cons(127, +Nil()))))
                                         );
-                                        ! check_bits Float32 numeric/float32/to_le_bytes
-                                          numeric/float32/from_le_bytes expected {
+                                        ! check_bits Float32 codecs/float32/to_le_bytes
+                                          codecs/float32/from_le_bytes expected {
                                           do expected <- ! buffer (
                                             +Cons(1, +Cons(0, +Cons(0, +Cons(0, +Nil()))))
                                           );
-                                          ! check_bits Float32 numeric/float32/to_le_bytes
-                                            numeric/float32/from_le_bytes expected {
+                                          ! check_bits Float32 codecs/float32/to_le_bytes
+                                            codecs/float32/from_le_bytes expected {
                                             do expected <- ! buffer (
                                               +Cons(0, +Cons(0, +Cons(128, +Cons(255, +Nil()))))
                                             );
-                                            ! check_bits Float32 numeric/float32/to_le_bytes
-                                              numeric/float32/from_le_bytes expected {
+                                            ! check_bits Float32 codecs/float32/to_le_bytes
+                                              codecs/float32/from_le_bytes expected {
                                               do expected <- ! buffer (
                                                 +Cons(0, +Cons(0, +Cons(128, +Cons(127, +Nil()))))
                                               );
-                                              ! check_bits Float32 numeric/float32/to_le_bytes
-                                                numeric/float32/from_le_bytes expected {
+                                              ! check_bits Float32 codecs/float32/to_le_bytes
+                                                codecs/float32/from_le_bytes expected {
                                                 do expected <- ! buffer (
                                                   +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))
                                                 );
-                                                ! check_bits Float32 numeric/float32/to_le_bytes
-                                                  numeric/float32/from_le_bytes expected {
+                                                ! check_bits Float32 codecs/float32/to_le_bytes
+                                                  codecs/float32/from_le_bytes expected {
                                                   ! process/exit 0
                                                 }
                                               }
