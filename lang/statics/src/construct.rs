@@ -1083,7 +1083,12 @@ where
 impl<'a> Construct<Tycker<'a>, CompuId> for cs::Top {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> CompuId {
         let top = cs::TopTy.build(tycker, env);
-        Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top, env)
+        let Ok(Type::CoData(codata)) = tycker.type_filled(&top) else {
+            unreachable!("top is an empty codata")
+        };
+        let compu = Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top, env);
+        tycker.statics.codata_hints.insert_new(compu, codata);
+        compu
     }
 }
 

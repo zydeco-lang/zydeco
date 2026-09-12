@@ -1167,10 +1167,6 @@ where
     }
 }
 // top
-impl MonConstruct<CompuId> for cs::Top {
-    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-        let (env, top) = cs::TopTy.mbuild(tycker, env)?;
-        let alloc = Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top, &env.ty);
-        Ok((env, alloc))
-    }
+impl_mon_construct_from_construct! {
+    impl MonConstruct<CompuId> for cs::Top;
 }
