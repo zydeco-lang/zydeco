@@ -98,7 +98,7 @@ struct ValuePlan<T> {
     value: T,
 }
 
-/// A residual pattern decision containing a literal comparison.
+/// Ordered residual pattern decisions, including comparisons and fallthrough.
 #[derive(Clone)]
 enum MatchPlan {
     Fail,
@@ -769,7 +769,12 @@ impl Lower for ss::CompuId {
                 })
             }
             | Compu::Match(Match { scrut, arms }) => {
-                let needs_plan = arms.iter().any(|arm| lo.pattern_needs_match_plan(arm.binder));
+                // A constructor followed by a catch-all needs ordered fallthrough.
+                // Backend coproduct matches contain constructor arms only.
+                let mixed = arms.iter().any(|arm| lo.is_coprod_pattern(arm.binder))
+                    && arms.iter().any(|arm| !lo.is_coprod_pattern(arm.binder));
+                let needs_plan =
+                    mixed || arms.iter().any(|arm| lo.pattern_needs_match_plan(arm.binder));
                 let is_coprod = !needs_plan && lo.is_coprod_match(&arms);
                 let scrut = scrut.lower(lo, ());
                 scrut.lower_into(lo, move |scrut, lo| {
