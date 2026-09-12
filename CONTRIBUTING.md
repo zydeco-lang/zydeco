@@ -156,64 +156,10 @@ See the [WebAssembly ABI and limitations](DESIGN.md#webassembly-backend) before 
 
 ### Select Compiler Passes
 
-Discover the optional high-SPS passes and explain their enclosing compiler phase:
-
-```sh
-zydeco passes
-zydeco passes --sps-passes default
-zydeco passes --sps-passes normalize,normalize
-```
-
-Every `build` target accepts `--sps-passes`.
-The default runs the existing normalizer once; `none` disables optional high-SPS transformations,
-and a comma-separated list preserves order and repeated entries.
-The initial built-in catalog contains `normalize`, which keeps its existing combined reductions and demand analysis.
-The required checks and closure conversion still run with an empty selection.
-The source interpreter (`run`), `check`, and the REPL do not execute this backend phase and do not accept the option.
-
-```sh
-zydeco build lib/tests/core/representation-policies.zy --target zir --sps-passes none
-zydeco build lib/tests/core/representation-policies.zy --target wasm-sps --sps-passes normalize,normalize
-```
-
-Use `--trace-passes` to report occurrences and timings, `--verify-passes` to check high-SPS invariants
-before and after each selected pass, and `--dump-passes` to render the corresponding intermediate programs.
-Trace and dump output goes to stderr, leaving the selected target's stdout intact.
-With `none`, there are no optional occurrences to inspect; the required phase checks still run.
-Invalid selections are rejected before loading the source or writing build artifacts.
-
-```sh
-zydeco build lib/tests/core/representation-policies.zy --target zir \
-  --sps-passes normalize,normalize --trace-passes --verify-passes --dump-passes
-```
-
-Rust callers can provide a static `pipeline!`, a runtime `PassSequence`,
-or a custom `CompilerPass` through `SpsLowPipeline::with_optimizations`.
-[`cli/examples/pipelines.rs`](cli/examples/pipelines.rs) demonstrates static and dynamic composition,
-a custom pass with borrowed configuration, and a timing comparison on the same checked source:
-
-```sh
-cargo run --release -p zydeco-cli --example pipelines -- --iterations 30 \
-  lib/tests/core/representation-policies.zy lib/tests/core/gc-stress.zy
-```
-
-The CSV reports average pipeline construction and normalization times separately,
-excluding source checking and high-SPS construction.
-It also records the resulting computation-node count.
-Use repeated runs when comparing timings; these measurements do not establish generated-program performance.
-The [pass composition contract](DESIGN.md#compiler-pass-composition) owns execution and error semantics.
-
-Focused checks cover ordering, failure boundaries, CLI selection, and applicable backend execution:
-
-```sh
-cargo test -p zydeco-utils -p zydeco-stackir --lib
-cargo test -p zydeco-cli --test passes
-```
-
-The ZASM interpreter has no external-call dispatch; its coverage checks lowering,
-while native and both WebAssembly backends execute host effects.
-Numeric imports retained by an empty selection use the same arithmetic contracts as normalized primitive instructions,
-including trapping operations and wide scalar boxes.
+See the [compiler reference](docs/references/compiler.md#selecting-and-inspecting-passes)
+for pass discovery, selection, and inspection commands.
+Its [pipeline examples and validation](docs/references/compiler.md#pipeline-examples-and-validation) section
+contains the Rust composition example, timing experiment, and focused checks.
 
 ### Representation Experiments
 

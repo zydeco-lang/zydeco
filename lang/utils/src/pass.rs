@@ -1,4 +1,7 @@
 //! Typed compiler transformations and ordered composition.
+//!
+//! The "Compiler pass composition" section of `docs/references/compiler.md`
+//! owns the rationale, ownership and execution contract, and usage examples.
 
 use std::convert::Infallible;
 
@@ -9,11 +12,7 @@ pub use observe::{
     Observed, PassFailure, PassFailureCause, PassInvocation, PassLocation, PassObserver,
 };
 
-/// A configured transformation with an explicit input and output.
-///
-/// Passes keep dependencies and configuration in `self`; each invocation creates
-/// its own temporary construction state. Inputs can be owned programs or typed
-/// borrows. Completed phase arenas need not expose mutable access.
+/// A configured transformation with an explicit input, output, and domain error.
 pub trait CompilerPass<Input> {
     type Output;
     type Error;

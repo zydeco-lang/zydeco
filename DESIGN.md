@@ -550,94 +550,9 @@ Policies feed assembly lowering before stack and frame validation.
 
 ### Compiler Pass Composition
 
-Compiler pipelines specify an order of transformations whose intermediate representations may differ.
-The `CompilerPass<Input>` trait
-in [`lang/utils/src/pass.rs`](lang/utils/src/pass.rs) exposes each transformation's input,
-associated `Output`, and domain `Error`.
-A pass value holds configuration and typed dependencies;
-`run(&mut self, input)` creates the temporary construction state for that invocation.
-Inputs can own a program or borrow one, so composition preserves the existing arena ownership boundaries.
-
-`pipeline![first, second, ...]` constructs a nonempty sequence and connects each output to the next input.
-Stage expressions are evaluated once, in declaration order, when the pipeline is constructed.
-Execution follows that order and stops at the first error.
-A sequence is itself a pass, so named pipelines and nested sequences compose through the same interface.
-The compiler checks adjacent input and output types; semantic ordering requirements remain the responsibility
-of the selected stages and their validated program types.
-
-Stages in a sequence share an error type. `map_err` translates domain errors at a composition boundary;
-`with_error` gives an infallible pass the enclosing pipeline's error type.
-`run_infallible` removes the unreachable error case when executing an entirely infallible sequence.
-For example, a Rust caller can select a repeated high-SPS normalization sequence:
-
-```rust
-let optimizations = pipeline![Normalizer, Normalizer];
-let mut lowering = SpsLowPipeline { scoped: &scoped, statics: &statics }
-    .with_optimizations(optimizations);
-let sps_low = lowering.run_infallible(high);
-```
-
-`SpsLowPipeline` declares its own high-SPS checks, normalization, and closure conversion as a sequence.
-Its `with_optimizations` method accepts any pass preserving `BranchJoinProgram`,
-including `Identity`, a custom Rust pass, or a nested sequence.
-The selected stage runs between the required high-SPS checks and before closure conversion;
-the default selection remains the existing normalizer.
-Functions and closures returning `Result` also implement the pass interface,
-allowing local checks to participate without additional named types.
-`LoweringPipeline` composes assembly construction, stack analysis, and publication from a borrowed SPSLow program.
-Its `with_native_frames` option returns a pass that ends in checked `NativeProgram::prepare`,
-retaining the distinct portable and native output types and the native frame-planning error.
-This composition mechanism schedules explicit stages; source query caching and revision ownership remain
-with the session's Salsa database described below.
-
-Runtime selection uses `PassSequence<'p, Ir, E>`, a vector of configured passes sharing one input/output contract
-and error type.
-`with_pass` appends an occurrence and retains its position, including duplicates.
-An empty sequence and `Identity` return their input.
-`when(enabled)` conditionally runs a same-IR stage; `repeat(times)` executes the whole enclosed stage
-or group exactly that many times, stopping at the first error.
-A disabled stage or zero repetitions return the input without invoking the enclosed pass.
-Configuration is constructed once, while each invocation receives the preceding invocation's output.
-`by_ref` allows a sequence to borrow an existing configured pass,
-and the sequence lifetime permits borrowed dependencies without imposing `Clone`, `Send`, or `'static` on every pass.
-Failure does not roll back ownership of an input consumed by a pass.
-
-`with_observer` wraps a pass with typed before/after hooks for inspection, verification, or rendering.
-`PassLocation` identifies its occurrence with a name and structural index path;
-the wrapper counts invocations, including repetitions and reuse across outer executions.
-Paths are stored with zero-based indices and displayed with one-based positions.
-Observers borrow the program, and timing measures pass execution separately from observer callbacks.
-A rejected before hook prevents the pass from running; a rejected after hook prevents downstream execution.
-`PassFailure` retains the occurrence and distinguishes the original domain error
-from a before/after observation failure.
-Panics remain compiler bugs and are not converted into ordinary pass errors.
-
-Built-in selection is described by `HighSpsPlan` in [`lang/stackir/src/passes.rs`](lang/stackir/src/passes.rs).
-`Default` selects one normalizer, `None` selects no optional transformations,
-and `Custom` retains an ordered vector of typed `HighSpsPass` entries.
-The textual forms are `default`, `none`, and comma-separated pass names; the initial catalog contains `normalize`.
-An empty textual selection, unknown names or options, empty list entries,
-and presets embedded inside lists are rejected before source loading.
-Displaying a plan gives its canonical textual selection; `explain` expands its optional stages together
-with their required checking and conversion boundaries.
-Rust callers can instead provide arbitrary `CompilerPass` implementations without joining the built-in catalog.
-
-The command compiler owns the plan and instantiates its passes after checked arenas are available.
-An observed plan shares a borrowed observer among distinct occurrences;
-each compilation creates fresh invocation counts and temporary pass state.
-The unobserved default retains static composition.
-`BackendProgram` records the selection that produced its frozen SPSLow input,
-and its assembly cache belongs to that product.
-Selecting another high-SPS plan requires a new lowering result, so cached assembly cannot cross selections.
-Assembly representation policy remains independently selectable and invalidates that product's assembly cache.
-The [compilation workflow](CONTRIBUTING.md#select-compiler-passes) documents selection, inspection, and discovery.
-
-High-SPS is the configurable optimization boundary. Assembly construction, stack analysis, publication,
-and native frame preparation remain required transformations in their typed pipeline.
-A future assembly rewrite must execute before the affected analyses,
-or explicitly reestablish them before publishing the completed program.
-Convergence and shared analysis caching require additional change and invalidation contracts;
-ordered composition itself provides neither inferred scheduling nor a second source query database.
+The [compiler reference](docs/references/compiler.md#compiler-pass-composition) owns the pass scheme's motivation,
+typed composition and ownership contract, runtime selection, observation, and required phase boundaries.
+It also contains the Rust and CLI examples.
 
 ### Query-Based Analysis
 

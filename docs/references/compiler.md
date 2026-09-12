@@ -2,8 +2,10 @@
 
 This reference describes the compiler's current representations, phase contracts, and maintenance entry points.
 It assumes basic programming-languages background.
-The [language reference](language.md) owns source semantics;
-[CONTRIBUTING](../../CONTRIBUTING.md) owns setup and command-line workflows.
+The [language reference](language.md) owns source semantics; [CONTRIBUTING](../../CONTRIBUTING.md) owns setup
+and general command-line workflows.
+This reference owns [compiler pass composition](#compiler-pass-composition),
+including pipeline selection and inspection.
 Component guides map local modules, and linked design records retain alternatives and open decisions.
 
 Each completed program has one selected root. Each phase establishes the representation its consumers need;
@@ -45,7 +47,7 @@ flowchart TD
     Statics --> Entry[Executable selection and completeness]
     Entry --> Dynamics[Builtin linking and interpreter]
     Entry --> High[BranchJoinProgram: high SPS]
-    High --> Normalize[Normalization and demand analysis]
+    High --> Normalize[Selected high-SPS passes: normalization by default]
     Normalize --> Low[SpsLowProgram: closure conversion]
     Low --> SPS[Structured WebAssembly]
     Low --> Portable[Portable ZASM and stack analysis]
@@ -64,13 +66,13 @@ The main boundaries are concrete program types:
 | `CheckedProgram` | `CompilerSession::checked_program` | Full typed-tree inspection |
 | `ExecutableProgram` | `CompilerSession::executable_program` | Builtin root linking or lowering |
 | `DynamicsProgram` | [BuiltinRootLinker](../../lang/dynamics/src/link.rs) | Reference interpreter |
-| `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | High SPS normalization |
+| `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | Selected high-SPS transformations, then closure conversion |
 | `SpsLowProgram` | [SpsLowPipeline::run](../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
 | `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | ZASM interpreter or AM Wasm |
 | `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
 
 Checked-root lowering, SPSLow conversion, and assembly lowering compose through typed compiler passes;
-[compiler pass composition](../../DESIGN.md#compiler-pass-composition) owns their execution and error contract.
+[compiler pass composition](#compiler-pass-composition) below owns their execution and error contract.
 
 Consider this executable, which exits successfully:
 
@@ -99,6 +101,180 @@ fn x => ret x
 Its inference region cannot close. The session retains a rejected analysis with diagnostics and available facts;
 `CommandCompiler::analyze` reports rejection, and executable selection cannot produce a backend input.
 Load, parse, desugar, and resolve failures retain the source information available at their own boundary.
+
+### Compiler pass composition
+
+An optimization can expose work for a later pass, and applying a pass again may simplify its result.
+Compiler developers need explicit control over order, omission, and repetition when comparing transformations.
+The pass scheme gives Rust callers ordinary values and typed interfaces for that control;
+CLI plans select built-in transformations within a phase whose required checks and lowering remain fixed.
+The same interface composes validation and representation-changing lowerers,
+so configurable optimization stages fit into the compiler's existing phase boundaries.
+
+#### Typed passes and static composition
+
+The [`CompilerPass<Input>` trait](../../lang/utils/src/pass.rs) exposes each transformation's input,
+associated `Output`, and domain `Error`.
+A pass value holds configuration and typed dependencies;
+`run(&mut self, input)` creates the temporary construction state for that invocation.
+Inputs can own a program or borrow one, preserving the existing arena ownership boundaries.
+Completed phase arenas need not expose mutable access.
+Functions and closures returning `Result` also implement the interface, allowing local checks to participate
+without additional named types.
+
+`pipeline![first, second, ...]` constructs a nonempty sequence and connects each output to the next input.
+Stage expressions are evaluated once, in declaration order, when the pipeline is constructed.
+Execution follows that order and stops at the first error.
+A sequence is itself a pass, so named pipelines and nested sequences compose through the same interface.
+Rust checks adjacent input and output types; semantic ordering requirements remain the responsibility
+of the selected stages and their validated program types.
+
+Stages in a sequence share an error type. `map_err` translates domain errors at a composition boundary;
+`with_error` gives an infallible pass the enclosing pipeline's error type.
+`run_infallible` removes the unreachable error case when executing an entirely infallible sequence.
+For a high-SPS program `high` and its naming arenas, a Rust caller can select repeated normalization:
+
+```rust
+use zydeco_stackir::{SpsLowPipeline, high::normalize::Normalizer};
+use zydeco_utils::{pass::CompilerPass, pipeline};
+
+let optimizations = pipeline![Normalizer, Normalizer];
+let mut lowering = SpsLowPipeline { scoped: &scoped, statics: &statics }
+    .with_optimizations(optimizations);
+let sps_low = lowering.run_infallible(high);
+```
+
+#### Runtime sequences and execution adapters
+
+[`PassSequence<'p, Ir, E>`](../../lang/utils/src/pass/sequence.rs) stores a vector
+of configured passes sharing one input/output contract and error type.
+Static composition retains concrete pass types; a runtime sequence boxes passes at its storage boundary.
+`with_pass` appends an occurrence and retains its position, including duplicates.
+An empty sequence and `Identity` return their input.
+`when(enabled)` conditionally runs a stage that preserves its IR type;
+`repeat(times)` executes the whole enclosed stage or group exactly that many times, stopping at the first error.
+A disabled stage or zero repetitions return the input without invoking the enclosed pass.
+Configuration is constructed once, while each invocation receives the preceding invocation's output.
+
+`by_ref` allows a sequence to borrow an existing configured pass,
+and the sequence lifetime permits borrowed dependencies without imposing `Clone`, `Send`, or `'static` on every pass.
+Failure does not roll back ownership of an input consumed by a pass.
+This makes reuse explicit while leaving each pass responsible for its temporary construction state.
+
+#### Observation and failures
+
+[`with_observer`](../../lang/utils/src/pass/observe.rs) wraps a pass with typed before/after hooks
+for inspection, verification, or rendering.
+`PassLocation` identifies its occurrence with a name and structural index path;
+the wrapper counts invocations, including repetitions and reuse across outer executions.
+Paths are stored with zero-based indices and displayed with one-based positions.
+Observers borrow the program, and timing measures pass execution separately from observer callbacks.
+A rejected before hook prevents the pass from running; a rejected after hook prevents downstream execution.
+`PassFailure` retains the occurrence and distinguishes the original domain error
+from a before/after observation failure.
+Panics remain compiler bugs and are not converted into ordinary pass errors.
+
+#### Built-in plans and phase boundaries
+
+[`SpsLowPipeline`](../../lang/stackir/src/pipeline.rs) declares high-SPS checks,
+optional transformations, and closure conversion as a sequence.
+Its `with_optimizations` method accepts any pass preserving `BranchJoinProgram`,
+including `Identity`, a custom Rust pass, or a nested sequence.
+The selected stage runs between the required high-SPS checks and before closure conversion.
+The default runs the existing normalizer once, keeping its combined reductions and demand analysis;
+an empty selection still runs the checks and closure conversion.
+[High SPS](#c8-high-sps-lowering-normalization-and-demand) defines the representation and normalization rules.
+
+[`HighSpsPlan`](../../lang/stackir/src/passes.rs) describes built-in selection.
+`Default` selects one normalizer, `None` selects no optional transformations,
+and `Custom` retains an ordered vector of typed `HighSpsPass` entries.
+The textual forms are `default`, `none`, and comma-separated pass names; the initial catalog contains `normalize`.
+An empty textual selection, unknown names or options, empty list entries,
+and presets embedded inside lists are rejected before source loading or artifact creation.
+Displaying a plan gives its canonical textual selection; `explain` expands its optional stages together
+with their required checking and conversion boundaries.
+Rust callers can provide arbitrary `CompilerPass` implementations without joining the built-in catalog.
+
+The command compiler owns the plan and instantiates its passes after checked arenas are available.
+An observed plan shares a borrowed observer among distinct occurrences;
+each compilation creates fresh invocation counts and temporary pass state.
+The high-SPS observer verifies lexical ownership, branch joins, and root closure using borrowed phase data.
+The unobserved default retains static composition.
+`BackendProgram` records the selection that produced its frozen SPSLow input,
+and its assembly cache belongs to that product.
+Selecting another high-SPS plan requires a new lowering result, so cached assembly cannot cross selections.
+[Assembly representation policy](#policy-selection) remains independently selectable and invalidates
+that product's assembly cache.
+
+High SPS is the configurable optimization boundary.
+[`LoweringPipeline`](../../lang/assembly/src/pipeline.rs) composes required assembly construction,
+stack analysis, and publication from a borrowed SPSLow program.
+Its `with_native_frames` option returns a pass that ends in checked `NativeProgram::prepare`,
+retaining the distinct portable and native output types and the native frame-planning error.
+A future assembly rewrite must execute before the affected analyses,
+or explicitly reestablish them before publishing the completed program.
+Convergence and shared analysis caching require additional change and invalidation contracts.
+Stage scheduling and prerequisite order are explicit in the selected sequence;
+source query caching and revision ownership remain
+with the [session's Salsa database](#c3-source-loading-sessions-queries-and-memory-retention).
+
+#### Selecting and inspecting passes
+
+These commands run from the repository root; [CLI setup](../../CONTRIBUTING.md#build-the-cli) explains how
+to build or install `zydeco`.
+Discover the optional passes and explain their enclosing compiler phase without loading a source:
+
+```sh
+zydeco passes
+zydeco passes --sps-passes default
+zydeco passes --sps-passes normalize,normalize
+```
+
+Every `build` target accepts `--sps-passes`.
+The source interpreter (`run`), `check`, and the REPL do not execute this backend phase and do not accept the option.
+For example, disable optional high-SPS transformations or select repeated normalization:
+
+```sh
+zydeco build lib/tests/core/representation-policies.zy --target zir --sps-passes none
+zydeco build lib/tests/core/representation-policies.zy --target wasm-sps --sps-passes normalize,normalize
+```
+
+Use `--trace-passes` to report occurrences and timings, `--verify-passes` to check high-SPS invariants
+before and after each selected pass, and `--dump-passes` to render the corresponding intermediate programs.
+Trace and dump output goes to stderr, leaving the selected target's stdout intact.
+With `none`, there are no optional occurrences to inspect; the required phase checks still run.
+
+```sh
+zydeco build lib/tests/core/representation-policies.zy --target zir \
+  --sps-passes normalize,normalize --trace-passes --verify-passes --dump-passes
+```
+
+#### Pipeline examples and validation
+
+The runnable Rust example [`cli/examples/pipelines.rs`](../../cli/examples/pipelines.rs) demonstrates static
+and dynamic composition, a custom pass with borrowed configuration, and a timing comparison on the same checked source:
+
+```sh
+cargo run --release -p zydeco-cli --example pipelines -- --iterations 30 \
+  lib/tests/core/representation-policies.zy lib/tests/core/gc-stress.zy
+```
+
+The CSV reports average pipeline construction and normalization times separately,
+excluding source checking and high-SPS construction.
+It also records the resulting computation-node count.
+Use repeated runs when comparing timings; these measurements do not establish generated-program performance.
+
+Focused checks cover ordering, failure boundaries, CLI selection, and applicable backend execution:
+
+```sh
+cargo test -p zydeco-utils -p zydeco-stackir --lib
+cargo test -p zydeco-cli --test passes
+```
+
+The ZASM interpreter has no external-call dispatch; its coverage checks lowering,
+while native and both WebAssembly backends execute host effects.
+Numeric imports retained by an empty selection use the same arithmetic contracts as normalized primitive instructions,
+including trapping operations and wide scalar boxes, as described under [primitive calls](#primitive-calls).
 
 ## C2. Compiler data, identities, arenas, and source provenance
 
@@ -505,13 +681,9 @@ Stack lets guard value-coproduct matches so every branch shares one supplied con
 The [high verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
 and this branch-join shape.
 
-[SpsLowPipeline](../../lang/stackir/src/pipeline.rs) defaults to validating high SPS, normalizing it,
-validating the rebuilt program, and consuming it through closure conversion.
-Its `with_optimizations` method replaces the optional normalization stage with a same-IR Rust pass or sequence,
-under the [pass composition contract](../../DESIGN.md#compiler-pass-composition).
-[`HighSpsPlan`](../../lang/stackir/src/passes.rs) supplies the built-in catalog and command selection;
-its observer verifies lexical ownership, branch joins, and root closure using borrowed phase data.
-The [workflow](../../CONTRIBUTING.md#select-compiler-passes) documents discovery and inspection flags.
+The [pass composition contract](#built-in-plans-and-phase-boundaries) owns the configurable stage between high-SPS
+checks and closure conversion, including its default normalization and built-in plans.
+The [selection and inspection guide](#selecting-and-inspecting-passes) gives the corresponding CLI commands.
 These optimizations are optional consequences of known runtime structure;
 they do not relax L10's source elimination boundary.
 The normalizer preserves definition identities while allocating fresh syntax for the surviving lexical tree.

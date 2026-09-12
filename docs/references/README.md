@@ -5,8 +5,9 @@ The language reference gives source rules and observable behavior; the compiler 
 
 - [Language reference](language.md): syntax, typing, evaluation, static composition, packages, host interfaces,
   and execution profiles.
-- [Compiler implementation reference](compiler.md): phase contracts, representations, checking, lowering,
-  runtimes, tooling, and validation, with entry points and maintenance indexes.
+- [Compiler implementation reference](compiler.md): phase contracts,
+  [pass composition and selection](compiler.md#compiler-pass-composition), representations, checking,
+  lowering, runtimes, tooling, and validation, with entry points and maintenance indexes.
 
 The references own material transferred
 through the [completed consolidations](../todos/reference-plan.md#completed-proposal-retirements).
