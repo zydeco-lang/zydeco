@@ -83,8 +83,8 @@ fn monadic_metadata_lowers_arbitrary_terms_to_monadic_blocks() {
             let mut parser = Parser::new();
             let unit = StrictParser::source(source, &mut parser)
                 .unwrap_or_else(|error| panic!("expected `{source}` to parse: {error}"));
-            let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit)
-                .run()
+            let output = SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }
+                .run(unit)
                 .unwrap_or_else(|error| panic!("expected `{source}` to desugar: {error}"));
             let bitter::Term::MoBlock(block) = &output.arena.terms[&output.root] else {
                 panic!("expected `{source}` to lower to a monadic block")
@@ -104,10 +104,11 @@ fn monadic_metadata_rejects_arguments() {
     let source = "@[monadic(extra)] ret ()";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
-        | Ok(_) => panic!("monadic metadata must not accept arguments"),
-        | Err(error) => error,
-    };
+    let error =
+        match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
+            | Ok(_) => panic!("monadic metadata must not accept arguments"),
+            | Err(error) => error,
+        };
 
     assert!(matches!(
         &error,
@@ -124,7 +125,8 @@ fn typeof_metadata_preserves_its_operand_in_a_distinct_elaboration_form() {
     ["@[typeof] ret 1", "@[typeof()] ret 1"].into_iter().for_each(|source| {
         let mut parser = Parser::new();
         let unit = StrictParser::source(source, &mut parser).unwrap();
-        let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
+        let output =
+            SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
         let bitter::Term::TypeOf(bitter::TypeOf(operand)) = output.arena.terms[&output.root] else {
             panic!("typeof must lower to a classifier query")
         };
@@ -140,10 +142,11 @@ fn typeof_metadata_rejects_arguments_at_the_annotation_span() {
     let source = "@[typeof(extra)] ret 1";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
-        | Ok(_) => panic!("typeof metadata must not accept arguments"),
-        | Err(error) => error,
-    };
+    let error =
+        match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
+            | Ok(_) => panic!("typeof metadata must not accept arguments"),
+            | Err(error) => error,
+        };
     assert!(matches!(
         &error,
         crate::bitter::DesugarError::InvalidTypeOfMeta {
@@ -159,11 +162,13 @@ fn typeof_metadata_extent_survives_bitter_formatting() {
     let source = "(@[typeof] fn value => ret value) argument";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
+    let output =
+        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
     let formatted = output.root.ugly(&BitterFormatter::new(&output.arena));
     let mut reparsed = Parser::new();
     let unit = StrictParser::source(&formatted, &mut reparsed).unwrap();
-    let output = SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit).run().unwrap();
+    let output =
+        SourceUnitDesugarer { spans: &reparsed.spans, textual: &reparsed.arena }.run(unit).unwrap();
     let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
         panic!("the application must remain outside typeof")
     };
@@ -175,10 +180,11 @@ fn metadata_payload_errors_highlight_the_payload() {
     let source = "@[intrinsic(unit)] Unit";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let error = match SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run() {
-        | Ok(_) => panic!("intrinsic metadata must reject a non-hole payload"),
-        | Err(error) => error,
-    };
+    let error =
+        match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
+            | Ok(_) => panic!("intrinsic metadata must reject a non-hole payload"),
+            | Err(error) => error,
+        };
 
     assert!(matches!(&error, crate::bitter::DesugarError::IntrinsicPayloadNotHole(_)));
     assert_eq!(&source[error.span().range()], "Unit");
@@ -189,13 +195,15 @@ fn monadic_metadata_extent_survives_bitter_formatting() {
     let source = "(@[monadic] fn value => ret value) argument";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
-    let output = SourceUnitDesugarer::new(&parser.spans, &parser.arena, unit).run().unwrap();
+    let output =
+        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
     let rendered = output.root.ugly(&BitterFormatter::new(&output.arena));
 
     let mut reparsed = Parser::new();
     let unit = StrictParser::source(&rendered, &mut reparsed)
         .unwrap_or_else(|error| panic!("expected `{rendered}` to reparse: {error}"));
-    let output = SourceUnitDesugarer::new(&reparsed.spans, &reparsed.arena, unit).run().unwrap();
+    let output =
+        SourceUnitDesugarer { spans: &reparsed.spans, textual: &reparsed.arena }.run(unit).unwrap();
     let bitter::Term::App(bitter::App(function, _)) = output.arena.terms[&output.root] else {
         panic!("expected the reparsed root to remain an application")
     };

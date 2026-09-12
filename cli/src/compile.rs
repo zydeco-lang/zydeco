@@ -15,7 +15,7 @@ use zydeco_stackir::{
 };
 use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
-use zydeco_utils::pass::CompilerPass;
+use zydeco_utils::{pass::CompilerPass, pipeline};
 
 /// One-shot command adapter over the same revisioned session used by editor clients.
 #[derive(Default)]
@@ -238,22 +238,25 @@ pub struct Amd64Artifact {
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
-        let stackir =
-            match BuiltinRootLowerer::new(&spans, &scoped, &statics, root, signature).run() {
-                | Ok(stackir) => stackir,
-                | Err(BuiltinRootLowerError::Package(error)) => {
-                    return Err(CompileError::BuiltinLower(error));
-                }
-                | Err(BuiltinRootLowerError::Sps(errors)) => {
-                    return Err(CompileError::SpsLower(SpsLowerFailure {
-                        errors,
-                        spans,
-                        scoped,
-                        statics,
-                    }));
-                }
-            };
-        let sps_low = SpsLowPipeline::new(&scoped, &statics).run(stackir);
+        let lowered = pipeline![
+            BuiltinRootLowerer { spans: &spans, scoped: &scoped, statics: &statics, signature },
+            SpsLowPipeline { scoped: &scoped, statics: &statics }.with_error(),
+        ]
+        .run(root);
+        let sps_low = match lowered {
+            | Ok(sps_low) => sps_low,
+            | Err(BuiltinRootLowerError::Package(error)) => {
+                return Err(CompileError::BuiltinLower(error));
+            }
+            | Err(BuiltinRootLowerError::Sps(errors)) => {
+                return Err(CompileError::SpsLower(SpsLowerFailure {
+                    errors,
+                    spans,
+                    scoped,
+                    statics,
+                }));
+            }
+        };
         Ok(Self {
             spans,
             scoped,
@@ -299,13 +302,13 @@ impl BackendProgram {
     pub fn execute_assembly(self) -> Result<AssemblyOutcome, CompileError> {
         let Self { spans, scoped, statics, sps_low, assembly, representation } = self;
         let assembly = assembly.into_inner().unwrap_or_else(|| {
-            LoweringPipeline::new(&spans, &scoped, &statics, &sps_low)
+            LoweringPipeline::new(&spans, &scoped, &statics)
                 .with_representation(representation)
-                .run()
+                .run_infallible(&sps_low)
         });
         Self::validate_no_foreign_imports(&assembly, "ZASM interpreter")?;
-        match zydeco_assembly::interp::Interpreter::new(assembly)
-            .run()
+        match zydeco_assembly::interp::Interpret
+            .run(assembly)
             .map_err(CompileError::AssemblyInterpreter)?
         {
             | zydeco_assembly::interp::Output::Exit => Ok(AssemblyOutcome::Exit),
@@ -314,9 +317,10 @@ impl BackendProgram {
     }
 
     pub fn emit_amd64(&self, operating_system: TargetOs) -> Amd64Artifact {
-        let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low)
+        let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics)
             .with_representation(self.representation)
-            .run_native()
+            .with_native_frames()
+            .run(&self.sps_low)
             .expect("native lowering must establish valid frame entry contexts");
         let format = match operating_system {
             | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
@@ -360,9 +364,9 @@ impl BackendProgram {
     /// The immutable assembly product selected by this program's representation policy.
     pub fn assembly(&self) -> &AssemblyProgram {
         self.assembly.get_or_init(|| {
-            LoweringPipeline::new(&self.spans, &self.scoped, &self.statics, &self.sps_low)
+            LoweringPipeline::new(&self.spans, &self.scoped, &self.statics)
                 .with_representation(self.representation)
-                .run()
+                .run_infallible(&self.sps_low)
         })
     }
 

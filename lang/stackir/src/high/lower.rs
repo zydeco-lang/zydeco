@@ -162,22 +162,18 @@ pub struct Lowerer<'a> {
 }
 
 /// Lowering pass for one checked computation root.
-#[derive(AsRef, AsMut)]
 pub struct RootLowerer<'a> {
-    #[as_ref(StackirArena)]
-    #[as_mut(StackirArena)]
-    lowerer: Lowerer<'a>,
-    root: ss::CompuId,
+    pub spans: &'a SpanArena,
+    pub scoped: &'a ScopedArena,
+    pub statics: &'a StaticsArena,
 }
 
 /// Lowering pass for a package-dependent root applied to the host Builtin package.
-#[derive(AsRef, AsMut)]
 pub struct BuiltinRootLowerer<'a> {
-    #[as_ref(StackirArena)]
-    #[as_mut(StackirArena)]
-    lowerer: Lowerer<'a>,
-    root: ss::CompuId,
-    signature: ss::PackPi,
+    pub spans: &'a SpanArena,
+    pub scoped: &'a ScopedArena,
+    pub statics: &'a StaticsArena,
+    pub signature: ss::PackPi,
 }
 
 /// Materializes backend-independent Builtin package plans as Stack IR values.
@@ -461,25 +457,6 @@ impl<'a> Lowerer<'a> {
     }
 }
 
-impl<'a> RootLowerer<'a> {
-    pub fn new(
-        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena, root: ss::CompuId,
-    ) -> Self {
-        let root = statics.execution_compu(root);
-        Self { lowerer: Lowerer::new(spans, scoped, statics), root }
-    }
-}
-
-impl<'a> BuiltinRootLowerer<'a> {
-    pub fn new(
-        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
-        root: ss::CompuId, signature: ss::PackPi,
-    ) -> Self {
-        let root = statics.execution_compu(root);
-        Self { lowerer: Lowerer::new(spans, scoped, statics), root, signature }
-    }
-}
-
 impl BuiltinPackageLowering {
     fn lower(value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>) -> ValueId {
         match value {
@@ -499,25 +476,27 @@ impl BuiltinPackageLowering {
     }
 }
 
-impl CompilerPass for RootLowerer<'_> {
-    type Out = BranchJoinProgram;
+impl CompilerPass<ss::CompuId> for RootLowerer<'_> {
+    type Output = BranchJoinProgram;
     type Error = Vec<SpsLowerError>;
 
-    fn run(self) -> Result<BranchJoinProgram, Self::Error> {
-        let Self { mut lowerer, root } = self;
+    fn run(&mut self, root: ss::CompuId) -> Result<BranchJoinProgram, Self::Error> {
+        let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
+        let root = self.statics.execution_compu(root);
         let stack = Bullet.build(&mut lowerer, None);
         let root = root.lower(&mut lowerer, stack);
         lowerer.finish(root)
     }
 }
 
-impl CompilerPass for BuiltinRootLowerer<'_> {
-    type Out = BranchJoinProgram;
+impl CompilerPass<ss::CompuId> for BuiltinRootLowerer<'_> {
+    type Output = BranchJoinProgram;
     type Error = BuiltinRootLowerError;
 
-    fn run(self) -> Result<BranchJoinProgram, Self::Error> {
-        let Self { mut lowerer, root, signature } = self;
-        let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &signature)?;
+    fn run(&mut self, root: ss::CompuId) -> Result<BranchJoinProgram, Self::Error> {
+        let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
+        let root = self.statics.execution_compu(root);
+        let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &self.signature)?;
         let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer);
         let stack = Cons(package, Bullet.build(&mut lowerer, None)).build(&mut lowerer, None);
         let root = root.lower(&mut lowerer, stack);
@@ -862,7 +841,8 @@ mod tests {
         let spans = SpanArena::default();
         let scoped = ScopedArena::default();
 
-        let stackir = RootLowerer::new(&spans, &scoped, &statics, root).run().unwrap();
+        let stackir =
+            RootLowerer { spans: &spans, scoped: &scoped, statics: &statics }.run(root).unwrap();
         let stackir = stackir.as_program();
 
         assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
@@ -876,21 +856,29 @@ mod tests {
         let pattern = allocator.alloc();
         let abstraction = allocator.alloc();
         let root = allocator.alloc();
+        let valid_root = allocator.alloc();
         let mut statics = StaticsArena::default();
         statics.values.insert_new(unit, ss::Triv.into());
         statics.vpats.insert_new(pattern, ss::ValuePattern::Triv(ss::Triv));
         statics.values.insert_new(abstraction, ss::Abs(ss::ValBinder::Value(pattern), unit).into());
         statics.compus.insert_new(root, ss::Return(abstraction).into());
+        statics.compus.insert_new(valid_root, ss::Return(unit).into());
         let spans = SpanArena::default();
         let scoped = ScopedArena::default();
 
-        let errors = RootLowerer::new(&spans, &scoped, &statics, root)
-            .run()
-            .expect_err("unelaborated static syntax cannot lower");
+        let mut passes = zydeco_utils::pipeline![
+            RootLowerer { spans: &spans, scoped: &scoped, statics: &statics },
+            crate::SpsLowPipeline { scoped: &scoped, statics: &statics }.with_error(),
+        ];
+        let before = passes.run(valid_root).expect("a complete root reaches SPSLow");
+        let errors = passes.run(root).expect_err("unelaborated static syntax cannot lower");
         assert!(
             matches!(errors.as_slice(), [SpsLowerError::ResidualStaticValue { value }] if *value == abstraction)
         );
         // Internal fixtures need a useful report even without source spans.
         let _ = errors[0].to_report(&spans, &scoped, &statics);
+        let after =
+            passes.run(valid_root).expect("failed lowering leaves no state in the next run");
+        assert_eq!(before.arena().inner.compus.len(), after.arena().inner.compus.len());
     }
 }

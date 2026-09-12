@@ -1,6 +1,7 @@
 use std::{path::PathBuf, process::Command};
 use zydeco_assembly::syntax::{AssemblyProgram, Instruction, Program};
 use zydeco_cli::{CommandCompiler, RepresentationStrategy};
+use zydeco_utils::{pass::CompilerPass, pipeline};
 
 struct Fixture;
 
@@ -38,6 +39,28 @@ fn reselecting_a_policy_recomputes_the_cached_layout() {
     let independent = CommandCompiler::default().lower(&Fixture::source()).unwrap();
     assert_eq!(independent.representation(), RepresentationStrategy::Local);
     assert_eq!(Fixture::allocations(independent.assembly()), boxed);
+}
+
+#[test]
+fn assembly_pipelines_compose_and_reuse_the_same_borrowed_program() {
+    use zydeco_assembly::{LoweringPipeline, frames::NativeProgram};
+
+    let backend = CommandCompiler::default().lower(&Fixture::source()).unwrap();
+    let mut portable = pipeline![
+        LoweringPipeline::new(&backend.spans, &backend.scoped, &backend.statics),
+        |assembly: AssemblyProgram| Ok(assembly.arena().programs.len()),
+    ];
+    let mut native = pipeline![
+        LoweringPipeline::new(&backend.spans, &backend.scoped, &backend.statics)
+            .with_native_frames(),
+        |native: NativeProgram| Ok(native.assembly().arena().programs.len()),
+    ];
+
+    let portable_size = portable.run_infallible(&backend.sps_low);
+    let native_size = native.run(&backend.sps_low).unwrap();
+    assert!(portable_size > 0 && native_size > 0);
+    assert_eq!(portable.run_infallible(&backend.sps_low), portable_size);
+    assert_eq!(native.run(&backend.sps_low).unwrap(), native_size);
 }
 
 #[test]

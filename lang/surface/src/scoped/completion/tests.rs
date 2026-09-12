@@ -22,8 +22,9 @@ impl Fixture {
             panic!("a term cursor")
         };
         let (spans, arena) = parser.finish();
-        let bitter =
-            SourceUnitDesugarer::new(&spans, &arena, parsed.syntax.unwrap()).run().unwrap();
+        let bitter = SourceUnitDesugarer { spans: &spans, textual: &arena }
+            .run(parsed.syntax.unwrap())
+            .unwrap();
         Self { spans, bitter, target }
     }
 

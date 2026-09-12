@@ -28,12 +28,9 @@ pub struct Desugarer<'a> {
 }
 
 /// A desugaring pass whose input is one complete source term.
-#[derive(AsRef, AsMut)]
 pub struct SourceUnitDesugarer<'a> {
-    #[as_ref(b::BitterArena)]
-    #[as_mut(b::BitterArena)]
-    desugarer: Desugarer<'a>,
-    unit: t::SourceUnit,
+    pub spans: &'a t::SpanArena,
+    pub textual: &'a t::TextArena,
 }
 
 impl<'a> Desugarer<'a> {
@@ -108,12 +105,6 @@ impl<'a> Desugarer<'a> {
         b::BitterScope: Allocates<Id>,
     {
         self.allocator.alloc()
-    }
-}
-
-impl<'a> SourceUnitDesugarer<'a> {
-    pub fn new(spans: &'a t::SpanArena, textual: &'a t::TextArena, unit: t::SourceUnit) -> Self {
-        Self { desugarer: Desugarer::new(spans, textual), unit }
     }
 }
 
@@ -345,12 +336,12 @@ impl ExistentialTelescope {
     }
 }
 
-impl CompilerPass for SourceUnitDesugarer<'_> {
-    type Out = SourceDesugarOut;
+impl CompilerPass<t::SourceUnit> for SourceUnitDesugarer<'_> {
+    type Output = SourceDesugarOut;
     type Error = DesugarError;
 
-    fn run(self) -> Result<SourceDesugarOut> {
-        let SourceUnitDesugarer { mut desugarer, unit } = self;
+    fn run(&mut self, unit: t::SourceUnit) -> Result<SourceDesugarOut> {
+        let mut desugarer = Desugarer::new(self.spans, self.textual);
         let root = unit.root.desugar(&mut desugarer)?;
         let Desugarer { bitter: arena, .. } = desugarer;
         Ok(SourceDesugarOut { arena: FrozenArena::new(arena), root })

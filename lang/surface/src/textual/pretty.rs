@@ -2598,8 +2598,8 @@ mod tests {
 
         fn desugared_shape(&self) -> String {
             let output =
-                SourceUnitDesugarer::new(&self.parser.spans, &self.parser.arena, self.unit)
-                    .run()
+                SourceUnitDesugarer { spans: &self.parser.spans, textual: &self.parser.arena }
+                    .run(self.unit)
                     .unwrap();
             output.root.ugly(&BitterFormatter::new(&output.arena))
         }

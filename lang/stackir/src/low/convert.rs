@@ -9,11 +9,26 @@ use crate::high::{
 };
 use crate::protocol::{StackProtocol, ValueProtocol};
 use derive_more::{AsMut, AsRef};
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::Infallible};
 use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_syntax::VarName;
-use zydeco_utils::{arena::ArenaAccess as _, context::Context};
+use zydeco_utils::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
+
+/// Convert lexical high SPS into first-order SPSLow with fresh construction state.
+pub struct SpsLowConverter<'a> {
+    pub scoped: &'a ScopedArena,
+    pub statics: &'a StaticsArena,
+}
+
+impl CompilerPass<BranchJoinProgram> for SpsLowConverter<'_> {
+    type Output = SpsLowProgram;
+    type Error = Infallible;
+
+    fn run(&mut self, program: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
+        Ok(ClosureConversion::new(program, self.scoped, self.statics).convert())
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct RenameEnvId(usize);
@@ -31,7 +46,7 @@ struct PatternTranslation {
 
 /// Consume high SPS and construct a fresh first-order SPSLow program.
 #[derive(AsRef, AsMut)]
-pub struct SpsLowConverter<'a> {
+struct ClosureConversion<'a> {
     source: high::StackirArena,
     #[as_ref(low::SpsLowArena)]
     #[as_mut(low::SpsLowArena)]
@@ -42,10 +57,8 @@ pub struct SpsLowConverter<'a> {
     envs: Vec<RenameEnv>,
 }
 
-impl<'a> SpsLowConverter<'a> {
-    pub fn new(
-        program: BranchJoinProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena,
-    ) -> Self {
+impl<'a> ClosureConversion<'a> {
+    fn new(program: BranchJoinProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
         let high::StackirRebuild { source, target, root } = program.into_program().into_rebuild();
         let arena = low::SpsLowArena {
             admin: low::SpsLowAdminArena::from_high(target.admin),
@@ -64,7 +77,7 @@ impl<'a> SpsLowConverter<'a> {
         }
     }
 
-    pub fn convert(mut self) -> SpsLowProgram {
+    fn convert(mut self) -> SpsLowProgram {
         let root = self.translate_compu(self.root, RenameEnvId(0));
         SpsLowProgram::try_new(self.arena, root)
             .expect("closure conversion produces closed first-order SPSLow")
@@ -538,7 +551,7 @@ mod tests {
             let program =
                 BranchJoinProgram::try_new(high::StackirProgram::new(self.arena, root)).unwrap();
             let statics = StaticsArena::default();
-            SpsLowConverter::new(program, &self.scoped, &statics).convert()
+            SpsLowConverter { scoped: &self.scoped, statics: &statics }.run_infallible(program)
         }
     }
 

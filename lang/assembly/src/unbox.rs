@@ -648,6 +648,7 @@ mod tests {
         };
         use zydeco_statics::arena::StaticsArena;
         use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
+        use zydeco_utils::pass::CompilerPass;
 
         for (program, reason) in [
             (Fixture::projection(false).0, UnboxingReason::ProjectedVariable),
@@ -658,10 +659,9 @@ mod tests {
                     &SpanArena::default(),
                     &ScopedArena::default(),
                     &StaticsArena::default(),
-                    &program,
                 )
                 .with_representation(strategy)
-                .run();
+                .run_infallible(&program);
                 let allocations = assembly
                     .arena()
                     .programs

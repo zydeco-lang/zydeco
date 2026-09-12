@@ -36,8 +36,8 @@ impl ParsedSource {
     }
 
     fn desugared_shape(&self) -> String {
-        let output = SourceUnitDesugarer::new(&self.parser.spans, &self.parser.arena, self.unit)
-            .run()
+        let output = SourceUnitDesugarer { spans: &self.parser.spans, textual: &self.parser.arena }
+            .run(self.unit)
             .expect("repository sources should desugar");
         output.root.ugly(&BitterFormatter::new(&output.arena))
     }

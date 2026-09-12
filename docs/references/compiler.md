@@ -67,7 +67,10 @@ The main boundaries are concrete program types:
 | `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | High SPS normalization |
 | `SpsLowProgram` | [SpsLowPipeline::run](../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
 | `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | ZASM interpreter or AM Wasm |
-| `NativeProgram` | `LoweringPipeline::run_native` | AMD64 emitter |
+| `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
+
+Checked-root lowering, SPSLow conversion, and assembly lowering compose through typed compiler passes;
+[compiler pass composition](../../DESIGN.md#compiler-pass-composition) owns their execution and error contract.
 
 Consider this executable, which exits successfully:
 

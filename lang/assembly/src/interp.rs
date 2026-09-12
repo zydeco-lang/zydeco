@@ -2,7 +2,10 @@ use super::syntax::*;
 use thiserror::Error;
 use zydeco_utils::pass::CompilerPass;
 
-pub struct Interpreter {
+/// Execute an assembly program with a fresh runtime for each invocation.
+pub struct Interpret;
+
+struct Interpreter {
     arena: AssemblyArena,
     root: ProgId,
     pub runtime: Runtime,
@@ -47,11 +50,12 @@ pub enum Error {
     Primitive(#[from] PrimitiveError),
 }
 
-impl CompilerPass for Interpreter {
-    type Out = Output;
+impl CompilerPass<AssemblyProgram> for Interpret {
+    type Output = Output;
     type Error = Error;
-    fn run(mut self) -> Result<Self::Out, Self::Error> {
-        self.root.eval(&mut self)
+    fn run(&mut self, program: AssemblyProgram) -> Result<Self::Output, Self::Error> {
+        let mut interpreter = Interpreter::new(program);
+        interpreter.root.eval(&mut interpreter)
     }
 }
 

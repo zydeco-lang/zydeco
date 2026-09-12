@@ -11,8 +11,21 @@ use super::{
     variables::Vars as _,
 };
 use derive_more::{AsMut, AsRef};
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, convert::Infallible, rc::Rc};
 use zydeco_statics::syntax as ss;
+use zydeco_utils::pass::CompilerPass;
+
+/// Normalize high SPS using fresh construction state for each input program.
+pub struct Normalizer;
+
+impl CompilerPass<BranchJoinProgram> for Normalizer {
+    type Output = BranchJoinProgram;
+    type Error = Infallible;
+
+    fn run(&mut self, program: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
+        Ok(Normalization::new(program).run())
+    }
+}
 
 #[derive(Clone, Default)]
 enum KnownValue {
@@ -65,7 +78,7 @@ struct Residual<T> {
 /// Consume a lexical program and rebuild its normalized tree with fresh nodes.
 /// Shared bodies stay bound, so moving a body preserves its definition IDs.
 #[derive(AsRef, AsMut)]
-pub struct Normalizer {
+struct Normalization {
     source: StackirArena,
     #[as_ref]
     #[as_mut]
@@ -76,8 +89,8 @@ pub struct Normalizer {
     occurrences: HashMap<DefId, usize>,
 }
 
-impl Normalizer {
-    pub fn new(program: BranchJoinProgram) -> Self {
+impl Normalization {
+    fn new(program: BranchJoinProgram) -> Self {
         let StackirRebuild { source, target: arena, root } = program.into_program().into_rebuild();
         let occurrences =
             source.inner.values.iter().fold(HashMap::new(), |mut counts, (_, value)| {
@@ -90,7 +103,7 @@ impl Normalizer {
         Self { source, arena, root, envs, occurrences }
     }
 
-    pub fn run(mut self) -> BranchJoinProgram {
+    fn run(mut self) -> BranchJoinProgram {
         let root = self.compu(self.root, Scope { values: EnvId(0), stack: None }).node;
         BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
             .expect("normalization preserves lexical ownership and branch joins")
@@ -895,7 +908,7 @@ mod tests {
         fn normalize(self, root: CompuId) -> StackirProgram {
             let program =
                 BranchJoinProgram::try_new(StackirProgram::new(self.arena, root)).unwrap();
-            let normalized = Normalizer::new(program).run().into_program();
+            let normalized = Normalizer.run_infallible(program).into_program();
             assert!(normalized.root().free_vars(normalized.arena()).is_empty());
             normalized
         }

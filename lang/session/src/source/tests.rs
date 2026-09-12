@@ -113,11 +113,12 @@ impl CheckedProgram {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let stackir = zydeco_stackir::RootLowerer::new(&spans, &scoped, &statics, root)
-            .run()
-            .map_err(|errors| {
-                TestPipelineError::Stack(zydeco_stackir::BuiltinRootLowerError::Sps(errors))
-            })?;
+        let stackir =
+            zydeco_stackir::RootLowerer { spans: &spans, scoped: &scoped, statics: &statics }
+                .run(root)
+                .map_err(|errors| {
+                    TestPipelineError::Stack(zydeco_stackir::BuiltinRootLowerError::Sps(errors))
+                })?;
         Ok(SourceStack { spans, scoped, statics, stackir })
     }
 
@@ -137,10 +138,14 @@ impl CheckedProgram {
             )));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let stackir =
-            zydeco_stackir::BuiltinRootLowerer::new(&spans, &scoped, &statics, root, *signature)
-                .run()
-                .map_err(TestPipelineError::Stack)?;
+        let stackir = zydeco_stackir::BuiltinRootLowerer {
+            spans: &spans,
+            scoped: &scoped,
+            statics: &statics,
+            signature: *signature,
+        }
+        .run(root)
+        .map_err(TestPipelineError::Stack)?;
         Ok(SourceStack { spans, scoped, statics, stackir })
     }
 }
@@ -148,7 +153,8 @@ impl CheckedProgram {
 impl SourceStack {
     fn convert(self) -> SourceSpsLow {
         let Self { spans, scoped, statics, stackir } = self;
-        let sps_low = zydeco_stackir::SpsLowPipeline::new(&scoped, &statics).run(stackir);
+        let sps_low = zydeco_stackir::SpsLowPipeline { scoped: &scoped, statics: &statics }
+            .run_infallible(stackir);
         SourceSpsLow { spans, scoped, statics, sps_low }
     }
 }
@@ -156,8 +162,8 @@ impl SourceStack {
 impl SourceSpsLow {
     fn assemble(self) -> SourceAssembly {
         let Self { spans, scoped, statics, sps_low } = self;
-        let assembly =
-            zydeco_assembly::LoweringPipeline::new(&spans, &scoped, &statics, &sps_low).run();
+        let assembly = zydeco_assembly::LoweringPipeline::new(&spans, &scoped, &statics)
+            .run_infallible(&sps_low);
         SourceAssembly { sps_low, assembly }
     }
 }
@@ -229,9 +235,9 @@ impl TestPipeline {
             &lowered.spans,
             &lowered.scoped,
             &lowered.statics,
-            &lowered.sps_low,
         )
-        .run_native()
+        .with_native_frames()
+        .run(&lowered.sps_low)
         .map_err(TestPipelineError::Frame)?;
         let target = if cfg!(target_os = "macos") {
             zydeco_amd64::TargetFormat::MachO

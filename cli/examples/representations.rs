@@ -9,6 +9,7 @@ use zydeco_assembly::{
     unbox::LocalUnboxing,
 };
 use zydeco_cli::{BackendProgram, CommandCompiler};
+use zydeco_utils::pass::CompilerPass;
 
 /// A type-level policy experiment that needs no change to the analysis or emitters.
 struct FieldLimit<P, const MAX: usize>(P);
@@ -108,14 +109,9 @@ impl Experiment {
     }
 
     fn measure_static<const MAX: usize>(source: &std::path::Path, backend: &BackendProgram) {
-        let assembly = LoweringPipeline::new(
-            &backend.spans,
-            &backend.scoped,
-            &backend.statics,
-            &backend.sps_low,
-        )
-        .with_representation(FieldLimit::<_, MAX>(Shared))
-        .run();
+        let assembly = LoweringPipeline::new(&backend.spans, &backend.scoped, &backend.statics)
+            .with_representation(FieldLimit::<_, MAX>(Shared))
+            .run_infallible(&backend.sps_low);
         let unboxing = LocalUnboxing::with_policy(&backend.sps_low, &FieldLimit::<_, MAX>(Shared));
         Measurement::collect(&assembly).print(
             source,

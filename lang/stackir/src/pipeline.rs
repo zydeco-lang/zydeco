@@ -1,23 +1,31 @@
 use crate::{BranchJoinProgram, SpsLowConverter, SpsLowProgram};
+use std::convert::Infallible;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::arena::ScopedArena;
+use zydeco_utils::{pass::CompilerPass, pipeline};
 
 /// Convert branch-join high SPS into first-order SPSLow.
 pub struct SpsLowPipeline<'a> {
-    scoped: &'a ScopedArena,
-    statics: &'a StaticsArena,
+    pub scoped: &'a ScopedArena,
+    pub statics: &'a StaticsArena,
 }
 
-impl<'a> SpsLowPipeline<'a> {
-    pub fn new(scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
-        Self { scoped, statics }
-    }
+impl CompilerPass<BranchJoinProgram> for SpsLowPipeline<'_> {
+    type Output = SpsLowProgram;
+    type Error = Infallible;
 
-    pub fn run(self, stackir: BranchJoinProgram) -> SpsLowProgram {
-        crate::high::check::check(stackir.as_program(), self.scoped, self.statics);
-        let stackir = crate::high::normalize::Normalizer::new(stackir).run();
-        crate::high::check::check(stackir.as_program(), self.scoped, self.statics);
-        SpsLowConverter::new(stackir, self.scoped, self.statics).convert()
+    fn run(&mut self, stackir: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
+        let check = |program: BranchJoinProgram| {
+            crate::high::check::check(program.as_program(), self.scoped, self.statics);
+            Ok::<_, Infallible>(program)
+        };
+        pipeline![
+            check,
+            crate::high::normalize::Normalizer,
+            check,
+            SpsLowConverter { scoped: self.scoped, statics: self.statics },
+        ]
+        .run(stackir)
     }
 }
 
@@ -80,7 +88,8 @@ mod tests {
         fn compile(self, root: CompuId) -> SpsLowProgram {
             let program =
                 BranchJoinProgram::try_new(StackirProgram::new(self.arena, root)).unwrap();
-            SpsLowPipeline::new(&ScopedArena::default(), &StaticsArena::default()).run(program)
+            SpsLowPipeline { scoped: &ScopedArena::default(), statics: &StaticsArena::default() }
+                .run_infallible(program)
         }
 
         fn parameters(&mut self, params: &[DefId], mut tail: CompuId) -> CompuId {
