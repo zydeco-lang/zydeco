@@ -80,12 +80,13 @@ The fixture checks its native layout and little-endian byte order explicitly.
 ## Source-defined views at foreign boundaries
 
 The next extension should let `sample_inspect` receive one pointer
-while using the general [address, cell, and view interfaces](bytes.md#addresses-cells-and-views-proposed).
+while using the general [address, cell, and view interfaces](bytes.md#addresses-cells-and-views).
 That section owns `Addr`, `Access`, `Cell A`, `Fat M`, and `View H M`, including their phase and access rules.
 Thin, fat, prefix-header, and object-header handles are source library choices.
 The compiler boundary recognizes primitive storage and call operations;
 source libraries supply the view constructors and runtime metadata conventions.
-These native operations and the following adapters are proposed, not currently implemented.
+The checked owned-memory provider and source view constructors are implemented.
+Foreign grants and the call adapters below remain proposed; native `Addr` is not yet a C argument classifier.
 
 ### A handle layout does not determine a C call
 
@@ -137,7 +138,8 @@ A runtime integer cannot dynamically determine a new native calling convention a
 A `Thk B` may include a captured environment and is not a `Code S`.
 Source thunks call code pointers through their matching adapters.
 Turning a capturing thunk into a foreign callback additionally requires the runtime-entry and rooting protocol below.
-The source view prototype models only a vtable data address, not method invocation or code-pointer loading.
+The implemented source view reads a vtable data address.
+Method invocation and code-pointer loading require the separate foreign-call extension.
 
 ### Access and returning-call cleanup
 

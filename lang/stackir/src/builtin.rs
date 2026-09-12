@@ -39,6 +39,18 @@ impl HostCallMode {
             | BuiltinValueRole::BytesAligned
             | BuiltinValueRole::BytesEq
             | BuiltinValueRole::BytesLt
+            | BuiltinValueRole::MemoryAllocate
+            | BuiltinValueRole::MemoryGrant
+            | BuiltinValueRole::MemoryRevoke
+            | BuiltinValueRole::MemoryBase
+            | BuiltinValueRole::MemoryOffset
+            | BuiltinValueRole::MemoryCheck
+            | BuiltinValueRole::MemoryLoadI64
+            | BuiltinValueRole::MemoryLoadU8
+            | BuiltinValueRole::MemoryLoadAddr
+            | BuiltinValueRole::MemoryStoreI64
+            | BuiltinValueRole::MemoryStoreU8
+            | BuiltinValueRole::MemoryStoreAddr
             | BuiltinValueRole::BufferAllocate
             | BuiltinValueRole::BufferRead
             | BuiltinValueRole::BufferWrite

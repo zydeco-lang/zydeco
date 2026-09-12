@@ -28,7 +28,7 @@ The available surface names are:
 | Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt64` |
 | Floating point | `Float32`, `Float64` |
 | Text and bytes | `Char`, `String`, `Bytes` |
-| Capabilities | `Buffer`, `Reader`, `Writer`, `OS` |
+| Capabilities | `Addr`, `Access`, `Buffer`, `Reader`, `Writer`, `OS` |
 
 Host operations live in the same contract under the `numeric`, `text`, and `system` groups, and the search descends
 through them: `param (/stdio; /process) : @(import("lib/std/builtin.zy")) in` selects two operations
@@ -99,6 +99,9 @@ memory/size.zy             total checked size and alignment calculations
 memory/shape.zy            inspectable scalar widths and product placement
 memory/allocation.zy       allocator service and allocation computations
 memory/access.zy           checked offset reads and caller-provided destinations
+memory/views.zy            source cells, padding, alignment, views, pointers, and slices
+memory/native.zy           checked native addresses, grants, and typed memory operations
+memory/fault.zy            ordinary source memory errors
 memory/call.zy             stored call interfaces, composition, and conversion adapters
 memory/package.type.zy     abstract layout builder interface
 memory/representation.type.zy  per-realization abstract stored type and operations
@@ -120,14 +123,14 @@ No compatibility forwarding files remain at the old flat paths.
 
 The host contract is one launcher-supplied value.
 Its complete leading telescope carries every public static name as a manifest field — the CBPV kinds,
-constructors, and fixed-representation types — followed by the three generative system capabilities,
+constructors, and fixed-representation types — followed by generative host capabilities,
 and its body groups the runtime operations:
 
 - Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the ten fixed-width numeric types, `Char`, `String`,
-  and `Bytes`, then abstract `Buffer`, `Reader`, `Writer`, and `OS`.
+  and `Bytes`, then abstract `Addr`, `Access`, `Buffer`, `Reader`, `Writer`, and `OS`.
 - `numeric`: exact-width arithmetic, branch comparisons, and rendering, one plain operation module per representation.
 - `text`: operations crossing `Char`, `String`, `Bytes`, and `Int64`.
-- `system`: the re-exposed capabilities plus I/O, filesystem, standard stream, argument,
+- `system`: the re-exposed capabilities plus checked memory, I/O, filesystem, standard stream, argument,
   randomness, and process operations.
 
 Each public name is unique across the complete package, so one field search reaches kinds, types,
@@ -372,6 +375,34 @@ and `write_to` for encoding into a caller-provided `Buffer`.
 It consumes the existing representation package and works with runtime-selected contracts.
 See [access rules](../../docs/proposals/bytes.md#access-through-existing-representation-contracts)
 and [the C construction example](../tests/ffi/storage-access.zy).
+
+## Cells and memory views
+
+[The view library](memory/views.zy) receives address and access types as ordinary `VType` parameters.
+[The native provider](memory/native.zy) instantiates it with Builtin `Addr` and `Access`
+and supplies checked owned memory on the interpreter, AMD64, and the WebAssembly test host.
+A cell describes a fixed representation; a view interprets a thin, fat, or header-bearing handle.
+`padding`, `align`, and `product` calculate cell placement with source value functions.
+`read_at` and `index` perform runtime checks through the supplied memory provider.
+The `pointer` and `slice` factories seal handles behind ordinary existential packages specialized to an element cell.
+
+Select the native module through the same Builtin opening as its buffer owner:
+
+```zydeco
+let (/Fault; /views; /memory; /address_cell; native) =
+  builtin |> (@(import("memory/native.zy"))) in
+let prefixed = views/indirect Int64 address_cell views/int64 -8 0 in
+...
+```
+
+`native/allocate` produces uninitialized owned storage; `buffer/allocate` produces zeroed storage.
+`native/grant` gives a checked range `Read`, `Write`, or `ReadWrite` permissions.
+A grant can be revoked independently; closing the buffer invalidates all its grants.
+The source reader preflights the entire cell, including padding and over-alignment, before loading its fields.
+Typed stores initialize their footprint; only a typed address store establishes an address slot.
+See the [complete example](../tests/std/memory-views.zy), [failure cases](../tests/std/memory-faults.zy),
+and [owning contracts](../../docs/proposals/bytes.md#addresses-cells-and-views).
+The native pointer slot is 8 bytes; the WebAssembly host uses virtual addresses and does not expose a C pointer.
 
 ## Byte operation costs
 

@@ -6,6 +6,7 @@ use std::{
 use zydeco_machine::{
     buffer::{BufferArena, BufferHandle},
     bytes::ByteBuffer,
+    memory::{AccessHandle, AddressHandle},
 };
 
 /// Opaque values whose representation belongs to the interpreter runtime.
@@ -13,6 +14,8 @@ use zydeco_machine::{
 pub enum HostValue {
     Bytes(ByteBuffer),
     Buffer(BufferHandle),
+    Address(AddressHandle),
+    Access(AccessHandle),
     Reader(ReaderHandle),
     Writer(WriterHandle),
 }

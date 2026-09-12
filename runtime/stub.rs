@@ -1,4 +1,5 @@
 mod gc;
+mod memory;
 
 use gc::{CheneyHeap, OutOfMemory, RootRange, RootSource, Roots};
 use std::{

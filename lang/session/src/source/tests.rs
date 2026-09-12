@@ -1849,6 +1849,8 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
         ExpectedField::ManifestType,
         ExpectedField::ManifestType,
         ExpectedField::ManifestType,
+        ExpectedField::Abstract(BuiltinTypeRole::Addr),
+        ExpectedField::Abstract(BuiltinTypeRole::Access),
         ExpectedField::Abstract(BuiltinTypeRole::Buffer),
         ExpectedField::Abstract(BuiltinTypeRole::Reader),
         ExpectedField::Abstract(BuiltinTypeRole::Writer),
@@ -1912,6 +1914,8 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
     assert_eq!(
         opened_roles,
         vec![
+            Some(BuiltinRole::Type(BuiltinTypeRole::Addr)),
+            Some(BuiltinRole::Type(BuiltinTypeRole::Access)),
             Some(BuiltinRole::Type(BuiltinTypeRole::Buffer)),
             Some(BuiltinRole::Type(BuiltinTypeRole::Reader)),
             Some(BuiltinRole::Type(BuiltinTypeRole::Writer)),

@@ -927,9 +927,9 @@ The [foreign-interface reference](docs/references/language.md#14-foreign-interfa
 and borrowing obligations.
 The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record,
 output-buffer, callback, and component examples to motivate the next extensions.
-The proposed [memory views](docs/proposals/bytes.md#addresses-cells-and-views-proposed) use source-defined cells
-and thin, fat, or header-based handles over a small address/access interface.
-Their explicit foreign adapters choose pointer, scalar-sequence, or aggregate transport;
+The implemented [memory views](docs/proposals/bytes.md#addresses-cells-and-views) use source-defined cells and thin,
+fat, or header-based handles over a small address/access interface.
+Their proposed foreign adapters choose pointer, scalar-sequence, or aggregate transport;
 the existing native foreign classifiers remain unchanged.
 
 ## WebAssembly backend

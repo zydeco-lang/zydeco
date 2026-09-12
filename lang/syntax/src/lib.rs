@@ -168,6 +168,8 @@ impl std::fmt::Display for IntrinsicRole {
 )]
 #[strum(serialize_all = "lowercase")]
 pub enum BuiltinTypeRole {
+    Addr,
+    Access,
     Buffer,
     Reader,
     Writer,
@@ -191,7 +193,9 @@ impl BuiltinTypeRole {
 
     pub fn universe(self) -> BuiltinTypeUniverse {
         match self {
-            | Self::Buffer | Self::Reader | Self::Writer => BuiltinTypeUniverse::Value,
+            | Self::Addr | Self::Access | Self::Buffer | Self::Reader | Self::Writer => {
+                BuiltinTypeUniverse::Value
+            }
             | Self::OS => BuiltinTypeUniverse::Computation,
         }
     }
@@ -530,6 +534,18 @@ pub enum BuiltinValueRole {
     BytesSingleton,
     BytesEq,
     BytesLt,
+    MemoryAllocate,
+    MemoryGrant,
+    MemoryRevoke,
+    MemoryBase,
+    MemoryOffset,
+    MemoryCheck,
+    MemoryLoadI64,
+    MemoryLoadU8,
+    MemoryLoadAddr,
+    MemoryStoreI64,
+    MemoryStoreU8,
+    MemoryStoreAddr,
     BufferAllocate,
     BufferWrite,
     BufferRead,
@@ -695,6 +711,18 @@ impl BuiltinValueRole {
             | Self::IoReadLine
             | Self::IoWriteAll => 4,
             | Self::BytesSlice | Self::BufferRead | Self::BufferWrite => 5,
+            | Self::MemoryAllocate => 4,
+            | Self::MemoryGrant => 6,
+            | Self::MemoryRevoke => 3,
+            | Self::MemoryBase => 3,
+            | Self::MemoryOffset => 5,
+            | Self::MemoryCheck => 6,
+            | Self::MemoryLoadI64 => 4,
+            | Self::MemoryLoadU8 => 4,
+            | Self::MemoryLoadAddr => 4,
+            | Self::MemoryStoreI64 => 5,
+            | Self::MemoryStoreU8 => 5,
+            | Self::MemoryStoreAddr => 5,
         }
     }
 
@@ -728,7 +756,9 @@ impl BuiltinValueRole {
             ) => {
                 Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
             }
-            | Self::StrParseInt | Self::ReadLineAsInt | Self::RandomInt => Some(SpareBox::Opaque),
+            | Self::MemoryLoadI64 | Self::StrParseInt | Self::ReadLineAsInt | Self::RandomInt => {
+                Some(SpareBox::Opaque)
+            }
             | _ => None,
         }
     }

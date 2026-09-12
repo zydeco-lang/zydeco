@@ -22,6 +22,8 @@ pub enum BuiltinValueAtom {
     Char,
     String,
     Bytes,
+    Addr,
+    Access,
     Buffer,
     Reader,
     Writer,
@@ -30,6 +32,8 @@ pub enum BuiltinValueAtom {
 impl BuiltinValueAtom {
     fn capability_role(self) -> Option<BuiltinTypeRole> {
         match self {
+            | Self::Addr => Some(BuiltinTypeRole::Addr),
+            | Self::Access => Some(BuiltinTypeRole::Access),
             | Self::Buffer => Some(BuiltinTypeRole::Buffer),
             | Self::Reader => Some(BuiltinTypeRole::Reader),
             | Self::Writer => Some(BuiltinTypeRole::Writer),
@@ -45,7 +49,9 @@ impl BuiltinValueAtom {
             | Self::Char => PrimitiveType::Char,
             | Self::String => PrimitiveType::String,
             | Self::Bytes => PrimitiveType::Bytes,
-            | Self::Buffer | Self::Reader | Self::Writer => return None,
+            | Self::Addr | Self::Access | Self::Buffer | Self::Reader | Self::Writer => {
+                return None;
+            }
         })
     }
 }
@@ -160,6 +166,36 @@ impl BuiltinOperationAbi {
             | Role::BytesAligned => Self::optional([Atom::Bytes, int64], Atom::Bytes),
             | Role::BytesSingleton => Self::pure([uint8], Atom::Bytes),
             | Role::BytesEq | Role::BytesLt => Self::branch([Atom::Bytes, Atom::Bytes]),
+            | Role::MemoryAllocate => {
+                Self::buffer_effect([int64, int64], Self::continuation(Atom::Buffer))
+            }
+            | Role::MemoryGrant => {
+                Self::memory_operation([Atom::Buffer, int64, int64, int64], Some(Atom::Access))
+            }
+            | Role::MemoryRevoke => Self::memory_operation([Atom::Access], None),
+            | Role::MemoryBase => Self::memory_operation([Atom::Access], Some(Atom::Addr)),
+            | Role::MemoryOffset => {
+                Self::memory_operation([Atom::Access, Atom::Addr, int64], Some(Atom::Addr))
+            }
+            | Role::MemoryCheck => {
+                Self::memory_operation([Atom::Access, Atom::Addr, int64, int64], None)
+            }
+            | Role::MemoryLoadI64 => {
+                Self::memory_operation([Atom::Access, Atom::Addr], Some(int64))
+            }
+            | Role::MemoryLoadU8 => Self::memory_operation([Atom::Access, Atom::Addr], Some(uint8)),
+            | Role::MemoryLoadAddr => {
+                Self::memory_operation([Atom::Access, Atom::Addr], Some(Atom::Addr))
+            }
+            | Role::MemoryStoreI64 => {
+                Self::memory_operation([Atom::Access, Atom::Addr, int64], None)
+            }
+            | Role::MemoryStoreU8 => {
+                Self::memory_operation([Atom::Access, Atom::Addr, uint8], None)
+            }
+            | Role::MemoryStoreAddr => {
+                Self::memory_operation([Atom::Access, Atom::Addr, Atom::Addr], None)
+            }
             | Role::BufferAllocate => {
                 Self::buffer_effect([int64, int64], Self::continuation(Atom::Buffer))
             }
@@ -273,6 +309,20 @@ impl BuiltinOperationAbi {
             parameters.into_iter().map(Self::atom).chain([when_none, when_some]),
             result,
         );
+        Self::thunk(BuiltinComputationClassifier::ForallCType(Box::new(body)))
+    }
+
+    fn memory_operation(
+        parameters: impl IntoIterator<Item = BuiltinValueAtom>, output: Option<BuiltinValueAtom>,
+    ) -> BuiltinValueClassifier {
+        let result = BuiltinComputationClassifier::Bound(0);
+        let error = Self::thunk(Self::arrows(
+            [Self::atom(BuiltinValueAtom::Integer(IntegerType::Int64))],
+            result.clone(),
+        ));
+        let success = Self::thunk(Self::arrows(output.into_iter().map(Self::atom), result.clone()));
+        let body =
+            Self::arrows(parameters.into_iter().map(Self::atom).chain([error, success]), result);
         Self::thunk(BuiltinComputationClassifier::ForallCType(Box::new(body)))
     }
 

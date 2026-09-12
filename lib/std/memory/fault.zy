@@ -9,5 +9,6 @@ begin
   | +Uninitialized : Unit
   | +InvalidValue : Unit
   | +Unavailable : Unit
+  | +AllocationFailed : Unit
   end
 end

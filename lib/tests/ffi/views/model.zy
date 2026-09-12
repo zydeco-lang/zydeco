@@ -3,7 +3,7 @@ begin
   param val (/VType; /CType; /Thk; /Unit; /Int64; /numeric; builtin) : @(import(
     "../../../std/builtin.zy"
   )) that
-  let make_views = builtin |> (@(import("contracts.zy"))) in
+  let make_views = builtin |> (@(import("../../../std/memory/views.zy"))) in
   let Access =
     data
     | +Live : Unit
@@ -28,6 +28,21 @@ begin
   let memory : Thk (forall (R : CType) . Memory R) = {
     fn R =>
       comatch
+      | .check access origin count alignment no yes =>
+        ! readable R access no {
+          ! in_range R 0 32 origin { ! no +Bounds() } {
+            ! in_range R 0 32 count { ! no +Bounds() } {
+              do limit <- ! int64/sub 32 count;
+              ! int64/gt R origin limit { ! no +Bounds() } {
+                ! int64/lt R alignment 1 { ! no +Alignment() } {
+                  do remainder <- ! int64/mod origin alignment;
+                  ! int64/eq R remainder 0 yes { ! no +Alignment() }
+                }
+              }
+            }
+          }
+        }
+      | .load_u8 _ _ no _ => ! no +Unavailable()
       | .offset access origin delta no yes =>
         ! readable R access no {
           ! in_range R 0 32 origin { ! no +Bounds() } {
@@ -59,6 +74,8 @@ begin
   let unavailable : Thk (forall (R : CType) . Memory R) = {
     fn R =>
       comatch
+      | .check _ _ _ _ no _ => ! no +Unavailable()
+      | .load_u8 _ _ no _ => ! no +Unavailable()
       | .offset _ _ _ no _ => ! no +Unavailable()
       | .load_i64 _ _ no _ => ! no +Unavailable()
       | .load_addr _ _ no _ => ! no +Unavailable()

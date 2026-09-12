@@ -15,6 +15,7 @@ pub mod bytes;
 pub mod buffer;
 pub mod closure;
 pub mod frames;
+pub mod memory;
 pub mod native;
 pub mod word;
 

@@ -14,6 +14,10 @@ impl BufferRuntime {
         role: BuiltinValueRole, args: Vec<SemValue>, host: &mut HostRuntime,
     ) -> Result<Computation, i32> {
         let result = match role {
+            | BuiltinValueRole::MemoryAllocate => host
+                .buffers
+                .allocate_uninitialized(Self::integer(&args[0]), Self::integer(&args[1]))
+                .map(|handle| Some(HostValue::Buffer(handle).into())),
             | BuiltinValueRole::BufferAllocate => host
                 .buffers
                 .allocate(Self::integer(&args[0]), Self::integer(&args[1]))

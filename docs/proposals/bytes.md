@@ -304,7 +304,9 @@ A failed freeze leaves the handle open.
 Snapshots and frozen bytes remain immutable after later writes or close.
 These are resource-state guarantees, not a static uniqueness or lexical-lifetime claim.
 
-The stable error codes are `InvalidLayout = 0`, `Closed = 1`, `Bounds = 2`, and `AllocationFailed = 3`.
+The stable error codes are `InvalidLayout = 0`, `Closed = 1`, `Bounds = 2`,
+`AllocationFailed = 3`, and `Uninitialized = 4`.
+The last applies to buffers created by the uninitialized memory allocator described below.
 Operations on a closed handle report `Closed` before inspecting their range.
 Detected allocation and layout failures create no handle; failed writes preserve all bytes.
 General host allocator aborts remain outside this fallible protocol, as for immutable storage.
@@ -384,7 +386,7 @@ the [memory-backed Writer and byte builder](filesystem.md#memory-backed-writer-a
 A builder can yield an immutable result without adding mutation to `Bytes`.
 Functional update would need its own measured use case; in-place byte mutation is outside this interface.
 
-## Addresses, cells, and views (proposed)
+## Addresses, cells, and views
 
 A pointer to a record, a pointer paired with a length, and a pointer whose length lives just
 before its payload should share memory operations.
@@ -393,29 +395,33 @@ where its runtime metadata lives, and how that information is obtained.
 Length and capacity are examples of runtime metadata; so are strides, tags, allocator handles, and vtable pointers.
 There is no fixed compiler record of optional fields.
 
-This section specifies the next interface, not an implemented native-pointer feature.
-The [source contract](../../lib/tests/ffi/views/contracts.zy) checks the types and constructors in today's language.
-The [bounded model](../../lib/tests/ffi/views/model.zy) instantiates addresses with integer offsets;
-[tests](../../lang/tests/tests/memory_views.rs) execute its views and check phase errors.
-This model supplies evidence about source expressibility and sequencing, not native layout or memory safety.
-Current `Bytes`, `Buffer`, and `Storage` operations retain their implemented contracts above.
+The [source library](../../lib/std/memory/views.zy) implements these types and constructors
+with the existing `VType` and `CType` kinds.
+The [native provider](../../lib/std/memory/native.zy) binds them to checked host memory;
+[examples](../../lib/tests/std/memory-views.zy) run on the interpreter, AMD64, and both WebAssembly backends.
+The [bounded model](../../lib/tests/ffi/views/model.zy) supplies a deterministic alternative provider
+for [source composition and phase tests](../../lang/tests/tests/memory_views.rs).
+The WebAssembly test host models addresses in its own virtual address space and exposes no C pointer.
+The current `Bytes` and `Storage` interfaces still use their existing host-owned immutable storage.
 
 ### The primitive boundary
 
-The proposed provider exposes two abstract value types:
+The Builtin provider exposes two abstract value types:
 
 | Type | Meaning | Runtime responsibility |
 | --- | --- | --- |
-| `Addr : VType` | An opaque data address. It carries no element type, length, capacity, ownership, or permission. | An explicit native cell or FFI plan transports one target data pointer. Copying it does not keep its allocation alive. |
-| `Access : VType` | Authority to access a live allocation or granted range with particular permissions. | The initial checked implementation retains an owner or a revocable grant, checks liveness and bounds, and rejects invalid operations. |
+| `Addr : VType` | An opaque data address. It carries no element type, length, capacity, ownership, or permission. | The implemented native address cell occupies one 8-byte pointer slot. Copying an address does not keep its allocation alive; foreign-call transport is a separate extension. |
+| `Access : VType` | Authority to access a live allocation or granted range with particular permissions. | The checked implementation identifies an owned allocation and a revocable range grant, checks liveness and bounds, and rejects invalid operations. |
 
 Keep `Access` separate from `Addr`, so a thin external handle can remain one pointer.
 A source wrapper can retain both when it should own or retain the resource.
-Access to foreign storage starts with a trusted binding's explicit extent, permissions, and release contract.
+The implemented grants come from `Buffer` owners.
+Extending grants to foreign storage will require a trusted binding's explicit extent, permissions, and release contract.
 A length read from an arbitrary address cannot grant authority to read that address or its surrounding allocation.
 Revocation invalidates every alias of a grant; copying the handle does not duplicate ownership or release rights.
-The checked runtime record therefore needs a shared live/revoked state, an allocation identity and range,
-read/write permissions, and a retained owner or foreign release policy.
+The checked runtime record stores a shared live/revoked grant, an allocation identity
+and range, and read/write permissions.
+The buffer owner controls allocation lifetime; a future foreign owner must supply its release policy.
 Those fields belong to the provider's abstract grant representation, not to every raw pointer.
 
 The provider takes an explicit `Access` on every memory operation.
@@ -427,10 +433,12 @@ Loading an address from a pointer slot checks that slot; accessing its target re
 Addresses remain pointer values through native loads and stores; generic integer casts
 or byte codecs do not manufacture pointer validity or a foreign grant.
 
-The minimal read interface used by the prototype is:
+The source read interface is:
 
 ```zydeco
 let Memory (R : CType) = codata
+| .check : Access -> Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R
+| .load_u8 : Access -> Addr -> Thk (Fault -> R) -> Thk (UInt8 -> R) -> R
 | .offset : Access -> Addr -> Int64 -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
 | .load_i64 : Access -> Addr -> Thk (Fault -> R) -> Thk (Int64 -> R) -> R
 | .load_addr : Access -> Addr -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
@@ -445,11 +453,34 @@ Its answer protocol `R` belongs to the caller.
 It does not promise purity, termination, or one invocation.
 The provider must validate a primitive access before performing it and reporting success.
 The faults are ordinary source constructors `Closed`, `Bounds`, `Permission`, `Overflow`,
-`Alignment`, `Uninitialized`, `InvalidValue`, and `Unavailable`.
+`Alignment`, `Uninitialized`, `InvalidValue`, `Unavailable`, and `AllocationFailed`.
 The integer model implements only a bounded read space and uses `Bounds` for displacements outside that space.
-A native provider also reports misaligned accesses, uninitialized reads, and invalid leaf encodings.
-Writes, allocation, and release extend the provider with their own capabilities and errors.
-They do not require compiler recognition of each view form.
+The native provider checks initialization for every loaded leaf.
+Its `check` operation validates the complete footprint and alignment without reading padding
+or requiring padding bytes to be initialized.
+
+The native module also exports `allocate`, `grant`, `base`, `revoke`,
+and the typed operations `store_i64`, `store_u8`, and `store_addr`.
+Allocation returns a `Buffer` owner and starts uninitialized; the existing `buffer/allocate` remains zero-initializing.
+`grant R owner offset length permission no yes` creates a range grant
+with ordinary source permissions `Read`, `Write`, or `ReadWrite`.
+A grant does not embed itself in an address. `base` obtains the grant's first address,
+and `revoke` invalidates every copy of that grant without closing the allocation or independent grants.
+Closing or successfully freezing the buffer invalidates all its grants and addresses.
+Failed writes leave bytes, initialization information, and pointer slots unchanged.
+Freezing an incompletely initialized buffer reports buffer error 4 and preserves the live owner.
+
+Integer and byte stores initialize their footprint.
+Pointer stores additionally record the target's allocation identity and offset
+and write the native pointer into the slot.
+Any overlapping byte or scalar store removes that pointer information, even when it writes identical bits.
+Loading such a slot as an address reports `InvalidValue`;
+loading a properly stored address preserves the target identity, including after that target has closed.
+A later target access checks its own grant and reports `Closed`.
+The shared [runtime model](../../lang/machine/src/memory.rs) owns these checks for the interpreter and AMD64.
+Generic runtime address values are opaque handles into that model;
+an explicit address cell has the separate 8-byte native storage representation.
+No new kind or compiler rule recognizes thin, fat, or header views.
 
 This is a checked capability design.
 It makes no claim that current typing proves pointer lifetimes or that all checks erase.
@@ -488,15 +519,25 @@ power-of-two alignment, checked rounding, and checked addition.
 The complete cell size includes tail padding and is its array-element stride.
 Product construction places the second cell at `round_up(left.size, right.alignment)`
 and rounds the complete size to the larger alignment.
-The prototype reuses the existing [size value functions](../../lib/std/memory/size.zy) for those calculations.
-It reads fields through their cells, leaving padding uninterpreted.
-This read interface is independent of a future write interface and does not imply mutation permission.
+The library reuses the existing [size value functions](../../lib/std/memory/size.zy) for those calculations.
+Before reading any field, a product validates its complete size and alignment through `Memory.check`.
+It then reads fields through their cells, leaving padding uninterpreted.
+`padding count` constructs a `Cell Unit` with size `count` and alignment one;
+its read checks the footprint and returns unit without loading bytes.
+`align A boundary cell` raises alignment to the larger of `boundary` and the cell's current alignment,
+rounds its size accordingly, and preserves every field offset.
+It validates that new footprint before delegating to the original cell.
+Thus a small field cannot make an out-of-bounds padded or misaligned enclosing cell succeed.
+All three constructors return `Result (Cell A) LayoutError` using source value calculations.
+The read interface does not grant mutation permission; native stores require a writable access grant.
 
 As with `Storage`, the public dictionary type does not prove its size, alignment, and decoder agree.
 Caller-authored cells must satisfy those laws; checked builders can hide successful layouts behind package abstraction.
 All cells for `A` share `Cell A`; this is not a type index distinguishing their placements.
-The model's 8-byte integer and 8-byte pointer leaves illustrate one chosen format.
-A native implementation obtains leaf widths and alignments from an explicit target contract.
+The supplied native leaves are `UInt8` (size/alignment 1), `Int64` (8),
+and an address cell (8) for the current 64-bit native target.
+The integer model uses that same sample format.
+Additional primitive formats can extend the provider without changing the view constructors.
 Native address and code-pointer cells cannot be obtained by serializing an integer through `Bytes`:
 the existing portable byte contract has a different carrier and validity boundary.
 
@@ -547,11 +588,11 @@ The model uses 8-byte sample headers and does not implement either ABI.
 The typed operation layer receives a cell for the element it accesses:
 
 ```text
-read   : forall A R. Cell A -> Access -> Addr -> Mem A R
+read_at : forall A R. Cell A -> Access -> Addr -> Mem A R
 index  : forall H A R. View H Int64 -> Cell A -> Access -> H -> Int64 -> Mem A R
 ```
 
-`read` delegates to the selected cell.
+`read_at` validates the selected cell's complete footprint and then delegates to its reader.
 `index` opens the handle, checks `0 <= index < length`, checks multiplication by the element stride for overflow,
 offsets within the grant, and reads through the element cell.
 Thus a slice length counts elements, and its stride comes from `Cell A`.
@@ -559,10 +600,15 @@ For byte slices the element is `UInt8` with stride one.
 Runtime checks and numeric arithmetic are computations; the length does not become a dependent integer index such
 as `Slice A n`.
 
-A source module choosing a representation can export an abstract `Ptr A` or `Slice A`,
-constructors, and these operations specialized to its element cell and view.
-An ordinary factory package `exists (= Handle : VType) . SliceOps A Handle` shares
-that abstract handle with its callers.
+The source factories `pointer A carrier element` and `slice H A view element` export an abstract `Ptr`
+or `Slice` together with operations specialized to the chosen element cell.
+The pointer factory provides `from_address`, `address_of`, `pointer_cell`, and `get`;
+the slice factory provides `from_handle`, `handle_of`, `slice_cell`, and indexed `get`.
+Their expected existential signatures hide the selected handle representation
+while sharing its witness with the returned operations.
+For example, `let (= Slice, slices) = views/slice H A view element in ...` opens the slice factory once,
+and `slices/get` receives that opening's `Slice`.
+Constructing a wrapper only preserves the handle; access still validates the grant when `get` runs.
 This binds the chosen representation to an API without a compiler builtin for `Slice`.
 For a concrete instance, `Handle` may be `Addr`, `Fat Int64`, or a retained pair containing an owner.
 Clients that need to select different handle types dynamically package the handle
@@ -574,13 +620,28 @@ manages initialized elements, and supplies a writable grant for mutations.
 Copying its runtime metadata proves none of those facts and does not authorize a write.
 The same separation supports runtime strides, allocator records, and application-specific tags.
 
-`Bytes` keeps its immutable octet semantics. A future library implementation can combine a byte-slice handle
-with a retained immutable owner and implement its existing operations using these layers.
-Foreign mutable storage can yield `Bytes` only through copying or an ownership transition
-that rules out subsequent mutation through aliases.
-Wrapping a raw address and length is insufficient.
-Replacing current builtin byte storage requires matching existing content, borrowing, and ownership behavior;
-this proposal does not silently change that implementation.
+`Bytes` should be an ordinary std abstraction combining a byte-slice handle with a retained immutable owner.
+Its length, bounds checks, slicing, comparison, singleton construction, concatenation,
+and collection conversions are source algorithms over these layers.
+Compiler recognition of a universal `Bytes` layout is unnecessary; an FFI adapter should choose its pointer
+and length transport explicitly.
+
+The remaining primitive question is how an allocation becomes an immutable owner.
+A read-only grant over a mutable buffer is insufficient: another grant or owner alias can still write or close it.
+A freeze transition must invalidate writable aliases and transfer the storage
+to an immutable owner retained by every shared slice.
+Copying foreign mutable storage is another valid way to establish this invariant.
+Initialization checks remain at the primitive boundary, and no wrapper can establish pointer provenance
+by decoding ordinary octets.
+
+Moving the current builtin implementation therefore requires one coordinated migration:
+define the std type and algorithms; have codecs, UTF-8 conversion, and I/O exchange generic storage windows;
+and replace the special `Bytes -> (pointer, length)` foreign classifier with an explicit view adapter.
+Remove the old byte roles and compiler primitive in that same change.
+The present memory provider supplies checked owned mutable storage; it does not
+yet supply the retained immutable-owner transition.
+Existing builtin `Bytes` remains implemented until that ownership and caller migration is complete,
+with no parallel public std replacement.
 
 ### Compile-time and runtime behavior
 
@@ -609,22 +670,23 @@ Shared mutable runtime metadata needs its own synchronization protocol, and late
 
 ### Implementation boundary and next steps
 
-The executable model covers thin/fat projection, prefix and inline-header recovery, object-header loads,
-runtime view selection, typed mismatch rejection, and static-arithmetic rejection.
-The selected-view program runs on all four backends.
-A provider that rejects every operation still permits thin/fat opening;
-invalid indirect access selects its fault continuation without exposing a successful result.
-The model has no real allocator, native pointers, target initialization map, or concurrent mutations.
+The source library implements thin/fat projection, prefix and inline-header recovery, object-header loads,
+padding, alignment, product cells, typed indexing, and abstract pointer/slice factories.
+Source tests pair successful construction and access with layout, bounds, phase, and type rejections.
+[Native view](../../lib/tests/std/memory-views.zy)
+and [fault](../../lib/tests/std/memory-faults.zy) examples exercise checked owned memory on all four backends.
+The Rust model also verifies allocation identity, revocation, initialization, pointer-slot invalidation,
+and failure-before-mutation invariants.
 
-Implement native `Addr`, checked allocation grants, and typed primitive loads first.
-Keep cell composition, header conventions, and slice algorithms in source.
+The next ownership boundary is the immutable owner needed to move `Bytes` into std, described above.
 The [foreign adapter](c-ffi.md#source-defined-views-at-foreign-boundaries) separately specifies whether
-a handle supplies one pointer, several scalar arguments, or an aggregate by value.
+an address-bearing handle supplies one pointer, several scalar arguments, or an aggregate by value.
+Foreign grants and native `Addr` arguments are not yet part of that implemented ABI.
 Data addresses and callable code require different leaves: a proposed `Code S : VType` is indexed
 by an abstract static foreign-signature witness `S : VType`, and uses the matching call adapter.
 A code address is not a `Thk`, which may capture an environment,
 and a computation classifier alone does not determine the target calling convention.
-Code-pointer loading and callbacks follow the FFI design; they are not implemented by this read model.
+Code-pointer loading and callbacks follow the FFI design.
 
 ## Remaining questions
 

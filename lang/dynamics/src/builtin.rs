@@ -91,11 +91,23 @@ impl BuiltinRuntime {
             | Role::BytesSingleton => bytes_singleton(args),
             | Role::BytesEq => bytes_eq_branch(args),
             | Role::BytesLt => bytes_lt_branch(args),
+            | Role::MemoryAllocate
             | Role::BufferAllocate
             | Role::BufferWrite
             | Role::BufferRead
             | Role::BufferFreeze
             | Role::BufferClose => crate::buffer::BufferRuntime::invoke(role, args, host),
+            | Role::MemoryGrant
+            | Role::MemoryRevoke
+            | Role::MemoryBase
+            | Role::MemoryOffset
+            | Role::MemoryCheck
+            | Role::MemoryLoadI64
+            | Role::MemoryLoadU8
+            | Role::MemoryLoadAddr
+            | Role::MemoryStoreI64
+            | Role::MemoryStoreU8
+            | Role::MemoryStoreAddr => crate::memory::MemoryRuntime::invoke(role, args, host),
             | Role::Stdin => stdin(args),
             | Role::Stdout => stdout(args),
             | Role::Stderr => stderr(args),

@@ -1,6 +1,7 @@
 //! Mutable fixed-capacity storage behind checked, non-reused resource handles.
 
 use crate::bytes::ByteBuffer;
+use crate::memory::{Address, MemoryState};
 use alloc::{collections::BTreeMap, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -10,6 +11,7 @@ pub enum BufferError {
     Closed = 1,
     Bounds = 2,
     AllocationFailed = 3,
+    Uninitialized = 4,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -26,11 +28,13 @@ impl BufferHandle {
 }
 
 #[derive(Debug)]
-struct Buffer {
-    allocation: Vec<u8>,
-    start: usize,
-    len: usize,
+pub(crate) struct Buffer {
+    pub(crate) allocation: Vec<u8>,
+    pub(crate) start: usize,
+    pub(crate) len: usize,
     alignment: usize,
+    pub(crate) initialized: Vec<bool>,
+    pub(crate) pointers: BTreeMap<usize, Address>,
 }
 
 impl Buffer {
@@ -47,7 +51,10 @@ impl Buffer {
         allocation.try_reserve_exact(capacity).map_err(|_| BufferError::AllocationFailed)?;
         allocation.resize(capacity, 0);
         let start = allocation.as_ptr().align_offset(alignment);
-        Ok(Self { allocation, start, len, alignment })
+        let mut initialized = Vec::new();
+        initialized.try_reserve_exact(len).map_err(|_| BufferError::AllocationFailed)?;
+        initialized.resize(len, true);
+        Ok(Self { allocation, start, len, alignment, initialized, pointers: BTreeMap::new() })
     }
 
     fn range(&self, offset: i64, length: usize) -> Result<core::ops::Range<usize>, BufferError> {
@@ -60,6 +67,12 @@ impl Buffer {
     fn read(&self, offset: i64, length: i64) -> Result<ByteBuffer, BufferError> {
         let length = usize::try_from(length).map_err(|_| BufferError::Bounds)?;
         let range = self.range(offset, length)?;
+        if !self.initialized[range.start - self.start..range.end - self.start]
+            .iter()
+            .all(|value| *value)
+        {
+            return Err(BufferError::Uninitialized);
+        }
         Ok(self.allocation[range].to_vec().into())
     }
 
@@ -71,10 +84,19 @@ impl Buffer {
 #[derive(Debug, Default)]
 pub struct BufferArena {
     next: usize,
-    buffers: BTreeMap<BufferHandle, Buffer>,
+    pub(crate) buffers: BTreeMap<BufferHandle, Buffer>,
+    pub(crate) memory: MemoryState,
 }
 
 impl BufferArena {
+    pub fn allocate_uninitialized(
+        &mut self, size: i64, alignment: i64,
+    ) -> Result<BufferHandle, BufferError> {
+        let handle = self.allocate(size, alignment)?;
+        self.buffers.get_mut(&handle).expect("allocated buffer").initialized.fill(false);
+        Ok(handle)
+    }
+
     pub fn allocate(&mut self, size: i64, alignment: i64) -> Result<BufferHandle, BufferError> {
         let next = self
             .next
@@ -93,6 +115,9 @@ impl BufferArena {
     ) -> Result<(), BufferError> {
         let buffer = self.buffers.get_mut(&handle).ok_or(BufferError::Closed)?;
         let range = buffer.range(offset, source.len())?;
+        let relative = range.start - buffer.start..range.end - buffer.start;
+        buffer.invalidate_pointers(relative.clone());
+        buffer.initialized[relative].fill(true);
         buffer.allocation[range].copy_from_slice(source);
         Ok(())
     }

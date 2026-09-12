@@ -1,4 +1,4 @@
-//! The view proposal's source types and phase boundaries; no native pointer ABI is implied.
+//! Source-defined view composition and phase boundaries over a deterministic provider.
 
 use std::path::PathBuf;
 use zydeco_statics::TyckDiagnosticCode;
@@ -271,4 +271,88 @@ end
     {
         SourceProgram::setup(&program).test(backend);
     }
+}
+
+#[test]
+fn padding_alignment_and_full_footprint_checks_precede_field_reads() {
+    for (expression, expected) in [
+        ("views/padding -1", "+Err(+NegativeSize())"),
+        ("views/align Int64 3 views/int64", "+Err(+InvalidAlignment())"),
+        ("views/align Int64 0 views/int64", "+Err(+InvalidAlignment())"),
+    ] {
+        ViewCase::runs(&format!("match {expression} | {expected} => ! exit 0 | _ => ! fail end"));
+    }
+    // The model only implements loads at 0, 8, and 24. At origin 4 a child load
+    // would report Bounds, so Alignment demonstrates that the outer check ran first.
+    for (boundary, origin, fault) in [(16, 4, "+Alignment()"), (64, 0, "+Bounds()")] {
+        ViewCase::runs(&format!(
+            "match views/align Int64 {boundary} views/int64 \
+             | +Err(_) => ! fail | +Ok(cell) => \
+             ! cell/read OS +Live() {origin} {{ ! memory OS }} \
+             {{ fn fault => match fault | {fault} => ! exit 0 | _ => ! fail end }} \
+             {{ fn _ => ! fail }} end"
+        ));
+    }
+    ViewCase::runs(
+        "match views/padding 32 | +Err(_) => ! fail | +Ok(cell) => \
+         ! cell/read OS +Live() 0 { ! memory OS } no { fn () => ! exit 0 } end",
+    );
+    ViewCase::runs(
+        "match views/align Int64 16 views/int64 | +Err(_) => ! fail | +Ok(cell) => \
+         match (cell/size, cell/alignment) | (16, 16) => \
+         ! cell/read OS +Live() 0 { ! memory OS } no { fn value => \
+         ! int64/eq OS value 3 { ! exit 0 } fail } | _ => ! fail end end",
+    );
+}
+
+#[test]
+fn typed_slice_indexing_checks_lengths_indices_stride_overflow_and_extent() {
+    ViewCase::runs(
+        "let view = views/indirect Int64 pointer views/int64 0 8 in \
+         ! views/index Int64 Int64 OS view views/int64 +Live() 0 0 \
+         { ! memory OS } no { fn value => ! int64/eq OS value 5 { ! exit 0 } fail }",
+    );
+    for (length, index, stride, fault) in [
+        (3_i64, -1_i64, 8_i64, "+Bounds()"),
+        (3, 3, 8, "+Bounds()"),
+        (-1, 0, 8, "+InvalidValue()"),
+        (0, 0, 8, "+Bounds()"),
+        (i64::MAX, i64::MAX - 1, 8, "+Overflow()"),
+        (3, 1, -1, "+InvalidValue()"),
+        (8, 5, 8, "+Bounds()"),
+    ] {
+        ViewCase::runs(&format!(
+            "match views/fat_cell Int64 pointer views/int64 \
+             | +Err(_) => ! fail | +Ok(carrier) => \
+             let view = views/fat Int64 carrier in \
+             ! views/index (Fat Int64) Int64 OS view (views/address {stride} 8) \
+               +Live() (views/with_runtime_metadata Int64 0 {length}) {index} \
+               {{ ! memory OS }} \
+               {{ fn fault => match fault | {fault} => ! exit 0 | _ => ! fail end }} \
+               {{ fn _ => ! fail }} end"
+        ));
+    }
+}
+
+#[test]
+fn pointer_and_slice_factories_bind_an_abstract_handle_to_its_element_operations() {
+    ViewCase::runs(
+        "let (= Ptr, pointers) = views/pointer Int64 pointer views/int64 in \
+         let pointer : Ptr = pointers/from_address 0 in \
+         ! pointers/get OS +Live() pointer { ! memory OS } no { fn value => \
+           ! int64/eq OS value 3 { \
+             let view = views/indirect Int64 (views/address 8 8) views/int64 0 8 in \
+             let (= Slice, slices) = views/slice Int64 Int64 view views/int64 in \
+             let slice : Slice = slices/from_handle 0 in \
+             ! slices/get OS +Live() slice 0 { ! memory OS } no { fn value => \
+               ! int64/eq OS value 5 { ! exit 0 } fail } \
+           } fail }",
+    );
+    SourceCase::assert_rejected(
+        SourceCase::check(&ViewCase::source(
+            "let (= Ptr, pointers) = views/pointer Int64 pointer views/int64 in \
+             let forged : Ptr = 0 in ! exit 0",
+        )),
+        TyckDiagnosticCode::TypeMismatch,
+    );
 }

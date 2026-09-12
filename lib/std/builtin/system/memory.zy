@@ -1,0 +1,91 @@
+-- Primitive memory capabilities. The library supplies cells, views, and typed faults.
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Int64 = @(intrinsic(i64)) in
+  let UInt8 = @(intrinsic(u8)) in
+  param Addr : VType in
+  param Access : VType in
+  param Buffer : VType in
+  param OS : CType in
+    (
+      @[builtin(memory_allocate)] (
+        #allocate :: Thk (Int64 -> Int64 -> Thk (Int64 -> OS) -> Thk (Buffer -> OS) -> OS)
+      )
+    )
+  * (
+      @[builtin(memory_grant)] (
+        #grant :: Thk (
+          forall (R : CType) .
+            Buffer -> Int64 -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk (Access -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_revoke)] (
+        #revoke :: Thk (forall (R : CType) . Access -> Thk (Int64 -> R) -> Thk R -> R)
+      )
+    )
+  * (
+      @[builtin(memory_base)] (
+        #base :: Thk (forall (R : CType) . Access -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R)
+      )
+    )
+  * (
+      @[builtin(memory_offset)] (
+        #offset :: Thk (
+          forall (R : CType) . Access -> Addr -> Int64 -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_check)] (
+        #check :: Thk (
+          forall (R : CType) . Access -> Addr -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_load_i64)] (
+        #load_i64 :: Thk (
+          forall (R : CType) . Access -> Addr -> Thk (Int64 -> R) -> Thk (Int64 -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_load_u8)] (
+        #load_u8 :: Thk (
+          forall (R : CType) . Access -> Addr -> Thk (Int64 -> R) -> Thk (UInt8 -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_load_addr)] (
+        #load_addr :: Thk (
+          forall (R : CType) . Access -> Addr -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_store_i64)] (
+        #store_i64 :: Thk (
+          forall (R : CType) . Access -> Addr -> Int64 -> Thk (Int64 -> R) -> Thk R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_store_u8)] (
+        #store_u8 :: Thk (
+          forall (R : CType) . Access -> Addr -> UInt8 -> Thk (Int64 -> R) -> Thk R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(memory_store_addr)] (
+        #store_addr :: Thk (
+          forall (R : CType) . Access -> Addr -> Addr -> Thk (Int64 -> R) -> Thk R -> R
+        )
+      )
+    )
+end
