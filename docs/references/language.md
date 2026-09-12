@@ -747,12 +747,16 @@ Native FFI requires installed libraries, and the CLI does not execute Wasm modul
 There are no source raw pointers, layout annotations, manual allocation, or primitive concurrency interfaces.
 Runtime-managed capabilities provide the current resource boundary.
 
-## Metadata index
+## Meta annotations (compile-time metadata)
 
-Metadata is `@[meta] e`; `@(meta)` abbreviates a hole payload.
-A metadata expression is a name, string, integer, or a named application with comma-separated arguments.
+Meta annotations are written `@[meta] e`; `@(meta)` abbreviates a hole payload.
+These forms supply compile-time metadata to the compiler.
+An annotation expression is a name, string, integer, or a named application with comma-separated arguments.
+Runtime metadata, such as a buffer length or object vtable pointer,
+is ordinary value data and follows the usual checking and erasure rules.
+An ordinary layout descriptor is also a typed value; evaluating it during checking does not make it a meta annotation.
 
-| Metadata | Meaning and valid use |
+| Meta annotation | Meaning and valid use |
 | --- | --- |
 | `import(path-or-number)` | Replace a hole with an independently checked source term (§12) |
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`, `bytes`) or an integer value function (§8) |
@@ -766,9 +770,9 @@ A metadata expression is a name, string, integer, or a named application with co
 | `format(options...)` | Scope formatting options to a payload |
 | `debug` | Record a checked term for compiler observation |
 
-The REPL commands in §12 are frontend interpretations of root metadata.
-Unrecognized metadata is structurally accepted and has no defined semantic effect here.
-Documentation and debug metadata may carry additional metadata arguments.
+The REPL commands in §12 are frontend interpretations of root meta annotations.
+Unrecognized meta annotations are structurally accepted and have no defined semantic effect here.
+Documentation and debug annotations may carry additional annotation arguments.
 Formatting options include `width`, `indent`, `layout`, `parentheses`, and `verbatim`;
 their workflow and values are in [CONTRIBUTING](../../CONTRIBUTING.md#format-and-lint).
 

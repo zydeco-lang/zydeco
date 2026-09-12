@@ -1,10 +1,11 @@
-# Immutable byte representation
+# Bytes, explicit storage, and memory views
 
 Binary formats and foreign calls need indexed octets and contiguous borrowed buffers.
 The current [library interface](../../lib/std/README.md#text-model) supplies those operations;
 [C14](../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls)
 owns their backend storage.
-This record owns the source-level layout laws for explicit storage and the rationale for byte representation.
+This record owns the source-level layout laws for explicit storage, the rationale for byte representation,
+and the proposed address, cell, and memory-view interfaces below.
 The public classifiers live in the library sources; C14 owns host storage and ABI mechanics.
 
 ## Design constraints
@@ -40,9 +41,10 @@ It constructs layouts with ordinary total value functions: `product A B left rig
 `padding count`, and `align A boundary layout`.
 Their bodies construct thunks; applying these value functions does not execute numeric arithmetic during type checking.
 Forcing a layout through `realize A R layout no yes` calculates
-and validates its metadata using ordinary returning computations, then selects one of the supplied `R` continuations.
+and validates its layout information using ordinary returning computations,
+then selects one of the supplied `R` continuations.
 The choice of `R : CType` belongs to the caller, so construction requires no `OS` stack.
-The static builder below performs the metadata calculation
+The static builder below performs the layout calculation
 within [value functions](../references/language.md#8-value-functions-and-views).
 
 A successful realization supplies [Representation A](../../lib/std/memory/representation.type.zy),
@@ -88,7 +90,7 @@ and discloses `Layout A = Result (Plan A) Error`.
 Constructors have the same composition syntax as the runtime builder: scalar leaves,
 `unit`, `padding`, `product`, and `align`.
 Each successful plan contains validated placement and the codecs derived from that placement.
-Callers cannot introduce a successful plan from a metadata record.
+Callers cannot introduce a successful plan from a layout-information record.
 
 ```zydeco
 let make_memory = @(import("memory/static-layout.zy")) in
@@ -113,7 +115,7 @@ Raising alignment preserves that form, so an over-aligned scalar still exposes i
 and an over-aligned product retains its field offsets.
 For the example, the shape exposes size 16, alignment 16, and right offset 4.
 `realize` constructs the usual `Representation A`; it needs no failure continuation
-because metadata has already been checked.
+because placement has already been checked.
 Its `store` and `from_bytes` operations still perform fallible backing allocation.
 
 [Size calculations](../../lib/std/memory/size.zy) are source-defined value functions returning `Result Int64 Error`.
@@ -136,7 +138,7 @@ The [static elimination contract](../references/language.md#10-static-eliminatio
 when a value calculation must resolve.
 A runtime size cannot supply a static `padding` calculation; the runtime builder supports that use.
 Validated plans themselves can be transported or selected at runtime,
-and `inspect` can forward their metadata as ordinary values.
+and `inspect` can forward their layout information as ordinary values.
 A runtime-selected plan does not thereby supply known integers to a later static calculation.
 Neither API executes `Ret` computations during checking.
 
@@ -167,7 +169,7 @@ The [scalar primitives](../../lib/std/builtin/numeric) implement only these leav
 `unit` has size zero and alignment one.
 `padding n : Layout Unit` has size `n` and alignment one, and stores exactly `n` zero octets.
 It can occur as a field in an ordinary product layout.
-For a product with metadata `(left_size, left_alignment)` and `(right_size, right_alignment)`:
+For a product with field sizes and alignments `(left_size, left_alignment)` and `(right_size, right_alignment)`:
 
 ```text
 right_offset = round_up(left_size, right_alignment)
@@ -248,7 +250,7 @@ Reproduce them with:
 cargo run --example representations -- lib/tests/ffi/representation.zy lib/tests/ffi/static-layout.zy
 ```
 
-Layout realization allocates ordinary closure metadata.
+Layout realization allocates ordinary closure environments.
 Storage construction currently creates intermediate buffers and concatenates them; native field decoding copies slices.
 Deeply nested composition can therefore copy a payload repeatedly.
 Import validation also re-encodes. This implementation establishes the semantics needed
@@ -381,6 +383,248 @@ Incremental effectful construction has one separate home:
 the [memory-backed Writer and byte builder](filesystem.md#memory-backed-writer-and-byte-builder).
 A builder can yield an immutable result without adding mutation to `Bytes`.
 Functional update would need its own measured use case; in-place byte mutation is outside this interface.
+
+## Addresses, cells, and views (proposed)
+
+A pointer to a record, a pointer paired with a length, and a pointer whose length lives just
+before its payload should share memory operations.
+Their differences are source-defined representation choices: which value crosses a boundary,
+where its runtime metadata lives, and how that information is obtained.
+Length and capacity are examples of runtime metadata; so are strides, tags, allocator handles, and vtable pointers.
+There is no fixed compiler record of optional fields.
+
+This section specifies the next interface, not an implemented native-pointer feature.
+The [source contract](../../lib/tests/ffi/views/contracts.zy) checks the types and constructors in today's language.
+The [bounded model](../../lib/tests/ffi/views/model.zy) instantiates addresses with integer offsets;
+[tests](../../lang/tests/tests/memory_views.rs) execute its views and check phase errors.
+This model supplies evidence about source expressibility and sequencing, not native layout or memory safety.
+Current `Bytes`, `Buffer`, and `Storage` operations retain their implemented contracts above.
+
+### The primitive boundary
+
+The proposed provider exposes two abstract value types:
+
+| Type | Meaning | Runtime responsibility |
+| --- | --- | --- |
+| `Addr : VType` | An opaque data address. It carries no element type, length, capacity, ownership, or permission. | An explicit native cell or FFI plan transports one target data pointer. Copying it does not keep its allocation alive. |
+| `Access : VType` | Authority to access a live allocation or granted range with particular permissions. | The initial checked implementation retains an owner or a revocable grant, checks liveness and bounds, and rejects invalid operations. |
+
+Keep `Access` separate from `Addr`, so a thin external handle can remain one pointer.
+A source wrapper can retain both when it should own or retain the resource.
+Access to foreign storage starts with a trusted binding's explicit extent, permissions, and release contract.
+A length read from an arbitrary address cannot grant authority to read that address or its surrounding allocation.
+Revocation invalidates every alias of a grant; copying the handle does not duplicate ownership or release rights.
+The checked runtime record therefore needs a shared live/revoked state, an allocation identity and range,
+read/write permissions, and a retained owner or foreign release policy.
+Those fields belong to the provider's abstract grant representation, not to every raw pointer.
+
+The provider takes an explicit `Access` on every memory operation.
+It checks the addressed range, required alignment, initialization and leaf representation before exposing a value.
+Offsetting checks signed displacement without overflow and stays within the granted allocation,
+including its one-past address; a subsequent nonempty load rejects one-past access.
+A negative offset is therefore valid when the grant includes the header before the payload.
+Loading an address from a pointer slot checks that slot; accessing its target requires a suitable target grant.
+Addresses remain pointer values through native loads and stores; generic integer casts
+or byte codecs do not manufacture pointer validity or a foreign grant.
+
+The minimal read interface used by the prototype is:
+
+```zydeco
+let Memory (R : CType) = codata
+| .offset : Access -> Addr -> Int64 -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
+| .load_i64 : Access -> Addr -> Thk (Fault -> R) -> Thk (Int64 -> R) -> R
+| .load_addr : Access -> Addr -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
+end in
+let Mem (A : VType) (R : CType) =
+  Thk (Memory R) -> Thk (Fault -> R) -> Thk (A -> R) -> R in
+...
+```
+
+`Mem A R` abbreviates a computation supplied with a memory provider and failure/success continuations.
+Its answer protocol `R` belongs to the caller.
+It does not promise purity, termination, or one invocation.
+The provider must validate a primitive access before performing it and reporting success.
+The faults are ordinary source constructors `Closed`, `Bounds`, `Permission`, `Overflow`,
+`Alignment`, `Uninitialized`, `InvalidValue`, and `Unavailable`.
+The integer model implements only a bounded read space and uses `Bounds` for displacements outside that space.
+A native provider also reports misaligned accesses, uninitialized reads, and invalid leaf encodings.
+Writes, allocation, and release extend the provider with their own capabilities and errors.
+They do not require compiler recognition of each view form.
+
+This is a checked capability design.
+It makes no claim that current typing proves pointer lifetimes or that all checks erase.
+Static region retirement and transitive support have their separate owner
+in [reachability regions](reachability-regions.typ);
+adopting that system would change how access evidence is discharged.
+`Ret A` remains an installed continuation accepting `A`; it supplies neither a memory lifetime nor cleanup scope.
+
+### Cells describe storage; views interpret handles
+
+`Cell A` describes a fixed memory representation of an `A` and a computation that reads it:
+
+```zydeco
+let Cell (A : VType) =
+    (#size :: Int64)
+  * (#alignment :: Int64)
+  * (#read :: Thk (forall (R : CType) . Access -> Addr -> Mem A R)) in
+let Fat (RuntimeMetadata : VType) =
+  (#address :: Addr) * (#runtime_metadata :: RuntimeMetadata) in
+let View (Handle : VType) (RuntimeMetadata : VType) =
+    (#carrier :: Cell Handle)
+  * (#open :: Thk (forall (R : CType) . Access -> Handle -> Mem (Addr * RuntimeMetadata) R)) in
+...
+```
+
+The three questions have different answers: `Handle` is the value being passed,
+`Cell Handle` describes its explicit stored form, and `open` obtains a payload address
+and runtime metadata from that handle.
+A view descriptor is an ordinary reusable dictionary; it need not be stored inside each handle.
+`Fat M` permits any representable `M`.
+Its fields are logical source fields until a `Cell (Fat M)` or call adapter supplies physical placement.
+A source product alone does not promise adjacent native words.
+
+Cell construction follows the existing layout laws: nonnegative size,
+power-of-two alignment, checked rounding, and checked addition.
+The complete cell size includes tail padding and is its array-element stride.
+Product construction places the second cell at `round_up(left.size, right.alignment)`
+and rounds the complete size to the larger alignment.
+The prototype reuses the existing [size value functions](../../lib/std/memory/size.zy) for those calculations.
+It reads fields through their cells, leaving padding uninterpreted.
+This read interface is independent of a future write interface and does not imply mutation permission.
+
+As with `Storage`, the public dictionary type does not prove its size, alignment, and decoder agree.
+Caller-authored cells must satisfy those laws; checked builders can hide successful layouts behind package abstraction.
+All cells for `A` share `Cell A`; this is not a type index distinguishing their placements.
+The model's 8-byte integer and 8-byte pointer leaves illustrate one chosen format.
+A native implementation obtains leaf widths and alignments from an explicit target contract.
+Native address and code-pointer cells cannot be obtained by serializing an integer through `Bytes`:
+the existing portable byte contract has a different carrier and validity boundary.
+
+### Concrete view forms
+
+The source constructors use the following representations.
+`p` is the supplied handle address, and offsets are byte displacements checked by the provider.
+
+| Form | `Handle` | `RuntimeMetadata` | `open` behavior |
+| --- | --- | --- | --- |
+| Thin | `Addr` | `Unit` | Return `(p, ())`; no memory operation. |
+| Fat length | `Fat Int64` | `Int64` | Project `(handle/address, handle/runtime_metadata)`; no memory operation. |
+| Fat length and capacity | `Fat ((#length :: Int64) * (#capacity :: Int64))` | The named pair | Project the carried record; no memory operation. |
+| Prefix header | `Addr` | Any `M` with a `Cell M` | Read `M` at `p - header_delta`, return payload `p`. |
+| Inline header | `Addr` | Any `M` with a `Cell M` | Read `M` at `p`, return payload `p + payload_offset`. |
+| Object header | `Addr` | `Addr`, for a vtable slot | Read the slot at `p`, return the original object address and the vtable address. |
+
+The last three are applications of one source constructor:
+
+```zydeco
+indirect M pointer_cell runtime_cell runtime_offset data_offset
+```
+
+It offsets to the runtime metadata, reads it through `runtime_cell`, offsets to the payload,
+and invokes success only after these operations succeed.
+A runtime metadata cell can itself be a product; following more
+than one indirection is another ordinary `open` computation.
+The caller supplies the original allocation grant, so prefix recovery does not attempt
+to validate itself using the header it is about to read.
+
+On the model's chosen 64-bit format, a thin handle occupies 8 bytes,
+a fat length handle 16, and a fat length/capacity handle 24.
+A prefix or inline-header handle still occupies 8 bytes; the runtime metadata resides in the referenced allocation.
+Header size, payload alignment, and the position of an embedded pointer are choices of the source cell plan.
+COM-style object access first loads a vtable address, then uses a separate table cell and access grant
+to load a method pointer; invocation is a foreign-call operation, not a data load.
+
+These layouts cover familiar external formats without baking their conventions into `View`.
+A [BSTR](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/automat/bstr) has a
+four-byte byte-length prefix before its character pointer; its length excludes the terminating character.
+A BSTR binding must also preserve its allocation/release convention and distinguish byte counts from character counts.
+A [COM interface](https://learn.microsoft.com/en-us/office/client-developer/outlook/mapi/implementing-objects-in-c)
+starts with a vtable pointer and supplies the interface pointer as the method's first argument.
+The model uses 8-byte sample headers and does not implement either ABI.
+
+### Typed pointers, slices, and immutable bytes
+
+The typed operation layer receives a cell for the element it accesses:
+
+```text
+read   : forall A R. Cell A -> Access -> Addr -> Mem A R
+index  : forall H A R. View H Int64 -> Cell A -> Access -> H -> Int64 -> Mem A R
+```
+
+`read` delegates to the selected cell.
+`index` opens the handle, checks `0 <= index < length`, checks multiplication by the element stride for overflow,
+offsets within the grant, and reads through the element cell.
+Thus a slice length counts elements, and its stride comes from `Cell A`.
+For byte slices the element is `UInt8` with stride one.
+Runtime checks and numeric arithmetic are computations; the length does not become a dependent integer index such
+as `Slice A n`.
+
+A source module choosing a representation can export an abstract `Ptr A` or `Slice A`,
+constructors, and these operations specialized to its element cell and view.
+An ordinary factory package `exists (= Handle : VType) . SliceOps A Handle` shares
+that abstract handle with its callers.
+This binds the chosen representation to an API without a compiler builtin for `Slice`.
+For a concrete instance, `Handle` may be `Addr`, `Fat Int64`, or a retained pair containing an owner.
+Clients that need to select different handle types dynamically package the handle
+with its matching operations: `exists (= H : VType) . H * View H Int64 * Cell A`.
+Clients sharing one `H` can select a view at runtime directly.
+
+Capacity has a separate meaning from length. A growable container's source API validates `0 <= length <= capacity`,
+manages initialized elements, and supplies a writable grant for mutations.
+Copying its runtime metadata proves none of those facts and does not authorize a write.
+The same separation supports runtime strides, allocator records, and application-specific tags.
+
+`Bytes` keeps its immutable octet semantics. A future library implementation can combine a byte-slice handle
+with a retained immutable owner and implement its existing operations using these layers.
+Foreign mutable storage can yield `Bytes` only through copying or an ownership transition
+that rules out subsequent mutation through aliases.
+Wrapping a raw address and length is insufficient.
+Replacing current builtin byte storage requires matching existing content, borrowing, and ownership behavior;
+this proposal does not silently change that implementation.
+
+### Compile-time and runtime behavior
+
+The existing [value-function](../references/language.md#8-value-functions-and-views)
+and [static-elimination](../references/language.md#10-static-elimination) rules remain authoritative.
+The following table applies those rules to memory views:
+
+| Expression or information | During checking | At runtime |
+| --- | --- | --- |
+| `Addr`, `Access`, `M`, and `H` | Check ordinary kinds, types, and package witnesses. | Types, witnesses, and field labels erase; their values remain as needed. |
+| Fixed cell size, alignment, and product offsets | Value arithmetic requires known operands and checks its ordinary error result. | A retained descriptor may carry those calculated integers and read thunks. |
+| Fat-handle construction and runtime metadata projection | A value function may forward unknown runtime fields inside known structure. | The residual program constructs or projects ordinary values; it contains no value-function closure. |
+| Thin/fat `open` | Check the suspended computation; never force it to discover static information. | Invoke success with carried fields, without accessing memory. |
+| Header recovery and element indexing | Check types and operation protocols. Runtime lengths cannot drive static arithmetic. | Execute checked offsets, loads, and numeric computations through the supplied provider. |
+| Runtime-selected view or cell | Check that the selected values have a common type, or open an existential package. | Keep required dictionaries, offsets, and captured values. Selection does not make their integers statically known. |
+| Explicit native ABI layout | Require a known target leaf layout and argument/result transport plan. | Apply the validated marshalling plan to runtime payloads. |
+
+Runtime metadata names the information's role in a representation, not a requirement that it be unknown during checking.
+A literal length may fold away while still describing that representation's runtime metadata.
+Conversely, ordinary layout descriptions may be constructed and selected at runtime.
+Neither is a [meta annotation](../references/language.md#meta-annotations-compile-time-metadata).
+
+An `open` result is a snapshot of the observations its computation made.
+It neither freezes the referenced allocation nor promises an atomic snapshot of a mutable multifield header.
+Shared mutable runtime metadata needs its own synchronization protocol, and later accesses recheck their grants.
+
+### Implementation boundary and next steps
+
+The executable model covers thin/fat projection, prefix and inline-header recovery, object-header loads,
+runtime view selection, typed mismatch rejection, and static-arithmetic rejection.
+The selected-view program runs on all four backends.
+A provider that rejects every operation still permits thin/fat opening;
+invalid indirect access selects its fault continuation without exposing a successful result.
+The model has no real allocator, native pointers, target initialization map, or concurrent mutations.
+
+Implement native `Addr`, checked allocation grants, and typed primitive loads first.
+Keep cell composition, header conventions, and slice algorithms in source.
+The [foreign adapter](c-ffi.md#source-defined-views-at-foreign-boundaries) separately specifies whether
+a handle supplies one pointer, several scalar arguments, or an aggregate by value.
+Data addresses and callable code require different leaves: a proposed `Code S : VType` is indexed
+by an abstract static foreign-signature witness `S : VType`, and uses the matching call adapter.
+A code address is not a `Thk`, which may capture an environment,
+and a computation classifier alone does not determine the target calling convention.
+Code-pointer loading and callbacks follow the FFI design; they are not implemented by this read model.
 
 ## Remaining questions
 

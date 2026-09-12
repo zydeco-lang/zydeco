@@ -13,6 +13,8 @@ Use English for identifiers and repository prose, including comments and documen
 Communicate in the user's preferred language, following the current conversation when none is stated.
 Keep established technical terms in English when that preserves precision and searchability,
 unless the user requests localization.
+Use **runtime metadata** for information carried with a runtime representation, such as lengths or vtable pointers.
+Call compiler `@[meta]` forms **meta annotations**, or **compile-time metadata**, to distinguish the two concepts.
 
 ## Project References
 

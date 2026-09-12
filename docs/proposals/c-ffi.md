@@ -18,7 +18,7 @@ Executing a C caller is evidence about the specimen, not evidence that Zydeco ca
 | Example | Current result | Missing capability or next decision |
 | --- | --- | --- |
 | A checksum taking `const void *`, `size_t`, and `uint64_t` | `Thk (Bytes -> UInt64 -> Ret UInt64)` describes the call directly. The existing xxHash binding exercises this pattern. | No new mechanism is needed for an immutable, synchronous borrow. |
-| An inspector taking a `sample_record`, by pointer or by value | A source storage contract constructs the record, but `Bytes` always adds a length. The specimen's `sample_inspect_bytes` wrapper adapts the pointer signature; a logical product is rejected for the by-value form. | Select pointer-only transport first. Passing an aggregate by value additionally needs target ABI classification. |
+| An inspector taking a `sample_record`, by pointer or by value | A source storage contract constructs the record, but `Bytes` always adds a length. The specimen's `sample_inspect_bytes` wrapper adapts the pointer signature; a logical product is rejected for the by-value form. | Use a source-defined view and explicit pointer transport. Passing an aggregate by value additionally needs target ABI classification. |
 | A writer taking `void *`, capacity, and scalar fields | `Buffer` is rejected as a foreign parameter. A C caller can receive valid fields with nonzero padding. | A checked mutable call borrow, plus a foreign decoder that distinguishes fields from padding. |
 | A visitor taking an array, a function pointer, and `void *context` | A capturing `Thk (Int64 -> Ret Int64)` is rejected as a foreign parameter. The C visitor invokes a context-bearing callback repeatedly. | A rooted callback environment and a runtime entry that returns to each C invocation. |
 | A Zydeco service passing an abstract stored record to another module | The [stored-call example](../../lib/tests/std/represented-call/main.zy) already shares a carrier, converts representations, and selects a service at runtime. | Source modularity works; loading a separately compiled service needs a negotiated external ABI and runtime ownership. |
@@ -45,7 +45,7 @@ Raising that limit would still leave the extra length in the wrong signature.
 Its C caller succeeds, while `Thk ((UInt8 * UInt32) -> Ret UInt64)` is rejected by the current foreign checker.
 Choosing a byte layout does not determine whether a target ABI splits an aggregate across registers,
 passes it in memory, or introduces a hidden result pointer.
-The read view below addresses pointer arguments; aggregate classification remains a separate, later extension.
+The view adapters below address pointer arguments; aggregate classification remains a separate, later extension.
 
 Writing six `UInt64` parameters passes source checking because declarations are trusted.
 It describes integers rather than a retained pointer and must not be executed against that symbol.
@@ -77,95 +77,117 @@ Other foreign decoders must account for their own endianness, valid field encodi
 and length conventions; the integer record does not establish a generic decoder for arbitrary C objects.
 The fixture checks its native layout and little-endian byte order explicitly.
 
-## Proposed next extension: retained read views
+## Source-defined views at foreign boundaries
 
-The next compiler capability should remove the C adapter for `sample_inspect`.
-Add one explicit source argument view for pointer-only immutable transport.
-In the proposed interface, a trusted foreign package exports an abstract value type `Read`
-and a total value function `read` that wraps `Bytes`.
-The view retains the bytes; it contains no user-observable address.
-It can be copied, captured, and supplied to several calls with the ordinary lifetime of its backing value.
-Constructing the view does not run C code or create a borrow that needs lexical cleanup.
+The next extension should let `sample_inspect` receive one pointer
+while using the general [address, cell, and view interfaces](bytes.md#addresses-cells-and-views-proposed).
+That section owns `Addr`, `Access`, `Cell A`, `Fat M`, and `View H M`, including their phase and access rules.
+Thin, fat, prefix-header, and object-header handles are source library choices.
+The compiler boundary recognizes primitive storage and call operations;
+source libraries supply the view constructors and runtime metadata conventions.
+These native operations and the following adapters are proposed, not currently implemented.
 
-The proposed use is below; `Read` and `c/read` are design names and are not implemented:
+### A handle layout does not determine a C call
 
-```zydeco
-let raw : Thk (Read -> Ret UInt64) =
-  @(ffi(c, library("zyffi_examples"), symbol("sample_inspect"))) in
-let inspect : Thk (Stored -> Ret UInt64) = {
-  fn value =>
-    do data <- ! storage/bytes value;
-    ! raw (c/read data)
-} in
-...
+A view interprets a handle; the foreign signature determines what its C callee receives.
+For example, opening a `Fat Int64` produces an address and an element count.
+The binding chooses among the following explicit transports:
+
+| C parameter shape | Source adapter | Native arguments |
+| --- | --- | --- |
+| `const sample_record *` | Obtain the record address through the binding's selected view and validate the known record extent. | One data pointer. |
+| `const void *, size_t` | Open the view, validate the extent, and convert its length to the target unsigned byte-count type. | Pointer followed by byte count. |
+| A struct containing pointer and length, passed by value | Encode the handle with an explicit native aggregate cell and classify that aggregate for the target ABI. | The aggregate's target register/stack classes. |
+| An interface pointer with an initial vtable slot | Open the object view, load the selected table slot under a suitable grant, and call its code pointer with the original interface address. | The method's declared arguments, including its interface argument. |
+
+A source product is not automatically a C aggregate or a sequence of C arguments.
+`Cell H` determines storage when `H` is stored; it does not determine aggregate register splitting,
+parameter expansion, or hidden result pointers.
+The call plan must preserve ordered leaves and aggregate grouping.
+Likewise, a prefix-header handle can cross C as just its original payload pointer
+without first loading the header, when the binding already knows the required extent.
+The general `open` operation is available when its runtime metadata is needed;
+an adapter need not perform unused reads merely to pass an address.
+
+The binding for `sample_inspect` continues to accept its abstract `Stored` record.
+It obtains an address and retained access authority for that storage and invokes a pointer-argument adapter.
+Arbitrary bytes must first satisfy the binding's record contract, through its existing canonical constructor
+or through foreign decoding followed by canonical storage.
+The storage dictionary's layout laws and correspondence to the actual C declaration remain explicit obligations.
+
+### Signature identity and code addresses
+
+Data pointers and code pointers need distinct leaves.
+Use a proposed `Code S : VType`, where `S : VType` is an abstract static witness introduced
+by a checked foreign-signature package.
+The package supplies the ordered native argument/result description, its source conversion operations,
+and an invocation operation accepting `Code S`.
+An independently opened signature witness cannot silently reuse that code value.
+`S` erases; the code address remains.
+The target determines the code-pointer representation, which is not assumed to be interchangeable with a data address.
+
+The native signature description must resolve before target call lowering.
+It records the calling convention, primitive widths, aggregate grouping, and result transport.
+Source value functions can build its fixed layouts; the compiler validates and classifies the resulting plan.
+Equal source computation types or equal aggregate sizes do not establish equal foreign signatures.
+A dynamically selected foreign method can vary the `Code S` value under one known signature,
+or package distinct witnesses together with their matching invocation operations.
+A runtime integer cannot dynamically determine a new native calling convention at a compiled call site.
+
+A `Thk B` may include a captured environment and is not a `Code S`.
+Source thunks call code pointers through their matching adapters.
+Turning a capturing thunk into a foreign callback additionally requires the runtime-entry and rooting protocol below.
+The source view prototype models only a vtable data address, not method invocation or code-pointer loading.
+
+### Access and returning-call cleanup
+
+The proposed checked read adapter has an explicit preflight failure path, for example:
+
+```text
+inspect : forall R. Access -> Addr -> Thk (Fault -> R) -> Thk (UInt64 -> R) -> R
 ```
 
-The public binding accepts the `Stored` from its chosen contract.
-The low-level view only selects argument transport: it does not make arbitrary bytes a valid record.
-An API accepting unclassified bytes must validate them or decode and store them before calling that binding.
-Source-authored storage dictionaries retain their existing layout-law obligations;
-the view adds no proof of those laws or of the actual C declaration.
+A high-level wrapper can retain the grant and specialize this interface to its chosen record handle.
+The adapter validates every promised argument range and alignment and retains its owners
+before entering C. A synchronous read-only binding permits the callee to read those ranges during the call;
+it grants neither mutation nor retention after return.
+A raw pointer result, by contrast, needs a separately specified allocation, extent,
+and ownership policy before it can yield usable access authority.
 
-### Source construction and call interpretation
+The initial bridge remains single-threaded and non-reentrant, with no admitted nonlocal exit.
+After the actual C return it releases call borrows before resuming the chosen source continuation,
+while preserving roots needed to encode the result.
+Cleanup belongs to this bridge operation.
+It is not inferred from `Ret`, source frame extent, or a convention that a source thunk calls a continuation once.
+Empty ranges contain no readable byte and do not imply a null address.
+Nullability and sentinel conventions belong to the binding's explicit source contract.
 
-Keep placement, padding, alignment, and decoding in their existing source value functions and computations.
-The view itself needs only an ordinary wrapper carrying the backing `Bytes`.
-Its identity and payload projection must be supplied by the trusted foreign package and validated
-at the compiler boundary, rather than inferred from a user-chosen field name or an isomorphic product.
-The implementation must retain that identity until foreign signature checking
-and retain the backing value after erasure.
-Whether the checked wrapper can reuse current nominal data lowering
-or needs a dedicated residual constructor is an implementation question for this one boundary;
-it does not require a general layout annotation mechanism.
+The implemented `Bytes` foreign classifier retains its current pointer-and-length meaning
+until its adapter can be expressed through this boundary without changing existing semantics.
+The new implementation should share its borrowing machinery with the general pointer plan.
+It should remove the need for the specimen's pointer-and-length C shim, then support the same source view constructors
+without adding per-layout compiler identities.
 
-The checked call plan gains a pointer-only read parameter, expanding to exactly one pointer component.
-Its adapter obtains the backing window from the view.
-Existing `Bytes` parameters keep their pointer-and-length meaning, using the same window-borrowing implementation.
-Both interpreter and AMD64 paths must consume this single validated expansion, including mixed parameter order.
-A view preserves the address alignment and visible window established by its backing bytes.
-Taking a byte slice or applying another byte transformation still requires the usual revalidation
-when alignment matters.
+### Acceptance criteria
 
-The bridge retains owners for all arguments until the C call actually returns.
-The C callee may read only the range promised by its binding and may neither modify nor retain the pointer.
-The initial extension inherits the current prohibition on reentry and nonlocal exits.
-An empty view supplies no readable byte and does not promise a null pointer;
-nullable arguments and sentinel-terminated strings need their own explicit contracts.
-`Read` is initially argument-only at the foreign boundary: a returned C pointer has no such backing owner,
-so `Ret Read` cannot be obtained by reversing this marshalling operation.
+First execute the pointer-only inspector and the six-component inspector with options through both supported C adapters.
+Check field contents, alignment, argument ordering, empty windows, selected slices,
+and repeated calls with retained owners.
+Pair valid calls with revoked grants, insufficient extents, wrong permissions, and mismatched signature witnesses;
+preflight failure must prevent C entry and preserve handle state.
+A value from an unrelated `Stored` opening must still fail source checking.
 
-Borrow cleanup belongs to the returning C bridge.
-It occurs before resuming the supplied Zydeco continuation, including when result encoding can allocate.
-It is not inferred from the source `Ret` type or an assumed source frame size:
-[the installed-continuation rule](../references/language.md#ret-and-stack-extent) remains authoritative.
-No source thunk is required to invoke a cleanup continuation exactly once.
+Then exercise a fat pointer whose runtime metadata is a record, a prefix-header pointer,
+and a vtable-bearing object using the same leaf operations and explicit transport plans.
+Arbitrary source runtime metadata must not create new compiler cases.
+Aggregate-by-value transport and actual code-pointer invocation require their respective target adapters;
+source view tests alone do not establish either capability.
 
-### Alternatives and acceptance criteria
-
-A C shim is the current useful workaround, but puts a language-level transport choice in every affected binding.
-Integer addresses lose ownership and range evidence.
-A source-visible scoped raw pointer would require lifetime restrictions the language does not yet express.
-A general algebra of C signatures would be premature for this example;
-the existing compositional classifier can accommodate this one additional argument view.
-
-Accept the extension when both supported C adapters execute the original pointer-only inspector,
-the six-component inspector with options, and repeated calls using a captured view.
-Check field contents and address alignment at C entry; retain tests for empty windows and selected byte slices.
-Pair those with rejected foreign pointer results, unwrapped storage carriers,
-and unsupported mutable or callback arguments.
-The source binding must still reject a value from a different `Stored` opening.
-The argument owner must remain live until C returns.
-Subsequent result allocation must not expose raw scratch words as roots or invalidate an independently retained view.
-C must observe neither a spurious length nor a shifted scalar parameter.
-
-These tests are the next implementation milestone.
-The current increment supplies the specimens, source gap probes, and the working foreign-decoder example;
-it does not yet implement `Read` or change a native ABI.
-
-## Mutable output after read views
+## Mutable output through access grants
 
 `sample_write` provides a separate next milestone once immutable views work.
-A mutable view should retain a `Buffer` capability and describe pointer-only or pointer-and-capacity transport.
+A mutable wrapper retains a `Buffer` capability or writable `Access` grant
+and chooses pointer-only or pointer-and-capacity transport.
 Creating the view need not establish exclusivity; the call bridge must revalidate the handle and acquire the borrow
 on every invocation, since an alias may have closed or frozen it since view construction.
 Keep this boundary in an explicit effectful protocol compatible with the existing `OS` buffer operations,
@@ -262,7 +284,7 @@ The remaining shapes are deferred with distinct prerequisites:
 | Floating-point scalars | Classify and allocate SSE argument/result registers independently of integer registers; preserve payload bits across marshalling and mixed calls. |
 | More than six integer components | Plan stack arguments, their alignment, and cleanup together with the existing temporary frame and return continuation. |
 | Aggregates by value | Derive target ABI classes from an explicit storage contract, including register splitting, memory arguments, and hidden result pointers. |
-| Read-only pointer arguments | Implement the retained read view and its owner-preserving marshalling described above. |
+| Read-only pointer arguments | Implement general address/access leaves and the source view adapters described above. |
 | Mutable or retained pointers | Implement the per-call buffer borrow above; retained pointers additionally need an ownership and release protocol. |
 | Callbacks and exports | Establish runtime entry, retained roots, completion, and reentry as described above. |
 
@@ -289,7 +311,7 @@ Installed-library and native-toolchain runs remain opt-in under the repository's
 Reproduce the concrete boundary review with focused targets:
 
 ```sh
-cargo test -p zydeco-tests --test ffi_examples --test ffi --test represented_calls
+cargo test -p zydeco-tests --test memory_views --test ffi_examples --test ffi --test represented_calls
 cargo test -p zydeco-tests --test ffi native_c_boundary_executes_the_compositional_protocol -- --ignored
 ```
 

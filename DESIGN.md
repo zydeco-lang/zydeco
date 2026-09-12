@@ -886,8 +886,12 @@ Checking a declaration does not load its library or validate the real C symbol's
 Both WebAssembly backends and the ZASM interpreter reject native foreign imports.
 The [foreign-interface reference](docs/references/language.md#14-foreign-interfaces) owns the supported ABI
 and borrowing obligations.
-The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record, output-buffer,
-callback, and component examples to motivate the next extensions, starting with pointer-only read views.
+The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record,
+output-buffer, callback, and component examples to motivate the next extensions.
+The proposed [memory views](docs/proposals/bytes.md#addresses-cells-and-views-proposed) use source-defined cells
+and thin, fat, or header-based handles over a small address/access interface.
+Their explicit foreign adapters choose pointer, scalar-sequence, or aggregate transport;
+the existing native foreign classifiers remain unchanged.
 
 ## WebAssembly backend
 
