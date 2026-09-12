@@ -10,22 +10,36 @@ pub struct SpsLowPipeline<'a> {
     pub statics: &'a StaticsArena,
 }
 
+impl SpsLowPipeline<'_> {
+    /// Replace the optional high-SPS transformations, preserving the required
+    /// validation and closure-conversion boundaries around them.
+    pub fn with_optimizations<P>(
+        self, optimizations: P,
+    ) -> impl CompilerPass<BranchJoinProgram, Output = SpsLowProgram, Error = P::Error>
+    where
+        P: CompilerPass<BranchJoinProgram, Output = BranchJoinProgram>,
+    {
+        let check = move |program: BranchJoinProgram| {
+            crate::high::check::check(program.as_program(), self.scoped, self.statics);
+            Ok::<_, P::Error>(program)
+        };
+        pipeline![
+            check,
+            optimizations,
+            check,
+            SpsLowConverter { scoped: self.scoped, statics: self.statics }.with_error(),
+        ]
+    }
+}
+
 impl CompilerPass<BranchJoinProgram> for SpsLowPipeline<'_> {
     type Output = SpsLowProgram;
     type Error = Infallible;
 
     fn run(&mut self, stackir: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
-        let check = |program: BranchJoinProgram| {
-            crate::high::check::check(program.as_program(), self.scoped, self.statics);
-            Ok::<_, Infallible>(program)
-        };
-        pipeline![
-            check,
-            crate::high::normalize::Normalizer,
-            check,
-            SpsLowConverter { scoped: self.scoped, statics: self.statics },
-        ]
-        .run(stackir)
+        Self { scoped: self.scoped, statics: self.statics }
+            .with_optimizations(crate::high::normalize::Normalizer)
+            .run(stackir)
     }
 }
 
@@ -40,6 +54,14 @@ mod tests {
     }
 
     impl PrimitiveFixture {
+        fn closed_program() -> BranchJoinProgram {
+            let mut fixture = Self::default();
+            let value = fixture.build(Triv);
+            let stack = fixture.build(Bullet);
+            let root = fixture.build(SReturn { value, stack });
+            BranchJoinProgram::try_new(StackirProgram::new(fixture.arena, root)).unwrap()
+        }
+
         fn build<U, S, T>(&mut self, node: U) -> T
         where
             U: Construct<S, T, StackirArena>,
@@ -138,6 +160,42 @@ mod tests {
                 matches!(&arena.values[&value], low::Value::Literal(actual) if *actual == expected)
             );
         }
+    }
+
+    #[test]
+    fn custom_optimization_stages_are_reusable_and_preserve_errors() {
+        use std::cell::Cell;
+        use zydeco_utils::pass::{Identity, PassSequence};
+        let scoped = ScopedArena::default();
+        let statics = StaticsArena::default();
+        let calls = Cell::new(0);
+        let visit = |program: BranchJoinProgram| {
+            calls.set(calls.get() + 1);
+            Ok::<_, Infallible>(program)
+        };
+        let optimizations = PassSequence::new().with_pass(Identity).with_pass(visit);
+        let mut lowering =
+            SpsLowPipeline { scoped: &scoped, statics: &statics }.with_optimizations(optimizations);
+        for _ in 0..2 {
+            let output = lowering.run_infallible(PrimitiveFixture::closed_program());
+            assert!(output.arena().inner.compus.iter().next().is_some());
+        }
+        assert_eq!(calls.get(), 2);
+        #[derive(Debug, Eq, PartialEq)]
+        enum Error {
+            Rejected,
+        }
+        let reject = |_: BranchJoinProgram| Err::<BranchJoinProgram, _>(Error::Rejected);
+        let completed = Cell::new(false);
+        let mut lowering = pipeline![
+            SpsLowPipeline { scoped: &scoped, statics: &statics }.with_optimizations(reject),
+            |output: SpsLowProgram| {
+                completed.set(true);
+                Ok(output)
+            },
+        ];
+        assert_eq!(lowering.run(PrimitiveFixture::closed_program()).unwrap_err(), Error::Rejected);
+        assert!(!completed.get());
     }
 
     #[test]

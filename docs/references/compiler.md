@@ -505,8 +505,10 @@ Stack lets guard value-coproduct matches so every branch shares one supplied con
 The [high verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
 and this branch-join shape.
 
-[SpsLowPipeline](../../lang/stackir/src/pipeline.rs) validates high SPS, normalizes it,
-validates the rebuilt program, and consumes it through closure conversion.
+[SpsLowPipeline](../../lang/stackir/src/pipeline.rs) defaults to validating high SPS, normalizing it,
+validating the rebuilt program, and consuming it through closure conversion.
+Its `with_optimizations` method replaces the optional normalization stage with a same-IR Rust pass or sequence,
+under the [pass composition contract](../../DESIGN.md#compiler-pass-composition).
 These optimizations are optional consequences of known runtime structure;
 they do not relax L10's source elimination boundary.
 The normalizer preserves definition identities while allocating fresh syntax for the surviving lexical tree.

@@ -579,6 +579,10 @@ let sps_low = lowering.run(root)?;
 ```
 
 `SpsLowPipeline` declares its own high-SPS checks, normalization, and closure conversion as a sequence.
+Its `with_optimizations` method accepts any pass preserving `BranchJoinProgram`,
+including `Identity`, a custom Rust pass, or a nested sequence.
+The selected stage runs between the required high-SPS checks and before closure conversion;
+the default selection remains the existing normalizer.
 Functions and closures returning `Result` also implement the pass interface,
 allowing local checks to participate without additional named types.
 `LoweringPipeline` composes assembly construction, stack analysis, and publication from a borrowed SPSLow program.
@@ -586,6 +590,28 @@ Its `with_native_frames` option returns a pass that ends in checked `NativeProgr
 retaining the distinct portable and native output types and the native frame-planning error.
 This composition mechanism schedules explicit stages; source query caching and revision ownership remain
 with the session's Salsa database described below.
+
+Runtime selection uses `PassSequence<'p, Ir, E>`, a vector of configured passes sharing one input/output contract
+and error type.
+`with_pass` appends an occurrence and retains its position, including duplicates.
+An empty sequence and `Identity` return their input.
+`when(enabled)` conditionally runs a same-IR stage; `repeat(times)` executes the whole enclosed stage
+or group exactly that many times, stopping at the first error.
+A disabled stage or zero repetitions return the input without invoking the enclosed pass.
+Configuration is constructed once, while each invocation receives the preceding invocation's output.
+`by_ref` allows a sequence to borrow an existing configured pass,
+and the sequence lifetime permits borrowed dependencies without imposing `Clone`, `Send`, or `'static` on every pass.
+Failure does not roll back ownership of an input consumed by a pass.
+
+`with_observer` wraps a pass with typed before/after hooks for inspection, verification, or rendering.
+`PassLocation` identifies its occurrence with a name and structural index path;
+the wrapper counts invocations, including repetitions and reuse across outer executions.
+Paths are stored with zero-based indices and displayed with one-based positions.
+Observers borrow the program, and timing measures pass execution separately from observer callbacks.
+A rejected before hook prevents the pass from running; a rejected after hook prevents downstream execution.
+`PassFailure` retains the occurrence and distinguishes the original domain error
+from a before/after observation failure.
+Panics remain compiler bugs and are not converted into ordinary pass errors.
 
 ### Query-Based Analysis
 

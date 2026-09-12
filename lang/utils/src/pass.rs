@@ -2,6 +2,13 @@
 
 use std::convert::Infallible;
 
+mod sequence;
+pub use sequence::{Identity, PassRef, PassSequence, Repeat, When};
+mod observe;
+pub use observe::{
+    Observed, PassFailure, PassFailureCause, PassInvocation, PassLocation, PassObserver,
+};
+
 /// A configured transformation with an explicit input and output.
 ///
 /// Passes keep dependencies and configuration in `self`; each invocation creates
@@ -12,6 +19,39 @@ pub trait CompilerPass<Input> {
     type Error;
 
     fn run(&mut self, input: Input) -> Result<Self::Output, Self::Error>;
+
+    /// Borrow a configured pass for composition without moving it.
+    fn by_ref(&mut self) -> PassRef<'_, Self>
+    where
+        Self: Sized,
+    {
+        PassRef(self)
+    }
+
+    /// Execute a same-IR pass conditionally; a disabled pass returns its input.
+    fn when(self, enabled: bool) -> When<Self>
+    where
+        Self: Sized + CompilerPass<Input, Output = Input>,
+    {
+        When { pass: self, enabled }
+    }
+
+    /// Execute a same-IR pass or nested pipeline exactly `times` times.
+    fn repeat(self, times: usize) -> Repeat<Self>
+    where
+        Self: Sized + CompilerPass<Input, Output = Input>,
+    {
+        Repeat { pass: self, times }
+    }
+
+    /// Observe this occurrence without adding instrumentation to its implementation.
+    fn with_observer<O>(self, location: PassLocation, observer: O) -> Observed<Self, O>
+    where
+        Self: Sized,
+        O: PassObserver<Input, Self::Output, Self::Error>,
+    {
+        Observed::new(self, location, observer)
+    }
 
     /// Connect a following pass that accepts this pass's output and error type.
     fn then<Next>(self, next: Next) -> Then<Self, Next>

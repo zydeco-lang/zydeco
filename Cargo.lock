@@ -2818,6 +2818,7 @@ dependencies = [
  "derive_more",
  "la-arena",
  "rustc-hash",
+ "thiserror",
 ]
 
 [[package]]
