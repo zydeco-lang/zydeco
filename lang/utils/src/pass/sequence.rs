@@ -1,7 +1,7 @@
 use super::CompilerPass;
 use std::convert::Infallible;
 
-/// The empty transformation. Its error can be lifted with `with_error`.
+/// Return the input unchanged.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Identity;
 
@@ -26,11 +26,7 @@ impl<Input, P: CompilerPass<Input> + ?Sized> CompilerPass<Input> for PassRef<'_,
     }
 }
 
-/// A runtime-selected sequence whose passes preserve one IR contract.
-///
-/// Order and duplicates are preserved. Empty sequences are identity operations.
-/// The lifetime permits passes to borrow configuration. Passes share an error
-/// type; errors stop execution without rolling back consumed inputs.
+/// A runtime-selected sequence preserving one IR and error type.
 ///
 /// ```
 /// use std::convert::Infallible;
@@ -87,7 +83,7 @@ impl<Ir, E> CompilerPass<Ir> for PassSequence<'_, Ir, E> {
     }
 }
 
-/// A configured pass whose execution can be disabled without changing its type.
+/// Conditionally execute the enclosed pass.
 pub struct When<P> {
     pub pass: P,
     pub enabled: bool,
@@ -102,8 +98,7 @@ impl<Ir, P: CompilerPass<Ir, Output = Ir>> CompilerPass<Ir> for When<P> {
     }
 }
 
-/// Bounded repetition of the entire enclosed pass, with fresh input each time.
-/// Configuration is constructed once and reused; zero repetitions are identity.
+/// Repeat the enclosed pass a fixed number of times.
 pub struct Repeat<P> {
     pub pass: P,
     pub times: usize,

@@ -11,8 +11,7 @@ pub struct SpsLowPipeline<'a> {
 }
 
 impl SpsLowPipeline<'_> {
-    /// Replace the optional high-SPS transformations, preserving the required
-    /// validation and closure-conversion boundaries around them.
+    /// Select the optional high-SPS transformations.
     pub fn with_optimizations<P>(
         self, optimizations: P,
     ) -> impl CompilerPass<BranchJoinProgram, Output = SpsLowProgram, Error = P::Error>

@@ -1,4 +1,6 @@
-//! Built-in high-SPS plans. Rust extensions use `CompilerPass` directly.
+//! Built-in high-SPS plans.
+//!
+//! See `docs/references/compiler.md#built-in-plans-and-phase-boundaries`.
 
 use crate::{
     BranchJoinError, BranchJoinProgram,
@@ -19,7 +21,7 @@ use zydeco_utils::pass::{
     CompilerPass, PassFailure, PassInvocation, PassLocation, PassObserver, PassSequence,
 };
 
-/// A selectable optional transformation, with its own typed configuration when needed.
+/// A selectable high-SPS transformation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HighSpsPass {
     Normalize,
@@ -51,8 +53,7 @@ impl fmt::Display for HighSpsPass {
     }
 }
 
-/// Owned selection, instantiated separately for each compilation's dependencies.
-/// `Default` selects one normalizer; `None` selects no optional transformations.
+/// An owned selection of built-in high-SPS passes.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum HighSpsPlan {
     #[default]
@@ -170,7 +171,7 @@ impl HighSpsPlan {
     }
 }
 
-/// Inspection is compiler-side configuration, independent of runtime metadata.
+/// High-SPS trace, verification, and dump options.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct HighSpsInspection {
     pub trace: bool,

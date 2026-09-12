@@ -48,9 +48,8 @@ Both representations have one computation root rather than a top-level declarati
   retained branch joins, and native continuation metadata.
   `low::contracts` checks code provenance and package agreement
   under the [word entry contract](../../../docs/references/compiler.md#word-entry-contracts).
-- `SpsLowPipeline` is the consuming boundary between high SPS and assembly-ready SPSLow.
-  It composes checks, selected high-SPS transformations, and conversion
-  through the [compiler pass interface](../../../docs/references/compiler.md#compiler-pass-composition).
+- `SpsLowPipeline`:
+  [high-SPS pass composition](../../../docs/references/compiler.md#built-in-plans-and-phase-boundaries).
 
 The paper correspondence and the phase invariants are summarized in the implementation architecture section
 of [`DESIGN.md`](../../../DESIGN.md); the stack-passing-style paper remains authoritative for the formal presentations.

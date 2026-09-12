@@ -1,6 +1,6 @@
 //! Compare static and dynamic composition on the same checked source.
-//! Timings exclude source checking and high-SPS construction, and include one
-//! normalization traversal. They do not measure generated program runtime.
+//!
+//! Timing scope: `docs/references/compiler.md#pipeline-examples-and-validation`.
 
 use clap::Parser;
 use std::{
@@ -19,7 +19,6 @@ use zydeco_utils::{
     pipeline,
 };
 
-/// A downstream Rust pass can borrow configuration and inspect owned IR.
 struct CountComputations<'a> {
     result: &'a Cell<usize>,
 }

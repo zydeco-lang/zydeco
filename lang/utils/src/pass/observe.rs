@@ -7,8 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// The structural position of a configured occurrence, independent of its type.
-/// Paths use zero-based indices; displayed positions are one-based.
+/// A pass occurrence with a zero-based path, displayed one-based.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PassLocation {
     pub path: Vec<usize>,
@@ -49,8 +48,7 @@ impl fmt::Display for PassLocation {
     }
 }
 
-/// One execution of an occurrence. Repetition increments `run`, starting at one.
-/// Counts belong to the configured observed pass, including across outer runs.
+/// An occurrence's one-based invocation count, retained across runs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PassInvocation {
     pub location: PassLocation,
@@ -82,11 +80,7 @@ pub struct PassFailure<P, O> {
     pub cause: PassFailureCause<P, O>,
 }
 
-/// Borrow inputs and outputs to inspect, verify, or render a stage.
-///
-/// Timing covers the pass itself, excluding observer callbacks. A rejected
-/// `before` prevents execution; a rejected `after` prevents downstream stages.
-/// Panics remain compiler bugs and are not converted into domain failures.
+/// Hooks borrowing a pass's input, output, or failure.
 pub trait PassObserver<Input, Output, Error> {
     type Error;
 

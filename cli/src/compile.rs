@@ -269,8 +269,7 @@ impl BackendProgram {
         Self::lower_with_passes(executable, &HighSpsPlan::Default, HighSpsInspection::default())
     }
 
-    /// Select transformations before freezing backend input. Changing this plan
-    /// requires lowering a new program, whose assembly cache starts empty.
+    /// Lower and freeze an executable under the selected pass plan.
     pub fn lower_with_passes(
         executable: ExecutableProgram, plan: &HighSpsPlan, inspection: HighSpsInspection,
     ) -> Result<Self, CompileError> {

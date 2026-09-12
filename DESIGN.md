@@ -550,9 +550,7 @@ Policies feed assembly lowering before stack and frame validation.
 
 ### Compiler Pass Composition
 
-The [compiler reference](docs/references/compiler.md#compiler-pass-composition) owns the pass scheme's motivation,
-typed composition and ownership contract, runtime selection, observation, and required phase boundaries.
-It also contains the Rust and CLI examples.
+See [compiler pass composition](docs/references/compiler.md#compiler-pass-composition).
 
 ### Query-Based Analysis
 

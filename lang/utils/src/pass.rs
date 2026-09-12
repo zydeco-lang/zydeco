@@ -1,7 +1,6 @@
 //! Typed compiler transformations and ordered composition.
 //!
-//! The "Compiler pass composition" section of `docs/references/compiler.md`
-//! owns the rationale, ownership and execution contract, and usage examples.
+//! See `docs/references/compiler.md#compiler-pass-composition`.
 
 use std::convert::Infallible;
 
@@ -43,7 +42,7 @@ pub trait CompilerPass<Input> {
         Repeat { pass: self, times }
     }
 
-    /// Observe this occurrence without adding instrumentation to its implementation.
+    /// Observe this configured pass occurrence.
     fn with_observer<O>(self, location: PassLocation, observer: O) -> Observed<Self, O>
     where
         Self: Sized,
@@ -78,7 +77,7 @@ pub trait CompilerPass<Input> {
         MapError { pass: self, map: |never| match never {} }
     }
 
-    /// Execute an infallible pass without repeating an unreachable error arm.
+    /// Run a pass whose error type is `Infallible`.
     fn run_infallible(&mut self, input: Input) -> Self::Output
     where
         Self: Sized + CompilerPass<Input, Error = Infallible>,
@@ -141,10 +140,7 @@ where
 
 /// Declare a nonempty, ordered sequence of compiler passes.
 ///
-/// Stage expressions are evaluated once, in order, when constructing the
-/// pipeline. Running it moves intermediate outputs and stops at the first error.
-/// All stages must share an error type; use [`CompilerPass::map_err`] or
-/// [`CompilerPass::with_error`] to adapt errors. A nested pipeline is also a pass.
+/// See the [pass module](crate::pass) for the composition reference.
 ///
 /// ```
 /// use zydeco_utils::{pass::CompilerPass, pipeline};

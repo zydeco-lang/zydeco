@@ -156,10 +156,7 @@ See the [WebAssembly ABI and limitations](DESIGN.md#webassembly-backend) before 
 
 ### Select Compiler Passes
 
-See the [compiler reference](docs/references/compiler.md#selecting-and-inspecting-passes)
-for pass discovery, selection, and inspection commands.
-Its [pipeline examples and validation](docs/references/compiler.md#pipeline-examples-and-validation) section
-contains the Rust composition example, timing experiment, and focused checks.
+See [pass selection and inspection](docs/references/compiler.md#selecting-and-inspecting-passes).
 
 ### Representation Experiments
 
@@ -172,8 +169,6 @@ zydeco build lib/tests/core/representation-policies.zy --target wasm-am --repres
 
 The available strategies are `boxed`, `direct`, `local` (default), and experimental `shared`.
 [Compiler policy selection](docs/references/compiler.md#policy-selection) owns their invariants and target scope.
-The earlier high-SPS pass selection is independent of the representation strategy;
-its default still normalizes before any strategy, including `boxed`.
 
 Compare static allocation sites while reusing one checked SPSLow program for each source:
 
