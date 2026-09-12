@@ -103,6 +103,7 @@ struct ValuePlan<T> {
 enum MatchPlan {
     Fail,
     Tail(ss::CompuId),
+    Continue(DefId),
     Pattern {
         scrutinee: DefId,
         pattern: ss::VPatId,
@@ -255,6 +256,10 @@ impl<'a> Lowerer<'a> {
         match plan {
             | MatchPlan::Fail => SHole(stack).build(self, site),
             | MatchPlan::Tail(tail) => tail.lower(self, stack),
+            | MatchPlan::Continue(continuation) => {
+                let thunk = continuation.build(self, site);
+                SForce { thunk, stack }.build(self, site)
+            }
             | MatchPlan::Pattern { scrutinee, pattern, success, failure } => {
                 match self.statics.vpats[&pattern].clone() {
                     | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => {
@@ -310,6 +315,14 @@ impl<'a> Lowerer<'a> {
                     | ss::ValuePattern::Ctor(Ctor(name, argument)) => {
                         let data = self.statics.data_pat_hints[&pattern];
                         let constructors = self.statics.datas[&data].clone();
+                        // Every unmatched tag, and any rejected payload, resumes
+                        // the same remaining rows. Keep that code bound once.
+                        let continuation = self.alloc_admin_def("__match_fallback__");
+                        let failure_stack = Bullet.build(self, site);
+                        let failure_body = self.lower_match_plan(*failure, failure_stack, site);
+                        let fallback =
+                            Closure { stack: Bullet, body: failure_body }.build(self, site);
+                        let failure = Box::new(MatchPlan::Continue(continuation));
                         let arms = constructors
                             .iter()
                             .enumerate()
@@ -352,7 +365,10 @@ impl<'a> Lowerer<'a> {
                             .collect();
                         let scrut = scrutinee.build(self, site);
                         let body = SCoprodMatch { scrut, arms }.build(self, site);
-                        Let { binder: Bullet, bindee: stack, tail: body }.build(self, site)
+                        let tail =
+                            Let { binder: Bullet, bindee: stack, tail: body }.build(self, site);
+                        let binder = continuation.build(self, None);
+                        Let { binder, bindee: fallback, tail }.build(self, site)
                     }
                     | ss::ValuePattern::View(_) => {
                         unreachable!("static elaboration eliminates views")

@@ -1,0 +1,52 @@
+param (/VType; /Thk; /Ret; /Unit; /Int64; /OS; /numeric; /process) : @(import(
+  "../../std/builtin.zy"
+)) in
+let Choice =
+  data
+  | +First : Int64
+  | +Second : Int64
+  | +Third : Unit
+  | +Fourth : Unit
+  | +Fifth : Unit
+  | +Sixth : Unit
+  | +Seventh : Unit
+  | +Eighth : Unit
+  | +Ninth : Unit
+  end
+in
+let classify : Thk (Choice -> Ret Int64) = {
+  fn choice =>
+    match choice
+    | +First(1) => ret 10
+    | +First(value) => ret value
+    | +Second(value) => ret value
+    | +Third() => ret 30
+    | +Fourth() => ret 40
+    | +Fifth() => ret 50
+    | remaining =>
+      match remaining
+      | +Sixth() => ret 60
+      | _ => ret 70
+      end
+    end
+} in
+let ensure : Thk (Int64 -> Int64 -> Ret Unit) = {
+  fn actual expected =>
+    do delta <- ! numeric/int64/sub actual expected;
+    @[partial]
+    let 0 = delta in
+    ret ()
+} in
+do first <- ! classify +First(1);
+do _ <- ! ensure first 10;
+do payload_fallback <- ! classify +First(12);
+do _ <- ! ensure payload_fallback 12;
+do second <- ! classify +Second(20);
+do _ <- ! ensure second 20;
+do middle <- ! classify +Fifth();
+do _ <- ! ensure middle 50;
+do nested <- ! classify +Sixth();
+do _ <- ! ensure nested 60;
+do last <- ! classify +Ninth();
+do _ <- ! ensure last 70;
+! process/exit 0
