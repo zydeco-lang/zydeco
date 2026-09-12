@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
@@ -70,6 +70,12 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// List optional compiler passes or explain a selected high-SPS plan
+    Passes {
+        /// Explain `default`, `none`, or a comma-separated list such as normalize,normalize
+        #[arg(long, value_name = "PLAN")]
+        sps_passes: Option<String>,
+    },
     #[command(name = "__doc-example-worker", hide = true)]
     DocumentationExampleWorker,
     /// Read, search, generate, or verify project documentation
@@ -123,6 +129,8 @@ pub enum Commands {
         /// Local representation policy for zasm, asm, exe, or wasm-am
         #[arg(long)]
         representation: Option<RepresentationChoice>,
+        #[command(flatten)]
+        pipeline: PipelineOptions,
         /// Build Directory
         #[arg(short = 'b', long)]
         build_dir: Option<PathBuf>,
@@ -133,6 +141,23 @@ pub enum Commands {
         #[arg(short = 'x', long, default_value_t = false)]
         execute: bool,
     },
+}
+
+/// External text is parsed into phase-owned plan types before source loading.
+#[derive(Args, Debug, Default)]
+pub struct PipelineOptions {
+    /// High-SPS passes: default, none, or a comma-separated list; order and duplicates are preserved
+    #[arg(long, value_name = "PLAN")]
+    pub sps_passes: Option<String>,
+    /// Trace each selected high-SPS pass and its execution time on stderr
+    #[arg(long)]
+    pub trace_passes: bool,
+    /// Verify high-SPS invariants before and after each selected pass
+    #[arg(long)]
+    pub verify_passes: bool,
+    /// Print high-SPS IR before and after each selected pass on stderr
+    #[arg(long)]
+    pub dump_passes: bool,
 }
 
 #[derive(Subcommand)]

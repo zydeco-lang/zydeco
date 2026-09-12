@@ -2,10 +2,10 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zydeco_cli::{
-    BackendProgram, BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError,
-    DiagnosticRenderer, DocumentationCommand, NativeError, RepresentationStrategy,
-    SourceFormatError, SourceFormatOutcome, SourceFormatter, TargetArchitecture, TargetOs,
-    WasmBackendKind,
+    BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
+    DocumentationCommand, HighSpsInspection, HighSpsPass, HighSpsPlan, HighSpsPlanError,
+    NativeError, RepresentationStrategy, SourceFormatError, SourceFormatOutcome, SourceFormatter,
+    TargetArchitecture, TargetOs, WasmBackendKind,
     documentation::{DocumentationRenderError, DocumentationRenderer},
 };
 use zydeco_dynamics::ProgKont;
@@ -30,8 +30,21 @@ struct Application {
 }
 
 impl Application {
-    fn run(&self, command: Commands) -> Result<i32, ApplicationError> {
+    fn run(mut self, command: Commands) -> Result<i32, ApplicationError> {
         match command {
+            | Commands::Passes { sps_passes } => {
+                if let Some(text) = sps_passes {
+                    print!("{}", text.parse::<HighSpsPlan>()?.explain());
+                } else {
+                    println!("Optional high-SPS passes:");
+                    for pass in HighSpsPass::ALL {
+                        println!("  {pass}: {}", pass.description());
+                    }
+                    println!("Selections: default, none, or a comma-separated pass list.");
+                    println!("Use --sps-passes PLAN to explain the selected sequence.");
+                }
+                Ok(0)
+            }
             | Commands::DocumentationExampleWorker => {
                 zydeco_session::source::DocumentationExampleWorker::serve()
                     .map_err(ApplicationError::DocumentationWorker)?;
@@ -48,25 +61,40 @@ impl Application {
                 target_arch,
                 target,
                 representation,
+                pipeline,
                 build_dir,
                 runtime_dir,
                 execute,
-            } => self.build_source(
-                &file,
-                target,
-                BuildOptions::new(
-                    build_dir.unwrap_or_else(|| PathBuf::from("build")),
-                    runtime_dir.unwrap_or_else(|| PathBuf::from("runtime")),
-                    target_arch
-                        .map_or_else(TargetArchitecture::host, Ok)
-                        .map_err(NativeError::UnsupportedHostArchitecture)?,
-                    target_os
-                        .map_or_else(TargetOs::host, Ok)
-                        .map_err(NativeError::UnsupportedHostOperatingSystem)?,
-                ),
-                execute,
-                representation.map(Into::into),
-            ),
+            } => {
+                let plan = pipeline
+                    .sps_passes
+                    .as_deref()
+                    .map(str::parse::<HighSpsPlan>)
+                    .transpose()?
+                    .unwrap_or_default();
+                self.compiler =
+                    self.compiler.with_sps_passes(plan).with_pass_inspection(HighSpsInspection {
+                        trace: pipeline.trace_passes,
+                        verify: pipeline.verify_passes,
+                        dump: pipeline.dump_passes,
+                    });
+                self.build_source(
+                    &file,
+                    target,
+                    BuildOptions::new(
+                        build_dir.unwrap_or_else(|| PathBuf::from("build")),
+                        runtime_dir.unwrap_or_else(|| PathBuf::from("runtime")),
+                        target_arch
+                            .map_or_else(TargetArchitecture::host, Ok)
+                            .map_err(NativeError::UnsupportedHostArchitecture)?,
+                        target_os
+                            .map_or_else(TargetOs::host, Ok)
+                            .map_err(NativeError::UnsupportedHostOperatingSystem)?,
+                    ),
+                    execute,
+                    representation.map(Into::into),
+                )
+            }
         }
     }
 
@@ -236,7 +264,9 @@ impl Application {
         }
         let analysis = self.analyze(path)?;
         let executable = self.compiler.executable_program(&analysis)?;
-        let backend = BackendProgram::lower(executable)?
+        let backend = self
+            .compiler
+            .lower_executable(executable)?
             .with_representation(representation.unwrap_or_default());
         match target {
             | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
@@ -306,6 +336,8 @@ impl Application {
 
 #[derive(Debug, Error)]
 enum ApplicationError {
+    #[error(transparent)]
+    PipelinePlan(#[from] HighSpsPlanError),
     #[error(
         "--representation applies to zasm, asm, exe, and wasm-am; this target does not use assembly representation analysis"
     )]

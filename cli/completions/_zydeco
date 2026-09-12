@@ -29,7 +29,15 @@ _zydeco() {
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:zydeco-command-$line[1]:"
         case $line[1] in
-            (__doc-example-worker)
+            (passes)
+_arguments "${_arguments_options[@]}" : \
+'--sps-passes=[Explain \`default\`, \`none\`, or a comma-separated list such as normalize,normalize]:PLAN:_default' \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(__doc-example-worker)
 _arguments "${_arguments_options[@]}" : \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
@@ -171,10 +179,14 @@ _arguments "${_arguments_options[@]}" : \
 '-t+[Target backend]:TARGET:(zir zasm asm wasm-am wasm-sps exe)' \
 '--target=[Target backend]:TARGET:(zir zasm asm wasm-am wasm-sps exe)' \
 '--representation=[Local representation policy for zasm, asm, exe, or wasm-am]:REPRESENTATION:(boxed direct local shared)' \
+'--sps-passes=[High-SPS passes\: default, none, or a comma-separated list; order and duplicates are preserved]:PLAN:_default' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \
 '-r+[Runtime directory]:RUNTIME_DIR:_files' \
 '--runtime-dir=[Runtime directory]:RUNTIME_DIR:_files' \
+'--trace-passes[Trace each selected high-SPS pass and its execution time on stderr]' \
+'--verify-passes[Verify high-SPS invariants before and after each selected pass]' \
+'--dump-passes[Print high-SPS IR before and after each selected pass on stderr]' \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
@@ -195,7 +207,11 @@ _arguments "${_arguments_options[@]}" : \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:zydeco-help-command-$line[1]:"
         case $line[1] in
-            (__doc-example-worker)
+            (passes)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(__doc-example-worker)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -267,13 +283,14 @@ esac
 (( $+functions[_zydeco_commands] )) ||
 _zydeco_commands() {
     local commands; commands=(
+'passes:List optional compiler passes or explain a selected high-SPS plan' \
 '__doc-example-worker:' \
 'doc:Read, search, generate, or verify project documentation' \
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
 'repl:Start the declaration-free terminal REPL' \
-'build:' \
+'build:External text is parsed into phase-owned plan types before source loading' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'zydeco commands' commands "$@"
@@ -368,13 +385,14 @@ _zydeco__subcmd__fmt_commands() {
 (( $+functions[_zydeco__subcmd__help_commands] )) ||
 _zydeco__subcmd__help_commands() {
     local commands; commands=(
+'passes:List optional compiler passes or explain a selected high-SPS plan' \
 '__doc-example-worker:' \
 'doc:Read, search, generate, or verify project documentation' \
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
 'repl:Start the declaration-free terminal REPL' \
-'build:' \
+'build:External text is parsed into phase-owned plan types before source loading' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'zydeco help commands' commands "$@"
@@ -434,6 +452,11 @@ _zydeco__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help help commands' commands "$@"
 }
+(( $+functions[_zydeco__subcmd__help__subcmd__passes_commands] )) ||
+_zydeco__subcmd__help__subcmd__passes_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco help passes commands' commands "$@"
+}
 (( $+functions[_zydeco__subcmd__help__subcmd__repl_commands] )) ||
 _zydeco__subcmd__help__subcmd__repl_commands() {
     local commands; commands=()
@@ -443,6 +466,11 @@ _zydeco__subcmd__help__subcmd__repl_commands() {
 _zydeco__subcmd__help__subcmd__run_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help run commands' commands "$@"
+}
+(( $+functions[_zydeco__subcmd__passes_commands] )) ||
+_zydeco__subcmd__passes_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco passes commands' commands "$@"
 }
 (( $+functions[_zydeco__subcmd__repl_commands] )) ||
 _zydeco__subcmd__repl_commands() {

@@ -568,14 +568,13 @@ of the selected stages and their validated program types.
 Stages in a sequence share an error type. `map_err` translates domain errors at a composition boundary;
 `with_error` gives an infallible pass the enclosing pipeline's error type.
 `run_infallible` removes the unreachable error case when executing an entirely infallible sequence.
-For example, the CLI combines checked-root lowering with the reusable SPSLow pipeline:
+For example, a Rust caller can select a repeated high-SPS normalization sequence:
 
 ```rust
-let mut lowering = pipeline![
-    BuiltinRootLowerer { spans: &spans, scoped: &scoped, statics: &statics, signature },
-    SpsLowPipeline { scoped: &scoped, statics: &statics }.with_error(),
-];
-let sps_low = lowering.run(root)?;
+let optimizations = pipeline![Normalizer, Normalizer];
+let mut lowering = SpsLowPipeline { scoped: &scoped, statics: &statics }
+    .with_optimizations(optimizations);
+let sps_low = lowering.run_infallible(high);
 ```
 
 `SpsLowPipeline` declares its own high-SPS checks, normalization, and closure conversion as a sequence.
@@ -612,6 +611,33 @@ A rejected before hook prevents the pass from running; a rejected after hook pre
 `PassFailure` retains the occurrence and distinguishes the original domain error
 from a before/after observation failure.
 Panics remain compiler bugs and are not converted into ordinary pass errors.
+
+Built-in selection is described by `HighSpsPlan` in [`lang/stackir/src/passes.rs`](lang/stackir/src/passes.rs).
+`Default` selects one normalizer, `None` selects no optional transformations,
+and `Custom` retains an ordered vector of typed `HighSpsPass` entries.
+The textual forms are `default`, `none`, and comma-separated pass names; the initial catalog contains `normalize`.
+An empty textual selection, unknown names or options, empty list entries,
+and presets embedded inside lists are rejected before source loading.
+Displaying a plan gives its canonical textual selection; `explain` expands its optional stages together
+with their required checking and conversion boundaries.
+Rust callers can instead provide arbitrary `CompilerPass` implementations without joining the built-in catalog.
+
+The command compiler owns the plan and instantiates its passes after checked arenas are available.
+An observed plan shares a borrowed observer among distinct occurrences;
+each compilation creates fresh invocation counts and temporary pass state.
+The unobserved default retains static composition.
+`BackendProgram` records the selection that produced its frozen SPSLow input,
+and its assembly cache belongs to that product.
+Selecting another high-SPS plan requires a new lowering result, so cached assembly cannot cross selections.
+Assembly representation policy remains independently selectable and invalidates that product's assembly cache.
+The [compilation workflow](CONTRIBUTING.md#select-compiler-passes) documents selection, inspection, and discovery.
+
+High-SPS is the configurable optimization boundary. Assembly construction, stack analysis, publication,
+and native frame preparation remain required transformations in their typed pipeline.
+A future assembly rewrite must execute before the affected analyses,
+or explicitly reestablish them before publishing the completed program.
+Convergence and shared analysis caching require additional change and invalidation contracts;
+ordered composition itself provides neither inferred scheduling nor a second source query database.
 
 ### Query-Based Analysis
 

@@ -34,6 +34,9 @@ _zydeco() {
             zydeco,help)
                 cmd="zydeco__subcmd__help"
                 ;;
+            zydeco,passes)
+                cmd="zydeco__subcmd__passes"
+                ;;
             zydeco,repl)
                 cmd="zydeco__subcmd__repl"
                 ;;
@@ -88,6 +91,9 @@ _zydeco() {
             zydeco__subcmd__help,help)
                 cmd="zydeco__subcmd__help__subcmd__help"
                 ;;
+            zydeco__subcmd__help,passes)
+                cmd="zydeco__subcmd__help__subcmd__passes"
+                ;;
             zydeco__subcmd__help,repl)
                 cmd="zydeco__subcmd__help__subcmd__repl"
                 ;;
@@ -113,7 +119,7 @@ _zydeco() {
 
     case "${cmd}" in
         zydeco)
-            opts="-h -V --lint-types --help --version __doc-example-worker doc fmt run check repl build help"
+            opts="-h -V --lint-types --help --version passes __doc-example-worker doc fmt run check repl build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -141,7 +147,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-t -b -r -x -h --target-os --target-arch --target --representation --build-dir --runtime-dir --execute --lint-types --help"
+            opts="-t -b -r -x -h --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --execute --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -165,6 +171,10 @@ _zydeco() {
                     ;;
                 --representation)
                     COMPREPLY=($(compgen -W "boxed direct local shared" -- "${cur}"))
+                    return 0
+                    ;;
+                --sps-passes)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --build-dir)
@@ -393,7 +403,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__help)
-            opts="__doc-example-worker doc fmt run check repl build help"
+            opts="passes __doc-example-worker doc fmt run check repl build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -546,6 +556,20 @@ _zydeco() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        zydeco__subcmd__help__subcmd__passes)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         zydeco__subcmd__help__subcmd__repl)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -567,6 +591,24 @@ _zydeco() {
                 return 0
             fi
             case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        zydeco__subcmd__passes)
+            opts="-h --sps-passes --lint-types --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --sps-passes)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;

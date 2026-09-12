@@ -15,6 +15,9 @@ pub use builtin::*;
 mod pipeline;
 pub use pipeline::SpsLowPipeline;
 
+/// Built-in high-SPS pass selection and typed inspection hooks.
+pub mod passes;
+
 /// First-order stack-passing IR with blocks, jumps, and explicit packages.
 pub mod low;
 pub use low::{SpsLowConverter, SpsLowError, SpsLowProgram};

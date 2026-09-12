@@ -11,7 +11,9 @@ use zydeco_session::{
     ProgramAnalysis,
 };
 use zydeco_stackir::{
-    BuiltinRootLowerError, BuiltinRootLowerer, SpsLowPipeline, SpsLowProgram, SpsLowerError,
+    BranchJoinProgram, BuiltinRootLowerError, BuiltinRootLowerer, SpsLowPipeline, SpsLowProgram,
+    SpsLowerError,
+    passes::{HighSpsFailure, HighSpsInspection, HighSpsObserver, HighSpsPlan},
 };
 use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
@@ -23,6 +25,8 @@ pub struct CommandCompiler {
     session: CompilerSession,
     lint_types: bool,
     representation: RepresentationStrategy,
+    sps_passes: HighSpsPlan,
+    pass_inspection: HighSpsInspection,
 }
 
 /// The interaction of a checked source run: its standard output, standard error, and exit status.
@@ -34,6 +38,18 @@ pub struct TestInteraction {
 }
 
 impl CommandCompiler {
+    /// Select optional high-SPS transformations for subsequent compilations.
+    pub fn with_sps_passes(mut self, plan: HighSpsPlan) -> Self {
+        self.sps_passes = plan;
+        self
+    }
+
+    /// Inspect high-SPS transformations on stderr using each compilation's arenas.
+    pub fn with_pass_inspection(mut self, inspection: HighSpsInspection) -> Self {
+        self.pass_inspection = inspection;
+        self
+    }
+
     /// Select local value representations for assembly-derived targets.
     pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
         self.representation = strategy;
@@ -187,7 +203,14 @@ impl CommandCompiler {
     }
 
     pub fn lower(&self, path: &Path) -> Result<BackendProgram, CompileError> {
-        BackendProgram::lower(self.executable(path)?)
+        self.lower_executable(self.executable(path)?)
+    }
+
+    /// Lower an already checked executable under this command's selected configuration.
+    pub fn lower_executable(
+        &self, executable: ExecutableProgram,
+    ) -> Result<BackendProgram, CompileError> {
+        BackendProgram::lower_with_passes(executable, &self.sps_passes, self.pass_inspection)
             .map(|program| program.with_representation(self.representation))
     }
 }
@@ -201,6 +224,7 @@ pub struct BackendProgram {
     /// Populated only when an assembly-derived target is requested.
     assembly: OnceLock<AssemblyProgram>,
     representation: RepresentationStrategy,
+    sps_passes: HighSpsPlan,
 }
 
 /// One source-level SPS lowering failure with the provenance its reports need.
@@ -235,20 +259,54 @@ pub struct Amd64Artifact {
     pub foreign_libraries: Vec<zydeco_syntax::ForeignLibraryName>,
 }
 
+enum BackendLowerError {
+    Root(BuiltinRootLowerError),
+    Pass(HighSpsFailure),
+}
+
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
+        Self::lower_with_passes(executable, &HighSpsPlan::Default, HighSpsInspection::default())
+    }
+
+    /// Select transformations before freezing backend input. Changing this plan
+    /// requires lowering a new program, whose assembly cache starts empty.
+    pub fn lower_with_passes(
+        executable: ExecutableProgram, plan: &HighSpsPlan, inspection: HighSpsInspection,
+    ) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
+        let lower_sps = |program: BranchJoinProgram| {
+            let mut pipeline = SpsLowPipeline { scoped: &scoped, statics: &statics };
+            if inspection.enabled() {
+                let mut observer = HighSpsObserver {
+                    scoped: &scoped,
+                    statics: &statics,
+                    inspection,
+                    output: std::io::stderr().lock(),
+                };
+                pipeline
+                    .with_optimizations(plan.instantiate_observed(&mut observer))
+                    .run(program)
+                    .map_err(BackendLowerError::Pass)
+            } else {
+                Ok(match plan {
+                    | HighSpsPlan::Default => pipeline.run_infallible(program),
+                    | _ => pipeline.with_optimizations(plan.instantiate()).run_infallible(program),
+                })
+            }
+        };
         let lowered = pipeline![
-            BuiltinRootLowerer { spans: &spans, scoped: &scoped, statics: &statics, signature },
-            SpsLowPipeline { scoped: &scoped, statics: &statics }.with_error(),
+            BuiltinRootLowerer { spans: &spans, scoped: &scoped, statics: &statics, signature }
+                .map_err(BackendLowerError::Root),
+            lower_sps,
         ]
         .run(root);
         let sps_low = match lowered {
             | Ok(sps_low) => sps_low,
-            | Err(BuiltinRootLowerError::Package(error)) => {
+            | Err(BackendLowerError::Root(BuiltinRootLowerError::Package(error))) => {
                 return Err(CompileError::BuiltinLower(error));
             }
-            | Err(BuiltinRootLowerError::Sps(errors)) => {
+            | Err(BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))) => {
                 return Err(CompileError::SpsLower(SpsLowerFailure {
                     errors,
                     spans,
@@ -256,6 +314,7 @@ impl BackendProgram {
                     statics,
                 }));
             }
+            | Err(BackendLowerError::Pass(error)) => return Err(CompileError::HighSpsPass(error)),
         };
         Ok(Self {
             spans,
@@ -264,7 +323,13 @@ impl BackendProgram {
             sps_low,
             assembly: OnceLock::new(),
             representation: RepresentationStrategy::default(),
+            sps_passes: plan.clone(),
         })
+    }
+
+    /// The immutable optimization selection used to produce this backend input.
+    pub fn sps_passes(&self) -> &HighSpsPlan {
+        &self.sps_passes
     }
 
     /// Reconfigure assembly lowering, invalidating any previously cached assembly.
@@ -300,7 +365,7 @@ impl BackendProgram {
     }
 
     pub fn execute_assembly(self) -> Result<AssemblyOutcome, CompileError> {
-        let Self { spans, scoped, statics, sps_low, assembly, representation } = self;
+        let Self { spans, scoped, statics, sps_low, assembly, representation, .. } = self;
         let assembly = assembly.into_inner().unwrap_or_else(|| {
             LoweringPipeline::new(&spans, &scoped, &statics)
                 .with_representation(representation)
@@ -406,6 +471,8 @@ impl std::fmt::Display for AssemblyOutcome {
 
 #[derive(Debug, Error)]
 pub enum CompileError {
+    #[error("high-SPS pipeline: {0}")]
+    HighSpsPass(#[source] HighSpsFailure),
     #[error(transparent)]
     Analysis(AnalysisError),
     #[error("type checking failed")]

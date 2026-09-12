@@ -509,6 +509,9 @@ and this branch-join shape.
 validating the rebuilt program, and consuming it through closure conversion.
 Its `with_optimizations` method replaces the optional normalization stage with a same-IR Rust pass or sequence,
 under the [pass composition contract](../../DESIGN.md#compiler-pass-composition).
+[`HighSpsPlan`](../../lang/stackir/src/passes.rs) supplies the built-in catalog and command selection;
+its observer verifies lexical ownership, branch joins, and root closure using borrowed phase data.
+The [workflow](../../CONTRIBUTING.md#select-compiler-passes) documents discovery and inspection flags.
 These optimizations are optional consequences of known runtime structure;
 they do not relax L10's source elimination boundary.
 The normalizer preserves definition identities while allocating fresh syntax for the surviving lexical tree.
@@ -610,6 +613,10 @@ The remaining stack must satisfy the movement conditions above.
 The result stays shared, and exposing its continuation as a binding avoids allocating a continuation package.
 Literal folding obeys [L13's numeric rules](language.md#13-primitive-values-and-capabilities).
 A zero divisor remains a runtime operation at its original position, even if its result is unused.
+
+When optional normalization is disabled, retained arithmetic calls execute through the ordinary host-call ABI.
+The native runtime and WebAssembly test host implement those calls with the same numeric rules
+and spare-box contracts as their corresponding primitive instructions.
 
 Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
 An unknown callee remains indirect; other known Builtin operations remain external calls.
@@ -902,7 +909,7 @@ Fields retain their ordinary tagged-word representation; the policy cannot assig
 
 | Policy | Selected opportunities |
 | --- | --- |
-| `Boxed` | Keep residual product and closure cells. Earlier SPS normalization still runs. |
+| `Boxed` | Keep residual product and closure cells after the selected high-SPS transformations. |
 | `Direct` | Immediate product elimination and opening of a syntactic closure package. |
 | `Local` (default) | `Direct`, plus a variable-bound product used only through compatible projections. |
 | `Shared` (experimental) | `Local`, plus a variable-bound closure used only through closure openings. |

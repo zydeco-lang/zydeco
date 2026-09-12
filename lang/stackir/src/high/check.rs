@@ -31,6 +31,11 @@ pub enum BranchJoinError {
 }
 
 impl BranchJoinProgram {
+    /// Recheck lexical ownership and branch joins without rebuilding the program.
+    pub fn validate(&self) -> Result<(), BranchJoinError> {
+        BranchJoinValidator::validate(&self.program)
+    }
+
     pub fn try_new(program: StackirProgram) -> Result<Self, BranchJoinError> {
         BranchJoinValidator::validate(&program)?;
         Ok(Self { program })

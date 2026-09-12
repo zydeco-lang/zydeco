@@ -26,14 +26,22 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected high-SPS plan')
             [CompletionResult]::new('__doc-example-worker', '__doc-example-worker', [CompletionResultType]::ParameterValue, '__doc-example-worker')
             [CompletionResult]::new('doc', 'doc', [CompletionResultType]::ParameterValue, 'Read, search, generate, or verify project documentation')
             [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a zydeco program')
             [CompletionResult]::new('repl', 'repl', [CompletionResultType]::ParameterValue, 'Start the declaration-free terminal REPL')
-            [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'build')
+            [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'External text is parsed into phase-owned plan types before source loading')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;passes' {
+            [CompletionResult]::new('--sps-passes', '--sps-passes', [CompletionResultType]::ParameterName, 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize')
+            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'zydeco;__doc-example-worker' {
@@ -137,10 +145,14 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Target backend')
             [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Target backend')
             [CompletionResult]::new('--representation', '--representation', [CompletionResultType]::ParameterName, 'Local representation policy for zasm, asm, exe, or wasm-am')
+            [CompletionResult]::new('--sps-passes', '--sps-passes', [CompletionResultType]::ParameterName, 'High-SPS passes: default, none, or a comma-separated list; order and duplicates are preserved')
             [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('--build-dir', '--build-dir', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Runtime directory')
             [CompletionResult]::new('--runtime-dir', '--runtime-dir', [CompletionResultType]::ParameterName, 'Runtime directory')
+            [CompletionResult]::new('--trace-passes', '--trace-passes', [CompletionResultType]::ParameterName, 'Trace each selected high-SPS pass and its execution time on stderr')
+            [CompletionResult]::new('--verify-passes', '--verify-passes', [CompletionResultType]::ParameterName, 'Verify high-SPS invariants before and after each selected pass')
+            [CompletionResult]::new('--dump-passes', '--dump-passes', [CompletionResultType]::ParameterName, 'Print high-SPS IR before and after each selected pass on stderr')
             [CompletionResult]::new('-x', '-x', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--execute', '--execute', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
@@ -149,14 +161,18 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;help' {
+            [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected high-SPS plan')
             [CompletionResult]::new('__doc-example-worker', '__doc-example-worker', [CompletionResultType]::ParameterValue, '__doc-example-worker')
             [CompletionResult]::new('doc', 'doc', [CompletionResultType]::ParameterValue, 'Read, search, generate, or verify project documentation')
             [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a zydeco program')
             [CompletionResult]::new('repl', 'repl', [CompletionResultType]::ParameterValue, 'Start the declaration-free terminal REPL')
-            [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'build')
+            [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'External text is parsed into phase-owned plan types before source loading')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'zydeco;help;passes' {
             break
         }
         'zydeco;help;__doc-example-worker' {

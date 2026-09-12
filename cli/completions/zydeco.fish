@@ -27,14 +27,18 @@ end
 complete -c zydeco -n "__fish_zydeco_needs_command" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_needs_command" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_needs_command" -s V -l version -d 'Print version'
+complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "passes" -d 'List optional compiler passes or explain a selected high-SPS plan'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "__doc-example-worker"
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "doc" -d 'Read, search, generate, or verify project documentation'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "fmt" -d 'Format Zydeco source files in place'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "run" -d 'Run a zydeco program'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "check" -d 'Check a zydeco program'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "repl" -d 'Start the declaration-free terminal REPL'
-complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "build"
+complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "build" -d 'External text is parsed into phase-owned plan types before source loading'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l sps-passes -d 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize' -r
+complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand __doc-example-worker" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand __doc-example-worker" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand doc; and not __fish_seen_subcommand_from show search build check help" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
@@ -85,19 +89,24 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l representation -
 direct\t''
 local\t''
 shared\t''"
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l sps-passes -d 'High-SPS passes: default, none, or a comma-separated list; order and duplicates are preserved' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l trace-passes -d 'Trace each selected high-SPS pass and its execution time on stderr'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l verify-passes -d 'Verify high-SPS invariants before and after each selected pass'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dump-passes -d 'Print high-SPS IR before and after each selected pass on stderr'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "__doc-example-worker"
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "doc" -d 'Read, search, generate, or verify project documentation'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "fmt" -d 'Format Zydeco source files in place'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "run" -d 'Run a zydeco program'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "check" -d 'Check a zydeco program'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "repl" -d 'Start the declaration-free terminal REPL'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "build"
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from __doc-example-worker doc fmt run check repl build help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "passes" -d 'List optional compiler passes or explain a selected high-SPS plan'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "__doc-example-worker"
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "doc" -d 'Read, search, generate, or verify project documentation'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "fmt" -d 'Format Zydeco source files in place'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "run" -d 'Run a zydeco program'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "check" -d 'Check a zydeco program'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "repl" -d 'Start the declaration-free terminal REPL'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "build" -d 'External text is parsed into phase-owned plan types before source loading'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from passes __doc-example-worker doc fmt run check repl build help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and __fish_seen_subcommand_from doc" -f -a "show" -d 'Show a public subject\'s classifier and complete documentation'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and __fish_seen_subcommand_from doc" -f -a "search" -d 'Search exposed names and documentation prose'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and __fish_seen_subcommand_from doc" -f -a "build" -d 'Generate a self-contained searchable HTML reference without executing examples'

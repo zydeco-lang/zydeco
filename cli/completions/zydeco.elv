@@ -23,14 +23,21 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
             cand -V 'Print version'
             cand --version 'Print version'
+            cand passes 'List optional compiler passes or explain a selected high-SPS plan'
             cand __doc-example-worker '__doc-example-worker'
             cand doc 'Read, search, generate, or verify project documentation'
             cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a zydeco program'
             cand repl 'Start the declaration-free terminal REPL'
-            cand build 'build'
+            cand build 'External text is parsed into phase-owned plan types before source loading'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;passes'= {
+            cand --sps-passes 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize'
+            cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
+            cand -h 'Print help'
+            cand --help 'Print help'
         }
         &'zydeco;__doc-example-worker'= {
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
@@ -117,10 +124,14 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -t 'Target backend'
             cand --target 'Target backend'
             cand --representation 'Local representation policy for zasm, asm, exe, or wasm-am'
+            cand --sps-passes 'High-SPS passes: default, none, or a comma-separated list; order and duplicates are preserved'
             cand -b 'Build Directory'
             cand --build-dir 'Build Directory'
             cand -r 'Runtime directory'
             cand --runtime-dir 'Runtime directory'
+            cand --trace-passes 'Trace each selected high-SPS pass and its execution time on stderr'
+            cand --verify-passes 'Verify high-SPS invariants before and after each selected pass'
+            cand --dump-passes 'Print high-SPS IR before and after each selected pass on stderr'
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
@@ -128,14 +139,17 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;help'= {
+            cand passes 'List optional compiler passes or explain a selected high-SPS plan'
             cand __doc-example-worker '__doc-example-worker'
             cand doc 'Read, search, generate, or verify project documentation'
             cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a zydeco program'
             cand repl 'Start the declaration-free terminal REPL'
-            cand build 'build'
+            cand build 'External text is parsed into phase-owned plan types before source loading'
             cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'zydeco;help;passes'= {
         }
         &'zydeco;help;__doc-example-worker'= {
         }
