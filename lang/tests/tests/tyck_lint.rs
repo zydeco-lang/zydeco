@@ -19,6 +19,55 @@ use zydeco_statics::{
 use zydeco_tests::utils::SourceCase;
 
 #[test]
+fn copied_codata_annotations_agree_but_changed_results_are_rejected() {
+    let source = r#"
+let C (R : CType) = codata | .go : Thk R -> R end in
+let make : Thk (forall (R : CType) . C R) = {
+  fn R => comatch | .go next => ! next end
+} in
+let left : Thk (C (Ret Int64)) = { ! make (Ret Int64) } in
+let right : Thk (C (Ret Unit)) = { ! make (Ret Unit) } in
+! left
+"#;
+    let (mut statics, root) = SourceCase::checked_arena(source).unwrap();
+    assert!(LintChecker::new(&statics).validate(root).is_empty());
+    let variants: Vec<_> = statics
+        .annotations_compu
+        .iter()
+        .filter_map(|(compu, ty)| {
+            let Some(Type::CoData(codata)) = statics.normalized_at(*ty) else { return None };
+            let payload =
+                statics.codatas[codata].get(&zydeco_statics::syntax::DtorName(".go".into()))?;
+            let Some(Type::Arrow(zydeco_statics::syntax::Arrow(_, result))) =
+                statics.normalized_at(payload)
+            else {
+                return None;
+            };
+            let Some(Type::App(zydeco_statics::syntax::App(head, payload))) =
+                statics.normalized_at(*result)
+            else {
+                return None;
+            };
+            if !matches!(statics.normalized_at(*head), Some(Type::Ret(_))) {
+                return None;
+            }
+            let returns_integer = match statics.normalized_at(*payload) {
+                | Some(Type::Primitive(_)) => true,
+                | Some(Type::Unit(_)) => false,
+                | _ => return None,
+            };
+            Some((*compu, *ty, returns_integer))
+        })
+        .collect();
+    let TermAnnId::Compu(compu, _) = root else { panic!("the fixture is a computation") };
+    let (_, wrong, _) = variants.iter().find(|(_, _, integer)| !*integer).unwrap();
+    statics.annotations_compu.replace_existing(compu, *wrong);
+    assert_reports(&statics, root, |error| {
+        matches!(error, LintError::AnnotationDisagreement { site: LintSite::Root, .. })
+    });
+}
+
+#[test]
 fn named_data_shapes_compare_structure_and_still_reject_different_payloads() {
     let source = r#"
 let I = @(intrinsic(i64)) in

@@ -15,7 +15,7 @@ use crate::syntax::*;
 use std::fmt;
 use zydeco_utils::arena::ArenaAccess;
 
-use super::rederive::{ExpectedKind, ExpectedType};
+use super::rederive::{ExpectedKind, ExpectedType, RederiveChecker};
 
 /* -------------------------------- Diagnostics ------------------------------ */
 
@@ -123,7 +123,8 @@ pub enum LintError {
         colocated: KindId,
         colocated_form: Box<Kind>,
     },
-    /// A recorded term annotation disagreeing with the node-keyed annotation.
+    /// A recorded term annotation disagreeing with the node-keyed annotation,
+    /// compared up to normalized type structure.
     AnnotationDisagreement { site: LintSite, recorded: TermAnnId, node: Option<TermAnnId> },
     /// A definition reference without any recorded annotation.
     UnresolvedDef { referenced_by: LintNode, def: DefId },
@@ -226,11 +227,12 @@ impl<'a> LintChecker<'a> {
     /// Re-establish the arena-wide invariants of a successful check and
     /// re-derive every reachable annotation.
     pub fn validate(&self, root: TermAnnId) -> Vec<LintError> {
+        let mut rederive = RederiveChecker::new(self.statics);
         [
             self.fill_closure(),
             self.annotation_presence(),
             self.annotation_sorts(),
-            self.paired_annotations(root),
+            self.paired_annotations(root, &mut rederive),
             self.type_references(),
             self.kind_references(),
             self.value_references(),
@@ -240,7 +242,7 @@ impl<'a> LintChecker<'a> {
         ]
         .into_iter()
         .flatten()
-        .chain(super::rederive::RederiveChecker::new(self.statics).validate(root))
+        .chain(rederive.validate(root))
         .collect()
     }
 
@@ -408,7 +410,9 @@ impl<'a> LintChecker<'a> {
     }
 
     /// Recorded term annotations must agree with the node-keyed tables.
-    fn paired_annotations(&self, root: TermAnnId) -> Vec<LintError> {
+    fn paired_annotations(
+        &self, root: TermAnnId, rederive: &mut RederiveChecker<'_>,
+    ) -> Vec<LintError> {
         let recorded = std::iter::once((LintSite::Root, root)).chain(
             self.statics
                 .term_facts
@@ -416,11 +420,15 @@ impl<'a> LintChecker<'a> {
                 .map(|(term, facts)| (LintSite::Source(term), facts.annotation())),
         );
         recorded
-            .filter_map(|(site, annotation)| self.check_paired_annotation(site, annotation))
+            .filter_map(|(site, annotation)| {
+                self.check_paired_annotation(site, annotation, rederive)
+            })
             .collect()
     }
 
-    fn check_paired_annotation(&self, site: LintSite, recorded: TermAnnId) -> Option<LintError> {
+    fn check_paired_annotation(
+        &self, site: LintSite, recorded: TermAnnId, rederive: &mut RederiveChecker<'_>,
+    ) -> Option<LintError> {
         match recorded {
             | TermAnnId::Hole(_) => Some(LintError::ResidualHoleAnnotation { site }),
             | TermAnnId::Kind(kind) => self.require(LintNode::Kind(kind), LintNode::Kind(kind)),
@@ -445,21 +453,25 @@ impl<'a> LintChecker<'a> {
             | TermAnnId::Value(value, recorded_ty) => {
                 self.require(LintNode::Value(value), LintNode::Value(value)).or_else(|| {
                     let node_ty = self.statics.annotations_value.get(&value).copied()?;
-                    (node_ty != recorded_ty).then_some(LintError::AnnotationDisagreement {
-                        site,
-                        recorded,
-                        node: Some(TermAnnId::Value(value, node_ty)),
-                    })
+                    (!rederive.type_ids_agree(node_ty, recorded_ty)).then_some(
+                        LintError::AnnotationDisagreement {
+                            site,
+                            recorded,
+                            node: Some(TermAnnId::Value(value, node_ty)),
+                        },
+                    )
                 })
             }
             | TermAnnId::Compu(compu, recorded_ty) => {
                 self.require(LintNode::Compu(compu), LintNode::Compu(compu)).or_else(|| {
                     let node_ty = self.statics.annotations_compu.get(&compu).copied()?;
-                    (node_ty != recorded_ty).then_some(LintError::AnnotationDisagreement {
-                        site,
-                        recorded,
-                        node: Some(TermAnnId::Compu(compu, node_ty)),
-                    })
+                    (!rederive.type_ids_agree(node_ty, recorded_ty)).then_some(
+                        LintError::AnnotationDisagreement {
+                            site,
+                            recorded,
+                            node: Some(TermAnnId::Compu(compu, node_ty)),
+                        },
+                    )
                 })
             }
         }

@@ -440,6 +440,8 @@ runtime payloads, shared runtime data, and failed evidence recovery.
 It checks fill closure, annotation presence and sorts, agreement of surface-keyed and node-keyed views,
 and existence of referenced nodes and definitions.
 Kind comparisons resolve normalized structure; raw kind-ID equality is insufficient after reconciliation.
+Paired value and computation annotations likewise compare normalized type structure,
+including the payloads of copied data/codata arms; different arena IDs alone do not establish disagreement.
 The well-formedness sweep includes orphaned allocations left by retries.
 Abstract-witness kinds can come from their annotation, a denoting type node, or an enclosing binder;
 requiring an `annotations_abst` row for every witness would reject legitimate artifacts.

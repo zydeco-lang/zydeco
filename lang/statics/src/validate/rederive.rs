@@ -264,7 +264,7 @@ impl<'a> RederiveChecker<'a> {
     /// Structural agreement of two type identifiers through their normalized
     /// forms. Identifiers are not canonicalized, so equality of constructor
     /// shapes is decided recursively rather than by derived equality.
-    fn type_ids_agree(&mut self, left: TypeId, right: TypeId) -> bool {
+    pub(super) fn type_ids_agree(&mut self, left: TypeId, right: TypeId) -> bool {
         if left == right {
             return true;
         }
