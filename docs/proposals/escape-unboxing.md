@@ -445,6 +445,80 @@ Native caller environments already survive return continuations; choosing storag
 for an individual product remains a decision here.
 It is not implemented; current lowering uses unboxed fields or a heap cell.
 
+## Functional allocation reuse (proposed)
+
+Unboxing removes an allocation by representing a value as separate fields.
+Allocation reuse answers another question: can a new value occupy a cell
+whose previous contents are no longer observable?
+This section owns the proposed compiler reuse obligations;
+the [byte-memory application](bytes.md#functional-updates-with-allocation-reuse-proposed) owns how they apply
+to retained byte allocations.
+General allocation reuse and the byte update path are not implemented yet.
+
+The [related work](#related-work) suggests treating consumed storage as an explicit compiler resource.
+For example, this schematic functional reversal consumes and reconstructs one list cell per step:
+
+```text
+reverse_step(Cons(x, rest), accumulator)
+    = reverse_step(rest, Cons(x, accumulator))
+```
+
+An eligible match supplies a reuse credit for the old cell; the replacement constructor consumes it.
+The credit identifies a particular allocation with a compatible physical layout.
+It cannot be duplicated, manufactured from an address, or inferred merely from equal source types.
+The source operation preserves functional observations regardless of whether reuse succeeds.
+
+### Evidence and lowering
+
+SPSLow provides a useful candidate-analysis boundary because captures, products, and transfers are explicit.
+Its single-occurrence syntax invariant does not imply that runtime values are used linearly.
+A proposed ownership analysis must distinguish consumed, borrowed, and shared uses,
+including aliases retained in heap fields, closures, and saved continuations.
+An unknown consumer prevents reuse unless its ownership and escape contract supplies the missing evidence.
+The existing `U`, `S`, and `R` choices describe representation placement, not exclusive ownership.
+
+A reusable cell needs both an ownership justification and a target-layout check:
+
+- The old contents cannot be observed through any surviving alias or active borrow.
+  Having reached the last textual use of one variable is insufficient.
+- The selected destination fits the cell's size and alignment and obeys its scanning and pointer-layout rules.
+  Start with equal-size cells of the same allocation kind; a different constructor name is harmless
+  when the selected physical layouts agree.
+- Replacement fields and the reuse credit remain rooted across any possible collection.
+  Lowering must preserve the destination's initialization and tracing invariants while replacing its fields.
+- Every credit is consumed at most once along an executed path.
+  A captured or repeatedly invocable continuation cannot duplicate exclusive access to that credit.
+
+Candidate discovery can precede representation selection, but the final layout
+and native root checks must validate a reuse plan before assembly emission.
+Without that evidence, ordinary allocation remains the valid implementation.
+This permits a conservative static experiment alongside the existing tracing collector.
+Dynamic uniqueness checks would additionally require complete ownership accounting;
+the collector's current reachability information does not supply a reference count.
+Adopting Perceus for the general heap would be a separate collector and control-runtime change,
+including an account of cycles and all retained roots.
+
+The [region proposal](reachability-regions.typ) continues to own lifetime and retirement rules.
+A live region, disjoint region support, or a nonescaping value does not
+by itself establish exclusive ownership of a particular cell.
+Reuse must also preserve the surviving graph's support obligations.
+
+### Predictable costs and acceptance cases
+
+A later checked FIP profile could verify credit balance, allocation-free calls, result transport, and bounded stack use.
+This would be a compiler resource contract, with no new kind family selected here.
+`Ret A` alone establishes none of those cost or ownership properties.
+Payload reuse must be distinguished from allocating grant records, boxes, closure environments, or call frames;
+a source callback's allocations also count toward any whole-call guarantee.
+
+Start with list reversal and equal-layout tree-to-zipper rewrites under a closed ownership proof.
+Pair each successful reuse with a shared input, a captured alias,
+and a pending continuation that later reads the original.
+The latter cases must preserve the original values and select allocation when exclusivity is absent.
+Reject incompatible cell layouts before mutation, and collect during a permitted rewrite to verify roots.
+Runtime counters should distinguish reused cells, fresh allocations, and peak stack use;
+static allocation-site counts alone cannot establish an in-place execution claim.
+
 ## Worked Example
 
 Consider `let x = (10, 0) in let (y, z) = x in M`.
@@ -534,6 +608,27 @@ The proposed conservative choice boxes from the start on such paths, avoiding du
   The current [retained-frame model](native-frames.md#collection-and-space-behavior) must account
   for active and suspended activations, packed capacity, and their live data.
   Retention does not authorize a raw frame pointer to escape its activation.
+
+## Related work
+
+- Alex Reinking, Ningning Xie, Leonardo de Moura, and Daan Leijen.
+  *Perceus: Garbage Free Reference Counting with Reuse*.
+  PLDI 2021. [DOI](https://doi.org/10.1145/3453483.3454032), [paper](https://xnning.github.io/papers/perceus.pdf),
+  especially Sections 2.4–2.6.
+  Precise reference counting exposes runtime uniqueness, allowing constructor reuse
+  while preserving persistent behavior for shared inputs.
+  Its garbage-free result concerns cycle-free programs.
+- Anton Lorenzen, Daan Leijen, and Wouter Swierstra.
+  *FP²: Fully in-Place Functional Programming*.
+  Proceedings of the ACM on Programming Languages 7 (ICFP), Article 198, 2023.
+  [DOI](https://doi.org/10.1145/3607840), [paper](https://webspace.science.uu.nl/~swier004/publications/2023-icfp.pdf),
+  especially Sections 1, 2, and 5.
+  Its linear calculus accounts for reusable cells and proves no heap allocation
+  or deallocation and constant stack space under its ownership assumptions.
+  The dynamic embedding allocates when sharing prevents reuse.
+
+These results motivate the proposed reuse analysis above; they do not establish those guarantees
+for Zydeco's current representation policies or arbitrary computation protocols.
 
 ## Related Documents
 

@@ -610,6 +610,14 @@ calculi [2, 3]. A strict outlives relation between every container and its field
 heap invariant but rejects some temporary cross-region graphs admitted here. Region support instead
 checks the retained graph, benefiting from immutable payloads and explicit captures.
 
+Perceus [4] and FP² [5] study storage reuse under functional observations.
+They address a different obligation: whether a particular cell can be consumed and reconstructed in place.
+A support bound records lifetime dependencies; it neither counts aliases nor establishes exclusive ownership.
+The proposed #link("escape-unboxing.md#functional-allocation-reuse-proposed")[compiler reuse rules]
+and their #link("bytes.md#functional-updates-with-allocation-reuse-proposed")[byte-memory application]
+own that additional evidence. Applying such rewrites to this immutable-store calculus requires a separate
+preservation argument for the surviving graph and its support bounds; a retirement argument alone is insufficient.
+
 The remaining design and proof work includes:
 
 - A complete inductive or mechanized proof, including bounded existential substitution and the code-table invariant.
@@ -651,3 +659,14 @@ ACM Transactions on Programming Languages and Systems 22(4), 701-771, 2000.
 ACM SIGPLAN Notices 39(9) (ICFP 2004), 103-114.
 #link("https://www.cs.cornell.edu/people/fluet/research/rgn-monad/ICFP04/icfp04.pdf")[Author manuscript].
 #link("https://doi.org/10.1145/1016848.1016867")[doi:10.1145/1016848.1016867].
+
+[4] Alex Reinking, Ningning Xie, Leonardo de Moura, and Daan Leijen.
+_Perceus: Garbage Free Reference Counting with Reuse._ PLDI 2021.
+#link("https://doi.org/10.1145/3453483.3454032")[doi:10.1145/3453483.3454032].
+#link("https://xnning.github.io/papers/perceus.pdf")[Author manuscript].
+
+[5] Anton Lorenzen, Daan Leijen, and Wouter Swierstra.
+_FP²: Fully in-Place Functional Programming._
+Proceedings of the ACM on Programming Languages 7 (ICFP), Article 198, 2023.
+#link("https://doi.org/10.1145/3607840")[doi:10.1145/3607840].
+#link("https://webspace.science.uu.nl/~swier004/publications/2023-icfp.pdf")[Author manuscript].
