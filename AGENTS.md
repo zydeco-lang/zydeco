@@ -21,11 +21,11 @@ Call compiler `@[meta]` forms **meta annotations**, or **compile-time metadata**
 Read the relevant sections for the task:
 
 - [README.md](README.md) for usage and quick start.
-- [DESIGN.md](DESIGN.md) for language semantics, architecture, pipeline, and repository layout.
+- [References](docs/references/README.md) for canonical language and compiler design.
+- [DESIGN.md](DESIGN.md) for the project overview and repository layout.
 - [CONTRIBUTING.md](CONTRIBUTING.md) for build, formatting, test, and contribution workflows.
 - [OOPSLA artifact overview](lib/tests/oopsla/README.md) when working on those examples.
 
-When changing architecture or workflows, prefer updating `DESIGN.md` or `CONTRIBUTING.md`, respectively.
 Keep documentation examples consistent with the repository's CLI flags and scripts.
 
 ## Working Principles
@@ -96,36 +96,23 @@ and expected output snapshots as needed.
 
 [docs/README.md](docs/README.md) indexes the documentation:
 
-- `docs/references/`: concise language and compiler references; assume basic PL background.
-- `docs/todos/`: documentation drift, proposed fixes, and consolidation work, kept separate from reference prose.
-- `docs/proposals/`: stable designs, invariants, rationale, examples, and open questions.
-- `docs/ideas/`: exploratory problems, constraints, alternatives, and decision criteria.
-- `docs/tutorial/`, `docs/spell/`, `docs/examples/`: tutorials, literate chapters, and checked examples.
-- `docs/legacy/`: historical material.
-- `docs/scripts/`: documentation tooling.
-- `docs/logs/`: optional scratch records; fold durable content into its owner, then delete the log.
+- `docs/references/`: the sole authoritative home for all user-approved canonical design decisions,
+  including language semantics, compiler architecture, and invariants.
+- `docs/proposals/`: concrete design documents for ongoing features not yet implemented.
+- `docs/ideas/`: higher-level academic discussions, research questions, and conceptual exploration.
+- `docs/todos/`: urgent codebase drift from the references.
+  Link the governing rule, describe the discrepancy, and address it as soon as possible.
 
-Existing rule owners remain authoritative until reference replacements are accepted.
-The implementation and stable docs must justify themselves without scratch logs.
+Adopting, changing, or promoting a canonical design requires user permission; existing authorization suffices.
+Once a feature is implemented, move its approved, settled design into the references.
+Keep only ongoing, unimplemented design work in proposals.
 
-When substantial design or exploratory work converges, revise the existing proposal that owns the topic.
-Propose a new review document under `docs/proposals/` only for an independently reviewable topic
-that does not fit an existing proposal.
-Use Markdown or Typst and explain what it would make easier to review: the problem, constraints,
-alternatives, chosen invariants, representative examples, and remaining uncertainty.
-Suggest a new artifact rather than creating it automatically; skip this for small routine changes.
-
-Maintain **one home per semantic rule**: the proposal or design section that owns a mechanism
-or invariant is authoritative for its rules.
-Define shared phase, typing, erasure, and representation rules once at their common semantic boundary.
-Other documents may summarize a rule to establish context, but must link to its owning section;
-keep their detailed treatment to local applications, examples, and consequences.
-
-When changing a rule, update its authoritative home and audit dependent summaries,
-examples, and references in the same change.
-Consolidate proposals that only restate the same rule or describe another use of the same mechanism;
-retain separate proposals for independently reviewable mechanisms or design questions.
+Maintain **one home per canonical rule**, in the reference section that owns its semantic boundary.
+Outside references, prefer concise pointers over repeated design explanations.
+Keep dependent examples and links consistent with the canonical rule.
 When moving or merging content, remove superseded sections or files and update incoming links in the same change.
+
+Scratch records in `docs/logs/` are temporary; fold durable content into its proper home, then delete the log.
 
 ## Documentation Style
 
