@@ -43,3 +43,7 @@ It requires a separate design decision before adoption.
 [Reachability and regions for SPSLow](proposals/reachability-regions.typ) formalizes proposed value support,
 environment and stack dependencies, explicit arena operations, and the obligations for safe region retirement.
 It is a design draft; the current compiler does not implement these rules.
+
+[Scoped source packages and remote resolution](proposals/source-package-resolution.md) proposes named package scopes,
+per-project Git dependencies, lock and cache policy, and the counterexamples that constrain a minimal implementation.
+It is a design draft; current source-package behavior remains defined by the language reference.

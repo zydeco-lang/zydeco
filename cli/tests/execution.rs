@@ -29,6 +29,17 @@ impl Fixture {
         )
     }
 
+    fn file_effect() -> String {
+        Self::program(
+            r#"! system/fs/create_writer "executed.marker"
+                { fn _ _ => ! process/exit 8 }
+                { fn writer => ! system/io/close_writer writer
+                    { fn _ _ => ! process/exit 9 }
+                    { ! process/exit 0 }
+                }"#,
+        )
+    }
+
     fn suite(&self, first: &str, second: &str) {
         self.write(
             "package.zy",
@@ -216,6 +227,46 @@ fn invalid_sources_and_missing_hosts_fail_before_any_test_runs() {
         assert!(stderr.contains(diagnostic), "{stderr}");
         assert!(!fixture.directory.path().join("build").exists());
     }
+}
+
+#[test]
+fn test_preflight_failures_leave_filesystem_effects_unexecuted() {
+    let fixture = Fixture::new();
+    let marker = fixture.directory.path().join("executed.marker");
+    let valid = Fixture::program("! process/exit 0");
+    for (second, diagnostic) in [("42", "classified as a value"), (valid.as_str(), "cannot start")]
+    {
+        fixture.suite(&Fixture::file_effect(), second);
+        let output = fixture
+            .command(&["test", "suite", "-t", "interpreter", "-t", "wasm-sps"])
+            .env("NODE", fixture.directory.path().join("missing-node"))
+            .output()
+            .unwrap();
+        assert!(Fixture::stdout(&output, 1).is_empty());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(diagnostic), "{stderr}");
+        assert!(!marker.exists(), "a test executed before preparation completed");
+    }
+
+    let output = fixture.command(&["test", "suite"]).output().unwrap();
+    assert!(Fixture::stdout(&output, 0).contains("2 passed; 0 failed."));
+    assert!(marker.is_file(), "the successful control must actually perform the effect");
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn native_preparation_failure_does_not_execute_already_prepared_interpreter_programs() {
+    let fixture = Fixture::new();
+    fixture.suite(&Fixture::file_effect(), &Fixture::program("! process/exit 0"));
+    let output = fixture
+        .command(&["test", "suite", "-t", "interpreter", "-t", "exe", "-r", "missing-runtime"])
+        .output()
+        .unwrap();
+    assert!(Fixture::stdout(&output, 1).is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("runtime directory"), "{stderr}");
+    assert!(!fixture.directory.path().join("executed.marker").exists());
+    assert!(!fixture.directory.path().join("build").exists());
 }
 
 #[test]

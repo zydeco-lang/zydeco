@@ -561,3 +561,203 @@ fn explicit_package_files_work_without_conventional_roots_and_reject_invalid_inp
         assert!(error.contains(expected) && error.contains(file), "{error}");
     }
 }
+
+#[test]
+fn name_and_file_relationships_select_the_same_test_only_once() {
+    let fixture = Fixture::new().with_discovery(&["lib.zy", "tests/*.zy"]);
+    fixture.write(
+        "lib.zy",
+        r#"@[package(library, name(lib), test(smoke), test("tests/smoke.zy"))] 42"#,
+    );
+    fixture.write(
+        "tests/smoke.zy",
+        &format!(
+            r#"@[package(test(of(lib, "../lib.zy")), name(smoke))] ({})"#,
+            Fixture::executable(0)
+        ),
+    );
+    for source in ["lib", "lib.zy", "./lib.zy", "smoke", "tests/smoke.zy"] {
+        let output = fixture.success(&["-p", "./packages.zy", "test", source]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(stdout.matches("PASS [interpreter] ").count(), 1, "{stdout}");
+        assert!(stdout.contains("tests/smoke.zy"), "{stdout}");
+        assert!(stdout.contains("1 passed; 0 failed."), "{stdout}");
+    }
+}
+
+#[test]
+fn registration_wrappers_and_implementation_files_have_distinct_test_subjects() {
+    let fixture = Fixture::new().with_discovery(&["library.zy", "wrapper.zy", "tests/*.zy"]);
+    fixture.write("library.zy", "@[package(library, name(core))] 42");
+    fixture.write("wrapper.zy", "@[package(library, name(wrapped))] @(import(core))");
+    for (subject, name) in [("core", "core-test"), ("wrapped", "wrapper-test")] {
+        fixture.write(
+            &format!("tests/{name}.zy"),
+            &format!("@[package(test(of({subject})), name({name}))] ({})", Fixture::executable(0)),
+        );
+    }
+    for (source, selected, excluded) in [
+        ("core", "core-test", "wrapper-test"),
+        ("library.zy", "core-test", "wrapper-test"),
+        ("wrapped", "wrapper-test", "core-test"),
+        ("wrapper.zy", "wrapper-test", "core-test"),
+    ] {
+        let output = fixture.success(&["test", source]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains(&format!("tests/{selected}.zy")), "{stdout}");
+        assert!(!stdout.contains(excluded), "{stdout}");
+        assert!(stdout.contains("1 passed; 0 failed."), "{stdout}");
+    }
+}
+
+#[test]
+fn suites_do_not_recursively_activate_dependency_or_selected_test_relationships() {
+    let fixture = Fixture::new().with_discovery(&["lib.zy", "dependency.zy", "tests/*.zy"]);
+    fixture.write("lib.zy", "@[package(library, name(app))] @(import(dependency))");
+    fixture
+        .write("dependency.zy", "@[package(library, name(dependency), test(dependency-test))] 42");
+    for (name, role, relations, code) in [
+        ("smoke", "test(of(app))", ", test(extra)", 0),
+        ("dependency-test", "test", "", 7),
+        ("extra", "test", "", 9),
+    ] {
+        fixture.write(
+            &format!("tests/{name}.zy"),
+            &format!("@[package({role}, name({name}){relations})] ({})", Fixture::executable(code)),
+        );
+    }
+    let output = fixture.success(&["test", "app"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("tests/smoke.zy"), "{stdout}");
+    assert!(stdout.contains("1 passed; 0 failed."), "{stdout}");
+    assert!(!stdout.contains("dependency-test") && !stdout.contains("extra"), "{stdout}");
+
+    for (source, selected, summary) in [
+        ("dependency", "dependency-test", "0 passed; 1 failed."),
+        ("smoke", "extra", "1 passed; 1 failed."),
+    ] {
+        let output = fixture.command(&["test", source]);
+        assert_eq!(output.status.code(), Some(1));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("FAIL [interpreter] "), "{stdout}");
+        assert!(stdout.contains(&format!("tests/{selected}.zy")), "{stdout}");
+        assert!(stdout.contains(summary), "{stdout}");
+    }
+}
+
+#[test]
+fn code_cycles_reject_before_execution_or_replacing_existing_build_artifacts() {
+    let fixture = Fixture::new().with_discovery(&["lib.zy", "smoke.zy", "main.zy"]);
+    fixture.write("lib.zy", "@[package(library, name(lib), test(smoke))] 42");
+    fixture.write(
+        "smoke.zy",
+        &format!(
+            "@[package(test, name(smoke))] let lib = @(import(lib)) in ({})",
+            Fixture::executable(0)
+        ),
+    );
+    fixture.write(
+        "main.zy",
+        &format!(
+            "@[package(binary, name(main))] let lib = @(import(lib)) in ({})",
+            Fixture::executable(0)
+        ),
+    );
+    fixture.success(&["test", "lib"]);
+    let build = ["build", "main", "-t", "wasm-sps", "--build-dir", "build"];
+    fixture.success(&build);
+    let artifact = fixture.directory.path().join("build/main.sps.wasm");
+    let original = std::fs::read(&artifact).unwrap();
+    wasmparser::Validator::new().validate_all(&original).unwrap();
+
+    fixture.write("lib.zy", "@[package(library, name(lib), test(smoke))] @(import(smoke))");
+    for arguments in [&["check", "lib"][..], &["test", "lib"], &["run", "main"], &build] {
+        let output = fixture.command(arguments);
+        assert!(!output.status.success() && output.stdout.is_empty(), "{arguments:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("cyclic source dependencies"), "{stderr}");
+        assert!(stderr.contains("lib.zy") && stderr.contains("smoke.zy"), "{stderr}");
+        assert_eq!(std::fs::read(&artifact).unwrap(), original, "{arguments:?}");
+    }
+}
+
+#[test]
+fn quoted_imports_remain_relative_to_their_defining_file_through_named_registrations() {
+    let fixture = Fixture::new();
+    fixture.write("package.zy", "@[package(library, name(app))] @(import(vendor/core))");
+    fixture.write(
+        "vendor/catalog/entries.zy",
+        r#"@[package(library, name(vendor/core))] @(import("../src/impl.zy"))"#,
+    );
+    fixture.write("vendor/src/impl.zy", r#"@(import("value.zy"))"#);
+    fixture.write("vendor/src/value.zy", "42");
+    for decoy in ["value.zy", "vendor/catalog/value.zy", "src/impl.zy"] {
+        fixture.write(decoy, "(");
+    }
+    let arguments = ["-p", "vendor/catalog/entries.zy", "check", "app"];
+    fixture.success(&arguments);
+
+    fixture.write("vendor/src/value.zy", r#"@(import("missing.zy"))"#);
+    let output = fixture.command(&arguments);
+    assert!(!output.status.success() && output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("source file not found") && stderr.contains("vendor/src/missing.zy"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn catalog_root_order_preserves_cross_file_resolution_and_suite_order() {
+    let fixture = Fixture::new();
+    fixture.write("first.zy", "@[package(library, name(consumer))] @(import(provider))");
+    fixture.write("second.zy", "@[package(library, name(provider))] 42");
+    fixture.write("testing.zy", r#"@[discover(include("tests/*.zy"))] ()"#);
+    for name in ["z-last", "a-first"] {
+        fixture.write(
+            &format!("tests/{name}.zy"),
+            &format!("@[package(test(of(provider)), name({name}))] ({})", Fixture::executable(0)),
+        );
+    }
+    let roots = [
+        ["-p", "first.zy", "-p", "second.zy", "-p", "testing.zy"],
+        ["-p", "testing.zy", "-p", "second.zy", "-p", "first.zy"],
+    ];
+    for operation in [&["show"][..], &["check", "consumer"], &["test", "provider"]] {
+        let outputs = roots.map(|roots| fixture.success(&[&roots[..], operation].concat()));
+        assert_eq!(outputs[0].stdout, outputs[1].stdout, "{operation:?}");
+    }
+    let output = fixture.success(&[&roots[0][..], &["test", "provider"]].concat());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let names = stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix("PASS [interpreter] "))
+        .map(|path| Path::new(path).file_stem().unwrap().to_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["a-first", "z-last"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn discovery_ignores_symlinked_files_and_directories_until_explicitly_selected() {
+    let fixture = Fixture::new().with_discovery(&["tests/**/*.zy"]);
+    fixture.write("tests/valid.zy", "@[package(library, name(valid))] 42");
+    let outside = Fixture::new();
+    let broken = outside.write("broken.zy", "(");
+    std::os::unix::fs::symlink(&broken, fixture.directory.path().join("tests/linked.zy")).unwrap();
+    std::os::unix::fs::symlink(
+        outside.directory.path(),
+        fixture.directory.path().join("tests/linked-directory"),
+    )
+    .unwrap();
+    fixture.success(&["check", "valid"]);
+    let shown = fixture.success(&["show"]);
+    let stdout = String::from_utf8_lossy(&shown.stdout);
+    assert!(stdout.contains("library valid ("), "{stdout}");
+    assert!(!stdout.contains("linked") && !stdout.contains("broken"), "{stdout}");
+
+    let output = fixture.command(&["-p", "tests/linked.zy", "show"]);
+    assert!(!output.status.success() && output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("broken.zy") && stderr.contains("Unrecognized EOF"), "{stderr}");
+}
