@@ -669,9 +669,9 @@ impl Desugar for t::TermId {
                                 b::Abs(pat, tail).into(),
                                 self.into(),
                             );
-                            let pat_ty =
-                                FreshenFolder { builder: &mut desugarer.builder }.fold_pat(pat);
                             if let Some(annotation) = &mut annotation {
+                                let pat_ty =
+                                    FreshenFolder { builder: &mut desugarer.builder }.fold_pat(pat);
                                 *annotation = Alloc::alloc(
                                     &mut desugarer.builder,
                                     b::Pi(pat_ty, *annotation).into(),

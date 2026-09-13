@@ -164,6 +164,24 @@ fn sealed_annotations_and_internal_leaves_are_preserved_by_copying() {
 }
 
 #[test]
+fn unannotated_abstractions_do_not_allocate_classifier_binders() {
+    for (text, definitions) in [
+        ("fn x => x", 1),
+        ("fn x y z => (x, y, z)", 3),
+        ("fn (x : (fn y => y)) => x", 2),
+        ("fn x .read => x", 1),
+    ] {
+        let mut parser = t::Parser::new();
+        let source = StrictParser::source(text, &mut parser).unwrap();
+        let output = SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }
+            .run(source)
+            .unwrap();
+        assert_eq!(output.arena.defs.iter().count(), definitions, "{text}");
+        Resolver::new(&parser.spans, output.arena).run_source(output.root).unwrap();
+    }
+}
+
+#[test]
 fn annotated_abstractions_resolve_each_generated_binder_independently() {
     let mut parser = t::Parser::new();
     let mut source = StrictParser::source("fn x => (x : x)", &mut parser).unwrap();
