@@ -18,7 +18,7 @@ macro_rules! impl_span_view_desugarer {
         $(
             impl<'a> SpanView<'a, Desugarer<'_>> for $ty {
                 fn span(&self, desugarer: &'a Desugarer<'_>) -> &'a Span {
-                    span_via_back(&desugarer.spans, &desugarer.bitter, *self)
+                    span_via_back(&desugarer.spans, &desugarer.builder.arena, *self)
                 }
             }
         )*

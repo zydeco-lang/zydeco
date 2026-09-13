@@ -1,16 +1,17 @@
 # Reusable folders and traversal composition
 
 This proposal collects the remaining work on reusable compiler traversals.
-The implemented scoped visitor and its composition contract live
-in the [compiler reference](../references/compiler.md#scoped-structural-traversal).
-That implementation is the starting point for the extensions below; this document proposes no change
+The implemented [scoped visitor](../references/compiler.md#scoped-structural-traversal)
+and [surface rebuilding and freshening](../references/compiler.md#surface-structural-rebuilding) contracts live
+in the compiler reference.
+Those implementations are the starting point for the extensions below; this document proposes no change
 to source semantics or to the existing ordering of compiler phases.
 
 ## Motivation and scope
 
 Adding a syntax constructor currently requires updating many operations that each describe how
 to recurse through the same representation.
-Bitter cloning, desugaring, and resolution contain their own recursive dispatch; typed substitution,
+Desugaring and resolution contain their own recursive dispatch; typed substitution,
 hole resolution, and normalization repeat much of their rebuilding structure.
 This spreads structural knowledge across passes and makes each pass responsible for both traversal and its own rules.
 
@@ -28,11 +29,11 @@ The design should grow from concrete migrations rather than parameterizing every
 
 ## Representation-owned structure
 
-Extend the surface traversal machinery with a borrowed arena adapter and a rebuilding interface.
+Extend the surface traversal machinery with a borrowed arena adapter as further clients need it.
 Bitter and scoped syntax already share `Pattern` and `Term<Ref>`;
 their [debug formatter](../../lang/surface/src/debug.rs) demonstrates adapting the phase-specific arena
 and references without duplicating the syntax dispatch.
-Reuse that syntax family when the bitter folder is introduced.
+The [owned folder](../../lang/surface/src/fold.rs) now rebuilds that shared syntax family.
 Textual syntax and typed syntax need their own structural implementations because their node categories differ.
 
 Keep exhaustive structural matches beside the relevant IR.
@@ -41,7 +42,7 @@ Borrow nodes for inspection; use an owned reconstruction when a folder must chan
 Allocation belongs to a phase builder, following the existing
 [identity and provenance contract](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance).
 
-The folder interface should distinguish three questions explicitly:
+Extensions of the folder interface should distinguish three questions explicitly:
 
 - Which source node is being read, and which representation is being constructed?
 - Which inherited environment applies to each child, and which results return from that child?
@@ -49,7 +50,6 @@ The folder interface should distinguish three questions explicitly:
 
 This supports ordinary identity-preserving rewrites and intentional freshening
 without making their identity policies implicit in a generic memo table.
-Prefer an exhaustive hand-written implementation for the first folder.
 Consider generating borrowed traversal and rebuilding from one structural declaration only
 after two real clients show that their common structure is stable.
 
@@ -82,21 +82,6 @@ Introduce independent activity masks or separate traversal groups only when a co
 Likewise, preserve diagnostic precedence when combining validators:
 interleaving two validators can change which error is reported first.
 Accumulating each validator's outcome and selecting errors at the enclosing stage boundary may be necessary.
-
-## Next migration: bitter cloning
-
-Replace [DeepClone](../../lang/surface/src/bitter/clone.rs) with a specific `FreshenFolder` over bitter syntax.
-Move the required allocation and origin operations out of their dependency on `Desugarer` and into the bitter builder.
-The folder should express copying; the shared structural implementation should express where its children live.
-
-Preserve the existing fresh-definition behavior used when a binder appears in both a term and its generated classifier.
-Keep source provenance on all copies. Specify whether each copied source boundary retains a shared provider
-or intentionally duplicates it before introducing memoization into cloning.
-This must be tested separately from the per-node policy used by read-only analysis.
-
-Migrate all cloning callers and remove the superseded trait in the same change.
-Useful regressions include annotated abstractions, recursive binding sugar, copattern spines,
-and patterns whose annotations contain source boundaries.
 
 ## Desugaring decomposition
 
@@ -192,12 +177,10 @@ deduplicating visits must never hide that rejection.
 
 The remaining work fits one migration sequence:
 
-1. Generalize the surface structural implementation as required by `FreshenFolder`, migrate bitter cloning,
-   and remove its old recursive path.
-2. Separate desugaring's rule families around that builder and traversal boundary.
-3. Extract resolution events and their consumers while retaining block discovery and scheduling stages.
-4. Introduce typed graph views and folders for substitution and finalization.
-5. Apply the established interfaces to source inventories and SPS analyses where they simplify concrete callers.
+1. Separate desugaring's rule families around the existing bitter builder and the required textual traversal boundary.
+2. Extract resolution events and their consumers while retaining block discovery and scheduling stages.
+3. Introduce typed graph views and folders for substitution and finalization.
+4. Apply the established interfaces to source inventories and SPS analyses where they simplify concrete callers.
 
 For each migration, compare separate and composed results and retain visit-count regressions on shared graphs.
 Measure allocations and representative compilation time before making broader performance claims.

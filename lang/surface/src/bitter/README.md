@@ -1,59 +1,25 @@
 # Bitter (Desugared Surface Syntax)
 
-`bitter` is the desugaring phase that sits between the parsed surface syntax (`textual`)
-and the name-resolved syntax (`scoped`).
-It normalizes surface constructs into a smaller core, injects primitive terms for built-in kinds and types,
-and preserves a mapping back to the original parsed entities so later phases can report accurate spans.
+`bitter` lowers parsed surface syntax to the shared syntax family consumed by name resolution.
+The [compiler reference](../../../../docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution)
+owns the phase contract,
+and its [rebuilding section](../../../../docs/references/compiler.md#surface-structural-rebuilding) owns allocation,
+structural folding, and freshening.
 
-## Role in the pipeline
-
-The surface pipeline looks like:
-
-```markdown
-textual (parser output) -> bitter (desugared surface) -> scoped (name resolution)
+```text
+textual -> bitter -> scoped -> statics
 ```
 
-`bitter` is intentionally still "surface-shaped" (it keeps source-level names),
-but removes syntactic sugar and inserts explicit nodes the later passes rely on.
+## Implementation map
 
-Term-level splices are resolved before this pass: the compiler session's assembly phase replaces `@[import(...)]` holes
-with source boundaries and `@[literal]` holes with string literals, so bitter only ever sees ordinary `Lit` nodes
-for embedded text.
+| Module | Responsibility |
+| --- | --- |
+| [`syntax`](syntax.rs) | Desugared syntax and IDs, with term references parameterized for resolution. |
+| [`arena`](arena.rs) | Node storage, textual origins, and source binder annotations. |
+| [`alloc`](alloc.rs) | `BitterBuilder`, allocation with provenance, and frozen publication. |
+| [`desugar`](desugar.rs) | Source-term lowering, sugar expansion, and recognized meta annotations. |
+| [`freshen`](freshen.rs) | Fresh occurrence copies through the shared [`Folder`](../fold.rs). |
+| [`err`](err.rs), [`fmt`](fmt.rs), [`span`](span.rs) | Diagnostics, debug formatting, and source locations. |
 
-## Data model
-
-`bitter::syntax` defines the desugared AST and the identifiers used to store it:
-
-- `DefId`, `PatId`, and `TermId`: arena-backed IDs.
-- `BitterArena`: holds arenas for definitions, patterns, and terms plus a `textual` mapping (`ArenaForth`)
-  that links bitter nodes back to the original textual entity IDs.
-- `Internal`: explicit intrinsic nodes, such as `VType`, `CType`, `Thk`, and `Ret`,
-  whose identities do not depend on lexical names.
-
-This pass keeps names as `VarName` in `Term` until the `scoped` pass rewrites them to bound variables.
-
-## Desugaring pass
-
-`bitter::desugar` implements the `Desugarer` compiler pass.
-It:
-
-- Expands sugar into core forms (e.g., empty parens to `Triv`, comma-separated parens to `Cons(ConsN<_, _>)`,
-  `Arrow` to `Pi`, `Prod` to `Sigma`, and `forall`/`exists` to annotated `Pi`/`Sigma`).
-- Normalizes multi-parameter abstractions and applications into nested `Abs` and `App` nodes.
-- Inserts type annotations for literals, `ret`, and `thunk` so later phases see explicit types.
-- Consumes `@[monadic]` metadata into a monadic-translation node while preserving the annotated payload term.
-- Wraps definitions in `Sealed` when they should not be expanded accidentally.
-- Preserves explicit intrinsic nodes through name resolution.
-
-`Alloc` centralizes allocation into `BitterArena` while recording the textual-to-bitter mapping.
-`DeepClone` is used to duplicate nodes while preserving their original source linkage.
-
-## Errors and spans
-
-- `bitter::err` defines errors for malformed intrinsic or monadic metadata and incompatible binding modifiers.
-- `bitter::span` provides `SpanView` implementations that retrieve spans via the `textual` back-mapping.
-
-## Formatting
-
-`bitter::fmt` implements an "ugly" formatter over the bitter syntax.
-It is primarily a debugging aid to print desugared terms in a safe surface syntax.
+The [traversal proposal](../../../../docs/proposals/traversals.md) collects remaining desugaring
+and resolution rule extraction around these structural and builder boundaries.

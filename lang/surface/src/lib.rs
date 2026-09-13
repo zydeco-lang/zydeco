@@ -12,6 +12,9 @@ pub mod syntax;
 /// Shared debug formatter for bitter and scoped syntax, generic over the phase arena.
 pub mod debug;
 
+/// Owned structural rebuilding for the shared bitter and scoped syntax family.
+pub mod fold;
+
 #[doc = include_str!("textual/README.md")]
 pub mod textual {
     /// Author-selected layout attached to canonical textual IDs.
@@ -77,9 +80,8 @@ pub mod bitter {
     /// Allocation helpers that preserve textual-to-bitter mappings.
     pub mod alloc;
     pub use alloc::*;
-    /// Deep cloning helpers for bitter nodes with span preservation.
-    pub mod clone;
-    pub use clone::*;
+    /// Fresh occurrence copying through the shared structural folder.
+    pub mod freshen;
     /// Desugaring pass from textual syntax into bitter syntax.
     pub mod desugar;
     pub use desugar::*;

@@ -48,7 +48,7 @@ It is a design draft; the current compiler does not implement these rules.
 per-project Git dependencies, lock and cache policy, and the counterexamples that constrain a minimal implementation.
 It is a design draft; current source-package behavior remains defined by the language reference.
 
-[Reusable folders and traversal composition](proposals/traversals.md) collects the remaining migration of cloning,
-desugaring, resolution, and typed rebuilding onto shared structural operations.
-The implemented scoped visitor is defined
-in the [compiler reference](references/compiler.md#scoped-structural-traversal).
+[Reusable folders and traversal composition](proposals/traversals.md) collects the remaining migration of desugaring,
+resolution, and typed rebuilding onto shared structural operations.
+The compiler reference defines the implemented [scoped visitor](references/compiler.md#scoped-structural-traversal)
+and [surface folder](references/compiler.md#surface-structural-rebuilding).

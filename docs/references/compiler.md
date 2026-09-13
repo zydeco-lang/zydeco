@@ -324,6 +324,49 @@ and token ranges in non-ASCII text and in files beyond the first merged source.
 Allocation and provenance changes should exercise arena tests and source-location tests,
 including repeated checking and the distinction between local and merged spans.
 
+### Surface structural rebuilding
+
+Bitter and scoped syntax share `Pattern` and `Term<Ref>`, with source names
+or resolved definition IDs in reference positions.
+Their [owned rebuilding operations](../../lang/surface/src/fold.rs) describe immediate children once
+for that syntax family.
+`Pattern::fold_with`, `Term::fold_with`, and the copattern operations consume a node
+and rebuild its children through a `Folder`.
+Literal values, field names, meta annotations, and other non-child payloads retain their contents.
+Internal terms are leaves, and sealing retains its wrapper around the transformed payload.
+
+The folder supplies `fold_def`, `fold_pat`, and `fold_term` for ID-bearing children;
+those hooks own arena lookup, recursive descent, and identity policy.
+`fold_ref` handles a variable reference separately and preserves it by default.
+Changing a binder identity therefore does not implicitly rename references; a folder
+over resolved syntax must supply the corresponding reference behavior when required.
+The structural operations themselves neither issue arena IDs nor memoize and do not establish lexical environments.
+
+Rebuilding follows the existing bitter copying order: annotations process payload then classifier,
+view patterns process function then pattern, and binder-bearing forms process binder before body or bindee.
+Binding tails follow their bindees. Recursive definitions and arms retain their sequence,
+and a copattern spine processes its head followed by its tail items.
+A monadic block processes body, monad, then algebra.
+These are structural copying rules; a scope-sensitive folder must choose its own child environments
+or handle the enclosing form before delegating to `fold_with`.
+
+The [bitter builder](../../lang/surface/src/bitter/alloc.rs) owns one sequential ID issuer and its `BitterArena`.
+Every `Alloc` operation stores a node and its textual origin together; consuming `finish` publishes a `FrozenArena`.
+Desugaring owns a builder alongside its textual inputs and source-term memo table.
+[FreshenFolder](../../lang/surface/src/bitter/freshen.rs) uses the same builder to copy an existing bitter fragment:
+every reachable occurrence receives fresh IDs, including definition IDs, while retaining the original textual origins.
+Source names remain unchanged for subsequent lexical resolution.
+Source and signature boundary payloads are copied per occurrence, even when the input shares a provider.
+There is no copy memoization, and source identities in `partial_binders` remain valid through the retained origins.
+Freshening uses recursive descent and requires acyclic input; it does not provide the scoped visitor's explicit-stack
+or cycle-reporting guarantees.
+
+The folder is used for binder copies in annotated abstractions, generated binding classifiers,
+and recursive binding sugar.
+Its regressions check distinct resolved binders, retained provenance, copattern order,
+shared annotation copying, and sealed payloads.
+Further lowering and resolution decomposition remains in the [traversal proposal](../proposals/traversals.md).
+
 ### Scoped structural traversal
 
 Resolved syntax can share source roots, so structural analysis operates on a graph of arena entities.
