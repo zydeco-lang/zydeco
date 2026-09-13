@@ -47,3 +47,8 @@ It is a design draft; the current compiler does not implement these rules.
 [Scoped source packages and remote resolution](proposals/source-package-resolution.md) proposes named package scopes,
 per-project Git dependencies, lock and cache policy, and the counterexamples that constrain a minimal implementation.
 It is a design draft; current source-package behavior remains defined by the language reference.
+
+[Reusable folders and traversal composition](proposals/traversals.md) collects the remaining migration of cloning,
+desugaring, resolution, and typed rebuilding onto shared structural operations.
+The implemented scoped visitor is defined
+in the [compiler reference](references/compiler.md#scoped-structural-traversal).
