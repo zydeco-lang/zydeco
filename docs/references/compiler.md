@@ -324,6 +324,69 @@ and token ranges in non-ASCII text and in files beyond the first merged source.
 Allocation and provenance changes should exercise arena tests and source-location tests,
 including repeated checking and the distinction between local and merged spans.
 
+### Scoped structural traversal
+
+Resolved syntax can share source roots, so structural analysis operates on a graph of arena entities.
+[Traversal](../../lang/surface/src/scoped/traverse.rs) owns the exhaustive child enumeration and depth-first schedule;
+independent `Visitor` implementations receive borrowed `Node` values at entry and exit.
+An explicit work stack avoids recursion through the Rust call stack.
+The traversal reads one immutable `ScopedArena`; visitors own their analysis state and do not schedule its children.
+
+The root is a scoped `EntityId`. Definition IDs are leaves, including those reached through pattern binders
+and variable references; the traversal does not follow them to defining terms.
+It follows source and signature boundaries, annotations, and the elaborated children of blocks,
+without following side tables or establishing a lexical environment.
+Mobile syntax is an invariant violation because resolution must have eliminated it.
+Term and pattern IDs must name existing nodes in the supplied arena.
+
+Child order is deterministic and preserves the structural analysis order:
+
+| Form | Child order |
+| --- | --- |
+| Term or pattern annotation | Payload, then classifier. |
+| View pattern | Function, then pattern. |
+| Abstraction, fixpoint, or quantifier | Pattern, then body. |
+| Let, do, manifest existential, or package layer | Definition or bindee, pattern, then body or tail. |
+| Match | Scrutinee, then each arm's pattern and tail in arm order. |
+| Copattern clause | Patterns in spine order, then the tail; clauses retain their order. |
+| Recursive group | Each definition's pattern and bindee in group order, then the tail. |
+| Monadic block | Monad, algebra, then body. |
+
+Products, applications, and data/codata arms retain their stored order.
+This is an analysis schedule; [resolution](#c4-parsing-desugaring-and-name-resolution) owns lexical scope transitions.
+
+`Sharing::UniqueNodes`, the default, delivers one entry and exit per distinct entity.
+Completed nodes are skipped before lookup or descent, including a provider reached by multiple import boundaries.
+Structural scheduling therefore takes work proportional to reachable nodes and edges, excluding the analyses' own work.
+`Sharing::Occurrences` revisits completed nodes along each edge for analyses whose observations depend on the path.
+Both modes distinguish an active ancestor from a completed node and reject a structural cycle with `TraversalCycle`.
+Recursive language bindings remain valid because definition references are leaves.
+
+`Together { first, second }` delivers each entry and exit to both visitors in declaration order.
+Visitors can own or borrow their state and must have the same `Break` type.
+They share the traversal's ordering, boundaries, and sharing policy; independently pruning a subtree is unsupported.
+For independent, completing analyses this produces the same results as separate runs under that policy.
+It does not fuse successive rewriting passes or preserve the error priority of running two validators in sequence.
+
+`Traversal::run` returns `Result<ControlFlow<V::Break>, TraversalCycle>`.
+A visitor's `Break` stops immediately, before subsequent callbacks, and returns the supplied domain value.
+Neither a break nor a cycle balances pending exits or rolls back visitor state.
+Every run has fresh traversal bookkeeping, so a configuration can be reused after either outcome.
+Callers must distinguish a completed analysis from its partial state after stopping.
+
+[ContextCollector](../../lang/surface/src/scoped/context.rs) is the postorder free-variable analysis.
+It temporarily records bound and free definitions for patterns, and free definitions for terms.
+`finish` retains only the term summaries as `TermContexts`.
+These summaries are independent of the incoming environment, so `TermContexts::collect` uses unique-node traversal.
+Other analyses can share its traversal through `Together`.
+
+The [traversal regressions](../../lang/surface/src/scoped/traverse/tests.rs) cover composed results,
+callback order and early breaks, cycles, dependent binders, and deep syntax.
+A repeated-import graph with 37 distinct term nodes has 16,381 occurrences;
+the unique-node traversal delivers 37 entries and exits.
+This checks traversal work, not end-to-end compilation speed.
+The [folder proposal](../proposals/traversals.md) contains the remaining cross-representation migrations.
+
 ## C3. Source loading, sessions, queries, and memory retention
 
 The [source graph](../../lang/session/src/source/graph.rs) identifies canonical paths,
@@ -443,8 +506,9 @@ Parameters become abstractions, acyclic definitions become lets, and recursive t
 Resolution establishes binder identity before dependency ordering moves syntax;
 scheduling must preserve those identities.
 The checker subsequently verifies the admissibility of a recursive group.
-The context collector records visible and free definitions from the elaborated term,
-allowing completion to reuse scope rather than reconstruct it from later types.
+The [context collector](#scoped-structural-traversal) summarizes free definitions in the elaborated term for checking.
+Resolution captures authoring scopes for documentation and exact cursor scopes
+for completion before later transformations change the syntax.
 Parser agreement, recovery laws, formatting laws,
 and the [uniform-term fixtures](../../lang/tests/cases/uniform-term) exercise this boundary.
 The [term design](../proposals/term.md) retains its binding motivation and remaining recursion questions.

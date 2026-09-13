@@ -1,4 +1,5 @@
 use derive_more::{AsMut, AsRef, Deref};
+use zydeco_surface::scoped::context::TermContexts;
 use {
     super::{
         arena::StaticsArena,
@@ -6,7 +7,7 @@ use {
         syntax::{AbstId, AnnId, FillId, Fillable, InferenceSite, PatAnnId, TermAnnId},
         *,
     },
-    crate::surface_syntax::{ScopedArena, SpanArena, TermContexts},
+    crate::surface_syntax::{ScopedArena, SpanArena},
     crate::validate::CoverageChecker,
     zydeco_surface::metadata::{BuiltinMeta, FfiMeta, MetadataKind},
     zydeco_utils::prelude::ArenaAccess,

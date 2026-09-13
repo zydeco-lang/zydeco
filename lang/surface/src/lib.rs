@@ -96,8 +96,12 @@ pub mod bitter {
 pub mod scoped {
     /// Scoped AST aliases and primitive definition tracking.
     pub mod syntax;
-    /// Scoped arena storage, dependency metadata, and checker-local context analysis.
+    /// Scoped arena storage and dependency metadata.
     pub mod arena;
+    /// Shared structural traversal and visitor composition.
+    pub mod traverse;
+    /// Checker-local free-variable analysis over resolved syntax.
+    pub mod context;
     /// Binder collection and primitive allocation helpers.
     pub mod binders;
     pub use binders::*;

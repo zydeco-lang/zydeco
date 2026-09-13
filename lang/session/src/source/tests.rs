@@ -1089,7 +1089,7 @@ fn a_self_contained_imported_term_resolves_normally() {
         zydeco_surface::scoped::syntax::Term::SourceBoundary(_)
     ));
     let contexts =
-        zydeco_surface::scoped::arena::TermContexts::collect(&resolved.arena, resolved.root);
+        zydeco_surface::scoped::context::TermContexts::collect(&resolved.arena, resolved.root);
     assert!(contexts.at(&resolved.root).is_empty());
 }
 
