@@ -1,23 +1,27 @@
 use clap::Parser;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 use zydeco_cli::{
     BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
     DocumentationCommand, Executable, ExecutionError, ExecutionRunner, ExecutionTarget,
     HighSpsInspection, HighSpsPass, HighSpsPlan, HighSpsPlanError, NativeError,
     RepresentationStrategy, SourceFormatError, SourceFormatOutcome, SourceFormatter,
-    TargetArchitecture, TargetOs, TestTarget, WasmBackendKind,
+    SourceSelection, TargetArchitecture, TargetOs, TestTarget, WasmBackendKind,
     documentation::{DocumentationRenderError, DocumentationRenderer},
 };
 use zydeco_session::source::{
-    Package, PackageId, PackageRelationKind, PackageRole, SourceLoadError, SourceReference,
+    Package, PackageId, PackageName, PackageRelationKind, PackageRole, SourceLoadError,
+    SourceReference,
 };
 use zydeco_tui::{Repl, ReplError};
 
 fn main() {
     let cli = Cli::parse();
     let compiler = CommandCompiler::default().with_lint_types(cli.lint_types);
-    let result = Application { compiler }.run(cli.command, cli.packages);
+    let result = Application { compiler }.run(cli.command);
     match result {
         | Ok(code) => std::process::exit(code),
         | Err(error) => {
@@ -33,12 +37,12 @@ struct Application {
 }
 
 impl Application {
-    fn run(mut self, command: Commands, packages: Vec<PathBuf>) -> Result<i32, ApplicationError> {
+    fn run(mut self, command: Commands) -> Result<i32, ApplicationError> {
         if !matches!(
             command,
             Commands::Fmt { .. } | Commands::Passes { .. } | Commands::DocumentationExampleWorker
         ) {
-            let roots = ["package.zy", "packages.zy"]
+            let roots = ["package.zy", "workspace.zy"]
                 .into_iter()
                 .map(PathBuf::from)
                 .filter_map(|path| match path.try_exists() {
@@ -48,13 +52,12 @@ impl Application {
                         Some(Err(SourceLoadError::Read { path, source: source.into() }))
                     }
                 })
-                .chain(packages.into_iter().map(Ok))
                 .collect::<Result<Vec<_>, _>>()?;
             self.compiler = self.compiler.with_packages(&roots)?;
         }
         match command {
-            | Commands::Show => {
-                self.show_packages();
+            | Commands::Show { packages } => {
+                self.show_packages(packages)?;
                 Ok(0)
             }
             | Commands::Passes { sps_passes } => {
@@ -77,17 +80,26 @@ impl Application {
             }
             | Commands::Doc { command } => self.documentation(command),
             | Commands::Fmt { files, check } => self.format_sources(&files, check),
-            | Commands::Run { file, target, execution, dry, args } => {
-                self.run_source(&file, target, execution.runtime_dir, dry, &args)
+            | Commands::Run { selection, target, execution, dry, args } => {
+                let sources = self.sources(selection)?;
+                let [source] = sources.as_slice() else {
+                    return Err(ApplicationError::SingleExecution);
+                };
+                self.run_source(source, target, execution.runtime_dir, dry, &args)
             }
-            | Commands::Check { file } => self.check_source(&file),
-            | Commands::Test { file, targets, execution } => {
-                self.test_package(&self.resolve(&file)?, targets, execution.runtime_dir)
+            | Commands::Check { selection } => {
+                for source in self.sources(selection)? {
+                    self.check_source(&source)?;
+                }
+                Ok(0)
+            }
+            | Commands::Test { selection, targets, execution } => {
+                self.test_packages(self.sources(selection)?, targets, execution.runtime_dir)
             }
             | Commands::Repl => Repl::launch(self.compiler.catalog().bindings.clone())
                 .map_err(ApplicationError::Repl),
             | Commands::Build {
-                file,
+                selection,
                 target_os,
                 target_arch,
                 target,
@@ -109,8 +121,8 @@ impl Application {
                         verify: pipeline.verify_passes,
                         dump: pipeline.dump_passes,
                     });
-                self.build_source(
-                    &file,
+                self.build_sources(
+                    self.sources(selection)?,
                     target,
                     BuildOptions::new(
                         build_dir.unwrap_or_else(|| PathBuf::from("build")),
@@ -133,6 +145,19 @@ impl Application {
         Ok(self.compiler.catalog().bindings.resolve(source, &std::env::current_dir()?)?)
     }
 
+    fn sources(
+        &self, selection: SourceSelection,
+    ) -> Result<Vec<SourceReference>, ApplicationError> {
+        let mut seen = BTreeSet::new();
+        selection
+            .file
+            .into_iter()
+            .chain(selection.packages.into_iter().map(SourceReference::Package))
+            .map(|source| Ok(seen.insert(self.resolve(&source)?).then_some(source)))
+            .collect::<Result<Vec<_>, ApplicationError>>()
+            .map(|sources| sources.into_iter().flatten().collect())
+    }
+
     fn selected_analysis(
         &self, source: &SourceReference,
     ) -> Result<std::sync::Arc<zydeco_session::ProgramAnalysis>, ApplicationError> {
@@ -144,8 +169,18 @@ impl Application {
         Ok(self.report_analysis(analysis))
     }
 
-    fn show_packages(&self) {
-        for package in &self.compiler.catalog().packages {
+    fn show_packages(&self, names: Vec<PackageName>) -> Result<(), ApplicationError> {
+        let selected = names
+            .into_iter()
+            .map(|name| self.resolve(&SourceReference::Package(name)))
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        for package in self
+            .compiler
+            .catalog()
+            .packages
+            .iter()
+            .filter(|package| selected.is_empty() || selected.contains(&package.id))
+        {
             let position = package.source.file.line_col(package.origin.range().start);
             let label =
                 package.name.as_ref().map_or_else(|| package.id.to_string(), ToString::to_string);
@@ -166,6 +201,7 @@ impl Application {
                 println!("  {} -> {}{status}", relationship.kind, relationship.target);
             }
         }
+        Ok(())
     }
 
     fn check_package(
@@ -184,17 +220,26 @@ impl Application {
         Ok(Some(executable))
     }
 
-    fn test_package(
-        &self, id: &PackageId, targets: Vec<TestTarget>, runtime_dir: PathBuf,
+    fn test_packages(
+        &self, sources: Vec<SourceReference>, targets: Vec<TestTarget>, runtime_dir: PathBuf,
     ) -> Result<i32, ApplicationError> {
-        let plan = self.compiler.package_tests(id)?;
-        if plan.root.role != PackageRole::Test {
-            self.check_package(&plan.root)?;
+        let plans = sources
+            .iter()
+            .map(|source| {
+                self.compiler.package_tests(&self.resolve(source)?).map_err(ApplicationError::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for plan in &plans {
+            if plan.root.role != PackageRole::Test {
+                self.check_package(&plan.root)?;
+            }
         }
         // Prepare every selected test before any can perform effects, retaining those exact programs.
-        let programs = plan
-            .tests
+        let mut seen = BTreeSet::new();
+        let programs = plans
             .iter()
+            .flat_map(|plan| &plan.tests)
+            .filter(|package| seen.insert(package.id.clone()))
             .map(|package| {
                 let executable =
                     self.check_package(package)?.expect("test packages are executable");
@@ -405,57 +450,71 @@ impl Application {
         Ok(run.run(arguments)?)
     }
 
-    fn build_source(
-        &self, path: &SourceReference, target: BuildTarget, options: BuildOptions, execute: bool,
-        representation: Option<RepresentationStrategy>,
+    fn build_sources(
+        &self, sources: Vec<SourceReference>, target: BuildTarget, options: BuildOptions,
+        execute: bool, representation: Option<RepresentationStrategy>,
     ) -> Result<i32, ApplicationError> {
         if representation.is_some() && matches!(target, BuildTarget::Zir | BuildTarget::WasmSps) {
             return Err(ApplicationError::RepresentationTarget);
         }
-        let analysis = self.selected_analysis(path)?;
-        let executable = self.compiler.executable_program(&analysis)?;
-        let backend = self
-            .compiler
-            .lower_executable(executable)?
-            .with_representation(representation.unwrap_or_default());
-        match target {
-            | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
-            | BuildTarget::Zasm if execute => println!("{}", backend.execute_assembly()?),
-            | BuildTarget::Zasm => println!("{}", backend.render_assembly()),
-            | BuildTarget::Asm => {
-                if options.architecture != TargetArchitecture::X86_64 {
-                    return Err(
-                        NativeError::UnsupportedAmd64Architecture(options.architecture).into()
-                    );
+        if execute && sources.len() != 1 {
+            return Err(ApplicationError::SingleExecution);
+        }
+        let backends = sources
+            .iter()
+            .map(|source| {
+                let analysis = self.selected_analysis(source)?;
+                let executable = self.compiler.executable_program(&analysis)?;
+                Ok(self
+                    .compiler
+                    .lower_executable(executable)?
+                    .with_representation(representation.unwrap_or_default()))
+            })
+            .collect::<Result<Vec<_>, ApplicationError>>()?;
+        for (path, backend) in sources.iter().zip(backends) {
+            match target {
+                | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
+                | BuildTarget::Zasm if execute => println!("{}", backend.execute_assembly()?),
+                | BuildTarget::Zasm => println!("{}", backend.render_assembly()),
+                | BuildTarget::Asm => {
+                    if options.architecture != TargetArchitecture::X86_64 {
+                        return Err(NativeError::UnsupportedAmd64Architecture(
+                            options.architecture,
+                        )
+                        .into());
+                    }
+                    println!("{}", backend.emit_amd64(options.operating_system).assembly);
                 }
-                println!("{}", backend.emit_amd64(options.operating_system).assembly);
-            }
-            | BuildTarget::WasmAm => {
-                if execute {
-                    return Err(NativeError::WasmBuildExecution.into());
+                | BuildTarget::WasmAm => {
+                    if execute {
+                        return Err(NativeError::WasmBuildExecution.into());
+                    }
+                    let artifact = Self::artifact_name(path)?;
+                    let module = backend.emit_wasm_am()?;
+                    let module =
+                        options.write_wasm(&artifact, WasmBackendKind::AbstractMachine, &module)?;
+                    println!("{}", module.path().display());
                 }
-                let artifact = Self::artifact_name(path)?;
-                let module = backend.emit_wasm_am()?;
-                let module =
-                    options.write_wasm(&artifact, WasmBackendKind::AbstractMachine, &module)?;
-                println!("{}", module.path().display());
-            }
-            | BuildTarget::WasmSps => {
-                if execute {
-                    return Err(NativeError::WasmBuildExecution.into());
+                | BuildTarget::WasmSps => {
+                    if execute {
+                        return Err(NativeError::WasmBuildExecution.into());
+                    }
+                    let artifact = Self::artifact_name(path)?;
+                    let module = backend.emit_wasm_sps()?;
+                    let module = options.write_wasm(&artifact, WasmBackendKind::SpsLow, &module)?;
+                    println!("{}", module.path().display());
                 }
-                let artifact = Self::artifact_name(path)?;
-                let module = backend.emit_wasm_sps()?;
-                let module = options.write_wasm(&artifact, WasmBackendKind::SpsLow, &module)?;
-                println!("{}", module.path().display());
-            }
-            | BuildTarget::Exe => {
-                let artifact = Self::artifact_name(path)?;
-                let native = backend.emit_amd64(options.operating_system);
-                let executable =
-                    options.link_amd64(&artifact, &native.assembly, &native.foreign_libraries)?;
-                if execute {
-                    return Ok(Executable::exit_code(executable.run(&[])?));
+                | BuildTarget::Exe => {
+                    let artifact = Self::artifact_name(path)?;
+                    let native = backend.emit_amd64(options.operating_system);
+                    let executable = options.link_amd64(
+                        &artifact,
+                        &native.assembly,
+                        &native.foreign_libraries,
+                    )?;
+                    if execute {
+                        return Ok(Executable::exit_code(executable.run(&[])?));
+                    }
                 }
             }
         }
@@ -476,6 +535,8 @@ impl Application {
 
 #[derive(Debug, Error)]
 enum ApplicationError {
+    #[error("run and build --execute require exactly one selected package")]
+    SingleExecution,
     #[error("cannot read the working directory: {0}")]
     WorkingDirectory(#[from] std::io::Error),
     #[error(transparent)]

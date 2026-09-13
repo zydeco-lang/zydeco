@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 impl Fixture {
     fn discover(&self, rules: &str) -> (BTreeSet<PathBuf>, BTreeSet<PathBuf>) {
-        self.discover_at("packages.zy", rules)
+        self.discover_at("workspace.zy", rules)
     }
 
     fn discover_at(&self, path: &str, rules: &str) -> (BTreeSet<PathBuf>, BTreeSet<PathBuf>) {
@@ -34,7 +34,7 @@ fn absent_rules_excludes_and_literal_files_never_enumerate_directories() {
     assert_eq!(paths, [PathBuf::from("tests/one.zy")].into());
     assert!(queries.is_empty());
     let source = SourceTemplate::parse(
-        fixture.path("packages.zy"),
+        fixture.path("workspace.zy"),
         r#"@[discover(exclude("**"))] ()"#.into(),
     )
     .unwrap();
@@ -51,7 +51,7 @@ fn discovered_paths_retain_the_winning_include_span_for_disk_and_overlays() {
     let fixture = Fixture::new();
     fixture.write("tests/one.zy", "1");
     let text = r#"@[discover(include("tests/*.zy"), exclude("tests/skip.zy"), include("tests/one.zy"))] ()"#;
-    let source = SourceTemplate::parse(fixture.path("packages.zy"), text.into()).unwrap();
+    let source = SourceTemplate::parse(fixture.path("workspace.zy"), text.into()).unwrap();
     let overlays = ["tests/one.zy", "tests/new.zy", "tests/skip.zy"].map(|path| fixture.path(path));
     let paths = PackageDiscovery { source: &source }.paths(overlays.into_iter()).unwrap();
     assert_eq!(paths.len(), 2);
@@ -130,7 +130,7 @@ fn directory_errors_point_to_the_authored_include_pattern() {
     let fixture = Fixture::new();
     fixture.write("file.zy", "1");
     let text = r#"@[discover(include("file.zy/child/*.zy"))] ()"#;
-    let source = SourceTemplate::parse(fixture.path("packages.zy"), text.into()).unwrap();
+    let source = SourceTemplate::parse(fixture.path("workspace.zy"), text.into()).unwrap();
     let error = PackageDiscovery { source: &source }.paths(std::iter::empty()).unwrap_err();
     let SourceLoadError::Package(error) = error else { panic!("discovery error") };
     let PackageError::Discovery { path, site, source } = *error else { panic!("directory error") };

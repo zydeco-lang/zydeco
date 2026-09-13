@@ -644,14 +644,13 @@ Qualification organizes names without implying term projection, a directory, inh
 Names are unique across all declarations in one selected catalog, regardless of role or nesting.
 
 A catalog is the declarations in root files plus their declared discovery matches.
-Before a source operation, the CLI detects `package.zy` and `packages.zy` in the current working directory.
+Before a source operation, the CLI detects `package.zy` and `workspace.zy` in the current working directory.
 Both files contribute when present; neither overrides the other.
+Prefer `package.zy` for a complete package entry point and `workspace.zy` for shared declarations and discovery.
+Both are ordinary source files; `workspace.zy` introduces no additional package kind.
 These are two exact filename checks, with no ancestor search, search beside a source argument,
 or implicit traversal into subdirectories.
-The repeatable option `-p FILE`, also spelled `--pkg FILE` or `--package FILE`,
-adds explicit root files alongside the detected ones.
-Place these options before the command. Relative paths are resolved from the working directory;
-each root's discovery patterns remain relative to that root file.
+Each root's discovery patterns are relative to that root file.
 All selected declarations are indexed before resolving names, so file order does not affect lookup.
 Duplicate names are errors with both declaration locations; repeated selection of the same file is harmless.
 If no roots are selected, the catalog is empty and file paths remain usable.
@@ -680,10 +679,20 @@ or `.zydeco` are files; other spellings are package names.
 Use `./file` for an extensionless file. For example:
 
 ```sh
-zydeco check example/math
-zydeco run example/hello
+zydeco check -p example/math
+zydeco run -p example/hello
 zydeco check library.zy
 ```
+
+The repeatable option `-p NAME`, also spelled `--pkg NAME` or `--package NAME`, selects declared packages by name.
+Place it after `show`, `check`, `test`, `run`, or `build`.
+It accepts exact package names, not file paths or globs, and never adds discovery roots.
+The source commands require either one positional source or one or more package options; the forms cannot be mixed.
+`check`, `test`, and `build` support multiple selected packages, with repeated entries deduplicated
+by source identity in first-selection order.
+`run` and `build --execute` require exactly one distinct entry.
+All requested names resolve before an operation begins; an unknown name is an error, never a file fallback.
+`show` without package options lists all declarations; with them, it lists only the selected entries.
 
 #### Concluding files and exact term selection
 
@@ -727,7 +736,7 @@ Test-side associations let tests join a suite without editing the library.
 A file-root `discover` annotation declares the candidate files explicitly:
 
 ```zydeco
--- packages.zy
+-- workspace.zy
 @[discover(include("library.zy", "main.zy", "tests/**/*.zy"), exclude("tests/fixtures/**"))]
 ()
 ```
@@ -754,7 +763,7 @@ Parent steps elsewhere, absolute patterns, backslashes, `#`, brackets, and brace
 Only `.zy`, `.zyi`, and `.zydeco` files are candidates; missing matches select nothing.
 
 Catalog preparation expands only the roots' rules, never rules in matched files or code dependencies.
-In the CLI, those roots are the conventional files in the working directory plus files supplied with `-p`;
+In the CLI, those roots are `package.zy` and `workspace.zy` in the working directory;
 passing another file to `check`, `test`, `run`, `build`, or `doc` does not make it a discovery root.
 Each include starts at its literal directory prefix; traversal depth is bounded unless it uses `**`.
 Exact filenames require no enumeration, excludes never initiate scans,
@@ -792,8 +801,10 @@ A requested test also selects itself. Every selected target must have the test r
 Planning resolves all catalog test subjects and rejects unknown names;
 unknown relationship kinds on the requested package also fail before execution.
 It does not recursively activate associations on code dependencies or selected tests.
-Targets are deduplicated by source identity and ordered by source/name.
-The requested package and all selected executables are checked before any test runs.
+Within each selected package, targets are deduplicated by source identity and ordered by source/name.
+With repeated `-p` selections, suites are combined in selection order and each test runs once per backend,
+even when several selected packages share it.
+All requested packages and selected executables are checked before any test runs.
 Tests use empty stdin and arguments.
 [Execution selection](#selecting-an-execution-backend) defines backend preparation, ordering, and results.
 

@@ -1998,7 +1998,7 @@ fn standard_library_package_composes_as_an_imported_value_function() {
 
     let root = repository_source("tests/std/minimal.zy");
     let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("packages.zy")]).unwrap();
+        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -2015,7 +2015,7 @@ fn standard_library_package_composes_as_an_imported_value_function() {
 fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
     let root = repository_source("tests/std/comparisons.zy");
     let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("packages.zy")]).unwrap();
+        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -2032,7 +2032,7 @@ fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
 fn standard_library_reifies_foundational_splits_as_abstract_option() {
     let root = repository_source("tests/std/splits.zy");
     let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("packages.zy")]).unwrap();
+        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -2103,7 +2103,7 @@ fn legacy_alias_example_ports_to_uniform_term_composition() {
 fn builtin_surface_selection_replaces_the_old_prelude_usage() {
     let root = repository_source("tests/std/identity.zy");
     let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("packages.zy")]).unwrap();
+        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -2219,7 +2219,7 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
 
     let root = repository_source("tests/std/bool.zy");
     let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("packages.zy")]).unwrap();
+        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -2236,7 +2236,7 @@ fn abstract_bool_package_exports_values_and_an_eliminator() {
 fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
     let root = repository_source("tests/std/option.zy");
     let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("packages.zy")]).unwrap();
+        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();
@@ -2253,7 +2253,7 @@ fn abstract_option_package_exports_a_type_constructor_and_an_eliminator() {
 fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
     let root = repository_source("tests/std/list.zy");
     let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("packages.zy")]).unwrap();
+        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();
     let mut output = Vec::new();

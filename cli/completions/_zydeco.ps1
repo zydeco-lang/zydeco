@@ -21,9 +21,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
 
     $completions = @(switch ($command) {
         'zydeco' {
-            [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Add a package file alongside automatic discovery; repeat for multiple files')
-            [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Add a package file alongside automatic discovery; repeat for multiple files')
-            [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Add a package file alongside automatic discovery; repeat for multiple files')
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -43,6 +40,9 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;show' {
+            [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Select declared packages by name; omit to list all packages')
+            [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Select declared packages by name; omit to list all packages')
+            [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Select declared packages by name; omit to list all packages')
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -132,6 +132,9 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;run' {
+            [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
             [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Execution backend')
             [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Execution backend')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Native runtime sources, used by exe')
@@ -143,12 +146,18 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;check' {
+            [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'zydeco;test' {
+            [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
             [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Execution backend or all; repeat to test multiple backends in order')
             [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Execution backend or all; repeat to test multiple backends in order')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Native runtime sources, used by exe')
@@ -165,6 +174,9 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;build' {
+            [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--pkg', '--pkg', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
+            [CompletionResult]::new('--package', '--package', [CompletionResultType]::ParameterName, 'Select declared packages by name; repeat for multiple packages')
             [CompletionResult]::new('--target-os', '--target-os', [CompletionResultType]::ParameterName, 'Target OS (defaults to host OS)')
             [CompletionResult]::new('--target-arch', '--target-arch', [CompletionResultType]::ParameterName, 'Target architecture (defaults to host architecture)')
             [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Target backend')

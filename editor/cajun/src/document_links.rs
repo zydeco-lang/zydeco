@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn package_links_cover_multiple_roots_and_unloaded_relationship_targets() {
         let directory = tempfile::tempdir().unwrap();
-        let root = directory.path().join("packages.zy");
+        let root = directory.path().join("workspace.zy");
         let first = directory.path().join("one.zy");
         let second = directory.path().join("two.zy");
         let source = r#"(

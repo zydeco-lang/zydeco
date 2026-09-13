@@ -18,9 +18,6 @@ set edit:completion:arg-completer[zydeco] = {|@words|
     }
     var completions = [
         &'zydeco'= {
-            cand -p 'Add a package file alongside automatic discovery; repeat for multiple files'
-            cand --pkg 'Add a package file alongside automatic discovery; repeat for multiple files'
-            cand --package 'Add a package file alongside automatic discovery; repeat for multiple files'
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
@@ -39,6 +36,9 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'zydeco;show'= {
+            cand -p 'Select declared packages by name; omit to list all packages'
+            cand --pkg 'Select declared packages by name; omit to list all packages'
+            cand --package 'Select declared packages by name; omit to list all packages'
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
@@ -113,6 +113,9 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;run'= {
+            cand -p 'Select declared packages by name; repeat for multiple packages'
+            cand --pkg 'Select declared packages by name; repeat for multiple packages'
+            cand --package 'Select declared packages by name; repeat for multiple packages'
             cand -t 'Execution backend'
             cand --target 'Execution backend'
             cand -r 'Native runtime sources, used by exe'
@@ -123,11 +126,17 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;check'= {
+            cand -p 'Select declared packages by name; repeat for multiple packages'
+            cand --pkg 'Select declared packages by name; repeat for multiple packages'
+            cand --package 'Select declared packages by name; repeat for multiple packages'
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
         &'zydeco;test'= {
+            cand -p 'Select declared packages by name; repeat for multiple packages'
+            cand --pkg 'Select declared packages by name; repeat for multiple packages'
+            cand --package 'Select declared packages by name; repeat for multiple packages'
             cand -t 'Execution backend or all; repeat to test multiple backends in order'
             cand --target 'Execution backend or all; repeat to test multiple backends in order'
             cand -r 'Native runtime sources, used by exe'
@@ -142,6 +151,9 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --help 'Print help'
         }
         &'zydeco;build'= {
+            cand -p 'Select declared packages by name; repeat for multiple packages'
+            cand --pkg 'Select declared packages by name; repeat for multiple packages'
+            cand --package 'Select declared packages by name; repeat for multiple packages'
             cand --target-os 'Target OS (defaults to host OS)'
             cand --target-arch 'Target architecture (defaults to host architecture)'
             cand -t 'Target backend'

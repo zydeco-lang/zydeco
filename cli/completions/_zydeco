@@ -15,9 +15,6 @@ _zydeco() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
-'*-p+[Add a package file alongside automatic discovery; repeat for multiple files]:FILE:_files' \
-'*--pkg=[Add a package file alongside automatic discovery; repeat for multiple files]:FILE:_files' \
-'*--package=[Add a package file alongside automatic discovery; repeat for multiple files]:FILE:_files' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
@@ -34,6 +31,9 @@ _zydeco() {
         case $line[1] in
             (show)
 _arguments "${_arguments_options[@]}" : \
+'*-p+[Select declared packages by name; omit to list all packages]:NAME:_default' \
+'*--pkg=[Select declared packages by name; omit to list all packages]:NAME:_default' \
+'*--package=[Select declared packages by name; omit to list all packages]:NAME:_default' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
@@ -159,6 +159,9 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (run)
 _arguments "${_arguments_options[@]}" : \
+'*-p+[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--pkg=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '-t+[Execution backend]:TARGET:(interpreter exe wasm-am wasm-sps)' \
 '--target=[Execution backend]:TARGET:(interpreter exe wasm-am wasm-sps)' \
 '-r+[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
@@ -167,20 +170,26 @@ _arguments "${_arguments_options[@]}" : \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':file -- Package name, or source path (use ./ for an extensionless file):_default' \
+'::file -- Package name, or source path (use ./ for an extensionless file):_default' \
 '*::args -- Environmental arguments to pass to the program:_default' \
 && ret=0
 ;;
 (check)
 _arguments "${_arguments_options[@]}" : \
+'*-p+[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--pkg=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':file -- Package name, or source path (use ./ for an extensionless file):_default' \
+'::file -- Package name, or source path (use ./ for an extensionless file):_default' \
 && ret=0
 ;;
 (test)
 _arguments "${_arguments_options[@]}" : \
+'*-p+[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--pkg=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '*-t+[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-am wasm-sps all)' \
 '*--target=[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-am wasm-sps all)' \
 '-r+[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
@@ -188,7 +197,7 @@ _arguments "${_arguments_options[@]}" : \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':file -- Package name, or source path (use ./ for an extensionless file):_default' \
+'::file -- Package name, or source path (use ./ for an extensionless file):_default' \
 && ret=0
 ;;
 (repl)
@@ -200,6 +209,9 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (build)
 _arguments "${_arguments_options[@]}" : \
+'*-p+[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--pkg=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
+'*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '--target-os=[Target OS (defaults to host OS)]:TARGET_OS:(linux macos)' \
 '--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:(x86-64 aarch64)' \
 '-t+[Target backend]:TARGET:(zir zasm asm wasm-am wasm-sps exe)' \
@@ -218,7 +230,7 @@ _arguments "${_arguments_options[@]}" : \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':file -- Package name, or source path (use ./ for an extensionless file):_default' \
+'::file -- Package name, or source path (use ./ for an extensionless file):_default' \
 && ret=0
 ;;
 (help)

@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
-use zydeco_surface::metadata::SourceReference;
+use zydeco_surface::metadata::{PackageName, SourceReference};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum BuildTarget {
@@ -112,16 +112,12 @@ impl TargetOs {
 
 #[derive(Parser)]
 #[command(version, about, long_about = None,
-    after_help = "Packages are loaded from package.zy and packages.zy in the working directory.")]
+    after_help = "Packages are loaded from package.zy and workspace.zy in the working directory.")]
 pub struct Cli {
     /// Re-validate the finished typed arena after every successful check,
     /// reporting internal compiler errors (debugging aid)
     #[arg(long, global = true)]
     pub lint_types: bool,
-
-    /// Add a package file alongside automatic discovery; repeat for multiple files
-    #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "FILE")]
-    pub packages: Vec<PathBuf>,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -130,7 +126,11 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// List the project's packages and relationships without checking or executing code
-    Show,
+    Show {
+        /// Select declared packages by name; omit to list all packages
+        #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "NAME")]
+        packages: Vec<PackageName>,
+    },
     /// List optional compiler passes or explain a selected high-SPS plan
     Passes {
         /// Explain `default`, `none`, or a comma-separated list such as normalize,normalize
@@ -156,9 +156,8 @@ pub enum Commands {
     },
     /// Run a zydeco program
     Run {
-        /// Package name, or source path (use ./ for an extensionless file)
-        #[arg(value_name = "SOURCE")]
-        file: SourceReference,
+        #[command(flatten)]
+        selection: SourceSelection,
         /// Execution backend
         #[arg(short, long, default_value = "interpreter")]
         target: ExecutionTarget,
@@ -173,15 +172,13 @@ pub enum Commands {
     },
     /// Check a source package and its code dependencies, including its declared executable role
     Check {
-        /// Package name, or source path (use ./ for an extensionless file)
-        #[arg(value_name = "SOURCE")]
-        file: SourceReference,
+        #[command(flatten)]
+        selection: SourceSelection,
     },
     /// Run a test package or the selected package's direct test companions with empty stdin
     Test {
-        /// Package name, or source path (use ./ for an extensionless file)
-        #[arg(value_name = "SOURCE")]
-        file: SourceReference,
+        #[command(flatten)]
+        selection: SourceSelection,
         /// Execution backend or all; repeat to test multiple backends in order
         #[arg(short, long = "target", default_value = "interpreter", value_parser = TestTarget::parser())]
         targets: Vec<TestTarget>,
@@ -192,9 +189,8 @@ pub enum Commands {
     Repl,
     /// Build a Zydeco program for the selected target
     Build {
-        /// Package name, or source path (use ./ for an extensionless file)
-        #[arg(value_name = "SOURCE")]
-        file: SourceReference,
+        #[command(flatten)]
+        selection: SourceSelection,
         /// Target OS (defaults to host OS)
         #[arg(long)]
         target_os: Option<TargetOs>,
@@ -219,6 +215,18 @@ pub enum Commands {
         #[arg(short = 'x', long, default_value_t = false)]
         execute: bool,
     },
+}
+
+/// Select an existing package or a standalone source; never add declaration files.
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+pub struct SourceSelection {
+    /// Package name, or source path (use ./ for an extensionless file)
+    #[arg(value_name = "SOURCE")]
+    pub file: Option<SourceReference>,
+    /// Select declared packages by name; repeat for multiple packages
+    #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "NAME")]
+    pub packages: Vec<PackageName>,
 }
 
 /// External text is parsed into phase-owned plan types before source loading.

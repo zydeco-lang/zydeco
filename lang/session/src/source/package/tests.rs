@@ -35,7 +35,7 @@ impl Fixture {
 fn test_side_associations_work_locally_without_discovery_or_forward_edges() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"(
         #lib = @[package(library, name(lib))] 1,
         #other = @[package(library, name(other))] 2,
@@ -44,9 +44,9 @@ fn test_side_associations_work_locally_without_discovery_or_forward_edges() {
     )"#,
     );
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
     for name in ["lib", "other"] {
-        let plan = session.package_tests(&fixture.named("packages.zy", name), &catalog).unwrap();
+        let plan = session.package_tests(&fixture.named("workspace.zy", name), &catalog).unwrap();
         assert_eq!(plan.tests.len(), 1);
         assert_eq!(plan.tests[0].id.name.as_ref().unwrap().to_string(), "smoke");
         assert!(
@@ -58,7 +58,7 @@ fn test_side_associations_work_locally_without_discovery_or_forward_edges() {
                 .is_some()
         );
     }
-    let plain = session.package_tests(&fixture.named("packages.zy", "plain"), &catalog).unwrap();
+    let plain = session.package_tests(&fixture.named("workspace.zy", "plain"), &catalog).unwrap();
     assert_eq!(plain.tests.len(), 1, "plain tests remain directly selectable");
     assert_eq!(plain.tests[0].id, plain.root.id);
 }
@@ -67,7 +67,7 @@ fn test_side_associations_work_locally_without_discovery_or_forward_edges() {
 fn explicit_discovery_finds_reverse_tests_and_deduplicates_forward_edges() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"@[discover(include("tests/**/*.zy"), exclude("tests/fixtures/**"))]
         (#lib = @[package(library, test("tests/smoke.zy"), name(lib))] @(import("lib.zy")))"#,
     );
@@ -78,8 +78,8 @@ fn explicit_discovery_finds_reverse_tests_and_deduplicates_forward_edges() {
     fixture.write("tests/unrelated.zy", r#"@[package(test(of("../missing.zy")))] absent"#);
     fixture.write("tests/fixtures/broken.zy", "(");
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
-    let plan = session.package_tests(&fixture.named("packages.zy", "lib"), &catalog).unwrap();
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
+    let plan = session.package_tests(&fixture.named("workspace.zy", "lib"), &catalog).unwrap();
     assert_eq!(plan.tests.len(), 2);
     assert!(plan.tests.iter().all(|package| package.id.name.is_none()));
     for test in plan.tests {
@@ -92,7 +92,7 @@ fn explicit_discovery_finds_reverse_tests_and_deduplicates_forward_edges() {
                 .is_some()
         );
     }
-    assert_eq!(session.package_catalog(&[fixture.path("packages.zy")]).unwrap().packages.len(), 5);
+    assert_eq!(session.package_catalog(&[fixture.path("workspace.zy")]).unwrap().packages.len(), 5);
     assert!(
         session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.is_empty(),
         "an implementation does not inherit its registration's scope or identity"
@@ -246,7 +246,7 @@ fn sibling_test_associations_share_canonical_ids_and_include_editor_overlays() {
 fn selected_roots_only_report_their_own_documentation_and_warnings() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"(
         #one = @[package(library, name(one))] (
             --| one documentation
@@ -260,10 +260,10 @@ fn selected_roots_only_report_their_own_documentation_and_warnings() {
             4))"#,
     );
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
     for name in ["one", "two"] {
         let analysis = session
-            .analyze_package(&fixture.named("packages.zy", name), catalog.bindings.clone())
+            .analyze_package(&fixture.named("workspace.zy", name), catalog.bindings.clone())
             .unwrap();
         let graph = analysis.graph();
         let documentation = graph.documentation();
@@ -281,7 +281,7 @@ fn selected_roots_only_report_their_own_documentation_and_warnings() {
 #[test]
 fn concluding_files_register_imports_without_loading_implementation_or_relationship_targets() {
     let fixture = Fixture::new();
-    let path = fixture.write("packages.zy", r#"(
+    let path = fixture.write("workspace.zy", r#"(
         #library = @[package(library, test(smoke), documentation("docs.zy"), name(library))] @(import("math.zy")),
         #binary = @[package(binary, name(binary))] @(import("tool.zy"))
     )"#);
@@ -334,17 +334,17 @@ fn any_file_is_a_library_and_root_annotations_supply_roles_without_names() {
 fn package_selection_ignores_surrounding_terms_and_unrelated_imports() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"let unused = @(import("missing.zy")) in
         (#one = @[package(library, name(one))] 1, #two = @[package(library, name(two))] "two", #broken = unknown)"#,
     );
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
     let one = session
-        .analyze_package(&fixture.named("packages.zy", "one"), catalog.bindings.clone())
+        .analyze_package(&fixture.named("workspace.zy", "one"), catalog.bindings.clone())
         .unwrap();
     let two = session
-        .analyze_package(&fixture.named("packages.zy", "two"), catalog.bindings.clone())
+        .analyze_package(&fixture.named("workspace.zy", "two"), catalog.bindings.clone())
         .unwrap();
     assert!(one.outcome().root().is_some() && two.outcome().root().is_some());
     assert_eq!(one.graph().imports.len(), 0);
@@ -359,21 +359,21 @@ fn package_selection_ignores_surrounding_terms_and_unrelated_imports() {
     ));
     assert!(session.checked_program(&one).is_some(), "rematerialization retains the selection");
     assert!(session.checked_program(&two).is_some());
-    assert!(session.analyze(fixture.path("packages.zy")).is_err());
+    assert!(session.analyze(fixture.path("workspace.zy")).is_err());
 }
 
 #[test]
 fn annotations_preserve_local_scope_but_separate_entries_require_self_contained_terms() {
     let fixture = Fixture::new();
     let source = "let outer = 1 in (#open = @[package(library, name(open))] outer)";
-    let path = fixture.write("packages.zy", source);
+    let path = fixture.write("workspace.zy", source);
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
     let local = session.analyze(&path).unwrap();
     assert!(local.outcome().root().is_some());
     assert_eq!(local.graph().imports.len(), 0, "annotations do not create source boundaries");
     let error = session
-        .analyze_package(&fixture.named("packages.zy", "open"), catalog.bindings.clone())
+        .analyze_package(&fixture.named("workspace.zy", "open"), catalog.bindings.clone())
         .unwrap_err();
     assert!(
         matches!(&error, AnalysisError::Resolve { error, .. } if matches!(&**error, ResolveError::UnboundVar(name) if name.inner.0 == "outer"))
@@ -387,12 +387,12 @@ fn annotations_preserve_local_scope_but_separate_entries_require_self_contained_
 fn repeated_named_imports_share_roots_and_file_snapshot_inputs() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         "(#one = @[package(library, name(one))] 1, #two = @[package(library, name(two))] 2)",
     );
     fixture.write("main.zy", r#"(@(import(one)), @(import(one)), @(import(two)))"#);
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
     let analysis =
         session.analyze_package(&fixture.id("main.zy"), catalog.bindings.clone()).unwrap();
     assert!(analysis.outcome().root().is_some());
@@ -409,10 +409,10 @@ fn file_packages_retain_companions_and_registration_imports_share_the_file_root(
     let fixture = Fixture::new();
     fixture.write("lib.zy", "@[package(library)] 1");
     fixture.write("lib.zyi", "@(intrinsic(i64))");
-    fixture.write("packages.zy", r#"(#lib = @[package(library, name(lib))] @(import("lib.zy")))"#);
+    fixture.write("workspace.zy", r#"(#lib = @[package(library, name(lib))] @(import("lib.zy")))"#);
     fixture.write("main.zy", r#"(@(import(lib)), @(import("lib.zy")))"#);
     let mut session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
     let analysis =
         session.analyze_package(&fixture.id("main.zy"), catalog.bindings.clone()).unwrap();
     assert!(analysis.outcome().root().is_some());
@@ -437,14 +437,14 @@ fn file_packages_retain_companions_and_registration_imports_share_the_file_root(
 fn local_annotated_terms_remain_local_and_only_explicit_imports_create_edges() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"(#lib = @[doc] (@[package(library, name(lib))] 1),
         #again = @(import(lib)))"#,
     );
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
     let analysis =
-        session.analyze_package(&fixture.id("packages.zy"), catalog.bindings.clone()).unwrap();
+        session.analyze_package(&fixture.id("workspace.zy"), catalog.bindings.clone()).unwrap();
     assert!(analysis.outcome().root().is_some());
     let graph = analysis.graph();
     let edges = &graph.sources[&graph.root].imports;
@@ -458,13 +458,13 @@ fn local_annotated_terms_remain_local_and_only_explicit_imports_create_edges() {
 fn explicit_parameters_and_nested_packages_are_ordinary_code_components() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"@[package(library)]
         (#inner = @[package(library, name(inner))] val (x : @(intrinsic(i64))) => x)"#,
     );
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
-    let package = session.package(&fixture.id("packages.zy")).unwrap();
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
+    let package = session.package(&fixture.id("workspace.zy")).unwrap();
     assert!(package.imports.is_empty());
     assert!(package.relations.is_empty());
     let analysis = session.analyze_package(&package.id, catalog.bindings.clone()).unwrap();
@@ -472,7 +472,7 @@ fn explicit_parameters_and_nested_packages_are_ordinary_code_components() {
     assert_eq!(analysis.graph().sources.len(), 1);
     assert!(
         session
-            .analyze_package(&fixture.named("packages.zy", "inner"), catalog.bindings.clone())
+            .analyze_package(&fixture.named("workspace.zy", "inner"), catalog.bindings.clone())
             .unwrap()
             .outcome()
             .root()
@@ -485,7 +485,7 @@ fn errors_in_multiple_selected_packages_keep_original_file_offsets() {
     let fixture = Fixture::new();
     let source =
         "(#one = @[package(library, name(one))] 1, #bad = @[package(library, name(bad))] absent)";
-    let path = fixture.write("packages.zy", source);
+    let path = fixture.write("workspace.zy", source);
     let error = CompilerSession::default().analyze(&path).unwrap_err();
     let site = error.diagnostic_site().unwrap();
     assert_eq!(site.path(), path.canonicalize().unwrap());
@@ -529,7 +529,7 @@ fn test_associations_and_returning_code_dependencies_are_not_code_cycles() {
 fn concluding_files_can_register_unannotated_implementations_and_be_split() {
     let fixture = Fixture::new();
     fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"(#lib = @[package(library, test(smoke), name(lib))] @(import("lib.zy")),
         #missing = @[package(binary, name(missing))] @(import("missing.zy")))"#,
     );
@@ -538,8 +538,8 @@ fn concluding_files_can_register_unannotated_implementations_and_be_split() {
     fixture.write("lib.zy", "1");
     fixture.write("tests.zy", r#"@(import(lib))"#);
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy", "testing.zy"]);
-    let id = fixture.named("packages.zy", "lib");
+    let catalog = fixture.catalog(&session, &["workspace.zy", "testing.zy"]);
+    let id = fixture.named("workspace.zy", "lib");
     assert!(
         session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.is_empty(),
         "registration does not mutate the imported file"
@@ -557,13 +557,13 @@ fn concluding_files_can_register_unannotated_implementations_and_be_split() {
 fn same_file_test_associations_work_but_real_code_cycles_are_rejected() {
     let fixture = Fixture::new();
     let path = fixture.write(
-        "packages.zy",
+        "workspace.zy",
         r#"(#lib = @[package(library, test(smoke), name(lib))] 1,
         #smoke = @[package(test, name(smoke))] @(import(lib)))"#,
     );
     let mut session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy"]);
-    let plan = session.package_tests(&fixture.named("packages.zy", "lib"), &catalog).unwrap();
+    let catalog = fixture.catalog(&session, &["workspace.zy"]);
+    let plan = session.package_tests(&fixture.named("workspace.zy", "lib"), &catalog).unwrap();
     assert!(
         session
             .analyze_package(&plan.tests[0].id, catalog.bindings.clone())
@@ -581,7 +581,7 @@ fn same_file_test_associations_work_but_real_code_cycles_are_rejected() {
         )
         .unwrap();
     let error = session
-        .analyze_package(&fixture.named("packages.zy", "lib"), catalog.bindings.clone())
+        .analyze_package(&fixture.named("workspace.zy", "lib"), catalog.bindings.clone())
         .unwrap_err();
     assert!(
         matches!(error, AnalysisError::Source { error } if matches!(&*error, SourceLoadError::Cycle(cycle) if cycle.steps.len() == 2))
@@ -659,7 +659,7 @@ fn test_targets_require_test_role_while_ordinary_imports_accept_any_role() {
 #[test]
 fn selection_and_planning_track_overlays_and_removed_registrations() {
     let fixture = Fixture::new();
-    fixture.write("packages.zy", r#"(#lib = @[package(library, test(old), name(lib))] 1)"#);
+    fixture.write("workspace.zy", r#"(#lib = @[package(library, test(old), name(lib))] 1)"#);
     let mut session = CompilerSession::default();
     session
         .set_overlay(
@@ -667,8 +667,8 @@ fn selection_and_planning_track_overlays_and_removed_registrations() {
             "(#old = @[package(test, name(old))] (), #new = @[package(test, name(new))] ())".into(),
         )
         .unwrap();
-    let catalog = fixture.catalog(&session, &["packages.zy", "tests.zy"]);
-    let id = fixture.named("packages.zy", "lib");
+    let catalog = fixture.catalog(&session, &["workspace.zy", "tests.zy"]);
+    let id = fixture.named("workspace.zy", "lib");
     let first = session.analyze_package(&id, catalog.bindings.clone()).unwrap();
     assert!(Arc::ptr_eq(&first, &session.analyze_package(&id, catalog.bindings.clone()).unwrap()));
     assert_eq!(
@@ -755,11 +755,11 @@ fn invalid_source_paths_and_syntax_are_reported_without_panicking() {
 #[test]
 fn symlinked_sources_share_canonical_identity() {
     let fixture = Fixture::new();
-    let source = fixture.write("packages.zy", "(#lib = @[package(library, name(lib))] 1)");
+    let source = fixture.write("workspace.zy", "(#lib = @[package(library, name(lib))] 1)");
     std::os::unix::fs::symlink(source, fixture.path("alias.zy")).unwrap();
     fixture.write("main.zy", r#"(@(import(lib)), @(import(lib)))"#);
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["packages.zy", "alias.zy"]);
+    let catalog = fixture.catalog(&session, &["workspace.zy", "alias.zy"]);
     let analysis =
         session.analyze_package(&fixture.id("main.zy"), catalog.bindings.clone()).unwrap();
     let graph = analysis.graph();
@@ -770,7 +770,7 @@ fn symlinked_sources_share_canonical_identity() {
 #[test]
 fn missing_named_import_reports_the_consumer_site() {
     let fixture = Fixture::new();
-    fixture.write("packages.zy", "(#one = @[package(library, name(one))] 1)");
+    fixture.write("workspace.zy", "(#one = @[package(library, name(one))] 1)");
     let source = r#"@(import(missing))"#;
     let path = fixture.write("main.zy", source);
     let error = CompilerSession::default().analyze(&path).unwrap_err();

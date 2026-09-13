@@ -44,10 +44,6 @@ It requires a separate design decision before adoption.
 environment and stack dependencies, explicit arena operations, and the obligations for safe region retirement.
 It is a design draft; the current compiler does not implement these rules.
 
-[Scoped source packages and remote resolution](proposals/source-package-resolution.md) proposes named package scopes,
-per-project Git dependencies, lock and cache policy, and the counterexamples that constrain a minimal implementation.
-It is a design draft; current source-package behavior remains defined by the language reference.
-
 [Reusable folders and traversal composition](proposals/traversals.md) collects the remaining migration of desugaring,
 resolution, and typed rebuilding onto shared structural operations.
 The compiler reference defines the implemented [scoped visitor](references/compiler.md#scoped-structural-traversal)

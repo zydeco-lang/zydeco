@@ -102,7 +102,7 @@ Use `name(example/smoke)` if the test also needs a public name.
 Names are independent of term fields and file layout.
 The [language reference](docs/references/language.md#source-packages) owns the rules.
 
-Run commands from the project root, where the CLI detects `package.zy` and `packages.zy`.
+Run commands from the project root, where the CLI detects `package.zy` and `workspace.zy`.
 Keep discovery in these top-level files; implementation files use ordinary imports,
 and tests own their `of(...)` associations.
 A primary library can use `package.zy` as both its entry point and discovery boundary:
@@ -113,26 +113,29 @@ A primary library can use `package.zy` as both its entry point and discovery bou
 @(import("src/lib.zy"))
 ```
 
-For a collection without a main entry, use `packages.zy` with a discovery annotation and `()` as its body.
+For a collection without a main entry, use `workspace.zy` with a discovery annotation and `()` as its body.
 Reserve discovered directories for entry files and keep helpers or fixtures outside those patterns.
 The [source-package rules](docs/references/language.md#names-and-project-catalogs) specify the discovery boundary.
 
-From this repository's root, its [catalog](packages.zy) is selected automatically:
+From this repository's root, [workspace.zy](workspace.zy) is selected automatically:
 
 ```sh
 zydeco show
-zydeco check std
-zydeco test std
-zydeco test std -t all
+zydeco check -p std
+zydeco test -p std
+zydeco test -p std -t all
 zydeco check lib/tests/std/bool.zy
 ```
 
-Use repeatable `-p FILE` options to include additional package files, with `--pkg` and `--package` as long spellings:
+Select declared packages with repeatable `-p NAME` options, also spelled `--pkg` or `--package`:
 
 ```sh
-zydeco -p ../shared/package.zy check example/math
+zydeco check -p std -p std/memory
 ```
 
+Use either a positional source or package options, not both.
+`check`, `test`, and `build` accept multiple packages; `run` and `build --execute` select one.
+The options select existing names, never declaration files; use top-level `discover` to register more files.
 Preparation indexes names once; imports and compilation reuse that catalog without scanning.
 `show` lists declarations and relationships without checking their code.
 `test` accepts the same targets and runtime directory as `run`, with repeatable `-t` options or `-t all`.
@@ -142,7 +145,7 @@ It uses empty stdin and arguments; each test/backend result is labeled, and nonz
 See the [std guide](lib/std/README.md#source-packages-and-tests) for fixture-dependent and multi-backend coverage.
 
 Quoted imports such as `@(import("library.zy"))` and CLI paths still select complete files without a catalog.
-For the [small file-based example](docs/examples/packages/packages.zy), run from its root:
+For the [small file-based example](docs/examples/packages/workspace.zy), run from its root:
 
 ```sh
 cd docs/examples/packages

@@ -79,7 +79,7 @@ Builtin is `std/builtin`; topic entries are `std/data`, `std/text`, `std/numeric
 These names identify source terms; fields and factory applications remain ordinary language structure.
 The [source-package rules](../../docs/references/language.md#source-packages) govern selection and relationships.
 
-The [repository catalog](../../packages.zy) explicitly includes entry files and the std test tree.
+The repository's [workspace.zy](../../workspace.zy) explicitly includes entry files and the std test tree.
 From the repository root:
 
 ```sh

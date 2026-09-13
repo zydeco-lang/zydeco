@@ -86,7 +86,7 @@ fn documentation_worker_limits_and_failures_cannot_count_as_success() {
 }
 
 #[test]
-fn documentation_cli_and_workers_share_detected_and_explicit_package_names() {
+fn documentation_cli_and_workers_share_detected_and_workspace_package_names() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("api.zy");
     let library = directory.path().join("package.zy");
@@ -101,12 +101,19 @@ fn documentation_cli_and_workers_share_detected_and_explicit_package_names() {
         ),
     )
     .unwrap();
-    let outside = tempfile::tempdir().unwrap();
     for (scoped, explicit) in [(true, false), (false, true), (false, false)] {
+        let outside = tempfile::tempdir().unwrap();
         let mut command = Command::new(env!("CARGO_BIN_EXE_zydeco"));
         command.current_dir(if scoped { directory.path() } else { outside.path() });
         if explicit {
-            command.arg("--pkg").arg(&library);
+            std::fs::write(
+                outside.path().join("workspace.zy"),
+                format!(
+                    "@[package(library, name(example/value))] @(import({:?}))",
+                    library.to_str().unwrap()
+                ),
+            )
+            .unwrap();
         }
         let output = command.args(["doc", "check"]).arg(&root).output().unwrap();
         assert_eq!(

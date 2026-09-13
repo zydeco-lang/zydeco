@@ -131,24 +131,12 @@ _zydeco() {
 
     case "${cmd}" in
         zydeco)
-            opts="-p -h -V --lint-types --package --pkg --help --version show passes __doc-example-worker doc fmt run check test repl build help"
+            opts="-h -V --lint-types --help --version show passes __doc-example-worker doc fmt run check test repl build help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --pkg)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --package)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -p)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -171,12 +159,24 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-t -b -r -x -h --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --execute --lint-types --help"
+            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --execute --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --pkg)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --package)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -p)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --target-os)
                     COMPREPLY=($(compgen -W "linux macos" -- "${cur}"))
                     return 0
@@ -225,12 +225,24 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__check)
-            opts="-h --lint-types --help"
+            opts="-p -h --package --pkg --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --pkg)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --package)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -p)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -683,12 +695,24 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__run)
-            opts="-t -r -h --target --runtime-dir --dry --lint-types --help"
+            opts="-p -t -r -h --package --pkg --target --runtime-dir --dry --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --pkg)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --package)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -p)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --target)
                     COMPREPLY=($(compgen -W "interpreter exe wasm-am wasm-sps" -- "${cur}"))
                     return 0
@@ -713,12 +737,24 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__show)
-            opts="-h --lint-types --help"
+            opts="-p -h --package --pkg --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --pkg)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --package)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -p)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -727,12 +763,24 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__test)
-            opts="-t -r -h --target --runtime-dir --lint-types --help"
+            opts="-p -t -r -h --package --pkg --target --runtime-dir --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --pkg)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --package)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -p)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --target)
                     COMPREPLY=($(compgen -W "interpreter exe wasm-am wasm-sps all" -- "${cur}"))
                     return 0

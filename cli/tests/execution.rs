@@ -237,18 +237,22 @@ fn test_preflight_failures_leave_filesystem_effects_unexecuted() {
     for (second, diagnostic) in [("42", "classified as a value"), (valid.as_str(), "cannot start")]
     {
         fixture.suite(&Fixture::file_effect(), second);
-        let output = fixture
-            .command(&["test", "suite", "-t", "interpreter", "-t", "wasm-sps"])
-            .env("NODE", fixture.directory.path().join("missing-node"))
-            .output()
-            .unwrap();
-        assert!(Fixture::stdout(&output, 1).is_empty());
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains(diagnostic), "{stderr}");
-        assert!(!marker.exists(), "a test executed before preparation completed");
+        for selection in [&["suite"][..], &["-p", "a", "-p", "b"]] {
+            let output = fixture
+                .command(&["test"])
+                .args(selection)
+                .args(["-t", "interpreter", "-t", "wasm-sps"])
+                .env("NODE", fixture.directory.path().join("missing-node"))
+                .output()
+                .unwrap();
+            assert!(Fixture::stdout(&output, 1).is_empty());
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains(diagnostic), "{stderr}");
+            assert!(!marker.exists(), "a test executed before preparation completed");
+        }
     }
 
-    let output = fixture.command(&["test", "suite"]).output().unwrap();
+    let output = fixture.command(&["test", "-p", "a", "-p", "b"]).output().unwrap();
     assert!(Fixture::stdout(&output, 0).contains("2 passed; 0 failed."));
     assert!(marker.is_file(), "the successful control must actually perform the effect");
 }

@@ -64,7 +64,7 @@ pub mod utils {
     impl SourceProgram {
         fn compiler() -> CommandCompiler {
             CommandCompiler::default()
-                .with_packages(&[Self::resolve("../packages.zy".into())])
+                .with_packages(&[Self::resolve("../workspace.zy".into())])
                 .expect("repository package catalog")
         }
 
