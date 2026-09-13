@@ -147,7 +147,7 @@ impl crate::Cajun {
             if session.revision() != revision {
                 return Ok(None);
             }
-            match example.request(&session.compiler) {
+            match example.request(&session.compiler, &Default::default()) {
                 | Ok(request) => request,
                 | Err(error) => {
                     return Ok(Some(DocumentationExampleVerification::worker_failure(

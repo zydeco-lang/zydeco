@@ -64,7 +64,7 @@ impl Fixture {
 #[test]
 fn package_import_and_relationship_paths_complete_but_names_do_not() {
     for marked in [
-        r#"@(import("lib¦#main"))"#,
+        r#"@(import("lib¦"))"#,
         r#"@[package(library, test("lib¦"))] ()"#,
         r#"@[package(library, documentation("lib¦"))] ()"#,
         r#"@[package(test(of("lib¦")))] ()"#,
@@ -75,11 +75,12 @@ fn package_import_and_relationship_paths_complete_but_names_do_not() {
         assert_eq!(fixture.labels(), ["library.zy"], "{marked}");
     }
     for marked in [
-        r#"@(import("package.zy#lib¦"))"#,
+        r#"@(import(package/lib¦))"#,
+        r#"@(import("lib¦#main"))"#,
         r#"@[package("lib¦")] ()"#,
-        r#"@[package(library, name("lib¦"))] ()"#,
-        r#"@[package(library, test("tests.zy#lib¦"))] ()"#,
-        r#"@[package(test(of("tests.zy#lib¦")))] ()"#,
+        r#"@[package(library, name(lib¦))] ()"#,
+        r#"@[package(library, test(tests/lib¦))] ()"#,
+        r#"@[package(test(of(tests/lib¦)))] ()"#,
         r#"@[discover(include("lib¦"))] ()"#,
         r#"@[discover(exclude("lib¦"))] ()"#,
     ] {

@@ -1,6 +1,7 @@
+@[package(test(of(std)))]
 begin
-  let make_std = @(import("../../std/std.zy")) that
-  param (/Ret; /Int64; /String; builtin) : @(import("../../std/builtin.zy")) that
+  let make_std = @(import(std)) that
+  param (/Ret; /Int64; /String; builtin) : @(import(std/builtin)) that
   let (/option; /int64; /string; /process) = builtin |> make_std in
   do present <- ! string/split_once "left:right" ':';
   do present_status <- ! option/fold

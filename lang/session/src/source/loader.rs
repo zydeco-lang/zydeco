@@ -27,6 +27,7 @@ pub(crate) struct SourceGraphLoader<Provider> {
     seen: HashMap<(PathBuf, t::TermId), SourceId>,
     provider: Provider,
     templates: HashMap<PathBuf, Arc<SourceTemplate>>,
+    bindings: Arc<super::PackageBindings>,
 }
 
 impl SourceTemplate {
@@ -87,7 +88,9 @@ impl SourceTemplate {
 impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
     pub(crate) fn load_root(
         mut self, root: &Path, package: Option<&super::PackageName>,
+        bindings: Arc<super::PackageBindings>,
     ) -> Result<SourceGraph, SourceLoadError> {
+        self.bindings = bindings;
         let canonical = SourcePath::identity(root).map_err(|source| SourceLoadError::RootPath {
             path: root.to_path_buf(),
             source: source.into(),
@@ -114,6 +117,7 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
             seen: HashMap::new(),
             provider,
             templates: HashMap::new(),
+            bindings: Arc::default(),
         }
     }
 
@@ -180,40 +184,38 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
     ) -> Result<SourceImportId, SourceLoadError> {
         let parent = importer_path.parent().expect("a source file has a parent");
         let target = site.directive.target;
-        let (requested, package) = match &target {
-            | ImportTarget::Input(number) => (number.overlay_path(parent), None),
-            | ImportTarget::Source(reference) => {
-                (parent.join(&reference.path), reference.name.as_ref())
-            }
-        };
         let imported = (|| {
-            let canonical = SourcePath::identity(&requested).map_err(|source| {
-                SourceLoadError::Read { path: requested.clone(), source: source.into() }
-            })?;
-            self.load_canonical(canonical, package)
+            let id = match &target {
+                | ImportTarget::Input(number) => {
+                    super::PackageId { path: number.overlay_path(parent), name: None }
+                }
+                | ImportTarget::Source(reference) => self.bindings.resolve(reference, parent)?,
+            };
+            self.load_canonical(id.path, id.name.as_ref())
         })()
         .map_err(|error| match (&target, error) {
-            | (ImportTarget::Source(reference), error) if reference.name.is_some() => {
-                SourceLoadError::PackageImport {
-                    importer: importer_path.to_path_buf(),
-                    span: site.directive.span,
-                    error: Box::new(error),
-                }
-            }
-            | (ImportTarget::Source(_), SourceLoadError::Read { source, .. }) => {
-                SourceLoadError::ImportPath {
-                    importer: importer_path.to_path_buf(),
-                    requested,
-                    span: Box::new(site.directive.span),
-                    source,
-                }
-            }
+            | (
+                ImportTarget::Source(super::SourceReference::Path(path)),
+                SourceLoadError::Read { source, .. },
+            ) => SourceLoadError::ImportPath {
+                importer: importer_path.to_path_buf(),
+                requested: parent.join(path),
+                span: Box::new(site.directive.span),
+                source,
+            },
             | (ImportTarget::Input(input), SourceLoadError::Read { source, .. }) => {
                 SourceLoadError::ImportInput {
                     importer: importer_path.to_path_buf(),
                     input: *input,
                     span: Box::new(site.directive.span),
                     source,
+                }
+            }
+            | (ImportTarget::Source(super::SourceReference::Package(_)), error) => {
+                SourceLoadError::PackageImport {
+                    importer: importer_path.to_path_buf(),
+                    span: site.directive.span,
+                    error: Box::new(error),
                 }
             }
             | (_, error) => error,

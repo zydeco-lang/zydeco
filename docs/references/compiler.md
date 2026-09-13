@@ -334,24 +334,31 @@ with explicit source and signature boundaries.
 Dependency cycles are diagnosed before checking.
 The independence of provider inference and source scope is specified in [L12](language.md#12-sources-imports-and-entry).
 
-[Package selection](../../lang/session/src/source/package.rs) uses one source-reference type with a file path
-and an optional `#name` selection; the ordinary entry point is the complete file.
-Registrations take explicit names from meta annotations; file roots need no name.
-The surface decoder indexes annotations by name and retains their term identity, role, and relationships.
-Inspection shares the parsed containing file and extracts each selected root's direct code edges;
-it does not construct a separate source template or compiler graph per registration.
-The loader keys checked roots by canonical path and textual term and follows ordinary imports only.
-Local package annotations are ordinary metadata; they neither partition the source nor create import edges.
-Each graph node stores its selected term ID and shares the containing file's parsed template.
-Only that term's code is assembled; documentation and warnings are filtered to its source range.
-The source queries retain the selected package name through analysis and arena rematerialization.
-Several roots can share a file; `SourceGraph::source_inputs` and the merged span map deduplicate file inputs.
-Typed relationships are stored separately from code edges.
-Test planning combines forward associations and reverse `of` associations within the containing file's scope.
-The surface layer decodes ordered include/exclude globs; session package operations expand them separately
-from source-graph loading.
-Ordinary source loading neither expands discovery nor follows association targets.
-The [source-package section](language.md#source-packages) owns boundary and operation rules.
+[Package selection](../../lang/session/src/source/package.rs) separates authored references (`SourceReference::Package`
+or `SourceReference::Path`) from resolved source entries (`PackageId`).
+The surface decoder indexes explicit meta annotation names and retains their term identities, roles, and relationships.
+A session prepares a `PackageCatalog` from caller-supplied roots and ordered discovery rules,
+rejects conflicting names, and shares immutable `PackageBindings` with compiler queries.
+The CLI combines conventional and explicitly requested roots at command startup
+under the [project-catalog rules](language.md#names-and-project-catalogs); the session API remains explicit.
+Those bindings are part of every dependent query key and are retained with analyses
+and documentation-worker requests; different catalogs cannot reuse each other's name resolution.
+Source loading does not expand discovery.
+
+Inspection shares each parsed file and extracts direct code edges
+without materializing a compiler graph per declaration.
+The loader keys roots by canonical path and textual term, following ordinary imports and companion signatures only.
+Each graph node shares its containing template; only the selected term's code, documentation, and warnings participate.
+Several roots can share one file, and merged source inputs and spans deduplicate that file.
+Typed relationships remain separate; test planning combines direct forward
+and reverse associations in the prepared catalog.
+The [source-package section](language.md#source-packages) owns selection, discovery, and operation rules.
+
+The CLI's [execution runner](../../cli/src/execution.rs) consumes checked `ExecutableProgram` snapshots,
+sharing their immutable arenas across targets and lowering once for compiled backends.
+It prepares temporary artifacts before execution and owns their cleanup.
+CLI `run`, package `test`, and the Rust source fixture harness use this runner;
+[L15](language.md#selecting-an-execution-backend) owns selection and execution policy.
 
 `CompilerSession` is the Salsa database and revision owner.
 [ScopedData](../../lang/statics/src/query/input.rs) connects the resolved root, scoped arena and spans to `TyckDb`.
@@ -806,7 +813,7 @@ Literal folding obeys [L13's numeric rules](language.md#13-primitive-values-and-
 A zero divisor remains a runtime operation at its original position, even if its result is unused.
 
 When optional normalization is disabled, retained arithmetic calls execute through the ordinary host-call ABI.
-The native runtime and WebAssembly test host implement those calls with the same numeric rules
+The native runtime and WebAssembly host implement those calls with the same numeric rules
 and spare-box contracts as their corresponding primitive instructions.
 
 Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
@@ -1293,8 +1300,9 @@ Control arity is at most two. Spare boxes belong to the module's allocation prot
 the host must not invent closure layouts or return unregistered control code.
 Native C imports are rejected by both emitters.
 
-The [Node test host](../../lang/tests/wasm-host.mjs) supplies captured I/O, resources, and scalar adapters.
-It does not provide a general deployment runtime, and randomness is deliberately restricted for tests.
+The [Node host](../../cli/wasm/wasm-host.mjs) supplies I/O, resources, random integers, and scalar adapters.
+The CLI bundles it with its numeric and checked-memory helpers for source execution outside the checkout.
+`run` inherits terminal streams; `test` captures output with explicit input through the shared execution runner.
 Argument lookup uses the invocation's supplied sequence; lazy folds use module-created source closures,
 so multi-argument traversal needs no host-created closure layout.
 [Backend strategy questions](../proposals/wasm-backends.md) retain default-target criteria and historical comparisons.
@@ -1334,7 +1342,7 @@ Freezing transfers storage to the arena's retained immutable-owner table; source
 that grant and never copy the visible payload merely to change a window.
 The arena retains frozen storage until runtime teardown.
 It contains no managed Zydeco references.
-The Node test host supplies the same capability checks with virtual addresses and no native C pointer export.
+The Node host supplies the same capability checks with virtual addresses and no native C pointer export.
 [Memory laws](../proposals/bytes.md#addresses-cells-and-views) own the source-visible permissions,
 state transitions, alignment, initialization, and failure-before-mutation guarantees.
 

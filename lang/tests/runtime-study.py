@@ -125,7 +125,7 @@ class Study:
                     self.metadata["input_hashes"][str(path)] = self.sha256(path)
         self.metadata["input_hashes"]["builtin.zy"] = self.sha256(ROOT / "lib/std/builtin.zy")
         self.metadata["input_hashes"]["runtime-study.py"] = self.sha256(Path(__file__))
-        self.metadata["input_hashes"]["wasm-host.mjs"] = self.sha256(ROOT / "lang/tests/wasm-host.mjs")
+        self.metadata["input_hashes"]["wasm-host.mjs"] = self.sha256(ROOT / "cli/wasm/wasm-host.mjs")
         self.save()
 
     def source(self, name, body):
@@ -344,7 +344,7 @@ class Study:
                             expected_exit=expected_exit, success=success, **result)
                 if success:
                     result = self.run([
-                        "node", ROOT / "lang/tests/wasm-host.mjs", module,
+                        "node", ROOT / "cli/wasm/wasm-host.mjs", module,
                     ], timeout=self.args.timeout,
                         env=self.environment | {"ZYDECO_WASM_MEMORY_REPORT": "1"})
                     try:

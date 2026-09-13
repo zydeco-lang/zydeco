@@ -8,7 +8,7 @@ use zydeco_stackir::{
         StackProtocol, ValueProtocol,
     },
 };
-use zydeco_tests::utils::{SourceProgram, TestBackend};
+use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
 
 struct Fixture;
 
@@ -181,9 +181,12 @@ fn an_instantiated_recursive_transfer_checks_arguments_after_the_first_observati
 
 #[test]
 fn parameterized_and_growing_protocols_execute_on_every_backend() {
-    for backend in
-        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
-    {
+    for backend in [
+        ExecutionTarget::Interpreter,
+        ExecutionTarget::Exe,
+        ExecutionTarget::WasmAm,
+        ExecutionTarget::WasmSps,
+    ] {
         for input in ["", "abc"] {
             SourceProgram::setup("tests/core/parameterized-protocols.zy")
                 .with_args([input])
@@ -288,9 +291,12 @@ fn low_publication_checks_parameter_kinds_before_transfers() {
 
 #[test]
 fn polymorphic_calls_choose_independent_instantiations_on_every_backend() {
-    for backend in
-        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
-    {
+    for backend in [
+        ExecutionTarget::Interpreter,
+        ExecutionTarget::Exe,
+        ExecutionTarget::WasmAm,
+        ExecutionTarget::WasmSps,
+    ] {
         for input in ["", "abc"] {
             SourceProgram::setup("tests/core/symbolic-protocols.zy")
                 .with_args([input])
@@ -483,9 +489,12 @@ fn equivalent_codata_interfaces_share_tag_numbers_across_declaration_orders() {
                 .stacks_agree(&StackProtocol::Codata(*id), &StackProtocol::Codata(interfaces[0].0))
         );
     }
-    for backend in
-        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
-    {
+    for backend in [
+        ExecutionTarget::Interpreter,
+        ExecutionTarget::Exe,
+        ExecutionTarget::WasmAm,
+        ExecutionTarget::WasmSps,
+    ] {
         SourceProgram::setup("tests/core/codata-order.zy").test(backend);
     }
 }
@@ -591,9 +600,12 @@ fn an_indirect_worker_rejects_an_incompatible_argument_prefix() {
 
 #[test]
 fn dynamic_argument_stacks_and_returned_workers_execute_on_every_backend() {
-    for backend in
-        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
-    {
+    for backend in [
+        ExecutionTarget::Interpreter,
+        ExecutionTarget::Exe,
+        ExecutionTarget::WasmAm,
+        ExecutionTarget::WasmSps,
+    ] {
         for argument in ["abc".to_owned(), "x".repeat(257)] {
             SourceProgram::setup("tests/core/stack-protocols.zy")
                 .with_args([argument])

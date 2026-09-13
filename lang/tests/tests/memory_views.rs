@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::utils::{SourceCase, SourceProgram, TestBackend};
+use zydeco_tests::utils::{ExecutionTarget, SourceCase, SourceProgram};
 
 struct ViewCase;
 
@@ -281,9 +281,12 @@ end
         ),
     )
     .unwrap();
-    for backend in
-        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
-    {
+    for backend in [
+        ExecutionTarget::Interpreter,
+        ExecutionTarget::Exe,
+        ExecutionTarget::WasmAm,
+        ExecutionTarget::WasmSps,
+    ] {
         SourceProgram::setup(&program).test(backend);
     }
 }

@@ -1,0 +1,2 @@
+@[discover(include("library.zy", "main.zy", "tests/**/*.zy"), exclude("tests/fixtures/**"))]
+()

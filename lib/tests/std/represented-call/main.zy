@@ -1,6 +1,7 @@
+@[package(test(of(std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /OS; /UInt8; /UInt32; /Int64;
-    /numeric; /args; /process; builtin) : @(import("../../../std/builtin.zy")) that
+    /numeric; /args; /process; builtin) : @(import(std/builtin)) that
   let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../../std/text/bytes.zy"))) in
 
   let make_memory = @(import("../../../std/memory/static-layout.zy")) in

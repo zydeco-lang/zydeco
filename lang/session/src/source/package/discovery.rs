@@ -49,8 +49,7 @@ impl PackageDiscovery<'_> {
         }
         paths.extend(overlays.filter_map(|path| {
             SourceKind::recognize(&path)?;
-            let relative = path.strip_prefix(base).ok()?;
-            let rule = rules.iter().rev().find(|rule| rule.pattern.matches(relative))?;
+            let rule = rules.iter().rev().find(|rule| rule.pattern.matches(base, &path))?;
             (rule.kind == DiscoveryRuleKind::Include).then_some((path, rule.info))
         }));
         Ok(paths)
@@ -62,15 +61,17 @@ impl PackageDiscovery<'_> {
     ) -> Result<(), (PathBuf, io::Error)> {
         let pattern = &rule.pattern;
         let excluded_tree =
-            |relative: &Path| exclusions.iter().any(|pattern| pattern.covers_directory(relative));
-        if (pattern.max_depth() != Some(0) && excluded_tree(pattern.literal_prefix()))
+            |path: &Path| exclusions.iter().any(|pattern| pattern.covers_directory(base, path));
+        let anchor = pattern.anchor(base);
+        let start = anchor.join(pattern.literal_prefix());
+        if (pattern.max_depth() != Some(0) && excluded_tree(&start))
             || (pattern.max_depth() == Some(0)
-                && exclusions.iter().any(|rule| rule.matches(pattern.literal_prefix())))
+                && exclusions.iter().any(|rule| rule.matches(base, &start)))
         {
             return Ok(());
         }
         // Do not traverse a symlink in a literal prefix, including a link to a directory.
-        let mut prefix = base.to_path_buf();
+        let mut prefix = anchor.to_path_buf();
         for component in pattern.literal_prefix().components() {
             prefix.push(component);
             match std::fs::symlink_metadata(&prefix) {
@@ -80,9 +81,8 @@ impl PackageDiscovery<'_> {
                 | Err(error) => return Err((prefix, error)),
             }
         }
-        let mut pending = vec![(pattern.literal_prefix().to_path_buf(), 0)];
-        while let Some((relative, depth)) = pending.pop() {
-            let path = base.join(&relative);
+        let mut pending = vec![(start, 0)];
+        while let Some((path, depth)) = pending.pop() {
             let metadata = match std::fs::symlink_metadata(&path) {
                 | Ok(metadata) => metadata,
                 | Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
@@ -93,20 +93,20 @@ impl PackageDiscovery<'_> {
             }
             if metadata.is_file() {
                 if SourceKind::recognize(&path).is_some()
-                    && pattern.matches(&relative)
-                    && !exclusions.iter().any(|rule| rule.matches(&relative))
+                    && pattern.matches(base, &path)
+                    && !exclusions.iter().any(|rule| rule.matches(base, &path))
                 {
                     paths.insert(path, rule.info);
                 }
             } else if metadata.is_dir()
-                && !excluded_tree(&relative)
+                && !excluded_tree(&path)
                 && pattern.max_depth().is_none_or(|limit| depth < limit)
             {
                 query(&path);
                 let children = std::fs::read_dir(&path).map_err(|error| (path.clone(), error))?;
                 for child in children {
                     let child = child.map_err(|error| (path.clone(), error))?;
-                    pending.push((relative.join(child.file_name()), depth + 1));
+                    pending.push((child.path(), depth + 1));
                 }
             }
         }

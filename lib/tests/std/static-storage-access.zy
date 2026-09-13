@@ -1,3 +1,4 @@
+@[package(test(of(std)))]
 begin
   param (/Thk; /Ret; /OS; /Int64; /UInt8; /UInt32; /numeric; /process; builtin) : @(import(
     "../../std/builtin.zy"

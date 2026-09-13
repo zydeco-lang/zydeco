@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use zydeco_cli::CommandCompiler;
 use zydeco_tests::e2e_sources;
-use zydeco_tests::utils::{SourceProgram, TestBackend};
+use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
 
 e2e_sources!({
     add => "tests/builtin/add.zy",
@@ -65,22 +65,22 @@ mod host_arguments {
 
     #[test]
     fn interpreter() {
-        program().test(TestBackend::Interpreter);
+        program().test(ExecutionTarget::Interpreter);
     }
 
     #[test]
     fn amd64() {
-        program().test(TestBackend::Amd64);
+        program().test(ExecutionTarget::Exe);
     }
 
     #[test]
     fn wasm_am() {
-        program().test(TestBackend::WasmAm);
+        program().test(ExecutionTarget::WasmAm);
     }
 
     #[test]
     fn wasm_sps() {
-        program().test(TestBackend::WasmSps);
+        program().test(ExecutionTarget::WasmSps);
     }
 }
 
@@ -93,21 +93,21 @@ mod argument_contract {
 
     #[test]
     fn interpreter() {
-        program().test(TestBackend::Interpreter);
+        program().test(ExecutionTarget::Interpreter);
     }
 
     #[test]
     fn amd64() {
-        program().test(TestBackend::Amd64);
+        program().test(ExecutionTarget::Exe);
     }
 
     #[test]
     fn wasm_am() {
-        program().test(TestBackend::WasmAm);
+        program().test(ExecutionTarget::WasmAm);
     }
 
     #[test]
     fn wasm_sps() {
-        program().test(TestBackend::WasmSps);
+        program().test(ExecutionTarget::WasmSps);
     }
 }

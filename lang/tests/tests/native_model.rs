@@ -76,8 +76,8 @@ fn returning_calls_retain_slots_without_heap_capture_products() {
 
 #[test]
 fn tail_calls_and_an_escaping_closure_survive_frame_reuse() {
-    use zydeco_tests::utils::{SourceProgram, TestBackend};
-    for backend in [TestBackend::Interpreter, TestBackend::Amd64] {
+    use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
+    for backend in [ExecutionTarget::Interpreter, ExecutionTarget::Exe] {
         SourceProgram::setup("tests/core/native-frames.zy").test(backend);
     }
 }

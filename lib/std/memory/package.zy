@@ -1,3 +1,4 @@
+@[package(library, name(std/memory))]
 begin
   param val (/Addr; /Access; /VType; /CType; /Thk; /Ret; /Unit;
     /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;

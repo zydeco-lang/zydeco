@@ -1,5 +1,6 @@
+@[package(test(of(std)))]
 param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /String; /Addr; /Access; /OS;
-  /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+  /numeric; /process; builtin) : @(import(std/builtin)) in
 let (/Bytes; /bytes) = builtin |> (@(import("../../std/text/bytes.zy"))) in
 let (/Fault; native) = builtin |> (@(import("../../std/memory/native.zy"))) in
 let int = numeric/int64 in

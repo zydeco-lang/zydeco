@@ -48,7 +48,7 @@ impl RuntimeFixture {
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let extension = if backend == "wasm-am" { "am" } else { "sps" };
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
-            .arg(self.workspace.join("lang/tests/wasm-host.mjs"))
+            .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
             .arg(build.join(format!("runtime.{extension}.wasm")))
             .output()
             .unwrap()

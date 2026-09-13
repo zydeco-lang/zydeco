@@ -11,6 +11,7 @@ readme = { workspace = true }
 description = "surface syntax for zydeco"
 
 [dependencies]
+serde = { workspace = true }
 regex = { workspace = true }
 logos = { workspace = true }
 lalrpop-util = { workspace = true }

@@ -13,8 +13,9 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, sync::Arc};
 use thiserror::Error;
+use zydeco_session::source::PackageBindings;
 use zydeco_surface::textual::SourceNumber;
 
 const HELP: &str = concat!(
@@ -45,16 +46,16 @@ pub struct Repl {
 }
 
 impl Repl {
-    pub fn launch() -> Result<i32, ReplError> {
+    pub fn launch(bindings: Arc<PackageBindings>) -> Result<i32, ReplError> {
         let directory = std::env::current_dir()?;
-        let mut repl = Self::new(directory);
+        let mut repl = Self::new(directory, bindings);
         ratatui::run(|terminal| repl.run(terminal))?;
         Ok(0)
     }
 
-    fn new(directory: PathBuf) -> Self {
+    fn new(directory: PathBuf, bindings: Arc<PackageBindings>) -> Self {
         Self {
-            engine: ReplEngine::new(directory.clone()),
+            engine: ReplEngine::new(directory.clone(), bindings),
             directory,
             editor: SourceEditor::default(),
             transcript: vec![TranscriptItem::Notice(
@@ -403,7 +404,7 @@ mod tests {
     #[test]
     fn initial_screen_renders_numbered_input_and_numeric_import_help() {
         let directory = tempfile::tempdir().unwrap();
-        let repl = Repl::new(directory.path().to_path_buf());
+        let repl = Repl::new(directory.path().to_path_buf(), Arc::default());
         let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
 
         terminal.draw(|frame| repl.render(frame)).unwrap();
@@ -416,7 +417,7 @@ mod tests {
     #[test]
     fn help_does_not_consume_an_input_number() {
         let directory = tempfile::tempdir().unwrap();
-        let mut repl = Repl::new(directory.path().to_path_buf());
+        let mut repl = Repl::new(directory.path().to_path_buf(), Arc::default());
         repl.editor.insert_str("@(help)");
         repl.submit(false);
 
@@ -429,7 +430,7 @@ mod tests {
     #[test]
     fn expressions_advance_numbered_history() {
         let directory = tempfile::tempdir().unwrap();
-        let mut repl = Repl::new(directory.path().to_path_buf());
+        let mut repl = Repl::new(directory.path().to_path_buf(), Arc::default());
         repl.editor.insert_str("1");
         repl.submit(false);
 
@@ -440,7 +441,7 @@ mod tests {
     #[test]
     fn type_error_keeps_the_number_editor_and_cursor_for_retry() {
         let directory = tempfile::tempdir().unwrap();
-        let mut repl = Repl::new(directory.path().to_path_buf());
+        let mut repl = Repl::new(directory.path().to_path_buf(), Arc::default());
         repl.editor.insert_str("1 2");
         let cursor = repl.editor.cursor_position();
 
@@ -486,7 +487,7 @@ mod tests {
     #[test]
     fn run_metadata_evaluates_its_annotated_expression() {
         let directory = tempfile::tempdir().unwrap();
-        let mut repl = Repl::new(directory.path().to_path_buf());
+        let mut repl = Repl::new(directory.path().to_path_buf(), Arc::default());
         repl.editor.insert_str("@[run] ret 1");
         repl.submit(false);
 

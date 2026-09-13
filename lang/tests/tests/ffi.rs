@@ -3,7 +3,7 @@ use zydeco_cli::{CommandCompiler, CompileError, TargetArchitecture, TargetOs};
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{
     check_source,
-    utils::{CaseError, SourceCase, SourceProgram, TestBackend},
+    utils::{CaseError, ExecutionTarget, SourceCase, SourceProgram},
 };
 
 check_source!(xxhash_binding, "ffi/xxhash.zy");
@@ -167,7 +167,7 @@ fn boundary_fixture_lowers_without_xxhash_specific_shapes() {
 #[test]
 #[ignore = "requires libxxhash in the platform dynamic-library search path"]
 fn calls_the_installed_xxhash_library() {
-    SourceProgram::setup("tests/ffi/xxhash.zy").test(TestBackend::Interpreter);
+    SourceProgram::setup("tests/ffi/xxhash.zy").test(ExecutionTarget::Interpreter);
 }
 
 #[test]

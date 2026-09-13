@@ -355,7 +355,7 @@ impl MetadataSnippet {
             | MetadataValue::String | MetadataValue::Glob => {
                 format!("\"{}\"", self.placeholder(parameter.label()))
             }
-            | MetadataValue::Source { .. } => format!("\"{}\"", self.placeholder("path")),
+            | MetadataValue::Source { .. } => self.placeholder("package"),
             | MetadataValue::Call(definition) => self.definition(definition),
         }
     }
@@ -694,14 +694,14 @@ mod tests {
         let Some(CompletionTextEdit::Edit(edit)) = &items[0].text_edit else {
             panic!("expected snippet")
         };
-        assert_eq!(edit.new_text, r#"test("${1:path}")"#);
+        assert_eq!(edit.new_text, r#"test(${1:package})"#);
         let items = CompletionFixture::new("@[package(library, na|)] ()").items().unwrap();
         let Some(CompletionTextEdit::Edit(edit)) = &items[0].text_edit else {
             panic!("name snippet")
         };
-        assert_eq!(edit.new_text, r#"name("${1:name}")"#);
+        assert_eq!(edit.new_text, r#"name(${1:name})"#);
         assert_eq!(
-            CompletionFixture::new(r#"@[package(library, name("api"), |)] ()"#).labels().unwrap(),
+            CompletionFixture::new(r#"@[package(library, name(api), |)] ()"#).labels().unwrap(),
             ["test"]
         );
         assert!(CompletionFixture::new(r#"@(import(pa|))"#).items().is_none());

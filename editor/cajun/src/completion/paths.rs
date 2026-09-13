@@ -58,11 +58,7 @@ impl SourcePathCursor {
                 return None;
             }
             if decoded == '#' {
-                if unit_start < offset {
-                    return None;
-                }
-                replacement.end = unit_start;
-                break;
+                return None;
             }
             if std::path::is_separator(decoded) {
                 if unit_end <= offset {

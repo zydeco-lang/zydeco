@@ -14,9 +14,16 @@ pub struct DiscoveryGlob {
     matcher: Regex,
     prefix: PathBuf,
     depth: Option<usize>,
+    parents: usize,
 }
 
 impl DiscoveryGlob {
+    /// Resolve the explicit leading parent steps without querying the filesystem.
+    pub fn anchor<'a>(&self, base: &'a Path) -> &'a Path {
+        (0..self.parents).fold(base, |path, _| path.parent().unwrap_or(path))
+    }
+
+    /// The fixed path prefix relative to the pattern's anchor.
     pub fn literal_prefix(&self) -> &Path {
         &self.prefix
     }
@@ -24,19 +31,22 @@ impl DiscoveryGlob {
         self.depth
     }
 
-    pub fn matches(&self, relative: &Path) -> bool {
-        Self::path_text(relative).is_some_and(|text| self.matcher.is_match(&text))
+    pub fn matches(&self, base: &Path, path: &Path) -> bool {
+        self.relative_text(base, path).is_some_and(|text| self.matcher.is_match(&text))
     }
 
     /// Only a trailing ** excludes an entire subtree.
-    pub fn covers_directory(&self, relative: &Path) -> bool {
+    pub fn covers_directory(&self, base: &Path, path: &Path) -> bool {
         self.written.ends_with("**")
-            && Self::path_text(relative)
+            && self
+                .relative_text(base, path)
                 .is_some_and(|text| self.matcher.is_match(&format!("{text}/")))
     }
 
-    fn path_text(path: &Path) -> Option<String> {
-        path.components()
+    fn relative_text(&self, base: &Path, path: &Path) -> Option<String> {
+        path.strip_prefix(self.anchor(base))
+            .ok()?
+            .components()
             .map(|part| part.as_os_str().to_str())
             .collect::<Option<Vec<_>>>()
             .map(|parts| parts.join("/"))
@@ -49,37 +59,34 @@ impl FromStr for DiscoveryGlob {
     fn from_str(written: &str) -> Result<Self, Self::Err> {
         if written.is_empty()
             || Path::new(written).components().any(|component| {
-                matches!(
-                    component,
-                    std::path::Component::Prefix(_)
-                        | std::path::Component::RootDir
-                        | std::path::Component::ParentDir
-                )
+                matches!(component, std::path::Component::Prefix(_) | std::path::Component::RootDir)
             })
             || written.contains(['\0', '\\', '#', '[', ']', '{', '}'])
         {
             return Err(DiscoveryGlobError::Syntax);
         }
         let parts = written.split('/').filter(|part| *part != ".").collect::<Vec<_>>();
-        if parts.is_empty()
-            || parts.iter().any(|part| {
+        let parents = parts.iter().take_while(|part| **part == "..").count();
+        let pattern = &parts[parents..];
+        if pattern.is_empty()
+            || pattern.iter().any(|part| {
                 part.is_empty() || *part == ".." || (part.contains("**") && *part != "**")
             })
         {
             return Err(DiscoveryGlobError::Syntax);
         }
-        let literal = parts.iter().take_while(|part| !part.contains(['*', '?'])).count();
-        let prefix = parts[..literal].iter().collect();
-        let depth = (!parts.contains(&"**")).then_some(parts.len() - literal);
+        let literal = pattern.iter().take_while(|part| !part.contains(['*', '?'])).count();
+        let prefix = pattern[..literal].iter().collect();
+        let depth = (!pattern.contains(&"**")).then_some(pattern.len() - literal);
         let written = parts.join("/");
-        let expression = regex::escape(&written)
+        let expression = regex::escape(&pattern.join("/"))
             .replace(r"\*\*/", "(?:[^/]+/)*")
             .replace(r"\*\*", "(?s:.*)")
             .replace(r"\*", "[^/]*")
             .replace(r"\?", "[^/]");
         let matcher = Regex::new(&format!(r"\A{expression}\z"))
             .map_err(|error| DiscoveryGlobError::Compile(error.to_string()))?;
-        Ok(Self { written, matcher, prefix, depth })
+        Ok(Self { written, matcher, prefix, depth, parents })
     }
 }
 
@@ -92,7 +99,7 @@ impl fmt::Display for DiscoveryGlob {
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum DiscoveryGlobError {
     #[error(
-        "expected a nonempty relative glob using *, ?, or whole-component **; parent paths, #, backslashes, brackets, and braces are not supported"
+        "expected a nonempty relative glob using *, ?, or whole-component **; .. is allowed only as a leading prefix; #, backslashes, brackets, and braces are not supported"
     )]
     Syntax,
     #[error("glob is too complex: {0}")]
@@ -189,10 +196,10 @@ mod tests {
             assert_eq!(glob.literal_prefix(), Path::new(prefix));
             assert_eq!(glob.max_depth(), depth);
             for path in matches {
-                assert!(glob.matches(Path::new(path)), "{pattern}: {path}");
+                assert!(glob.matches(Path::new(""), Path::new(path)), "{pattern}: {path}");
             }
             for path in misses {
-                assert!(!glob.matches(Path::new(path)), "{pattern}: {path}");
+                assert!(!glob.matches(Path::new(""), Path::new(path)), "{pattern}: {path}");
             }
         }
     }
@@ -201,27 +208,54 @@ mod tests {
     fn only_subtree_excludes_can_prune_directories() {
         let subtree: DiscoveryGlob = "tests/**/fixtures/**".parse().unwrap();
         for path in ["tests/fixtures", "tests/fixtures/deep", "tests/unit/fixtures"] {
-            assert!(subtree.covers_directory(Path::new(path)), "{path}");
+            assert!(subtree.covers_directory(Path::new(""), Path::new(path)), "{path}");
         }
         for pattern in ["tests/fixtures", "tests/fixtures/*.zy"] {
             assert!(
                 !pattern
                     .parse::<DiscoveryGlob>()
                     .unwrap()
-                    .covers_directory(Path::new("tests/fixtures"))
+                    .covers_directory(Path::new(""), Path::new("tests/fixtures"))
             );
         }
-        assert!("**".parse::<DiscoveryGlob>().unwrap().covers_directory(Path::new("")));
+        assert!(
+            "**".parse::<DiscoveryGlob>().unwrap().covers_directory(Path::new(""), Path::new(""))
+        );
     }
 
     #[test]
-    fn unbounded_parent_paths_and_unsupported_glob_forms_are_rejected() {
+    fn leading_parents_select_an_explicit_anchor_without_changing_glob_depth() {
+        let base = Path::new("project/lib/std");
+        for (pattern, anchor, prefix, depth) in [
+            ("../tests/*.zy", "project/lib", "tests", Some(1)),
+            ("../../tests/**/*.zy", "project", "tests", None),
+            ("./.././tests/one.zy", "project/lib", "tests/one.zy", Some(0)),
+        ] {
+            let glob: DiscoveryGlob = pattern.parse().unwrap();
+            assert_eq!(glob.anchor(base), Path::new(anchor));
+            assert_eq!(glob.literal_prefix(), Path::new(prefix));
+            assert_eq!(glob.max_depth(), depth);
+            assert!(glob.matches(base, &Path::new(anchor).join("tests/one.zy")));
+            assert!(!glob.matches(base, &base.join("tests/one.zy")));
+            assert!(!glob.matches(base, &Path::new(anchor).join("other/one.zy")));
+        }
+        let subtree: DiscoveryGlob = "../tests/fixtures/**".parse().unwrap();
+        assert!(subtree.covers_directory(base, Path::new("project/lib/tests/fixtures")));
+        assert!(!subtree.covers_directory(base, Path::new("project/lib/std/tests/fixtures")));
+    }
+
+    #[test]
+    fn nonleading_parents_and_unsupported_glob_forms_are_rejected() {
         for pattern in [
             "",
             ".",
             "/tmp/*.zy",
-            "../*.zy",
+            "..",
+            "../..",
             "tests/../*.zy",
+            "../tests/../*.zy",
+            "../*/../*.zy",
+            "**/../*.zy",
             "tests//a.zy",
             "test**.zy",
             "tests/",

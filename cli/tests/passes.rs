@@ -58,7 +58,7 @@ impl Fixture {
         Self::assert_success(&compiled);
         let extension = if target == "wasm-am" { "am" } else { "sps" };
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
-            .arg(self.workspace.join("lang/tests/wasm-host.mjs"))
+            .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
             .arg(self.build_dir().join(format!("program.{extension}.wasm")))
             .output()
             .unwrap()

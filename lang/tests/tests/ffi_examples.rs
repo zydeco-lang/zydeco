@@ -138,7 +138,7 @@ fn mutable_destinations_and_capturing_callbacks_need_new_contracts() {
 #[cfg(unix)]
 fn c_examples_execute_and_their_output_can_be_canonicalized_in_source() {
     use std::process::Command;
-    use zydeco_tests::utils::{SourceProgram, TestBackend};
+    use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
 
     let directory = tempfile::tempdir().unwrap();
     let executable = directory.path().join("ffi_examples");
@@ -187,9 +187,12 @@ do foreign <- ! bytes/from_string "{literal}";
         ),
     )
     .unwrap();
-    for backend in
-        [TestBackend::Interpreter, TestBackend::Amd64, TestBackend::WasmAm, TestBackend::WasmSps]
-    {
+    for backend in [
+        ExecutionTarget::Interpreter,
+        ExecutionTarget::Exe,
+        ExecutionTarget::WasmAm,
+        ExecutionTarget::WasmSps,
+    ] {
         SourceProgram::setup(&program).test(backend);
     }
 }

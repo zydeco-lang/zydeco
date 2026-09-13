@@ -103,7 +103,7 @@ check_source!(iota, "tests/core/iota.zy");
 // negative fixtures driven by the CLI diagnostic-rendering tests.
 
 mod gc_stress {
-    use zydeco_tests::utils::{SourceProgram, TestBackend};
+    use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
 
     fn program() -> SourceProgram {
         SourceProgram::setup("tests/core/gc-stress.zy")
@@ -111,16 +111,16 @@ mod gc_stress {
 
     #[test]
     fn amd64() {
-        program().test(TestBackend::Amd64);
+        program().test(ExecutionTarget::Exe);
     }
 
     #[test]
     fn wasm_am() {
-        program().test(TestBackend::WasmAm);
+        program().test(ExecutionTarget::WasmAm);
     }
 
     #[test]
     fn wasm_sps() {
-        program().test(TestBackend::WasmSps);
+        program().test(ExecutionTarget::WasmSps);
     }
 }

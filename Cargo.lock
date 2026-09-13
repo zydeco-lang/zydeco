@@ -2757,6 +2757,7 @@ dependencies = [
  "regex",
  "rpds",
  "sequence_trie",
+ "serde",
  "strum",
  "thiserror",
  "unindent",

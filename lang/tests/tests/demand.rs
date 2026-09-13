@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use zydeco_cli::CommandCompiler;
-use zydeco_tests::utils::{SourceCase, SourceProgram, TestBackend};
+use zydeco_tests::utils::{ExecutionTarget, SourceCase, SourceProgram};
 
 #[test]
 fn discarded_computation_results_keep_their_dependencies() {
@@ -62,16 +62,16 @@ mod prune_program {
 
     #[test]
     fn interpreter() {
-        SourceProgram::setup("tests/demand/prune.zy").test(TestBackend::Interpreter);
+        SourceProgram::setup("tests/demand/prune.zy").test(ExecutionTarget::Interpreter);
     }
 
     #[test]
     fn wasm_sps() {
-        SourceProgram::setup("tests/demand/prune.zy").test(TestBackend::WasmSps);
+        SourceProgram::setup("tests/demand/prune.zy").test(ExecutionTarget::WasmSps);
     }
 
     #[test]
     fn wasm_am() {
-        SourceProgram::setup("tests/demand/prune.zy").test(TestBackend::WasmAm);
+        SourceProgram::setup("tests/demand/prune.zy").test(ExecutionTarget::WasmAm);
     }
 }

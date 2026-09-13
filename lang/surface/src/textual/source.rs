@@ -1,7 +1,7 @@
 use super::syntax::*;
 use crate::metadata::{
     BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError, LiteralMeta,
-    LiteralMetaError, MetadataKind, MetadataValidationError,
+    LiteralMetaError, MetadataKind,
 };
 pub use crate::metadata::{SourceReference, SourceReferenceError};
 use std::{
@@ -52,7 +52,7 @@ pub struct LiteralSite {
 /// The provider named by an `@[import(...)]` term splice.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImportTarget {
-    /// A disk or overlay source addressed by a quoted path.
+    /// A source addressed by a catalog name or quoted path.
     Source(SourceReference),
     /// A numbered source retained by an interactive compiler session.
     Input(SourceNumber),
@@ -61,7 +61,7 @@ pub enum ImportTarget {
 impl std::fmt::Display for ImportTarget {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            | Self::Source(reference) => write!(formatter, "{:?}", reference.to_string()),
+            | Self::Source(reference) => reference.fmt(formatter),
             | Self::Input(input) => input.fmt(formatter),
         }
     }
@@ -146,10 +146,6 @@ pub enum BuiltinLocation {
 pub enum ImportDirectiveError {
     #[error("import at {span} expects one source argument, but found {found}")]
     TargetArity { term: TermId, span: Span, found: usize },
-    #[error(
-        "import source at {span} must be a file or file#name string, or a positive input number"
-    )]
-    UnsupportedTarget { term: TermId, span: Span },
     #[error("import path at {span} must not be empty")]
     EmptyPath { term: TermId, span: Span },
     #[error("import input number at {span} must be positive")]
@@ -209,7 +205,6 @@ impl ImportDirectiveError {
     pub fn span(&self) -> Span {
         match self {
             | Self::TargetArity { span, .. }
-            | Self::UnsupportedTarget { span, .. }
             | Self::EmptyPath { span, .. }
             | Self::NonPositiveInput { span, .. }
             | Self::InvalidSource { span, .. }
@@ -475,55 +470,29 @@ impl ImportSite {
         metadata.is(MetadataKind::Import.name()).then(|| {
             let annotation_span = spans[&EntityId::Term(term)];
             let meta_span = spans[&EntityId::Meta(meta)];
-            let semantic = arena.semantic_meta(meta);
-            if let Err(error) =
-                MetadataKind::Import.definition().validate_arguments(semantic.arguments())
-            {
-                return Err(match error {
-                    | MetadataValidationError::Arity { definition: "import", found, .. } => {
-                        ImportDirectiveError::TargetArity { term, span: meta_span, found }
-                    }
-                    | MetadataValidationError::ExpectedSource { .. } => {
-                        let [argument] = metadata.arguments() else {
-                            unreachable!("source validation reports arity separately")
-                        };
-                        let span = spans[&EntityId::Meta(*argument)];
-                        match &arena.metas[argument] {
-                            | MetaNode::String(path) if path.is_empty() => {
-                                ImportDirectiveError::EmptyPath { term, span }
-                            }
-                            | MetaNode::Integer(_) => {
-                                ImportDirectiveError::NonPositiveInput { term, span }
-                            }
-                            | MetaNode::String(text) => ImportDirectiveError::InvalidSource {
-                                term,
-                                span,
-                                source: text.parse::<SourceReference>().unwrap_err(),
-                            },
-                            | MetaNode::Ident(_) | MetaNode::Apply { .. } => {
-                                ImportDirectiveError::UnsupportedTarget { term, span }
-                            }
-                        }
-                    }
-                    | _ => unreachable!("import validates arity and source only"),
-                });
-            }
             let [argument] = metadata.arguments() else {
-                unreachable!("the import metadata contract validates one source")
+                return Err(ImportDirectiveError::TargetArity {
+                    term,
+                    span: meta_span,
+                    found: metadata.arguments().len(),
+                });
             };
-            let target = match &arena.metas[argument] {
-                | MetaNode::String(path) => {
-                    ImportTarget::Source(path.parse().expect("validated source reference"))
+            let span = spans[&EntityId::Meta(*argument)];
+            let target = match arena.semantic_meta(*argument) {
+                | zydeco_syntax::Meta::Integer(number) => {
+                    let input = u64::try_from(number)
+                        .ok()
+                        .and_then(SourceNumber::new)
+                        .ok_or(ImportDirectiveError::NonPositiveInput { term, span })?;
+                    ImportTarget::Input(input)
                 }
-                | MetaNode::Integer(number) => ImportTarget::Input(
-                    SourceNumber::new(
-                        u64::try_from(*number)
-                            .expect("the import metadata contract validates a positive input"),
-                    )
-                    .expect("the import metadata contract validates a nonzero input"),
-                ),
-                | MetaNode::Ident(_) | MetaNode::Apply { .. } => {
-                    unreachable!("the import metadata contract validates a source")
+                | zydeco_syntax::Meta::String(path) if path.is_empty() => {
+                    return Err(ImportDirectiveError::EmptyPath { term, span });
+                }
+                | meta => {
+                    ImportTarget::Source(SourceReference::decode(&meta).map_err(|source| {
+                        ImportDirectiveError::InvalidSource { term, span, source }
+                    })?)
                 }
             };
             if !matches!(arena.terms[&payload], Term::Hole(Hole)) {

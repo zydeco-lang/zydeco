@@ -63,6 +63,7 @@ pub struct ProgramAnalysis {
     documentation: crate::source::DocumentationIndex,
     scoped_root: zydeco_surface::scoped::syntax::TermId,
     package: Option<super::PackageName>,
+    bindings: Arc<super::PackageBindings>,
 }
 
 impl ProgramAnalysis {
@@ -128,6 +129,7 @@ pub struct CheckedProgram {
 }
 
 /// One checked computation with the host Builtin package contract validated.
+#[derive(Clone)]
 pub struct ExecutableProgram {
     pub spans: Arc<SpanArena>,
     pub scoped: Arc<ScopedArena>,
@@ -279,28 +281,32 @@ impl SourceQueryDb for CompilerSession {
 }
 
 impl CompilerSession {
-    /// Inspect local registrations and the explicitly declared discovery scope; never load code dependencies.
-    pub fn packages(&self, path: impl AsRef<Path>) -> Result<Vec<super::Package>, SourceLoadError> {
-        let source = QuerySourceProvider { db: self }.load(path.as_ref())?;
-        let mut packages = Self::local_packages(&source)?;
-        let overlays = self
-            .files
-            .iter()
-            .filter_map(|entry| entry.overlay(self).as_ref().map(|_| entry.key().clone()));
-        for (path, span) in (super::PackageDiscovery { source: &source }).paths(overlays)? {
-            if path == source.path {
-                continue;
-            }
-            let discovered = QuerySourceProvider { db: self }.load(&path).map_err(|error| {
-                super::PackageError::DiscoveredSource {
-                    site: super::SourceDiagnosticSite::new(source.path.clone(), span.range()),
-                    error: Box::new(error),
+    /// Prepare the explicitly requested scopes once, before name lookup or compilation.
+    pub fn package_catalog(
+        &self, paths: &[PathBuf],
+    ) -> Result<super::PackageCatalog, SourceLoadError> {
+        let mut packages = Vec::new();
+        for path in paths {
+            let source = QuerySourceProvider { db: self }.load(path)?;
+            packages.extend(Self::local_packages(&source)?);
+            let overlays = self
+                .files
+                .iter()
+                .filter_map(|entry| entry.overlay(self).as_ref().map(|_| entry.key().clone()));
+            for (path, span) in (super::PackageDiscovery { source: &source }).paths(overlays)? {
+                if path == source.path {
+                    continue;
                 }
-            })?;
-            packages.extend(Self::local_packages(&discovered)?);
+                let discovered = QuerySourceProvider { db: self }.load(&path).map_err(|error| {
+                    super::PackageError::DiscoveredSource {
+                        site: super::SourceDiagnosticSite::new(source.path.clone(), span.range()),
+                        error: Box::new(error),
+                    }
+                })?;
+                packages.extend(Self::local_packages(&discovered)?);
+            }
         }
-        packages.sort_by(|left, right| left.id.cmp(&right.id));
-        Ok(packages)
+        super::PackageCatalog::new(packages).map_err(Into::into)
     }
 
     fn local_packages(
@@ -322,20 +328,18 @@ impl CompilerSession {
     }
 
     pub fn package_tests(
-        &self, id: &super::PackageId,
+        &self, id: &super::PackageId, catalog: &super::PackageCatalog,
     ) -> Result<super::PackageTestPlan, SourceLoadError> {
-        super::PackageTestPlan::collect(self.package(id)?, self.packages(&id.path)?, |id| {
-            self.package(id)
-        })
+        super::PackageTestPlan::collect(self.package(id)?, catalog, |id| self.package(id))
     }
 
     pub fn analyze_package(
-        &self, id: &super::PackageId,
+        &self, id: &super::PackageId, bindings: Arc<super::PackageBindings>,
     ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
         let root = self
             .source_input(id.path.clone())
             .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
-        analyze_source(self, root, id.name.clone())
+        analyze_source(self, root, id.name.clone(), bindings)
     }
     /// Create a consistent read snapshot for a request.
     pub fn snapshot(&self) -> Self {
@@ -393,7 +397,7 @@ impl CompilerSession {
 
     pub fn graph(&self, root: impl AsRef<Path>) -> Result<Arc<SourceGraph>, Arc<SourceLoadError>> {
         let root = self.source_input(root.as_ref().to_path_buf()).map_err(Arc::new)?;
-        source_graph(self, root, None)
+        source_graph(self, root, None, Arc::default())
     }
 
     /// Effective text from this snapshot, with editor overlays taking precedence.
@@ -407,7 +411,7 @@ impl CompilerSession {
         let root = self
             .source_input(root.as_ref().to_path_buf())
             .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
-        analyze_source(self, root, None)
+        analyze_source(self, root, None, Arc::default())
     }
 
     /// Recover the full typed arena of one analysis from the memoized check.
@@ -420,7 +424,8 @@ impl CompilerSession {
         let root = self
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
-        let (_, output) = rechecked(self, root, analysis.package.clone())?;
+        let (_, output) =
+            rechecked(self, root, analysis.package.clone(), analysis.bindings.clone())?;
         Ok(output.outcome.statics_arc())
     }
 
@@ -429,7 +434,7 @@ impl CompilerSession {
     pub fn checked_program(&self, analysis: &ProgramAnalysis) -> Option<CheckedProgram> {
         let root = self.source_input(analysis.root_path().to_path_buf()).ok()?;
         let (spans, zydeco_statics::query::TyckOutput { scoped, outcome }) =
-            rechecked(self, root, analysis.package.clone()).ok()?;
+            rechecked(self, root, analysis.package.clone(), analysis.bindings.clone()).ok()?;
         let (root, statics) = match outcome {
             | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
                 statics, root, ..
@@ -448,7 +453,7 @@ impl CompilerSession {
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|_| ExecutableError::Materialize)?;
         let (spans, zydeco_statics::query::TyckOutput { scoped, outcome }) =
-            rechecked(self, root, analysis.package.clone())
+            rechecked(self, root, analysis.package.clone(), analysis.bindings.clone())
                 .map_err(|_| ExecutableError::Materialize)?;
         let (root, statics) = match outcome {
             | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
@@ -623,9 +628,10 @@ fn parse_source(
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn source_graph(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackageName>,
+    bindings: Arc<super::PackageBindings>,
 ) -> Result<Arc<SourceGraph>, Arc<SourceLoadError>> {
     SourceGraphLoader::with_provider(QuerySourceProvider { db })
-        .load_root(&root.path(db), package.as_ref())
+        .load_root(&root.path(db), package.as_ref(), bindings)
         .map(Arc::new)
         .map_err(Arc::new)
 }
@@ -636,8 +642,10 @@ fn source_graph(
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn resolved_data<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, package: Option<super::PackageName>,
+    bindings: Arc<super::PackageBindings>,
 ) -> Result<zydeco_statics::query::ScopedData<'db>, AnalysisError> {
-    let graph = source_graph(db, root, package).map_err(|error| AnalysisError::Source { error })?;
+    let graph = source_graph(db, root, package, bindings)
+        .map_err(|error| AnalysisError::Source { error })?;
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
     let bitter = program.desugar().map_err(|failure| AnalysisError::Desugar {
         error: failure.error,
@@ -662,8 +670,9 @@ fn resolved_data<'db>(
 /// the latest root via `lru = 1`); immutable phase arenas are shared with callers.
 fn rechecked(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackageName>,
+    bindings: Arc<super::PackageBindings>,
 ) -> Result<(Arc<SpanArena>, zydeco_statics::query::TyckOutput), AnalysisError> {
-    let data = resolved_data(db, root, package)?;
+    let data = resolved_data(db, root, package, bindings)?;
     let spans = Arc::clone(data.spans(db));
     Ok((spans, zydeco_statics::query::check_source(db, data)))
 }
@@ -671,11 +680,12 @@ fn rechecked(
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 fn analyze_source(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackageName>,
+    bindings: Arc<super::PackageBindings>,
 ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
-    let graph =
-        source_graph(db, root, package.clone()).map_err(|error| AnalysisError::Source { error })?;
+    let graph = source_graph(db, root, package.clone(), bindings.clone())
+        .map_err(|error| AnalysisError::Source { error })?;
     let (spans, zydeco_statics::query::TyckOutput { scoped, outcome: checked }) =
-        rechecked(db, root, package.clone())?;
+        rechecked(db, root, package.clone(), bindings.clone())?;
     let documentation =
         crate::source::DocumentationIndex::new(&graph, &spans, &scoped, &checked.statics_arc());
     let (statics, outcome, observations) = match checked {
@@ -692,7 +702,7 @@ fn analyze_source(
             (statics.clone_keyed_indexes(), AnalysisOutcome::Rejected { diagnostics }, observations)
         }
     };
-    let scoped_root = resolved_data(db, root, package.clone())?.root(db);
+    let scoped_root = resolved_data(db, root, package.clone(), bindings.clone())?.root(db);
     Ok(Arc::new(ProgramAnalysis {
         graph,
         spans,
@@ -703,6 +713,7 @@ fn analyze_source(
         documentation,
         scoped_root,
         package,
+        bindings,
     }))
 }
 
@@ -711,7 +722,7 @@ fn analyze_source(
 fn diagnostics_at(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Option<zydeco_statics::check::TyckDiagnostics> {
-    let analysis = analyze_source(db, root, None).ok()?;
+    let analysis = analyze_source(db, root, None, Arc::default()).ok()?;
     analysis.outcome().diagnostics().cloned()
 }
 
@@ -723,7 +734,7 @@ fn diagnostics_at(
 fn normalized_type_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, id: zydeco_statics::query::InternedType<'db>,
 ) -> Option<Type> {
-    let analysis = analyze_source(db, root, None).ok()?;
+    let analysis = analyze_source(db, root, None, Arc::default()).ok()?;
     let statics = analysis.statics();
     statics.normalized_annotation_at(id.id(db)).cloned()
 }
@@ -733,7 +744,7 @@ fn normalized_type_at<'db>(
 fn coverage_at(
     db: &dyn SourceQueryDb, root: SourceInput,
 ) -> Vec<zydeco_statics::validate::CoverageError> {
-    let Ok(analysis) = analyze_source(db, root, None) else {
+    let Ok(analysis) = analyze_source(db, root, None, Arc::default()) else {
         return Vec::new();
     };
     analysis.statics().coverage_errors.clone()
@@ -744,7 +755,7 @@ fn coverage_at(
 fn fill_solution_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, fill: zydeco_statics::query::InternedFill<'db>,
 ) -> Option<zydeco_statics::syntax::AnnId> {
-    let analysis = analyze_source(db, root, None).ok()?;
+    let analysis = analyze_source(db, root, None, Arc::default()).ok()?;
     analysis.statics().solus.get(&fill.id(db)).copied()
 }
 
@@ -753,7 +764,7 @@ fn fill_solution_at<'db>(
 fn annotation_of_def<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, def: zydeco_statics::query::InternedDef<'db>,
 ) -> Option<zydeco_statics::syntax::AnnId> {
-    let analysis = analyze_source(db, root, None).ok()?;
+    let analysis = analyze_source(db, root, None, Arc::default()).ok()?;
     analysis.statics().annotations_var.get(&def.id(db)).copied()
 }
 
@@ -762,7 +773,7 @@ fn annotation_of_def<'db>(
 fn type_definition_of_def<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, def: zydeco_statics::query::InternedDef<'db>,
 ) -> Option<zydeco_statics::syntax::TypeId> {
-    let analysis = analyze_source(db, root, None).ok()?;
+    let analysis = analyze_source(db, root, None, Arc::default()).ok()?;
     analysis.statics().type_definitions.get(&def.id(db)).copied()
 }
 
@@ -772,7 +783,7 @@ fn type_definition_of_def<'db>(
 fn term_annotation_at<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, term: zydeco_statics::query::InternedTerm<'db>,
 ) -> Option<zydeco_statics::syntax::TermAnnId> {
-    let analysis = analyze_source(db, root, None).ok()?;
+    let analysis = analyze_source(db, root, None, Arc::default()).ok()?;
     analysis.statics().term_annotation(term.id(db))
 }
 

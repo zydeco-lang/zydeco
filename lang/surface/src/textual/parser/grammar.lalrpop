@@ -133,7 +133,8 @@ MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
 // Metadata occupies its own namespace, so language keywords remain useful as
 // closed role names inside an annotation.
-MetaName: String = {
+MetaName: String = <first:MetaSegment> <rest:("/" <MetaSegment>)*> => std::iter::once(first).chain(rest).collect::<Vec<_>>().join("/");
+MetaSegment: String = {
     <MixedId>,
     "end" => "end".into(),
     "begin" => "begin".into(),

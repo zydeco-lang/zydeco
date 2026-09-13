@@ -3,7 +3,7 @@ use zydeco_cli::RepresentationStrategy;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{
     e2e_sources,
-    utils::{SourceCase, SourceProgram, TestBackend},
+    utils::{ExecutionTarget, SourceCase, SourceProgram},
 };
 
 e2e_sources!({
@@ -12,12 +12,12 @@ e2e_sources!({
 
 #[test]
 fn dynamic_calls_and_conversion_agree_under_every_word_policy() {
-    for backend in [TestBackend::Interpreter, TestBackend::WasmSps] {
+    for backend in [ExecutionTarget::Interpreter, ExecutionTarget::WasmSps] {
         SourceProgram::setup("tests/std/represented-call/main.zy")
             .with_args(["convert"])
             .test(backend);
     }
-    for backend in [TestBackend::Amd64, TestBackend::WasmAm] {
+    for backend in [ExecutionTarget::Exe, ExecutionTarget::WasmAm] {
         for &policy in RepresentationStrategy::ALL {
             SourceProgram::setup("tests/std/represented-call/main.zy")
                 .with_args(["convert"])

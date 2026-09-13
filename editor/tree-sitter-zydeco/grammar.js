@@ -443,7 +443,9 @@ module.exports = grammar({
       ')',
     ),
 
-    meta_identifier: $ => choice(
+    meta_identifier: $ => seq($._meta_segment, repeat(seq('/', $._meta_segment))),
+
+    _meta_segment: $ => choice(
       $._variable_name,
       alias(choice(...KEYWORDS), $.keyword_identifier),
     ),

@@ -1838,6 +1838,31 @@
       ]
     },
     "meta_identifier": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_meta_segment"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "/"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_meta_segment"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "_meta_segment": {
       "type": "CHOICE",
       "members": [
         {

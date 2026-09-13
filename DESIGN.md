@@ -88,12 +88,12 @@ A source boundary prevents free names and mobile block bindings from crossing be
 Sharing is static: an imported computation is still evaluated at every dynamic occurrence.
 
 Every file is a source package; a `package` meta annotation declares a library, binary, or test role.
-Prefer complete files as library and binary entry points, addressed by bare paths.
-An optional `#name` selects a term named in package metadata;
+Prefer complete files as library and binary entry points, addressed by names or file paths.
+Package names select terms named in meta annotations independently of the file layout;
 concluding files can collect such registrations when needed.
 Annotations preserve ordinary local scoping and structure; only explicit imports introduce source boundaries.
 Typed relationships separate code requirements from operation-specific associations such as companion tests.
-Tests may declare their subjects with an optional `of` field; file-root discovery rules bound reverse lookup.
+Tests may declare their subjects with optional `of(...)` relationships; file-root discovery rules bound reverse lookup.
 The session owns term selection and test planning; the CLI executes the selected operation.
 The [source-package rules](docs/references/language.md#source-packages) define identities, roles, and relationships.
 
@@ -981,7 +981,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 | `lang/` | Compiler phases, interpreter, emitters, utilities, test harnesses, and data-driven case fixtures under `lang/tests/cases/`. |
 | `lang/machine/` | Rust representations and host-resumption descriptions shared by compiler phases and native stubs. |
 | `lib/` | Standard library, reusable examples, and regression projects under `lib/tests/`. |
-| `cli/` | Source checking, interpreter launch, formatting, and compilation commands. |
+| `cli/` | Source checking, shared backend execution, the bundled Node host, formatting, and compilation commands. |
 | `runtime/` | Runtime sources copied into native executable builds. |
 | `tui/` | Ratatui REPL using the shared compiler session. |
 | `editor/cajun/` | Language server, included in the Rust workspace. |
@@ -999,14 +999,14 @@ and `memory`, but the embedding must supply the imports before invoking either f
   and does not enter computations to discover static functions or witnesses.
   Demand does not yet flow through runtime package-dependent computation applications,
   so their arguments materialize whole ([Package modularization](docs/proposals/package-modularization.md)).
-- The standard native test path is AMD64 on Linux or macOS.
-  The CLI defaults to the host architecture, so an ARM host needs explicit AMD64 target selection
-  and appropriate tools for native execution.
+- Native execution is AMD64 on Linux or macOS.
+  `build` defaults to the host architecture, so an ARM host needs explicit AMD64 target selection.
+  `run -t exe` and `test -t exe` select AMD64 directly; execution still requires appropriate tools and host support.
 - WebAssembly requires a `zydeco` host embedding.
   Both variants have growing, non-collecting heaps.
   The abstract-machine variant has a fixed one-megabyte operand/control stack;
   the SPS variant allocates persistent stack frames and boxes products without ZASM's local-unboxing analysis.
-  The Node.js test host uses deterministic randomness.
+  CLI Wasm execution uses the bundled Node.js host; standalone WASI execution is not implemented.
 - Native foreign imports support only the returning subset described above;
   callbacks and C-to-Zydeco exports are not implemented.
   Checking a source is not evidence that a foreign library can be loaded or linked.

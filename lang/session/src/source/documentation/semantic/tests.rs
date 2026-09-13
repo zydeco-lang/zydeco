@@ -112,12 +112,18 @@ fn generic_field_docs_survive_type_substitution() {
     let source = "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(i64)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in\ncounter/¦value";
     assert_eq!(Fixture::new(source).markdown(), "Generic value.");
     let fixture = Fixture::new(source);
-    let reference = fixture.session.documentation_reference(&fixture.root).unwrap();
+    let reference = fixture
+        .session
+        .documentation_reference(fixture.session.analyze(&fixture.root).unwrap())
+        .unwrap();
     assert!(reference.get(&crate::source::DocumentationPath::default()).is_some());
     let package = Fixture::new(
         "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(i64)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in ¦counter",
     );
-    let reference = package.session.documentation_reference(&package.root).unwrap();
+    let reference = package
+        .session
+        .documentation_reference(package.session.analyze(&package.root).unwrap())
+        .unwrap();
     let member = reference
         .get(&crate::source::DocumentationPath::parse("value"))
         .expect("instantiated public field");

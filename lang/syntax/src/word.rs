@@ -68,7 +68,7 @@ mod tests {
         };
 
         let host = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/wasm-host.mjs"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../cli/wasm/wasm-host.mjs"),
         )
         .expect("the wasm host is part of this repository");
 

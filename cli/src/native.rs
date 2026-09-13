@@ -283,6 +283,20 @@ pub struct Executable {
 }
 
 impl Executable {
+    pub fn exit_code(status: ExitStatus) -> i32 {
+        if let Some(code) = status.code() {
+            return code;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            if let Some(signal) = status.signal() {
+                return 128 + signal;
+            }
+        }
+        1
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -366,7 +380,7 @@ pub enum NativeError {
     #[error("cannot run the executable: {0}")]
     RunExecutable(#[source] std::io::Error),
     #[error(
-        "WebAssembly execution requires an embedding that implements the `zydeco` host imports"
+        "build --execute is not supported for WebAssembly; use run --target wasm-am or wasm-sps"
     )]
-    WasmExecutionRequiresHost,
+    WasmBuildExecution,
 }

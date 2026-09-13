@@ -1,2 +1,1 @@
-@[discover(include("tests/**/*.zy"), exclude("tests/fixtures/**"))]
 (#message = "hello from a package")

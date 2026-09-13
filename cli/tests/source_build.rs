@@ -108,7 +108,7 @@ fn partial_patterns_report_runtime_failure_across_backends() {
                 assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
                 let extension = if target == "wasm-am" { "am" } else { "sps" };
                 output = Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
-                    .arg(workspace.join("lang/tests/wasm-host.mjs"))
+                    .arg(workspace.join("cli/wasm/wasm-host.mjs"))
                     .arg(build.join(format!("partial.{extension}.wasm")))
                     .output()
                     .unwrap();

@@ -4999,8 +4999,18 @@ mod tests {
     }
 
     #[test]
+    fn qualified_metadata_identifiers_round_trip_without_path_quotes_or_projection() {
+        let source = "@[package(test(of(std/data)), name(std/data/smoke))] @(import(std/data))";
+        let parsed = ParsedSource::new(source);
+        let formatted = parsed.render(LayoutIntentions::Ignore);
+        assert_eq!(formatted.trim(), source);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+    }
+
+    #[test]
     fn metadata_applications_expand_at_their_own_width_boundary() {
-        let source = r#"@[package(name("zydeco"),version("0.3.0"),license("MIT"))] _"#;
+        let source = r#"@[example(name("zydeco"),version("0.3.0"),license("MIT"))] _"#;
         let parsed = ParsedSource::new(source);
 
         let wide = parsed.render_with_options(
@@ -5008,7 +5018,7 @@ mod tests {
                 .with_line_width(120)
                 .with_layout_intentions(LayoutIntentions::Ignore),
         );
-        assert_eq!(wide, "@(package(name(\"zydeco\"), version(\"0.3.0\"), license(\"MIT\")))\n",);
+        assert_eq!(wide, "@(example(name(\"zydeco\"), version(\"0.3.0\"), license(\"MIT\")))\n",);
 
         let narrow = parsed.render_with_options(
             PrettyOptions::default()
@@ -5018,7 +5028,7 @@ mod tests {
         assert_eq!(
             narrow,
             concat!(
-                "@(package(\n",
+                "@(example(\n",
                 "  name(\"zydeco\"),\n",
                 "  version(\"0.3.0\"),\n",
                 "  license(\"MIT\")\n",
@@ -5041,7 +5051,7 @@ mod tests {
     #[test]
     fn metadata_preserves_authored_rows_and_internal_comments() {
         let source = concat!(
-            "@[package(name(\"zydeco\"),\n",
+            "@[example(name(\"zydeco\"),\n",
             "-- Explain the selected version.\n",
             "version(\"0.3.0\"))] _",
         );
@@ -5051,7 +5061,7 @@ mod tests {
         assert_eq!(
             formatted,
             concat!(
-                "@(package(\n",
+                "@(example(\n",
                 "  name(\"zydeco\"),\n",
                 "  -- Explain the selected version.\n",
                 "  version(\"0.3.0\")\n",

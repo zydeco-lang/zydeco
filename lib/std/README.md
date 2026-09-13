@@ -5,17 +5,17 @@
 Select the foundational kinds and types directly from the Builtin contract:
 
 ```zydeco
-param (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) : @(import("lib/std/builtin.zy")) in
+param (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) : @(import(std/builtin)) in
 ...
 ```
 
-The path above is relative to a source file in the repository root.
+Run CLI commands from the repository root to use its automatically detected package catalog.
 The contract's surface carries the compiler-canonical kinds and types as manifest fields,
 so one field search reaches every public name and every selection shares one type identity.
 A pure library function states its interface with just this parameter:
 
 ```zydeco
-param (/Ret; /Int64) : @(import("lib/std/builtin.zy")) in
+param (/Ret; /Int64) : @(import(std/builtin)) in
 fn (value : Int64) => (ret value : Ret Int64)
 ```
 
@@ -30,8 +30,8 @@ The available surface names are:
 | Text | `Char`, `String` |
 | Capabilities | `Addr`, `Access`, `Buffer`, `Reader`, `Writer`, `OS` |
 
-Host operations live in the same contract under the `numeric`, `text`, and `system` groups, and the search descends
-through them: `param (/stdio; /process) : @(import("lib/std/builtin.zy")) in` selects two operations
+Host operations live in the same contract under the `numeric`, `text`, and `system` groups,
+and the search descends through them: `param (/stdio; /process) : @(import(std/builtin)) in` selects two operations
 from the `system` group without naming it.
 The [integer example](../tests/std/minimal.zy) selects `Int64` and `Ret` this way,
 then uses the assembled standard package for arithmetic.
@@ -71,6 +71,37 @@ The optional `memory/package.zy` and `memory/static-layout.zy` builders are impo
 like the control libraries.
 Their explicit signatures prescribe abstract layouts, plans, and storage types.
 See [explicit storage](#explicit-storage).
+
+## Source packages and tests
+
+[`std.zy`](std.zy) declares the whole-file package `std`.
+Builtin is `std/builtin`; topic entries are `std/data`, `std/text`, `std/numeric`, `std/system`, and `std/memory`.
+These names identify source terms; fields and factory applications remain ordinary language structure.
+The [source-package rules](../../docs/references/language.md#source-packages) govern selection and relationships.
+
+The [repository catalog](../../packages.zy) explicitly includes entry files and the std test tree.
+From the repository root:
+
+```sh
+zydeco show
+zydeco check std
+zydeco test std
+zydeco test std -t all
+```
+
+Within that catalog, use `@(import(std))` or `@(import(std/memory))`.
+Explicit file imports remain valid without a catalog.
+Self-contained tests declare `@[package(test(of(std)))]` on their roots, including tests of optional libraries.
+Adding a test in the declared scope requires no edit to the library or catalog.
+
+The package runner defaults to the interpreter and uses empty stdin and arguments on every selected backend.
+`arg-list.zy`, `filesystem.zy`, and `read-line-as-int.zy` need supplied arguments,
+fixtures, or input, so they have no standalone test annotation.
+Keep the [Rust registrations](../../lang/tests/tests/std.rs) for fixture setup;
+that harness shares the execution runner and explicitly selects the repository catalog too.
+
+Use std from the same compiler release or revision, preserving its internal relative imports.
+There is no separate version resolver or hosted registry.
 
 ## Source layout
 
@@ -391,7 +422,7 @@ and [the C construction example](../tests/ffi/storage-access.zy).
 
 [The view library](memory/views.zy) receives address and access types as ordinary `VType` parameters.
 [The native provider](memory/native.zy) instantiates it with Builtin `Addr` and `Access`
-and supplies checked owned memory on the interpreter, AMD64, and the WebAssembly test host.
+and supplies checked owned memory on the interpreter, AMD64, and the WebAssembly host.
 A cell describes a fixed stored representation; a view interprets a thin, fat, or header-bearing handle.
 Views need no handle cell until an operation actually stores that handle.
 `padding`, `align`, and `product` calculate cell placement with source value functions.

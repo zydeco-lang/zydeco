@@ -61,12 +61,22 @@ Check a reusable source independently, or run an executable source with optional
 zydeco check lib/std/prelude.zy
 zydeco run lib/tests/oopsla/polynomial.zydeco
 zydeco run path/to/main.zy -- first-argument second-argument
+zydeco run path/to/main.zy -t wasm-sps -- first-argument second-argument
 ```
 
 `check` accepts any complete term that synthesizes its classifier, including types and library values.
 `run` additionally requires the executable Builtin package boundary.
-`run --dry` performs analysis and selects an executable root without evaluating it;
-it does not exercise runtime Builtin linking or load foreign libraries.
+`run --dry` performs analysis and selects an executable root without evaluating it; it does not compile a backend,
+require its tools, exercise runtime Builtin linking, or load foreign libraries.
+`run -t TARGET` (`--target`) selects `interpreter` (the default), `exe`, `wasm-am`, or `wasm-sps`.
+Execution inherits stdin, stdout, and stderr and preserves the program's exit status.
+Wasm uses the bundled Node.js host; `NODE` can name an alternative Node executable.
+`exe` uses the existing AMD64 linker and needs NASM, an archiver, Cargo, and support for executing AMD64 code.
+Its runtime source directory defaults to `runtime/`; use `-r PATH` (`--runtime-dir`) outside the checkout.
+Compiled execution uses temporary directories, removed after execution.
+Large native or Wasm compilations can exceed macOS's default main-thread stack;
+run `ulimit -s 16384` in the invoking shell for a 16 MiB process stack.
+The workspace's `RUST_MIN_STACK` setting applies to Rust worker threads, not the CLI's main thread.
 Use `--lint-types` with a checking command to run the compiler's additional typed-arena invariant checks:
 
 ```sh
@@ -85,40 +95,71 @@ and its use of `@[typeof]` to reuse the remaining package type.
 
 ## Use Source Packages
 
-A source file is already a library package.
-Prefer a complete file as the entry point for each library or binary, and address it by its path.
-A root `@[package(binary)]` or `@[package(test)]` annotation declares its role.
-The [language reference](docs/references/language.md#source-packages) owns the notation and relationship rules.
+Prefer complete files as library and binary entry points.
+Name a file with `@[package(library, name(example/math))]` and refer to it as `@(import(example/math))`.
+A test can declare `@[package(test(of(example/math)))]`; plain `@[package(test)]` is also valid.
+Use `name(example/smoke)` if the test also needs a public name.
+Names are independent of term fields and file layout.
+The [language reference](docs/references/language.md#source-packages) owns the rules.
 
-The [example library](docs/examples/packages/library.zy) declares an include/exclude discovery scope for test files;
-the [binary](docs/examples/packages/main.zy) imports that library directly.
-The smoke test names its subject with `@[package(test(of("../library.zy")))]`:
+Run commands from the project root, where the CLI detects `package.zy` and `packages.zy`.
+Keep discovery in these top-level files; implementation files use ordinary imports,
+and tests own their `of(...)` associations.
+A primary library can use `package.zy` as both its entry point and discovery boundary:
 
-```sh
-zydeco package show docs/examples/packages/library.zy docs/examples/packages/main.zy
-zydeco package check docs/examples/packages/library.zy
-zydeco package test docs/examples/packages/library.zy
-zydeco run docs/examples/packages/main.zy
-zydeco build docs/examples/packages/main.zy --target wasm-sps --build-dir build
+```zydeco
+@[discover(include("bin/*.zy", "tests/**/*.zy"), exclude("tests/fixtures/**"))]
+@[package(library, name(example/math))]
+@(import("src/lib.zy"))
 ```
 
-`show` accepts several files, so package declarations can remain modular while CLI inspection is centralized.
-It lists roles and typed relationships without loading their targets or checking code.
-Both `show` and `test` expand only the supplied file's explicit discovery rules, not rules in matched files.
-`check` follows code requirements only.
-`test` validates the requested package and all directly selected tests before executing them.
-Plain `@[package(test)]` is also supported: run it directly with `package test PATH`,
-or select it through a subject's `test("PATH")` relationship.
-Tests run sequentially with empty stdin and no arguments.
-Nonzero exits report captured output and fail the suite; compiler and runtime errors also fail the command.
-Unsupported relationship kinds are displayed by `show` and rejected by `test`.
+For a collection without a main entry, use `packages.zy` with a discovery annotation and `()` as its body.
+Reserve discovered directories for entry files and keep helpers or fixtures outside those patterns.
+The [source-package rules](docs/references/language.md#names-and-project-catalogs) specify the discovery boundary.
 
-Whole-file builds use the filename, so this example produces `main.sps.wasm`.
-If several packages need to share a file, give their meta annotations explicit names such
-as `@[package(test, name("smoke"))]`, and select them with `zydeco package test tests.zy#smoke`.
-Names do not come from fields or bindings, and annotations preserve the file's ordinary scoping.
-Named binary entry points remain available to `run` and `build`; their artifacts use the package name.
-Selecting a term as a separate entry requires its imports and parameters to be inside that term.
+From this repository's root, its [catalog](packages.zy) is selected automatically:
+
+```sh
+zydeco show
+zydeco check std
+zydeco test std
+zydeco test std -t all
+zydeco check lib/tests/std/bool.zy
+```
+
+Use repeatable `-p FILE` options to include additional package files, with `--pkg` and `--package` as long spellings:
+
+```sh
+zydeco -p ../shared/package.zy check example/math
+```
+
+Preparation indexes names once; imports and compilation reuse that catalog without scanning.
+`show` lists declarations and relationships without checking their code.
+`test` accepts the same targets and runtime directory as `run`, with repeatable `-t` options or `-t all`.
+The [execution selection rules](docs/references/language.md#selecting-an-execution-backend) specify defaults,
+ordering, preparation, and failure handling.
+It uses empty stdin and arguments; each test/backend result is labeled, and nonzero exits report captured output.
+See the [std guide](lib/std/README.md#source-packages-and-tests) for fixture-dependent and multi-backend coverage.
+
+Quoted imports such as `@(import("library.zy"))` and CLI paths still select complete files without a catalog.
+For the [small file-based example](docs/examples/packages/packages.zy), run from its root:
+
+```sh
+cd docs/examples/packages
+zydeco show
+zydeco test library.zy
+zydeco run main.zy
+zydeco build main.zy --target wasm-sps --build-dir build
+```
+
+For a named binary, use `zydeco run example/hello` or the corresponding `build` command.
+Named artifacts use dots for namespace separators (`example.hello.sps.wasm`); path builds use the file stem.
+Concluding files can register imported or inline terms with explicit names.
+Selecting an inline term independently requires all of its imports and parameters inside that term.
+
+`zydeco repl` uses the same detected catalog.
+Cajun recognizes the notation, but does not yet detect or expose project catalogs;
+its standalone analyses still require explicit file imports.
 
 ## Compile Programs
 
@@ -179,16 +220,16 @@ zydeco build path/to/main.zy --target wasm-am --build-dir build
 zydeco build path/to/main.zy --target wasm-sps --build-dir build
 ```
 
-These targets write `build/main.am.wasm` and `build/main.sps.wasm`;
-`--execute` is rejected because the CLI has no host embedding.
-For local experiments, the repository's Node.js test host can run either module:
+These targets write `build/main.am.wasm` and `build/main.sps.wasm`.
+Use `run -t wasm-am` or `run -t wasm-sps` to compile and execute a source directly;
+`build --execute` remains unsupported for Wasm.
+The same Node.js host can also run an existing module:
 
 ```sh
-node lang/tests/wasm-host.mjs build/main.am.wasm
-node lang/tests/wasm-host.mjs build/main.sps.wasm
+node cli/wasm/wasm-host.mjs build/main.am.wasm
+node cli/wasm/wasm-host.mjs build/main.sps.wasm
 ```
 
-This is a test host: randomness is deterministic.
 See the [WebAssembly ABI and limitations](DESIGN.md#webassembly-backend) before writing another embedding.
 
 ### Select Compiler Passes
@@ -320,6 +361,7 @@ A single-behavior fragment belongs in a data-driven case fixture rather than a n
 
 Whole-program fixtures run on every backend by default: `e2e_sources!` covers the interpreter,
 AMD64, and both WebAssembly backends.
+The harness shares its execution runner and `ExecutionTarget` with CLI `run` and `test`.
 Test programs never inherit the developer's terminal: undeclared standard input is EOF
 and output is captured on every backend, and a program that reads input declares it with `with_stdin`,
 asserting the exact output and exit status through `test_io`.

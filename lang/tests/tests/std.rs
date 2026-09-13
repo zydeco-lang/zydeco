@@ -1,5 +1,5 @@
 use zydeco_tests::e2e_sources;
-use zydeco_tests::utils::{SourceProgram, TestBackend};
+use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
 
 e2e_sources!({
     bool => "tests/std/bool.zy",
@@ -14,7 +14,7 @@ e2e_sources!({
 struct FilesystemCase;
 
 impl FilesystemCase {
-    fn run(backend: TestBackend) {
+    fn run(backend: ExecutionTarget) {
         let directory = tempfile::tempdir().expect("filesystem fixture directory");
         let path = directory.path().join("roundtrip.bin");
         std::fs::write(path.with_extension("bin.invalid"), [0xff, 0xfe])
@@ -27,43 +27,43 @@ impl FilesystemCase {
 
 #[test]
 fn filesystem_interpreter() {
-    FilesystemCase::run(TestBackend::Interpreter);
+    FilesystemCase::run(ExecutionTarget::Interpreter);
 }
 
 #[test]
 fn filesystem_amd64() {
-    FilesystemCase::run(TestBackend::Amd64);
+    FilesystemCase::run(ExecutionTarget::Exe);
 }
 
 #[test]
 fn filesystem_wasm_am() {
-    FilesystemCase::run(TestBackend::WasmAm);
+    FilesystemCase::run(ExecutionTarget::WasmAm);
 }
 
 #[test]
 fn filesystem_wasm_sps() {
-    FilesystemCase::run(TestBackend::WasmSps);
+    FilesystemCase::run(ExecutionTarget::WasmSps);
 }
 
 struct ArgumentListCase;
 
 impl ArgumentListCase {
-    fn run(backend: TestBackend) {
+    fn run(backend: ExecutionTarget) {
         SourceProgram::setup("tests/std/arg-list.zy").with_args(["alpha"]).test(backend);
     }
 }
 
 #[test]
 fn argument_list_interpreter() {
-    ArgumentListCase::run(TestBackend::Interpreter);
+    ArgumentListCase::run(ExecutionTarget::Interpreter);
 }
 
 #[test]
 fn argument_list_wasm_am() {
-    ArgumentListCase::run(TestBackend::WasmAm);
+    ArgumentListCase::run(ExecutionTarget::WasmAm);
 }
 
 #[test]
 fn argument_list_wasm_sps() {
-    ArgumentListCase::run(TestBackend::WasmSps);
+    ArgumentListCase::run(ExecutionTarget::WasmSps);
 }

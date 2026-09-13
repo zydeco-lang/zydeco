@@ -1,3 +1,4 @@
+@[package(library, name(std/data))]
 val
   (
     (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /numeric) : @(import("../builtin.zy"))

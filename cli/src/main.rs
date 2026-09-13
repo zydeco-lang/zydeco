@@ -3,19 +3,21 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use zydeco_cli::{
     BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
-    DocumentationCommand, HighSpsInspection, HighSpsPass, HighSpsPlan, HighSpsPlanError,
-    NativeError, PackageCommand, RepresentationStrategy, SourceFormatError, SourceFormatOutcome,
-    SourceFormatter, TargetArchitecture, TargetOs, WasmBackendKind,
+    DocumentationCommand, Executable, ExecutionError, ExecutionRunner, ExecutionTarget,
+    HighSpsInspection, HighSpsPass, HighSpsPlan, HighSpsPlanError, NativeError,
+    RepresentationStrategy, SourceFormatError, SourceFormatOutcome, SourceFormatter,
+    TargetArchitecture, TargetOs, TestTarget, WasmBackendKind,
     documentation::{DocumentationRenderError, DocumentationRenderer},
 };
-use zydeco_dynamics::ProgKont;
-use zydeco_session::source::{Package, PackageId, PackageRelationKind, PackageRole};
+use zydeco_session::source::{
+    Package, PackageId, PackageRelationKind, PackageRole, SourceLoadError, SourceReference,
+};
 use zydeco_tui::{Repl, ReplError};
 
 fn main() {
     let cli = Cli::parse();
     let compiler = CommandCompiler::default().with_lint_types(cli.lint_types);
-    let result = Application { compiler }.run(cli.command);
+    let result = Application { compiler }.run(cli.command, cli.packages);
     match result {
         | Ok(code) => std::process::exit(code),
         | Err(error) => {
@@ -31,9 +33,30 @@ struct Application {
 }
 
 impl Application {
-    fn run(mut self, command: Commands) -> Result<i32, ApplicationError> {
+    fn run(mut self, command: Commands, packages: Vec<PathBuf>) -> Result<i32, ApplicationError> {
+        if !matches!(
+            command,
+            Commands::Fmt { .. } | Commands::Passes { .. } | Commands::DocumentationExampleWorker
+        ) {
+            let roots = ["package.zy", "packages.zy"]
+                .into_iter()
+                .map(PathBuf::from)
+                .filter_map(|path| match path.try_exists() {
+                    | Ok(true) => Some(Ok(path)),
+                    | Ok(false) => None,
+                    | Err(source) => {
+                        Some(Err(SourceLoadError::Read { path, source: source.into() }))
+                    }
+                })
+                .chain(packages.into_iter().map(Ok))
+                .collect::<Result<Vec<_>, _>>()?;
+            self.compiler = self.compiler.with_packages(&roots)?;
+        }
         match command {
-            | Commands::Package { command } => self.package(command),
+            | Commands::Show => {
+                self.show_packages();
+                Ok(0)
+            }
             | Commands::Passes { sps_passes } => {
                 if let Some(text) = sps_passes {
                     print!("{}", text.parse::<HighSpsPlan>()?.explain());
@@ -54,9 +77,15 @@ impl Application {
             }
             | Commands::Doc { command } => self.documentation(command),
             | Commands::Fmt { files, check } => self.format_sources(&files, check),
-            | Commands::Run { file, dry, args } => self.run_source(&file, dry, &args),
+            | Commands::Run { file, target, execution, dry, args } => {
+                self.run_source(&file, target, execution.runtime_dir, dry, &args)
+            }
             | Commands::Check { file } => self.check_source(&file),
-            | Commands::Repl => Repl::launch().map_err(ApplicationError::Repl),
+            | Commands::Test { file, targets, execution } => {
+                self.test_package(&self.resolve(&file)?, targets, execution.runtime_dir)
+            }
+            | Commands::Repl => Repl::launch(self.compiler.catalog().bindings.clone())
+                .map_err(ApplicationError::Repl),
             | Commands::Build {
                 file,
                 target_os,
@@ -100,58 +129,42 @@ impl Application {
         }
     }
 
+    fn resolve(&self, source: &SourceReference) -> Result<PackageId, ApplicationError> {
+        Ok(self.compiler.catalog().bindings.resolve(source, &std::env::current_dir()?)?)
+    }
+
     fn selected_analysis(
-        &self, path: &Path,
+        &self, source: &SourceReference,
     ) -> Result<std::sync::Arc<zydeco_session::ProgramAnalysis>, ApplicationError> {
-        let id = PackageId::with_path(path.to_path_buf())?;
-        if id.name.is_some() {
+        let id = self.resolve(source)?;
+        if matches!(source, SourceReference::Package(_)) {
             self.compiler.package(&id)?.require_role(PackageRole::Binary)?;
         }
         let analysis = self.compiler.analyze_package(&id)?;
         Ok(self.report_analysis(analysis))
     }
 
-    fn package(&self, command: PackageCommand) -> Result<i32, ApplicationError> {
-        match command {
-            | PackageCommand::Show { files } => {
-                for package in files
-                    .iter()
-                    .map(|file| self.compiler.packages(file))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .into_iter()
-                    .flatten()
-                    .map(|package| (package.id.clone(), package))
-                    .collect::<std::collections::BTreeMap<_, _>>()
-                    .into_values()
-                {
-                    let position = package.source.file.line_col(package.origin.range().start);
-                    println!("{} {} ({position})", package.role, package.id);
-                    for import in &package.imports {
-                        println!("  code -> {}", import.directive.target);
-                    }
-                    for relationship in &package.relations {
-                        let status = if matches!(relationship.kind, PackageRelationKind::Custom(_))
-                        {
-                            " [unsupported]"
-                        } else {
-                            ""
-                        };
-                        println!(
-                            "  {} -> {:?}{status}",
-                            relationship.kind,
-                            relationship.target.to_string()
-                        );
-                    }
-                }
-                Ok(0)
+    fn show_packages(&self) {
+        for package in &self.compiler.catalog().packages {
+            let position = package.source.file.line_col(package.origin.range().start);
+            let label =
+                package.name.as_ref().map_or_else(|| package.id.to_string(), ToString::to_string);
+            if package.name.is_some() {
+                println!("{} {label} ({}:{position})", package.role, package.id.path.display());
+            } else {
+                println!("{} {label}:{position}", package.role);
             }
-            | PackageCommand::Check { file } => {
-                let id = PackageId::with_path(file)?;
-                self.check_package(&self.compiler.package(&id)?)?;
-                println!("Checked package {id}.");
-                Ok(0)
+            for import in &package.imports {
+                println!("  code -> {}", import.directive.target);
             }
-            | PackageCommand::Test { file } => self.test_package(&PackageId::with_path(file)?),
+            for relationship in &package.relations {
+                let status = if matches!(relationship.kind, PackageRelationKind::Custom(_)) {
+                    " [unsupported]"
+                } else {
+                    ""
+                };
+                println!("  {} -> {}{status}", relationship.kind, relationship.target);
+            }
         }
     }
 
@@ -171,7 +184,9 @@ impl Application {
         Ok(Some(executable))
     }
 
-    fn test_package(&self, id: &PackageId) -> Result<i32, ApplicationError> {
+    fn test_package(
+        &self, id: &PackageId, targets: Vec<TestTarget>, runtime_dir: PathBuf,
+    ) -> Result<i32, ApplicationError> {
         let plan = self.compiler.package_tests(id)?;
         if plan.root.role != PackageRole::Test {
             self.check_package(&plan.root)?;
@@ -186,17 +201,37 @@ impl Application {
                 Ok((&package.id, executable))
             })
             .collect::<Result<Vec<_>, ApplicationError>>()?;
-        let count = programs.len();
+        let runner = ExecutionRunner::new(
+            &self.compiler,
+            targets.iter().flat_map(TestTarget::expand).copied(),
+            runtime_dir,
+        )?;
+        let runs = programs
+            .into_iter()
+            .map(|(id, executable)| {
+                runner.prepare(executable).map(|runs| runs.into_iter().map(move |run| (id, run)))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let count = runs.len();
         let mut failed = 0;
-        for (id, executable) in programs {
-            let result = CommandCompiler::test_io_program(executable, &[], "")?;
-            if result.code == 0 {
-                println!("PASS {id}");
-            } else {
-                failed += 1;
-                println!("FAIL {id} (exit {})", result.code);
-                print!("{}", result.output);
-                eprint!("{}", result.stderr);
+        for (id, run) in runs {
+            let target = run.target;
+            match run.test(&[], "") {
+                | Ok(result) if result.code == 0 => println!("PASS [{target}] {id}"),
+                | Ok(result) => {
+                    failed += 1;
+                    println!("FAIL [{target}] {id} (exit {})", result.code);
+                    print!("{}", result.output);
+                    eprint!("{}", result.stderr);
+                }
+                | Err(error) => {
+                    failed += 1;
+                    println!("FAIL [{target}] {id}");
+                    ApplicationError::Execution(error).render();
+                }
             }
         }
         println!("{} passed; {failed} failed.", count - failed);
@@ -211,8 +246,8 @@ impl Application {
             | DocumentationCommand::Build { file, .. }
             | DocumentationCommand::Check { file, .. } => file,
         };
-        self.analyze(file)?;
-        let reference = self.compiler.documentation_reference(file)?;
+        let analysis = self.analyze(file)?;
+        let reference = self.compiler.documentation_reference(analysis)?;
         let renderer = DocumentationRenderer { reference: &reference };
         match command {
             | DocumentationCommand::Show { subject, .. } => {
@@ -348,27 +383,30 @@ impl Application {
         analysis
     }
 
-    fn check_source(&self, path: &Path) -> Result<i32, ApplicationError> {
-        let id = PackageId::with_path(path.to_path_buf())?;
-        self.report_analysis(self.compiler.analyze_package(&id)?);
+    fn check_source(&self, source: &SourceReference) -> Result<i32, ApplicationError> {
+        let id = self.resolve(source)?;
+        self.check_package(&self.compiler.package(&id)?)?;
         Ok(0)
     }
 
     fn run_source(
-        &self, path: &Path, dry: bool, arguments: &[String],
+        &self, path: &SourceReference, target: ExecutionTarget, runtime_dir: PathBuf, dry: bool,
+        arguments: &[String],
     ) -> Result<i32, ApplicationError> {
         let analysis = self.selected_analysis(path)?;
         let executable = self.compiler.executable_program(&analysis)?;
-        match CommandCompiler::interpret_program(executable, arguments, dry)? {
-            | ProgKont::Dry => Ok(0),
-            | ProgKont::ExitCode(code) => Ok(code),
-            | ProgKont::Error(_) => unreachable!("runtime errors are promoted to CompileError"),
-            | ProgKont::Ret(_) => unreachable!("an executable source root must return `OS`"),
+        if dry {
+            return Ok(0);
         }
+        let run = ExecutionRunner::new(&self.compiler, [target], runtime_dir)?
+            .prepare(executable)?
+            .pop()
+            .expect("run selects one backend");
+        Ok(run.run(arguments)?)
     }
 
     fn build_source(
-        &self, path: &Path, target: BuildTarget, options: BuildOptions, execute: bool,
+        &self, path: &SourceReference, target: BuildTarget, options: BuildOptions, execute: bool,
         representation: Option<RepresentationStrategy>,
     ) -> Result<i32, ApplicationError> {
         if representation.is_some() && matches!(target, BuildTarget::Zir | BuildTarget::WasmSps) {
@@ -394,7 +432,7 @@ impl Application {
             }
             | BuildTarget::WasmAm => {
                 if execute {
-                    return Err(NativeError::WasmExecutionRequiresHost.into());
+                    return Err(NativeError::WasmBuildExecution.into());
                 }
                 let artifact = Self::artifact_name(path)?;
                 let module = backend.emit_wasm_am()?;
@@ -404,7 +442,7 @@ impl Application {
             }
             | BuildTarget::WasmSps => {
                 if execute {
-                    return Err(NativeError::WasmExecutionRequiresHost.into());
+                    return Err(NativeError::WasmBuildExecution.into());
                 }
                 let artifact = Self::artifact_name(path)?;
                 let module = backend.emit_wasm_sps()?;
@@ -417,47 +455,31 @@ impl Application {
                 let executable =
                     options.link_amd64(&artifact, &native.assembly, &native.foreign_libraries)?;
                 if execute {
-                    return Ok(Self::process_exit_code(executable.run(&[])?));
+                    return Ok(Executable::exit_code(executable.run(&[])?));
                 }
             }
         }
         Ok(0)
     }
 
-    fn process_exit_code(status: std::process::ExitStatus) -> i32 {
-        if let Some(code) = status.code() {
-            return code;
+    fn artifact_name(source: &SourceReference) -> Result<String, ApplicationError> {
+        match source {
+            | SourceReference::Package(name) => Ok(name.to_string().replace('/', ".")),
+            | SourceReference::Path(path) => path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(str::to_owned)
+                .ok_or_else(|| ApplicationError::InvalidArtifactName(path.clone())),
         }
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::ExitStatusExt;
-            if let Some(signal) = status.signal() {
-                return 128 + signal;
-            }
-        }
-        1
-    }
-
-    fn artifact_name(path: &Path) -> Result<String, ApplicationError> {
-        let source = PackageId::with_path(path.to_path_buf())?;
-        if let Some(name) = source.name {
-            return Ok(name.to_string());
-        }
-        source
-            .path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .map(str::to_owned)
-            .ok_or_else(|| ApplicationError::InvalidArtifactName(path.to_path_buf()))
     }
 }
 
 #[derive(Debug, Error)]
 enum ApplicationError {
+    #[error("cannot read the working directory: {0}")]
+    WorkingDirectory(#[from] std::io::Error),
     #[error(transparent)]
     PackageContract(#[from] zydeco_session::source::PackageError),
-    #[error(transparent)]
-    SourceReference(#[from] zydeco_surface::metadata::SourceReferenceError),
     #[error(transparent)]
     Package(#[from] zydeco_session::source::SourceLoadError),
     #[error(transparent)]
@@ -477,6 +499,8 @@ enum ApplicationError {
     #[error(transparent)]
     Compile(#[from] CompileError),
     #[error(transparent)]
+    Execution(#[from] ExecutionError),
+    #[error(transparent)]
     Native(#[from] NativeError),
     #[error(transparent)]
     Repl(#[from] ReplError),
@@ -487,7 +511,10 @@ enum ApplicationError {
 impl ApplicationError {
     fn render(&self) {
         match self {
-            | Self::Compile(error) => DiagnosticRenderer::error(error),
+            | Self::Compile(error) | Self::Execution(ExecutionError::Compile(error)) => {
+                DiagnosticRenderer::error(error)
+            }
+            | Self::Package(error) => DiagnosticRenderer::source_error(error),
             | Self::Format(error) => DiagnosticRenderer::format_error(error),
             | _ => eprintln!("{self}"),
         }
@@ -496,18 +523,18 @@ impl ApplicationError {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::Application;
+    use super::Executable;
     use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
 
     #[test]
     fn native_exit_codes_preserve_normal_exits_and_report_signals_as_failures() {
         for code in [0, 7, 134, 255] {
-            assert_eq!(Application::process_exit_code(ExitStatus::from_raw(code << 8)), code);
+            assert_eq!(Executable::exit_code(ExitStatus::from_raw(code << 8)), code);
         }
         for signal in [6, 9, 15] {
             let status = ExitStatus::from_raw(signal);
             assert_eq!(status.code(), None);
-            assert_eq!(Application::process_exit_code(status), 128 + signal);
+            assert_eq!(Executable::exit_code(status), 128 + signal);
         }
     }
 }

@@ -31,14 +31,13 @@ impl Fixture {
 
 #[test]
 fn tests_can_name_multiple_subjects_and_keep_each_source_span() {
-    let source =
-        r#"@[package(test(of("lib.zy", "packages.zy#other")), documentation("docs.zy"))] ()"#;
+    let source = r#"@[package(test(of("lib.zy", other)), documentation("docs.zy"))] ()"#;
     let packages = Fixture::parse(source).packages().unwrap();
     assert_eq!(packages[0].role, PackageRole::Test);
-    for (relation, expected) in packages[0].relations.iter().zip(["lib.zy", "packages.zy#other"]) {
+    for (relation, expected) in packages[0].relations.iter().zip([r#""lib.zy""#, "other"]) {
         assert_eq!(relation.kind, PackageRelationKind::TestOf);
         assert_eq!(relation.target.to_string(), expected);
-        assert_eq!(&source[relation.info.range()], format!("{expected:?}"));
+        assert_eq!(&source[relation.info.range()], expected);
     }
     for source in ["@[package(test)] ()", "@[package(test())] ()"] {
         assert!(Fixture::parse(source).packages().unwrap()[0].relations.is_empty());
@@ -47,9 +46,7 @@ fn tests_can_name_multiple_subjects_and_keep_each_source_span() {
 
 #[test]
 fn test_subjects_reject_wrong_placement_shape_and_duplicate_targets() {
-    for role in
-        ["test(of())", "test(of(1))", "test(of(\"one.zy\"), of(\"two.zy\"))", "test(\"one.zy\")"]
-    {
+    for role in ["test(of())", "test(of(\"one.zy\"), of(\"two.zy\"))", "test(\"one.zy\")"] {
         assert!(matches!(
             Fixture::parse(&format!("@[package({role})] ()")).packages(),
             Err(PackageDirectiveError::Annotation {
@@ -58,6 +55,13 @@ fn test_subjects_reject_wrong_placement_shape_and_duplicate_targets() {
             })
         ));
     }
+    let source = "@[package(test(of(1)))] ()";
+    let error = Fixture::parse(source).packages().unwrap_err();
+    assert!(matches!(
+        &error,
+        PackageDirectiveError::Annotation { source: PackageAnnotationError::Target(_), .. }
+    ));
+    assert_eq!(&source[error.span().range()], "1");
     for role in ["library", "test"] {
         assert!(matches!(
             Fixture::parse(&format!(r#"@[package({role}, of("lib.zy"))] ()"#)).packages(),
@@ -125,7 +129,7 @@ fn discovery_is_file_level_ordered_and_validates_each_glob() {
         ("(#x = @[discover] ())", "file root"),
         ("@[discover] @[discover] ()", "duplicate"),
         ("@[discover(include())] ()", "at least one"),
-        (r#"@[discover(include("../*.zy"))] ()"#, "relative glob"),
+        (r#"@[discover(include("tests/../*.zy"))] ()"#, "relative glob"),
     ] {
         let fixture = Fixture::parse(source);
         let error =
@@ -136,15 +140,15 @@ fn discovery_is_file_level_ordered_and_validates_each_glob() {
             span,
         } = error
         {
-            assert_eq!(&source[span.range()], r#""../*.zy""#);
+            assert_eq!(&source[span.range()], r#""tests/../*.zy""#);
         }
     }
 }
 
 #[test]
 fn metadata_names_register_exact_terms_and_roles_are_separate_from_relationships() {
-    let source = r#"(@[package(test, name("z"))] 1,
-        #unrelated = @[package(library, test("tests.zy#smoke"), documentation("docs.zy"), name("a"))] 2)"#;
+    let source = r#"(@[package(test, name(z))] 1,
+        #unrelated = @[package(library, test(smoke), documentation("docs.zy"), name(a))] 2)"#;
     let fixture = Fixture::parse(source);
     let packages = fixture.packages().unwrap();
     assert_eq!(
@@ -159,11 +163,11 @@ fn metadata_names_register_exact_terms_and_roles_are_separate_from_relationships
     assert_eq!(source[fixture.parser.spans[&payload.into()].range()].trim(), "2");
     assert_ne!(library.term, fixture.unit.root);
     assert_eq!(library.relations[0].kind, crate::metadata::PackageRelationKind::Test);
-    assert_eq!(library.relations[0].target.to_string(), "tests.zy#smoke");
+    assert_eq!(library.relations[0].target.to_string(), "smoke");
     assert!(
         matches!(&library.relations[1].kind, crate::metadata::PackageRelationKind::Custom(name) if name.to_string() == "documentation")
     );
-    assert_eq!(&source[library.relations[0].info.range()], r#"test("tests.zy#smoke")"#);
+    assert_eq!(&source[library.relations[0].info.range()], r#"test(smoke)"#);
 }
 
 #[test]
@@ -200,7 +204,7 @@ fn annotations_require_a_role_and_package_names_are_unique_across_roles() {
         Err(PackageDirectiveError::Annotation { source: PackageAnnotationError::Relation, .. })
     ));
     assert!(matches!(
-        Fixture::parse(r#"(#same = @[package(library, name("same"))] (), #different = @[package(test, name("same"))] ())"#).packages(),
+        Fixture::parse(r#"(#same = @[package(library, name(same))] (), #different = @[package(test, name(same))] ())"#).packages(),
         Err(PackageDirectiveError::DuplicateName { name, span, first }) if name.to_string() == "same" && span != first
     ));
     assert!(matches!(
@@ -212,9 +216,9 @@ fn annotations_require_a_role_and_package_names_are_unique_across_roles() {
 #[test]
 fn names_are_optional_at_file_roots_and_required_only_for_nested_entries() {
     for source in [
-        r#"@[package(library, name("api"))] 1"#,
-        r#"let x = @[package(library, name("api"))] 1 in x"#,
-        r#"(#field = @[package(library, name("api"))] 1)"#,
+        r#"@[package(library, name(api))] 1"#,
+        r#"let x = @[package(library, name(api))] 1 in x"#,
+        r#"(#field = @[package(library, name(api))] 1)"#,
     ] {
         let packages = Fixture::parse(source).packages().unwrap();
         assert_eq!(packages[0].name.as_ref().unwrap().to_string(), "api");
@@ -231,14 +235,12 @@ fn names_are_optional_at_file_roots_and_required_only_for_nested_entries() {
 #[test]
 fn name_options_validate_spelling_shape_and_uniqueness_at_the_option_span() {
     for (option, expected) in [
+        (r#"name("api")"#, PackageAnnotationError::NameShape),
         ("name()", PackageAnnotationError::NameShape),
         ("name(1)", PackageAnnotationError::NameShape),
         (r#"name("x", "y")"#, PackageAnnotationError::NameShape),
-        (r#"name("")"#, PackageAnnotationError::Name(crate::metadata::PackageNameError("".into()))),
-        (
-            r#"name("a/b")"#,
-            PackageAnnotationError::Name(crate::metadata::PackageNameError("a/b".into())),
-        ),
+        (r#"name("")"#, PackageAnnotationError::NameShape),
+        (r#"name("a/b")"#, PackageAnnotationError::NameShape),
     ] {
         let source = format!("@[package(library, {option})] 1");
         let PackageDirectiveError::Annotation { span, source: error } =
@@ -249,14 +251,14 @@ fn name_options_validate_spelling_shape_and_uniqueness_at_the_option_span() {
         assert_eq!(error, expected);
         assert_eq!(&source[span.range()], option);
     }
-    let source = r#"@[package(library, name("one"), name("two"))] 1"#;
+    let source = r#"@[package(library, name(one), name(two))] 1"#;
     let PackageDirectiveError::Annotation { span, source: error } =
         Fixture::parse(source).packages().unwrap_err()
     else {
         panic!("duplicate name")
     };
     assert_eq!(error, PackageAnnotationError::DuplicateName);
-    assert_eq!(&source[span.range()], r#"name("two")"#);
+    assert_eq!(&source[span.range()], r#"name(two)"#);
 }
 
 #[test]
@@ -269,7 +271,7 @@ fn malformed_relationships_and_redundant_code_declarations_are_rejected() {
         matches!(Fixture::parse(r#"@[package(library, test("tests.zy"), test("tests.zy"))] ()"#).packages(),
         Err(PackageDirectiveError::DuplicateRelation { span, first }) if span != first)
     );
-    for target in [r#"test("")"#, r#"test("tests.zy#")"#, r##"test("#smoke")"##] {
+    for target in [r#"test(1)"#, r#"test("")"#, r#"test("tests.zy#")"#, r##"test("#smoke")"##] {
         assert!(matches!(
             Fixture::parse(&format!("@[package(library, {target})] ()")).packages(),
             Err(PackageDirectiveError::Annotation {
@@ -278,7 +280,7 @@ fn malformed_relationships_and_redundant_code_declarations_are_rejected() {
             })
         ));
     }
-    for relation in [r#"test(1)"#, r#"test"#, r#"relation("test", package("tests.zy", "smoke"))"#] {
+    for relation in [r#"test"#, r#"relation("test", package("tests.zy", "smoke"))"#] {
         assert!(matches!(
             Fixture::parse(&format!("@[package(library, {relation})] ()")).packages(),
             Err(PackageDirectiveError::Annotation { source: PackageAnnotationError::Relation, .. })
@@ -287,16 +289,47 @@ fn malformed_relationships_and_redundant_code_declarations_are_rejected() {
 }
 
 #[test]
-fn source_references_select_a_whole_file_or_a_named_package() {
-    for (address, path, name) in
-        [("math.zy", "math.zy", None), ("../math.zy#main", "../math.zy", Some("main"))]
-    {
-        let target = Fixture::import(&format!("@(import({address:?}))")).unwrap();
-        let ImportTarget::Source(reference) = &target else { panic!("expected a source file") };
-        assert_eq!(reference.path, std::path::Path::new(path));
-        assert_eq!(reference.name.as_ref().map(ToString::to_string).as_deref(), name);
-        assert_eq!(reference.to_string(), address);
-        assert_eq!(target.to_string(), format!("{address:?}"));
+fn source_references_distinguish_catalog_names_from_explicit_whole_files() {
+    use crate::metadata::{PackageName, SourceReference};
+    for (written, expected) in [
+        (r#""math.zy""#, SourceReference::Path("math.zy".into())),
+        (r#""std""#, SourceReference::Path("std".into())),
+        ("std", SourceReference::Package("std".parse().unwrap())),
+        ("std/data", SourceReference::Package("std/data".parse().unwrap())),
+        ("std/test/foo-bar", SourceReference::Package("std/test/foo-bar".parse().unwrap())),
+    ] {
+        let target = Fixture::import(&format!("@(import({written}))")).unwrap();
+        assert_eq!(target, ImportTarget::Source(expected));
+        assert_eq!(target.to_string(), written);
+    }
+    for path in ["math.zy", "lib/math.zy", "./std", "../std", "/std", "math.zyi", "math.zydeco"] {
+        assert_eq!(path.parse::<SourceReference>().unwrap(), SourceReference::Path(path.into()));
+    }
+    for name in ["std", "std/data", "pkg/test-1", "_pkg"] {
+        assert_eq!(
+            name.parse::<SourceReference>().unwrap(),
+            SourceReference::Package(name.parse().unwrap())
+        );
+        let source = format!("@[package(library, name({name}))] ()");
+        assert_eq!(
+            Fixture::parse(&source).packages().unwrap()[0].name,
+            Some(name.parse().unwrap())
+        );
+    }
+    for name in [
+        "",
+        "/",
+        "std/",
+        "/std",
+        "std//data",
+        "std/../data",
+        "1std",
+        "std/1",
+        "_",
+        "std/_",
+        "std#data",
+    ] {
+        assert!(name.parse::<PackageName>().is_err(), "{name}");
     }
     assert!(matches!(Fixture::import("@(import(1))").unwrap(), ImportTarget::Input(_)));
 }
@@ -316,10 +349,10 @@ fn invalid_source_references_and_old_package_calls_are_rejected() {
     ));
     assert!(matches!(
         Fixture::import(r#"@(import(package("math.zy", "main")))"#),
-        Err(ImportDirectiveError::UnsupportedTarget { .. })
+        Err(ImportDirectiveError::InvalidSource { .. })
     ));
     assert!(matches!(
-        Fixture::import(r#"@[import("math.zy#main")] 1"#),
+        Fixture::import(r#"@[import("math.zy")] 1"#),
         Err(ImportDirectiveError::PayloadNotHole { .. })
     ));
 }
@@ -334,17 +367,16 @@ fn metadata_catalog_agrees_with_package_argument_and_source_validation() {
         };
         fixture.parser.arena.semantic_meta(meta)
     };
-    let valid =
-        annotation(r#"@[package(library, test("tests.zy#smoke"), documentation("docs.zy"))] ()"#);
+    let valid = annotation(r#"@[package(library, test(smoke), documentation("docs.zy"))] ()"#);
     assert!(MetadataKind::Package.definition().validate_arguments(valid.arguments()).is_ok());
     let invalid = annotation(r#"@[package(library, test(1))] ()"#);
     assert!(matches!(
         MetadataKind::Package.definition().validate_arguments(invalid.arguments()),
-        Err(MetadataValidationError::Package(PackageAnnotationError::Relation))
+        Err(MetadataValidationError::Package(PackageAnnotationError::Target(_)))
     ));
     let test =
         MetadataCatalog::package_options().iter().find(|option| option.name() == "test").unwrap();
-    assert!(test.validate_arguments(&[Meta::String("tests.zy#smoke".into())]).is_ok());
+    assert!(test.validate_arguments(&[Meta::Ident("smoke".into())]).is_ok());
     assert!(matches!(
         test.validate_arguments(&[Meta::Integer(1)]),
         Err(MetadataValidationError::ExpectedSource { .. })

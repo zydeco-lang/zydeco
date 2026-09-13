@@ -601,14 +601,14 @@ fn source_unit_decodes_a_numbered_input_import() {
 fn source_unit_rejects_import_without_one_supported_target() {
     enum ExpectedImportError {
         TargetArity(usize),
-        UnsupportedTarget,
+        InvalidSource,
         EmptyPath,
         NonPositiveInput,
     }
 
     let cases = [
         ("@[import] _", ExpectedImportError::TargetArity(0), "import"),
-        ("@[import(path)] _", ExpectedImportError::UnsupportedTarget, "path"),
+        ("@[import(path())] _", ExpectedImportError::InvalidSource, "path()"),
         (
             r#"@[import("one.zy","two.zy")] _"#,
             ExpectedImportError::TargetArity(2),
@@ -630,10 +630,7 @@ fn source_unit_rejects_import_without_one_supported_target() {
                 ImportDirectiveError::TargetArity { found, .. },
                 ExpectedImportError::TargetArity(expected),
             ) => assert_eq!(found, expected),
-            | (
-                ImportDirectiveError::UnsupportedTarget { .. },
-                ExpectedImportError::UnsupportedTarget,
-            ) => {}
+            | (ImportDirectiveError::InvalidSource { .. }, ExpectedImportError::InvalidSource) => {}
             | (ImportDirectiveError::EmptyPath { .. }, ExpectedImportError::EmptyPath) => {}
             | (
                 ImportDirectiveError::NonPositiveInput { .. },

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { randomBytes } from "node:crypto";
 import { FloatText } from "./wasm-numeric.mjs";
 import { CheckedMemory, MemoryFault } from "./wasm-memory.mjs";
 
@@ -190,6 +191,55 @@ class InputBuffer {
   }
 }
 
+// Read only when the program asks, including line input before stdin reaches EOF.
+class StandardInput {
+  constructor() {
+    this.buffer = Buffer.alloc(4096);
+    this.offset = 0;
+    this.length = 0;
+    this.ended = false;
+  }
+
+  fill() {
+    if (this.offset === this.length && !this.ended) {
+      this.length = fs.readSync(0, this.buffer, 0, this.buffer.length);
+      this.offset = 0;
+      this.ended = this.length === 0;
+    }
+  }
+
+  get eof() {
+    this.fill();
+    return this.ended;
+  }
+
+  read(count) {
+    if (count > 0) this.fill();
+    const end = Math.min(this.offset + count, this.length);
+    const bytes = Buffer.from(this.buffer.subarray(this.offset, end));
+    this.offset = end;
+    return bytes;
+  }
+
+  readAll() {
+    const chunks = [];
+    while (!this.eof) chunks.push(this.read(this.length - this.offset));
+    return Buffer.concat(chunks);
+  }
+
+  readLine() {
+    const chunks = [];
+    while (!this.eof) {
+      const newline = this.buffer.subarray(0, this.length).indexOf(0x0a, this.offset);
+      chunks.push(this.read((newline < 0 ? this.length : newline + 1) - this.offset));
+      if (newline >= 0) break;
+    }
+    const bytes = Buffer.concat(chunks);
+    if (bytes.at(-1) !== 0x0a) return bytes;
+    return bytes.subarray(0, bytes.at(-2) === 0x0d ? -2 : -1);
+  }
+}
+
 class HostIo {
   constructor(stdin) {
     this.stdin = stdin;
@@ -283,7 +333,7 @@ class HostIo {
 class ZydecoHost {
   constructor(arguments_, stdin) {
     this.arguments = arguments_;
-    this.input = new InputBuffer(stdin);
+    this.input = stdin;
     this.values = new HostValues();
     this.checkedMemory = new CheckedMemory();
     this.io = new HostIo(this.input);
@@ -332,7 +382,7 @@ class ZydecoHost {
               return implementation;
             }
             return () => {
-              throw new Error(`WASM test host does not implement zydeco.${String(name)}`);
+              throw new Error(`WASM host does not implement zydeco.${String(name)}`);
             };
           },
         },
@@ -778,7 +828,7 @@ class ZydecoHost {
       return Transfers.withOneArgument(whenSome, this.values.string(this.arguments[Number(offset)]));
     });
     functions.set("random_int", (continuation, spare) =>
-      Transfers.withOneArgument(continuation, this.words.encodeSigned(0n, 64, spare)),
+      Transfers.withOneArgument(continuation, this.words.encodeSigned(randomBytes(8).readBigInt64LE(), 64, spare)),
     );
     functions.set("exit", (code) => {
       const status = Number(BigInt.asIntN(32, this.words.decodeSigned(code, 64)));
@@ -789,8 +839,7 @@ class ZydecoHost {
 
 class WasmProgram {
   static async run(modulePath, arguments_) {
-    const stdin = fs.readFileSync(0);
-    const host = new ZydecoHost(arguments_, stdin);
+    const host = new ZydecoHost(arguments_, new StandardInput());
     const module = await WebAssembly.compile(fs.readFileSync(modulePath));
     host.instance = await WebAssembly.instantiate(module, host.imports());
     const initialLinearBytes = host.memory().buffer.byteLength;

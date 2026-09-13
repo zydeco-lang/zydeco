@@ -59,7 +59,7 @@ fn wasm_float_text_matches_rust_for_boundaries_and_sampled_bit_patterns() {
             "--eval",
             r#"
 import fs from 'node:fs';
-import { FloatText } from './wasm-numeric.mjs';
+import { FloatText } from '../../cli/wasm/wasm-numeric.mjs';
 const scratch = new DataView(new ArrayBuffer(8));
 let failures = 0;
 for (const line of fs.readFileSync(process.argv[1], 'utf8').trim().split('\n')) {

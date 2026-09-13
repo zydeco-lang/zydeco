@@ -227,7 +227,7 @@ by the contract's alignment.
 the binding passes its explicit readable window as one C pointer and supplies a separate length if required.
 Subsequent byte transformations produce ordinary buffers and carry no stored-type proof;
 re-import them through the contract to reestablish its invariants.
-The Wasm test host models checked memory and alignment in a virtual address space, with no native C pointer export.
+The Wasm host models checked memory and alignment in a virtual address space, with no native C pointer export.
 
 The [C example](../../lib/tests/ffi/representation.zy) constructs an over-aligned record
 and passes it to a [C fixture](../../lib/tests/ffi/boundary.c) that checks address alignment,
@@ -313,7 +313,7 @@ The last applies to buffers created by the uninitialized memory allocator descri
 Operations on a closed handle report `Closed` before inspecting their range.
 Detected allocation and layout failures create no returned handle; range and capability rejections precede copying.
 General host allocator aborts remain outside this fallible protocol, as for immutable storage.
-Native/interpreter buffers use real aligned allocations; the Wasm test host retains its opaque-address limitation.
+Native/interpreter buffers use real aligned allocations; the Wasm host retains its opaque-address limitation.
 Reads copy a detached snapshot; freeze transfers the initialized allocation under the immutable-owner rule below.
 
 ### Choosing an allocator on the computation stack
@@ -407,7 +407,7 @@ The [native provider](../../lib/std/memory/native.zy) binds them to checked host
 [examples](../../lib/tests/std/memory-views.zy) run on the interpreter, AMD64, and both WebAssembly backends.
 The [bounded model](../../lib/tests/ffi/views/model.zy) supplies a deterministic alternative provider
 for [source composition and phase tests](../../lang/tests/tests/memory_views.rs).
-The WebAssembly test host models addresses in its own virtual address space and exposes no C pointer.
+The WebAssembly host models addresses in its own virtual address space and exposes no C pointer.
 The source `Bytes` and `Storage` interfaces use this same memory provider and its retained immutable-owner transition.
 
 ### The primitive boundary

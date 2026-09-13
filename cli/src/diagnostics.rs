@@ -12,10 +12,7 @@ pub struct DiagnosticRenderer;
 impl DiagnosticRenderer {
     pub fn error(error: &CompileError) {
         match error {
-            | CompileError::Analysis(AnalysisError::Source { error }) => match error.as_ref() {
-                | SourceLoadError::Parse(SourceParseError::Parse { error }) => Self::parse(error),
-                | _ => eprintln!("{error}"),
-            },
+            | CompileError::Analysis(AnalysisError::Source { error }) => Self::source_error(error),
             | CompileError::Rejected(analysis) => {
                 Self::warnings(analysis);
                 if let Some(diagnostics) = analysis.outcome().diagnostics() {
@@ -37,6 +34,13 @@ impl DiagnosticRenderer {
                         .eprint(&mut cache);
                 }
             }
+            | _ => eprintln!("{error}"),
+        }
+    }
+
+    pub fn source_error(error: &SourceLoadError) {
+        match error {
+            | SourceLoadError::Parse(SourceParseError::Parse { error }) => Self::parse(error),
             | _ => eprintln!("{error}"),
         }
     }

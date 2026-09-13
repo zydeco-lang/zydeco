@@ -1,4 +1,4 @@
-// Checked allocation model for the WebAssembly test host. Data addresses are
+// Checked allocation model for the WebAssembly host. Data addresses are
 // virtual host addresses; this host does not export borrowed C pointers.
 export class MemoryFault extends Error {
   constructor(code) {

@@ -1,3 +1,4 @@
+@[package(library, name(std/numeric))]
 begin
   param val (
     (

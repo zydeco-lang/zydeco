@@ -20,7 +20,7 @@ pub struct PackageSite {
 pub enum PackageDirectiveError {
     #[error("invalid package annotation at {span}: {source}")]
     Annotation { span: Span, source: PackageAnnotationError },
-    #[error("package annotation at {span} needs name(\"id\") unless it annotates the file root")]
+    #[error("package annotation at {span} needs name(id) unless it annotates the file root")]
     Unnamed { span: Span },
     #[error("duplicate package name `{name}` at {span}; first declared at {first}")]
     DuplicateName { name: PackageName, span: Span, first: Span },

@@ -2,8 +2,8 @@ use super::{
     DocumentationContent, DocumentationExposure, DocumentationExposureError,
     DocumentationExposureQuery, DocumentationLinkTarget, DocumentationPath,
 };
-use crate::{AnalysisError, CompilerSession, ProgramAnalysis};
-use std::{path::Path, sync::Arc};
+use crate::{CompilerSession, ProgramAnalysis};
+use std::sync::Arc;
 use thiserror::Error;
 use zydeco_statics::{
     arena::StaticsArena,
@@ -19,8 +19,6 @@ pub struct DocumentationReference {
 
 #[derive(Debug, Error)]
 pub enum DocumentationReferenceError {
-    #[error(transparent)]
-    Analysis(#[from] AnalysisError),
     #[error("public documentation requires a successfully checked entry root")]
     Rejected,
     #[error(transparent)]
@@ -29,9 +27,8 @@ pub enum DocumentationReferenceError {
 
 impl CompilerSession {
     pub fn documentation_reference(
-        &self, root: impl AsRef<Path>,
+        &self, analysis: Arc<ProgramAnalysis>,
     ) -> Result<DocumentationReference, DocumentationReferenceError> {
-        let analysis = self.analyze(root)?;
         let program =
             self.checked_program(&analysis).ok_or(DocumentationReferenceError::Rejected)?;
         let classifier = match program.root {

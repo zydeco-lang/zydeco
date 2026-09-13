@@ -1,0 +1,2 @@
+@[discover(include("lib/std/*.zy", "lib/std/*/package.zy", "lib/tests/std/**/*.zy"))]
+()

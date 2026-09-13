@@ -63,18 +63,18 @@ a pure function or `ret 1` can pass checking without being a runnable file root.
 The [standard library guide](lib/std/README.md) describes the package boundary, library assembly,
 and available operations.
 
-A file is already a library package.
-Prefer complete files as library and binary entry points, addressed by plain paths such as `library.zy` and `main.zy`.
-Use `@[package(binary)]` or `@[package(test)]` on the file root to declare another role.
-Tests can name their subjects with `@[package(test(of("../library.zy")))]`;
-a file-root `@[discover(include("tests/**/*.zy"), exclude("tests/fixtures/**"))]` supplies an explicit discovery scope.
-Plain `@[package(test)]` remains independently runnable.
-Inspect the [example library](docs/examples/packages/library.zy)
-with `zydeco package show docs/examples/packages/library.zy`,
-or run the [example binary](docs/examples/packages/main.zy) with `zydeco run docs/examples/packages/main.zy`.
-An optional `#name` suffix selects a term explicitly named in package metadata,
-such as `@[package(test, name("smoke"))]`; omit it for the usual whole-file entry point.
-Package names are independent of fields and bindings, and annotations leave ordinary file scoping unchanged.
+Prefer complete files as package entry points.
+Name one with `@[package(library, name(example/math))]` and reuse it with `@(import(example/math))`.
+Binary and test roles use the same annotation; `@[package(test(of(example/math)))]` associates a test
+from the test side alone.
+The CLI detects `package.zy` and `packages.zy` in the working directory;
+their include/exclude globs collect additional package declarations.
+Use `-p FILE` (`--pkg` or `--package`) to add other package files.
+From this repository's root, `zydeco test std` runs std's standalone suite and `zydeco show` lists packages.
+Both `run` and `test` default to the interpreter; `-t` (`--target`) selects a backend.
+Repeat it for a test matrix: `zydeco test std -t interpreter -t wasm-am -t wasm-sps`.
+Use `zydeco test std -t all` to include every backend, including native `exe`.
+Quoted file imports and direct CLI paths also work without a catalog.
 See the [package workflow](CONTRIBUTING.md#use-source-packages) for checking, building, and tests.
 
 ## Interactive REPL
@@ -101,9 +101,10 @@ zydeco build hello-world.zy --target wasm-sps --build-dir build
 ```
 
 These commands produce `build/hello-world.am.wasm` and `build/hello-world.sps.wasm`.
-The modules require imports from the `zydeco` host namespace; the CLI does not execute them itself.
+The modules require imports from the `zydeco` host namespace.
+`zydeco run hello-world.zy -t wasm-sps` compiles and executes with the bundled host, requiring Node.js.
 The [compilation workflow](CONTRIBUTING.md#compile-programs) explains native targets
-and execution with the Node.js test host.
+and execution with the Node.js host.
 [DESIGN.md](DESIGN.md#webassembly-backend) describes the two lowering strategies, shared ABI, and limitations.
 
 ## Editor Support

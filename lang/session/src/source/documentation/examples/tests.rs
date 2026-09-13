@@ -30,7 +30,14 @@ fn only_explicitly_opted_in_fences_are_checked() {
     let fixture = Fixture::new("```zydeco\nschematic ...\n```\n\n```zydeco check\n42\n```");
     let examples = fixture.examples();
     assert_eq!(examples.len(), 1);
-    assert!(examples[0].request(&fixture.session).unwrap().check().status.is_passed());
+    assert!(
+        examples[0]
+            .request(&fixture.session, &Default::default())
+            .unwrap()
+            .check()
+            .status
+            .is_passed()
+    );
 }
 
 #[test]
@@ -43,14 +50,18 @@ fn examples_keep_relative_imports_and_current_overlay_inputs() {
         .unwrap();
     let example = &fixture.examples()[0];
     let before = fixture.session.source_text(&fixture.path).unwrap();
-    assert!(example.request(&fixture.session).unwrap().check().status.is_passed());
+    assert!(
+        example.request(&fixture.session, &Default::default()).unwrap().check().status.is_passed()
+    );
     assert_eq!(fixture.session.source_text(&fixture.path).unwrap(), before);
     fixture
         .session
         .set_overlay(fixture.path.with_file_name("library.zy"), "(#other = 42)".to_owned())
         .unwrap();
-    assert!(!example.request(&fixture.session).unwrap().check().status.is_passed());
-    assert!(!example.request(&fixture.session).unwrap().path.exists());
+    assert!(
+        !example.request(&fixture.session, &Default::default()).unwrap().check().status.is_passed()
+    );
+    assert!(!example.request(&fixture.session, &Default::default()).unwrap().path.exists());
 }
 
 #[test]
@@ -59,17 +70,24 @@ fn rejection_requires_the_declared_code_and_position() {
         "```zydeco reject=tyck.missing-named-field at=1:15\n(#value = 42)/missing\n```",
     );
     let example = &fixture.examples()[0];
-    let result = example.request(&fixture.session).unwrap().check();
+    let result = example.request(&fixture.session, &Default::default()).unwrap().check();
     assert!(result.status.is_passed(), "{result:?}");
     let wrong =
         Fixture::new("```zydeco reject=tyck.type-mismatch at=1:15\n(#value = 42)/missing\n```");
-    assert!(!wrong.examples()[0].request(&wrong.session).unwrap().check().status.is_passed());
+    assert!(
+        !wrong.examples()[0]
+            .request(&wrong.session, &Default::default())
+            .unwrap()
+            .check()
+            .status
+            .is_passed()
+    );
     let wrong_location = Fixture::new(
         "```zydeco reject=tyck.missing-named-field at=1:2\n(42, (#value = 1)/missing)\n```",
     );
     assert!(
         !wrong_location.examples()[0]
-            .request(&wrong_location.session)
+            .request(&wrong_location.session, &Default::default())
             .unwrap()
             .check()
             .status
@@ -82,7 +100,8 @@ fn unrelated_import_errors_do_not_satisfy_expected_rejection() {
     let fixture = Fixture::new(
         "```zydeco reject=tyck.type-expected at=1:1\nlet value = @(import(\"missing.zy\")) in ! 1\n```",
     );
-    let result = fixture.examples()[0].request(&fixture.session).unwrap().check();
+    let result =
+        fixture.examples()[0].request(&fixture.session, &Default::default()).unwrap().check();
     assert!(!result.status.is_passed());
     assert!(result.diagnostics.iter().all(|diagnostic| diagnostic.code.is_none()));
 }
@@ -91,7 +110,7 @@ fn unrelated_import_errors_do_not_satisfy_expected_rejection() {
 fn example_errors_map_back_to_unicode_crlf_comment_lines() {
     let fixture = Fixture::new("Some α prose.\n\n```zydeco check\nlet text = \"😀\" in\n! 1\n```");
     let example = &fixture.examples()[0];
-    let result = example.request(&fixture.session).unwrap().check();
+    let result = example.request(&fixture.session, &Default::default()).unwrap().check();
     assert!(!result.status.is_passed());
     let diagnostic = &result.diagnostics[0];
     let range = example.source_range(diagnostic.range.clone().unwrap()).unwrap();
@@ -134,23 +153,42 @@ fn scratch_source_preserves_import_context_without_changing_other_strings() {
 }
 
 #[test]
-fn package_scratch_imports_preserve_source_context_and_package_names() {
-    let mut fixture = Fixture::new("```zydeco check\n@(import(\"package.zy#main\"))\n```");
+fn package_examples_and_scratch_imports_retain_the_selected_catalog() {
+    let mut fixture = Fixture::new("```zydeco check\n@(import(example/main))\n```");
+    let library = fixture.path.with_file_name("package.zy");
     fixture
         .session
-        .set_overlay(
-            fixture.path.with_file_name("package.zy"),
-            r#"(#main = @[package(library, name("main"))] 42)"#.into(),
-        )
+        .set_overlay(&library, "@[package(library, name(example/main))] 42".into())
         .unwrap();
+    let catalog = fixture.session.package_catalog(&[library]).unwrap();
     let example = &fixture.examples()[0];
-    assert!(example.request(&fixture.session).unwrap().check().status.is_passed());
+    let request = example.request(&fixture.session, &catalog.bindings).unwrap();
+    let encoded = serde_json::to_string(&request).unwrap();
+    let decoded: DocumentationExampleRequest = serde_json::from_str(&encoded).unwrap();
+    assert!(decoded.check().status.is_passed());
+    assert!(
+        !example.request(&fixture.session, &Default::default()).unwrap().check().status.is_passed()
+    );
+    assert!(
+        serde_json::from_str::<DocumentationExampleRequest>(
+            &encoded.replace("example/main", "example//main")
+        )
+        .is_err()
+    );
     let scratch = example.scratch_source().unwrap();
-    assert!(scratch.contains("package.zy#main"));
+    assert_eq!(scratch, example.code, "catalog names are independent of source directories");
     let other = tempfile::tempdir().unwrap();
     let path = other.path().join("scratch.zydeco");
     fixture.session.set_overlay(&path, scratch).unwrap();
-    assert!(fixture.session.analyze(path).unwrap().outcome().root().is_some());
+    assert!(
+        fixture
+            .session
+            .analyze_package(&PackageId { path, name: None }, catalog.bindings)
+            .unwrap()
+            .outcome()
+            .root()
+            .is_some()
+    );
     let numbered = Fixture::new("```zydeco check\n@(import(1))\n```");
     assert!(matches!(
         numbered.examples()[0].scratch_source(),

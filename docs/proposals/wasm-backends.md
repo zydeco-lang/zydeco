@@ -34,7 +34,7 @@ Runtime data and private dispatch state remain distinct even when both contain t
 Deterministic emission and typed rejection of unsupported forms remain required when representations change.
 
 These constraints do not select fixed stack capacity, uniform boxing, bump allocation, or whole-program local plans.
-They also do not make the test host a packaged application runtime or imply standalone WASI support.
+The CLI's bundled Node host provides local execution; standalone WASI support remains a separate question.
 
 ## Prototype Comparison
 

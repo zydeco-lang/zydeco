@@ -1,3 +1,4 @@
+@[package(library, name(std/builtin))]
 exists
   -- Kind-valued manifest components establish the two CBPV universes used by
   -- the rest of the signature.

@@ -1,5 +1,6 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
+use zydeco_surface::metadata::SourceReference;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum BuildTarget {
@@ -10,6 +11,59 @@ pub enum BuildTarget {
     WasmSps,
     #[default]
     Exe,
+}
+
+/// Backends that can execute a program with the host Builtin package.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum ExecutionTarget {
+    #[default]
+    Interpreter,
+    Exe,
+    WasmAm,
+    WasmSps,
+}
+
+impl std::fmt::Display for ExecutionTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.to_possible_value().expect("execution target has a CLI name").get_name())
+    }
+}
+
+/// A test selection expands to concrete backends before execution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TestTarget {
+    One(ExecutionTarget),
+    All,
+}
+
+impl TestTarget {
+    pub fn parser() -> impl clap::builder::TypedValueParser<Value = Self> {
+        use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
+        PossibleValuesParser::new(
+            ExecutionTarget::value_variants()
+                .iter()
+                .filter_map(ValueEnum::to_possible_value)
+                .chain([PossibleValue::new("all")]),
+        )
+        .map(|value| match value.as_str() {
+            | "all" => Self::All,
+            | _ => Self::One(ExecutionTarget::from_str(&value, false).expect("validated backend")),
+        })
+    }
+
+    pub fn expand(&self) -> &[ExecutionTarget] {
+        match self {
+            | Self::One(target) => std::slice::from_ref(target),
+            | Self::All => ExecutionTarget::value_variants(),
+        }
+    }
+}
+
+#[derive(Args)]
+pub struct ExecutionOptions {
+    /// Native runtime sources, used by exe
+    #[arg(short = 'r', long, default_value = "runtime")]
+    pub runtime_dir: PathBuf,
 }
 
 /// Command-line spelling, translated to the compiler's representation policy at entry.
@@ -57,12 +111,17 @@ impl TargetOs {
 }
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(version, about, long_about = None,
+    after_help = "Packages are loaded from package.zy and packages.zy in the working directory.")]
 pub struct Cli {
     /// Re-validate the finished typed arena after every successful check,
     /// reporting internal compiler errors (debugging aid)
     #[arg(long, global = true)]
     pub lint_types: bool,
+
+    /// Add a package file alongside automatic discovery; repeat for multiple files
+    #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "FILE")]
+    pub packages: Vec<PathBuf>,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -70,11 +129,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Inspect, check, or test source packages
-    Package {
-        #[command(subcommand)]
-        command: PackageCommand,
-    },
+    /// List the project's packages and relationships without checking or executing code
+    Show,
     /// List optional compiler passes or explain a selected high-SPS plan
     Passes {
         /// Explain `default`, `none`, or a comma-separated list such as normalize,normalize
@@ -100,9 +156,14 @@ pub enum Commands {
     },
     /// Run a zydeco program
     Run {
-        /// File path (preferred); append #NAME only to select a registered term
+        /// Package name, or source path (use ./ for an extensionless file)
         #[arg(value_name = "SOURCE")]
-        file: PathBuf,
+        file: SourceReference,
+        /// Execution backend
+        #[arg(short, long, default_value = "interpreter")]
+        target: ExecutionTarget,
+        #[command(flatten)]
+        execution: ExecutionOptions,
         /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
         dry: bool,
@@ -110,18 +171,30 @@ pub enum Commands {
         #[arg(last = true)]
         args: Vec<String>,
     },
-    /// Check a zydeco program
+    /// Check a source package and its code dependencies, including its declared executable role
     Check {
-        /// File path (preferred); append #NAME only to select a registered term
+        /// Package name, or source path (use ./ for an extensionless file)
         #[arg(value_name = "SOURCE")]
-        file: PathBuf,
+        file: SourceReference,
+    },
+    /// Run a test package or the selected package's direct test companions with empty stdin
+    Test {
+        /// Package name, or source path (use ./ for an extensionless file)
+        #[arg(value_name = "SOURCE")]
+        file: SourceReference,
+        /// Execution backend or all; repeat to test multiple backends in order
+        #[arg(short, long = "target", default_value = "interpreter", value_parser = TestTarget::parser())]
+        targets: Vec<TestTarget>,
+        #[command(flatten)]
+        execution: ExecutionOptions,
     },
     /// Start the declaration-free terminal REPL
     Repl,
+    /// Build a Zydeco program for the selected target
     Build {
-        /// File path (preferred); append #NAME only to select a registered term
+        /// Package name, or source path (use ./ for an extensionless file)
         #[arg(value_name = "SOURCE")]
-        file: PathBuf,
+        file: SourceReference,
         /// Target OS (defaults to host OS)
         #[arg(long)]
         target_os: Option<TargetOs>,
@@ -145,27 +218,6 @@ pub enum Commands {
         /// Run the program after building
         #[arg(short = 'x', long, default_value_t = false)]
         execute: bool,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum PackageCommand {
-    /// Inspect packages from one or more source files without checking or executing code
-    Show {
-        #[arg(value_name = "FILE", required = true)]
-        files: Vec<PathBuf>,
-    },
-    /// Check one package and its code dependencies, without following test associations
-    Check {
-        /// File path (preferred); append #NAME only to select a registered term
-        #[arg(value_name = "SOURCE")]
-        file: PathBuf,
-    },
-    /// Run a test package or the selected package's direct test companions with empty stdin
-    Test {
-        /// File path (preferred); append #NAME only to select a registered term
-        #[arg(value_name = "SOURCE")]
-        file: PathBuf,
     },
 }
 

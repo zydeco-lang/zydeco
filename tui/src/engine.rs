@@ -1,5 +1,5 @@
 use crate::{diagnostics::DiagnosticText, submission::ExpressionMode};
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use thiserror::Error;
 use zydeco_dynamics::{
     BuiltinComputationRootLinker, BuiltinPackageError, ProgKont, RootLinker, Runtime,
@@ -7,6 +7,7 @@ use zydeco_dynamics::{
 };
 use zydeco_session::{
     AnalysisOutcome, CheckedProgram, CompilerSession, ProgramAnalysis, SourceLoadError,
+    source::{PackageBindings, PackageId},
 };
 use zydeco_statics::{
     TyckObservation,
@@ -33,14 +34,15 @@ pub(crate) struct ReplEngine {
     directory: PathBuf,
     builtin: PathBuf,
     session: CompilerSession,
+    bindings: Arc<PackageBindings>,
 }
 
 impl ReplEngine {
     const INPUT_OBSERVATION: &'static str = "zydeco-tui-input";
 
-    pub(crate) fn new(directory: PathBuf) -> Self {
+    pub(crate) fn new(directory: PathBuf, bindings: Arc<PackageBindings>) -> Self {
         let builtin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
-        Self { directory, builtin, session: CompilerSession::default() }
+        Self { directory, builtin, session: CompilerSession::default(), bindings }
     }
 
     pub(crate) fn install(
@@ -76,7 +78,10 @@ impl ReplEngine {
     pub(crate) fn evaluate(
         &self, input: &InstalledInput, mode: ExpressionMode,
     ) -> EvaluationOutcome {
-        let direct_analysis = match self.session.analyze(&input.direct_wrapper) {
+        let direct_analysis = match self.session.analyze_package(
+            &PackageId { path: input.direct_wrapper.clone(), name: None },
+            self.bindings.clone(),
+        ) {
             | Ok(analysis) => analysis,
             | Err(error) => {
                 return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
@@ -85,7 +90,10 @@ impl ReplEngine {
         let analysis = if matches!(direct_analysis.outcome(), AnalysisOutcome::Checked { .. }) {
             direct_analysis
         } else {
-            let returned_analysis = match self.session.analyze(&input.returned_wrapper) {
+            let returned_analysis = match self.session.analyze_package(
+                &PackageId { path: input.returned_wrapper.clone(), name: None },
+                self.bindings.clone(),
+            ) {
                 | Ok(analysis) => analysis,
                 | Err(error) => {
                     return EvaluationOutcome::Error(DiagnosticText::analysis_error(&error));
@@ -393,9 +401,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn named_imports_use_explicit_bindings_in_numbered_inputs() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        std::fs::write(&library, "@[package(library, name(example/value))] 42").unwrap();
+        let catalog = CompilerSession::default().package_catalog(&[library]).unwrap();
+        for (bindings, accepted) in [(catalog.bindings, true), (Arc::default(), false)] {
+            let mut engine = ReplEngine::new(directory.path().to_path_buf(), bindings);
+            let input = engine
+                .install(SourceNumber::new(1).unwrap(), "@(import(example/value))".into())
+                .unwrap();
+            let result = engine.evaluate(&input, ExpressionMode::Evaluate);
+            match result {
+                | EvaluationOutcome::Success(text) if accepted => assert_eq!(text, "42 : Int64"),
+                | EvaluationOutcome::Error(text) if !accepted => {
+                    assert!(text.contains("unknown package"))
+                }
+                | _ => panic!("package bindings were not honored"),
+            }
+            if accepted {
+                let later =
+                    engine.install(SourceNumber::new(2).unwrap(), "@(import(1))".into()).unwrap();
+                assert!(matches!(engine.evaluate(&later, ExpressionMode::Evaluate),
+                    EvaluationOutcome::Success(text) if text == "42 : Int64"));
+            }
+        }
+    }
+
+    #[test]
     fn typed_holes_can_be_inspected_but_not_evaluated() {
         let directory = tempfile::tempdir().unwrap();
-        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
         let input = engine
             .install(
                 SourceNumber::new(1).unwrap(),
@@ -417,7 +453,7 @@ mod tests {
     #[test]
     fn a_numbered_input_can_import_an_earlier_expression() {
         let directory = tempfile::tempdir().unwrap();
-        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
         let first = SourceNumber::new(1).unwrap();
         let second = SourceNumber::new(2).unwrap();
         let third = SourceNumber::new(3).unwrap();
@@ -449,7 +485,7 @@ mod tests {
     #[test]
     fn type_metadata_checks_without_running() {
         let directory = tempfile::tempdir().unwrap();
-        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
         let path =
             engine.install(SourceNumber::new(1).unwrap(), "@[type] ret 1".to_owned()).unwrap();
 
@@ -466,7 +502,7 @@ mod tests {
     #[test]
     fn returned_values_are_classified_by_the_return_payload() {
         let directory = tempfile::tempdir().unwrap();
-        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
         let path = engine.install(SourceNumber::new(1).unwrap(), "ret 1".to_owned()).unwrap();
 
         match engine.evaluate(&path, ExpressionMode::Evaluate) {
@@ -480,7 +516,7 @@ mod tests {
     #[test]
     fn type_check_failures_have_a_retryable_outcome() {
         let directory = tempfile::tempdir().unwrap();
-        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
         let path = engine.install(SourceNumber::new(1).unwrap(), "1 2".to_owned()).unwrap();
 
         match engine.evaluate(&path, ExpressionMode::Evaluate) {
@@ -499,7 +535,7 @@ mod tests {
     #[test]
     fn a_missing_number_is_diagnosed_as_an_input_identity() {
         let directory = tempfile::tempdir().unwrap();
-        let mut engine = ReplEngine::new(directory.path().to_path_buf());
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
         let path =
             engine.install(SourceNumber::new(1).unwrap(), "@(import(2))".to_owned()).unwrap();
 
@@ -519,7 +555,7 @@ mod tests {
     #[test]
     fn run_mode_supplies_builtin_to_a_declaration_free_program() {
         let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/builtin");
-        let mut engine = ReplEngine::new(directory);
+        let mut engine = ReplEngine::new(directory, Arc::default());
         let path = engine
             .install(
                 SourceNumber::new(1).unwrap(),

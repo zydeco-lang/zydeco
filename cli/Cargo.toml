@@ -31,14 +31,15 @@ thiserror = { workspace = true }
 pulldown-cmark = { workspace = true }
 sha3 = { workspace = true }
 url = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 wasmparser = { workspace = true }
 
 [build-dependencies]
 clap = { workspace = true }
 clap_complete = { workspace = true }
+zydeco-surface = { workspace = true }
 
 [[bin]]
 name = "zydeco"

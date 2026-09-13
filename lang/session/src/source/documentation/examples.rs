@@ -1,5 +1,8 @@
 use super::{Documentation, DocumentationGuide};
-use crate::{CompilerSession, SourceDiagnosticSite};
+use crate::{
+    CompilerSession, SourceDiagnosticSite,
+    source::{PackageBindings, PackageId},
+};
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
@@ -59,7 +62,7 @@ pub enum DocumentationScratchError {
     Parse(#[from] zydeco_surface::textual::ParseFailure),
     #[error(transparent)]
     Import(#[from] zydeco_surface::textual::ImportDirectiveError),
-    #[error("scratch examples require explicit file imports")]
+    #[error("scratch examples cannot retain numbered interactive imports")]
     NumberedImport,
     #[error("import has no path token")]
     MissingPathToken,
@@ -88,7 +91,12 @@ impl DocumentationExample {
             .iter()
             .map(|site| {
                 let reference = match &site.directive.target {
-                    | ImportTarget::Source(reference) => reference,
+                    | ImportTarget::Source(zydeco_surface::metadata::SourceReference::Path(
+                        path,
+                    )) => path,
+                    | ImportTarget::Source(zydeco_surface::metadata::SourceReference::Package(
+                        _,
+                    )) => return Ok(None),
                     | ImportTarget::Input(_) => {
                         return Err(DocumentationScratchError::NumberedImport);
                     }
@@ -102,15 +110,14 @@ impl DocumentationExample {
                 let target = origin
                     .parent()
                     .ok_or(DocumentationScratchError::MissingDirectory)?
-                    .join(&reference.path);
+                    .join(reference);
                 let text = target.to_str().ok_or(DocumentationScratchError::NonUtf8Path)?;
-                let text = match &reference.name {
-                    | Some(name) => format!("{text}#{name}"),
-                    | None => text.to_owned(),
-                };
-                Ok((token.range.clone(), format!("{text:?}")))
+                Ok(Some((token.range.clone(), format!("{text:?}"))))
             })
-            .collect::<Result<Vec<_>, DocumentationScratchError>>()?;
+            .collect::<Result<Vec<_>, DocumentationScratchError>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
         replacements.sort_by_key(|(range, _)| range.start);
         let mut code = self.code.clone();
         replacements
@@ -238,7 +245,7 @@ impl DocumentationExample {
     }
 
     pub fn request(
-        &self, session: &CompilerSession,
+        &self, session: &CompilerSession, bindings: &PackageBindings,
     ) -> Result<DocumentationExampleRequest, DocumentationExampleError> {
         let expectation = match self.mode.clone()? {
             | DocumentationExampleMode::Check => DocumentationExampleExpectation::Check,
@@ -253,6 +260,7 @@ impl DocumentationExample {
             path,
             code: self.code.clone(),
             inputs: session.documentation_inputs(),
+            bindings: bindings.clone(),
             expectation,
         })
     }
@@ -268,6 +276,7 @@ pub struct DocumentationExampleRequest {
     pub path: PathBuf,
     pub code: String,
     pub inputs: Vec<DocumentationExampleInput>,
+    pub bindings: PackageBindings,
     pub expectation: DocumentationExampleExpectation,
 }
 
@@ -355,7 +364,9 @@ impl DocumentationExampleRequest {
         if let Err(error) = session.set_overlay(&self.path, self.code) {
             return DocumentationExampleVerification::worker_failure(error.to_string());
         }
-        let analysis = match session.analyze(&self.path) {
+        let analysis = match session
+            .analyze_package(&PackageId { path: self.path, name: None }, self.bindings.into())
+        {
             | Ok(analysis) => analysis,
             | Err(error) => {
                 let site = error.diagnostic_site();

@@ -34,21 +34,46 @@ impl PackageRole {
     }
 }
 
-/// A package name, unique within its source file.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, derive_more::Display)]
+/// A package name, qualified by `/` and unique within a selected catalog.
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    derive_more::Display,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(try_from = "String")]
 pub struct PackageName(String);
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
-#[error("invalid package name `{0}`: expected nonempty ASCII letters, digits, `_`, or `-`")]
+#[error(
+    "invalid package name `{0}`: expected `/`-separated identifiers using ASCII letters, digits, `_`, or `-`"
+)]
 pub struct PackageNameError(pub String);
+
+impl TryFrom<String> for PackageName {
+    type Error = PackageNameError;
+
+    fn try_from(name: String) -> Result<Self, Self::Error> {
+        name.parse()
+    }
+}
 
 impl FromStr for PackageName {
     type Err = PackageNameError;
 
     fn from_str(name: &str) -> Result<Self, Self::Err> {
-        if !name.is_empty()
-            && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-        {
+        if name.split('/').all(|part| {
+            let mut bytes = part.bytes();
+            bytes.next().is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+                && part != "_"
+                && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        }) {
             Ok(Self(name.to_owned()))
         } else {
             Err(PackageNameError(name.to_owned()))
@@ -89,51 +114,70 @@ impl fmt::Display for PackageRelationKind {
     }
 }
 
-/// A complete source file (preferred), with an optional `#name` selecting a registered term.
+/// Names are resolved in an explicit catalog; quoted source paths select complete files.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SourceReference {
-    pub path: PathBuf,
-    pub name: Option<PackageName>,
+pub enum SourceReference {
+    Path(PathBuf),
+    Package(PackageName),
 }
 
 impl SourceReference {
     pub fn with_path(path: PathBuf) -> Result<Self, SourceReferenceError> {
-        match path.to_str() {
-            | Some(text) => text.parse(),
-            | None => Ok(Self { path, name: None }),
+        if path.as_os_str().is_empty()
+            || path.to_str().is_some_and(|text| text.contains(['\0', '#']))
+        {
+            return Err(SourceReferenceError::Path);
+        }
+        Ok(Self::Path(path))
+    }
+
+    pub fn decode(meta: &Meta) -> Result<Self, SourceReferenceError> {
+        match meta {
+            | Meta::String(path) => Self::with_path(path.into()),
+            | Meta::Ident(name) => Ok(Self::Package(name.parse()?)),
+            | _ => Err(SourceReferenceError::Shape),
         }
     }
 }
 
+/// CLI spelling: source extensions, absolute paths, and explicit ./ or ../ prefixes are paths.
+/// Every other spelling is a package name, with no filesystem-dependent fallback.
 impl FromStr for SourceReference {
     type Err = SourceReferenceError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let (path, name) = match text.split_once('#') {
-            | Some((path, name)) => (path, Some(name.parse()?)),
-            | None => (text, None),
-        };
-        if path.is_empty() || path.contains('\0') {
-            return Err(SourceReferenceError::Path);
+        let path = PathBuf::from(text);
+        if path.is_absolute()
+            || text.starts_with('.')
+            || matches!(
+                path.extension().and_then(|ext| ext.to_str()),
+                Some("zy" | "zyi" | "zydeco")
+            )
+        {
+            Self::with_path(path)
+        } else {
+            Ok(Self::Package(text.parse()?))
         }
-        Ok(Self { path: path.into(), name })
     }
 }
 
 impl fmt::Display for SourceReference {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.path.display().fmt(formatter)?;
-        if let Some(name) = &self.name {
-            write!(formatter, "#{name}")?;
+        match self {
+            | Self::Path(path) => write!(formatter, "{:?}", path.to_string_lossy()),
+            | Self::Package(name) => name.fmt(formatter),
         }
-        Ok(())
     }
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceReferenceError {
-    #[error("source path must be nonempty and contain no NUL characters")]
+    #[error(
+        "source path must be nonempty and contain no NUL or # characters; select named packages through a catalog"
+    )]
     Path,
+    #[error("expected a package name or quoted source path")]
+    Shape,
     #[error(transparent)]
     Name(#[from] PackageNameError),
 }
@@ -173,9 +217,9 @@ impl PackageAnnotation {
         let mut name = None;
         let mut relations = Vec::new();
         let mut seen = BTreeMap::new();
-        let mut add = |kind: PackageRelationKind, written: &str, path: Vec<usize>| {
-            let target: SourceReference =
-                written.parse().map_err(|error| (path.clone(), Error::Target(error)))?;
+        let mut add = |kind: PackageRelationKind, reference: &Meta, path: Vec<usize>| {
+            let target: SourceReference = SourceReference::decode(reference)
+                .map_err(|error| (path.clone(), Error::Target(error)))?;
             if let Some(first) = seen.insert((kind.clone(), target.clone()), path.clone()) {
                 return Err((path, Error::Duplicate { first }));
             }
@@ -183,8 +227,7 @@ impl PackageAnnotation {
             Ok(())
         };
         for (index, subject) in subjects.iter().enumerate() {
-            let Meta::String(written) = subject else { return Err((vec![0], Error::TestOptions)) };
-            add(PackageRelationKind::TestOf, written, vec![0, 0, index])?;
+            add(PackageRelationKind::TestOf, subject, vec![0, 0, index])?;
         }
         for (index, argument) in arguments.iter().enumerate().skip(1) {
             let path = vec![index];
@@ -196,7 +239,7 @@ impl PackageAnnotation {
                     if name.is_some() {
                         return Err((path, Error::DuplicateName));
                     }
-                    let [Meta::String(written)] = args.as_slice() else {
+                    let [Meta::Ident(written)] = args.as_slice() else {
                         return Err((path, Error::NameShape));
                     };
                     name = Some(written.parse().map_err(|error| (path, Error::Name(error)))?);
@@ -207,10 +250,10 @@ impl PackageAnnotation {
                 | _ => {}
             }
             let kind = callee.parse().map_err(|_| (path.clone(), Error::Relation))?;
-            let [Meta::String(written)] = args.as_slice() else {
+            let [reference] = args.as_slice() else {
                 return Err((path, Error::Relation));
             };
-            add(kind, written, path)?;
+            add(kind, reference, path)?;
         }
         Ok(Self { role, name, relations })
     }
@@ -220,17 +263,17 @@ impl PackageAnnotation {
 pub enum PackageAnnotationError {
     #[error("package expects library, binary, or test as its first argument")]
     Role,
-    #[error("name expects one quoted package identifier")]
+    #[error("name expects one unquoted package identifier")]
     NameShape,
     #[error(transparent)]
     Name(PackageNameError),
     #[error("duplicate package name option")]
     DuplicateName,
-    #[error("test options must be of(\"source\", ...), with at least one subject")]
+    #[error("test options must be of(package, ...), with at least one subject")]
     TestOptions,
-    #[error("of belongs under the test role: test(of(\"source\"))")]
+    #[error("of belongs under the test role: test(of(package))")]
     OfPlacement,
-    #[error("package relationship must be kind(\"file.zy\") or kind(\"file.zy#name\")")]
+    #[error("package relationship must be kind(package) or kind(\"file.zy\")")]
     Relation,
     #[error("code dependencies must be expressed by imports in the package term")]
     Code,

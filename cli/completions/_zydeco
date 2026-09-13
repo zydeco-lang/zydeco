@@ -15,6 +15,9 @@ _zydeco() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
+'*-p+[Add a package file alongside automatic discovery; repeat for multiple files]:FILE:_files' \
+'*--pkg=[Add a package file alongside automatic discovery; repeat for multiple files]:FILE:_files' \
+'*--package=[Add a package file alongside automatic discovery; repeat for multiple files]:FILE:_files' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
@@ -29,80 +32,12 @@ _zydeco() {
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:zydeco-command-$line[1]:"
         case $line[1] in
-            (package)
-_arguments "${_arguments_options[@]}" : \
-'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
-'-h[Print help]' \
-'--help[Print help]' \
-":: :_zydeco__subcmd__package_commands" \
-"*::: :->package" \
-&& ret=0
-
-    case $state in
-    (package)
-        words=($line[1] "${words[@]}")
-        (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:zydeco-package-command-$line[1]:"
-        case $line[1] in
             (show)
 _arguments "${_arguments_options[@]}" : \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'*::files:_files' \
 && ret=0
-;;
-(check)
-_arguments "${_arguments_options[@]}" : \
-'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
-'-h[Print help]' \
-'--help[Print help]' \
-':file -- File path (preferred); append #NAME only to select a registered term:_files' \
-&& ret=0
-;;
-(test)
-_arguments "${_arguments_options[@]}" : \
-'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
-'-h[Print help]' \
-'--help[Print help]' \
-':file -- File path (preferred); append #NAME only to select a registered term:_files' \
-&& ret=0
-;;
-(help)
-_arguments "${_arguments_options[@]}" : \
-":: :_zydeco__subcmd__package__subcmd__help_commands" \
-"*::: :->help" \
-&& ret=0
-
-    case $state in
-    (help)
-        words=($line[1] "${words[@]}")
-        (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:zydeco-package-help-command-$line[1]:"
-        case $line[1] in
-            (show)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-(check)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-(test)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-(help)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-        esac
-    ;;
-esac
-;;
-        esac
-    ;;
-esac
 ;;
 (passes)
 _arguments "${_arguments_options[@]}" : \
@@ -224,11 +159,15 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (run)
 _arguments "${_arguments_options[@]}" : \
+'-t+[Execution backend]:TARGET:(interpreter exe wasm-am wasm-sps)' \
+'--target=[Execution backend]:TARGET:(interpreter exe wasm-am wasm-sps)' \
+'-r+[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
+'--runtime-dir=[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
 '--dry[Dry run (don'\''t execute)]' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':file -- File path (preferred); append #NAME only to select a registered term:_files' \
+':file -- Package name, or source path (use ./ for an extensionless file):_default' \
 '*::args -- Environmental arguments to pass to the program:_default' \
 && ret=0
 ;;
@@ -237,7 +176,19 @@ _arguments "${_arguments_options[@]}" : \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':file -- File path (preferred); append #NAME only to select a registered term:_files' \
+':file -- Package name, or source path (use ./ for an extensionless file):_default' \
+&& ret=0
+;;
+(test)
+_arguments "${_arguments_options[@]}" : \
+'*-t+[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-am wasm-sps all)' \
+'*--target=[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-am wasm-sps all)' \
+'-r+[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
+'--runtime-dir=[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
+'--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':file -- Package name, or source path (use ./ for an extensionless file):_default' \
 && ret=0
 ;;
 (repl)
@@ -267,7 +218,7 @@ _arguments "${_arguments_options[@]}" : \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help]' \
 '--help[Print help]' \
-':file -- File path (preferred); append #NAME only to select a registered term:_files' \
+':file -- Package name, or source path (use ./ for an extensionless file):_default' \
 && ret=0
 ;;
 (help)
@@ -282,33 +233,9 @@ _arguments "${_arguments_options[@]}" : \
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:zydeco-help-command-$line[1]:"
         case $line[1] in
-            (package)
-_arguments "${_arguments_options[@]}" : \
-":: :_zydeco__subcmd__help__subcmd__package_commands" \
-"*::: :->package" \
-&& ret=0
-
-    case $state in
-    (package)
-        words=($line[1] "${words[@]}")
-        (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:zydeco-help-package-command-$line[1]:"
-        case $line[1] in
             (show)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
-;;
-(check)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-(test)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-        esac
-    ;;
-esac
 ;;
 (passes)
 _arguments "${_arguments_options[@]}" : \
@@ -362,6 +289,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(test)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (repl)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -386,15 +317,16 @@ esac
 (( $+functions[_zydeco_commands] )) ||
 _zydeco_commands() {
     local commands; commands=(
-'package:Inspect, check, or test source packages' \
+'show:List the project'\''s packages and relationships without checking or executing code' \
 'passes:List optional compiler passes or explain a selected high-SPS plan' \
 '__doc-example-worker:' \
 'doc:Read, search, generate, or verify project documentation' \
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
-'check:Check a zydeco program' \
+'check:Check a source package and its code dependencies, including its declared executable role' \
+'test:Run a test package or the selected package'\''s direct test companions with empty stdin' \
 'repl:Start the declaration-free terminal REPL' \
-'build:External text is parsed into phase-owned plan types before source loading' \
+'build:Build a Zydeco program for the selected target' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'zydeco commands' commands "$@"
@@ -489,15 +421,16 @@ _zydeco__subcmd__fmt_commands() {
 (( $+functions[_zydeco__subcmd__help_commands] )) ||
 _zydeco__subcmd__help_commands() {
     local commands; commands=(
-'package:Inspect, check, or test source packages' \
+'show:List the project'\''s packages and relationships without checking or executing code' \
 'passes:List optional compiler passes or explain a selected high-SPS plan' \
 '__doc-example-worker:' \
 'doc:Read, search, generate, or verify project documentation' \
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
-'check:Check a zydeco program' \
+'check:Check a source package and its code dependencies, including its declared executable role' \
+'test:Run a test package or the selected package'\''s direct test companions with empty stdin' \
 'repl:Start the declaration-free terminal REPL' \
-'build:External text is parsed into phase-owned plan types before source loading' \
+'build:Build a Zydeco program for the selected target' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'zydeco help commands' commands "$@"
@@ -557,30 +490,6 @@ _zydeco__subcmd__help__subcmd__help_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help help commands' commands "$@"
 }
-(( $+functions[_zydeco__subcmd__help__subcmd__package_commands] )) ||
-_zydeco__subcmd__help__subcmd__package_commands() {
-    local commands; commands=(
-'show:Inspect packages from one or more source files without checking or executing code' \
-'check:Check one package and its code dependencies, without following test associations' \
-'test:Run a test package or the selected package'\''s direct test companions with empty stdin' \
-    )
-    _describe -t commands 'zydeco help package commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__help__subcmd__package__subcmd__check_commands] )) ||
-_zydeco__subcmd__help__subcmd__package__subcmd__check_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco help package check commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__help__subcmd__package__subcmd__show_commands] )) ||
-_zydeco__subcmd__help__subcmd__package__subcmd__show_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco help package show commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__help__subcmd__package__subcmd__test_commands] )) ||
-_zydeco__subcmd__help__subcmd__package__subcmd__test_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco help package test commands' commands "$@"
-}
 (( $+functions[_zydeco__subcmd__help__subcmd__passes_commands] )) ||
 _zydeco__subcmd__help__subcmd__passes_commands() {
     local commands; commands=()
@@ -596,60 +505,15 @@ _zydeco__subcmd__help__subcmd__run_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help run commands' commands "$@"
 }
-(( $+functions[_zydeco__subcmd__package_commands] )) ||
-_zydeco__subcmd__package_commands() {
-    local commands; commands=(
-'show:Inspect packages from one or more source files without checking or executing code' \
-'check:Check one package and its code dependencies, without following test associations' \
-'test:Run a test package or the selected package'\''s direct test companions with empty stdin' \
-'help:Print this message or the help of the given subcommand(s)' \
-    )
-    _describe -t commands 'zydeco package commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__package__subcmd__check_commands] )) ||
-_zydeco__subcmd__package__subcmd__check_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__show_commands] )) ||
+_zydeco__subcmd__help__subcmd__show_commands() {
     local commands; commands=()
-    _describe -t commands 'zydeco package check commands' commands "$@"
+    _describe -t commands 'zydeco help show commands' commands "$@"
 }
-(( $+functions[_zydeco__subcmd__package__subcmd__help_commands] )) ||
-_zydeco__subcmd__package__subcmd__help_commands() {
-    local commands; commands=(
-'show:Inspect packages from one or more source files without checking or executing code' \
-'check:Check one package and its code dependencies, without following test associations' \
-'test:Run a test package or the selected package'\''s direct test companions with empty stdin' \
-'help:Print this message or the help of the given subcommand(s)' \
-    )
-    _describe -t commands 'zydeco package help commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__package__subcmd__help__subcmd__check_commands] )) ||
-_zydeco__subcmd__package__subcmd__help__subcmd__check_commands() {
+(( $+functions[_zydeco__subcmd__help__subcmd__test_commands] )) ||
+_zydeco__subcmd__help__subcmd__test_commands() {
     local commands; commands=()
-    _describe -t commands 'zydeco package help check commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__package__subcmd__help__subcmd__help_commands] )) ||
-_zydeco__subcmd__package__subcmd__help__subcmd__help_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco package help help commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__package__subcmd__help__subcmd__show_commands] )) ||
-_zydeco__subcmd__package__subcmd__help__subcmd__show_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco package help show commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__package__subcmd__help__subcmd__test_commands] )) ||
-_zydeco__subcmd__package__subcmd__help__subcmd__test_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco package help test commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__package__subcmd__show_commands] )) ||
-_zydeco__subcmd__package__subcmd__show_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco package show commands' commands "$@"
-}
-(( $+functions[_zydeco__subcmd__package__subcmd__test_commands] )) ||
-_zydeco__subcmd__package__subcmd__test_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco package test commands' commands "$@"
+    _describe -t commands 'zydeco help test commands' commands "$@"
 }
 (( $+functions[_zydeco__subcmd__passes_commands] )) ||
 _zydeco__subcmd__passes_commands() {
@@ -665,6 +529,16 @@ _zydeco__subcmd__repl_commands() {
 _zydeco__subcmd__run_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco run commands' commands "$@"
+}
+(( $+functions[_zydeco__subcmd__show_commands] )) ||
+_zydeco__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco show commands' commands "$@"
+}
+(( $+functions[_zydeco__subcmd__test_commands] )) ||
+_zydeco__subcmd__test_commands() {
+    local commands; commands=()
+    _describe -t commands 'zydeco test commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_zydeco" ]; then

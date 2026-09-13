@@ -8,28 +8,93 @@ use thiserror::Error;
 mod discovery;
 pub(crate) use discovery::PackageDiscovery;
 pub use zydeco_surface::metadata::{
-    PackageName, PackageRelation, PackageRelationKind, PackageRole,
+    PackageName, PackageRelation, PackageRelationKind, PackageRole, SourceReference,
 };
 use zydeco_surface::textual::{ImportSite, PackageSite, syntax as t};
 use zydeco_utils::span::Sp;
 
-/// Package operations use the same file or file#name addresses as imports.
-pub use zydeco_surface::metadata::SourceReference as PackageId;
+/// A resolved source entry. The selector is compiler-internal, not path syntax.
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub struct PackageId {
+    pub path: PathBuf,
+    pub name: Option<PackageName>,
+}
 
-impl SourcePath {
-    pub fn resolve_package(
-        source: &Path, reference: &PackageId,
+impl std::fmt::Display for PackageId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(name) = &self.name {
+            write!(formatter, "{name} ({})", self.path.display())
+        } else {
+            self.path.display().fmt(formatter)
+        }
+    }
+}
+
+/// Immutable name resolution, retained as part of the compiler query key.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct PackageBindings {
+    entries: BTreeMap<PackageName, PackageId>,
+}
+
+impl PackageBindings {
+    pub fn resolve(
+        &self, reference: &SourceReference, directory: &Path,
     ) -> Result<PackageId, SourceLoadError> {
-        let requested = source.parent().unwrap_or(source).join(&reference.path);
-        let path = SourcePath::identity(&requested)
-            .map_err(|source| SourceLoadError::Read { path: requested, source: source.into() })?;
-        Ok(PackageId { path, name: reference.name.clone() })
+        match reference {
+            | SourceReference::Package(name) => self
+                .entries
+                .get(name)
+                .cloned()
+                .ok_or_else(|| PackageError::Unknown { name: name.clone() }.into()),
+            | SourceReference::Path(path) => {
+                let requested = directory.join(path);
+                let path = SourcePath::identity(&requested).map_err(|source| {
+                    SourceLoadError::Read { path: requested, source: source.into() }
+                })?;
+                Ok(PackageId { path, name: None })
+            }
+        }
+    }
+}
+
+/// The declarations in one explicitly selected discovery scope.
+#[derive(Clone, Debug, Default)]
+pub struct PackageCatalog {
+    pub packages: Vec<Package>,
+    pub bindings: Arc<PackageBindings>,
+}
+
+impl PackageCatalog {
+    pub(crate) fn new(packages: Vec<Package>) -> Result<Self, PackageError> {
+        let packages = packages
+            .into_iter()
+            .map(|package| (package.id.clone(), package))
+            .collect::<BTreeMap<_, _>>()
+            .into_values()
+            .collect::<Vec<_>>();
+        let mut names: BTreeMap<PackageName, &Package> = BTreeMap::new();
+        for package in &packages {
+            if let Some(name) = &package.name
+                && let Some(first) = names.insert(name.clone(), package)
+            {
+                return Err(PackageError::DuplicateName {
+                    name: name.clone(),
+                    first: first.origin.clone(),
+                    site: package.origin.clone(),
+                });
+            }
+        }
+        let entries = names.into_iter().map(|(name, package)| (name, package.id.clone())).collect();
+        Ok(Self { bindings: Arc::new(PackageBindings { entries }), packages })
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Package {
     pub id: PackageId,
+    pub name: Option<PackageName>,
     pub role: PackageRole,
     pub origin: SourceDiagnosticSite,
     pub imports: Vec<ImportSite>,
@@ -45,7 +110,11 @@ impl Package {
         let site = source.package_site(name)?;
         let term = site.map_or(source.unit.root, |site| site.term);
         Ok(Self {
-            id: PackageId { path: source.path.clone(), name: name.cloned() },
+            id: PackageId {
+                path: source.path.clone(),
+                name: if term == source.unit.root { None } else { name.cloned() },
+            },
+            name: site.and_then(|site| site.name.clone()),
             role: site.map_or(PackageRole::Library, |site| site.role),
             origin: SourceDiagnosticSite::new(
                 source.path.clone(),
@@ -84,7 +153,7 @@ pub struct PackageTestPlan {
 
 impl PackageTestPlan {
     pub(crate) fn collect(
-        root: Package, discovered: Vec<Package>,
+        root: Package, catalog: &PackageCatalog,
         mut load: impl FnMut(&PackageId) -> Result<Package, SourceLoadError>,
     ) -> Result<Self, SourceLoadError> {
         let mut tests = BTreeMap::new();
@@ -95,19 +164,19 @@ impl PackageTestPlan {
             match &relation.kind {
                 | PackageRelationKind::TestOf => {}
                 | PackageRelationKind::Test => {
-                    let id = SourcePath::resolve_package(&root.id.path, &relation.target)?;
-                    if let std::collections::btree_map::Entry::Vacant(entry) = tests.entry(id) {
-                        let package =
-                            load(entry.key()).map_err(|error| PackageError::Relation {
-                                site: SourceDiagnosticSite::new(
-                                    root.id.path.clone(),
-                                    relation.info.range(),
-                                ),
-                                error: Box::new(error),
-                            })?;
-                        package.require_role(PackageRole::Test)?;
-                        entry.insert(package);
-                    }
+                    let package = catalog
+                        .bindings
+                        .resolve(&relation.target, root.id.path.parent().expect("source file"))
+                        .and_then(|id| load(&id))
+                        .map_err(|error| PackageError::Relation {
+                            site: SourceDiagnosticSite::new(
+                                root.id.path.clone(),
+                                relation.info.range(),
+                            ),
+                            error: Box::new(error),
+                        })?;
+                    package.require_role(PackageRole::Test)?;
+                    tests.insert(package.id.clone(), package);
                 }
                 | kind @ PackageRelationKind::Custom(_) => {
                     return Err(PackageError::UnsupportedRelation {
@@ -121,7 +190,7 @@ impl PackageTestPlan {
                 }
             }
         }
-        for package in discovered {
+        for package in &catalog.packages {
             if package.role != PackageRole::Test {
                 continue;
             }
@@ -130,7 +199,9 @@ impl PackageTestPlan {
                 .iter()
                 .filter(|relation| relation.kind == PackageRelationKind::TestOf)
             {
-                let subject = SourcePath::resolve_package(&package.id.path, &relation.target)
+                let subject = catalog
+                    .bindings
+                    .resolve(&relation.target, package.id.path.parent().expect("source file"))
                     .map_err(|error| PackageError::Relation {
                         site: SourceDiagnosticSite::new(
                             package.id.path.clone(),
@@ -139,8 +210,7 @@ impl PackageTestPlan {
                         error: Box::new(error),
                     })?;
                 if subject == root.id {
-                    tests.entry(package.id.clone()).or_insert(package);
-                    break;
+                    tests.entry(package.id.clone()).or_insert_with(|| package.clone());
                 }
             }
         }
@@ -150,6 +220,10 @@ impl PackageTestPlan {
 
 #[derive(Clone, Debug, Error)]
 pub enum PackageError {
+    #[error("unknown package `{name}` in the selected catalog")]
+    Unknown { name: PackageName },
+    #[error("duplicate package name `{name}` at {site}; first declared at {first}")]
+    DuplicateName { name: PackageName, site: SourceDiagnosticSite, first: SourceDiagnosticSite },
     #[error("package discovery at {site} cannot read `{}`: {source}", path.display())]
     Discovery { path: PathBuf, site: SourceDiagnosticSite, source: Arc<std::io::Error> },
     #[error("package discovery at {site}: {error}")]
@@ -180,7 +254,8 @@ pub enum PackageError {
 impl PackageError {
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         match self {
-            | Self::Missing { .. } => None,
+            | Self::Missing { .. } | Self::Unknown { .. } => None,
+            | Self::DuplicateName { site, .. }
             | Self::WrongRole { site, .. }
             | Self::UnsupportedRelation { site, .. }
             | Self::Discovery { site, .. } => Some(site.clone()),

@@ -66,6 +66,7 @@ fn documentation_worker_limits_and_failures_cannot_count_as_success() {
         path: std::env::temp_dir().join("worker.zydeco"),
         code: "42".to_owned(),
         inputs: Vec::new(),
+        bindings: Default::default(),
         expectation: DocumentationExampleExpectation::Check,
     };
     let timeout = DocumentationExampleWorker::verify(
@@ -82,4 +83,44 @@ fn documentation_worker_limits_and_failures_cannot_count_as_success() {
         Duration::from_secs(1),
     );
     assert!(matches!(failure.status, DocumentationExampleStatus::WorkerFailure(_)), "{failure:?}");
+}
+
+#[test]
+fn documentation_cli_and_workers_share_detected_and_explicit_package_names() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("api.zy");
+    let library = directory.path().join("package.zy");
+    std::fs::write(&library, "@[package(library, name(example/value))] 42").unwrap();
+    std::fs::write(
+        &root,
+        concat!(
+            "--| ```zydeco check\n",
+            "--| @(import(example/value))\n",
+            "--| ```\n",
+            "@[doc] @(import(example/value))\n",
+        ),
+    )
+    .unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    for (scoped, explicit) in [(true, false), (false, true), (false, false)] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_zydeco"));
+        command.current_dir(if scoped { directory.path() } else { outside.path() });
+        if explicit {
+            command.arg("--pkg").arg(&library);
+        }
+        let output = command.args(["doc", "check"]).arg(&root).output().unwrap();
+        assert_eq!(
+            output.status.success(),
+            scoped || explicit,
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if scoped || explicit {
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 examples checked"));
+        } else {
+            assert!(String::from_utf8_lossy(&output.stderr).contains("unknown package"));
+            assert!(output.stdout.is_empty());
+        }
+    }
+    assert!(!root.with_extension("doc-example.zydeco").exists());
 }

@@ -61,7 +61,7 @@ impl MetadataKind {
         let description = match self {
             | Self::Doc => "Attach documentation metadata to an expression.",
             | Self::Import => {
-                "Import a source file; #name optionally selects a registered term. Numbered inputs are also accepted."
+                "Import a catalog package or quoted source path. Numbered inputs are also accepted."
             }
             | Self::Package => {
                 "Assign a role and relationships to this term; prefer complete files for libraries and binaries."
@@ -180,7 +180,7 @@ impl MetadataCatalog {
                     "Name this package independently of fields or bindings.",
                     MetadataArguments::Positional(vec![MetadataParameter::new(
                         "name",
-                        MetadataValue::String,
+                        MetadataValue::Identifier(vec![]),
                     )]),
                 ),
                 MetadataDefinition::new(
@@ -343,7 +343,7 @@ impl MetadataParameter {
     ) -> Result<(), MetadataValidationError> {
         match &self.value {
             | MetadataValue::Identifier(choices) => match argument {
-                | Meta::Ident(value) if choices.contains(value) => Ok(()),
+                | Meta::Ident(value) if choices.is_empty() || choices.contains(value) => Ok(()),
                 | Meta::Ident(value) => Err(MetadataValidationError::UnknownIdentifier {
                     definition,
                     parameter: self.label,
@@ -379,7 +379,7 @@ impl MetadataParameter {
                 }),
             },
             | MetadataValue::Source { inputs } => match argument {
-                | Meta::String(path) if path.parse::<SourceReference>().is_ok() => Ok(()),
+                | meta if SourceReference::decode(meta).is_ok() => Ok(()),
                 | Meta::Integer(number) if *inputs && *number > 0 => Ok(()),
                 | _ => Err(MetadataValidationError::ExpectedSource {
                     definition,
@@ -408,7 +408,7 @@ pub enum MetadataValue {
     String,
     Integer,
     Glob,
-    /// A quoted file or file#name reference, optionally allowing numbered inputs.
+    /// A package name or quoted source path, optionally allowing numbered inputs.
     Source {
         inputs: bool,
     },

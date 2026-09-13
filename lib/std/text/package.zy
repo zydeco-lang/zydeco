@@ -1,3 +1,4 @@
+@[package(library, name(std/text))]
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit;
     /Char; /String; /UInt8; /Int64; /Addr; /Access;

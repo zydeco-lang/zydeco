@@ -1,9 +1,10 @@
+@[package(test(of(std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int64;
-    /UInt8; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+    /UInt8; /numeric; /process; builtin) : @(import(std/builtin)) that
   let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
 
-  let make_memory = @(import("../../std/memory/package.zy")) in
+  let make_memory = @(import(std/memory)) in
   let (= Layout, = Representation, memory) = (builtin |> make_memory) byte_package in
   let fail = { ! process/exit 1 } in
   let ! rejected (A : VType) (layout : Layout A) (next : Thk OS) : OS =

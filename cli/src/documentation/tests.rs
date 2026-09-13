@@ -17,7 +17,7 @@ impl Fixture {
     }
 
     fn reference(&self) -> DocumentationReference {
-        self.session.documentation_reference(&self.root).unwrap()
+        self.session.documentation_reference(self.session.analyze(&self.root).unwrap()).unwrap()
     }
 }
 

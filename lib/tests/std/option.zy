@@ -1,6 +1,7 @@
+@[package(test(of(std)))]
 begin
-  let make_std = @(import("../../std/std.zy")) that
-  param (/system; /OS; /Int64; builtin) : @(import("../../std/builtin.zy")) that
+  let make_std = @(import(std)) that
+  param (/system; /OS; /Int64; builtin) : @(import(std/builtin)) that
   let (/Option; /option; /process) = builtin |> make_std in
   do value <- ! option/map
     Int64

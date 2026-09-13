@@ -4,9 +4,12 @@ use std::collections::BTreeSet;
 
 impl Fixture {
     fn discover(&self, rules: &str) -> (BTreeSet<PathBuf>, BTreeSet<PathBuf>) {
+        self.discover_at("packages.zy", rules)
+    }
+
+    fn discover_at(&self, path: &str, rules: &str) -> (BTreeSet<PathBuf>, BTreeSet<PathBuf>) {
         let source =
-            SourceTemplate::parse(self.path("packages.zy"), format!("@[discover({rules})] ()"))
-                .unwrap();
+            SourceTemplate::parse(self.path(path), format!("@[discover({rules})] ()")).unwrap();
         let mut queries = BTreeSet::new();
         let paths = PackageDiscovery { source: &source }
             .walk(std::iter::empty(), |path| {
@@ -72,6 +75,46 @@ fn nonrecursive_globs_read_only_their_prefix_and_required_depth() {
 }
 
 #[test]
+fn parent_prefixes_read_only_the_selected_sibling_and_apply_excludes_across_anchors() {
+    let fixture = Fixture::new();
+    fixture.write("lib/std/std.zy", "1");
+    fixture.write("lib/tests/one.zy", "1");
+    fixture.write("lib/tests/nested/two.zy", "2");
+    fixture.write("lib/tests/fixtures/broken.zy", "(");
+    fixture.write("unrelated/three.zy", "3");
+    let (paths, queries) = fixture.discover_at("lib/std/std.zy", r#"include("../tests/*.zy")"#);
+    assert_eq!(paths, [PathBuf::from("lib/tests/one.zy")].into());
+    assert_eq!(queries, [PathBuf::from("lib/tests")].into());
+    let (paths, queries) = fixture
+        .discover_at("lib/std/std.zy", r#"include("../tests/one.zy", "../../lib/tests/one.zy")"#);
+    assert_eq!(paths, [PathBuf::from("lib/tests/one.zy")].into());
+    assert!(queries.is_empty(), "literal parent paths never enumerate ancestors");
+    let (paths, queries) = fixture.discover_at("lib/std/std.zy", r#"include("../tests/**/*.zy"), exclude("../../lib/tests/fixtures/**", "../../lib/tests/one.zy"), include("../tests/one.zy")"#);
+    assert_eq!(paths, ["lib/tests/one.zy", "lib/tests/nested/two.zy"].map(PathBuf::from).into());
+    assert_eq!(queries, ["lib/tests", "lib/tests/nested"].map(PathBuf::from).into());
+}
+
+#[test]
+fn parent_prefixes_match_disk_and_overlay_paths_with_the_same_winning_rule() {
+    let fixture = Fixture::new();
+    fixture.write("lib/std/std.zy", "1");
+    fixture.write("lib/tests/one.zy", "1");
+    let text = r#"@[discover(include("../tests/*.zy"), exclude("../../lib/tests/skip.zy"), include("../../lib/tests/one.zy"))] ()"#;
+    let source = SourceTemplate::parse(fixture.path("lib/std/std.zy"), text.into()).unwrap();
+    let overlays =
+        ["lib/tests/one.zy", "lib/tests/new.zy", "lib/tests/skip.zy", "lib/std/tests/no.zy"]
+            .map(|path| fixture.path(path));
+    let paths = PackageDiscovery { source: &source }.paths(overlays.into_iter()).unwrap();
+    assert_eq!(paths.len(), 2);
+    for (path, pattern) in [
+        ("lib/tests/one.zy", r#""../../lib/tests/one.zy""#),
+        ("lib/tests/new.zy", r#""../tests/*.zy""#),
+    ] {
+        assert_eq!(&text[paths[&fixture.path(path)].range()], pattern);
+    }
+}
+
+#[test]
 fn subtree_pruning_does_not_exclude_a_file_with_the_same_name_as_its_root() {
     let fixture = Fixture::new();
     fixture.write("test.zy", "1");
@@ -126,6 +169,13 @@ fn symlink_files_directories_and_literal_prefixes_are_not_followed() {
         .unwrap();
     let (paths, queries) =
         fixture.discover(r#"include("tests/**/*.zy", "tests/link/*.zy", "tests/link/one.zy")"#);
+    assert!(paths.is_empty());
+    assert_eq!(queries, [PathBuf::from("tests")].into());
+    fixture.write("std/std.zy", "1");
+    let (paths, queries) = fixture.discover_at(
+        "std/std.zy",
+        r#"include("../tests/**/*.zy", "../tests/link/*.zy", "../tests/link/one.zy")"#,
+    );
     assert!(paths.is_empty());
     assert_eq!(queries, [PathBuf::from("tests")].into());
 }
