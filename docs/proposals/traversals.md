@@ -48,7 +48,9 @@ The implemented [resumable execution contract](../references/compiler.md#resumab
 provides statically selected native and explicit-stack drivers for residual lowering,
 Builtin package materialization, and high SPS normalization, including its pattern reconstruction.
 Their equivalence and depth checks support using the interface for those boundaries.
-Classifier scope handling remains deferred while other suitable folders are evaluated.
+Classifier scope handling remains deferred.
+The next evaluated boundary is surface rebuilding, where shared structural callbacks
+and recovery must become resumable together.
 
 ### Classifier environments and suspension
 
@@ -89,14 +91,69 @@ Include reduction calls reached after reconstruction:
 an explicit structural subwalk alone does not bound recursive normalization or substitution helpers.
 Replace the affected callback interfaces and their callers together once the ownership choice is settled.
 
-### Remaining execution adapters
+### Surface rebuilding and recovery
 
-Surface rebuilding, desugaring, resolution, and assembly lowering retain their current execution mechanisms.
-The existing analysis visitors already use explicit traversal stacks;
-a driver migration there needs a concrete maintenance benefit and must preserve entry/exit balancing,
-cycle handling, and occurrence policies.
+The [freshening folder](../../lang/surface/src/bitter/freshen.rs) has a suitable ownership policy:
+it copies each occurrence into `BitterBuilder`, retains textual origins, and stores no borrowed child environment.
+Its recursive edge, however, passes through the shared [surface rebuilding interface](../../lang/surface/src/fold.rs).
+Patterns can contain terms in annotations and views, so migrating only pattern recursion would leave that cycle intact.
+
+`Pattern::fold_with` and `Term::fold_with` currently finish their children inside ordinary Rust callbacks.
+The interface also changes reference representation from `InputRef` to `OutputRef`,
+and its generic `fold_items` callback supplies the grouping boundary for recovery.
+Freshening keeps source names and cannot fail; resolution converts names to definition IDs
+and collects independent reported failures through `OrdinaryFolder::fold_items`.
+An annotation's structural copying order is term then classifier, while the resolver deliberately handles
+that constructor itself and resolves the classifier first.
+A child layer must expose positions without imposing one semantic schedule on both clients.
+
+This is a design boundary beyond changing the driver invocation.
+Copying the syntax match into a dedicated freshening machine would duplicate the shared structural rule.
+Starting a new explicit driver inside each existing callback would still leave recursive callbacks on the native stack.
+The useful next step is a resumable description of one owned syntax layer, shared by copying and resolution.
+It must support partial child results, reference conversion, and continuing independent children after rejection
+without constructing a successful parent from failed prerequisites.
+
+Two implementation approaches deserve comparison before replacing the interface:
+
+| Approach | Benefit | Cost and design question |
+| --- | --- | --- |
+| Handwritten owned layers with typed child slots and reconstruction frames | Explicit constructor coverage and recovery boundaries; can be evaluated directly with both existing clients | Decide how a partially rebuilt layer represents input and output references, and how callers select independent groups and scope-dependent children |
+| Generate layers and their child operations from a structural declaration | One child description can support synchronous and resumable execution without parallel handwritten matches | Adds generation machinery and annotations for child roles; semantic scheduling and recovery still belong to the client |
+
+Prefer a handwritten layer evaluation first, using freshening and ordinary resolution together.
+If accepted, replace their shared structural interface and callers in one change.
+This preference does not yet choose the layer representation or adopt a generated syntax description.
+A later complete resolver migration must also retain global environments beyond the current borrowed calls
+and resume block dependency collection through its existing success and abort boundaries.
+The [resolver](../../lang/surface/src/scoped/resolver.rs)
+and [block handling](../../lang/surface/src/scoped/blocks.rs) show those current lifetimes;
+the [name-resolution reference](../references/compiler.md#name-resolution) owns their semantic contract.
+
+Acceptance should cover repeated source and signature boundaries, fresh binder identities,
+origins, annotation and view children, and copattern spines.
+Pair successful name resolution with several unresolved siblings; preserve diagnostic multiplicity,
+reference and scope events, dependency cleanup, and the absence of a published strict-resolution product on failure.
+A direct deep fixture must cross pattern-to-term edges and include destruction of retained layer state.
+
+### Other execution adapters
+
+The scoped and high SPS analysis visitors already enumerate children directly into one traversal vector.
+Adapting their callback-based child enumeration to one-child-at-a-time calls would need retained child sequences
+or a shared child cursor; re-enumerating all children for each position would make wide nodes quadratic.
+A migration needs a concrete maintenance benefit and must preserve entry/exit balancing, cycle handling,
+early termination, and occurrence policies.
+
+The residual runtime traversal is a lazy `Iterator`: a consumer can stop after any yielded node.
+A whole-fold `Driver::run` cannot replace that suspension boundary without changing the consumer interface
+or buffering the traversal.
+Keep a lazy adapter requirement separate from reconstruction driver selection.
+
+Desugaring and assembly lowering retain their current execution mechanisms.
+Assembly lowering additionally reserves instruction IDs before executing boxed pending continuations;
+any future evaluation must preserve that allocation and publication order.
 Do not expand the common folder protocol merely to accommodate all these mechanisms at once.
-Each subsequent migration should first demonstrate a simpler client under both drivers and retain its depth fixture.
+Each subsequent migration should demonstrate a simpler client under both drivers and retain its depth fixture.
 
 ## Additional graph views and adapters
 
