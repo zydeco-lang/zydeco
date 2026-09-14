@@ -15,6 +15,30 @@ Extend reclamation to interactive sessions only with an account of active projec
 A replacement must preserve keyed facts after arena eviction and pair materialization with the correct revision;
 a smaller arena cache alone cannot bound database storage.
 
+## Next measurement pass
+
+The 2026-09-14 code review at `3b4dd665` leaves the following concrete targets.
+They are observed mechanisms whose cost needs measurement, not measured regressions or a selected replacement design.
+
+| Target | Current mechanism | Comparison to make |
+| --- | --- | --- |
+| Judgment producers | [Small producer queries](../../lang/statics/src/query/computation.rs), such as `force_judgment`, intern already checked inputs and return a derived node | Record query executions, memo reuse, and bookkeeping time during cold checks, unchanged queries, and edits before changing query granularity. |
+| Local inference | [InferenceRegion](../../lang/statics/src/check/source.rs) copies all existing fill IDs on entry and scans the fill table on close | Count visited fills as the number of local binders grows; compare region-owned fill tracking while preserving nested-region constraints and rejection diagnostics. |
+| Retained analysis | [Materialization](../../lang/session/src/source/query.rs) recovers a full arena from the session's current inputs | Measure repeated root switching and edits, retained memos, and live snapshots separately from full-arena residency. |
+| Editor lookups | [Cajun](../../editor/cajun/src/analysis.rs) retains a full arena, but symbol hover still obtains some facts through the session | Measure request cost and verify revision pairing before simplifying the path; term hover already uses the retained arena directly. |
+
+The current reference requires an analysis and its materializing session to have matching revisions.
+The API represents retained facts with `StaticsArena::clone_keyed_indexes()`
+and does not encode that pairing in the analysis argument's type.
+This is an API-hardening candidate, not a reproduced editor failure.
+Compare explicit fact views and revision-bound materialization only after retaining tests for unchanged snapshots,
+edited roots, rejected revisions, and arena eviction.
+
+Use identical inputs and toolchains for each alternative, and record elapsed time,
+peak RSS, retained counts, and correctness outcomes.
+Pair these measurements with the [traversal evaluation](traversals.md#performance-validation) so a local reduction
+in visits does not hide larger temporary summaries or query retention.
+
 ## Historical measurements and alternatives
 
 Earlier investigations recorded the following measurements.

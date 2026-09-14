@@ -1,5 +1,11 @@
 # Worklog: bug-hunt fixes and remaining work
 
+Historical follow-up: the status counts below describe `3d458223`, not the current checkout.
+The [2026-09-14 next-work index](../todos/README.md#next-pass-reviewed-2026-09-14) records the new priorities
+and changed findings.
+The [remaining record audit](../todos/reference-drift.md#duplicate-accounts-and-scratch-records) tracks preservation
+of useful evidence before this scratch record is retired.
+
 Status after `3d458223`, following the [2026-09-07 bug report](2026-09-07-bug-hunt.md).
 The original report is preserved as received: its source paths, line numbers,
 measurements, and descriptions refer to the reported checkout at `e00b91f0`.

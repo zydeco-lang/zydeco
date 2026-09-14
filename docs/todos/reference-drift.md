@@ -1,7 +1,7 @@
 # Reference drift
 
 These outstanding documentation repairs follow the 2026-09-08 and 2026-09-10 audits,
-with a source review against `0099858b` on 2026-09-14.
+with a source review against `3b4dd665` on 2026-09-14.
 Completed repairs and migration histories have been removed from this work list.
 The [reference ownership map](../references/README.md#rule-ownership) locates each canonical account;
 [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation) defines the consolidation workflow.
@@ -48,3 +48,9 @@ not a missing positivity guarantee to add to the reference.
   following [the repository's record policy](../../AGENTS.md#documentation-structure-and-design-records).
   Preserve evidence with its original revision and limitations; re-run measurements used to choose a new default.
   The dated [runtime study](../ideas/cbpv-runtime-evaluation.md) already has a separate evidence role.
+  In particular, the September 7 follow-up's `ArgumentFold` root-table mechanism has been removed,
+  and `HostString::leak` has been replaced by storage owned and released
+  by a [runtime instance](../references/compiler.md#runtime-instances).
+  Its six-open-findings count must not be copied into a current backlog.
+  Preserve the remaining interpreter cloning, deep-stack, and suffix-layout probes with their historical limits;
+  compare long-running host retention separately from normal entry teardown.

@@ -18,6 +18,14 @@ Two concrete followups remain, in recommended implementation order:
 
 Package catalog construction currently visits roots and discovered files through separate fallible requests.
 Collect independent provider and discovery failures without publishing an incomplete catalog.
+Rechecked at `3b4dd665` on 2026-09-14 with a newly built debug CLI:
+`workspace.zy` containing `@[discover(include("a.zy", "b.zy"))] ()`,
+with both discovered files containing only `(`, makes `zydeco show` report only `a.zy`.
+After replacing `a.zy` with `()`, it reports `b.zy`; replacing both with `()` succeeds.
+Both rejected runs leave stdout empty.
+Retain this pair of independent failures and the successful catalog when extending recovery,
+including the invariant that failed discovery publishes no partial result.
+
 SPSLow validation currently returns the first structural, entry-contract, or protocol failure.
 Establish recoverable structural regions before batching dependent contract checks;
 malformed ownership and cyclic input cannot supply the evidence those checks expect.
