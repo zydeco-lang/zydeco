@@ -33,10 +33,7 @@ A write invokes a completion continuation without constructing an intermediate i
 freeze delivers the completed bytes to their consumer.
 This separates advancing a construction from publishing its contents.
 
-The [control reference](../references/language.md#6-computations-and-control) owns the meaning of these continuations.
-The caller's `R : CType` describes the remaining computation protocol.
-Completion alone needs `Thk R`; producing a value of type `A` needs `Thk (A -> R)`.
-These are existing source forms; `Ret A` still describes an installed return continuation.
+The [Ret and CPS convention](../references/language.md#ret-and-explicit-cps) governs these public interfaces.
 Choosing explicit successors does not by itself remove allocations or make a thunk single-use.
 
 For a selected codec and memory provider, the proposed computation shape after forcing an encoder is:

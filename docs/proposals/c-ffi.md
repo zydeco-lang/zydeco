@@ -71,11 +71,8 @@ Method invocation and code-pointer loading require the separate foreign-call ext
 
 ## Source continuation adapters
 
-Use explicit source successors when a binding selects among outcomes or continues a destination construction.
-For an implemented returning C import, ordinary source code can bind its `Ret A` result
-and deliver `A` to a continuation under the caller's `R : CType`.
-This adaptation already follows the [source control rules](../references/language.md#6-computations-and-control);
-it does not change the C declaration, machine return convention, or supported foreign types.
+The [FFI reference](../references/language.md#14-foreign-interfaces) owns how raw C returns coexist
+with the [public Ret and CPS convention](../references/language.md#ret-and-explicit-cps).
 Status interpretation belongs to the individual binding, including which failures occurred before C entry
 and which were reported after C may have changed memory.
 

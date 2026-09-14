@@ -294,6 +294,20 @@ Matching selects the first successful arm; partial binders may terminate executi
 terminates, aborts, or diverges; it has no ordinary source return.
 An explicit successor `Thk OS` is suspended code and need not be a captured machine continuation.
 
+### Ret and explicit CPS
+
+The public API convention is `Ret A` for observably pure calculations
+and explicit continuation-passing style (CPS) for effectful operations.
+The programmer is responsible for keeping public `Ret` operations free of hidden effects,
+including effects from captured computations and foreign code.
+This convention is not enforced by the checker; `Ret` alone is not purity evidence for compiler optimizations.
+
+In an explicit CPS interface, the caller's `R : CType` describes the remaining computation protocol.
+Use `Thk R` for completion without a result and `Thk (A -> R)` when delivering an `A`;
+failure can have its own continuation.
+Both styles coexist, and CPS supplies no single-use or cleanup guarantee.
+The [C FFI](#14-foreign-interfaces) keeps the native return protocol beneath these public interfaces.
+
 ### Ret and stack extent
 
 **`Ret A` describes an installed continuation accepting an `A`, not a stack-frame marker.**
@@ -1714,7 +1728,10 @@ The declaration author is responsible for the actual symbol's signature and thes
 A returning call must use the C return protocol; unwinding and nonlocal jumps across this boundary are unsupported.
 An import may call another compiled Zydeco library under its [entry discipline](#compiled-libraries-and-c-exports);
 callbacks into an active instance remain unsupported.
-`Ret` does not imply purity or termination.
+Here `Ret` records the C return protocol even when the C function has effects.
+Apply the [public API convention](#ret-and-explicit-cps) in source wrappers: keep pure operations returning,
+and expose effectful ones by binding the raw result and invoking an explicit successor.
+The declaration establishes neither purity nor termination.
 
 Checking validates the declared classifier without loading a library or inspecting headers.
 The Unix interpreter loads symbols lazily; native AMD64 links the named library.
