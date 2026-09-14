@@ -1,0 +1,124 @@
+
+baseline benchmark:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+0000000100181368 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_>:
+100181368:     	stp	x28, x27, [sp, #-0x50]!
+10018136c:     	stp	x24, x23, [sp, #0x10]
+100181370:     	stp	x22, x21, [sp, #0x20]
+100181374:     	stp	x20, x19, [sp, #0x30]
+100181378:     	stp	x29, x30, [sp, #0x40]
+10018137c:     	add	x29, sp, #0x40
+100181380:     	sub	sp, sp, #0x260
+100181384:     	mov	x19, x0
+100181388:     	mov	x20, x8
+10018138c:     	mov	w8, #0x10               ; =16
+100181390:     	stp	xzr, x8, [sp, #0x8]
+100181394:     	str	xzr, [sp, #0x18]
+100181398:     	add	x21, sp, #0x20
+10018139c:     	add	x8, sp, #0x20
+1001813a0:     	bl	0x10017ae60 <__RNvXs1_NtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folderNtB5_8LoweringNtNtCsiZTw7gbbDJe_12zydeco_utils4fold6Folder5enter>
+1001813a4:     	add	x22, sp, #0x20
+1001813a8:     	orr	x23, x21, #0x8
+1001813ac:     	b	0x1001813fc <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x94>
+1001813b0:     	add	x8, sp, #0x100
+1001813b4:     	orr	x1, x21, #0x8
+1001813b8:     	mov	x0, x19
+1001813bc:     	bl	0x10017ae60 <__RNvXs1_NtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folderNtB5_8LoweringNtNtCsiZTw7gbbDJe_12zydeco_utils4fold6Folder5enter>
+1001813c0:     	ldp	q0, q1, [x22, #0x180]
+1001813c4:     	ldp	q2, q3, [x22, #0x1a0]
+1001813c8:     	stp	q1, q2, [x22, #0xb0]
+1001813cc:     	str	q3, [x22, #0xd0]
+1001813d0:     	ldp	q4, q2, [x22, #0x140]
+1001813d4:     	ldp	q1, q3, [x22, #0x160]
+1001813d8:     	stp	q2, q1, [x22, #0x70]
+1001813dc:     	stp	q3, q0, [x22, #0x90]
+1001813e0:     	ldp	q0, q1, [x22, #0x100]
+1001813e4:     	stp	q0, q1, [sp, #0x40]
+1001813e8:     	ldp	q0, q1, [x22, #0x120]
+1001813ec:     	str	q0, [sp, #0x60]
+1001813f0:     	stp	q1, q4, [sp, #0x70]
+1001813f4:     	ldp	q0, q1, [x22, #0xe0]
+1001813f8:     	stp	q0, q1, [sp, #0x20]
+1001813fc:     	ldr	x8, [sp, #0x20]
+100181400:     	subs	x8, x8, #0x5
+100181404:     	csel	x8, xzr, x8, lo
+100181408:     	cbz	x8, 0x100181474 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x10c>
+10018140c:     	cmp	x8, #0x1
+100181410:     	b.eq	0x1001813b0 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x48>
+100181414:     	ldr	x8, [x23]
+100181418:     	str	x8, [x20]
+10018141c:     	ldr	w8, [x23, #0x8]
+100181420:     	str	w8, [x20, #0x8]
+100181424:     	ldr	x8, [sp, #0x18]
+100181428:     	cbz	x8, 0x1001814d4 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x16c>
+10018142c:     	sub	x8, x8, #0x1
+100181430:     	str	x8, [sp, #0x18]
+100181434:     	ldr	x9, [sp, #0x10]
+100181438:     	add	x8, x9, x8, lsl #7
+10018143c:     	ldp	q0, q1, [x8, #0x40]
+100181440:     	stp	q0, q1, [x22, #0x200]
+100181444:     	ldp	q0, q1, [x8, #0x60]
+100181448:     	stp	q0, q1, [x22, #0x220]
+10018144c:     	ldp	q0, q1, [x8]
+100181450:     	stp	q0, q1, [x22, #0x1c0]
+100181454:     	ldp	q0, q1, [x8, #0x20]
+100181458:     	stp	q0, q1, [x22, #0x1e0]
+10018145c:     	add	x8, sp, #0x100
+100181460:     	sub	x1, x29, #0xc0
+100181464:     	mov	x0, x19
+100181468:     	mov	x2, x20
+10018146c:     	bl	0x10017f318 <__RNvXs1_NtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folderNtB5_8LoweringNtNtCsiZTw7gbbDJe_12zydeco_utils4fold6Folder6resume>
+100181470:     	b	0x1001813c0 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x58>
+100181474:     	ldr	x24, [sp, #0x18]
+100181478:     	ldr	x8, [sp, #0x8]
+10018147c:     	cmp	x24, x8
+100181480:     	b.ne	0x10018148c <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x124>
+100181484:     	add	x0, sp, #0x8
+100181488:     	bl	0x100653d80 <__RNvMs4_NtCs6KVRSXc8uZF_5alloc7raw_vecINtB5_6RawVecNtNtNtNtNtCsb5sCjcsaM02_15zydeco_assembly9benchmark8combined5lower6folder5FrameE8grow_oneBW_>
+10018148c:     	ldr	x8, [sp, #0x10]
+100181490:     	add	x8, x8, x24, lsl #7
+100181494:     	ldp	q0, q1, [sp, #0x60]
+100181498:     	stp	q0, q1, [x8, #0x40]
+10018149c:     	ldr	q0, [sp, #0x80]
+1001814a0:     	ldr	q1, [x22, #0x70]
+1001814a4:     	stp	q0, q1, [x8, #0x60]
+1001814a8:     	ldp	q0, q1, [sp, #0x20]
+1001814ac:     	stp	q0, q1, [x8]
+1001814b0:     	ldp	q0, q1, [sp, #0x40]
+1001814b4:     	stp	q0, q1, [x8, #0x20]
+1001814b8:     	add	x8, x24, #0x1
+1001814bc:     	str	x8, [sp, #0x18]
+1001814c0:     	add	x8, sp, #0x100
+1001814c4:     	add	x1, x21, #0x80
+1001814c8:     	mov	x0, x19
+1001814cc:     	bl	0x10017ae60 <__RNvXs1_NtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folderNtB5_8LoweringNtNtCsiZTw7gbbDJe_12zydeco_utils4fold6Folder5enter>
+1001814d0:     	b	0x1001813c0 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x58>
+1001814d4:     	ldr	x8, [sp, #0x8]
+1001814d8:     	cbz	x8, 0x1001814e4 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x17c>
+1001814dc:     	ldr	x0, [sp, #0x10]
+1001814e0:     	bl	0x1006c1f74 <dyld_stub_binder+0x1006c1f74>
+1001814e4:     	add	sp, sp, #0x260
+1001814e8:     	ldp	x29, x30, [sp, #0x40]
+1001814ec:     	ldp	x20, x19, [sp, #0x30]
+1001814f0:     	ldp	x22, x21, [sp, #0x20]
+1001814f4:     	ldp	x24, x23, [sp, #0x10]
+1001814f8:     	ldp	x28, x27, [sp], #0x50
+1001814fc:     	ret
+100181500:     	b	0x100181528 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x1c0>
+100181504:     	mov	x19, x0
+100181508:     	add	x20, sp, #0x20
+10018150c:     	add	x0, sp, #0x20
+100181510:     	bl	0x1001807f8 <__RINvNtCslWxY2MhVcag_4core3ptr9drop_glueNtNtNtNtNtCsb5sCjcsaM02_15zydeco_assembly9benchmark5reuse5lower6folder5FrameEBL_>
+100181514:     	add	x0, x20, #0x80
+100181518:     	bl	0x100180754 <__RINvNtCslWxY2MhVcag_4core3ptr9drop_glueNtNtNtNtNtCsb5sCjcsaM02_15zydeco_assembly9benchmark5reuse5lower6folder4WorkEBL_>
+10018151c:     	b	0x10018152c <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x1c4>
+100181520:     	b	0x100181528 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x1c0>
+100181524:     	b	0x100181528 <__RINvXNtCsiZTw7gbbDJe_12zydeco_utils4foldNtB3_8ExplicitNtB3_6Driver3runNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder8LoweringEB1c_+0x1c0>
+100181528:     	mov	x19, x0
+10018152c:     	add	x0, sp, #0x8
+100181530:     	bl	0x100180424 <__RINvNtCslWxY2MhVcag_4core3ptr9drop_glueINtNtCs6KVRSXc8uZF_5alloc3vec3VecNtNtNtCsb5sCjcsaM02_15zydeco_assembly5lower6folder5FrameEEB1e_>
+100181534:     	mov	x0, x19
+100181538:     	bl	0x1006c1e6c <dyld_stub_binder+0x1006c1e6c>
+10018153c:     	bl	0x10063c544 <__RNvNtCslWxY2MhVcag_4core9panicking16panic_in_cleanup>

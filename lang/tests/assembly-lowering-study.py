@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Reproduce the isolated assembly-lowering comparison of 2026-09-14.
 
-Builds four historical variants together in an archived checkout. Production
-sources stay unchanged; timings use the normal allocator, and allocation counts
-come from a separate executable. Requires the pinned commits and cached Cargo
-dependencies. See docs/ideas/assembly-lowering-evaluation.md for the boundaries.
+Builds historical variants together in an archived checkout, optionally comparing
+a compatible assembly-folder candidate. Production sources stay unchanged;
+timings use the normal allocator, and allocation counts come from a separate
+executable. Requires the pinned commits and cached Cargo dependencies.
+See docs/ideas/assembly-lowering-evaluation.md for the boundaries.
 """
 
 import argparse
@@ -43,6 +44,8 @@ class Study:
         self.revisions = {
             name: self.git("rev-parse", revision).strip() for name, revision in REVISIONS.items()
         }
+        if args.candidate:
+            self.revisions["candidate"] = self.git("rev-parse", args.candidate).strip()
         self.environment = os.environ.copy()
         self.environment["CARGO_TARGET_DIR"] = str(self.target)
 
@@ -57,7 +60,8 @@ class Study:
     def prepare(self):
         archive = self.output / "source.tar"
         with archive.open("wb") as stream:
-            subprocess.run(["git", "archive", self.revisions["folder"]],
+            revision = self.revisions.get("candidate", self.revisions["folder"])
+            subprocess.run(["git", "archive", revision],
                            cwd=ROOT, stdout=stream, check=True)
         with tarfile.open(archive) as source:
             source.extractall(self.checkout, filter="data")
@@ -85,6 +89,8 @@ class Study:
                 lower = lower.replace("arena::{AssemblyArena, AssemblyBuild, CxKont, Kont}",
                                       "arena::{AssemblyArena, AssemblyBuild, ContextUpdate, CxKont, Kont}")
             (directory / "lower.rs").write_text(lower)
+        if self.args.candidate:
+            self.add_baseline(boundary)
         with (self.checkout / "lang/assembly/src/lib.rs").open("a") as stream:
             stream.write("\n#[doc(hidden)]\npub mod benchmark;\n")
 
@@ -105,7 +111,9 @@ class Study:
             "rustc": subprocess.check_output(["rustc", "-vV"], text=True),
             "profiles": self.args.profiles,
             "timing_runs_per_profile": self.args.runs,
-            "timing_batches_per_run": 32,
+            "timing_batches_per_run": 40 if self.args.candidate else 32,
+            "variants": (["original", "jobs", "baseline", "explicit", "recursive"]
+                         if self.args.candidate else ["original", "jobs", "explicit", "recursive"]),
             "allocation_rounds": 8,
             "sources": SOURCES,
             "input_hashes": {
@@ -132,6 +140,50 @@ class Study:
             "peak_extra_bytes": "peak live heap increment over the prepared-lowerer baseline",
         }
         (self.output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+    def add_baseline(self, boundary):
+        """Compare the pinned folder and a compatible candidate in one binary.
+
+        The driver and shared IR/assembly definitions come from the candidate.
+        This option isolates assembly-folder changes, not changes to those APIs.
+        """
+        directory = boundary / "baseline"
+        (directory / "lower").mkdir(parents=True)
+        (directory / "mod.rs").write_text("use crate::{arena, syntax};\npub(super) mod lower;\n")
+        revision = self.revisions["folder"]
+        lower = self.git("show", f"{revision}:lang/assembly/src/lower.rs")
+        lower = lower.split("impl From<sk::HostCallMode> for ExternMode {")[0]
+        lower = lower.replace("#[cfg(test)]\nmod tests;\n", "")
+        (directory / "lower.rs").write_text(lower)
+        (directory / "lower/folder.rs").write_text(
+            self.git("show", f"{revision}:lang/assembly/src/lower/folder.rs"))
+
+        path = boundary / "mod.rs"
+        source = path.read_text()
+        replacements = {
+            "mod original;": "mod original;\nmod baseline;",
+            "    Jobs,": "    Jobs,\n    Baseline,",
+            "pub const ALL: [Self; 4]": "pub const ALL: [Self; 5]",
+            "Self::Jobs, Self::Explicit": "Self::Jobs, Self::Baseline, Self::Explicit",
+            '            | Self::Jobs => "jobs",':
+                '            | Self::Jobs => "jobs",\n            | Self::Baseline => "baseline",',
+            "    Explicit(Lowerer<'a>),":
+                "    Baseline(baseline::lower::Lowerer<'a>),\n    Explicit(Lowerer<'a>),",
+            "            | Variant::Explicit | Variant::Recursive => {": """
+            | Variant::Baseline => {
+                let lo = baseline::lower::Lowerer::with_policy(
+                    self.spans, self.scoped, self.statics, self.program, &Local);
+                PreparedInner::Baseline(if native { lo.with_native_frames() } else { lo })
+            }
+            | Variant::Explicit | Variant::Recursive => {""",
+            "            | PreparedInner::Explicit(lo)":
+                "            | PreparedInner::Baseline(lo) => lo.run_with_driver::<Explicit>(),\n"
+                "            | PreparedInner::Explicit(lo)",
+        }
+        for before, after in replacements.items():
+            assert source.count(before) == 1, before
+            source = source.replace(before, after)
+        path.write_text(source)
 
     def measure(self):
         with ((self.output / "timings.csv").open("w", newline="") as timing_stream,
@@ -173,6 +225,7 @@ def main():
                         default=["debug", "release"])
     parser.add_argument("--runs", type=int, default=2, help="timing runs per profile (default: 2)")
     parser.add_argument("--prepare-only", action="store_true", help="prepare sources without building")
+    parser.add_argument("--candidate", help="compatible Git revision to compare with the pinned folder")
     args = parser.parse_args()
     if args.runs < 1:
         parser.error("--runs must be positive")

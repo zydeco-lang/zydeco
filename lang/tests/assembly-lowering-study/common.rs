@@ -66,10 +66,10 @@ impl Experiment {
                 }
                 let iterations =
                     ((5_000_000u128 * 8) / calibration.as_nanos()).clamp(1, 1024) as usize;
-                for round in 0..32 {
+                for round in 0..(8 * Variant::ALL.len()) {
                     // Each implementation occupies every position equally often.
-                    for index in 0..4 {
-                        let variant = Variant::ALL[(round + index) % 4];
+                    for index in 0..Variant::ALL.len() {
+                        let variant = Variant::ALL[(round + index) % Variant::ALL.len()];
                         let mut lowering = Duration::ZERO;
                         let mut teardown = Duration::ZERO;
                         for _ in 0..iterations {
@@ -113,8 +113,8 @@ impl Experiment {
             for native in [false, true] {
                 let counts = Self::verify(&input, native);
                 for round in 0..8 {
-                    for index in 0..4 {
-                        let variant = Variant::ALL[(round + index) % 4];
+                    for index in 0..Variant::ALL.len() {
+                        let variant = Variant::ALL[(round + index) % Variant::ALL.len()];
                         let prepared = input.prepare(variant, native);
                         start();
                         let output = black_box(prepared.run());

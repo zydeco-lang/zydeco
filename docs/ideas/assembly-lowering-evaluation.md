@@ -1,11 +1,14 @@
 # Isolated assembly lowering evaluation
 
 This study measures the CPS assembly-lowering refactor on 2026-09-14.
-The current folder takes about **5–10% longer inside lowering** on the six nontrivial source fixtures,
+The initial folder at `370195d8` took about **5–10% longer inside lowering** on the six nontrivial source fixtures,
 while making substantially fewer heap allocations and retaining more peak heap storage.
 The absolute differences are microseconds on these inputs.
 Earlier whole-debug-CLI observations of 2–9% slower builds do not establish an effect caused by this pass:
 their millisecond-scale differences are much larger than the isolated lowering differences measured here.
+The [cost investigation](#cost-investigation-and-improvements) subsequently identified two small improvements:
+reusing completed consumer slots and avoiding redundant consumer dispatch.
+The initial comparison below remains historical evidence; `823f223a` includes both improvements.
 
 The [compiler reference](../references/compiler.md#cps-assembly-lowering) owns the implemented scheduling,
 ownership, and stack-safety contracts.
@@ -22,7 +25,7 @@ they are absent from the production compiler.
 | --- | --- | --- |
 | Original | `9c1d3000`: boxed consumers, context updates, and pending instructions | What did the complete refactor change? |
 | Typed jobs | `8e508e36`: typed context updates and pending instructions, boxed consumers | What did the first step contribute? |
-| Explicit | `370195d8`: typed consumers and the default `Explicit` driver | What does the current compiler pay? |
+| Explicit | `370195d8`: typed consumers and the default `Explicit` driver | What did the initial complete folder cost? |
 | Recursive | `370195d8`: the same folder with `Recursive` | How much comes from driver choice within the new representation? |
 
 Each source is compiled to SPSLow once per measurement process.
@@ -96,7 +99,7 @@ Switching drivers does not restore the original closure-based implementation.
 
 ## Allocation and retention results
 
-On the larger fixtures, the current folder makes approximately 36–45% fewer allocation calls.
+On the larger fixtures, the initial folder makes approximately 36–45% fewer allocation calls.
 It makes more reallocations as vectors grow, requests about 7–38% more bytes cumulatively,
 and adds roughly 13–97 KiB to peak live heap above the prepared-lowerer baseline.
 Fewer allocation calls therefore do not imply a smaller memory footprint.
@@ -114,7 +117,7 @@ Allocation calls exclude reallocations; peak columns report requested heap paylo
 For every measured case, changing the new folder from `Recursive` to `Explicit` added exactly one allocation,
 512 cumulatively requested bytes, and 512 bytes of peak heap increment.
 The larger memory difference from the original lowerer is consequently shared by both new drivers.
-The append-only consumer vector is a plausible target for reducing retention:
+The append-only consumer vector was a plausible target for reducing retention:
 consumed payloads are released, but their slots remain allocated until lowering finishes.
 This study does not profile allocation sites, so it does not attribute every extra byte to that vector.
 
@@ -140,12 +143,83 @@ A causal whole-build estimate would require controlled repeated end-to-end measu
 with these phase boundaries instrumented separately.
 Multiplying the isolated percentage by a whole-build duration would be incorrect.
 
-If further optimization is warranted, first measure a larger SPSLow size series and profile consumer-slot retention.
-Reusing consumed slots or reducing record size can then be evaluated while preserving affine consumption,
-abandoned-chain teardown, and instruction publication order.
-Driver-specific tuning should be compared with the same consumer representation;
-the four-way comparison here provides that baseline.
-No compiler optimization is part of this study.
+These results motivated the investigation below.
+Larger SPSLow size series and controlled whole-build measurements remain useful
+for evaluating future changes beyond these small, warmed fixtures.
+
+## Cost investigation and improvements
+
+The follow-up used separate diagnostic counters and inspected the generated arm64 dispatcher.
+Process sampling was unavailable in the sandbox, so the attribution combines observed work counts,
+generated code, and controlled comparisons of individual changes.
+Instrumentation was absent from timed code.
+
+Two costs stood out. Each consumer slot occupies 96 bytes, and consumed slots accumulated until the run ended.
+Portable `host-runtime.zy` saved 685 consumers, with at most 14 live simultaneously,
+but its vector reserved 1,024 slots, or 96 KiB.
+The other cost was dispatch: `Work` occupies 88 bytes, a return frame 128 bytes, and `Step` 224 bytes.
+The [generated dispatcher](assembly-study-2026-09-14/optimization/dispatcher.txt) copies the full `Step`
+record between loop iterations, including transfers whose useful payload is much smaller.
+Some of those transfers only select a syntax rule that the consumer already knows.
+
+The implemented changes are small and remain local to assembly lowering:
+
+- `726fec37` trims vacant suffix slots after consumption and makes `ContId` non-copyable.
+  On portable `host-runtime.zy`, reserved consumer storage falls from 96 to 6 KiB.
+- `823f223a` dispatches a consumer directly to its selected syntax rule.
+  The rule still schedules its descendants through the driver, as specified
+  by the [CPS lowering boundary](../references/compiler.md#cps-assembly-lowering).
+  On the same fixture, calls to `enter` and `resume` fall from 2,390 to 1,860, a 22% reduction.
+  Saved consumers, emitted nodes, publication order, and native-entry metadata remain equivalent.
+
+The first screening also tried an intrusive free list, ordinary and forced inlining hints,
+and a driver carrying a smaller intermediate state.
+None provided a consistent time improvement.
+The free list reduced heap retention further but generally added 1–2% time; the alternative driver added roughly 2–4%.
+Neither is part of the implementation.
+These experiments show that smaller storage alone does not imply faster dispatch.
+
+Two repeated comparisons placed the unchanged folder, suffix trimming, direct dispatch,
+and both changes in the same executable.
+Percentages below are median paired batch changes for the combined variant,
+using the same timing boundary and seven sources as the initial study.
+There are 64 pairs per source and mode in each profile.
+
+| Result on the six nontrivial fixtures | Debug | Release |
+| --- | --- | --- |
+| Lowering time relative to the initial folder | Roughly unchanged; most cases 0–2% faster | 3–6% faster |
+| Peak live heap saved during lowering | 9–90 KiB | 9–90 KiB |
+
+For portable `host-runtime.zy`, peak heap increment falls from 421.8 to 331.8 KiB.
+The remaining output arena and its contexts still dominate the heap footprint.
+The two-node control has a small release regression of about 2–3%, amounting to only a few nanoseconds.
+The allocation counter still excludes allocator bookkeeping and native stack storage.
+
+The committed implementation was also checked in one executable against the original boxed CPS lowerer,
+the typed-job intermediate step, the initial folder, and the optimized folder with both drivers.
+Those results are retained separately because changing the comparison executable can change code generation,
+and early absolute timings again varied.
+They support the improvement but do not justify a precise universal speedup.
+Across its two release runs, the committed folder was 4–8% faster than the initial folder
+and about 1–3% slower than the original boxed CPS lowerer on the six nontrivial fixtures.
+The generic driver and folder interface are unchanged.
+
+All output comparisons passed.
+Each implementation commit passed the 26 assembly library tests, including the allocation/publication oracle,
+both drivers, native frame plans, rejected patterns, and lowering and dropping 16,384-level inputs on a 256 KiB stack.
+A new regression checks constant retained consumer capacity across 32 and 16,384 sequential completed steps.
+Workspace Clippy and the generated comparison examples pass with warnings denied.
+
+The [optimization evidence](assembly-study-2026-09-14/optimization/manifest.json) records the selection process.
+It includes [before/after counters](assembly-study-2026-09-14/optimization/counters.json),
+[paired timing samples](assembly-study-2026-09-14/optimization/timings.csv),
+[allocation samples](assembly-study-2026-09-14/optimization/allocations.csv),
+[summary statistics](assembly-study-2026-09-14/optimization/summary.csv),
+[screening samples](assembly-study-2026-09-14/optimization/screenings.csv), and the candidate patches.
+The patches apply to `370195d8` with `git apply --unidiff-zero`.
+The [committed comparison manifest](assembly-study-2026-09-14/optimization/committed-manifest.json),
+[timings](assembly-study-2026-09-14/optimization/committed-timings.csv),
+and [allocations](assembly-study-2026-09-14/optimization/committed-allocations.csv) retain the final check.
 
 ## Reproduction and evidence
 
@@ -164,6 +238,17 @@ or `--prepare-only` to inspect the generated sources without building.
 The frozen harness measures the three historical revisions above, including after the production compiler changes.
 It adds no production API and retains no duplicate historical lowerer source in the repository.
 The generated examples pass focused Clippy with warnings denied.
+
+To include the optimized implementation and the pinned initial folder in the same executable, use:
+
+```sh
+python3 lang/tests/assembly-lowering-study.py --candidate 823f223a --output /tmp/assembly-lowering-optimized
+```
+
+This adds a fifth variant, `baseline`, and uses 40 rotating batches per run.
+`explicit` and `recursive` then select the candidate's folder.
+Shared IR definitions, analyses, and the generic driver come from the candidate,
+so this option compares compatible assembly-folder changes rather than arbitrary compiler or driver revisions.
 
 The [manifest](assembly-study-2026-09-14/manifest.json) records revisions, toolchain,
 source and harness hashes, commands, measurement boundaries, and output checks.

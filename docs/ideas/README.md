@@ -44,3 +44,4 @@ Its linked JSON and CSV files are the original evidence; old results do not esta
 [Isolated assembly lowering evaluation](assembly-lowering-evaluation.md) records the 2026-09-14 comparison
 of boxed CPS lowering, typed pending jobs, and the shared folder's explicit and recursive drivers.
 It separates pass timing from allocation costs and whole-build observations.
+The follow-up records consumer-slot reuse, reduced administrative dispatch, and the rejected optimization experiments.

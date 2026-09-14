@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-14",
+  "baseline": "370195d85b80a3206b063454a10188e02058c906",
+  "slot_reuse_commit": "726fec37",
+  "direct_dispatch_commit": "823f223a",
+  "method": "same executable, identical prepared SPSLow input, rotating variant order, isolated lowering timing; allocation counters in separate executable",
+  "timing_repeats_per_profile": 2,
+  "batches_per_variant_per_repeat": 32,
+  "allocation_rounds_per_profile": 8,
+  "screening_repeats": 1,
+  "screening_profile": "release",
+  "selected_variants": {
+    "current": "baseline",
+    "reuse": "trim",
+    "inline": "direct",
+    "combined": "trim_direct"
+  },
+  "all_output_oracles_passed": true,
+  "counters": "separate instrumented copy; excluded from timing and allocation results",
+  "sampling": "macOS sample could not inspect the benchmark process in the sandbox; counters and disassembly used instead",
+  "input_manifest": "../manifest.json",
+  "summary_statistic": "median of (candidate lower_ns / candidate iterations) / (paired baseline lower_ns / baseline iterations), matched by profile, source, native, run, and round; percentage change is 100 * (median - 1)",
+  "candidate_patches": {
+    "free-list.patch": "f813ce98de6401692ff1224430f46c1e59eb456c85db180418a022e076ae0c87",
+    "inline-hint.patch": "cf15544b125e492d882e74eba90a6122eefb43b41342b23293e4d0b1af5ffbb5",
+    "trim.patch": "3af83da30d95d1c03a4bf8a4c942404b98ef5ebaaf841725d3de424c1abd4e5e",
+    "always-inline.patch": "14e6cbd0749ec93953290abbc5f7ae5302ca78dc8b84841cfd857cf86a3006a3",
+    "direct.patch": "74d6693bd30f791d2d4fe6c8069664a11f46399f19ae249eb346cdd064f54b6e",
+    "trim-direct.patch": "1bc5d81451819189ca4579a20576556a1f662478f0fd14a4784a3cf4cf4122b3"
+  },
+  "validation": [
+    "26 assembly library tests passed after each implementation commit",
+    "16,384-level lowering and destruction on a 256 KiB stack",
+    "constant retained consumer capacity for 32 versus 16,384 sequential steps",
+    "workspace Clippy with warnings denied"
+  ],
+  "patch_format": "unified diff without context; apply to 370195d8 with git apply --unidiff-zero"
+}

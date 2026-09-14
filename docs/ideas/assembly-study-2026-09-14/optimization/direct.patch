@@ -1,0 +1,10 @@
+--- a/lang/assembly/src/lower/folder.rs
++++ b/lang/assembly/src/lower/folder.rs
+@@ -162,2 +162,2 @@
+-            | Action::Value(value) => Step::TailCall(Work::Value(value, context, next)),
+-            | Action::Pattern(pattern) => Step::TailCall(Work::Pattern(pattern, context, next)),
++            | Action::Value(value) => self.value(value, context, next),
++            | Action::Pattern(pattern) => self.pattern(pattern, context, next),
+@@ -175 +175 @@
+-            | Continuation::Body(body) => Step::TailCall(Work::Compu(body, context)),
++            | Continuation::Body(body) => self.compu(body, context),

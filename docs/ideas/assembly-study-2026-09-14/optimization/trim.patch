@@ -1,0 +1,14 @@
+--- a/lang/assembly/src/lower/folder.rs
++++ b/lang/assembly/src/lower/folder.rs
+@@ -12 +11,0 @@
+-#[derive(Clone, Copy)]
+@@ -173 +172,8 @@
+-        let continuation = self.continuations[id.0].take().expect("consumer already applied");
++        let continuation = if id.0 + 1 == self.continuations.len() {
++            self.continuations.pop().flatten().expect("consumer already applied")
++        } else {
++            self.continuations[id.0].take().expect("consumer already applied")
++        };
++        while self.continuations.last().is_some_and(Option::is_none) {
++            self.continuations.pop();
++        }

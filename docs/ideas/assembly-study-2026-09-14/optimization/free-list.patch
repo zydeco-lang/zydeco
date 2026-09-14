@@ -1,0 +1,34 @@
+--- a/lang/assembly/src/lower/folder.rs
++++ b/lang/assembly/src/lower/folder.rs
+@@ -12 +11,0 @@
+-#[derive(Clone, Copy)]
+@@ -71,0 +71,5 @@
++}
++
++enum Slot {
++    Pending(Continuation),
++    Free(Option<ContId>),
+@@ -116 +120,2 @@
+-    continuations: Vec<Option<Continuation>>,
++    continuations: Vec<Slot>,
++    free: Option<ContId>,
+@@ -122 +127 @@
+-        Self { lo, continuations: Vec::new(), pending: Vec::new() }
++        Self { lo, continuations: Vec::new(), free: None, pending: Vec::new() }
+@@ -126,3 +131,9 @@
+-        let id = ContId(self.continuations.len());
+-        self.continuations.push(Some(continuation));
+-        id
++        if let Some(id) = self.free.take() {
++            let Slot::Free(next) = std::mem::replace(&mut self.continuations[id.0], Slot::Pending(continuation)) else { unreachable!("free list contains a live consumer") };
++            self.free = next;
++            id
++        } else {
++            let id = ContId(self.continuations.len());
++            self.continuations.push(Slot::Pending(continuation));
++            id
++        }
+@@ -173 +184,2 @@
+-        let continuation = self.continuations[id.0].take().expect("consumer already applied");
++        let Slot::Pending(continuation) = std::mem::replace(&mut self.continuations[id.0], Slot::Free(self.free.take())) else { panic!("consumer already applied") };
++        self.free = Some(id);

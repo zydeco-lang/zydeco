@@ -1,0 +1,6 @@
+--- a/lang/assembly/src/lower/folder.rs
++++ b/lang/assembly/src/lower/folder.rs
+@@ -257,0 +258 @@
++    #[inline]
+@@ -280,0 +282 @@
++    #[inline]

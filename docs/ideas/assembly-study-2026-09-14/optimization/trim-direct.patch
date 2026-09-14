@@ -1,0 +1,22 @@
+--- a/lang/assembly/src/lower/folder.rs
++++ b/lang/assembly/src/lower/folder.rs
+@@ -12 +11,0 @@
+-#[derive(Clone, Copy)]
+@@ -162,2 +161,2 @@
+-            | Action::Value(value) => Step::TailCall(Work::Value(value, context, next)),
+-            | Action::Pattern(pattern) => Step::TailCall(Work::Pattern(pattern, context, next)),
++            | Action::Value(value) => self.value(value, context, next),
++            | Action::Pattern(pattern) => self.pattern(pattern, context, next),
+@@ -173 +172,8 @@
+-        let continuation = self.continuations[id.0].take().expect("consumer already applied");
++        let continuation = if id.0 + 1 == self.continuations.len() {
++            self.continuations.pop().flatten().expect("consumer already applied")
++        } else {
++            self.continuations[id.0].take().expect("consumer already applied")
++        };
++        while self.continuations.last().is_some_and(Option::is_none) {
++            self.continuations.pop();
++        }
+@@ -175 +181 @@
+-            | Continuation::Body(body) => Step::TailCall(Work::Compu(body, context)),
++            | Continuation::Body(body) => self.compu(body, context),
