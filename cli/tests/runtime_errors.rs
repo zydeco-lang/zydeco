@@ -21,7 +21,7 @@ impl RuntimeFixture {
         std::fs::write(
             &source,
             format!(
-            "param (/OS; /Ret; /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /Float32; /Float64; /String; /numeric; /process; /system; /text) : @(import(\"{}\")) in {body}\n",
+            "param (/OS; /Ret; /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /Float32; /Float64; /String; /numeric; /process; /system; /text; builtin) : @(import(\"{}\")) in {body}\n",
                 self.workspace.join("lib/std/builtin.zy").display(),
             ),
         )
@@ -243,18 +243,25 @@ fn standard_error_uses_its_own_injected_stream() {
     let fixture = RuntimeFixture::new();
     let body = r#"
 do writer <- ! system/stdio/stderr;
-do bytes <- ! text/bytes/from_string "stderr only\n";
+do message <- ! bytes/from_string "stderr only\n";
 let failed = { fn (_ : Int64) (_ : String) => ! process/exit 42 } in
-! system/io/write_all writer bytes failed {
-  ! system/io/flush writer failed {
-    ! system/io/close_writer writer failed {
-      ! system/stdio/write "stdout only\n" { ! process/exit 0 }
+! bytes/with_window OS message { fn _ => ! process/exit 42 } {
+  fn access address count =>
+    ! system/io/write_all writer access address count failed {
+      ! system/io/flush writer failed {
+        ! system/io/close_writer writer failed {
+          ! system/stdio/write "stdout only\n" { ! process/exit 0 }
+        }
+      }
     }
-  }
 }
 "#;
+    let body = format!(
+        "let (/Bytes; /bytes) = builtin |> (@(import(\"{}\"))) in {body}",
+        fixture.workspace.join("lib/std/text/bytes.zy").display(),
+    );
     for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
-        let output = fixture.run(body, backend);
+        let output = fixture.run(&body, backend);
         assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(String::from_utf8_lossy(&output.stdout), "stdout only\n", "{backend}");
         assert_eq!(String::from_utf8_lossy(&output.stderr), "stderr only\n", "{backend}");
