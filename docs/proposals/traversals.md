@@ -172,11 +172,41 @@ A whole-fold `Driver::run` cannot replace that suspension boundary without chang
 or buffering the traversal.
 Keep a lazy adapter requirement separate from reconstruction driver selection.
 
-Desugaring and assembly lowering retain their current execution mechanisms.
-Assembly lowering additionally reserves instruction IDs before executing boxed pending continuations;
-any future evaluation must preserve that allocation and publication order.
+Desugaring retains its current execution mechanisms.
 Do not expand the common folder protocol merely to accommodate all these mechanisms at once.
 Each subsequent migration should demonstrate a simpler client under both drivers and retain its depth fixture.
+
+### Assembly continuations and publication
+
+[Assembly lowering](../../lang/assembly/src/lower.rs) is a medium–high difficulty case,
+skipped after evaluating its syntax and instruction execution separately.
+`Stack::Arg`, `Stack::Tag`, and continuation packages descend into the rest of the stack directly,
+retaining boxed consumers for values and tags.
+The existing `pending` loop therefore bounds deferred instruction work, not all syntax descent.
+Product and alias handlers also build nested consumers, and branch handlers lower child programs
+while constructing their jump tables.
+
+An instruction's `Construct::build` reserves its `ProgId` immediately.
+Its pending callback computes the next context, invokes the consumer to obtain the successor ID,
+then publishes the instruction with its original context.
+[`Kont` and `CxKont`](../../lang/assembly/src/arena.rs) encode those consumers and context updates as boxed functions.
+Native continuation lowering additionally creates capture bindings, a resume entry,
+a symbol, and frame metadata around that schedule.
+Wrapping the pending loop in the common driver would retain the direct recursion and nested function ownership.
+
+The promising next step is to replace these boxed consumers with typed continuation and context operations,
+then drive syntax descent and instruction completion through the same suspension protocol.
+Compare a continuation arena with IDs against owned reconstruction frames that reserve output IDs before descent.
+The former can preserve shared continuation boundaries but needs storage and retirement rules;
+the latter makes ownership local but must distinguish obtaining an ID from publishing its instruction.
+Neither representation is selected here, and the common driver does not yet need an expanded protocol.
+
+Acceptance must compare allocation slots, definition associations, contexts, successor links,
+branch order, and native frame-entry metadata under both drivers.
+Include deep argument/tag stacks, nested patterns, wide products, branch tables,
+portable continuation packages, and native resume entries.
+Check final assembly validation and emitted Wasm as well as lowering alone;
+teardown must also avoid recursively dropping nested continuation payloads.
 
 ## Additional graph views and adapters
 
