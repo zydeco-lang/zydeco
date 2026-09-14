@@ -1,0 +1,332 @@
+-- Array handles contain one address. Builders additionally retain the initialized-prefix count.
+begin
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /numeric; /memory; builtin) :
+  @(import("../builtin.zy")) that
+  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
+  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let Fault = @(import("fault.zy")) in
+  let Error = @(import("layout-error.zy")) in
+  let Result = @(import("../data/result.zy")) in
+  let size = @(import("size.zy")) in
+  let indexed = (builtin |> (@(import("indexed.zy")))) types in
+  let int = numeric/int64 in
+  def Contents (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * Contents A
+    end
+  that
+  let Array (Element : VType) (A : VType) =
+    exists (= L : VType) (= Build : VType) (= Values : VType) .
+        (#capacity :: Int64)
+      * (#contents :: Operations L Values)
+      * (
+          #values ::
+            (#generate :: Thk (Thk (Int64 -> Ret A) -> Ret Values))
+          * (#at :: Thk (Values -> Int64 -> Ret (Result A Fault)))
+        )
+      * (
+          #elements :: (
+            #unsafe ::
+              (#base :: Thk (forall (S : VType) . Ptr L S -> Ret (Ptr Element S)))
+            * (
+                #at :: Thk (
+                  forall (S : VType) (R : CType) .
+                    Ptr L S -> Int64 -> Thk (Fault -> R) -> Thk (Ptr Element S -> R) -> R
+                )
+              )
+            * (
+                #free :: Thk (
+                  forall (R : CType) . Alloc -> Ptr L Uninit -> Thk (Fault -> R) -> Thk R -> R
+                )
+              )
+            * (
+                #init_each :: Thk (
+                  forall (R : CType) .
+                       Ptr L Uninit
+                    -> Thk (
+                         Int64 -> Ptr Element Uninit -> Thk (
+                           Fault -> Ptr Element Uninit -> R
+                         ) -> Thk (Ptr Element Init -> R) -> R
+                       )
+                    -> Thk (Fault -> Build -> R) -> Thk (Ptr L Init -> R) -> R
+                )
+              )
+          )
+        )
+      * (
+          #buffer :: (
+            #unsafe ::
+              (#start :: Thk (Ptr L Uninit -> Ret Build))
+            * (#resume :: Thk (Ptr L Init -> Ret Build))
+            * (#length :: Thk (Build -> Ret Int64))
+            * (#prefix :: Thk (Build -> Ret (Ptr Element Init * Int64)))
+            * (
+                #push :: Thk (
+                  forall (R : CType) . Build -> A -> Thk (Fault -> R) -> Thk (Build -> R) -> R
+                )
+              )
+            * (
+                #pop :: Thk (
+                  forall (R : CType) . Build -> Thk (Fault -> R) -> Thk (Build -> A -> R) -> R
+                )
+              )
+            * (
+                #finish :: Thk (
+                  forall (R : CType) . Build -> Thk (Fault -> R) -> Thk (Ptr L Init -> R) -> R
+                )
+              )
+            * (#free :: Thk (forall (R : CType) . Alloc -> Build -> Thk (Fault -> R) -> Thk R -> R))
+          )
+        )
+  in
+  let val make (Element : VType) (A : VType) (element : Operations Element A)
+    (capacity : Int64) (count : Int64) (alignment : Int64)
+  : Array Element A =
+      let Build = Addr * Int64 in
+      let Values = Contents A in
+      let fix write (R : CType) (base : Addr) (index : Int64) (values : Values) (done : Thk R) : R =
+        match values
+        | +Nil(_) => ! done
+        | +Cons(head, tail) =>
+          do displacement <- ! int/mul index element/size;
+          do address <- ! memory/offset base displacement;
+          ! element/unsafe/init R (unsafe/from_address Element Uninit address) head {
+            fn _ =>
+              do next <- ! int/add index 1;
+              ! write R base next tail done
+          }
+        end
+      in
+      let fix read (R : CType) (base : Addr) (index : Int64) (yes : Thk (Values -> R)) : R =
+        ! int/eq R index capacity { ! yes +Nil() } {
+          do displacement <- ! int/mul index element/size;
+          do address <- ! memory/offset base displacement;
+          ! element/unsafe/read R (unsafe/from_address Element Init address) {
+            fn head =>
+              do next <- ! int/add index 1;
+              ! read R base next { fn tail => ! yes +Cons(head, tail) }
+          }
+        }
+      in
+      (
+        (
+          #L = Unit,
+          = Build,
+          = Values,
+          = capacity,
+          #contents = (
+            #size = count,
+            = alignment,
+            #allocate = {
+              fn R allocator no yes =>
+                ! allocator/allocate R count alignment no {
+                  fn base => ! yes (unsafe/from_address Unit Uninit base)
+                }
+            },
+            #unsafe = (
+              #init = {
+                fn R pointer values yes =>
+                  let base = unsafe/address Unit Uninit pointer in
+                  ! write R base 0 values { ! yes (unsafe/from_address Unit Init base) }
+              },
+              #read = { fn R pointer yes => ! read R (unsafe/address Unit Init pointer) 0 yes },
+              #take = {
+                fn R pointer yes =>
+                  let base = unsafe/address Unit Init pointer in
+                  ! read R base 0 {
+                    fn values => ! yes (unsafe/from_address Unit Uninit base) values
+                  }
+              },
+              #free = {
+                fn R allocator pointer no done =>
+                  ! allocator/free R (unsafe/address Unit Uninit pointer) count alignment no done
+              }
+            )
+          ),
+          #values = (
+            #generate = {
+              fn generate =>
+                let fix loop (index : Int64) : Ret Values =
+                  ! int/eq (Ret Values) index capacity { ret +Nil() } {
+                    do head <- ! generate index;
+                    do next <- ! int/add index 1;
+                    do tail <- ! loop next;
+                    ret +Cons(head, tail)
+                  }
+                in
+                ! loop 0
+            },
+            #at = {
+              fn values index =>
+                let fix loop (values : Values) (index : Int64) : Ret (Result A Fault) =
+                  match values
+                  | +Nil(_) => ret +Err(+Bounds())
+                  | +Cons(head, tail) =>
+                    ! int/eq (Ret (Result A Fault)) index 0 { ret +Ok(head) } {
+                      do previous <- ! int/sub index 1;
+                      ! loop tail previous
+                    }
+                  end
+                in
+                ! int/lt (Ret (Result A Fault)) index 0 { ret +Err(+Bounds()) } {
+                  ! loop values index
+                }
+            }
+          ),
+          #elements = (
+            #unsafe = (
+              #base = {
+                fn S pointer => ret (unsafe/from_address Element S (unsafe/address Unit S pointer))
+              },
+              #at = {
+                fn S R pointer index no yes =>
+                  ! indexed/at Element S R element/size
+                    (unsafe/from_address Element S (unsafe/address Unit S pointer)) capacity index
+                    no yes
+              },
+              #free = {
+                fn R allocator pointer no done =>
+                  ! allocator/free R (unsafe/address Unit Uninit pointer) count alignment no done
+              },
+              #init_each = {
+                fn R pointer fill no yes =>
+                  let base = unsafe/address Unit Uninit pointer in
+                  let fix loop (index : Int64) : R =
+                    ! int/eq R index capacity { ! yes (unsafe/from_address Unit Init base) } {
+                      do displacement <- ! int/mul index element/size;
+                      do address <- ! memory/offset base displacement;
+                      ! fill index (unsafe/from_address Element Uninit address)
+                        { fn fault _ => ! no fault (base, index) }
+                        {
+                          fn _ =>
+                            do next <- ! int/add index 1;
+                            ! loop next
+                        }
+                    }
+                  in
+                  ! loop 0
+              }
+            )
+          ),
+          #buffer = (
+            #unsafe = (
+              #start = { fn pointer => ret (unsafe/address Unit Uninit pointer, 0) },
+              #resume = { fn pointer => ret (unsafe/address Unit Init pointer, capacity) },
+              #length = { fn (_, length) => ret length },
+              #prefix = {
+                fn (base, length) => ret (unsafe/from_address Element Init base, length)
+              },
+              #push = {
+                fn R (base, length) value no yes =>
+                  ! int/lt R length capacity {
+                    do displacement <- ! int/mul length element/size;
+                    do address <- ! memory/offset base displacement;
+                    ! element/unsafe/init R (unsafe/from_address Element Uninit address) value {
+                      fn _ =>
+                        do next <- ! int/add length 1;
+                        ! yes (base, next)
+                    }
+                  } { ! no +Bounds() }
+              },
+              #pop = {
+                fn R (base, length) no yes =>
+                  ! int/eq R length 0 { ! no +Bounds() } {
+                    do previous <- ! int/sub length 1;
+                    do displacement <- ! int/mul previous element/size;
+                    do address <- ! memory/offset base displacement;
+                    ! element/unsafe/take R (unsafe/from_address Element Init address) {
+                      fn _ value =>
+                        ! yes (base, previous) value
+                    }
+                  }
+              },
+              #finish = {
+                fn R (base, length) no yes =>
+                  ! int/eq R length capacity { ! yes (unsafe/from_address Unit Init base) } {
+                    ! no +Bounds()
+                  }
+              },
+              #free = {
+                fn R allocator (base, length) no done =>
+                  ! int/eq R length 0 { ! allocator/free R base count alignment no done } {
+                    ! no +Bounds()
+                  }
+              }
+            )
+          )
+        ) : Array Element A
+      )
+  in
+  let val make_fixed (Element : VType) (A : VType) (element : Operations Element A)
+    (capacity : Int64) (boundary : Int64)
+  : Result (Array Element A) Error =
+      size/bind Int64 (Array Element A) (size/alignment element/alignment) (
+        val natural =>
+          size/bind Int64 (Array Element A) (size/alignment boundary) (
+            val boundary =>
+              size/bind Int64 (Array Element A) (size/multiply element/size capacity) (
+                val bytes =>
+                  let alignment = size/maximum natural boundary in
+                  size/bind Int64 (Array Element A) (size/round_up bytes alignment) (
+                    val count =>
+                      +Ok(make Element A element capacity count alignment)
+                  )
+              )
+          )
+      )
+  in
+  let fix power_of_two (R : CType) (value : Int64) (no : Thk R) (yes : Thk R) : R =
+    ! int/lt R value 1 no {
+      ! int/eq R value 1 yes {
+        do remainder <- ! int/mod value 2;
+        ! int/eq R remainder 0 {
+          do half <- ! int/div value 2;
+          ! power_of_two R half no yes
+        } no
+      }
+    }
+  in
+  let dynamic : Thk (
+    forall (Element : VType) (A : VType) (R : CType) .
+      Operations Element A -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk (Array Element A -> R) -> R
+  ) = {
+    fn Element A R element capacity boundary no yes =>
+      let invalid = { ! no +InvalidLayout() } in
+      ! int/lt R capacity 0 invalid {
+        ! int/lt R element/size 0 invalid {
+          ! power_of_two R element/alignment invalid {
+            ! power_of_two R boundary invalid {
+              do alignment <- ! int/gt (Ret Int64) boundary element/alignment { ret boundary } {
+                ret element/alignment
+              };
+              let bytes = {
+                fn (count : Int64) =>
+                  do remainder <- ! int/mod count alignment;
+                  ! int/eq R remainder 0 { ! yes (make Element A element capacity count alignment) }
+                    {
+                      do padding <- ! int/sub alignment remainder;
+                      do limit <- ! int/sub 9223372036854775807 padding;
+                      ! int/gt R count limit { ! no +Overflow() } {
+                        do rounded <- ! int/add count padding;
+                        ! yes (make Element A element capacity rounded alignment)
+                      }
+                    }
+              } in
+              ! int/eq R element/size 0 { ! bytes 0 } {
+                do maximum <- ! int/div 9223372036854775807 element/size;
+                ! int/gt R capacity maximum { ! no +Overflow() } {
+                  do count <- ! int/mul capacity element/size;
+                  ! bytes count
+                }
+              }
+            }
+          }
+        }
+      }
+  } in
+  pack (= Array as Array : VType -> VType -> VType)
+  where
+    (#make = make_fixed, #realize = dynamic) end
+end

@@ -880,7 +880,9 @@ and [filesystem design](docs/proposals/filesystem.md) describe these boundaries 
 
 Explicit storage is available through the ordinary [memory library](lib/std/memory/package.zy).
 Its [owning design](docs/references/language.md#manual-memory) specifies manual allocation,
-erased pointer state, fixed versus dynamic layouts, and direct CPS destination writes.
+erased pointer and partial-record state, fixed versus dynamic layouts, and direct CPS destination writes.
+Typed field paths and array builders compose storage layouts; general views interpret thin,
+fat, header, and indirect handles with explicit runtime metadata.
 The [cross-module example](lib/tests/std/represented-call/main.zy) shares a typed pointer and its operations.
 The [library guide](lib/std/README.md#explicit-storage) locates the source interfaces and examples.
 

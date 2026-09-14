@@ -998,9 +998,11 @@ The library supplies the other types:
 
 | Type | Purpose | Runtime payload |
 | --- | --- | --- |
-| `Uninit`, `Init` | Whole-object initialization states, used as type parameters | None |
+| `Uninit`, `Init`, `Fields S T` | Whole-object and partial-record initialization states | None |
 | `Ptr L S` | An address interpreted with layout witness `L` and state `S` | One `Addr`; no wrapper or state tag |
 | `Slice L S` | Contiguous elements with an explicit dynamic extent | Pointer and element count |
+| `Field P C`, `DynamicField P C` | A parent/child layout path | Fixed recipe erases; dynamic path carries one offset |
+| `views/View P H A`, `views/DynamicView P H A` | Handle interpretation | Fixed recipe erases; dynamic operation is an ordinary thunk |
 | `fixed/Layout A` | A static `Result (Plan A) LayoutError` | Construction evidence eliminates before fixed realization |
 | `Representation A` | An existential layout witness with its allocation and typed access operations | Selected operations; dynamic layouts also capture placement |
 | `dynamic/Layout A` | Runtime layout computation | Captured dynamic inputs and operations |
@@ -1010,8 +1012,7 @@ The library supplies the other types:
 The table describes payload requirements. Products, closures, and runtime-selected dictionaries still use
 the [ordinary representation policy](compiler.md#c10-zasm-stack-analysis-and-local-representation-choices).
 CPS alone does not guarantee allocation-free callbacks or stack frames.
-`Buffer` currently builds bytes; a generic element builder
-and partial-record `Fields` states remain [extensions](../proposals/memory.md).
+`Buffer` builds bytes; the [array factory](#array-storage-and-element-builders) also provides generic element builders.
 No `Frozen` state is needed for this manual interface.
 
 #### Unsafe obligations
@@ -1058,6 +1059,8 @@ There is no runtime initialization check and no implicit initialization of paddi
 ### Typed pointers and slices
 
 Selecting a representation introduces an abstract layout witness `L` shared by its pointers and operations.
+`Representation A` packages `exists L. Operations L A`;
+[Operations](../../lib/std/memory/operations.type.zy) names the interface after that witness has been opened.
 [Ptr](../../lib/std/memory/types.zy) privately aliases `Addr` and has no runtime wrapper.
 After opening a representation for logical type `A`, its operations have the following schematic shapes,
 with `R` universally quantified:
@@ -1085,11 +1088,11 @@ No typed field-path or partial-record tracker is implied by an integer offset.
 
 The [slice operations](../../lib/std/memory/slice.zy) share these pointer and state types.
 `from_parts` checks a nonnegative count and wraps a caller-validated pointer and extent.
-`at` takes an explicit element stride, rejects negative stride or index, checks the index
-against the count, and rejects multiplication overflow before offsetting.
-Zero-sized elements have zero stride. The resulting element pointer keeps the same `L` and `S`.
-The caller supplies a stride matching `L` and an allocation covering the elements;
-bounds checks do not verify that assertion.
+`slices/for_layout L A operations` selects a matching element layout and supplies `unsafe/at`.
+It derives stride from those operations, checks the index against the count, and rejects multiplication overflow
+before offsetting, using the shared [counted-view access](#memory-views) implementation.
+Zero-sized elements have zero stride. The resulting pointer keeps the same `L` and `S`.
+The caller supplies an allocation covering the elements; bounds checks do not verify that assertion.
 A raw slice does not retain its allocation.
 
 ### Static layout plans
@@ -1144,6 +1147,181 @@ then supplies a `Representation A` with the corresponding witness and operations
 Invalid placement selects `no` before allocation or writes.
 Dynamic size, alignment, and offsets remain captured where needed; they are not appended to each typed pointer.
 The [runtime-layout example](../../lib/tests/std/representation.zy) exercises this distinction.
+
+### Typed records and field paths
+
+The [record factories](../../lib/std/memory/record.zy) compose opened child operations
+while preserving their layout witnesses.
+`records/product Left Right A B left right` calculates ordinary product placement;
+`records/at` additionally accepts the left and right byte offsets, total size, and alignment.
+Both produce a static `Result (Record Left Right A B) LayoutError`.
+Explicit placement checks nonnegative extents, alignment, field overlap, and the enclosing size before construction.
+Zero-sized fields occupy no bytes; padding remains uninterpreted.
+
+Opening the result yields a fresh parent `L`, its `value : Operations L (A * B)`,
+`left` and `right` field groups, and state conversions.
+Names come from ordinary source packages: a record module may expose `#length = left` and `#payload = right`.
+Nested records require neither reflection nor a compiler row system.
+
+[Field](../../lib/std/memory/field.zy) is an abstract source family `Field Parent Child`.
+Its implementation is a static value function carrying the constant displacement;
+`fields/offset` and path composition must resolve before execution.
+`fields/initialized` and `fields/uninitialized` specialize pure pointer projections for whole-object states.
+A path relates layouts, without identifying a particular allocation.
+Ordinary clients cannot exchange unrelated parent or child witnesses.
+`fields/unsafe/from_offset` is the explicit assertion boundary for caller-authored layout relationships;
+its caller establishes a nonnegative offset and a child footprint fitting and aligned within the parent.
+A raw shape inspection supplies no such evidence automatically.
+
+`fields/materialize` deliberately produces `DynamicField Parent Child`, carrying one runtime byte offset.
+The `runtime_fields` operations query, compose, and project these paths through `Ret`.
+`runtime_fields/unsafe/from_offset` accepts a runtime displacement under the same caller obligations.
+Neither path form appends a descriptor to its resulting pointer.
+
+Records track partial construction with the erased `Fields LeftState RightState` constructor.
+For a left field containing `A`, the operations have these schematic shapes, with `S` and `R` quantified:
+
+```text
+left/unsafe/init : Ptr L (Fields Uninit S) -> A -> Thk (Ptr L (Fields Init S) -> R) -> R
+left/unsafe/read : Ptr L (Fields Init S) -> Thk (A -> R) -> R
+left/unsafe/take : Ptr L (Fields Init S) -> Thk (Ptr L (Fields Uninit S) -> A -> R) -> R
+```
+
+The right field preserves the left state analogously.
+`states/empty` opens `Uninit` as `Fields Uninit Uninit`, and `states/full` opens `Init` as `Fields Init Init`.
+`states/finish` and `states/vacate` perform the inverse conversions for completely initialized or vacant records.
+These are erased value conversions, with no flag writes or padding initialization.
+
+A field's `unsafe/project` selects its own state from a partially initialized parent.
+For a nested transition, `unsafe/replace` accepts the original parent and the same projected child
+after its update, and returns the parent with that child state changed.
+It performs no writes or address-equality check: the caller must supply that exact child and retire stale aliases.
+An arbitrary path cannot propagate a parent's entire `Fields` state onto one child.
+The [record and view example](../../lib/tests/std/general-views.zy) exercises direct construction and untouched padding;
+[type/state regressions](../../lang/tests/tests/general_memory.rs) cover nested paths and rejected transitions.
+
+### Array storage and element builders
+
+The [array factory](../../lib/std/memory/array.zy) receives an opened element layout.
+`arrays/make Element A element capacity alignment` requires static placement inputs and returns a checked result.
+`arrays/realize Element A R element capacity alignment no yes` validates runtime inputs before exposing operations.
+Both check extent multiplication and alignment rounding before allocation; fixed multiplication is composed
+from the existing integer value intrinsics in [size.zy](../../lib/std/memory/size.zy).
+No integer-dependent type or new static arithmetic intrinsic is required.
+
+Opening `Array Element A` introduces an array-layout witness `L`, a construction handle `Build`, and `Values`.
+`Ptr L S` is one address; a fixed capacity and stride specialize the operations.
+A dynamic description retains its capacity and placement where its operations need them.
+`elements/unsafe/at` checks an index against capacity and produces `Ptr Element S`;
+zero-sized elements have zero stride and require no backing bytes.
+`elements/unsafe/base` is a pure address interpretation and supplies no dereference bounds.
+
+`elements/unsafe/init_each` writes directly into an uninitialized destination through a caller-supplied callback.
+A successful callback supplies that same element as `Init`; a failure callback must first settle its current contents
+and supply that same element as `Uninit`.
+Completed elements advance the initialized prefix.
+The operation's failure successor receives the fault and a `Build` describing that prefix;
+success receives whole-array `Init` only after every element completes.
+Abandoning a continuation produces neither cleanup nor failure notification.
+
+The `buffer/unsafe` group manages this prefix explicitly.
+`start` begins with zero initialized elements; `resume` reopens a fully initialized array at capacity.
+`length` and `prefix` expose the current count and a counted initialized element pointer.
+`push` checks capacity before writing; `pop` takes the last element and decreases the count.
+`finish` requires a complete prefix, while `free` requires an empty one and the original allocator.
+A rejected operation preserves the supplied handle and storage.
+Copying handles still permits stale aliases.
+
+The optional `contents : Operations L Values` interface makes an array usable as a child of a typed record.
+`values/generate` builds exactly its capacity of logical elements through a pure callback;
+`values/at` observes those logical values with a checked index.
+Whole-value reads and takes explicitly copy elements into a managed list behind `Values`.
+Direct element access, prefix building, and `init_each` do not create that intermediate list.
+[Array construction](../../lib/tests/std/array-memory.zy)
+and [runtime selection](../../lib/tests/std/runtime-memory.zy) exercise success, partial failure, and explicit release.
+
+### Memory views
+
+Storage layout, handle representation, and handle interpretation are independent choices.
+A handle `H` is the value passed by the caller; a view describes how it leads to a payload pointer and observations.
+A logical fat handle does not itself prescribe native field placement or a C argument layout.
+Its own storage representation is selected separately.
+
+The [view library](../../lib/std/memory/view.zy) defines these ordinary source types:
+
+```text
+Cps A        = forall R. Thk (A -> R) -> R
+Checked E A  = forall R. Thk (E -> R) -> Thk (A -> R) -> R
+View P H A   = val pi (handle : H). Thk (P A)
+DynamicView P H A = Thk (H -> P A)
+```
+
+`View` selects a recipe statically and produces a computation for its handle.
+`! (view handle)` executes that operation; a CPS operation then receives `R` and its successor.
+Typical results are `Ptr L S * M`, where `M` is runtime metadata, but a view can yield another handle for composition.
+`Ret` serves pure calculations, while `Cps` and `Checked` sequence memory observations
+under the [L6 convention](#ret-and-explicit-cps).
+Applying a value function never executes a load.
+
+`identity`, `precompose`, `map`, and `compose` adapt and combine pure views.
+`as_cps` lifts a pure view; `map_cps` and `compose_cps` preserve the CPS protocol.
+`as_checked`, `map_checked`, and `compose_checked` propagate explicit failure without running a later step.
+No adapter asserts that arbitrary CPS code is pure.
+The fixed recipe itself must disappear under static elimination; runtime handle fields and captured context can remain.
+
+For runtime selection, `materialize` explicitly produces `DynamicView` with its ordinary thunk and captured data.
+Different handle types can be paired with their matching operations in an existential package.
+Neither form inserts a view dictionary into each handle.
+
+```zydeco check
+param (/VType; /CType; /Thk; /Ret; /Int64; builtin) : @(import("../../lib/std/builtin.zy")) in
+let (/views) = builtin |> (@(import("../../lib/std/memory/package.zy"))) in
+let (/Cps; /View; /identity; /as_cps) = views in
+let run : Thk (Int64 -> Ret Int64) = {
+  fn value => ! ((as_cps Int64 Int64 (identity Int64)) value) (Ret Int64) { fn result => ret result }
+} in
+! run 7
+```
+
+The supplied constructors support these handle forms:
+
+| Constructor | Handle | Observation |
+| --- | --- | --- |
+| `thin` | `Ptr L S` | Same pointer and `Unit`, through `Ret` |
+| `fat` | `Ptr L S * M` | Carried pointer and arbitrary runtime metadata, through `Ret` |
+| `unsafe/header` | Abstract `H S`, backed by `Addr` | Read a metadata layout at a fixed signed displacement; calculate payload address through CPS |
+| `unsafe/inline` | Header address in `H S` | Metadata at the handle; payload at a fixed displacement |
+| `unsafe/prefix` | Payload address in `H S` | Metadata at a signed displacement; preserve payload address |
+| `unsafe/indirect` | Address of an unmanaged pointer slot | Load its pointer, then run another CPS view |
+
+A `Header M Payload` package supplies the handle family `H S` and its unsafe wrapping, address, and opening operations.
+The caller establishes initialized metadata fields and payload state `S` independently;
+finding an uninitialized destination does not require a fully initialized enclosing object.
+For a counted initialized element interpretation, the obligation covers the stated extent, not spare capacity.
+`unsafe/dynamic_header` accepts explicit runtime displacements and a raw address under these same obligations.
+A header containing a vtable address is supported as data; calling code pointers has its separate FFI boundary.
+
+[headers/from_fields](../../lib/std/memory/header.zy) derives inline and prefix recipes
+from metadata and payload paths sharing one parent layout.
+Prefix recovery includes the padding chosen by that layout.
+For example, an `Int64` length followed by four `UInt32` elements with payload alignment 16 has offsets 0
+and 16, total size 32, and alignment 16.
+The inline handle is the allocation base; the prefix handle is `base + 16`.
+The [complete example](../../lib/tests/std/header-array.zy) constructs that layout and uses both interpretations.
+
+`bounded` wraps a counted CPS view with checks for nonnegative capacity and `0 <= length <= capacity`.
+`counted` and `counted_checked` derive element stride from selected layout operations,
+validate index and multiplication bounds, and produce an element pointer.
+These checks cannot establish allocation validity or initialized contents from an arbitrary header.
+A fixed array can instead use a thin interpretation, keeping its bound in the recipe without a carried length.
+
+An opening is a snapshot: later metadata changes do not update earlier observations or copied handles.
+Reopening performs fresh loads.
+Synchronization, alias validity, and exact allocation release remain the caller's task;
+release uses the original base and allocation layout, not a mutable length header.
+Fixed recipes and state witnesses erase, while ordinary products, thunks,
+and frames retain the compiler's representation policy.
+Staging and CPS alone do not guarantee that all runtime allocations disappear.
 
 ### Immutable owners and source bytes
 

@@ -1,7 +1,14 @@
 @[package(library, name(std/memory))]
 begin
   param val (/VType; /Addr; builtin) : @(import("../builtin.zy")) that
-  let (/Uninit; /Init; /Ptr; /unsafe; types) = (@(import("types.zy"))) Addr in
+  let (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) = (@(import("types.zy"))) Addr in
+  let (= Field, = DynamicField, field_ops) = (builtin |> (@(import("field.zy")))) types in
+  let fields = field_ops/constant in
+  let runtime_fields = field_ops/runtime in
+  let headers = (builtin |> (@(import("header.zy")))) types Field DynamicField field_ops in
+  let records = (builtin |> (@(import("record.zy")))) types Field DynamicField field_ops in
+  let arrays = (builtin |> (@(import("array.zy")))) types in
+  let views = (builtin |> (@(import("view.zy")))) types in
   let fixed = (builtin |> (@(import("layout.zy")))) types in
   let dynamic = (builtin |> (@(import("dynamic-layout.zy")))) types in
   let allocation = builtin |> (@(import("allocation.zy"))) in
@@ -10,9 +17,25 @@ begin
   pack
       (= Uninit : VType) is Uninit
       (= Init : VType) is Init
+      (= Field : VType -> VType -> VType) is Field
+      (= DynamicField : VType -> VType -> VType) is DynamicField
+      (= Fields : VType -> VType -> VType) is Fields
       (= Ptr : VType -> VType -> VType) is Ptr
       (= Slice : VType -> VType -> VType) is Slice
   where
-    (= slices, = fixed, = dynamic, = allocation, #pointer = = unsafe, = raw)
+    (
+      = slices,
+      = fields,
+      = runtime_fields,
+      = records,
+      = headers,
+      = arrays,
+      = views,
+      = fixed,
+      = dynamic,
+      = allocation,
+      #pointer = = unsafe,
+      = raw
+    )
   end
 end

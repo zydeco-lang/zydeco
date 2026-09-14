@@ -15,6 +15,7 @@ begin
   | +Err(_) => ! fail
   | +Ok(plan) =>
     let (= L, repr) = layout/realize Int64 plan in
+    let access = slices/for_layout L Int64 repr in
     ! raw/allocate OS 24 8 no {
       fn base =>
         do second <- ! raw/unsafe/offset base 8;
@@ -30,11 +31,11 @@ begin
                         pointer/unsafe/from_address L Init restored
                       ) 2 no {
                         fn slice =>
-                          ! slices/unsafe/at L Init OS repr/size slice 2 {
+                          ! access/unsafe/at Init OS slice 2 {
                             fn fault =>
                               match fault
                               | +Bounds() =>
-                                ! slices/unsafe/at L Init OS repr/size slice 1 no {
+                                ! access/unsafe/at Init OS slice 1 no {
                                   fn pointer =>
                                     ! repr/unsafe/read OS pointer {
                                       fn value =>

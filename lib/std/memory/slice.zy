@@ -4,7 +4,7 @@ begin
   param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
-  param val (/Uninit; /Init; /Ptr; /unsafe) : (@(import("types.type.zy"))) Addr in
+  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
   let Fault = @(import("fault.zy")) in
   let int = numeric/int64 in
   let Slice (L : VType) (S : VType) = Ptr L S * Int64 in
@@ -16,27 +16,22 @@ begin
     fn L S R pointer count no yes =>
       ! int/lt R count 0 { ! no +Bounds() } { ! yes (pointer, count) }
   } in
-  let at : Thk (
-    forall (L : VType) (S : VType) (R : CType) .
-      Int64 -> Slice L S -> Int64 -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
-  ) = {
-    fn L S R stride (pointer, count) index no yes =>
-      ! int/lt R stride 0 { ! no +InvalidLayout() } {
-        ! int/lt R index 0 { ! no +Bounds() } {
-          ! int/lt R index count {
-            ! int/eq R stride 0 { ! yes pointer } {
-              do maximum <- ! int/div 9223372036854775807 stride;
-              ! int/gt R index maximum { ! no +Overflow() } {
-                do offset <- ! int/mul index stride;
-                do address <- ! memory/offset (unsafe/address L S pointer) offset;
-                ! yes (unsafe/from_address L S address)
-              }
-            }
-          } { ! no +Bounds() }
-        }
-      }
-  } in
+  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
+  let (/Cps; /View; /fat; /as_cps; /counted) =
+    (builtin |> (@(import("view.zy")))) types
+  in
+  let val for_layout (L : VType) (A : VType) (layout : Operations L A) =
+    let at : Thk (
+      forall (S : VType) (R : CType) .
+        Slice L S -> Int64 -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
+    ) = {
+      fn S R slice index no yes =>
+        let view = as_cps (Ptr L S * Int64) (Ptr L S * Int64) (fat L S Int64) in
+        ! (counted L A S (Ptr L S * Int64) layout view (slice, index)) R no yes
+    } in
+    (#unsafe = = at)
+  in
   pack (= Slice : VType -> VType -> VType) is Slice
   where
-    (= length, #unsafe = (= from_parts, = at)) end
+    (= length, = for_layout, #unsafe = = from_parts) end
 end

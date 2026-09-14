@@ -1,0 +1,8 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  param Uninit : VType in
+  param Init : VType in
+  param Ptr : VType -> VType -> VType in
+  exists (= Field : VType -> VType -> VType) (= DynamicField : VType -> VType -> VType) .
+    (@(import("field-operations.type.zy"))) Uninit Init Ptr Field DynamicField
+end

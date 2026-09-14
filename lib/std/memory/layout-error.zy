@@ -4,5 +4,8 @@ begin
   | +NegativeSize : Unit
   | +InvalidAlignment : Unit
   | +SizeOverflow : Unit
+  | +MisalignedField : Unit
+  | +OverlappingFields : Unit
+  | +InvalidExtent : Unit
   end
 end

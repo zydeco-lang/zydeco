@@ -1,0 +1,103 @@
+@[package(test(of(std)))]
+begin
+  param (/VType; /CType; /Thk; /Ret; /Int64; /UInt32; /OS; /numeric; /process; builtin) : @(import(
+    std/builtin
+  )) that
+  let (/Uninit; /Init; /Ptr; /arrays; /fixed; /allocation) = builtin |> (@(import(std/memory))) in
+  let (= Plan, = Layout, layout) = fixed in
+  let (/heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  let run =
+    match layout/uint32
+    | +Err(_) => fail
+    | +Ok(plan) =>
+      let (#L = Element, element) = layout/realize UInt32 plan in
+      match arrays/make Element UInt32 element 4 16
+      | +Err(_) => fail
+      | +Ok(array) =>
+        let (/L; /Build; /Values; /contents; /values; /capacity; /elements; /buffer) = array in
+        let complete =
+          {
+            -- The second allocation reaches whole-array Init without intermediate values.
+            ! contents/allocate OS heap no
+              {
+                fn vacant =>
+                  ! elements/init_each OS vacant {
+                    fn _ pointer _ yes =>
+                      ! element/unsafe/init OS pointer 19 yes
+                  } { fn _ _ => ! fail }
+                    {
+                      fn live =>
+                        ! elements/at Init OS live 3 no
+                          {
+                            fn last =>
+                              ! element/unsafe/read OS last
+                                {
+                                  fn item =>
+                                    ! numeric/uint32/eq OS item 19
+                                      {
+                                        -- Whole-value taking explicitly copies the elements into a logical value.
+                                        ! contents/unsafe/take OS live {
+                                          fn vacant copied =>
+                                            do last <- ! values/at copied 3;
+                                            match last
+                                            | +Err(_) => ! fail
+                                            | +Ok(item) => ! numeric/uint32/eq OS item 19 {
+                                              ! contents/unsafe/free OS heap vacant no {
+                                                ! process/exit 0
+                                              }
+                                            } fail
+                                            end
+                                        }
+                                      } fail
+                                }
+                          }
+                    }
+              }
+          }
+        in
+        {
+          ! contents/allocate OS heap no {
+            fn vacant =>
+              ! elements/init_each OS vacant {
+                fn index pointer error yes =>
+                  ! numeric/int64/eq OS index 2 { ! error +Bounds() pointer } {
+                    ! element/unsafe/init OS pointer 7 yes
+                  }
+              } {
+                fn fault progress =>
+                  match fault
+                  | +Bounds() =>
+                    do length <- ! buffer/length progress;
+                    ! numeric/int64/eq OS length 2 {
+                      ! buffer/free OS heap progress {
+                        fn fault =>
+                          match fault
+                          | +Bounds() =>
+                            ! buffer/pop OS progress no {
+                              fn progress item =>
+                                ! numeric/uint32/eq OS item 7 {
+                                  ! buffer/pop OS progress no {
+                                    fn empty _ =>
+                                      ! buffer/free OS heap empty no {
+                                        ! complete
+                                      }
+                                  }
+                                } fail
+                            }
+                          | _ => ! fail
+                          end
+                      } fail
+                    } fail
+                  | _ => ! fail
+                  end
+              } { fn _ => ! fail }
+          }
+        }
+      end
+    end
+  in
+  ! run
+end

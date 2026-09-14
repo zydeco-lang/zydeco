@@ -14,8 +14,9 @@ begin
     | +Init : Unit
     end
   in
+  let Fields (Left : VType) (Right : VType) = Left * Right in
   let Ptr (L : VType) (S : VType) = Addr in
   let val address (L : VType) (S : VType) (pointer : Ptr L S) : Addr = pointer in
   let val from_address (L : VType) (S : VType) (address : Addr) : Ptr L S = address in
-  ((= Uninit, = Init, = Ptr, #unsafe = (= address, = from_address)) : Package Addr)
+  ((= Uninit, = Init, = Fields, = Ptr, #unsafe = (= address, = from_address)) : Package Addr)
 end

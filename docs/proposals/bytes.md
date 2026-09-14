@@ -83,4 +83,5 @@ Manual typestate is not an implementation of those reuse proofs.
 - Which ownership evidence can justify reclamation and reuse across managed aliases and raw exports
   without imposing per-copy overhead on every value?
 
-Typed field paths and partial initialization belong to the [manual-memory extensions](memory.md).
+Typed field paths
+and partial initialization follow the [memory reference](../references/language.md#typed-records-and-field-paths).

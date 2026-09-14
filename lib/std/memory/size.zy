@@ -60,5 +60,36 @@ begin
         )
     )
   in
-  (= bind, = maximum, = size, = alignment, = add, = round_up)
+  -- Sixty-four statically composed steps need no multiplication intrinsic or runtime loop.
+  let val multiply (left : Int64) (right : Int64) : Result Int64 Error =
+    bind Int64 Int64 (size left) (
+      val left =>
+        bind Int64 Int64 (size right) (
+          val right =>
+            let State = Result Int64 Error * Int64 * Result Int64 Error in
+            let val step ((power, mask, total) : State) : State =
+              let next =
+                match bit_and right mask
+                | 0 => total
+                | _ => bind Int64 Int64 power (
+                  val power =>
+                    bind Int64 Int64 total (val total => add total power)
+                )
+                end
+              in
+              (bind Int64 Int64 power (val power => add power power), add_bits mask mask, next)
+            in
+            let val twice (f : val pi (state : State) . State) : val pi (state : State) . State =
+              val state => f (f state)
+            in
+            let (_, _, result) = twice (twice (twice (twice (twice (twice step))))) (
+              +Ok(left),
+              1,
+              +Ok(0)
+            ) in
+            result
+        )
+    )
+  in
+  (= bind, = maximum, = size, = alignment, = add, = round_up, = multiply)
 end

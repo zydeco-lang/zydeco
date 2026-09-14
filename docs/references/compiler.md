@@ -2409,6 +2409,12 @@ The [Node host](../../cli/wasm/wasm-memory.mjs) emulates unmanaged memory with v
 Its range lookup is an embedding implementation cost; it is not a source guarantee of recoverable raw-access errors.
 The virtual address space is separate from managed Wasm memory and exports no native pointer.
 [L13](language.md#manual-memory) owns caller obligations and the distinction between static evidence and runtime data.
+The source [view](../../lib/std/memory/view.zy),
+[field](../../lib/std/memory/field.zy), [record](../../lib/std/memory/record.zy),
+and [array](../../lib/std/memory/array.zy) factories use these same primitives.
+C6 eliminates fixed view functions and field recipes; runtime-selected views and layouts use ordinary source thunks.
+`Fields` states and layout witnesses introduce no runtime tags or new builtin roles.
+Array whole-value reads explicitly build managed logical contents; direct initialization and indexing do not.
 
 Scalar `store_le` takes an address, value, and completion; `load_le` takes an address and result successor.
 Native loads and stores use byte copies or unaligned pointer-slot accesses without runtime access validation.

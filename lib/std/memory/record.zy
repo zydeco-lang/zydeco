@@ -1,0 +1,309 @@
+-- replace requires the same projected child after its state transition; aliases remain manual.
+begin
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /memory; builtin) : @(import(
+    "../builtin.zy"
+  )) that
+  param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr that
+  param val Field : VType -> VType -> VType that
+  param val DynamicField : VType -> VType -> VType that
+  param val (/constant = /unsafe = field_unsafe) : (@(import("field-operations.type.zy"))) Uninit
+    Init Ptr Field DynamicField in
+  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
+  let Result = @(import("../data/result.zy")) in
+  let Error = @(import("layout-error.zy")) in
+  let size = @(import("size.zy")) in
+  let compare = @(intrinsic(i64_compare)) in
+  let bits = @(intrinsic(i64_and)) in
+  let sub = @(intrinsic(i64_sub)) in
+  let Descriptor = (@(import("descriptor.type.zy"))) Addr in
+  let codec = (builtin |> (@(import("codec.zy")))) types in
+  let Record (Left : VType) (Right : VType) (A : VType) (B : VType) =
+    exists (= L : VType) .
+        (#value :: Operations L (A * B))
+      * (
+          #states ::
+            (#empty :: val pi (pointer : Ptr L Uninit) . Ptr L (Fields Uninit Uninit))
+          * (#full :: val pi (pointer : Ptr L Init) . Ptr L (Fields Init Init))
+          * (#finish :: val pi (pointer : Ptr L (Fields Init Init)) . Ptr L Init)
+          * (#vacate :: val pi (pointer : Ptr L (Fields Uninit Uninit)) . Ptr L Uninit)
+        )
+      * (
+          #left ::
+            (#path :: Field L Left)
+          * (
+              #unsafe ::
+                (
+                  #project :: val pi (T : VType) (S : VType) (pointer : Ptr L (Fields T S)) .
+                    Thk (Ret (Ptr Left T))
+                )
+              * (
+                  #init :: Thk (
+                    forall (S : VType) (R : CType) .
+                      Ptr L (Fields Uninit S) -> A -> Thk (Ptr L (Fields Init S) -> R) -> R
+                  )
+                )
+              * (
+                  #read :: Thk (
+                    forall (S : VType) (R : CType) . Ptr L (Fields Init S) -> Thk (A -> R) -> R
+                  )
+                )
+              * (
+                  #take :: Thk (
+                    forall (S : VType) (R : CType) .
+                      Ptr L (Fields Init S) -> Thk (Ptr L (Fields Uninit S) -> A -> R) -> R
+                  )
+                )
+              * (
+                  #replace :: val pi (T : VType) (S : VType) (U : VType) (
+                      pointer : Ptr L (Fields T S)
+                    )
+                    (child : Ptr Left U)
+                  .
+                    Ptr L (Fields U S)
+                )
+            )
+        )
+      * (
+          #right ::
+            (#path :: Field L Right)
+          * (
+              #unsafe ::
+                (
+                  #project :: val pi (T : VType) (S : VType) (pointer : Ptr L (Fields S T)) .
+                    Thk (Ret (Ptr Right T))
+                )
+              * (
+                  #init :: Thk (
+                    forall (S : VType) (R : CType) .
+                      Ptr L (Fields S Uninit) -> B -> Thk (Ptr L (Fields S Init) -> R) -> R
+                  )
+                )
+              * (
+                  #read :: Thk (
+                    forall (S : VType) (R : CType) . Ptr L (Fields S Init) -> Thk (B -> R) -> R
+                  )
+                )
+              * (
+                  #take :: Thk (
+                    forall (S : VType) (R : CType) .
+                      Ptr L (Fields S Init) -> Thk (Ptr L (Fields S Uninit) -> B -> R) -> R
+                  )
+                )
+              * (
+                  #replace :: val pi (T : VType) (S : VType) (U : VType) (
+                      pointer : Ptr L (Fields S T)
+                    )
+                    (child : Ptr Right U)
+                  .
+                    Ptr L (Fields S U)
+                )
+            )
+        )
+  in
+  let val make (Left : VType) (Right : VType) (A : VType) (B : VType)
+    (left : Operations Left A) (right : Operations Right B)
+    (left_offset : Int64) (right_offset : Int64) (count : Int64) (alignment : Int64)
+  :
+    Record Left Right A B
+  =
+    let descriptor : Descriptor (A * B) =
+      (
+        #size = count,
+        = alignment,
+        #write = {
+          fn R (a, b) base done =>
+            do first <- ! memory/offset base left_offset;
+            ! left/unsafe/init R (unsafe/from_address Left Uninit first) a {
+              fn _ =>
+                do second <- ! memory/offset base right_offset;
+                ! right/unsafe/init R (unsafe/from_address Right Uninit second) b { fn _ => ! done }
+            }
+        },
+        #read = {
+          fn R base yes =>
+            do first <- ! memory/offset base left_offset;
+            ! left/unsafe/read R (unsafe/from_address Left Init first) {
+              fn a =>
+                do second <- ! memory/offset base right_offset;
+                ! right/unsafe/read R (unsafe/from_address Right Init second) {
+                  fn b => ! yes (a, b)
+                }
+            }
+        }
+      )
+    in
+    let L = Unit in
+    let value = codec/operations L (A * B) descriptor in
+    (
+      (
+        = L,
+        = value,
+        #states = (
+          #empty = val pointer =>
+            unsafe/from_address L (Fields Uninit Uninit) (unsafe/address L Uninit pointer),
+          #full = val pointer =>
+            unsafe/from_address L (Fields Init Init) (unsafe/address L Init pointer),
+          #finish = val pointer =>
+            unsafe/from_address L Init (unsafe/address L (Fields Init Init) pointer),
+          #vacate = val pointer =>
+            unsafe/from_address L Uninit (unsafe/address L (Fields Uninit Uninit) pointer)
+        ),
+        #left =
+        (
+          #path = field_unsafe/from_offset L Left left_offset,
+          #unsafe =
+          (
+            #project = val T S pointer =>
+              {
+                do address <- ! memory/offset (unsafe/address L (Fields T S) pointer) left_offset;
+                ret (unsafe/from_address Left T address)
+              },
+            #init = {
+              fn S R pointer item yes =>
+                let base = unsafe/address L (Fields Uninit S) pointer in
+                do address <- ! memory/offset base left_offset;
+                ! left/unsafe/init R (unsafe/from_address Left Uninit address) item {
+                  fn _ =>
+                    ! yes (unsafe/from_address L (Fields Init S) base)
+                }
+            },
+            #read =
+            {
+              fn S R pointer yes =>
+                do address <- ! memory/offset (unsafe/address L (Fields Init S) pointer) left_offset;
+                ! left/unsafe/read R (unsafe/from_address Left Init address) yes
+            },
+            #take = {
+              fn S R pointer yes =>
+                let base = unsafe/address L (Fields Init S) pointer in
+                do address <- ! memory/offset base left_offset;
+                ! left/unsafe/take R (unsafe/from_address Left Init address) {
+                  fn _ item =>
+                    ! yes (unsafe/from_address L (Fields Uninit S) base) item
+                }
+            },
+            #replace = val T S U pointer child =>
+              unsafe/from_address L (Fields U S) (unsafe/address L (Fields T S) pointer)
+          )
+        ),
+        #right = (
+          #path = field_unsafe/from_offset L Right right_offset,
+          #unsafe = (
+            #project = val T S pointer =>
+              {
+                do address <- ! memory/offset (unsafe/address L (Fields S T) pointer) right_offset;
+                ret (unsafe/from_address Right T address)
+              },
+            #init = {
+              fn S R pointer item yes =>
+                let base = unsafe/address L (Fields S Uninit) pointer in
+                do address <- ! memory/offset base right_offset;
+                ! right/unsafe/init R (unsafe/from_address Right Uninit address) item {
+                  fn _ =>
+                    ! yes (unsafe/from_address L (Fields S Init) base)
+                }
+            },
+            #read = {
+              fn S R pointer yes =>
+                do address <- ! memory/offset (unsafe/address L (Fields S Init) pointer)
+                  right_offset;
+                ! right/unsafe/read R (unsafe/from_address Right Init address) yes
+            },
+            #take = {
+              fn S R pointer yes =>
+                let base = unsafe/address L (Fields S Init) pointer in
+                do address <- ! memory/offset base right_offset;
+                ! right/unsafe/take R (unsafe/from_address Right Init address) {
+                  fn _ item =>
+                    ! yes (unsafe/from_address L (Fields S Uninit) base) item
+                }
+            },
+            #replace = val T S U pointer child =>
+              unsafe/from_address L (Fields S U) (unsafe/address L (Fields S T) pointer)
+          )
+        )
+      ) : Record Left Right A B
+    )
+  in
+  let val at (Left : VType) (Right : VType) (A : VType) (B : VType)
+    (left : Operations Left A) (right : Operations Right B)
+    (left_offset : Int64) (right_offset : Int64) (count : Int64) (alignment : Int64)
+  : Result (Record Left Right A B) Error =
+      let Out = Record Left Right A B in
+      size/bind Int64 Out (size/alignment alignment) (
+        val alignment =>
+          size/bind Int64 Out (size/alignment left/alignment) (
+            val la =>
+              size/bind Int64 Out (size/alignment right/alignment) (
+                val ra =>
+                  size/bind Int64 Out (size/add left_offset left/size) (
+                    val le =>
+                      size/bind Int64 Out (size/add right_offset right/size) (
+                        val re =>
+                          size/bind Int64 Out (size/size count) (
+                            val count =>
+                              let val valid () : Result Out Error =
+                                +Ok(
+                                  make Left Right A B left right left_offset right_offset count
+                                    alignment
+                                )
+                              in
+                              let val disjoint () : Result Out Error =
+                                match compare le right_offset
+                                | 1 =>
+                                  match compare re left_offset
+                                  | 1 =>
+                                    match (compare left/size 0, compare right/size 0)
+                                    | (0, _) => valid ()
+                                    | (_, 0) => valid ()
+                                    | _ => +Err(+OverlappingFields())
+                                    end
+                                  | _ => valid ()
+                                  end
+                                | _ => valid ()
+                                end
+                              in
+                              match (
+                                compare alignment la,
+                                compare alignment ra,
+                                bits left_offset (sub la 1),
+                                bits right_offset (sub ra 1),
+                                bits count (sub alignment 1)
+                              )
+                              | (-1, _, _, _, _) => +Err(+MisalignedField())
+                              | (_, -1, _, _, _) => +Err(+MisalignedField())
+                              | (_, _, 0, 0, 0) =>
+                                match (compare count le, compare count re)
+                                | (-1, _) => +Err(+InvalidExtent())
+                                | (_, -1) => +Err(+InvalidExtent())
+                                | _ => disjoint ()
+                                end
+                              | _ => +Err(+MisalignedField())
+                              end
+                          )
+                      )
+                  )
+              )
+          )
+      )
+  in
+  let val product (Left : VType) (Right : VType) (A : VType) (B : VType)
+    (left : Operations Left A) (right : Operations Right B)
+  : Result (Record Left Right A B) Error =
+      let Out = Record Left Right A B in
+      size/bind Int64 Out (size/round_up left/size right/alignment) (
+        val offset =>
+          size/bind Int64 Out (size/add offset right/size) (
+            val field_end =>
+              let alignment = size/maximum left/alignment right/alignment in
+              size/bind Int64 Out (size/round_up field_end alignment) (
+                val count =>
+                  at Left Right A B left right 0 offset count alignment
+              )
+          )
+      )
+  in
+  pack (= Record as Record : VType -> VType -> VType -> VType -> VType)
+  where
+    (= at, = product) end
+end

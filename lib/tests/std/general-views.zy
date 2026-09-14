@@ -1,0 +1,150 @@
+@[package(test(of(std)))]
+begin
+  param (
+    /VType;
+    /CType;
+    /Thk;
+    /Ret;
+    /Unit;
+    /Int64;
+    /UInt32;
+    /Addr;
+    /OS;
+    /numeric;
+    /process;
+    builtin
+  ) : @(import(std/builtin)) that
+  let (
+    /Uninit;
+    /Init;
+    /Fields;
+    /Field;
+    /Ptr;
+    /fields;
+    /records;
+    /headers;
+    /views;
+    /fixed;
+    /allocation;
+    /pointer;
+    /raw
+  )
+  =
+    builtin |> (@(import(std/memory)))
+  in
+  let (= Plan, = Layout, layout) = fixed in
+  let (/initialized) = fields in
+  let (/Cps; /precompose; /materialize; /unsafe = view_unsafe) = views in
+  let (/heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  let run =
+    match layout/int64
+    | +Err(_) => fail
+    | +Ok(length_plan) =>
+      let (#L = Length, length) = layout/realize Int64 length_plan in
+      match layout/uint32
+      | +Err(_) => fail
+      | +Ok(value_plan) =>
+        let (#L = Value, value) = layout/realize UInt32 value_plan in
+        match records/at Length Value Int64 UInt32 length value 0 16 32 16
+        | +Err(_) => fail
+        | +Ok(record) =>
+          let (/L; /value = object; /states; /left; /right) = record in
+          let named = (#length = left, #payload = right) in
+          let forms = headers/from_fields L Length Value Int64 length named/length/path
+            named/payload/path in
+          let (/H; /unsafe = inline) = forms/inline in
+          let (/H = Prefix; /unsafe = prefix) = forms/prefix in
+          let check_padding : Thk (Ptr L Init -> OS) = {
+            fn live =>
+              -- Padding remains untouched by direct field initialization.
+              let base = pointer/unsafe/address L Init live in
+              do gap <- ! raw/unsafe/offset base 8;
+              ! numeric/int64/load_le OS gap {
+                fn padding =>
+                  ! numeric/int64/eq OS padding 6148914691236517205 {
+                    ! object/unsafe/take OS live {
+                      fn vacant _ =>
+                        ! object/unsafe/free OS heap vacant no { ! process/exit 0 }
+                    }
+                  } fail
+              }
+          } in
+          let check_dynamic : Thk (Ptr L Init -> Addr -> OS) = {
+            fn live slot =>
+              -- A retained dynamic opener has the same explicit read effects.
+              let base = pointer/unsafe/address L Init live in
+              let runtime_view = materialize Cps (H Init) (Ptr Value Init * Int64) (
+                inline/open Init
+              ) in
+              ! runtime_view (inline/from_address Init base) OS {
+                fn (_, observed) =>
+                  ! numeric/int64/eq OS observed 1 {
+                    ! raw/unsafe/free OS slot 8 8 no { ! check_padding live }
+                  } fail
+              }
+          } in
+          let check_indirect : Thk (Ptr L Init -> OS) = {
+            fn live =>
+              let base = pointer/unsafe/address L Init live in
+              let open_address = precompose Cps Addr (H Init) (Ptr Value Init * Int64)
+                (inline/from_address Init) (inline/open Init) in
+              ! raw/allocate OS 8 8 no {
+                fn slot =>
+                  ! raw/unsafe/store_addr OS slot base {
+                    ! (view_unsafe/indirect (Ptr Value Init * Int64) open_address slot) OS {
+                      fn (restored, _) =>
+                        ! value/unsafe/read OS restored {
+                          fn read =>
+                            ! numeric/uint32/eq OS read 41 { ! check_dynamic live slot } fail
+                        }
+                    }
+                  }
+              }
+          } in
+          let check_headers : Thk (Ptr L Init -> OS) = {
+            fn live =>
+              let base = pointer/unsafe/address L Init live in
+              do payload <- ! (initialized L Value named/payload/path live);
+              ! value/unsafe/read OS payload {
+                fn read =>
+                  ! numeric/uint32/eq OS read 41 {
+                    ! (inline/open Init (inline/from_address Init base)) OS {
+                      fn (_, first_count) =>
+                        do payload_address <- ! raw/unsafe/offset base 16;
+                        ! (prefix/open Init (prefix/from_address Init payload_address)) OS {
+                          fn (payload, count) =>
+                            ! numeric/int64/eq OS first_count count {
+                              ! value/unsafe/read OS payload {
+                                fn read =>
+                                  ! numeric/uint32/eq OS read 41 { ! check_indirect live } fail
+                              }
+                            } fail
+                        }
+                    }
+                  } fail
+              }
+          } in
+          {
+            ! object/allocate OS heap no {
+              fn vacant =>
+                let base = pointer/unsafe/address L Uninit vacant in
+                ! raw/unsafe/fill OS base 32 85 {
+                  ! named/length/init Uninit OS (states/empty vacant) 1 {
+                    fn partial =>
+                      ! named/payload/init Init OS partial 41 {
+                        fn complete =>
+                          ! check_headers (states/finish complete)
+                      }
+                  }
+                }
+            }
+          }
+        end
+      end
+    end
+  in
+  ! run
+end

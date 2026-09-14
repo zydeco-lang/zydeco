@@ -1,0 +1,26 @@
+-- Recover both handle conventions from paths in one finalized enclosing layout.
+begin
+  param val (/VType; /Addr; builtin) : @(import("../builtin.zy")) that
+  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr that
+  param val Field : VType -> VType -> VType that
+  param val DynamicField : VType -> VType -> VType that
+  param val (/constant = /offset) : (@(import("field-operations.type.zy"))) Uninit Init Ptr Field
+    DynamicField in
+  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
+  let (/Header; /unsafe = view) = (builtin |> (@(import("view.zy")))) types in
+  let val from_fields (Parent : VType) (Metadata : VType) (Payload : VType) (M : VType)
+    (metadata : Operations Metadata M) (metadata_path : Field Parent Metadata) (
+      payload_path : Field Parent Payload
+    )
+  : (#inline :: Header M Payload) * (#prefix :: Header M Payload) =
+      let metadata_offset = offset Parent Metadata metadata_path in
+      let payload_offset = offset Parent Payload payload_path in
+      (
+        #inline = view/header M Metadata Payload metadata metadata_offset payload_offset,
+        #prefix = view/prefix M Metadata Payload metadata (
+          (@(intrinsic(i64_sub))) metadata_offset payload_offset
+        )
+      )
+  in
+  (= from_fields)
+end

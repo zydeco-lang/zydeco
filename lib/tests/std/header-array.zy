@@ -1,0 +1,115 @@
+@[package(test(of(std)))]
+begin
+  param (/VType; /CType; /Thk; /Ret; /Int64; /UInt32; /OS; /numeric; /process; builtin) : @(import(
+    std/builtin
+  )) that
+  let (
+    /Uninit;
+    /Init;
+    /Fields;
+    /Ptr;
+    /arrays;
+    /records;
+    /headers;
+    /views;
+    /fixed;
+    /allocation;
+    /pointer
+  )
+  =
+    builtin |> (@(import(std/memory)))
+  in
+  let (= Plan, = Layout, layout) = fixed in
+  let (/heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  let run =
+    match layout/int64
+    | +Err(_) => fail
+    | +Ok(plan) =>
+      let (#L = Length, length) = layout/realize Int64 plan in
+      match layout/uint32
+      | +Err(_) => fail
+      | +Ok(plan) =>
+        let (#L = Element, element) = layout/realize UInt32 plan in
+        match arrays/make Element UInt32 element 4 16
+        | +Err(_) => fail
+        | +Ok(array) =>
+          let (/L = Array; /Values; /contents; /elements) = array in
+          match records/product Length Array Int64 Values length contents
+          | +Err(_) => fail
+          | +Ok(record) =>
+            let (/L; /value = object; /states; /left; /right) = record in
+            let forms = headers/from_fields L Length Array Int64 length left/path right/path in
+            let (/H; /unsafe = inline) = forms/inline in
+            let (/H = Prefix; /unsafe = prefix) = forms/prefix in
+            let checked = views/bounded Array Init (H Init) 4 (inline/open Init) in
+            {
+              ! object/allocate OS heap no {
+                fn vacant =>
+                  ! left/init Uninit OS (states/empty vacant) 4 {
+                    fn building =>
+                      do destination <- ! (right/project Uninit Init building);
+                      ! elements/init_each OS destination {
+                        fn _ slot _ yes =>
+                          ! element/unsafe/init OS slot 73 yes
+                      } { fn _ _ => ! fail } {
+                        fn initialized =>
+                          let completed = right/replace Uninit Init Init building initialized in
+                          let live = states/finish completed in
+                          let base = pointer/unsafe/address L Init live in
+                          ! (checked (inline/from_address Init base)) OS no {
+                            fn (payload, count) =>
+                              ! numeric/int64/eq OS count 4 {
+                                let payload_address = pointer/unsafe/address Array Init payload in
+                                ! (prefix/open Init (prefix/from_address Init payload_address)) OS {
+                                  fn (payload, saved_count) =>
+                                    ! elements/at Init OS payload 3 no {
+                                      fn last =>
+                                        ! element/unsafe/read OS last {
+                                          fn item =>
+                                            ! numeric/uint32/eq OS item 73 {
+                                              ! numeric/int64/store_le OS base 0 {
+                                                ! (inline/open Init (inline/from_address Init base))
+                                                  OS {
+                                                  fn (_, current_count) =>
+                                                    ! numeric/int64/eq OS saved_count 4 {
+                                                      ! numeric/int64/eq OS current_count 0 {
+                                                        ! numeric/int64/store_le OS base 9 {
+                                                          ! (
+                                                            checked (inline/from_address Init base)
+                                                          ) OS {
+                                                            fn fault =>
+                                                              match fault
+                                                              | +Bounds() => ! object/unsafe/take OS
+                                                                live {
+                                                                fn vacant _ =>
+                                                                  ! object/unsafe/free OS heap
+                                                                    vacant no { ! process/exit 0 }
+                                                              }
+                                                              | _ => ! fail
+                                                              end
+                                                          } { fn _ => ! fail }
+                                                        }
+                                                      } fail
+                                                    } fail
+                                                }
+                                              }
+                                            } fail
+                                        }
+                                    }
+                                }
+                              } fail
+                          }
+                      }
+                  }
+              }
+            }
+          end
+        end
+      end
+    end
+  in
+  ! run
+end

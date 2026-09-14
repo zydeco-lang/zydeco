@@ -35,6 +35,7 @@ Chapter contents provide the detailed topic indexes.
 | Required static elimination | [L10](language.md#10-static-elimination) | [C6: elaboration](compiler.md#static-elimination) |
 | Relative monads | [L11](language.md#11-relative-monads) | [C6: translation](compiler.md#monadic-and-copattern-elaboration) |
 | Sources and source packages | [L12](language.md#12-sources-imports-and-entry) | [C3: loading and sessions](compiler.md#c3-source-loading-sessions-queries-and-memory-retention), [C4: assembly](compiler.md#c4-parsing-desugaring-and-name-resolution) |
+| Memory layouts and views | [L13: memory](language.md#manual-memory) | [C6: static elimination](compiler.md#static-elimination), [C14: host contracts](compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) |
 | Primitive values and capabilities | [L13](language.md#13-primitive-values-and-capabilities) | [C14: host contracts](compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls) |
 | Foreign interfaces and compiled libraries | [L14](language.md#14-foreign-interfaces) | [C14: C calls](compiler.md#foreign-calls), [C11: artifacts](compiler.md#compilation-unit-preparation-and-artifacts) |
 | Execution profiles and costs | [L15](language.md#15-execution-profiles) | [C11: activation lifetime](compiler.md#activation-lifetime), [C12: native runtime](compiler.md#c12-shared-native-model-allocation-and-collection), [C13: Wasm](compiler.md#c13-webassembly-backends-and-embedding) |

@@ -6,6 +6,7 @@ begin
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
   let Descriptor = (@(import("descriptor.type.zy"))) Addr in
   let Representation = (@(import("representation.type.zy"))) Addr Uninit Init Ptr in
+  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
   let Alloc = (@(import("allocator.type.zy"))) Addr in
   let Fault = @(import("fault.zy")) in
   let val scalar (A : VType) (size : Int64) (alignment : Int64)
@@ -54,41 +55,43 @@ begin
     A =
     (= size, = alignment, #write = layout/write, #read = layout/read)
   in
-  let val realize (A : VType) (layout : Descriptor A) : Representation A =
+  let val operations (L : VType) (A : VType) (layout : Descriptor A) : Operations L A =
     (
       (
-        #L = Unit,
         #size = layout/size,
         #alignment = layout/alignment,
         #allocate = {
           fn R allocator no yes =>
             ! allocator/allocate R layout/size layout/alignment no {
               fn address =>
-                ! yes (unsafe/from_address Unit Uninit address)
+                ! yes (unsafe/from_address L Uninit address)
             }
         },
         #unsafe = (
           #init = {
             fn R pointer value yes =>
-              let address = unsafe/address Unit Uninit pointer in
-              ! layout/write R value address { ! yes (unsafe/from_address Unit Init address) }
+              let address = unsafe/address L Uninit pointer in
+              ! layout/write R value address { ! yes (unsafe/from_address L Init address) }
           },
-          #read = { fn R pointer yes => ! layout/read R (unsafe/address Unit Init pointer) yes },
+          #read = { fn R pointer yes => ! layout/read R (unsafe/address L Init pointer) yes },
           #take = {
             fn R pointer yes =>
-              let address = unsafe/address Unit Init pointer in
+              let address = unsafe/address L Init pointer in
               ! layout/read R address {
-                fn value => ! yes (unsafe/from_address Unit Uninit address) value
+                fn value => ! yes (unsafe/from_address L Uninit address) value
               }
           },
           #free = {
             fn R allocator pointer no done =>
-              ! allocator/free R (unsafe/address Unit Uninit pointer) layout/size layout/alignment
+              ! allocator/free R (unsafe/address L Uninit pointer) layout/size layout/alignment
                 no done
           }
         )
-      ) : Representation A
+      ) : Operations L A
     )
   in
-  (= scalar, = padding, = product, = align, = realize)
+  let val realize (A : VType) (layout : Descriptor A) : Representation A =
+    ((#L = Unit, operations Unit A layout) : Representation A)
+  in
+  (= scalar, = padding, = product, = align, = operations, = realize)
 end

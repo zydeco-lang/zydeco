@@ -7,7 +7,7 @@ pub fn source(body: &str) -> String {
         .unwrap();
     format!(
         r#"
-let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
+let (/Uninit; /Init; /Fields; /Field; /DynamicField; /runtime_fields; /Ptr; /fields; /records; /headers; /arrays; /views; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
   builtin |> (@(import("{directory}/package.zy"))) in
 let (= Plan, = Layout, memory) = fixed in
 let (/Alloc; /heap) = allocation in

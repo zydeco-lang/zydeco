@@ -1,0 +1,123 @@
+@[package(test(of(std)))]
+begin
+  param (/VType; /CType; /Thk; /Ret; /Int64; /Addr; /OS; /numeric; /process; builtin) : @(import(
+    std/builtin
+  )) that
+  let (
+    /Uninit;
+    /Init;
+    /Ptr;
+    /DynamicField;
+    /runtime_fields;
+    /views;
+    /arrays;
+    /records;
+    /fixed;
+    /allocation;
+    /pointer
+  )
+  =
+    builtin |> (@(import(std/memory)))
+  in
+  let (= Plan, = Layout, layout) = fixed in
+  let (/Cps; /DynamicView; /unsafe = view_unsafe) = views in
+  let (/heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  let int = numeric/int64 in
+  let run =
+    match layout/int64
+    | +Err(_) => fail
+    | +Ok(plan) =>
+      let (#L = Element, element) = layout/realize Int64 plan in
+      let allocate : Thk (Int64 -> OS) = {
+        fn count =>
+          ! arrays/realize Element Int64 OS element count 16 no {
+            fn array =>
+              let (/L = Array; /Values; /contents; /values; /elements; /buffer) = array in
+              do generated <- ! values/generate { fn index => ret index };
+              ! contents/allocate OS heap no {
+                fn vacant =>
+                  ! contents/unsafe/init OS vacant generated {
+                    fn live =>
+                      ! elements/at Init OS live 2 no {
+                        fn third =>
+                          ! element/unsafe/read OS third {
+                            fn value =>
+                              ! int/eq OS value 2 {
+                                do progress <- ! buffer/resume live;
+                                ! buffer/pop OS progress no {
+                                  fn progress _ =>
+                                    ! buffer/push OS progress 17 no {
+                                      fn progress =>
+                                        ! buffer/finish OS progress no {
+                                          fn live =>
+                                            ! contents/unsafe/take OS live {
+                                              fn vacant copied =>
+                                                do last <- ! values/at copied 2;
+                                                match last
+                                                | +Err(_) => ! fail
+                                                | +Ok(value) => ! int/eq OS value 17 {
+                                                  ! contents/unsafe/free OS heap vacant no {
+                                                    ! process/exit 0
+                                                  }
+                                                } fail
+                                                end
+                                            }
+                                        }
+                                    }
+                                }
+                              } fail
+                          }
+                      }
+                  }
+              }
+          }
+      } in
+      match records/product Element Element Int64 Int64 element element
+      | +Err(_) => fail
+      | +Ok(record) =>
+        let (/L; /value = object) = record in
+        {
+          ! object/allocate OS heap no {
+            fn vacant =>
+              ! object/unsafe/init OS vacant (1, 99) {
+                fn live =>
+                  do displacement <- ! int/add 4 4;
+                  do path <- ! runtime_fields/unsafe/from_offset L Element displacement;
+                  do member <- ! runtime_fields/initialized L Element path live;
+                  ! element/unsafe/read OS member {
+                    fn value =>
+                      ! int/eq OS value 99 {
+                        let view : DynamicView Cps Addr (Ptr Element Init * Int64) = {
+                          fn handle =>
+                            ! view_unsafe/dynamic_header Int64 Element Element Init element 0
+                              displacement handle
+                        } in
+                        ! view (pointer/unsafe/address L Init live) OS {
+                          fn (member, length) =>
+                            ! int/eq OS length 1 {
+                              ! element/unsafe/read OS member {
+                                fn value =>
+                                  ! int/eq OS value 99 {
+                                    ! object/unsafe/take OS live {
+                                      fn vacant _ =>
+                                        ! object/unsafe/free OS heap vacant no {
+                                          ! allocate 3
+                                        }
+                                    }
+                                  } fail
+                              }
+                            } fail
+                        }
+                      } fail
+                  }
+              }
+          }
+        }
+      end
+    end
+  in
+  ! run
+end

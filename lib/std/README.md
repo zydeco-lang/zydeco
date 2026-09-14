@@ -358,22 +358,37 @@ match layouts/uint8
 end
 ```
 
-`Ptr L S` contains one address. `L`, `Uninit`, and `Init` are erased type parameters.
+`Ptr L S` contains one address. `L`, `Uninit`, `Init`, and partial-record `Fields S T` are erased type parameters.
 The types guide transitions, while the caller remains responsible for stale aliases,
 allocation lifetime, initialization, and matching release.
 `unsafe` is an ordinary library namespace documenting those obligations.
 
+Typed records compose opened element operations and expose field paths plus partial-initialization accessors.
+Arrays supply direct element access and an explicit initialized-prefix builder.
+General views interpret thin, fat, header, or indirect handles independently of the storage layout.
+Fixed recipes specialize through value functions; `DynamicView` and `DynamicField` make runtime selection explicit.
+The [view and layout contracts](../../docs/references/language.md#typed-records-and-field-paths) describe their types,
+costs, and caller obligations.
+
 | Need | API or example |
 | --- | --- |
-| Fixed fields, padding, and alignment | [layout.zy](memory/layout.zy), [aligned record](../tests/std/static-layout.zy) |
+| Fixed placement, padding, and alignment | [layout.zy](memory/layout.zy), [aligned record](../tests/std/static-layout.zy) |
+| Typed fields and partial record initialization | [record.zy](memory/record.zy), [field.zy](memory/field.zy), [example](../tests/std/general-views.zy) |
+| Fixed arrays and element builders | [array.zy](memory/array.zy), [construction and cleanup](../tests/std/array-memory.zy) |
+| Thin, fat, header, and indirect views | [view.zy](memory/view.zy), [header and payload composition](../tests/std/header-array.zy) |
+| Runtime field paths, views, and arrays | [runtime example](../tests/std/runtime-memory.zy) |
 | Runtime placement | [dynamic-layout.zy](memory/dynamic-layout.zy), [example](../tests/std/representation.zy) |
 | Explicit allocation service | [allocation.zy](memory/allocation.zy) and [Alloc](memory/allocator.type.zy) |
 | Typed pointer access | [representation interface](memory/representation.type.zy) |
 | Expose/assert a raw pointer interpretation | `pointer/unsafe/address` and `pointer/unsafe/from_address` |
-| Counted pointer views and checked indexing | [slice.zy](memory/slice.zy), [example](../tests/std/memory-views.zy) |
+| Counted pointers with layout-derived indexing | `slices/for_layout` in [slice.zy](memory/slice.zy), [example](../tests/std/memory-views.zy) |
 | Raw memory effects | [native.zy](memory/native.zy) |
 | Share a pointer with another source module | [CPS worker](../tests/std/represented-call/main.zy) |
 | C input and mutable output | [aligned input](../tests/ffi/static-layout.zy), [output](../tests/ffi/mutable-output.zy) |
+
+An array's optional `contents` operations copy whole logical values through an abstract managed list.
+Use `elements/unsafe/init_each` and the prefix builder to construct storage directly without that intermediate value.
+These costs are separate from the compiler's ordinary product, thunk, and frame representation.
 
 The [byte builder](memory/buffer.zy) is also exposed as `std/buffer`, with a source-defined abstract `Buffer`.
 It allocates a capacity, advances an initialized prefix with `unsafe/push` or `unsafe/extend`,
