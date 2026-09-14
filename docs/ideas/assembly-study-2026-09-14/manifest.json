@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "revisions": {
+    "original": "9c1d3000910c59406b180a9a6b141bfbaf05ec43",
+    "jobs": "8e508e36788f525ad21a3fa0d225c3b3d10d9ca3",
+    "folder": "370195d85b80a3206b063454a10188e02058c906"
+  },
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+  "profiles": [
+    "debug",
+    "release"
+  ],
+  "timing_runs_per_profile": 2,
+  "timing_batches_per_run": 32,
+  "allocation_rounds": 8,
+  "sources": [
+    "lib/tests/core/fact.zy",
+    "lib/tests/core/pattern-alias.zy",
+    "lib/tests/core/native-frames.zy",
+    "lib/tests/builtin/host-return.zy",
+    "lib/tests/builtin/host-runtime.zy",
+    "lib/tests/delimcc/reset-shift-k.zy",
+    "lib/tests/core/gc-stress.zy"
+  ],
+  "input_hashes": {
+    "lib/tests/core/fact.zy": "ed383f713f0259044380af306a948a4ebb8c1965e7dbe527b2f7753f7af58c90",
+    "lib/tests/core/pattern-alias.zy": "424a89c0d2c73380dc33293bc44575c8f03683dc99e4d86198f675fb6f93639d",
+    "lib/tests/core/native-frames.zy": "72904785af88907ffcfaf9579603527177c0d6b6ffd192b4c102242678643e57",
+    "lib/tests/builtin/host-return.zy": "b89250d076b699dd1f3ec62c285ce3082b9bb29f2d9e6ebf54f0909acf3acada",
+    "lib/tests/builtin/host-runtime.zy": "e51087ebfbc2d13f2682eb68f21cac34fcb07a762383829afc8ed33f59b9592a",
+    "lib/tests/delimcc/reset-shift-k.zy": "8ac043c9e0a3993db0101004281cc963bee53b6909d03cff112ed753850d69ef",
+    "lib/tests/core/gc-stress.zy": "b3f12ff779124ddffef0232af0dec8343c7b239ab7a0b51d6adb7ff6ab970ab7",
+    "Cargo.lock": "82ad1dc7dce4b927dfba656f7e55cf1013194e54c8485077f46276b8bf900982",
+    "Cargo.toml": "90138255bd37c7226659142303f1f13a17a88f17ed8c752c3aba5e17a6cb665a",
+    "lib/std/builtin.zy": "17dc5a5d95adc9568b5c926ce33ca895715af771b65e6be7321d2654e24b7d6d"
+  },
+  "harness_hashes": {
+    "assembly-lowering-study.py": "77462185c69613eac42f07daeb130a8d0ee0ed141322787cf89c16101962554a",
+    "allocations.rs": "53ff0bfc40b950dd16604f1de49efefcb0564afe92d79fab154b3f275d7e983c",
+    "boundary.rs": "d9ccd710d03c0370a304d9a6712bddfa1dee69c5f720a495be3424caf4a301cb",
+    "common.rs": "6aabb7967500c5549421b6b6d16d50f84980beb4e2e52d7399727f6c366bdb99",
+    "timing.rs": "a97aaf048cb237aa4c10170deba83131b5b00309c3f087a09b1fd33bcf6096a7"
+  },
+  "build_environment": {},
+  "representation_policy": "local",
+  "timing_scope": "prepared lowerer.run(), including internal scratch teardown",
+  "excluded": [
+    "source and SPSLow preparation",
+    "representation analysis",
+    "output destruction (measured separately)",
+    "stack analysis",
+    "native frame preparation",
+    "code emission"
+  ],
+  "oracle": "all assembly fields compared after normalizing output key-space IDs",
+  "output_counts_order": [
+    "programs",
+    "variables",
+    "symbols",
+    "frame_entries"
+  ],
+  "allocations": "separate System-allocator wrapper; requested heap payload bytes",
+  "peak_extra_bytes": "peak live heap increment over the prepared-lowerer baseline",
+  "date": "2026-09-14",
+  "acquisition": "two timing runs per profile and one allocation run, executed serially from one archived checkout; formatted templates and runner retained afterward",
+  "measured_template_hashes": {
+    "boundary.rs": "09c571d34e41259ceca9d4dbb4e11ca277075866cc92e3bde2982d567b770265",
+    "common.rs": "56ba9843f7dbe16c9eba25f950e4ab3ffd302b20ef367b5ddd4566fb58a32909",
+    "timing.rs": "9ff93726a7e02cd9f81cfc010d45f04fd094fea37e5236526e9824069243b473",
+    "allocations.rs": "f6797ff53badcbbcbaa7acbf85d207679d74468ec3a4d9af1b60e09ae6ab0a31"
+  },
+  "build_commands": {
+    "debug": [
+      "cargo",
+      "build",
+      "--offline",
+      "-p",
+      "zydeco-cli",
+      "--example",
+      "bench_assembly",
+      "--example",
+      "bench_assembly_alloc"
+    ],
+    "release": [
+      "cargo",
+      "build",
+      "--offline",
+      "-p",
+      "zydeco-cli",
+      "--example",
+      "bench_assembly",
+      "--example",
+      "bench_assembly_alloc",
+      "--release"
+    ]
+  },
+  "oracle_outcomes": {
+    "all_sources_and_modes_equal": true,
+    "sources": 7,
+    "modes_per_source": 2,
+    "variants": 4
+  }
+}

@@ -40,3 +40,7 @@ The [references](../references/README.md) own approved, implemented contracts.
 [CBPV runtime evaluation](cbpv-runtime-evaluation.md) preserves the 2026-09-08 experiments,
 their measurements, and their limits.
 Its linked JSON and CSV files are the original evidence; old results do not establish a current performance ranking.
+
+[Isolated assembly lowering evaluation](assembly-lowering-evaluation.md) records the 2026-09-14 comparison
+of boxed CPS lowering, typed pending jobs, and the shared folder's explicit and recursive drivers.
+It separates pass timing from allocation costs and whole-build observations.

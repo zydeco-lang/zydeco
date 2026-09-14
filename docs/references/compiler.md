@@ -1927,6 +1927,8 @@ It also abandons and destroys a deep consumer chain at a value hole.
 These direct fixtures isolate folder execution from semantic validation and stack analysis.
 The guarantee covers lowering's control flow and flat continuation teardown; context cloning,
 retained assembly contexts, and the separate validators and analyzers still determine other costs.
+The [isolated lowering study](../ideas/assembly-lowering-evaluation.md) records historical timing
+and allocation measurements for the boxed implementation and both folder drivers.
 
 ### Product layout and local unboxing
 
