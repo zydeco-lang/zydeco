@@ -70,8 +70,10 @@ impl DiagnosticRenderer {
 
     fn parse(error: &zydeco_surface::textual::ParseError) {
         let file = &error.file_map;
-        let cache = (PathDisplay::from(file.path()), ariadne::Source::from(file.source()));
-        let _ = error.to_report().eprint(cache);
+        let mut cache = (PathDisplay::from(file.path()), ariadne::Source::from(file.source()));
+        for diagnostic in error.diagnostics() {
+            let _ = diagnostic.to_report().eprint(&mut cache);
+        }
     }
 
     pub fn warnings(analysis: &ProgramAnalysis) {

@@ -867,6 +867,31 @@ mod tests {
     }
 
     #[test]
+    fn parser_failures_publish_every_retained_issue() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("parser-issues.zy");
+        let source = "let first = in\nlet second =";
+        std::fs::write(&path, source).unwrap();
+        let error = zydeco_session::CompilerSession::default().analyze(&path).unwrap_err();
+        let diagnostics =
+            ProjectFailure::from_analysis_error(&error).diagnostics(Some(&path), Some(source));
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(diagnostics[0].range, Range::new(Position::new(0, 12), Position::new(0, 14)));
+        assert_eq!(diagnostics[1].range, Range::new(Position::new(1, 12), Position::new(1, 12)));
+        assert!(diagnostics[0].message.contains("Unrecognized token"));
+        assert!(diagnostics[1].message.contains("Unrecognized EOF"));
+        std::fs::write(&path, "let first = 1 in let second = 2 in second").unwrap();
+        assert!(
+            zydeco_session::CompilerSession::default()
+                .analyze(&path)
+                .unwrap()
+                .outcome()
+                .root()
+                .is_some()
+        );
+    }
+
+    #[test]
     fn failed_analysis_ranges_are_measured_in_utf16() {
         let path = Path::new("unicode-error.zy");
         let failure = ProjectFailure {

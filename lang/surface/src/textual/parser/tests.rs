@@ -412,6 +412,12 @@ fn a_real_error_followed_by_eof_is_not_just_incomplete_input() {
 
     assert!(!failure.is_unrecognized_eof());
     assert_eq!(failure.issue_count(), 2);
+    assert!(failure.to_string().contains("unrecognized token `in`"));
+    assert!(failure.to_string().contains("unrecognized end of input"));
+    assert!(
+        StrictParser::source("let first = 1 in let second = 2 in second", &mut Parser::new())
+            .is_ok()
+    );
     assert!(matches!(
         &failure.primary().kind,
         ParseIssueKind::UnrecognizedToken { token: DiagnosticToken::Source(token), .. } if token == "in"

@@ -123,3 +123,34 @@ fn resolution_reports_every_unbound_reference_at_its_own_location() {
         .unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
+
+#[test]
+fn parser_reports_recovery_and_later_eof_as_separate_errors() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("parser-issues.zy");
+    fs::write(&path, "let first = in\nlet second =").unwrap();
+    for command in ["check", "run", "build", "fmt"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .current_dir(directory.path())
+            .arg(command)
+            .arg(&path)
+            .output()
+            .unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(error.contains("Unrecognized token"), "{error}");
+        assert!(error.contains("Unrecognized EOF"), "{error}");
+        assert!(error.contains("parser-issues.zy:1:"), "{error}");
+        assert!(error.contains("parser-issues.zy:2:"), "{error}");
+        assert!(!error.contains("additional parse"), "{error}");
+        assert!(!error.contains("panicked"), "{error}");
+    }
+    fs::write(&path, "let first = 1 in\nlet second = 2 in second").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+        .current_dir(directory.path())
+        .arg("check")
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}

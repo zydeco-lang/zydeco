@@ -102,6 +102,25 @@ pub enum SourceParseError {
 }
 
 impl SourceParseError {
+    pub fn diagnostics(&self) -> Vec<SourceDiagnostic> {
+        match self {
+            | Self::Parse { error } => {
+                error
+                    .diagnostics()
+                    .map(|diagnostic| SourceDiagnostic {
+                        message: diagnostic.to_string(),
+                        site: diagnostic.issue.range.clone().map(|range| {
+                            SourceDiagnosticSite::new(diagnostic.file_map.path(), range)
+                        }),
+                    })
+                    .collect()
+            }
+            | _ => {
+                vec![SourceDiagnostic { message: self.to_string(), site: self.diagnostic_site() }]
+            }
+        }
+    }
+
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         let (path, range) = match self {
             | Self::Parse { error } => {
@@ -173,13 +192,9 @@ pub enum SourceLoadError {
 impl SourceLoadError {
     pub fn diagnostics(&self) -> Vec<SourceDiagnostic> {
         match self {
-            | Self::Parse(errors) => errors
-                .iter()
-                .map(|error| SourceDiagnostic {
-                    message: error.to_string(),
-                    site: error.diagnostic_site(),
-                })
-                .collect(),
+            | Self::Parse(errors) => {
+                errors.iter().flat_map(SourceParseError::diagnostics).collect()
+            }
             | Self::PackageImport { importer, span, error } => error
                 .diagnostics()
                 .into_iter()

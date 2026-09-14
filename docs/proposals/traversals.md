@@ -87,19 +87,18 @@ the [recovery contract](#diagnostic-collection-and-recovery) determines which wo
 
 ## Diagnostic collection and recovery
 
-The implemented [diagnostic collection contract](../references/compiler.md#diagnostic-collection) covers source
-analyzers, desugaring, and resolution, including complete frontend reporting and explicit recovery boundaries.
+The implemented [diagnostic collection contract](../references/compiler.md#diagnostic-collection) covers parsing,
+source analyzers, desugaring, and resolution, including complete frontend reporting and explicit recovery boundaries.
 The agreed direction extends to every pass: report independent errors justified by available input,
 and preserve their complete collection through the session and frontends.
 This does not require executing a dependent pass on an invalid intermediate representation.
 
 The remaining audit should follow concrete producer and publication boundaries:
 
-1. Render every retained parser issue, including its own location, instead of selecting its primary issue.
-2. Collect failures from independently available sources and imports.
+1. Collect failures from independently available sources and imports.
    A rejected source must not become a cached successful graph node,
    and shared rejected providers must not replay their diagnostics.
-3. Inspect checker and later validation loops for early exits over independent work.
+2. Inspect checker and later validation loops for early exits over independent work.
    Reuse their domain diagnostic collections and suppress consequences of an unavailable prerequisite.
 
 Recovery within one malformed directive remains local to its decoder.

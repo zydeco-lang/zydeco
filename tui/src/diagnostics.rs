@@ -80,6 +80,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parser_text_keeps_every_retained_issue() {
+        let mut session = zydeco_session::CompilerSession::default();
+        let path = std::env::temp_dir().join("zydeco-tui-parser-diagnostics.zy");
+        session.set_overlay(&path, "let first = in\nlet second =".into()).unwrap();
+        let text = DiagnosticText::analysis_error(&session.analyze(&path).unwrap_err());
+        assert!(text.contains("Unrecognized token"), "{text}");
+        assert!(text.contains("Unrecognized EOF"), "{text}");
+        assert!(text.contains("parser-diagnostics.zy:1:"), "{text}");
+        assert!(text.contains("parser-diagnostics.zy:2:"), "{text}");
+        session.set_overlay(&path, "let first = 1 in let second = 2 in second".into()).unwrap();
+        assert!(session.analyze(&path).unwrap().outcome().root().is_some());
+    }
+
+    #[test]
     fn resolution_text_keeps_each_error_and_its_location() {
         let mut session = zydeco_session::CompilerSession::default();
         let path = std::env::temp_dir().join("zydeco-tui-resolution-diagnostics.zy");

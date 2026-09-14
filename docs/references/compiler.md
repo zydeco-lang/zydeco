@@ -1778,6 +1778,11 @@ UTF-16 conversion happens when reading or writing client positions.
 
 ### Diagnostic collection
 
+Parsing retains all `ParseIssue` entries in `ParseFailure`.
+`ParseError::diagnostics` pairs every issue with the exact rejected source snapshot; CLI reports,
+editor locations, and plain-text formatting enumerate the complete collection.
+Each issue retains its own token expectations and source range, including a zero-width EOF location.
+
 Source analyzers, desugaring, and resolution retain vectors of typed domain errors.
 Strict transformation failures carry a nonempty `Diagnostics<E>` collection together with their source context;
 `Err` means no valid phase product is available, regardless of how many errors were established.

@@ -300,10 +300,21 @@ impl Display for ParseIssue {
 
 /// One or more issues that make a strict parse fail.
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
-#[error("{primary}")]
 pub struct ParseFailure {
     primary: Box<ParseIssue>,
     additional: Vec<ParseIssue>,
+}
+
+impl std::fmt::Display for ParseFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (index, issue) in self.issues().enumerate() {
+            if index > 0 {
+                writeln!(formatter)?;
+            }
+            std::fmt::Display::fmt(issue, formatter)?;
+        }
+        Ok(())
+    }
 }
 
 impl ParseFailure {
