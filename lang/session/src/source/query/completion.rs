@@ -67,7 +67,7 @@ impl CompilerSession {
     ) -> Result<Option<Arc<CompletionAnalysis>>, CompletionError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         complete_source(self, root, offset)
     }
 }
@@ -135,7 +135,7 @@ fn complete_source(
     let file = FileMap::local(source.as_str(), Some(Arc::new(path.clone())));
     let template = SourceTemplate::with_syntax(path.clone(), source.clone(), file, parser, unit)
         .map_err(|error| AnalysisError::Source {
-            error: Arc::new(SourceLoadError::Parse(error)),
+            error: Arc::new(SourceLoadError::Parse(error).into()),
         })?;
     let provider =
         CompletionSourceProvider { root: Arc::new(template), ordinary: QuerySourceProvider { db } };

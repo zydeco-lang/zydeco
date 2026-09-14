@@ -1,7 +1,7 @@
 use crate::source::{
     SourceFile, SourceGraph, SourceGraphScope, SourceId, SourceImport, SourceImportId, SourceKind,
-    SourceLoadError, SourceParseError, SourceParseErrors, SourcePath, SourceTemplate,
-    SourceWarning,
+    SourceLoadError, SourceLoadErrors, SourceParseError, SourceParseErrors, SourcePath,
+    SourceTemplate, SourceWarning,
 };
 use std::{
     collections::HashMap,
@@ -31,9 +31,11 @@ pub(crate) trait SourceProvider {
 pub(crate) struct SourceGraphLoader<Provider> {
     sources: ArenaDense<SourceGraphScope, SourceId>,
     imports: ArenaDense<SourceGraphScope, SourceImportId>,
-    seen: HashMap<(PathBuf, t::TermId), SourceId>,
+    seen: HashMap<(PathBuf, t::TermId), SourceState>,
+    root: Option<SourceId>,
+    errors: Vec<SourceLoadError>,
     provider: Provider,
-    templates: HashMap<PathBuf, Arc<SourceTemplate>>,
+    templates: HashMap<PathBuf, TemplateState>,
     bindings: Arc<super::PackageBindings>,
 }
 
@@ -113,29 +115,74 @@ impl SourceTemplate {
     }
 }
 
+/// Active nodes can be referenced to represent cycles; rejected nodes never become providers.
+#[derive(Clone, Copy)]
+enum SourceState {
+    Loading(SourceId),
+    Complete(SourceId),
+    Rejected(SourceId),
+}
+
+impl SourceState {
+    fn source(self) -> (SourceId, bool) {
+        match self {
+            | Self::Loading(id) | Self::Complete(id) => (id, true),
+            | Self::Rejected(id) => (id, false),
+        }
+    }
+}
+
+#[derive(Clone)]
+enum TemplateState {
+    Complete(Arc<SourceTemplate>),
+    Missing,
+    Rejected,
+}
+
+/// The first requester attaches context to a provider failure; later requests do not replay it.
+enum LoadFailure {
+    Unreported(SourceLoadError),
+    Reported,
+}
+
+impl From<SourceLoadError> for LoadFailure {
+    fn from(error: SourceLoadError) -> Self {
+        Self::Unreported(error)
+    }
+}
+
 impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
     pub(crate) fn load_root(
         mut self, root: &Path, package: Option<&super::PackageName>,
         bindings: Arc<super::PackageBindings>,
-    ) -> Result<SourceGraph, SourceLoadError> {
+    ) -> Result<SourceGraph, SourceLoadErrors> {
         self.bindings = bindings;
         let canonical = SourcePath::identity(root).map_err(|source| SourceLoadError::RootPath {
             path: root.to_path_buf(),
             source: source.into(),
         })?;
-        let root = self.load_canonical(canonical, package).map_err(|error| match error {
-            | SourceLoadError::Read { source, .. } => {
-                SourceLoadError::RootPath { path: root.to_path_buf(), source }
-            }
-            | error => error,
-        })?;
-        let graph = SourceGraph {
+        if let Err(error) = self.load_canonical(canonical, package) {
+            self.report(match error {
+                | LoadFailure::Unreported(SourceLoadError::Read { source, .. }) => {
+                    SourceLoadError::RootPath { path: root.to_path_buf(), source }.into()
+                }
+                | error => error,
+            });
+        }
+        // The temporary graph also retains valid edges in rejected sources, so independent
+        // cycles can be diagnosed alongside read and parse errors. It is never published on error.
+        let graph = self.root.map(|root| SourceGraph {
             root,
             sources: FrozenArena::new(self.sources),
             imports: FrozenArena::new(self.imports),
-        };
-        graph.ensure_acyclic()?;
-        Ok(graph)
+        });
+        if let Some(graph) = &graph {
+            self.errors.extend(graph.cycles().into_iter().map(SourceLoadError::Cycle));
+        }
+        if let Some(errors) = SourceLoadErrors::with_errors(self.errors) {
+            return Err(errors);
+        }
+        Ok(graph.expect("a successful load allocated its root"))
     }
 
     pub(crate) fn with_provider(provider: Provider) -> Self {
@@ -143,73 +190,128 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
             sources: ArenaDense::new(),
             imports: ArenaDense::new(),
             seen: HashMap::new(),
+            root: None,
+            errors: Vec::new(),
             provider,
             templates: HashMap::new(),
             bindings: Arc::default(),
         }
     }
 
+    fn report(&mut self, error: LoadFailure) {
+        if let LoadFailure::Unreported(error) = error {
+            self.errors.push(error);
+        }
+    }
+
+    fn template(
+        &mut self, path: &Path, optional: bool,
+    ) -> Result<Option<Arc<SourceTemplate>>, LoadFailure> {
+        match self.templates.get(path) {
+            | Some(TemplateState::Complete(template)) => return Ok(Some(template.clone())),
+            | Some(TemplateState::Rejected) => return Err(LoadFailure::Reported),
+            | Some(TemplateState::Missing) if optional => return Ok(None),
+            | Some(TemplateState::Missing) | None => {}
+        }
+        let result = if optional {
+            self.provider.load_optional(path)
+        } else {
+            self.provider.load(path).map(Some)
+        };
+        let state = match &result {
+            | Ok(Some(template)) => TemplateState::Complete(template.clone()),
+            | Ok(None) => TemplateState::Missing,
+            | Err(_) => TemplateState::Rejected,
+        };
+        self.templates.insert(path.to_path_buf(), state);
+        result.map_err(Into::into)
+    }
+
     fn load_canonical(
         &mut self, path: PathBuf, package: Option<&super::PackageName>,
-    ) -> Result<SourceId, SourceLoadError> {
-        let template = match self.templates.get(&path) {
-            | Some(template) => template.clone(),
-            | None => {
-                let template = self.provider.load(&path)?;
-                self.templates.insert(path, template.clone());
-                template
-            }
-        };
+    ) -> Result<SourceState, LoadFailure> {
+        let template = self.template(&path, false)?.expect("required source");
         self.load_template(template, package)
     }
 
     fn load_template(
         &mut self, template: Arc<SourceTemplate>, package: Option<&super::PackageName>,
-    ) -> Result<SourceId, SourceLoadError> {
-        let root = template.package_site(package)?.map_or(template.unit.root, |site| site.term);
+    ) -> Result<SourceState, LoadFailure> {
+        let root = template
+            .package_site(package)
+            .map_err(SourceLoadError::from)?
+            .map_or(template.unit.root, |site| site.term);
         let path = template.path.clone();
         let key = (path.clone(), root);
-        if let Some(source) = self.seen.get(&key) {
-            return Ok(*source);
+        if let Some(state) = self.seen.get(&key) {
+            return Ok(*state);
         }
         // A file companion describes the complete file term, never an arbitrary nested package.
         let companion = root == template.unit.root;
         let import_sites = template.code_sites(root);
         let source_id =
             self.sources.alloc(SourceFile { template, root, imports: Vec::new(), signature: None });
-        self.seen.insert(key, source_id);
+        self.root.get_or_insert(source_id);
+        self.seen.insert(key.clone(), SourceState::Loading(source_id));
+        let mut rejected = false;
         let imports = import_sites
             .into_iter()
-            .map(|site| self.load_import(source_id, &path, site))
-            .collect::<Result<Vec<_>, _>>()?;
-        let signature = if companion { self.load_signature(&path)? } else { None };
+            .filter_map(|site| match self.load_import(source_id, &path, site) {
+                | Ok((import, valid)) => {
+                    rejected |= !valid;
+                    Some(import)
+                }
+                | Err(error) => {
+                    rejected = true;
+                    self.report(error);
+                    None
+                }
+            })
+            .collect();
+        let signature = if companion {
+            match self.load_signature(&path) {
+                | Ok((signature, valid)) => {
+                    rejected |= !valid;
+                    signature
+                }
+                | Err(error) => {
+                    rejected = true;
+                    self.report(error);
+                    None
+                }
+            }
+        } else {
+            None
+        };
         self.sources[&source_id].imports = imports;
         self.sources[&source_id].signature = signature;
-        Ok(source_id)
+        let state = if rejected {
+            SourceState::Rejected(source_id)
+        } else {
+            SourceState::Complete(source_id)
+        };
+        self.seen.insert(key, state);
+        Ok(state)
     }
 
     fn load_signature(
         &mut self, implementation: &Path,
-    ) -> Result<Option<SourceId>, SourceLoadError> {
-        let Some(requested) = SourceKind::companion(implementation) else { return Ok(None) };
+    ) -> Result<(Option<SourceId>, bool), LoadFailure> {
+        let Some(requested) = SourceKind::companion(implementation) else {
+            return Ok((None, true));
+        };
         let signature = SourcePath::identity(&requested)
             .map_err(|source| SourceLoadError::Read { path: requested, source: source.into() })?;
-        let template = match self.templates.get(&signature) {
-            | Some(template) => template.clone(),
-            | None => {
-                let Some(template) = self.provider.load_optional(&signature)? else {
-                    return Ok(None);
-                };
-                self.templates.insert(signature, template.clone());
-                template
-            }
-        };
-        self.load_template(template, None).map(Some)
+        let Some(template) = self.template(&signature, true)? else { return Ok((None, true)) };
+        self.load_template(template, None).map(|state| {
+            let (source, valid) = state.source();
+            (Some(source), valid)
+        })
     }
 
     fn load_import(
         &mut self, importer: SourceId, importer_path: &Path, site: ImportSite,
-    ) -> Result<SourceImportId, SourceLoadError> {
+    ) -> Result<(SourceImportId, bool), LoadFailure> {
         let parent = importer_path.parent().expect("a source file has a parent");
         let target = site.directive.target;
         let imported = (|| {
@@ -221,38 +323,45 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
             };
             self.load_canonical(id.path, id.name.as_ref())
         })()
-        .map_err(|error| match (&target, error) {
-            | (
-                ImportTarget::Source(super::SourceReference::Path(path)),
-                SourceLoadError::Read { source, .. },
-            ) => SourceLoadError::ImportPath {
-                importer: importer_path.to_path_buf(),
-                requested: parent.join(path),
-                span: Box::new(site.directive.span),
-                source,
-            },
-            | (ImportTarget::Input(input), SourceLoadError::Read { source, .. }) => {
-                SourceLoadError::ImportInput {
+        .map_err(|error| {
+            let LoadFailure::Unreported(error) = error else { return error };
+            LoadFailure::Unreported(match (&target, error) {
+                | (
+                    ImportTarget::Source(super::SourceReference::Path(path)),
+                    SourceLoadError::Read { source, .. },
+                ) => SourceLoadError::ImportPath {
                     importer: importer_path.to_path_buf(),
-                    input: *input,
+                    requested: parent.join(path),
                     span: Box::new(site.directive.span),
                     source,
+                },
+                | (ImportTarget::Input(input), SourceLoadError::Read { source, .. }) => {
+                    SourceLoadError::ImportInput {
+                        importer: importer_path.to_path_buf(),
+                        input: *input,
+                        span: Box::new(site.directive.span),
+                        source,
+                    }
                 }
-            }
-            | (ImportTarget::Source(super::SourceReference::Package(_)), error) => {
-                SourceLoadError::PackageImport {
-                    importer: importer_path.to_path_buf(),
-                    span: site.directive.span,
-                    error: Box::new(error),
+                | (ImportTarget::Source(super::SourceReference::Package(_)), error) => {
+                    SourceLoadError::PackageImport {
+                        importer: importer_path.to_path_buf(),
+                        span: site.directive.span,
+                        error: Box::new(error),
+                    }
                 }
-            }
-            | (_, error) => error,
+                | (_, error) => error,
+            })
         })?;
-        Ok(self.imports.alloc(SourceImport {
-            importer,
-            imported,
-            term: site.term,
-            span: site.directive.span,
-        }))
+        let (imported, valid) = imported.source();
+        Ok((
+            self.imports.alloc(SourceImport {
+                importer,
+                imported,
+                term: site.term,
+                span: site.directive.span,
+            }),
+            valid,
+        ))
     }
 }

@@ -414,7 +414,7 @@ fn typeof_in_companion_signatures_retains_source_dependencies() {
     let AnalysisError::Source { error } = &error else {
         panic!("expected a source dependency error: {error}")
     };
-    let SourceLoadError::Cycle(cycle) = error.as_ref() else {
+    let Some(SourceLoadError::Cycle(cycle)) = error.iter().next() else {
         panic!("expected a source dependency cycle: {error}")
     };
     assert_eq!(cycle.steps.len(), 2);

@@ -221,7 +221,7 @@ impl TestPipeline {
         let mut pool = SHARED_SESSION.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let session = pool.session();
         let catalog = session.package_catalog(roots).map_err(|error| {
-            TestPipelineError::Analysis(AnalysisError::Source { error: Arc::new(error) })
+            TestPipelineError::Analysis(AnalysisError::Source { error: Arc::new(error.into()) })
         })?;
         let analysis = session
             .analyze_package(
@@ -287,7 +287,7 @@ struct TestSourceDiscovery {
 }
 
 impl SourceGraph {
-    pub(crate) fn load(path: impl AsRef<Path>) -> Result<Self, SourceLoadError> {
+    pub(crate) fn load(path: impl AsRef<Path>) -> Result<Self, SourceLoadErrors> {
         CompilerSession::default()
             .graph(path)
             .map(|graph| (*graph).clone())
@@ -296,7 +296,7 @@ impl SourceGraph {
 
     fn load_with_progress(
         path: impl AsRef<Path>, mut progress: impl FnMut(TestSourceDiscovery),
-    ) -> Result<Self, SourceLoadError> {
+    ) -> Result<Self, SourceLoadErrors> {
         let graph = Self::load(path)?;
         graph.sources.iter().enumerate().for_each(|(index, (_, source))| {
             progress(TestSourceDiscovery { path: source.path.clone(), discovered: index + 1 })
@@ -329,10 +329,19 @@ impl RepositorySourceFiles {
 }
 
 impl SourceFixture {
-    fn parse_error(error: SourceLoadError) -> SourceParseError {
-        let SourceLoadError::Parse(errors) = error else { panic!("expected source parse errors") };
+    fn parse_error(error: SourceLoadErrors) -> SourceParseError {
+        let SourceLoadError::Parse(errors) = Self::single_error(error) else {
+            panic!("expected source parse errors")
+        };
         assert_eq!(errors.len(), 1);
         errors.into_iter().next().unwrap()
+    }
+
+    fn single_error(errors: SourceLoadErrors) -> SourceLoadError {
+        let mut errors = errors.iter();
+        let error = errors.next().unwrap().clone();
+        assert!(errors.next().is_none(), "expected exactly one load error");
+        error
     }
 
     fn new() -> Self {
@@ -666,7 +675,9 @@ fn source_graph_rejects_cycles_with_every_import_site() {
     let first = fixture.write("first.zy", r#"@(import("second.zy"))"#);
     fixture.write("second.zy", r#"@(import("first.zy"))"#);
 
-    let SourceLoadError::Cycle(cycle) = SourceGraph::load(first).unwrap_err() else {
+    let SourceLoadError::Cycle(cycle) =
+        SourceFixture::single_error(SourceGraph::load(first).unwrap_err())
+    else {
         panic!("expected an import cycle")
     };
     let names = cycle
@@ -692,7 +703,9 @@ fn source_graph_rejects_a_self_import_at_its_site() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", r#"@(import("main.zy"))"#);
 
-    let SourceLoadError::Cycle(cycle) = SourceGraph::load(root).unwrap_err() else {
+    let SourceLoadError::Cycle(cycle) =
+        SourceFixture::single_error(SourceGraph::load(root).unwrap_err())
+    else {
         panic!("expected a self-import cycle")
     };
     let [step] = cycle.steps.as_slice() else { panic!("expected one self-import step") };
@@ -707,7 +720,9 @@ fn source_graph_rejects_cycles_through_a_companion_signature() {
     let root = fixture.write("main.zy", "()");
     fixture.write("main.zyi", r#"@(import("main.zy"))"#);
 
-    let SourceLoadError::Cycle(cycle) = SourceGraph::load(root).unwrap_err() else {
+    let SourceLoadError::Cycle(cycle) =
+        SourceFixture::single_error(SourceGraph::load(root).unwrap_err())
+    else {
         panic!("expected a source dependency cycle")
     };
 
@@ -722,7 +737,7 @@ fn source_graph_reports_a_missing_import_at_its_source_site() {
     let root = fixture.write("main.zy", r#"@(import("missing.zy"))"#);
 
     let SourceLoadError::ImportPath { importer, requested, .. } =
-        SourceGraph::load(root).unwrap_err()
+        SourceFixture::single_error(SourceGraph::load(root).unwrap_err())
     else {
         panic!("expected a missing import")
     };
@@ -738,7 +753,7 @@ fn source_graph_rejects_a_legacy_declaration_sequence() {
 
     assert!(matches!(
         SourceGraph::load(root),
-        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. }))
+        Err(errors) if matches!(errors.iter().next(), Some(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. })))
     ));
 }
 
@@ -752,7 +767,7 @@ fn source_graph_rejects_sources_that_only_parse_with_recovery() {
             assert!(
                 matches!(
                     SourceGraph::load(root),
-                    Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. }))
+                    Err(errors) if matches!(errors.iter().next(), Some(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. })))
                 ),
                 "source: {source:?}"
             );
@@ -2791,4 +2806,57 @@ fn shared_source_scan_reports_every_category_without_publishing_partial_template
     assert!(session.analyze(&root).unwrap().outcome().root().is_some());
     session.set_overlay(&root, source.into()).unwrap();
     assert_eq!(session.analyze(&root).unwrap_err().diagnostics().len(), 8);
+}
+
+#[test]
+fn source_graph_collects_independent_imports_and_signatures_without_replaying_rejections() {
+    let fixture = SourceFixture::new();
+    let root = fixture
+        .write("main.zy", r#"(@(import("left.zy")), @(import("right.zy")), @(import("left.zy")))"#);
+    fixture.write("left.zy", r#"(@(import("bad.zy")), @(import("missing.zy")))"#);
+    fixture.write("right.zy", r#"(@(import("bad.zy")), @(import("other.zy")))"#);
+    let bad = fixture.write("bad.zy", "@(import(0))");
+    let other = fixture.write("other.zy", "let value = in value");
+    let signature = fixture.write("main.zyi", "@(import)");
+    let mut session = CompilerSession::default();
+    let errors = session.graph(&root).unwrap_err();
+    let diagnostics = errors.diagnostics();
+    assert_eq!(diagnostics.len(), 4, "{errors}");
+    let mut paths = diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.site.as_ref().unwrap().path().file_name().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    paths.sort();
+    assert_eq!(paths, ["bad.zy", "left.zy", "main.zyi", "other.zy"].map(std::ffi::OsString::from));
+    assert!(Arc::ptr_eq(&errors, &session.graph(&root).unwrap_err()));
+    for path in [&bad, &other, &signature, &fixture.path("missing.zy")] {
+        session.set_overlay(path, "()".into()).unwrap();
+    }
+    let graph = session.graph(&root).unwrap();
+    assert_eq!(graph.sources.len(), 7);
+    assert_eq!(graph.provider_order().last(), Some(&graph.root));
+    session.set_overlay(&bad, "@(import(0))".into()).unwrap();
+    assert_eq!(session.graph(&root).unwrap_err().diagnostics().len(), 1);
+}
+
+#[test]
+fn source_graph_collects_cycles_even_through_a_rejected_importer() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write("main.zy", r#"(@(import("first.zy")), @(import("second.zy")))"#);
+    let first = fixture.write("first.zy", r#"(@(import("main.zy")), @(import("missing.zy")))"#);
+    let second = fixture.write("second.zy", r#"@(import("second.zy"))"#);
+    let errors = SourceGraph::load(&root).unwrap_err();
+    assert_eq!(errors.iter().count(), 3, "{errors}");
+    let mut cycle_lengths = errors
+        .iter()
+        .filter_map(|error| match error {
+            | SourceLoadError::Cycle(cycle) => Some(cycle.steps.len()),
+            | _ => None,
+        })
+        .collect::<Vec<_>>();
+    cycle_lengths.sort();
+    assert_eq!(cycle_lengths, [1, 2]);
+    fixture.write("first.zy", "()");
+    fixture.write("second.zy", "()");
+    assert!(SourceGraph::load(&root).is_ok(), "{first:?}, {second:?}");
 }

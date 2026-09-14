@@ -167,9 +167,11 @@ impl SourceGraph {
         ProviderOrder::new(self).run()
     }
 
-    pub(crate) fn ensure_acyclic(&self) -> Result<(), SourceCycle> {
-        match SourceCycleDetector::new(self).run() {
-            | Some(dependencies) => Err(SourceCycle {
+    pub(crate) fn cycles(&self) -> Vec<SourceCycle> {
+        SourceCycleDetector::new(self)
+            .run()
+            .into_iter()
+            .map(|dependencies| SourceCycle {
                 steps: dependencies
                     .into_iter()
                     .map(|dependency| match dependency {
@@ -193,9 +195,8 @@ impl SourceGraph {
                         }
                     })
                     .collect(),
-            }),
-            | None => Ok(()),
-        }
+            })
+            .collect()
     }
 
     fn dependencies(&self, source: SourceId) -> Vec<SourceDependency> {
@@ -234,22 +235,34 @@ struct SourceCycleDetector<'graph> {
     states: HashMap<SourceId, VisitState>,
     sources: Vec<SourceId>,
     dependencies: Vec<SourceDependency>,
+    cycles: Vec<Vec<SourceDependency>>,
 }
 
 impl<'graph> SourceCycleDetector<'graph> {
     fn new(graph: &'graph SourceGraph) -> Self {
-        Self { graph, states: HashMap::new(), sources: Vec::new(), dependencies: Vec::new() }
+        Self {
+            graph,
+            states: HashMap::new(),
+            sources: Vec::new(),
+            dependencies: Vec::new(),
+            cycles: Vec::new(),
+        }
     }
 
-    fn run(mut self) -> Option<Vec<SourceDependency>> {
-        self.visit(self.graph.root)
+    fn run(mut self) -> Vec<Vec<SourceDependency>> {
+        // Rejected parents may have no completed import edge to an otherwise available source.
+        for (source, _) in self.graph.sources.iter() {
+            if !self.states.contains_key(&source) {
+                self.visit(source);
+            }
+        }
+        self.cycles
     }
 
-    fn visit(&mut self, source: SourceId) -> Option<Vec<SourceDependency>> {
+    fn visit(&mut self, source: SourceId) {
         self.states.insert(source, VisitState::Active);
         self.sources.push(source);
-
-        let cycle = self.graph.dependencies(source).into_iter().find_map(|dependency| {
+        for dependency in self.graph.dependencies(source) {
             let target = dependency.target(self.graph);
             match self.states.get(&target) {
                 | Some(VisitState::Active) => {
@@ -258,29 +271,24 @@ impl<'graph> SourceCycleDetector<'graph> {
                         .iter()
                         .position(|candidate| *candidate == target)
                         .expect("active dependency target must be on the DFS path");
-                    Some(
+                    self.cycles.push(
                         self.dependencies[start..]
                             .iter()
                             .copied()
                             .chain(std::iter::once(dependency))
                             .collect(),
-                    )
+                    );
                 }
-                | Some(VisitState::Complete) => None,
+                | Some(VisitState::Complete) => {}
                 | None => {
                     self.dependencies.push(dependency);
-                    let cycle = self.visit(target);
+                    self.visit(target);
                     self.dependencies.pop();
-                    cycle
                 }
             }
-        });
-
-        if cycle.is_none() {
-            self.sources.pop();
-            self.states.insert(source, VisitState::Complete);
         }
-        cycle
+        self.sources.pop();
+        self.states.insert(source, VisitState::Complete);
     }
 }
 

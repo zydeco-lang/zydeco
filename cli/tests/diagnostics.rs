@@ -154,3 +154,40 @@ fn parser_reports_recovery_and_later_eof_as_separate_errors() {
         .unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
+
+#[test]
+fn imported_parse_failures_keep_each_file_and_do_not_replay_shared_providers() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("main.zy");
+    fs::write(&root, r#"(@(import("first.zy")), @(import("second.zy")), @(import("first.zy")))"#)
+        .unwrap();
+    for name in ["first.zy", "second.zy"] {
+        fs::write(directory.path().join(name), "let value = in value").unwrap();
+    }
+    for command in ["check", "run", "build"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .current_dir(directory.path())
+            .arg(command)
+            .arg(&root)
+            .output()
+            .unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert_eq!(error.matches("Unrecognized token").count(), 2, "{error}");
+        assert!(error.contains("first.zy:1:"), "{error}");
+        assert!(error.contains("second.zy:1:"), "{error}");
+    }
+    for name in ["first.zy", "second.zy"] {
+        fs::write(directory.path().join(name), "()").unwrap();
+    }
+    assert!(
+        Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .current_dir(directory.path())
+            .arg("check")
+            .arg(&root)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+}

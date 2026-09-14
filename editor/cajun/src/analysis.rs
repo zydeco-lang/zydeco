@@ -9,7 +9,7 @@ use tower_lsp::lsp_types::{
     PrepareRenameResponse, Range, SemanticToken, SymbolKind, Url, WorkspaceEdit,
 };
 use zydeco_session::{
-    AnalysisError, CompilerSession, ProgramAnalysis, SourceDiagnosticSite, SourceLoadError,
+    AnalysisError, CompilerSession, ProgramAnalysis, SourceDiagnosticSite, SourceLoadErrors,
 };
 use zydeco_statics::{
     arena::StaticsArena,
@@ -86,7 +86,7 @@ pub(crate) struct ProjectFailure {
 }
 
 impl ProjectFailure {
-    fn from_source_error(error: &SourceLoadError) -> Self {
+    fn from_source_error(error: &SourceLoadErrors) -> Self {
         Self {
             diagnostics: error
                 .diagnostics()
@@ -179,7 +179,7 @@ impl ProjectState {
         overrides.iter().try_for_each(|(path, source)| {
             session
                 .set_overlay(path, source.clone())
-                .map_err(|error| ProjectFailure::from_source_error(&error))
+                .map_err(|error| ProjectFailure::from_source_error(&error.into()))
         })?;
         Self::load_from_session(source_path, &session, progress).map(|project| (project, session))
     }

@@ -443,7 +443,18 @@ numbered inputs, imports, and type companions.
 The [loader](../../lang/session/src/source/loader.rs) obtains source text through session inputs,
 including editor overlays; [assembly](../../lang/session/src/source/program.rs) combines providers
 with explicit source and signature boundaries.
-Dependency cycles are diagnosed before checking.
+Loading visits every independently available import and companion signature before returning.
+A template cache records accepted, missing optional, and rejected files by canonical path;
+the first request reports a provider failure, and subsequent requests do not replay it.
+A graph-node cache distinguishes active, completed, and rejected source roots.
+Active roots permit recording cyclic edges, while rejected roots retain only temporary edges for diagnostics.
+The loader visits those edges to collect DFS back-edge cycles, including independent cycles in rejected sources;
+it does not enumerate every possible path around a cycle.
+Read, parse, directive, and cycle failures leave through the nonempty `SourceLoadErrors` collection.
+The graph and assembly boundary is strict: no partially loaded graph is published or cached as successful.
+Session revisions invalidate rejected results when their source inputs change.
+The [loader regressions](../../lang/session/src/source/tests.rs) cover shared rejected providers,
+independent imports and signatures, multiple cycles, and correction through overlays.
 The independence of provider inference and source scope is specified in [L12](language.md#12-sources-imports-and-entry).
 
 [Package selection](../../lang/session/src/source/package.rs) separates authored references (`SourceReference::Package`
@@ -1799,7 +1810,9 @@ Producers append diagnostics and composition concatenates collections.
 Diagnostic ordering is not an API guarantee; successful fact ordering retains its own contract.
 Tests compare contents, multiplicity, and locations rather than presentation order,
 and pair rejected inputs with valid counterparts.
-Equal spans alone do not identify duplicate errors. Broader recovery at loading and later pass boundaries remains
+Equal spans alone do not identify duplicate errors.
+Source graph loading follows the [provider recovery contract](#c3-source-loading-sessions-queries-and-memory-retention).
+Later-pass recovery work remains
 in the [traversal proposal](../proposals/traversals.md#diagnostic-collection-and-recovery).
 
 ### Formatting and typed rendering

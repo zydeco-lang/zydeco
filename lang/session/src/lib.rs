@@ -7,5 +7,5 @@ pub use source::{
     CompletionError, CompletionSemantics, DesugarError, Documentation, DocumentationContent,
     DocumentationId, DocumentationIndex, DocumentationSubject, ExecutableError, ExecutableProgram,
     LibraryProgram, ProgramAnalysis, SourceCaches, SourceDiagnosticSite, SourceGraph, SourceId,
-    SourceImportId, SourceLoadError, TyckReport,
+    SourceImportId, SourceLoadError, SourceLoadErrors, TyckReport,
 };

@@ -56,6 +56,35 @@ impl Display for SourceDiagnosticSite {
 
 pub type SourceParseErrors = zydeco_surface::diagnostic::Diagnostics<SourceParseError>;
 
+/// Every independent failure of a source graph load. A rejected load has no graph product.
+#[derive(Clone, Debug, Error)]
+#[error(transparent)]
+pub struct SourceLoadErrors(zydeco_surface::diagnostic::Diagnostics<SourceLoadError>);
+
+impl SourceLoadErrors {
+    pub(crate) fn with_errors(errors: Vec<SourceLoadError>) -> Option<Self> {
+        zydeco_surface::diagnostic::Diagnostics::with_errors(errors).map(Self)
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, SourceLoadError> {
+        self.0.iter()
+    }
+
+    pub fn diagnostics(&self) -> Vec<SourceDiagnostic> {
+        self.iter().flat_map(SourceLoadError::diagnostics).collect()
+    }
+
+    pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
+        self.iter().find_map(SourceLoadError::diagnostic_site)
+    }
+}
+
+impl From<SourceLoadError> for SourceLoadErrors {
+    fn from(error: SourceLoadError) -> Self {
+        Self(error.into())
+    }
+}
+
 /// One deterministic source-template error suitable for memoized parsing.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceParseError {

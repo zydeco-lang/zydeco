@@ -93,13 +93,10 @@ The agreed direction extends to every pass: report independent errors justified 
 and preserve their complete collection through the session and frontends.
 This does not require executing a dependent pass on an invalid intermediate representation.
 
-The remaining audit should follow concrete producer and publication boundaries:
-
-1. Collect failures from independently available sources and imports.
-   A rejected source must not become a cached successful graph node,
-   and shared rejected providers must not replay their diagnostics.
-2. Inspect checker and later validation loops for early exits over independent work.
-   Reuse their domain diagnostic collections and suppress consequences of an unavailable prerequisite.
+Source graph loading now collects independent imports, companion signatures, and dependency cycles under the
+[provider recovery contract](../references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention).
+Inspect checker and later validation loops for early exits over independent work.
+Reuse their domain diagnostic collections and suppress consequences of an unavailable prerequisite.
 
 Recovery within one malformed directive remains local to its decoder.
 A missing package name prevents duplicate-name checks for that site but does not prevent validating other sites.
@@ -116,7 +113,7 @@ and [resolution events and dependencies](../references/compiler.md#name-resoluti
 The file scan precedes assembly and therefore has different identities and spans from desugaring;
 sharing decoded facts across that boundary would require an explicit remapping.
 
-Next, audit diagnostic publication and independent source loading, then migrate typed structural operations.
+Next, extend independent checker and validator recovery and migrate typed structural operations.
 For each migration, remove the superseded recursion and update all callers in the same change.
 Compare separate and composed facts and diagnostics, including multiplicity and exact locations.
 Verify accepted-program behavior, rejected inputs' failure status, and the absence of invalid normal products.

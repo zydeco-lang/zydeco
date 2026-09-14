@@ -1,7 +1,7 @@
 use super::loader::{SourceGraphLoader, SourceProvider};
 use crate::source::{
-    CheckedRootSort, ScopedProgram, SourceDiagnosticSite, SourceGraph, SourceLoadError, SourcePath,
-    SourceTemplate, TextualProgramError,
+    CheckedRootSort, ScopedProgram, SourceDiagnosticSite, SourceGraph, SourceLoadError,
+    SourceLoadErrors, SourcePath, SourceTemplate, TextualProgramError,
 };
 use dashmap::{DashMap, mapref::entry::Entry};
 use salsa::{Setter as _, Storage};
@@ -175,7 +175,7 @@ pub enum AnalysisError {
     #[error("Source error: {error}")]
     Source {
         #[source]
-        error: Arc<SourceLoadError>,
+        error: Arc<SourceLoadErrors>,
     },
     #[error("Textual program error: {error}")]
     TextualProgram {
@@ -371,7 +371,7 @@ impl CompilerSession {
     ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
         let root = self
             .source_input(id.path.clone())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         analyze_source(self, root, id.name.clone(), bindings)
     }
     /// Create a consistent read snapshot for a request.
@@ -428,8 +428,10 @@ impl CompilerSession {
         Ok(())
     }
 
-    pub fn graph(&self, root: impl AsRef<Path>) -> Result<Arc<SourceGraph>, Arc<SourceLoadError>> {
-        let root = self.source_input(root.as_ref().to_path_buf()).map_err(Arc::new)?;
+    pub fn graph(&self, root: impl AsRef<Path>) -> Result<Arc<SourceGraph>, Arc<SourceLoadErrors>> {
+        let root = self
+            .source_input(root.as_ref().to_path_buf())
+            .map_err(|error| Arc::new(SourceLoadErrors::from(error)))?;
         source_graph(self, root, None, Arc::default())
     }
 
@@ -443,7 +445,7 @@ impl CompilerSession {
     pub fn analyze(&self, root: impl AsRef<Path>) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         analyze_source(self, root, None, Arc::default())
     }
 
@@ -456,7 +458,7 @@ impl CompilerSession {
     ) -> Result<Arc<zydeco_statics::arena::StaticsArena>, AnalysisError> {
         let root = self
             .source_input(analysis.root_path().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         let (_, output) =
             rechecked(self, root, analysis.package.clone(), analysis.bindings.clone())?;
         Ok(output.outcome.statics_arc())
@@ -544,7 +546,7 @@ impl CompilerSession {
     ) -> Result<Option<zydeco_statics::syntax::Type>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         let id = zydeco_statics::query::InternedType::new(self, id);
         Ok(normalized_type_at(self, root, id))
     }
@@ -555,7 +557,7 @@ impl CompilerSession {
     ) -> Result<Option<zydeco_statics::check::TyckDiagnostics>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         Ok(diagnostics_at(self, root))
     }
 
@@ -565,7 +567,7 @@ impl CompilerSession {
     ) -> Result<Vec<zydeco_statics::validate::CoverageError>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         Ok(coverage_at(self, root))
     }
 
@@ -575,7 +577,7 @@ impl CompilerSession {
     ) -> Result<Option<zydeco_statics::syntax::AnnId>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         let fill = zydeco_statics::query::InternedFill::new(self, fill);
         Ok(fill_solution_at(self, root, fill))
     }
@@ -586,7 +588,7 @@ impl CompilerSession {
     ) -> Result<Option<zydeco_statics::syntax::AnnId>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         let def = zydeco_statics::query::InternedDef::new(self, def);
         Ok(annotation_of_def(self, root, def))
     }
@@ -597,7 +599,7 @@ impl CompilerSession {
     ) -> Result<Option<zydeco_statics::syntax::TypeId>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         let def = zydeco_statics::query::InternedDef::new(self, def);
         Ok(type_definition_of_def(self, root, def))
     }
@@ -608,7 +610,7 @@ impl CompilerSession {
     ) -> Result<Option<zydeco_statics::syntax::TermAnnId>, AnalysisError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
         let term = zydeco_statics::query::InternedTerm::new(self, term);
         Ok(term_annotation_at(self, root, term))
     }
@@ -678,7 +680,7 @@ fn parse_source(
 fn source_graph(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackageName>,
     bindings: Arc<super::PackageBindings>,
-) -> Result<Arc<SourceGraph>, Arc<SourceLoadError>> {
+) -> Result<Arc<SourceGraph>, Arc<SourceLoadErrors>> {
     SourceGraphLoader::with_provider(QuerySourceProvider { db })
         .load_root(&root.path(db), package.as_ref(), bindings)
         .map(Arc::new)

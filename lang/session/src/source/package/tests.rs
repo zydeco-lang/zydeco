@@ -594,7 +594,7 @@ fn same_file_test_associations_work_but_real_code_cycles_are_rejected() {
         .analyze_package(&fixture.named("workspace.zy", "lib"), catalog.bindings.clone())
         .unwrap_err();
     assert!(
-        matches!(error, AnalysisError::Source { error } if matches!(&*error, SourceLoadError::Cycle(cycle) if cycle.steps.len() == 2))
+        matches!(error, AnalysisError::Source { error } if matches!(error.iter().next(), Some(SourceLoadError::Cycle(cycle)) if cycle.steps.len() == 2))
     );
 }
 
@@ -725,7 +725,7 @@ fn selection_and_planning_track_overlays_and_removed_registrations() {
         .set_overlay(&id.path, "(#renamed = @[package(library, name(renamed))] 2)".into())
         .unwrap();
     assert!(
-        matches!(session.analyze_package(&id, catalog.bindings.clone()), Err(AnalysisError::Source { error }) if matches!(&*error, SourceLoadError::Package(error) if matches!(**error, PackageError::Missing { .. })))
+        matches!(session.analyze_package(&id, catalog.bindings.clone()), Err(AnalysisError::Source { error }) if matches!(error.iter().next(), Some(SourceLoadError::Package(error)) if matches!(**error, PackageError::Missing { .. })))
     );
 }
 
@@ -784,8 +784,8 @@ fn missing_named_import_reports_the_consumer_site() {
     let source = r#"@(import(missing))"#;
     let path = fixture.write("main.zy", source);
     let error = CompilerSession::default().analyze(&path).unwrap_err();
-    assert!(matches!(&error, AnalysisError::Source { error } if matches!(&**error,
-        SourceLoadError::PackageImport { error, .. } if matches!(&**error, SourceLoadError::Package(error) if matches!(&**error, PackageError::Unknown { .. })))));
+    assert!(matches!(&error, AnalysisError::Source { error } if matches!(error.iter().next(),
+        Some(SourceLoadError::PackageImport { error, .. }) if matches!(&**error, SourceLoadError::Package(error) if matches!(&**error, PackageError::Unknown { .. })))));
     let site = error.diagnostic_site().unwrap();
     assert_eq!(site.path(), path.canonicalize().unwrap());
     assert_eq!(&source[site.range().clone()], source);

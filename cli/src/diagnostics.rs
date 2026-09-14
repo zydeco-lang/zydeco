@@ -18,7 +18,9 @@ impl DiagnosticRenderer {
                     let _ = error.to_report(spans).eprint(&mut cache);
                 }
             }
-            | CompileError::Analysis(AnalysisError::Source { error }) => Self::source_error(error),
+            | CompileError::Analysis(AnalysisError::Source { error }) => {
+                error.iter().for_each(Self::source_error);
+            }
             | CompileError::Rejected(analysis) => {
                 Self::warnings(analysis);
                 if let Some(diagnostics) = analysis.outcome().diagnostics() {
