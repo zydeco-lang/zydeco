@@ -45,7 +45,8 @@ environment and stack dependencies, explicit arena operations, and the obligatio
 It is a design draft; the current compiler does not implement these rules.
 
 [Reusable folders and traversal composition](proposals/traversals.md) collects the remaining migration of desugaring,
-resolution, and typed rebuilding onto shared structural operations.
+source-directive analysis, resolution, and typed rebuilding onto shared structural operations.
+It also records the planned diagnostic collection and recovery boundaries for reporting multiple errors across passes.
 The compiler reference defines the implemented [scoped visitor](references/compiler.md#scoped-structural-traversal)
 and [surface folder](references/compiler.md#surface-structural-rebuilding).
 
