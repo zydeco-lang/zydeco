@@ -216,27 +216,26 @@ Each subsequent migration should demonstrate a simpler client under both drivers
 ### Assembly continuations and publication
 
 [Assembly lowering](../../lang/assembly/src/lower.rs) is a medium–high difficulty case,
-skipped after evaluating its syntax and instruction execution separately.
+now being migrated after evaluating its syntax and instruction execution separately.
 `Stack::Arg`, `Stack::Tag`, and continuation packages descend into the rest of the stack directly,
 retaining boxed consumers for values and tags.
 The existing `pending` loop therefore bounds deferred instruction work, not all syntax descent.
 Product and alias handlers also build nested consumers, and branch handlers lower child programs
 while constructing their jump tables.
 
-An instruction's `Construct::build` reserves its `ProgId` immediately.
-Its pending callback computes the next context, invokes the consumer to obtain the successor ID,
-then publishes the instruction with its original context.
-[`Kont` and `CxKont`](../../lang/assembly/src/arena.rs) encode those consumers and context updates as boxed functions.
-Native continuation lowering additionally creates capture bindings, a resume entry,
-a symbol, and frame metadata around that schedule.
-Wrapping the pending loop in the common driver would retain the direct recursion and nested function ownership.
+Typed pending instructions and context updates now preserve the
+[existing reservation and publication schedule](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices).
+The remaining `Kont` consumers are boxed functions. Native continuation lowering additionally creates capture bindings,
+a resume entry, a symbol, and frame metadata around that schedule. Wrapping the pending loop in the common driver would
+retain the direct recursion and nested function ownership.
 
-The promising next step is to replace these boxed consumers with typed continuation and context operations,
-then drive syntax descent and instruction completion through the same suspension protocol.
-Compare a continuation arena with IDs against owned reconstruction frames that reserve output IDs before descent.
-The former can preserve shared continuation boundaries but needs storage and retirement rules;
-the latter makes ownership local but must distinguish obtaining an ID from publishing its instruction.
-Neither representation is selected here, and the common driver does not yet need an expanded protocol.
+The approved next step replaces these consumers with typed records in a flat continuation arena.
+An internal continuation ID links each record to its successor; consuming a record takes its slot once.
+A value hole can abandon the remaining chain, so unused records remain valid until bulk teardown.
+Sequence cursors retain the remaining fields or aliases without nested closure ownership.
+The existing folder protocol can then drive syntax descent, child entry construction, and instruction completion.
+Return frames retain the state needed after obtaining a child entry ID; they do not wait for its publication.
+The common driver needs no expanded protocol.
 
 Acceptance must compare allocation slots, definition associations, contexts, successor links,
 branch order, and native frame-entry metadata under both drivers.

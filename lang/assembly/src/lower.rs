@@ -16,13 +16,21 @@ use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::with::With;
 
+#[cfg(test)]
+mod tests;
+
 pub trait Lower<'a> {
     type Kont;
     type Out;
     fn lower(&self, lo: &mut Lowerer<'a>, kont: Self::Kont) -> Self::Out;
 }
 
-type PendingInstruction<'a> = Box<dyn FnOnce(&mut Lowerer<'a>) + 'a>;
+struct PendingInstruction<'a> {
+    id: ProgId,
+    instruction: Instruction,
+    context: Context,
+    continuation: CxKont<'a, Lowerer<'a>>,
+}
 
 #[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
@@ -89,7 +97,10 @@ impl<'a> Lowerer<'a> {
 
     fn finish_pending(&mut self) {
         while let Some(pending) = self.pending.pop() {
-            pending(self);
+            let PendingInstruction { id, instruction, context, continuation } = pending;
+            let next_context = continuation.update.apply(&context);
+            let next = (continuation.kont)(self, next_context);
+            self.arena.insert_program(id, Program::Instruction(instruction, next), context);
         }
     }
 }
@@ -101,16 +112,11 @@ where
     type Site = With<Context, CxKont<'a, Lowerer<'a>>>;
 
     fn build(
-        self, lowerer: &mut Lowerer<'a>,
-        With { info: context, inner: CxKont { incr, kont } }: Self::Site,
+        self, lowerer: &mut Lowerer<'a>, With { info: context, inner: continuation }: Self::Site,
     ) -> ProgId {
         let id = lowerer.allocator.alloc();
         let instruction = self.into();
-        lowerer.pending.push(Box::new(move |lowerer| {
-            let next_context = incr(&context);
-            let next = kont(lowerer, next_context);
-            lowerer.arena.insert_program(id, Program::Instruction(instruction, next), context);
-        }));
+        lowerer.pending.push(PendingInstruction { id, instruction, context, continuation });
         id
     }
 }
@@ -125,8 +131,8 @@ impl<'a> Lower<'a> for sk::VPatId {
         match vpat {
             | VPat::Hole(Hole) => {
                 let var = VarName::from("_").build(lo, None);
-                let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
+                let update = ContextUpdate::Bind(var);
+                Pop(var).build(lo, With::new(cx, CxKont { update, kont }))
             }
             | VPat::Var(def_id) => {
                 if let Some(&arity) = lo.unboxing.unboxed_vars.get(&def_id) {
@@ -139,9 +145,9 @@ impl<'a> Lower<'a> for sk::VPatId {
                         .collect();
                     lo.unboxed_var_slots.insert(def_id, vars.clone());
                     let kont = vars.iter().rev().fold(kont, |kont, &var| {
-                        let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
+                        let update = ContextUpdate::Bind(var);
                         Box::new(move |lo, cx| {
-                            Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
+                            Pop(var).build(lo, With::new(cx, CxKont { update, kont }))
                         })
                     });
                     kont(lo, cx)
@@ -149,8 +155,8 @@ impl<'a> Lower<'a> for sk::VPatId {
                     // Pop the value from the stack into the variable
                     let name = lo.sps_low.admin.def_name(lo.scoped, lo.statics, &def_id).clone();
                     let var = name.build(lo, Some(def_id));
-                    let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                    Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
+                    let update = ContextUpdate::Bind(var);
+                    Pop(var).build(lo, With::new(cx, CxKont { update, kont }))
                 }
             }
             | VPat::Ctor(Ctor(ctor, param)) => {
@@ -191,13 +197,13 @@ impl<'a> Lower<'a> for sk::VPatId {
                         })
                     },
                 );
-                let incr = Box::new(move |cx: &Context| cx.clone() + [alias]);
-                Pop(alias).build(lo, With::new(cx, CxKont { incr, kont }))
+                let update = ContextUpdate::Bind(alias);
+                Pop(alias).build(lo, With::new(cx, CxKont { update, kont }))
             }
             | VPat::Triv(Triv) => {
                 let var = VarName::from("_").build(lo, None);
-                let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
+                let update = ContextUpdate::Bind(var);
+                Pop(var).build(lo, With::new(cx, CxKont { update, kont }))
             }
             | VPat::VCons(sk::VCons { items, layout }) => {
                 let element_len = items.len();

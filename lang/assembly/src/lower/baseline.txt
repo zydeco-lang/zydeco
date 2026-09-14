@@ -1,0 +1,113 @@
+branches, native=false
+root p0
+published [p0, p1, p2, p10, p9, p7, p14, p17, p16, p18, p13, p4, p22, p25, p24, p26, p21]
+p0: Instruction(PushArg(Push(Imm(Integer(7)))), p1); context Context([]); deps []
+p1: Instruction(PushTag(Push(Tag { idx: 0, name: Some("First") })), p2); context Context([]); deps [p0]
+p2: Instruction(PackProduct(Pack(ProductLayout { arity: 2, elements: 2 })), p9); context Context([]); deps [p1]
+p4: Instruction(PopArg(Pop(v3)), p22); context Context([]); deps []
+p7: Instruction(PopArg(Pop(v6)), p14); context Context([]); deps []
+p9: Instruction(UnpackProduct(Unpack(ProductLayout { arity: 2, elements: 2 })), p10); context Context([]); deps [p2]
+p10: Terminator(PopBranch(PopBranch([(Tag { idx: 0, name: Some("First") }, p4), (Tag { idx: 1, name: Some("Second") }, p7)]))); context Context([]); deps [p4, p7, p9]
+p13: Instruction(PopArg(Pop(v12)), p18); context Context([]); deps []
+p14: Instruction(PushArg(Push(Sym(s11))), p16); context Context([v6]); deps [p7]
+p16: Instruction(PopArg(Pop(v15)), p17); context Context([v6]); deps [p14]
+p17: Terminator(Abort(Abort)); context Context([v6, v15]); deps [p16]
+p18: Terminator(Abort(Abort)); context Context([v12]); deps [p13]
+p21: Instruction(PopArg(Pop(v20)), p26); context Context([]); deps []
+p22: Instruction(PushArg(Push(Sym(s19))), p24); context Context([v3]); deps [p4]
+p24: Instruction(PopArg(Pop(v23)), p25); context Context([v3]); deps [p22]
+p25: Terminator(Abort(Abort)); context Context([v3, v23]); deps [p24]
+p26: Terminator(Abort(Abort)); context Context([v20]); deps [p21]
+v3: _
+v6: _
+v12: _
+v15: _
+v20: _
+v23: _
+s5: NamedSymbol { name: "arm", inner: Prog(p4) }
+s8: NamedSymbol { name: "arm", inner: Prog(p7) }
+s11: NamedSymbol { name: "Second", inner: Prog(p13) }
+s19: NamedSymbol { name: "First", inner: Prog(p21) }
+defs [("First", "Sym(s19)"), ("Second", "Sym(s11)")]
+labels [(p4, s5), (p7, s8), (p13, s11), (p21, s19)]
+frames {}
+externs []
+branches, native=true
+root p0
+published [p0, p1, p2, p10, p9, p7, p14, p17, p16, p18, p13, p4, p22, p25, p24, p26, p21]
+p0: Instruction(PushArg(Push(Imm(Integer(7)))), p1); context Context([]); deps []
+p1: Instruction(PushTag(Push(Tag { idx: 0, name: Some("First") })), p2); context Context([]); deps [p0]
+p2: Instruction(PackProduct(Pack(ProductLayout { arity: 2, elements: 2 })), p9); context Context([]); deps [p1]
+p4: Instruction(PopArg(Pop(v3)), p22); context Context([]); deps []
+p7: Instruction(PopArg(Pop(v6)), p14); context Context([]); deps []
+p9: Instruction(UnpackProduct(Unpack(ProductLayout { arity: 2, elements: 2 })), p10); context Context([]); deps [p2]
+p10: Terminator(PopBranch(PopBranch([(Tag { idx: 0, name: Some("First") }, p4), (Tag { idx: 1, name: Some("Second") }, p7)]))); context Context([]); deps [p4, p7, p9]
+p13: Instruction(PopArg(Pop(v12)), p18); context Context([]); deps []
+p14: Instruction(PushArg(Push(Sym(s11))), p16); context Context([v6]); deps [p7]
+p16: Instruction(PopArg(Pop(v15)), p17); context Context([v6]); deps [p14]
+p17: Terminator(Abort(Abort)); context Context([v6, v15]); deps [p16]
+p18: Terminator(Abort(Abort)); context Context([v12]); deps [p13]
+p21: Instruction(PopArg(Pop(v20)), p26); context Context([]); deps []
+p22: Instruction(PushArg(Push(Sym(s19))), p24); context Context([v3]); deps [p4]
+p24: Instruction(PopArg(Pop(v23)), p25); context Context([v3]); deps [p22]
+p25: Terminator(Abort(Abort)); context Context([v3, v23]); deps [p24]
+p26: Terminator(Abort(Abort)); context Context([v20]); deps [p21]
+v3: _
+v6: _
+v12: _
+v15: _
+v20: _
+v23: _
+s5: NamedSymbol { name: "arm", inner: Prog(p4) }
+s8: NamedSymbol { name: "arm", inner: Prog(p7) }
+s11: NamedSymbol { name: "Second", inner: Prog(p13) }
+s19: NamedSymbol { name: "First", inner: Prog(p21) }
+defs [("First", "Sym(s19)"), ("Second", "Sym(s11)")]
+labels [(p4, s5), (p7, s8), (p13, s11), (p21, s19)]
+frames {p0: Fresh, p13: Fresh, p21: Fresh}
+externs []
+continuation, native=false
+root p0
+published [p0, p2, p3, p4, p8, p11, p10, p7, p12, p14, p16, p15]
+p0: Instruction(PushArg(Push(Imm(Integer(42)))), p2); context Context([]); deps []
+p2: Instruction(PopArg(Pop(v1)), p3); context Context([]); deps [p0]
+p3: Instruction(PushArg(Push(Var(v1))), p4); context Context([v1]); deps [p2]
+p4: Instruction(PackProduct(Pack(ProductLayout { arity: 1, elements: 1 })), p8); context Context([v1]); deps [p3]
+p7: Instruction(PopArg(Pop(v6)), p12); context Context([]); deps []
+p8: Instruction(PushArg(Push(Sym(s5))), p10); context Context([v1]); deps [p4]
+p10: Instruction(PopArg(Pop(v9)), p11); context Context([v1]); deps [p8]
+p11: Terminator(Abort(Abort)); context Context([v1, v9]); deps [p10]
+p12: Instruction(UnpackProduct(Unpack(ProductLayout { arity: 1, elements: 1 })), p14); context Context([v6]); deps [p7]
+p14: Instruction(PopArg(Pop(v13)), p15); context Context([v6]); deps [p12]
+p15: Instruction(PushArg(Push(Var(v13))), p16); context Context([v6, v13]); deps [p14]
+p16: Terminator(Abort(Abort)); context Context([v6, v13]); deps [p15]
+v1: captured
+v6: _
+v9: _
+v13: restored
+s5: NamedSymbol { name: "resume", inner: Prog(p7) }
+defs [("captured", "Var(v1)"), ("restored", "Var(v13)"), ("resume", "Sym(s5)")]
+labels [(p7, s5)]
+frames {}
+externs []
+continuation, native=true
+root p0
+published [p0, p2, p7, p8, p11, p10, p5, p13, p12]
+p0: Instruction(PushArg(Push(Imm(Integer(42)))), p2); context Context([]); deps []
+p2: Instruction(PopArg(Pop(v1)), p7); context Context([]); deps [p0]
+p5: Instruction(PopArg(Pop(v4)), p12); context Context([v3]); deps []
+p7: Instruction(RetainFrame(RetainFrame { entry: p5, captures: [v1] }), p8); context Context([v1]); deps [p2]
+p8: Instruction(PushArg(Push(Sym(s6))), p10); context Context([v1]); deps [p7]
+p10: Instruction(PopArg(Pop(v9)), p11); context Context([v1]); deps [p8]
+p11: Terminator(Abort(Abort)); context Context([v1, v9]); deps [p10]
+p12: Instruction(PushArg(Push(Var(v3))), p13); context Context([v3, v4]); deps [p5]
+p13: Terminator(Abort(Abort)); context Context([v3, v4]); deps [p12]
+v1: captured
+v3: restored
+v4: _
+v9: _
+s6: NamedSymbol { name: "resume", inner: Prog(p5) }
+defs [("captured", "Var(v1)"), ("restored", "Var(v3)"), ("resume", "Sym(s6)")]
+labels [(p5, s6)]
+frames {p0: Fresh, p5: Resume { bindings: [(v3, v1)] }}
+externs []

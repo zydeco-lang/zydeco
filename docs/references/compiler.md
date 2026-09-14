@@ -1871,6 +1871,14 @@ with explicit operand and control stacks, environment variables, labels, and ins
 The portable result is an `AssemblyProgram` for the [ZASM interpreter](../../lang/assembly/src/interp.rs) or AM Wasm.
 Native lowering selects a distinct frame-aware path before preparation.
 
+Instruction construction reserves a `ProgId` and queues a typed pending instruction.
+Completion pops this queue in LIFO order, applies `ContextUpdate::{Keep, Bind, Clear}`,
+and invokes the instruction's consumer to obtain its successor ID.
+It then publishes the instruction with the original context, before completing any new jobs queued by that consumer.
+Obtaining an entry ID therefore does not imply that its body is published.
+The [lowering regression](../../lang/assembly/src/lower/tests.rs) records allocation slots, publication order,
+definition associations, contexts, branch links, and native entry metadata.
+
 [ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes logical arity from the physically stored fields.
 Tuple tails and projections must respect that distinction; a suffix pointer refers into an existing payload.
 Closure package layout is derived from the shared machine model rather

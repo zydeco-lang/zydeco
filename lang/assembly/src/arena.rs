@@ -23,6 +23,8 @@ impl ArenaSchema<ProgId> for AssemblyScope {
 
 #[derive(Default, AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
+    #[cfg(test)]
+    pub(crate) publication_order: Vec<ProgId>,
     pub(crate) frame_entries: std::collections::BTreeMap<ProgId, crate::frames::Entry>,
     /// All programs are attached with a ProgId.
     pub programs: ArenaSparse<AssemblyScope, ProgId>,
@@ -99,6 +101,8 @@ where
 
 impl AssemblyArena {
     pub(crate) fn insert_program(&mut self, id: ProgId, program: Program, context: Context) {
+        #[cfg(test)]
+        self.publication_order.push(id);
         self.programs.insert_new(id, program.clone());
         self.contexts.insert_new(id, context);
 
@@ -167,19 +171,36 @@ where
 
 pub type Kont<'a, Arena> = Box<dyn for<'b> FnOnce(&'b mut Arena, Context) -> ProgId + 'a>;
 
+/// The context passed to an instruction's successor; publication retains the original context.
+pub enum ContextUpdate {
+    Keep,
+    Bind(VarId),
+    Clear,
+}
+
+impl ContextUpdate {
+    pub fn apply(self, context: &Context) -> Context {
+        match self {
+            | Self::Keep => context.clone(),
+            | Self::Bind(variable) => context.clone() + [variable],
+            | Self::Clear => Context::new(),
+        }
+    }
+}
+
 pub struct CxKont<'a, Arena> {
-    pub incr: Box<dyn FnOnce(&Context) -> Context>,
+    pub update: ContextUpdate,
     pub kont: Kont<'a, Arena>,
 }
 
 impl<'a, Arena> CxKont<'a, Arena> {
-    /// No new binders are created, make [`Self::incr`] to be the identity function.
+    /// Retain the current context.
     pub fn same(kont: Kont<'a, Arena>) -> Self {
-        Self { incr: Box::new(|cx| cx.clone()), kont }
+        Self { update: ContextUpdate::Keep, kont }
     }
     /// Start with a clean slate.
     pub fn clean(kont: Kont<'a, Arena>) -> Self {
-        Self { incr: Box::new(|_: &Context| Context::new()), kont }
+        Self { update: ContextUpdate::Clear, kont }
     }
 }
 
