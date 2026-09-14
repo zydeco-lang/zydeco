@@ -11,7 +11,14 @@ use std::{collections::HashMap, convert::Infallible};
 use zydeco_statics::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_syntax::VarName;
-use zydeco_utils::{arena::ArenaAccess as _, context::Context, pass::CompilerPass};
+use zydeco_utils::{
+    arena::ArenaAccess as _,
+    context::Context,
+    fold::{Driver, Explicit},
+    pass::CompilerPass,
+};
+
+mod pattern;
 
 /// Convert lexical high SPS into first-order SPSLow with fresh construction state.
 pub struct SpsLowConverter<'a> {
@@ -204,60 +211,7 @@ impl<'a> ClosureConversion<'a> {
     }
 
     fn translate_pattern(&mut self, id: high::VPatId) -> PatternTranslation {
-        let site = self.pattern_site(id);
-        let translated = match self.source.inner.vpats[&id].clone() {
-            | high::ValuePattern::Hole(high::Hole) => {
-                PatternTranslation { pattern: low::Hole.build(self, site), bindings: Vec::new() }
-            }
-            | high::ValuePattern::Var(def) => {
-                let translated = self.alloc_like(def);
-                PatternTranslation {
-                    pattern: translated.build(self, site),
-                    bindings: vec![(def, translated)],
-                }
-            }
-            | high::ValuePattern::Ctor(high::Ctor(ctor, body)) => {
-                let PatternTranslation { pattern: body, bindings } = self.translate_pattern(body);
-                PatternTranslation { pattern: low::Ctor(ctor, body).build(self, site), bindings }
-            }
-            | high::ValuePattern::Alias(high::Alias(patterns)) => {
-                let (patterns, bindings): (Vec<_>, Vec<_>) = patterns
-                    .into_iter()
-                    .map(|pattern| {
-                        let PatternTranslation { pattern, bindings } =
-                            self.translate_pattern(pattern);
-                        (pattern, bindings)
-                    })
-                    .unzip();
-                PatternTranslation {
-                    pattern: low::Alias(
-                        low::ConsN::from_vec(patterns).expect("an alias pattern is non-empty"),
-                    )
-                    .build(self, site),
-                    bindings: bindings.into_iter().flatten().collect(),
-                }
-            }
-            | high::ValuePattern::Triv(high::Triv) => {
-                PatternTranslation { pattern: low::Triv.build(self, site), bindings: Vec::new() }
-            }
-            | high::ValuePattern::VCons(high::VCons { items, layout }) => {
-                let (items, bindings): (Vec<_>, Vec<_>) = items
-                    .into_iter()
-                    .map(|item| {
-                        let PatternTranslation { pattern, bindings } = self.translate_pattern(item);
-                        (pattern, bindings)
-                    })
-                    .unzip();
-                PatternTranslation {
-                    pattern: low::VCons::new(items, layout).build(self, site),
-                    bindings: bindings.into_iter().flatten().collect(),
-                }
-            }
-        };
-        if let Some(protocol) = self.source.inner.pattern_protocols.get(&id) {
-            self.arena.inner.pattern_protocols.insert_new(translated.pattern, protocol.clone());
-        }
-        translated
+        Explicit::run(&mut pattern::PatternFolder { conversion: self }, id)
     }
 
     fn translate_value(&mut self, id: high::ValueId, env: RenameEnvId) -> low::ValueId {

@@ -46,7 +46,7 @@ or the phase's acceptance boundary.
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution)
 provides statically selected native and explicit-stack drivers for residual lowering,
-Builtin package materialization, and high SPS normalization, including its pattern reconstruction.
+Builtin package materialization, high SPS normalization, and closure conversion pattern translation.
 Their equivalence and depth checks support using the interface for those boundaries.
 Classifier scope handling remains deferred.
 The next evaluated boundary is surface rebuilding, where shared structural callbacks

@@ -1566,6 +1566,22 @@ it is not a proof that a continuation is dynamically used once.
 Native preparation must establish the stronger lifetime facts in C11.
 Structured Wasm can consume this representation directly because block boundaries and residual stacks are explicit.
 
+### Closure conversion folders
+
+[Pattern translation](../../lang/stackir/src/low/convert/pattern.rs) uses the shared
+[resumable execution interface](#resumable-folder-execution).
+Each completed pattern returns both first-order syntax and its ordered source-to-fresh-binder assignments.
+Constructor frames retain one payload; alias and product cursors accumulate children
+and assignments in structural order.
+Production translation selects `Explicit`, while bounded comparisons exercise `Recursive` with the same folder.
+Origins, product layouts, and pattern protocols follow the reconstructed nodes.
+
+Pattern regressions compare binder order, fresh identities, origins, layouts, and protocols under both drivers,
+including empty field vectors and rejected layouts that cannot publish their parent.
+An 8,192-level alias fixture constructs, translates, and drops on a 512 KiB stack.
+This guarantee covers pattern translation; the remaining conversion methods
+and downstream validation retain their own execution and depth requirements.
+
 ### Word entry contracts
 
 Closure conversion introduces words that have no corresponding source argument:
