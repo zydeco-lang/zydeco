@@ -157,9 +157,11 @@ impl<'lo, 'ir> Lowering<'lo, 'ir> {
     }
 
     fn action(&mut self, action: Action, context: Context, next: ContId) -> Step<Self> {
+        // Syntax rules return their children to the driver. Dispatching one rule
+        // directly avoids an extra Work record without recursive syntax descent.
         match action {
-            | Action::Value(value) => Step::TailCall(Work::Value(value, context, next)),
-            | Action::Pattern(pattern) => Step::TailCall(Work::Pattern(pattern, context, next)),
+            | Action::Value(value) => self.value(value, context, next),
+            | Action::Pattern(pattern) => self.pattern(pattern, context, next),
             | Action::Emit(instruction, update) => self.emit(instruction, context, update, next),
             | Action::Alias { variable, pattern } => {
                 let next = self.then(Action::Pattern(pattern), next);
@@ -179,7 +181,7 @@ impl<'lo, 'ir> Lowering<'lo, 'ir> {
             self.continuations.pop();
         }
         match continuation {
-            | Continuation::Body(body) => Step::TailCall(Work::Compu(body, context)),
+            | Continuation::Body(body) => self.compu(body, context),
             | Continuation::End(end) => {
                 Step::Return(Program::Terminator(end).build(self.lo, context))
             }

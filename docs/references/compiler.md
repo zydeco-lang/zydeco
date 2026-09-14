@@ -1904,6 +1904,10 @@ Obtaining an entry ID therefore does not imply that its body is published.
 One driver run includes initial syntax lowering, root-entry marking, and draining the pending queue.
 Tail transfers use `Step::TailCall`; blocks, native resume entries, branch arms,
 and publication jobs retain explicit return frames only when they need a child's ID.
+Consumers dispatch directly to the selected value, pattern, or computation rule.
+Those syntax rules return their descendants as driver work; they do not invoke consumer application directly.
+This acyclic call boundary avoids a redundant dispatch for the selected rule
+while keeping syntax-depth-dependent execution on the driver.
 
 Sequence cursors preserve the stack machine's ordering: value fields and primitive operands are pushed right to left,
 patterns and alias members are consumed left to right, and a residual stack precedes its argument or tag.
