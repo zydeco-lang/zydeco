@@ -5,7 +5,6 @@ begin
   let String = @(intrinsic(string)) in
   let Int64 = @(intrinsic(i64)) in
   param Addr : VType in
-  param Access : VType in
   param Reader : VType in
   param Writer : VType in
   param OS : CType in
@@ -14,22 +13,22 @@ begin
   let Done = Thk OS in
     (
       @[builtin(io_read)] (
-        #read :: Thk (Reader -> Int64 -> Error -> Success Access -> OS)
+        #read :: Thk (Reader -> Int64 -> Error -> Thk (Addr -> Int64 -> OS) -> OS)
       )
     )
   * (
       @[builtin(io_read_line)] (
-        #read_line :: Thk (Reader -> Error -> Done -> Success Access -> OS)
+        #read_line :: Thk (Reader -> Error -> Done -> Thk (Addr -> Int64 -> OS) -> OS)
       )
     )
   * (
       @[builtin(io_read_all)] (
-        #read_all :: Thk (Reader -> Error -> Success Access -> OS)
+        #read_all :: Thk (Reader -> Error -> Thk (Addr -> Int64 -> OS) -> OS)
       )
     )
   * (
       @[builtin(io_write_all)] (
-        #write_all :: Thk (Writer -> Access -> Addr -> Int64 -> Error -> Done -> OS)
+        #write_all :: Thk (Writer -> Addr -> Int64 -> Error -> Done -> OS)
       )
     )
   * (

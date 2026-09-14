@@ -1,98 +1,43 @@
 @[package(test(of(std)))]
 begin
-  param (
-    /VType;
-    /CType;
-    /Thk;
-    /Ret;
-    /Unit;
-    /OS;
-    /UInt8;
-    /UInt32;
-    /Int64;
-    /numeric;
-    /process;
-    builtin
-  ) : @(import(std/builtin)) that
-  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
-
-  let make_memory = @(import(std/memory)) in
-  let (= Layout, = Representation, memory) = (builtin |> make_memory) byte_package in
-  let int = numeric/int64 in
-  let fail = { ! process/exit 1 } in
-  let ! ensure (actual : Int64) (expected : Int64) (next : Thk OS) : OS =
-    ! int/eq OS actual expected next fail
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /UInt32; /Addr; /OS;
+    /numeric; /process; builtin) : @(import(std/builtin)) that
+  let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
+    builtin |> (@(import(std/memory)))
   in
-  let ! check_padding (next : Thk OS) : OS =
-    ! memory/realize Unit OS (memory/padding 3) fail {
-      fn (= Stored, repr) =>
-        ! repr/store OS () fail {
-          fn stored =>
-            do actual <- ! repr/bytes stored;
-            do expected <- ! bytes/from_string "\0\0\0";
-            ! bytes/eq OS actual expected {
-              ! memory/realize Unit OS memory/unit fail {
-                fn (= Stored, repr) =>
-                  ! ensure repr/size 0 {
-                    ! repr/store OS () fail {
-                      fn stored =>
-                        do empty <- ! repr/bytes stored;
-                        do size <- ! bytes/length empty;
-                        ! ensure size 0 next
-                    }
+  let (= Plan, = Layout, layout) = fixed in
+  let (/Alloc; /heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+
+  let (#Layout = DynLayout, = Representation, layouts) = dynamic in
+  let ! run (alignment : Int64) : OS =
+    ! layouts/realize (UInt8 * UInt32) OS
+      (
+        layouts/align (UInt8 * UInt32) alignment (
+          layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32
+        )
+      )
+      fail {
+      fn (= L, repr) =>
+        ! numeric/int64/eq OS repr/alignment alignment {
+          ! repr/allocate OS heap no {
+            fn pointer =>
+              ! repr/unsafe/init OS pointer (7 : UInt8, 42 : UInt32) {
+                fn value =>
+                  ! repr/unsafe/take OS value {
+                    fn vacant (tag, payload) =>
+                      ! numeric/uint8/eq OS tag 7 {
+                        ! numeric/uint32/eq OS payload 42 {
+                          ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+                        } fail
+                      } fail
                   }
               }
-            } fail
-        }
+          }
+        } fail
     }
   in
-  let record = memory/align (UInt8 * UInt32) 16
-    (
-      memory/product UInt8 UInt32 memory/uint8 memory/uint32
-    ) in
-  ! memory/realize (UInt8 * UInt32) OS record fail {
-    fn (= Stored, repr) =>
-      ! ensure repr/size 16 {
-        ! ensure repr/alignment 16 {
-          ! repr/store OS (7 : UInt8, 16909060 : UInt32) fail {
-            fn stored =>
-              do buffer <- ! repr/bytes stored;
-              ! repr/load OS stored fail {
-                fn (tag, payload) =>
-                  ! numeric/uint8/eq OS tag 7 {
-                    ! numeric/uint32/eq OS payload 16909060 {
-                      ! repr/from_bytes OS buffer fail {
-                        fn copied =>
-                          do copy <- ! repr/bytes copied;
-                          ! bytes/eq OS buffer copy {
-                            do expected <- ! bytes/from_string
-                              "\u{7}\0\0\0\u{4}\u{3}\u{2}\u{1}\0\0\0\0\0\0\0\0";
-                            ! bytes/eq OS buffer expected {
-                              do bad_gap <- ! bytes/from_string
-                                "\u{7}X\0\0\u{4}\u{3}\u{2}\u{1}\0\0\0\0\0\0\0\0";
-                              do bad_tail <- ! bytes/from_string
-                                "\u{7}\0\0\0\u{4}\u{3}\u{2}\u{1}\0\0\0\0\0\0\0X";
-                              do long <- ! bytes/append buffer buffer;
-                              ! bytes/slice OS buffer 0 15 fail {
-                                fn short =>
-                                  ! repr/from_bytes OS short {
-                                    ! repr/from_bytes OS long {
-                                      ! repr/from_bytes OS bad_gap {
-                                        ! repr/from_bytes OS bad_tail {
-                                          ! check_padding { ! process/exit 0 }
-                                        } { fn _ => ! fail }
-                                      } { fn _ => ! fail }
-                                    } { fn _ => ! fail }
-                                  } { fn _ => ! fail }
-                              }
-                            } fail
-                          } fail
-                      }
-                    } fail
-                  } fail
-              }
-          }
-        }
-      }
-  }
+  ! run 64
 end

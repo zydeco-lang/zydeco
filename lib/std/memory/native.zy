@@ -1,140 +1,42 @@
--- Bind source cells and views to the checked host allocation provider.
+-- Raw operations: callers establish lifetime, initialization, bounds, and allocator ownership.
 begin
-  param val (/VType; /CType; /Thk; /OS; /Unit; /Int64; /UInt8; /String;
-    /Addr; /Access; /Buffer; /numeric; /memory; builtin) : @(import("../builtin.zy")) that
-  let primitive = memory in
-  let make_views = builtin |> (@(import("views.zy"))) in
-  let (/Fault; /Memory; views) = make_views Addr Access in
-  let Permissions =
-    data
-    | +Read : Unit
-    | +Write : Unit
-    | +ReadWrite : Unit
-    end
-  in
+  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /UInt8; /memory; /numeric; builtin) :
+  @(import("../builtin.zy")) that
+  let Fault = @(import("fault.zy")) in
   let error : Thk (forall (R : CType) . Thk (Fault -> R) -> Int64 -> R) = {
-    fn R no code =>
+    fn (R : CType) (no : Thk (Fault -> R)) (code : Int64) =>
       match code
-      | 0 => ! no +Closed()
-      | 1 => ! no +Bounds()
-      | 2 => ! no +Permission()
-      | 3 => ! no +Overflow()
-      | 4 => ! no +Alignment()
-      | 5 => ! no +Uninitialized()
-      | 6 => ! no +InvalidValue()
-      | 8 => ! no +AllocationFailed()
-      | _ => ! no +Unavailable()
-      end
-  } in
-  let memory : Thk (forall (R : CType) . Memory R) = {
-    fn R =>
-      comatch
-      | .check access address size alignment no yes =>
-        ! primitive/check R access address size alignment { ! error R no } yes
-      | .offset access address displacement no yes =>
-        ! primitive/offset R access address displacement { ! error R no } yes
-      | .load_i64 access address no yes =>
-        ! primitive/check R access address 8 8 { ! error R no } {
-          ! numeric/int64/load_le R access address { ! error R no } yes
-        }
-      | .load_u8 access address no yes =>
-        ! numeric/uint8/load_le R access address { ! error R no } yes
-      | .load_addr access address no yes =>
-        ! primitive/load_addr R access address { ! error R no } yes
+      | 0 => ! no +InvalidLayout()
+      | 1 => ! no +AllocationFailed()
+      | _ => ! no +InvalidEncoding()
       end
   } in
   let allocate : Thk (
-    forall (R : CType) . Int64 -> Int64 -> Thk (Fault -> R) -> Thk (Buffer -> R) -> R
+    forall (R : CType) . Int64 -> Int64 -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
   ) = {
-    fn R size alignment no yes => ! primitive/allocate R size alignment { ! error R no } yes
+    fn (R : CType) size alignment (no : Thk (Fault -> R)) yes =>
+      ! memory/allocate R size alignment { ! error R no } yes
   } in
-  let freeze : Thk (forall (R : CType) . Buffer -> Thk (Fault -> R) -> Thk (Access -> R) -> R) = {
-    fn R owner no yes => ! primitive/freeze R owner { ! error R no } yes
+  let free : Thk (forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R) = {
+    fn (R : CType) address size alignment (no : Thk (Fault -> R)) done =>
+      ! memory/free R address size alignment { ! error R no } done
   } in
-  let close : Thk (forall (R : CType) . Buffer -> Thk (Fault -> R) -> Thk R -> R) = {
-    fn R owner no yes => ! primitive/close R owner { ! error R no } yes
-  } in
-  let immutable_length : Thk (
-    forall (R : CType) . Access -> Thk (Fault -> R) -> Thk (Int64 -> R) -> R
-  ) = {
-    fn R access no yes => ! primitive/immutable_length R access { ! error R no } yes
-  } in
-  let from_string : Thk (
-    forall (R : CType) . String -> Thk (Fault -> R) -> Thk (Access -> R) -> R
-  ) = {
-    fn R string no yes => ! primitive/from_string R string { ! error R no } yes
-  } in
-  let to_string : Thk (
-    forall (R : CType) . Access -> Addr -> Int64 -> Thk (Fault -> R) -> Thk (String -> R) -> R
-  ) = {
-    fn R access address length no yes =>
-      ! primitive/to_string R access address length { ! error R no } yes
-  } in
-  let check_write : Thk (
-    forall (R : CType) . Access -> Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R
-  ) = {
-    fn R access address count alignment no yes =>
-      ! primitive/check_write R access address count alignment { ! error R no } yes
-  } in
-  let grant : Thk (
-    forall (R : CType) .
-         Buffer -> Int64 -> Int64 -> Permissions
-      -> Thk (Fault -> R) -> Thk (Access -> R) -> R
-  ) = {
-    fn R owner offset length permission no yes =>
-      let give : Thk (Int64 -> R) = {
-        fn code =>
-          ! primitive/grant R owner offset length code { ! error R no } yes
-      } in
-      match permission
-      | +Read() => ! give 1
-      | +Write() => ! give 2
-      | +ReadWrite() => ! give 3
-      end
-  } in
-  let base : Thk (forall (R : CType) . Access -> Thk (Fault -> R) -> Thk (Addr -> R) -> R) = {
-    fn R access no yes => ! primitive/base R access { ! error R no } yes
-  } in
-  let revoke : Thk (forall (R : CType) . Access -> Thk (Fault -> R) -> Thk R -> R) = {
-    fn R access no yes => ! primitive/revoke R access { ! error R no } yes
-  } in
-  let store_i64 : Thk (
-    forall (R : CType) . Access -> Addr -> Int64 -> Thk (Fault -> R) -> Thk R -> R
-  ) = {
-    fn R access address value no yes =>
-      ! primitive/check_write R access address 8 8 { ! error R no } {
-        ! numeric/int64/store_le R access address value { ! error R no } yes
-      }
-  } in
-  let store_u8 : Thk (
-    forall (R : CType) . Access -> Addr -> UInt8 -> Thk (Fault -> R) -> Thk R -> R
-  ) = {
-    fn R access address value no yes =>
-      ! numeric/uint8/store_le R access address value { ! error R no } yes
-  } in
-  let store_addr : Thk (
-    forall (R : CType) . Access -> Addr -> Addr -> Thk (Fault -> R) -> Thk R -> R
-  ) = {
-    fn R access address value no yes =>
-      ! primitive/store_addr R access address value { ! error R no } yes
-  } in
-  pack (= Permissions as Permissions : VType)
+  let retain : Thk (forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R) =
+    {
+      fn (R : CType) address size alignment (no : Thk (Fault -> R)) done =>
+        ! memory/retain R address size alignment { ! error R no } done
+    }
+  in
+  pack (= Fault as Fault : VType)
   where
-    = views,
-    = memory,
-    = allocate,
-    = freeze,
-    = close,
-    = immutable_length,
-    = from_string,
-    = to_string,
-    = check_write,
-    = grant,
-    = base,
-    = revoke,
-    = store_i64,
-    = store_u8,
-    = store_addr,
-    #address_cell = views/address 8 8
+    (
+      = allocate,
+      #unsafe = (
+        #null = memory/null, #offset = memory/offset, = free, = retain,
+        #copy = memory/copy, #fill = memory/fill,
+        #load_addr = memory/load_addr, #store_addr = memory/store_addr,
+        #load_u8 = numeric/uint8/load_le, #store_u8 = numeric/uint8/store_le,
+        #load_i64 = numeric/int64/load_le, #store_i64 = numeric/int64/store_le)
+    )
   end
 end

@@ -1,272 +1,143 @@
-//! Native binding for the shared checked address and grant model.
-
+//! Native raw memory. The source unsafe contract supplies validity and lifetime.
 use super::*;
-use zydeco_machine::memory::{AccessHandle, AddressHandle, MemoryError, Permission};
+use zydeco_machine::memory::{Address, MemoryError, MemoryLayout};
 
 pub(super) struct MemoryBranch;
-
 impl MemoryBranch {
-    fn buffer(value: Word) -> BufferHandle {
-        BufferHandle::with_raw(HostHandle::decode(value))
+    pub(super) fn address(word: Word) -> Address {
+        Address::from_exposed(word)
     }
-    pub(super) fn finish(
-        result: Result<Option<Word>, MemoryError>, error: Word, success: Word,
-    ) -> Word {
+    fn finish(result: Result<Option<Word>, MemoryError>, error: Word, success: Word) -> Word {
         match result {
-            | Ok(None) => HostControl::without_arguments(success),
             | Ok(Some(value)) => HostControl::with_one_argument(success, value),
+            | Ok(None) => HostControl::without_arguments(success),
             | Err(code) => {
                 HostControl::with_one_argument(error, Immediate::expect_signed(code as i64))
             }
         }
     }
-
-    pub(super) fn address(value: Word) -> AddressHandle {
-        AddressHandle::with_raw(HostHandle::decode(value))
-    }
-
-    pub(super) fn access(value: Word) -> AccessHandle {
-        AccessHandle::with_raw(HostHandle::decode(value))
-    }
 }
-
+#[unsafe(export_name = "\x01zydeco_memory_null")]
+extern "sysv64" fn null() -> Word {
+    0
+}
+#[unsafe(export_name = "\x01zydeco_memory_offset")]
+extern "sysv64" fn offset(address: Word, displacement: Word) -> Word {
+    MemoryBranch::address(address).offset(<i64 as RuntimeInteger>::decode(displacement)).expose()
+}
 #[unsafe(export_name = "\x01zydeco_memory_allocate")]
 extern "sysv64" fn allocate(size: Word, alignment: Word, error: Word, success: Word) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .allocate_uninitialized(
-                <i64 as RuntimeInteger>::decode(size),
-                <i64 as RuntimeInteger>::decode(alignment),
-            )
-            .map_err(MemoryError::from)
-            .map(|handle| Some(HostHandle::encode(handle.raw())))
-    });
+    let result = MemoryLayout::for_request(
+        <i64 as RuntimeInteger>::decode(size),
+        <i64 as RuntimeInteger>::decode(alignment),
+    )
+    .and_then(MemoryLayout::allocate)
+    .map(|address| Some(address.expose()));
     MemoryBranch::finish(result, error, success)
 }
-
-#[unsafe(export_name = "\x01zydeco_memory_close")]
-extern "sysv64" fn close(owner: Word, error: Word, success: Word) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .close(MemoryBranch::buffer(owner))
-            .map_err(MemoryError::from)
-            .map(|()| None)
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_freeze")]
-extern "sysv64" fn freeze(owner: Word, error: Word, success: Word) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .freeze_memory(MemoryBranch::buffer(owner))
-            .map(|access| Some(HostHandle::encode(access.raw())))
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_immutable_length")]
-extern "sysv64" fn immutable_length(
-    access: Word, error: Word, success: Word, spare: *mut Word,
+#[unsafe(export_name = "\x01zydeco_memory_free")]
+extern "sysv64" fn free(
+    address: Word, size: Word, alignment: Word, error: Word, success: Word,
 ) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow()
-            .immutable_length(MemoryBranch::access(access))
-            .map(|length| Some(length.encode(spare)))
+    let result = MemoryLayout::for_request(
+        <i64 as RuntimeInteger>::decode(size),
+        <i64 as RuntimeInteger>::decode(alignment),
+    )
+    .map(|layout| {
+        unsafe { layout.deallocate(MemoryBranch::address(address)) };
+        None
     });
     MemoryBranch::finish(result, error, success)
 }
-
-#[unsafe(export_name = "\x01zydeco_memory_check_write")]
-extern "sysv64" fn check_write(
-    access: Word, address: Word, size: Word, alignment: Word, error: Word, success: Word,
+#[unsafe(export_name = "\x01zydeco_memory_retain")]
+extern "sysv64" fn retain(
+    address: Word, size: Word, alignment: Word, error: Word, success: Word,
 ) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow()
-            .check_write(
-                MemoryBranch::access(access),
-                MemoryBranch::address(address),
-                <i64 as RuntimeInteger>::decode(size),
-                <i64 as RuntimeInteger>::decode(alignment),
-            )
-            .map(|()| None)
-    });
+    let result = MemoryLayout::for_request(
+        <i64 as RuntimeInteger>::decode(size),
+        <i64 as RuntimeInteger>::decode(alignment),
+    )
+    .and_then(|layout| {
+        RuntimeInstance::with_memory(|memory| unsafe {
+            memory.borrow_mut().retain(MemoryBranch::address(address), layout)
+        })
+    })
+    .map(|()| None);
     MemoryBranch::finish(result, error, success)
 }
-
+#[unsafe(export_name = "\x01zydeco_memory_copy")]
+extern "sysv64" fn copy(source: Word, destination: Word, count: Word, success: Word) -> Word {
+    let count = <i64 as RuntimeInteger>::decode(count) as usize;
+    if count != 0 {
+        unsafe {
+            std::ptr::copy(
+                MemoryBranch::address(source).pointer(),
+                MemoryBranch::address(destination).pointer(),
+                count,
+            )
+        };
+    }
+    HostControl::without_arguments(success)
+}
+#[unsafe(export_name = "\x01zydeco_memory_fill")]
+extern "sysv64" fn fill(address: Word, count: Word, value: Word, success: Word) -> Word {
+    let count = <i64 as RuntimeInteger>::decode(count) as usize;
+    if count != 0 {
+        unsafe {
+            MemoryBranch::address(address)
+                .pointer()
+                .write_bytes(<u8 as RuntimeInteger>::decode(value), count)
+        };
+    }
+    HostControl::without_arguments(success)
+}
+#[unsafe(export_name = "\x01zydeco_memory_load_addr")]
+extern "sysv64" fn load_addr(address: Word, success: Word) -> Word {
+    let value = unsafe { MemoryBranch::address(address).load_address() };
+    HostControl::with_one_argument(success, value.expose())
+}
+#[unsafe(export_name = "\x01zydeco_memory_store_addr")]
+extern "sysv64" fn store_addr(address: Word, value: Word, success: Word) -> Word {
+    unsafe { MemoryBranch::address(address).store_address(MemoryBranch::address(value)) };
+    HostControl::without_arguments(success)
+}
 #[unsafe(export_name = "\x01zydeco_memory_from_string")]
 extern "sysv64" fn from_string(string: Word, error: Word, success: Word) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .import_memory(unsafe { HostString::borrow(string) }.as_bytes())
-            .map(|access| Some(HostHandle::encode(access.raw())))
-    });
-    MemoryBranch::finish(result, error, success)
+    let bytes = unsafe { HostString::borrow(string) }.as_bytes();
+    match RuntimeInstance::with_memory(|memory| memory.borrow_mut().import(bytes)) {
+        | Ok(address) => HostControl::with_two_arguments(
+            success,
+            address.expose(),
+            Immediate::expect_signed(bytes.len() as i64),
+        ),
+        | Err(fault) => MemoryBranch::finish(Err(fault), error, success),
+    }
 }
-
 #[unsafe(export_name = "\x01zydeco_memory_to_string")]
-extern "sysv64" fn to_string(
-    access: Word, address: Word, size: Word, error: Word, success: Word,
-) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        let arena = arena.borrow();
-        let bytes = arena.read_memory(
-            MemoryBranch::access(access),
-            MemoryBranch::address(address),
-            <i64 as RuntimeInteger>::decode(size),
-        )?;
-        let string = std::str::from_utf8(bytes).map_err(|_| MemoryError::InvalidValue)?;
-        Ok(Some(HostString::own(string.to_owned())))
-    });
+extern "sysv64" fn to_string(address: Word, count: Word, error: Word, success: Word) -> Word {
+    let bytes = unsafe {
+        MemoryBranch::address(address).bytes(<i64 as RuntimeInteger>::decode(count) as usize)
+    };
+    let result = std::str::from_utf8(bytes)
+        .map(|s| Some(HostString::own(s.to_owned())))
+        .map_err(|_| MemoryError::InvalidEncoding);
     MemoryBranch::finish(result, error, success)
 }
-
-#[unsafe(export_name = "\x01zydeco_memory_grant")]
-extern "sysv64" fn grant(
-    buffer: Word, offset: Word, length: Word, permission: Word, error: Word, success: Word,
-) -> Word {
-    let result =
-        Permission::try_from(<i64 as RuntimeInteger>::decode(permission)).and_then(|permission| {
-            RuntimeInstance::with_buffers(|arena| {
-                arena
-                    .borrow_mut()
-                    .grant(
-                        MemoryBranch::buffer(buffer),
-                        <i64 as RuntimeInteger>::decode(offset),
-                        <i64 as RuntimeInteger>::decode(length),
-                        permission,
-                    )
-                    .map(|handle| Some(HostHandle::encode(handle.raw())))
-            })
-        });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_revoke")]
-extern "sysv64" fn revoke(access: Word, error: Word, success: Word) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena.borrow_mut().revoke(MemoryBranch::access(access)).map(|()| None)
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_base")]
-extern "sysv64" fn base(access: Word, error: Word, success: Word) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .base_address(MemoryBranch::access(access))
-            .map(|handle| Some(HostHandle::encode(handle.raw())))
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_offset")]
-extern "sysv64" fn offset(
-    access: Word, address: Word, offset: Word, error: Word, success: Word,
-) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .offset_address(
-                MemoryBranch::access(access),
-                MemoryBranch::address(address),
-                <i64 as RuntimeInteger>::decode(offset),
-            )
-            .map(|handle| Some(HostHandle::encode(handle.raw())))
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_check")]
-extern "sysv64" fn check(
-    access: Word, address: Word, size: Word, alignment: Word, error: Word, success: Word,
-) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow()
-            .check_access(
-                MemoryBranch::access(access),
-                MemoryBranch::address(address),
-                <i64 as RuntimeInteger>::decode(size),
-                <i64 as RuntimeInteger>::decode(alignment),
-            )
-            .map(|()| None)
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_load_addr")]
-extern "sysv64" fn load_addr(access: Word, address: Word, error: Word, success: Word) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .load_address(MemoryBranch::access(access), MemoryBranch::address(address))
-            .map(|handle| Some(HostHandle::encode(handle.raw())))
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-#[unsafe(export_name = "\x01zydeco_memory_store_addr")]
-extern "sysv64" fn store_addr(
-    access: Word, address: Word, value: Word, error: Word, success: Word,
-) -> Word {
-    let result = RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow_mut()
-            .store_address(
-                MemoryBranch::access(access),
-                MemoryBranch::address(address),
-                MemoryBranch::address(value),
-            )
-            .map(|()| None)
-    });
-    MemoryBranch::finish(result, error, success)
-}
-
-// Scalar representation leaves preserve every payload bit, including floating
-// NaN payloads. Product composition, padding, and field alignment are library code.
 macro_rules! scalar_memory {
     ($type:ty, $store:ident => $store_symbol:literal, $load:ident => $load_symbol:literal,
      $decode:expr, $encode:expr) => {
         #[unsafe(export_name = $store_symbol)]
-        extern "sysv64" fn $store(
-            access: Word, address: Word, value: Word, error: Word, success: Word,
-        ) -> Word {
+        extern "sysv64" fn $store(address: Word, value: Word, success: Word) -> Word {
             let value: $type = ($decode)(value);
-            let result = RuntimeInstance::with_buffers(|arena| {
-                arena
-                    .borrow_mut()
-                    .write_memory(
-                        MemoryBranch::access(access),
-                        MemoryBranch::address(address),
-                        &value.to_le_bytes(),
-                    )
-                    .map(|()| None)
-            });
-            MemoryBranch::finish(result, error, success)
+            unsafe { MemoryBranch::address(address).write(&value.to_le_bytes()) };
+            HostControl::without_arguments(success)
         }
         #[unsafe(export_name = $load_symbol)]
-        extern "sysv64" fn $load(
-            access: Word, address: Word, error: Word, success: Word, spare: *mut Word,
-        ) -> Word {
-            let result = RuntimeInstance::with_buffers(|arena| {
-                let arena = arena.borrow();
-                let bytes = arena.read_memory(
-                    MemoryBranch::access(access),
-                    MemoryBranch::address(address),
-                    core::mem::size_of::<$type>() as i64,
-                )?;
-                let value = <$type>::from_le_bytes(bytes.try_into().expect("checked scalar width"));
-                Ok(Some(($encode)(value, spare)))
-            });
-            MemoryBranch::finish(result, error, success)
+        extern "sysv64" fn $load(address: Word, success: Word, spare: *mut Word) -> Word {
+            let bytes =
+                unsafe { MemoryBranch::address(address).bytes(core::mem::size_of::<$type>()) };
+            let value = <$type>::from_le_bytes(bytes.try_into().expect("scalar width"));
+            HostControl::with_one_argument(success, ($encode)(value, spare))
         }
     };
 }

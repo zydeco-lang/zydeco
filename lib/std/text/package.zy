@@ -1,9 +1,9 @@
 @[package(library, name(std/text))]
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit;
-    /Char; /String; /UInt8; /Int64; /Addr; /Access;
+    /Char; /String; /UInt8; /Int64; /Addr;
     /numeric; /char; /string; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("bytes.type.zy"))) Addr Access in
+  param val (/Bytes; /bytes) : (@(import("bytes.type.zy"))) Addr in
   param val (/Bool; /Option; /List; /bool; /option; /list) : @(import("../data/package.type.zy")) in
   let int64 = numeric/int64 in
   let ! compare (A : VType)

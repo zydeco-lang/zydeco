@@ -1,7 +1,7 @@
 begin
-  param val (/Thk; /Ret; /UInt64; /Int64; /Addr; /Access; builtin) : @(import("../std/builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("../std/text/bytes.type.zy"))) Addr Access in
-  let Window = Access * Addr * Int64 in
+  param val (/Thk; /Ret; /UInt64; /Int64; /Addr; builtin) : @(import("../std/builtin.zy")) that
+  param val (/Bytes; /bytes) : (@(import("../std/text/bytes.type.zy"))) Addr in
+  let Window = Addr in
   let hash64 : Thk (Window -> Int64 -> UInt64 -> Ret UInt64) =
     @(ffi(c, library("xxhash"), symbol("XXH64")))
   in
@@ -18,14 +18,14 @@ begin
   (
     #xxh64 = {
       fn (value : Bytes) (seed : UInt64) =>
-        ! bytes/with_window (Ret UInt64) value fail {
-          fn access address length => ! hash64 (access, address, length) length seed
+        ! bytes/unsafe/with_window (Ret UInt64) value fail {
+          fn address length => ! hash64 address length seed
         }
     },
     #xxh3_64bits = {
       fn (value : Bytes) =>
-        ! bytes/with_window (Ret UInt64) value fail {
-          fn access address length => ! hash3 (access, address, length) length
+        ! bytes/unsafe/with_window (Ret UInt64) value fail {
+          fn address length => ! hash3 address length
         }
     }
   )

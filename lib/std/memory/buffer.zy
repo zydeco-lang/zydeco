@@ -1,107 +1,72 @@
--- Mutable byte-buffer convenience operations compose the general memory provider.
+-- A manually managed byte builder. Copies of its handle do not track later state changes.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /OS; /Int64; /UInt8;
-    /Addr; /Access; /Buffer; /numeric; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr Access that
-  let (/Fault; /memory; native) = builtin |> (@(import("native.zy"))) in
+  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /UInt8; /numeric; builtin) : @(import(
+    "../builtin.zy"
+  )) that
+  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr in
+  let (/Fault; /unsafe; native) = builtin |> (@(import("native.zy"))) in
+  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let Buffer = Addr * Int64 * Int64 in
   let int = numeric/int64 in
-  let error : Thk (Thk (Int64 -> OS) -> Fault -> OS) = {
-    fn no fault =>
-      match fault
-      | +Closed() => ! no 1
-      | +Bounds() => ! no 2
-      | +Uninitialized() => ! no 4
-      | +InvalidValue() => ! no 0
-      | +Alignment() => ! no 0
-      | _ => ! no 3
-      end
+  let allocate : Thk (
+    forall (R : CType) . Alloc -> Int64 -> Thk (Fault -> R) -> Thk (Buffer -> R) -> R
+  ) = {
+    fn R allocator capacity no yes =>
+      ! allocator/allocate R capacity 1 no { fn p => ! yes (p, capacity, 0) }
   } in
-  let allocate : Thk (Int64 -> Int64 -> Thk (Int64 -> OS) -> Thk (Buffer -> OS) -> OS) = {
-    fn count alignment no yes =>
-      ! native/allocate OS count alignment { ! error no } {
-        fn owner =>
-          let fail = {
-            fn fault => ! native/close OS owner { fn _ => ! error no fault } { ! error no fault }
-          } in
-          ! native/grant OS owner 0 count +Write() fail {
-            fn access =>
-              ! native/base OS access fail {
-                fn address =>
-                  let fix zero (index : Int64) : OS =
-                    ! int/eq OS index count {
-                      ! native/revoke OS access fail { ! yes owner }
-                    } {
-                      ! memory OS .offset access address index fail {
-                        fn target =>
-                          ! native/store_u8 OS access target (0 : UInt8) fail {
-                            do next <- ! int/add index 1;
-                            ! zero next
-                          }
-                      }
-                    }
-                  in
-                  ! zero 0
-              }
-          }
-      }
+  let length : Thk (Buffer -> Ret Int64) = { fn (_, _, length) => ret length } in
+  let capacity : Thk (Buffer -> Ret Int64) = { fn (_, capacity, _) => ret capacity } in
+  let push : Thk (
+    forall (R : CType) . Buffer -> UInt8 -> Thk (Fault -> R) -> Thk (Buffer -> R) -> R
+  ) = {
+    fn R (p, capacity, length) value no yes =>
+      ! int/lt R length capacity {
+        do target <- ! unsafe/offset p length;
+        ! unsafe/store_u8 R target value {
+          do next <- ! int/add length 1;
+          ! yes (p, capacity, next)
+        }
+      } { ! no +Bounds() }
   } in
-  let write : Thk (Buffer -> Int64 -> Bytes -> Thk (Int64 -> OS) -> Thk OS -> OS) = {
-    fn owner offset source no yes =>
+  let extend : Thk (
+    forall (R : CType) . Buffer -> Bytes -> Thk (Fault -> R) -> Thk (Buffer -> R) -> R
+  ) = {
+    fn R (p, capacity, length) source no yes =>
       do count <- ! bytes/length source;
-      ! native/grant OS owner offset count +Write() { ! error no } {
-        fn access =>
-          let fail = {
-            fn fault => ! native/revoke OS access { fn _ => ! error no fault } { ! error no fault }
-          } in
-          ! native/base OS access fail {
-            fn address =>
-              ! bytes/copy_to OS source access address fail {
-                ! native/revoke OS access { ! error no } yes
-              }
-          }
+      do remaining <- ! int/sub capacity length;
+      ! int/gt R count remaining { ! no +Bounds() } {
+        do target <- ! unsafe/offset p length;
+        ! bytes/unsafe/copy_to R source target {
+          do next <- ! int/add length count;
+          ! yes (p, capacity, next)
+        }
       }
   } in
-  let read : Thk (Buffer -> Int64 -> Int64 -> Thk (Int64 -> OS) -> Thk (Bytes -> OS) -> OS) = {
-    fn owner offset count no yes =>
-      ! native/grant OS owner offset count +Read() { ! error no } {
-        fn access =>
-          let fail = {
-            fn fault => ! native/revoke OS access { fn _ => ! error no fault } { ! error no fault }
-          } in
-          ! native/base OS access fail {
-            fn source =>
-              ! bytes/build OS count 1 {
-                fn destination base no done =>
-                  let fix copy (index : Int64) : OS =
-                    ! int/eq OS index count done {
-                      ! memory OS .offset access source index no {
-                        fn address =>
-                          ! memory OS .load_u8 access address no {
-                            fn octet =>
-                              ! memory OS .offset destination base index no {
-                                fn target =>
-                                  ! native/store_u8 OS destination target octet no {
-                                    do next <- ! int/add index 1;
-                                    ! copy next
-                                  }
-                              }
-                          }
-                      }
-                    }
-                  in
-                  ! copy 0
-              } fail { fn result => ! native/revoke OS access { ! error no } { ! yes result } }
-          }
-      }
+  let snapshot : Thk (forall (R : CType) . Buffer -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R) = {
+    fn R (p, _, length) no yes =>
+      ! bytes/unsafe/build R length 1 { fn target _ done => ! unsafe/copy R p target length done }
+        no yes
   } in
-  let freeze : Thk (Buffer -> Thk (Int64 -> OS) -> Thk (Bytes -> OS) -> OS) = {
-    fn owner no yes =>
-      ! native/freeze OS owner { ! error no } {
-        fn access => ! bytes/from_immutable OS access { ! error no } yes
-      }
+  let close : Thk (forall (R : CType) . Alloc -> Buffer -> Thk (Fault -> R) -> Thk R -> R) = {
+    fn R allocator (p, capacity, _) no done => ! allocator/free R p capacity 1 no done
   } in
-  let close : Thk (Buffer -> Thk (Int64 -> OS) -> Thk OS -> OS) = {
-    fn owner no yes => ! native/close OS owner { ! error no } yes
-  } in
-  (= allocate, = write, = read, = freeze, = close)
+  -- This transfer requires allocation by the builtin heap. The initialized prefix
+  -- becomes visible; uninitialized spare capacity remains unreadable through Bytes.
+  let finish_heap : Thk (forall (R : CType) . Buffer -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R) =
+    {
+      fn R (p, capacity, length) no yes =>
+        ! unsafe/retain R p capacity 1 no {
+          ! bytes/unsafe/from_retained R p length no yes
+        }
+    }
+  in
+  pack (= Buffer : VType) is Buffer
+  where
+    (
+      = allocate,
+      = length,
+      = capacity,
+      #unsafe = (= push, = extend, = snapshot, = close, = finish_heap)
+    )
+  end
 end

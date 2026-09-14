@@ -1,0 +1,21 @@
+-- State parameters and layout witnesses erase; a pointer has exactly Addr's representation.
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Unit = @(intrinsic(unit)) in
+  param val Addr : VType in
+  let Package = @(import("types.type.zy")) in
+  let Uninit =
+    data
+    | +Uninit : Unit
+    end
+  in
+  let Init =
+    data
+    | +Init : Unit
+    end
+  in
+  let Ptr (L : VType) (S : VType) = Addr in
+  let val address (L : VType) (S : VType) (pointer : Ptr L S) : Addr = pointer in
+  let val from_address (L : VType) (S : VType) (address : Addr) : Ptr L S = address in
+  ((= Uninit, = Init, = Ptr, #unsafe = (= address, = from_address)) : Package Addr)
+end

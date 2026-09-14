@@ -1,0 +1,42 @@
+-- A slice carries only a typed pointer and a runtime element count.
+-- The caller guarantees allocation extent, element stride, state, and alias validity.
+begin
+  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /numeric; /memory; builtin) : @(import(
+    "../builtin.zy"
+  )) that
+  param val (/Uninit; /Init; /Ptr; /unsafe) : (@(import("types.type.zy"))) Addr in
+  let Fault = @(import("fault.zy")) in
+  let int = numeric/int64 in
+  let Slice (L : VType) (S : VType) = Ptr L S * Int64 in
+  let val length (L : VType) (S : VType) ((_, count) : Slice L S) : Int64 = count in
+  let from_parts : Thk (
+    forall (L : VType) (S : VType) (R : CType) .
+      Ptr L S -> Int64 -> Thk (Fault -> R) -> Thk (Slice L S -> R) -> R
+  ) = {
+    fn L S R pointer count no yes =>
+      ! int/lt R count 0 { ! no +Bounds() } { ! yes (pointer, count) }
+  } in
+  let at : Thk (
+    forall (L : VType) (S : VType) (R : CType) .
+      Int64 -> Slice L S -> Int64 -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
+  ) = {
+    fn L S R stride (pointer, count) index no yes =>
+      ! int/lt R stride 0 { ! no +InvalidLayout() } {
+        ! int/lt R index 0 { ! no +Bounds() } {
+          ! int/lt R index count {
+            ! int/eq R stride 0 { ! yes pointer } {
+              do maximum <- ! int/div 9223372036854775807 stride;
+              ! int/gt R index maximum { ! no +Overflow() } {
+                do offset <- ! int/mul index stride;
+                do address <- ! memory/offset (unsafe/address L S pointer) offset;
+                ! yes (unsafe/from_address L S address)
+              }
+            }
+          } { ! no +Bounds() }
+        }
+      }
+  } in
+  pack (= Slice : VType -> VType -> VType) is Slice
+  where
+    (= length, #unsafe = (= from_parts, = at)) end
+end

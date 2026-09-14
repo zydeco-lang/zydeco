@@ -6,10 +6,9 @@ use zydeco_statics::{Alloc, ForeignClassifier, ForeignClassifierError, TyEnv, Ty
 #[derive(Clone, Copy)]
 enum Parameter {
     Scalar(PrimitiveType),
-    Window,
-    UntrustedWindow,
-    SwappedWindow,
-    UnsignedLength,
+    Address,
+    UntrustedAddress,
+    AddressPair,
 }
 
 impl Parameter {
@@ -18,23 +17,16 @@ impl Parameter {
         if let Self::Scalar(primitive) = self {
             return Alloc::alloc(tycker, PrimitiveTy(primitive), vtype, &environment);
         }
-        let fields = [BuiltinTypeRole::Access, BuiltinTypeRole::Addr].map(|role| {
-            let witness: AbstId = Alloc::alloc(tycker, None::<DefId>, vtype, &());
-            if !matches!(self, Self::UntrustedWindow) {
-                tycker.statics.builtin_roles.attach_type(witness, role).unwrap();
-            }
-            Alloc::alloc(tycker, witness, vtype, &environment)
-        });
-        let [access, address] =
-            if matches!(self, Self::SwappedWindow) { [fields[1], fields[0]] } else { fields };
-        let length = if matches!(self, Self::UnsignedLength) {
-            IntegerType::UInt64
+        let witness: AbstId = Alloc::alloc(tycker, None::<DefId>, vtype, &());
+        if !matches!(self, Self::UntrustedAddress) {
+            tycker.statics.builtin_roles.attach_type(witness, BuiltinTypeRole::Addr).unwrap();
+        }
+        let address = Alloc::alloc(tycker, witness, vtype, &environment);
+        if matches!(self, Self::AddressPair) {
+            Alloc::alloc(tycker, Prod(vec![address, address]), vtype, &environment)
         } else {
-            IntegerType::Int64
-        };
-        let length =
-            Alloc::alloc(tycker, PrimitiveTy(PrimitiveType::Integer(length)), vtype, &environment);
-        Alloc::alloc(tycker, Prod(vec![access, address, length]), vtype, &environment)
+            address
+        }
     }
 }
 
@@ -71,7 +63,7 @@ impl ForeignFixture {
 const U64: PrimitiveType = PrimitiveType::Integer(IntegerType::UInt64);
 const F32: PrimitiveType = PrimitiveType::Float(FloatType::Float32);
 const U: Parameter = Parameter::Scalar(U64);
-const W: Parameter = Parameter::Window;
+const W: Parameter = Parameter::Address;
 
 #[test]
 fn derives_signatures_compositionally_in_source_order() {
@@ -86,7 +78,7 @@ fn derives_signatures_compositionally_in_source_order() {
             let expected = parameters
                 .iter()
                 .map(|parameter| match parameter {
-                    | Parameter::Window => ForeignParameter::BorrowedMemory,
+                    | Parameter::Address => ForeignParameter::Address,
                     | Parameter::Scalar(U64) => ForeignParameter::Integer(IntegerType::UInt64),
                     | _ => unreachable!(),
                 })
@@ -98,11 +90,11 @@ fn derives_signatures_compositionally_in_source_order() {
 }
 
 #[test]
-fn a_window_supplies_one_pointer_and_length_remains_an_explicit_argument() {
+fn an_address_supplies_one_pointer_and_length_remains_an_explicit_argument() {
     let signature = ForeignSignature::new(
         vec![
             ForeignParameter::Integer(IntegerType::UInt64),
-            ForeignParameter::BorrowedMemory,
+            ForeignParameter::Address,
             ForeignParameter::Integer(IntegerType::UInt64),
         ],
         ForeignResult::Integer(IntegerType::UInt64),
@@ -125,14 +117,11 @@ fn a_window_supplies_one_pointer_and_length_remains_an_explicit_argument() {
 }
 
 #[test]
-fn rejects_unsupported_parameters_results_and_forged_window_shapes() {
+fn rejects_unsupported_parameters_results_and_forged_address_shapes() {
     TestFixture::run(|tycker| {
-        for parameter in [
-            Parameter::Scalar(F32),
-            Parameter::UntrustedWindow,
-            Parameter::SwappedWindow,
-            Parameter::UnsignedLength,
-        ] {
+        for parameter in
+            [Parameter::Scalar(F32), Parameter::UntrustedAddress, Parameter::AddressPair]
+        {
             let classifier = ForeignFixture::classifier(tycker, &[W, parameter], U64);
             assert!(matches!(
                 ForeignClassifier::new(&tycker.statics)
@@ -149,7 +138,7 @@ fn rejects_unsupported_parameters_results_and_forged_window_shapes() {
 }
 
 #[test]
-fn the_register_limit_counts_each_window_once() {
+fn the_register_limit_counts_each_address_once() {
     TestFixture::run(|tycker| {
         let valid = ForeignFixture::classifier(tycker, &[W; 6], U64);
         assert!(

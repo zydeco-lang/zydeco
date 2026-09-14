@@ -3,9 +3,12 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let Int64 = @(intrinsic(i64)) in
-  param Buffer : VType in
-  param OS : CType in
-  codata
-  | .allocate : Int64 -> Int64 -> Thk (Int64 -> OS) -> Thk (Buffer -> OS) -> OS
-  end
+  let Fault = @(import("fault.zy")) in
+  param Addr : VType in
+    (
+      #allocate :: Thk (
+        forall (R : CType) . Int64 -> Int64 -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
+      )
+    )
+  * (#free :: Thk (forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R))
 end

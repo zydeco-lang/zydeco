@@ -1,61 +1,39 @@
 begin
-  param (
-    /Int64;
-    /Access;
-    /Addr;
-    /VType;
-    /CType;
-    /Thk;
-    /Ret;
-    /OS;
-    /UInt8;
-    /UInt32;
-    /UInt64;
-    /numeric;
-    /process;
-    builtin
-  ) : @(import("../../std/builtin.zy")) that
-  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
-
-  let make_memory = @(import("../../std/memory/static-layout.zy")) in
-  let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
-  let inspect_raw = (
-    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_record"))) : Thk (
-      Access * Addr * Int64 -> Int64 -> Ret UInt64
-    )
+  param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt64; /Int64;
+    /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
+  let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
+    @(import("../../std/memory/package.zy"))
   ) in
-  let inspect : Thk (Bytes -> Ret UInt64) = {
-    fn value =>
-      ! bytes/with_window (Ret UInt64) value
-        {
-          fn _ =>
-            @[partial]
-            let 0 = 1 in
-            ret (0 : UInt64)
-        }
-        { fn access address length => ! inspect_raw (access, address, length) length }
-  } in
+  let (= Plan, = Layout, layouts) = fixed in
+  let (/Alloc; /heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
-  let layout = memory/align (UInt8 * UInt32) 64
-    (
-      memory/product UInt8 UInt32 memory/uint8 memory/uint32
-    ) in
-  match layout
+  let no = { fn (_ : Fault) => ! fail } in
+  let inspect : Thk (Addr -> Int64 -> Ret UInt64) =
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_record")))
+  in
+  match layouts/align (UInt8 * UInt32) 64 (
+    layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32
+  )
   | +Err(_) => ! fail
   | +Ok(plan) =>
-    let (= Stored, repr) = memory/realize (UInt8 * UInt32) plan in
-    ! repr/store OS (7 : UInt8, 16909060 : UInt32) fail {
-      fn value =>
-        do buffer <- ! repr/bytes value;
-        do valid <- ! inspect buffer;
-        ! numeric/uint64/eq OS valid 1 {
-          ! repr/from_bytes OS buffer fail {
-            fn imported =>
-              do buffer <- ! repr/bytes imported;
-              do valid <- ! inspect buffer;
-              ! numeric/uint64/eq OS valid 1 { ! process/exit 0 } fail
+    let (= L, repr) = layouts/realize (UInt8 * UInt32) plan in
+    ! repr/allocate OS heap no {
+      fn vacant =>
+        let address = pointer/unsafe/address L Uninit vacant in
+        -- This C function inspects all bytes, including padding; initialize them explicitly.
+        ! raw/unsafe/fill OS address repr/size 0 {
+          ! repr/unsafe/init OS vacant (7 : UInt8, 16909060 : UInt32) {
+            fn value =>
+              do result <- ! inspect (pointer/unsafe/address L Init value) repr/size;
+              ! numeric/uint64/eq OS result 1 {
+                ! repr/unsafe/take OS value {
+                  fn vacant _ =>
+                    ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+                }
+              } fail
           }
-        } fail
+        }
     }
   end
 end

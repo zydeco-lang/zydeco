@@ -1,26 +1,24 @@
 begin
-  param val (/Addr; /Access; /VType; /CType; /Thk; /Ret; /Unit;
+  param val (/Addr; /VType; /CType; /Thk; /Ret; /Unit;
     /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;
-    /Float32; /Float64; /numeric; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes; byte_package) : (@(import("../text/bytes.type.zy"))) Addr Access that
-  let codecs = (builtin |> (@(import("../numeric/codecs.zy")))) byte_package in
+    /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) that
+  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr that
   let Result = @(import("../data/result.zy")) in
   let Error = @(import("layout-error.zy")) in
   let Shape = @(import("shape.zy")) in
-  let Descriptor = (@(import("descriptor.type.zy"))) Bytes in
-  let Representation = (@(import("representation.type.zy"))) Bytes in
+  let Descriptor = (@(import("descriptor.type.zy"))) Addr in
+  let Representation = (@(import("representation.type.zy"))) Addr Uninit Init Ptr in
   let size = @(import("size.zy")) in
-  let sub = @(intrinsic(i64_sub)) in
   let make_codec = @(import("codec.zy")) in
-  let codec = (builtin |> make_codec) byte_package in
+  let codec = (builtin |> make_codec) types in
   let Plan (A : VType) = (#shape :: Shape) * (#codec :: Descriptor A) in
   let Layout (A : VType) = Result (Plan A) Error in
   let val scalar (A : VType) (count : Int64)
-    (write : Thk (A -> Ret Bytes))
-    (read : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R))
+    (write : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
+    (read : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
   : Layout A =
       +Ok(#shape = (#size = count, #alignment = count, #form = +Scalar(#width = count)),
-        #codec = codec/scalar A count write read)
+        #codec = codec/scalar A count count write read)
   in
   let val padding (count : Int64) : Layout Unit =
     size/bind Int64 (Plan Unit) (size/size count) (
@@ -43,13 +41,11 @@ begin
                       let alignment = size/maximum left/shape/alignment right/shape/alignment in
                       size/bind Int64 (Plan (A * B)) (size/round_up field_end alignment) (
                         val count =>
-                          let gap = sub offset left/shape/size in
-                          let tail = sub count field_end in
                           +Ok(
                             #shape = (#size = count, = alignment,
                               #form = +Product(= offset, #left = left/shape, #right = right/shape)),
                             #codec = codec/product A B left/codec right/codec offset count alignment
-                              gap tail
+
                           )
                       )
                   )
@@ -65,32 +61,35 @@ begin
             let alignment = size/maximum boundary layout/shape/alignment in
             size/bind Int64 (Plan A) (size/round_up layout/shape/size alignment) (
               val count =>
-                let tail = sub count layout/shape/size in
                 +Ok(#shape = (#size = count, = alignment, #form = layout/shape/form),
-                  #codec = codec/align A layout/codec count alignment tail)
+                  #codec = codec/align A layout/codec count alignment)
             )
         )
     )
   in
   let val inspect (A : VType) (plan : Plan A) : Shape = plan/shape in
   let val realize (A : VType) (plan : Plan A) : Representation A =
-    codec/realize A plan/codec
+    let known_size = (@(intrinsic(i64_add))) plan/codec/size 0 in
+    let known_alignment = (@(intrinsic(i64_add))) plan/codec/alignment 0 in
+    codec/realize A (#size = known_size, #alignment = known_alignment,
+      #write = plan/codec/write, #read = plan/codec/read)
   in
   (
     (
       = Plan,
       = Layout,
       (#unit = padding 0, = padding, = product, = align, = inspect, = realize,
-        #int8 = scalar Int8 1 codecs/int8/to_le_bytes codecs/int8/from_le_bytes,
-        #int16 = scalar Int16 2 codecs/int16/to_le_bytes codecs/int16/from_le_bytes,
-        #int32 = scalar Int32 4 codecs/int32/to_le_bytes codecs/int32/from_le_bytes,
-        #int64 = scalar Int64 8 codecs/int64/to_le_bytes codecs/int64/from_le_bytes,
-        #uint8 = scalar UInt8 1 codecs/uint8/to_le_bytes codecs/uint8/from_le_bytes,
-        #uint16 = scalar UInt16 2 codecs/uint16/to_le_bytes codecs/uint16/from_le_bytes,
-        #uint32 = scalar UInt32 4 codecs/uint32/to_le_bytes codecs/uint32/from_le_bytes,
-        #uint64 = scalar UInt64 8 codecs/uint64/to_le_bytes codecs/uint64/from_le_bytes,
-        #float32 = scalar Float32 4 codecs/float32/to_le_bytes codecs/float32/from_le_bytes,
-        #float64 = scalar Float64 8 codecs/float64/to_le_bytes codecs/float64/from_le_bytes)
-    ) : (@(import("static-layout.type.zy"))) Bytes
+        #int8 = scalar Int8 1 numeric/int8/store_le numeric/int8/load_le,
+        #int16 = scalar Int16 2 numeric/int16/store_le numeric/int16/load_le,
+        #int32 = scalar Int32 4 numeric/int32/store_le numeric/int32/load_le,
+        #int64 = scalar Int64 8 numeric/int64/store_le numeric/int64/load_le,
+        #uint8 = scalar UInt8 1 numeric/uint8/store_le numeric/uint8/load_le,
+        #uint16 = scalar UInt16 2 numeric/uint16/store_le numeric/uint16/load_le,
+        #uint32 = scalar UInt32 4 numeric/uint32/store_le numeric/uint32/load_le,
+        #uint64 = scalar UInt64 8 numeric/uint64/store_le numeric/uint64/load_le,
+        #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le,
+        #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le,
+        #addr = scalar Addr 8 memory/store_addr memory/load_addr)
+    ) : (@(import("layout.type.zy"))) Addr Uninit Init Ptr
   )
 end

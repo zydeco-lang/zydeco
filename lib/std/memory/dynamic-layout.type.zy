@@ -1,11 +1,14 @@
 begin
   let VType = @(intrinsic(vtype)) in
-  param Bytes : VType in
+  param Addr : VType in
+  param Uninit : VType in
+  param Init : VType in
+  param Ptr : VType -> VType -> VType in
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let Unit = @(intrinsic(unit)) in
   let Int64 = @(intrinsic(i64)) in
-  let Representation = (@(import("representation.type.zy"))) Bytes in
+  let Representation = (@(import("representation.type.zy"))) Addr Uninit Init Ptr in
   exists (= Layout : VType -> VType)
     (= Representation as Representation : VType -> VType)
   .
@@ -31,4 +34,5 @@ begin
     * (#uint64 :: Layout (@(intrinsic(u64))))
     * (#float32 :: Layout (@(intrinsic(f32))))
     * (#float64 :: Layout (@(intrinsic(f64))))
+    * (#addr :: Layout Addr)
 end

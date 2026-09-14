@@ -1,105 +1,67 @@
--- Primitive memory capabilities. The library supplies cells, views, and typed faults.
+-- Raw operations require caller-established validity, initialization, and lifetime.
 begin
   let VType = @(intrinsic(vtype)) in
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
   let Int64 = @(intrinsic(i64)) in
   let UInt8 = @(intrinsic(u8)) in
   let String = @(intrinsic(string)) in
   param Addr : VType in
-  param Access : VType in
-  param Buffer : VType in
-    (
+    (@[builtin(memory_null)] (#null :: Thk (Ret Addr)))
+  * (@[builtin(memory_offset)] (#offset :: Thk (Addr -> Int64 -> Ret Addr)))
+  * (
       @[builtin(memory_allocate)] (
         #allocate :: Thk (
-          forall (R : CType) . Int64 -> Int64 -> Thk (Int64 -> R) -> Thk (Buffer -> R) -> R
-        )
+          forall (R : CType) . Int64 -> Int64 -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R)
       )
     )
   * (
-      @[builtin(memory_grant)] (
-        #grant :: Thk (
-          forall (R : CType) .
-            Buffer -> Int64 -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk (Access -> R) -> R
-        )
+      @[builtin(memory_free)] (
+        #free :: Thk (
+          forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk R -> R)
       )
     )
   * (
-      @[builtin(memory_revoke)] (
-        #revoke :: Thk (forall (R : CType) . Access -> Thk (Int64 -> R) -> Thk R -> R)
+      @[builtin(memory_retain)] (
+        #retain :: Thk (
+          forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk R -> R)
       )
     )
   * (
-      @[builtin(memory_base)] (
-        #base :: Thk (forall (R : CType) . Access -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R)
+      @[builtin(memory_copy)] (
+        #copy :: Thk (
+          forall (R : CType) . Addr -> Addr -> Int64 -> Thk R -> R)
       )
     )
   * (
-      @[builtin(memory_offset)] (
-        #offset :: Thk (
-          forall (R : CType) . Access -> Addr -> Int64 -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R
-        )
+      @[builtin(memory_fill)] (
+        #fill :: Thk (
+          forall (R : CType) . Addr -> Int64 -> UInt8 -> Thk R -> R)
       )
     )
-  * (
-      @[builtin(memory_check)] (
-        #check :: Thk (
-          forall (R : CType) . Access -> Addr -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk R -> R
-        )
-      )
-    )
-
   * (
       @[builtin(memory_load_addr)] (
         #load_addr :: Thk (
-          forall (R : CType) . Access -> Addr -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R
-        )
+          forall (R : CType) . Addr -> Thk (Addr -> R) -> R)
       )
     )
-
   * (
       @[builtin(memory_store_addr)] (
         #store_addr :: Thk (
-          forall (R : CType) . Access -> Addr -> Addr -> Thk (Int64 -> R) -> Thk R -> R
-        )
-      )
-    )
-  * (
-      @[builtin(memory_close)] (
-        #close :: Thk (forall (R : CType) . Buffer -> Thk (Int64 -> R) -> Thk R -> R)
-      )
-    )
-  * (
-      @[builtin(memory_freeze)] (
-        #freeze :: Thk (forall (R : CType) . Buffer -> Thk (Int64 -> R) -> Thk (Access -> R) -> R)
-      )
-    )
-  * (
-      @[builtin(memory_immutable_length)] (
-        #immutable_length :: Thk (
-          forall (R : CType) . Access -> Thk (Int64 -> R) -> Thk (Int64 -> R) -> R
-        )
-      )
-    )
-  * (
-      @[builtin(memory_check_write)] (
-        #check_write :: Thk (
-          forall (R : CType) . Access -> Addr -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk R -> R
-        )
+          forall (R : CType) . Addr -> Addr -> Thk R -> R)
       )
     )
   * (
       @[builtin(memory_from_string)] (
         #from_string :: Thk (
-          forall (R : CType) . String -> Thk (Int64 -> R) -> Thk (Access -> R) -> R
-        )
+          forall (R : CType) . String -> Thk (Int64 -> R) -> Thk (Addr -> Int64 -> R) -> R)
       )
     )
   * (
       @[builtin(memory_to_string)] (
         #to_string :: Thk (
-          forall (R : CType) . Access -> Addr -> Int64 -> Thk (Int64 -> R) -> Thk (String -> R) -> R
-        )
+          forall (R : CType) . Addr -> Int64 -> Thk (Int64 -> R) -> Thk (String -> R) -> R)
       )
     )
 end

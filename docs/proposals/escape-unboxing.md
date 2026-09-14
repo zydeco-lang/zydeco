@@ -52,6 +52,7 @@ reproduce it before selecting a policy:
 | `std/storage-access.zy` | 85 | 85 | 85 | 85 | 85 | 85 |
 
 These are historical code counts, not runtime allocation or speed measurements.
+The `std/storage-access.zy` row refers to the retired checked-memory fixture, not the current manual-memory API.
 The first fixture loses one two-word closure cell in its recursive walker;
 the maximum-one-field policy declines that expansion.
 It retains a runtime-derived wide integer and a second captured scalar across repeated traversal,
@@ -344,8 +345,8 @@ Reuse must also preserve the surviving graph's support obligations.
 A later checked FIP profile could verify credit balance, allocation-free calls, result transport, and bounded stack use.
 This would be a compiler resource contract, with no new kind family selected here.
 `Ret A` alone establishes none of those cost or ownership properties.
-Payload reuse must be distinguished from allocating grant records, boxes, closure environments, or call frames;
-a source callback's allocations also count toward any whole-call guarantee.
+Payload reuse must be distinguished from allocating retention records, boxes, closure environments,
+or call frames; a source callback's allocations also count toward any whole-call guarantee.
 
 The [local CPS experiment](#local-cps-continuations-proposed) separates callback costs from payload construction.
 Its completion can still capture the destination or other live values; include those retained roots

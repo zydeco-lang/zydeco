@@ -1,0 +1,10 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  param Addr : VType in
+  exists (= Uninit : VType) (= Init : VType) (= Ptr : VType -> VType -> VType) .
+    (
+      #unsafe ::
+        (#address :: val pi (L : VType) (S : VType) (pointer : Ptr L S) . Addr)
+      * (#from_address :: val pi (L : VType) (S : VType) (address : Addr) . Ptr L S)
+    )
+end

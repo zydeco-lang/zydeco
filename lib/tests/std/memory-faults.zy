@@ -1,143 +1,69 @@
 @[package(test(of(std)))]
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /OS; /Addr; /Access; /Buffer;
-  /numeric; /process; builtin) : @(import(std/builtin)) in
-let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
-let buffer = (builtin |> (@(import("../../std/memory/buffer.zy")))) byte_package in
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /UInt32; /Addr; /OS;
+    /numeric; /process; builtin) : @(import(std/builtin)) that
+  let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
+    builtin |> (@(import(std/memory)))
+  in
+  let (= Plan, = Layout, layout) = fixed in
+  let (/Alloc; /heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
 
-let (/Fault; /views; /memory; /address_cell; native) =
-  builtin |> (@(import("../../std/memory/native.zy")))
-in
-let pointer = address_cell in
-let exit = process/exit in
-let fail = { ! exit 1 } in
-let no = { fn (_ : Fault) => ! fail } in
-let buffer_no = { fn (_ : Int64) => ! fail } in
-let fault_code : Thk (Fault -> Ret Int64) = {
-  fn fault =>
-    match fault
-    | +Closed() => ret 0
-    | +Bounds() => ret 1
-    | +Permission() => ret 2
-    | +Overflow() => ret 3
-    | +Alignment() => ret 4
-    | +Uninitialized() => ret 5
-    | +InvalidValue() => ret 6
-    | +Unavailable() => ret 7
-    | +AllocationFailed() => ret 8
-    end
-} in
-let Result = @(import("../../std/data/result.zy")) in
-let Checked (A : VType) = Ret (Result A Fault) in
-let require : Thk (
-  forall (A : VType) .
-    Thk (Thk (Fault -> Checked A) -> Thk (A -> Checked A) -> Checked A) -> Ret A
-) = {
-  fn A operation =>
-    @[partial]
-    do +Ok(value) <- ! operation { fn fault => ret +Err(fault) } { fn value => ret +Ok(value) };
-    ret value
-} in
-let expect : Thk (
-  Int64 -> Thk (Thk (Fault -> Ret Int64) -> Thk (Ret Int64) -> Ret Int64) -> Ret Unit
-) = {
-  fn expected operation =>
-    do actual <- ! operation fault_code { ret -1 };
-    do difference <- ! numeric/int64/sub actual expected;
-    @[partial]
-    let 0 = difference in
-    ret ()
-} in
-! native/allocate OS 16 64 no {
-  fn owner =>
-    do access <- ! require Access {
-      fn error yes =>
-        ! native/grant (Checked Access) owner 0 16 +ReadWrite() error yes
-    };
-    do read_only <- ! require Access {
-      fn error yes =>
-        ! native/grant (Checked Access) owner 0 16 +Read() error yes
-    };
-    do write_only <- ! require Access {
-      fn error yes =>
-        ! native/grant (Checked Access) owner 0 16 +Write() error yes
-    };
-    do base <- ! require Addr { fn error yes => ! native/base (Checked Addr) access error yes };
-    do misaligned <- ! require Addr {
-      fn error yes => ! memory (Checked Addr) .offset access base 1 error yes
-    };
-    do slot <- ! require Addr {
-      fn error yes => ! memory (Checked Addr) .offset access base 8 error yes
-    };
-    do one_past <- ! require Addr {
-      fn error yes => ! memory (Checked Addr) .offset access base 16 error yes
-    };
-    do () <- ! expect 5 {
-      fn error done => ! memory (Ret Int64) .load_i64 access base error { fn _ => ! done }
-    };
-    do () <- ! expect 4 {
-      fn error done => ! native/store_i64 (Ret Int64) access misaligned 1 error done
-    };
-    do () <- ! expect 5 {
-      fn error done => ! memory (Ret Int64) .load_u8 access misaligned error { fn _ => ! done }
-    };
-    do () <- ! expect 2 {
-      fn error done => ! native/store_i64 (Ret Int64) read_only base 1 error done
-    };
-    do () <- ! expect 2 {
-      fn error done => ! memory (Ret Int64) .load_i64 write_only base error { fn _ => ! done }
-    };
-    do () <- ! expect 1 {
-      fn error done => ! memory (Ret Int64) .load_u8 access one_past error { fn _ => ! done }
-    };
-    do () <- ! expect 3 {
-      fn error done =>
-        ! memory (Ret Int64) .offset access base -9223372036854775808 error { fn _ => ! done }
-    };
-    do () <- ! require Unit {
-      fn error yes =>
-        ! native/store_i64 (Checked Unit) access base -9223372036854775808 error { ! yes () }
-    };
-    ! buffer/freeze owner {
-      fn code =>
-        @[partial]
-        let 4 = code in
-        do () <- ! require Unit {
-          fn error yes => ! native/store_i64 (Checked Unit) access slot 0 error { ! yes () }
-        };
-        do () <- ! expect 6 {
-          fn error done => ! memory (Ret Int64) .load_addr access slot error { fn _ => ! done }
-        };
-        do () <- ! require Unit {
-          fn error yes => ! native/store_addr (Checked Unit) access slot base error { ! yes () }
-        };
-        do () <- ! expect 1 {
-          fn error done => ! native/store_i64 (Ret Int64) access one_past 7 error done
-        };
-        do target <- ! require Addr {
-          fn error yes => ! memory (Checked Addr) .load_addr access slot error yes
-        };
-        do value <- ! require Int64 {
-          fn error yes => ! memory (Checked Int64) .load_i64 access target error yes
-        };
-        @[partial]
-        let -9223372036854775808 = value in
-        do octet <- ! bytes/singleton (0 : UInt8);
-        ! buffer/write owner 9 octet buffer_no {
-          do () <- ! expect 6 {
-            fn error done => ! memory (Ret Int64) .load_addr access slot error { fn _ => ! done }
-          };
-          do () <- ! require Unit {
-            fn error yes => ! native/revoke (Checked Unit) access error { ! yes () }
-          };
-          do () <- ! expect 0 {
-            fn error done => ! memory (Ret Int64) .load_i64 access base error { fn _ => ! done }
-          };
-          ! buffer/close owner buffer_no {
-            do () <- ! expect 0 {
-              fn error done => ! native/base (Ret Int64) read_only error { fn _ => ! done }
-            };
-            ! exit 0
+  let ! invalid (count : Int64) (alignment : Int64) (next : Thk OS) : OS =
+    ! raw/allocate OS count alignment {
+      fn fault =>
+        match fault
+        | +InvalidLayout() => ! next
+        | _ => ! fail
+        end
+    } { fn _ => ! fail }
+  in
+  let ! copy_test (next : Thk OS) : OS =
+    ! raw/allocate OS 4 1 no {
+      fn base =>
+        ! numeric/uint32/store_le OS base 67305985 {
+          do second <- ! raw/unsafe/offset base 1;
+          ! raw/unsafe/copy OS base second 3 {
+            ! numeric/uint32/load_le OS base {
+              fn right =>
+                ! numeric/uint32/eq OS right 50462977 {
+                  ! raw/unsafe/copy OS second base 3 {
+                    ! numeric/uint32/load_le OS base {
+                      fn left =>
+                        ! numeric/uint32/eq OS left 50528769 {
+                          do empty <- ! raw/unsafe/null;
+                          ! raw/unsafe/copy OS empty empty 0 {
+                            ! raw/unsafe/fill OS empty 0 0 {
+                              ! raw/unsafe/free OS base 4 1 no next
+                            }
+                          }
+                        } fail
+                    }
+                  }
+                } fail
+            }
           }
         }
-    } { fn _ => ! fail }
-}
+    }
+  in
+  let small = allocation/limited 4 heap in
+  ! invalid -1 8 {
+    ! invalid 4 0 {
+      ! invalid 4 3 {
+        ! small/allocate OS 5 8 {
+          fn fault =>
+            match fault
+            | +AllocationFailed() =>
+              ! raw/allocate OS 0 64 no {
+                fn pointer =>
+                  ! raw/unsafe/free OS pointer 0 64 no { ! copy_test { ! process/exit 0 } }
+              }
+            | _ => ! fail
+            end
+        } { fn _ => ! fail }
+      }
+    }
+  }
+end

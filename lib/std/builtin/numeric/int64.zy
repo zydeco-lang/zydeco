@@ -6,7 +6,6 @@ begin
   let String = @(intrinsic(string)) in
   let Int64 = @(intrinsic(i64)) in
   param Addr : VType in
-  param Access : VType in
   let Binary (A : VType) = Thk (A -> A -> Ret A) in
   let Branch (A : VType) = Thk (
     forall (R : CType) . A -> A -> Thk R -> Thk R -> R
@@ -24,14 +23,14 @@ begin
   * (
       @[builtin(int64_store_le)] (
         #store_le :: Thk (
-          forall (R : CType) . Access -> Addr -> Int64 -> Thk (Int64 -> R) -> Thk R -> R
+          forall (R : CType) . Addr -> Int64 -> Thk R -> R
         )
       )
     )
   * (
       @[builtin(int64_load_le)] (
         #load_le :: Thk (
-          forall (R : CType) . Access -> Addr -> Thk (Int64 -> R) -> Thk (Int64 -> R) -> R
+          forall (R : CType) . Addr -> Thk (Int64 -> R) -> R
         )
       )
     )

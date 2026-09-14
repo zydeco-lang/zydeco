@@ -1,9 +1,9 @@
 @[package(library, name(std/system))]
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit;
-    /Int64; /String; /Addr; /Access; /Reader; /Writer; /OS;
+    /Int64; /String; /Addr; /Reader; /Writer; /OS;
     /io; /fs; /stdio; /args; /random; /process; /int64; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr Access in
+  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr in
   param val (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) : @(import(
     "../data/package.type.zy"
   )) in
@@ -171,8 +171,8 @@ begin
         count
         { fn code message => ! continue_host_error Bytes continuation code message }
         {
-          fn access =>
-            ! bytes/from_immutable OS access
+          fn address length =>
+            ! bytes/unsafe/from_retained OS address length
               { fn _ => ! continue_host_error Bytes continuation 4 "invalid immutable I/O storage" }
               { fn chunk => ! continue_io_ok Bytes continuation chunk }
         }
@@ -190,8 +190,8 @@ begin
           ! continue_io_ok (Option Bytes) continuation absent
         }
         {
-          fn access =>
-            ! bytes/from_immutable OS access
+          fn address length =>
+            ! bytes/unsafe/from_retained OS address length
               {
                 fn _ =>
                   ! continue_host_error (Option Bytes) continuation 4
@@ -210,8 +210,8 @@ begin
         reader
         { fn code message => ! continue_host_error Bytes continuation code message }
         {
-          fn access =>
-            ! bytes/from_immutable OS access
+          fn address length =>
+            ! bytes/unsafe/from_retained OS address length
               { fn _ => ! continue_host_error Bytes continuation 4 "invalid immutable I/O storage" }
               { fn chunk => ! continue_io_ok Bytes continuation chunk }
         }
@@ -219,11 +219,11 @@ begin
     let ! io_write_all (writer : Writer)
       (chunk : Bytes)
       (continuation : Thk (Result Unit IoError -> OS))
-    : OS = ! bytes/with_window OS chunk
+    : OS = ! bytes/unsafe/with_window OS chunk
         { fn _ => ! continue_host_error Unit continuation 4 "invalid byte storage" }
         {
-          fn access address count =>
-            ! io/write_all writer access address count
+          fn address count =>
+            ! io/write_all writer address count
               { fn code message => ! continue_host_error Unit continuation code message }
               { ! continue_io_ok Unit continuation () }
         }

@@ -17,24 +17,26 @@ value's observations; [memory extensions](bytes.md#alternatives-and-decision-cri
 
 Use the [CPS destination construction](bytes.md#cps-destination-construction) sequence for the proposed builder.
 Each successful push advances to a completion continuation; it does not produce an immutable snapshot.
-The construction's explicit finish should freeze and close its mutable owner before delivering bytes to the consumer.
+The construction's explicit finish should transfer its allocation to retention before delivering bytes to the consumer.
 An optional snapshot operation would have a distinct name and preserve its contents across later writes.
-Choose the owner representation, public operation names, and integration with `Writer` during implementation;
-the existing stream capability does not yet support this builder.
+The implemented byte builder provides the fixed-capacity core; choose growth policy
+and integration with `Writer` during the extension.
+The existing stream capability does not yet support this builder.
 
 A memory-only builder can use a caller-chosen answer protocol when its allocator and memory provider support it.
-Adapters using the current stream and allocation services retain their `OS` protocol.
+Adapters using the current stream services retain their `OS` protocol; the manual allocator is answer-polymorphic.
 Growth must reserve capacity and validate sizes before changing the builder's observable state.
 Completion is reached only after the new chunk is committed; failure preserves earlier committed chunks.
 Finish, failure, and explicit close must settle owner state before handing control to external successors.
 Abandoning a completion thunk does not run cleanup, as specified
-by the [current capability boundary](../references/language.md#choosing-an-allocator-on-the-computation-stack).
+by the [current capability boundary](../references/language.md#allocation-and-release).
 
 The builder must not expose a mutable alias to storage already borrowed as immutable bytes by foreign code.
-Compare copying snapshots with a consuming freeze using workloads that construct many small chunks.
-The implemented [fixed-capacity Buffer](../references/language.md#mutable-destination-capabilities)
-uses copying snapshots and closing freeze with checked alias invalidation.
-Pair successful pushes and finish with failed growth, repeated finish, and writes through closed aliases.
+Compare copying snapshots with explicit ownership transfer using workloads that construct many small chunks.
+The implemented [fixed-capacity Buffer](../references/language.md#byte-builders) uses copying snapshots
+and explicit retention; callers retire stale or published handles.
+Pair successful growth with failed reservations that preserve the initialized prefix.
+A stronger checked-handle wrapper would be a separate policy with its own runtime cost.
 Measure growth copies, published snapshots, and continuation allocations separately.
 
 ## Incremental stream processing

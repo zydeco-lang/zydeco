@@ -5,7 +5,7 @@ Their source obligations belong to [L14](../references/language.md#14-foreign-in
 and their validated call plan and target adapters to [C14](../references/compiler.md#foreign-calls).
 The [xxHash binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow.
 The implemented [storage and transport boundary](../references/language.md#storage-and-foreign-transport)
-also owns readable windows and canonical foreign decoding.
+also owns raw pointer obligations and foreign field decoding.
 This proposal contains the next foreign boundaries.
 
 Review extensions here through the
@@ -22,27 +22,27 @@ Executing a C caller is evidence about the specimen, not evidence that Zydeco ca
 
 | Example | Current result | Missing capability or next decision |
 | --- | --- | --- |
-| A checksum taking `const void *`, `size_t`, and `uint64_t` | `Thk ((Access * Addr * Int64) -> Int64 -> UInt64 -> Ret UInt64)` supplies a pointer, length, and seed. The source xxHash wrapper accepts `Bytes`. | No new mechanism is needed for an immutable, synchronous borrow. |
-| An inspector taking a `sample_record`, by pointer or by value | A source storage contract constructs the record, and a checked window supplies exactly one pointer. A logical product is rejected for the by-value form. | Pointer transport is implemented. Passing an aggregate by value still needs target ABI classification. |
-| A writer taking `void *`, capacity, and scalar fields | `Buffer` is rejected as a foreign parameter. A C caller can receive valid fields with nonzero padding. | A checked mutable call borrow, followed by the implemented source field decoder and canonical storage. |
+| A checksum taking `const void *`, `size_t`, and `uint64_t` | `Thk (Addr -> Int64 -> UInt64 -> Ret UInt64)` supplies a pointer, length, and seed. The source xxHash wrapper accepts `Bytes`. | No new mechanism is needed for an immutable, synchronous borrow. |
+| An inspector taking a `sample_record`, by pointer or by value | A typed layout constructs the record, and explicit address exposure supplies one pointer. A logical product is rejected for the by-value form. | Pointer transport is implemented. Passing an aggregate by value still needs target ABI classification. |
+| A writer taking `void *`, capacity, and scalar fields | A raw `Addr` supplies a manually managed writable destination. A CPS binding interprets C status before asserting initialized fields. | Pointer transport is implemented; each binding supplies its extent, alias, and partial-write contract. |
 | A visitor taking an array, a function pointer, and `void *context` | A capturing `Thk (Int64 -> Ret Int64)` is rejected as a foreign parameter. The C visitor invokes a context-bearing callback repeatedly. | A rooted callback environment and a runtime entry that returns to each C invocation. |
-| A Zydeco service passing an abstract stored record to another module | The [stored-call example](../../lib/tests/std/represented-call/main.zy) shares a carrier and selects a service at runtime; compiled libraries currently export scalars. | Transporting that retained carrier across artifacts needs an ownership-bearing ABI beyond fresh scalar entry. |
+| A Zydeco service passing an abstract stored record to another module | The [stored-call example](../../lib/tests/std/represented-call/main.zy) shares typed pointer operations; compiled libraries currently export scalars. | Passing that typed pointer across artifacts needs an agreed ABI and caller-owned lifetime contract beyond scalar entry. |
 
 ## External handle conventions
 
-The implemented source views suggest bindings for familiar external handle formats.
+Manual address arithmetic and pointer loads suggest bindings for familiar external handle formats.
 These examples motivate extensions; they are not implemented foreign ABIs.
 
-COM-style object access first loads a vtable address, then uses a separate table cell and access grant
-to load a method pointer; invocation is a foreign-call operation, not a data load.
+COM-style object access first loads a vtable data address, then loads a method pointer at its documented offset.
+Invoking that pointer needs a code-pointer ABI operation.
 
-These layouts cover familiar external formats without baking their conventions into `View`.
+These layouts cover familiar external formats through ordinary source wrappers.
 A [BSTR](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/automat/bstr) has a
 four-byte byte-length prefix before its character pointer; its length excludes the terminating character.
 A BSTR binding must also preserve its allocation/release convention and distinguish byte counts from character counts.
 A [COM interface](https://learn.microsoft.com/en-us/office/client-developer/outlook/mapi/implementing-objects-in-c)
 starts with a vtable pointer and supplies the interface pointer as the method's first argument.
-The source-view model uses 8-byte sample headers and does not implement either ABI.
+Neither external ABI is implemented by the current memory examples.
 
 ## Code-pointer signatures
 
@@ -66,7 +66,7 @@ A runtime integer cannot dynamically determine a new native calling convention a
 A `Thk B` may include a captured environment and is not a `Code S`.
 Source thunks call code pointers through their matching adapters.
 Turning a capturing thunk into a foreign callback additionally requires the runtime-entry and rooting protocol below.
-The implemented source view reads a vtable data address.
+A raw pointer-slot load can read a vtable data address.
 Method invocation and code-pointer loading require the separate foreign-call extension.
 
 ## Source continuation adapters
@@ -76,41 +76,18 @@ with the [public Ret and CPS convention](../references/language.md#ret-and-expli
 Status interpretation belongs to the individual binding, including which failures occurred before C entry
 and which were reported after C may have changed memory.
 
-The proposed mutable-output adapter below can then continue work on its destination without first producing `Bytes`.
-Its final consumer may choose to inspect, decode, or freeze according to the particular C API's contract.
-Release per-call borrows and restore runtime state before invoking an external source successor
-on any normal result path.
-A continuation carrying a borrowed address is not permission to retain it beyond the call.
+The [mutable-output example](../../lib/tests/ffi/mutable-output.zy) continues work
+on the same allocation without first producing `Bytes`.
+Its CPS successor receives the initialized pointer only after the C status establishes the promised fields.
+A foreign error may leave partial writes; a generic adapter cannot roll them back.
+The caller controls release and any permitted retention.
+A callback-shaped source wrapper does not establish a borrow.
 
 The reverse boundary still needs a C return: a callback invocation must deliver its ABI result to that C caller.
 An internal CPS worker can use a bridge continuation to produce that result,
 but cannot bypass callback rooting, reentry, or the return delimiter described below.
 Source CPS wrappers should be exercised with different caller protocols, preflight rejection without C entry,
 and result successors that immediately perform another allowed operation on the same resource.
-
-## Mutable output through access grants
-
-`sample_write` is the next mutable-output milestone after the implemented immutable window adapter.
-A mutable wrapper retains a `Buffer` capability or writable `Access` grant
-and chooses pointer-only or pointer-and-capacity transport.
-Creating the view need not establish exclusivity; the call bridge must revalidate the handle and acquire the borrow
-on every invocation, since an alias may have closed or frozen it since view construction.
-Keep this boundary in an explicit effectful protocol compatible with the existing `OS` buffer operations,
-with a structured preflight-error continuation and a C-result continuation.
-
-Validate every argument before invoking C and reject conflicting mutable arguments before changing any handle state.
-For the initial single-threaded, non-reentrant bridge, acquire a dynamic call borrow,
-invoke C, release the borrow, and then resume the chosen continuation.
-Snapshots remain detached, and immutable `Bytes` cannot be used as mutable storage.
-Bounds and closed-handle failures before C entry preserve buffer contents.
-Once C has run, its error result may accompany partial writes; the generic bridge cannot promise transactional rollback.
-
-The wrapper must interpret the particular C API's status and written-length conventions before inspecting output.
-For `sample_write`, a successful status permits a snapshot of the known record extent,
-followed by [foreign decoding and canonical storage](../references/language.md#foreign-decoding-and-canonical-storage).
-Only the fields established by the C contract may be read.
-General `out`/`inout` classification, aliased ranges, and APIs that retain the pointer need distinct policies.
-A reusable thunk around a buffer does not itself establish a lexical or affine lifetime.
 
 ## Following boundary
 
@@ -128,12 +105,13 @@ a computation classifier describes its stack protocol but does not provide a rel
 to captured values.
 
 The stored-call example already solves sharing an abstract carrier inside one compiled program.
-Extending that example across independently loaded artifacts should begin with an explicit runtime instance
-and a small, versioned entry protocol using owned buffers or opaque registered handles.
+Manual pointers can remain caller-owned across artifacts when their ABI and release convention agree.
+Interfaces retaining managed Zydeco values additionally need an explicit runtime instance and a small,
+versioned entry protocol using opaque registered handles.
 The component must retain its code and runtime while such handles exist.
 An entry must check the agreed representation schema and ABI version before dispatch;
 equal sizes or equal partial stack protocols do not establish that agreement.
-Keep logical decoding and representation conversion in the source adapters already exercised by the example.
+Keep logical decoding and representation conversion in source adapters sharing the selected layout witnesses.
 Directly exporting tagged words, source code pointers, or arbitrary codata stacks remains deferred.
 
 ## Closures, callbacks, and reentry
@@ -142,7 +120,7 @@ A callback needs both executable code and its captured environment.
 Choose who owns that environment, how a foreign caller releases it,
 and whether the callback may outlive the import call.
 Captured managed values must remain rooted while foreign code retains the callback.
-The current transient byte borrow does not provide an ownership protocol for such values.
+Raw byte pointer transport does not provide an ownership protocol for managed captured values.
 
 Reentry must define which runtime and stack context it enters, whether an earlier call is suspended,
 and how nested calls preserve roots and return continuations.
@@ -170,14 +148,11 @@ The remaining shapes are deferred with distinct prerequisites:
 | Floating-point scalars | Classify and allocate SSE argument/result registers independently of integer registers; preserve payload bits across marshalling and mixed calls. |
 | More than six integer components | Plan stack arguments, their alignment, and cleanup together with the existing temporary frame and return continuation. |
 | Aggregates by value | Derive target ABI classes from an explicit storage contract, including register splitting, memory arguments, and hidden result pointers. |
-| Foreign-owned read-only pointers | Establish a trusted owner, extent, permissions, and release contract before creating a grant. Owned readable windows already cross C. |
-| Mutable or retained pointers | Implement the per-call buffer borrow above; retained pointers additionally need an ownership and release protocol. |
+| Pointer results and incoming pointer exports | Add directional ABI adapters and binding-specific extent, ownership, retention, and release contracts. Raw pointer import arguments already support manual mutable storage. |
 | Callbacks and retained exports | Extend fresh scalar entry with retained roots, ownership/release, and a callback reentry protocol. |
 
-The [storage access extension](../references/language.md#access-through-existing-representation-contracts) already
-constructs an aligned C record in a caller-provided buffer and passes the frozen result
-through the existing immutable borrow.
-That supplies a useful aggregate-pointer path while aggregate calling conventions remain open.
+The [aligned record example](../../lib/tests/ffi/static-layout.zy) constructs a record in manual storage
+and passes its address to C. This aggregate-pointer path is independent of aggregate calling conventions.
 The source static builder also computes `Plan A`, but its inspectable shape is not target ABI classification evidence.
 The [storage design](../references/language.md#static-layout-plans) owns this distinction.
 Keep argument order and flattening in one validated representation consumed by every target as these shapes are added.

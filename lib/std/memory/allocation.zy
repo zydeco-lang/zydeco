@@ -1,33 +1,21 @@
--- Allocation requests are computations requiring an allocator service on their stack.
+-- Allocator context is explicit. Free requires the same allocator and allocation layout.
 begin
-  param val (/Access; /Addr; /VType; /CType; /Thk; /OS; /Int64; /Buffer; /numeric; builtin) :
-  @(import(
-    "../builtin.zy"
-  )) that
-  param val (/Bytes; /bytes; byte_package) : (@(import("../text/bytes.type.zy"))) Addr Access that
-  let buffer = (builtin |> (@(import("buffer.zy")))) byte_package in
-
-  let Allocator = (@(import("allocator.type.zy"))) Buffer OS in
-  let Allocate (A : VType) =
-    Thk Allocator -> Thk (Int64 -> OS) -> Thk (A -> OS) -> OS
+  param val (/VType; /CType; /Thk; /Addr; /Int64; /numeric; builtin) : @(import("../builtin.zy")) that
+  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let (/Fault; native) = builtin |> (@(import("native.zy"))) in
+  let heap : Alloc = (#allocate = native/allocate, #free = native/unsafe/free) in
+  let val limited (maximum : Int64) (parent : Alloc) : Alloc =
+    (
+      #allocate = {
+        fn R size alignment no yes =>
+          ! numeric/int64/gt R size maximum { ! no +AllocationFailed() } {
+            ! parent/allocate R size alignment no yes
+          }
+      },
+      #free = parent/free
+    )
   in
-  let heap : Thk Allocator = {
-    comatch
-    | .allocate size alignment error success => ! buffer/allocate size alignment error success
-    end
-  } in
-  let val limited (maximum : Int64) (parent : Thk Allocator) : Thk Allocator = {
-    comatch
-    | .allocate size alignment error success =>
-      ! numeric/int64/gt OS size maximum { ! error 3 } {
-        ! parent .allocate size alignment error success
-      }
-    end
-  } in
-  let ! allocate (size : Int64) (alignment : Int64) : Allocate Buffer =
-    fn allocator error success => ! allocator .allocate size alignment error success
-  in
-  pack (= Allocator as Allocator : CType) (= Allocate as Allocate : VType -> CType)
+  pack (= Alloc as Alloc : VType)
   where
-    = heap, = limited, = allocate end
+    (= heap, = limited) end
 end

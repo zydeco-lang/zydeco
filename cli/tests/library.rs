@@ -121,7 +121,7 @@ fn exports_are_checked_after_field_selection_and_static_specialization() {
 }
 
 #[test]
-fn named_entries_are_closed_and_c_exports_reject_incoming_windows() {
+fn named_entries_are_closed_and_c_exports_reject_incoming_addresses() {
     let fixture = Fixture::new();
     fixture.write("workspace.zy", "let captured = 1 in @[package(library(c, export(root, symbol(\"f\"))), name(captured))] captured");
     let output = fixture.command(&["check", "-p", "captured"]);
@@ -131,7 +131,7 @@ fn named_entries_are_closed_and_c_exports_reject_incoming_windows() {
     std::fs::remove_file(fixture.directory.path().join("workspace.zy")).unwrap();
     let builtin =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy").canonicalize().unwrap();
-    fixture.checked(&format!("@[package(library(c, export(root, symbol(\"f\"))), name(window))] param val (/Thk; /Ret; /Access; /Addr; /Int64) : @(import({:?})) in ({{ fn (window : Access * Addr * Int64) => ret 0 }} : Thk ((Access * Addr * Int64) -> Ret Int64))", builtin.to_str().unwrap()), Err("incoming memory grants"));
+    fixture.checked(&format!("@[package(library(c, export(root, symbol(\"f\"))), name(window))] param val (/Thk; /Ret;  /Addr; /Int64) : @(import({:?})) in ({{ fn (address : Addr) => ret 0 }} : Thk (Addr -> Ret Int64))", builtin.to_str().unwrap()), Err("incoming pointers"));
 }
 
 #[test]

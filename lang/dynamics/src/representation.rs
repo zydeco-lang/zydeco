@@ -1,45 +1,42 @@
 //! Primitive scalar storage operations. Layout composition belongs to Zydeco code.
 
 use crate::memory::MemoryRuntime;
-use crate::{host::HostRuntime, syntax::*};
+use crate::syntax::*;
 
 pub(crate) struct ScalarMemory;
 
 impl ScalarMemory {
-    pub(crate) fn store(
-        arguments: Vec<SemValue>, host: &mut HostRuntime,
-    ) -> Result<Computation, i32> {
-        let [access, address, SemValue::Literal(literal), error, success] = arguments.as_slice()
-        else {
+    pub(crate) fn store(arguments: Vec<SemValue>) -> Result<Computation, i32> {
+        let [address, SemValue::Literal(literal), success] = arguments.as_slice() else {
             unreachable!("checked scalar encoder received a non-scalar")
         };
-        let bytes = match literal {
-            | Literal::Integer(integer) => match integer {
-                | IntegerLiteral::Int8(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::Int16(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::Int32(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::Int64(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::UInt8(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::UInt16(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::UInt32(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::UInt64(value) => value.to_le_bytes().to_vec(),
-                | IntegerLiteral::Unresolved(_) => unreachable!("runtime integer is resolved"),
-            },
-            | Literal::Float(FloatLiteral::Float32(bits)) => bits.to_le_bytes().to_vec(),
-            | Literal::Float(FloatLiteral::Float64(bits)) => bits.to_le_bytes().to_vec(),
-            | _ => unreachable!("checked encoder received a non-numeric literal"),
-        };
-        let result = host
-            .buffers
-            .write_memory(MemoryRuntime::access(access), MemoryRuntime::address(address), &bytes)
-            .map(|()| None);
-        Ok(MemoryRuntime::finish(result, error, success))
+        let address = MemoryRuntime::address(address);
+        // SAFETY: the source raw-store contract establishes the destination extent and write access.
+        unsafe {
+            match literal {
+                | Literal::Integer(integer) => match integer {
+                    | IntegerLiteral::Int8(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::Int16(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::Int32(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::Int64(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::UInt8(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::UInt16(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::UInt32(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::UInt64(value) => address.write(&value.to_le_bytes()),
+                    | IntegerLiteral::Unresolved(_) => unreachable!("runtime integer is resolved"),
+                },
+                | Literal::Float(FloatLiteral::Float32(bits)) => address.write(&bits.to_le_bytes()),
+                | Literal::Float(FloatLiteral::Float64(bits)) => address.write(&bits.to_le_bytes()),
+                | _ => unreachable!("checked encoder received a non-numeric literal"),
+            }
+        }
+        Ok(MemoryRuntime::resume(success, []))
     }
 
     pub(crate) fn load(
-        primitive: PrimitiveType, arguments: Vec<SemValue>, host: &mut HostRuntime,
+        primitive: PrimitiveType, arguments: Vec<SemValue>,
     ) -> Result<Computation, i32> {
-        let [access, address, error, success] = arguments.as_slice() else {
+        let [address, success] = arguments.as_slice() else {
             unreachable!("checked scalar load received invalid arguments")
         };
         let width = match primitive {
@@ -48,17 +45,9 @@ impl ScalarMemory {
             | PrimitiveType::Float(FloatType::Float64) => 8,
             | _ => unreachable!("only numeric primitives have scalar loads"),
         };
-        let result = host
-            .buffers
-            .read_memory(
-                MemoryRuntime::access(access),
-                MemoryRuntime::address(address),
-                i64::from(width),
-            )
-            .map(|bytes| {
-                Some(Self::literal(primitive, bytes).expect("checked scalar width").into())
-            });
-        Ok(MemoryRuntime::finish(result, error, success))
+        let bytes = unsafe { MemoryRuntime::address(address).bytes(width as usize) };
+        let value = Self::literal(primitive, bytes).expect("scalar width").into();
+        Ok(MemoryRuntime::resume(success, [value]))
     }
 
     fn literal(primitive: PrimitiveType, bytes: &[u8]) -> Option<Literal> {

@@ -25,8 +25,6 @@ exists
   -- Effect capabilities remain generative at the provider boundary.
   @[builtin(addr)]
   (SystemAddr : VType)
-  @[builtin(access)] (SystemAccess : VType)
-  @[builtin(buffer)] (SystemBuffer : VType)
   @[builtin(reader)] (SystemReader : VType)
   @[builtin(writer)] (SystemWriter : VType)
   @[builtin(os)] (SystemOS : CType)
@@ -36,16 +34,16 @@ exists
 
       (
         #numeric ::
-          (#int8 :: (@(import("builtin/numeric/int8.zy"))) SystemAddr SystemAccess)
-        * (#int16 :: (@(import("builtin/numeric/int16.zy"))) SystemAddr SystemAccess)
-        * (#int32 :: (@(import("builtin/numeric/int32.zy"))) SystemAddr SystemAccess)
-        * (#int64 :: (@(import("builtin/numeric/int64.zy"))) SystemAddr SystemAccess)
-        * (#uint8 :: (@(import("builtin/numeric/uint8.zy"))) SystemAddr SystemAccess)
-        * (#uint16 :: (@(import("builtin/numeric/uint16.zy"))) SystemAddr SystemAccess)
-        * (#uint32 :: (@(import("builtin/numeric/uint32.zy"))) SystemAddr SystemAccess)
-        * (#uint64 :: (@(import("builtin/numeric/uint64.zy"))) SystemAddr SystemAccess)
-        * (#float32 :: (@(import("builtin/numeric/float32.zy"))) SystemAddr SystemAccess)
-        * (#float64 :: (@(import("builtin/numeric/float64.zy"))) SystemAddr SystemAccess)
+          (#int8 :: (@(import("builtin/numeric/int8.zy"))) SystemAddr)
+        * (#int16 :: (@(import("builtin/numeric/int16.zy"))) SystemAddr)
+        * (#int32 :: (@(import("builtin/numeric/int32.zy"))) SystemAddr)
+        * (#int64 :: (@(import("builtin/numeric/int64.zy"))) SystemAddr)
+        * (#uint8 :: (@(import("builtin/numeric/uint8.zy"))) SystemAddr)
+        * (#uint16 :: (@(import("builtin/numeric/uint16.zy"))) SystemAddr)
+        * (#uint32 :: (@(import("builtin/numeric/uint32.zy"))) SystemAddr)
+        * (#uint64 :: (@(import("builtin/numeric/uint64.zy"))) SystemAddr)
+        * (#float32 :: (@(import("builtin/numeric/float32.zy"))) SystemAddr)
+        * (#float64 :: (@(import("builtin/numeric/float64.zy"))) SystemAddr)
         * BuiltinUnit
       )
     * (
@@ -58,18 +56,15 @@ exists
         #system ::
         exists
           (= Addr as SystemAddr : VType)
-          (= Access as SystemAccess : VType)
-          (= Buffer as SystemBuffer : VType)
           (= Reader as SystemReader : VType)
           (= Writer as SystemWriter : VType)
           (= OS as SystemOS : CType)
         .
             (
-              #memory :: (@(import("builtin/system/memory.zy"))) SystemAddr SystemAccess
-                SystemBuffer
+              #memory :: (@(import("builtin/system/memory.zy"))) SystemAddr
             )
           * (
-              #io :: (@(import("builtin/system/io.zy"))) SystemAddr SystemAccess SystemReader
+              #io :: (@(import("builtin/system/io.zy"))) SystemAddr SystemReader
                 SystemWriter SystemOS
             )
           * (#fs :: (@(import("builtin/system/fs.zy"))) SystemReader SystemWriter SystemOS)

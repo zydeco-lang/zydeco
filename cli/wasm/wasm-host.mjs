@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { randomBytes } from "node:crypto";
 import { FloatText } from "./wasm-numeric.mjs";
-import { CheckedMemory, MemoryFault } from "./wasm-memory.mjs";
+import { ManualMemory, MemoryFault } from "./wasm-memory.mjs";
 
 const WORD_BITS = 64;
 const IMMEDIATE_SIGNED_MIN = -(0x4000_0000_0000_0000n);
@@ -335,7 +335,7 @@ class ZydecoHost {
     this.arguments = arguments_;
     this.input = stdin;
     this.values = new HostValues();
-    this.checkedMemory = new CheckedMemory();
+    this.manualMemory = new ManualMemory();
     this.io = new HostIo(this.input);
     this.instance = undefined;
     this.words = new RuntimeWords(() => this.memory());
@@ -486,26 +486,17 @@ class ZydecoHost {
   }
 
   installScalarMemory(functions, name, width, decode, encode) {
-    const access = (word) => this.values.load("access", word);
-    const address = (word) => this.values.load("address", word);
-    const branch = (action, error) => {
-      try { return action(); }
-      catch (exception) {
-        if (exception instanceof MemoryFault) return Transfers.withOneArgument(error, RuntimeWords.immediateSigned(exception.code));
-        throw exception;
-      }
-    };
-    functions.set(`${name}_store_le_branch`, (grant, pointer, word, error, success) => branch(() => {
+    functions.set(`${name}_store_le_branch`, (pointer, word, success) => {
       const bits = BigInt.asUintN(width, decode(word));
       const bytes = Array.from({ length: width / 8 }, (_, index) => Number((bits >> BigInt(index * 8)) & 255n));
-      CheckedMemory.writeMemory(access(grant), address(pointer), bytes);
+      this.manualMemory.write(pointer, bytes);
       return Transfers.withoutArguments(success);
-    }, error));
-    functions.set(`${name}_load_le_branch`, (grant, pointer, error, success, spare) => branch(() => {
-      const bytes = CheckedMemory.readMemory(access(grant), address(pointer), BigInt(width / 8));
+    });
+    functions.set(`${name}_load_le_branch`, (pointer, success, spare) => {
+      const bytes = this.manualMemory.bytes(pointer, BigInt(width / 8));
       const bits = bytes.reduce((value, byte, index) => value | (BigInt(byte) << BigInt(index * 8)), 0n);
       return Transfers.withOneArgument(success, encode(bits, spare));
-    }, error));
+    });
   }
 
   decodeFloat(word, width) {
@@ -611,66 +602,50 @@ class ZydecoHost {
 
   installMemory(functions) {
     const integer = (word) => this.words.decodeSigned(word, 64);
-    const access = (word) => this.values.load("access", word);
-    const address = (word) => this.values.load("address", word);
-    const branch = (operation, error, success) => {
-      try {
-        const result = operation();
-        return result === undefined ? Transfers.withoutArguments(success) : Transfers.withOneArgument(success, result);
-      } catch (exception) {
-        if (exception instanceof MemoryFault) {
-          return Transfers.withOneArgument(error, RuntimeWords.immediateSigned(exception.code));
-        }
+    const guard = (error, action) => {
+      try { return action(); }
+      catch (exception) {
+        if (exception instanceof MemoryFault) return Transfers.withOneArgument(error, RuntimeWords.immediateSigned(exception.code));
         throw exception;
       }
     };
-    functions.set("memory_allocate", (size, alignment, error, success) => branch(() => {
-      const length = integer(size), boundary = integer(alignment);
-      if (length < 0n || boundary <= 0n || (boundary & (boundary - 1n)) !== 0n) throw new MemoryFault(6n);
-      if (length > BigInt(Number.MAX_SAFE_INTEGER)) throw new MemoryFault(8n);
-      try { return this.values.store("buffer", this.checkedMemory.allocate(length, boundary, false)); }
-      catch (exception) { if (exception instanceof RangeError) throw new MemoryFault(8n); throw exception; }
-    }, error, success));
-    functions.set("memory_close", (buffer, error, success) => branch(() => {
-      const owner = this.values.load("buffer", buffer);
-      if (owner.bytes === null || owner.frozen) throw new MemoryFault(0n);
-      owner.bytes = null;
-    }, error, success));
-    functions.set("memory_freeze", (buffer, error, success) => branch(
-      () => this.values.store("access", CheckedMemory.freeze(this.values.load("buffer", buffer))), error, success));
-    functions.set("memory_immutable_length", (grant, error, success, spare) => branch(
-      () => this.words.encodeSigned(CheckedMemory.immutableLength(access(grant)), 64, spare), error, success));
-    functions.set("memory_check_write", (grant, pointer, size, alignment, error, success) => branch(
-      () => CheckedMemory.check(access(grant), address(pointer), integer(size), integer(alignment), true), error, success));
-    functions.set("memory_from_string", (string, error, success) => branch(
-      () => {
-        try { return this.values.store("access", this.checkedMemory.import(this.utf8.encode(this.values.getString(string)))); }
-        catch (exception) { if (exception instanceof RangeError) throw new MemoryFault(8n); throw exception; }
-      }, error, success));
-    functions.set("memory_to_string", (grant, pointer, size, error, success) => branch(
-      () => {
-        const bytes = CheckedMemory.readMemory(access(grant), address(pointer), integer(size));
-        try { return this.values.string(this.utf8Decoder.decode(bytes)); }
-        catch (exception) { if (exception instanceof TypeError) throw new MemoryFault(6n); throw exception; }
-      }, error, success));
-    functions.set("memory_grant", (buffer, start, length, permission, error, success) => branch(
-      () => this.values.store("access", CheckedMemory.grant(this.values.load("buffer", buffer), integer(start), integer(length), integer(permission))), error, success));
-    functions.set("memory_revoke", (grant, error, success) => branch(
-      () => CheckedMemory.revoke(access(grant)), error, success));
-    functions.set("memory_base", (grant, error, success) => branch(
-      () => this.values.store("address", CheckedMemory.base(access(grant))), error, success));
-    functions.set("memory_offset", (grant, pointer, displacement, error, success) => branch(
-      () => this.values.store("address", CheckedMemory.offset(access(grant), address(pointer), integer(displacement))), error, success));
-    functions.set("memory_check", (grant, pointer, size, alignment, error, success) => branch(
-      () => CheckedMemory.check(access(grant), address(pointer), integer(size), integer(alignment)), error, success));
-    functions.set("memory_load_addr", (grant, pointer, error, success) => branch(
-      () => this.values.store("address", CheckedMemory.loadAddress(access(grant), address(pointer))), error, success));
-    functions.set("memory_store_addr", (grant, pointer, value, error, success) => branch(
-      () => CheckedMemory.storeAddress(access(grant), address(pointer), address(value)), error, success));
+    functions.set("memory_null", () => 0n);
+    functions.set("memory_offset", (pointer, displacement) => BigInt.asUintN(64, pointer + integer(displacement)));
+    functions.set("memory_allocate", (size, alignment, error, success) => guard(error, () =>
+      Transfers.withOneArgument(success, this.manualMemory.allocate(integer(size), integer(alignment)))));
+    for (const operation of ["free", "retain"]) {
+      functions.set(`memory_${operation}`, (pointer, size, alignment, error, success) => guard(error, () => {
+        this.manualMemory[operation](pointer, integer(size), integer(alignment));
+        return Transfers.withoutArguments(success);
+      }));
+    }
+    functions.set("memory_copy", (source, destination, count, success) => {
+      this.manualMemory.copy(source, destination, integer(count)); return Transfers.withoutArguments(success);
+    });
+    functions.set("memory_fill", (pointer, count, value, success) => {
+      this.manualMemory.fill(pointer, integer(count), Number(RuntimeWords.decodeImmediateUnsigned(value)));
+      return Transfers.withoutArguments(success);
+    });
+    functions.set("memory_load_addr", (pointer, success) => Transfers.withOneArgument(success, this.manualMemory.loadAddress(pointer)));
+    functions.set("memory_store_addr", (pointer, value, success) => {
+      this.manualMemory.storeAddress(pointer, value); return Transfers.withoutArguments(success);
+    });
+    functions.set("memory_from_string", (string, error, success) => guard(error, () => {
+      const bytes = this.utf8.encode(this.values.getString(string));
+      return Transfers.withTwoArguments(success, this.manualMemory.import(bytes), RuntimeWords.immediateSigned(BigInt(bytes.length)));
+    }));
+    functions.set("memory_to_string", (pointer, count, error, success) => guard(error, () => {
+      const bytes = this.manualMemory.bytes(pointer, integer(count));
+      let string;
+      try { string = this.utf8Decoder.decode(bytes); }
+      catch (exception) { if (exception instanceof TypeError) throw new MemoryFault(2n); throw exception; }
+      return Transfers.withOneArgument(success, this.values.string(string));
+    }));
   }
 
   installIo(functions) {
-    const immutable = (bytes) => this.values.store("access", this.checkedMemory.import(bytes));
+    const immutable = (success, bytes) => Transfers.withTwoArguments(
+      success, this.manualMemory.import(bytes), RuntimeWords.immediateSigned(BigInt(bytes.length)));
     functions.set("stdin", () => HostIo.encodeHandle(0));
     functions.set("stdout", () => HostIo.encodeHandle(0));
     functions.set("stderr", () => HostIo.encodeHandle(1));
@@ -682,10 +657,7 @@ class ZydecoHost {
             code: "ERR_INVALID_ARG_VALUE",
           });
         }
-        return Transfers.withOneArgument(
-          whenSuccess,
-          immutable(this.io.reader(reader).read(Number(decoded))),
-        );
+        return immutable(whenSuccess, this.io.reader(reader).read(Number(decoded)));
       }),
     );
     functions.set("io_read_line", (reader, whenError, whenEof, whenLine) =>
@@ -693,19 +665,17 @@ class ZydecoHost {
         const input = this.io.reader(reader);
         return input.eof
           ? Transfers.withoutArguments(whenEof)
-          : Transfers.withOneArgument(whenLine, immutable(input.readLine()));
+          : immutable(whenLine, input.readLine());
       }),
     );
     functions.set("io_read_all", (reader, whenError, whenSuccess) =>
       this.ioControl(whenError, () =>
-        Transfers.withOneArgument(whenSuccess, immutable(this.io.reader(reader).readAll())),
+        immutable(whenSuccess, this.io.reader(reader).readAll()),
       ),
     );
-    functions.set("io_write_all", (writer, grant, pointer, length, whenError, whenSuccess) =>
+    functions.set("io_write_all", (writer, pointer, length, whenError, whenSuccess) =>
       this.ioUnit(whenError, whenSuccess, () => {
-        const bytes = CheckedMemory.readMemory(
-          this.values.load("access", grant), this.values.load("address", pointer), this.words.decodeSigned(length, 64),
-        );
+        const bytes = this.manualMemory.bytes(pointer, this.words.decodeSigned(length, 64));
         this.io.write(writer, bytes);
       }),
     );
@@ -796,7 +766,7 @@ class ZydecoHost {
   }
 
   ioErrorKind(error) {
-    if (error instanceof MemoryFault) return new Map([[0n, 6], [2n, 1], [5n, 4], [8n, 7]]).get(error.code) ?? 3;
+    if (error instanceof MemoryFault) return new Map([[0n, 3], [1n, 7], [2n, 4]]).get(error.code) ?? 3;
     switch (error?.code) {
       case "ENOENT":
         return 0;

@@ -2,7 +2,6 @@
 
 use crate::syntax as ds;
 use thiserror::Error;
-use zydeco_machine::{buffer::BufferArena, memory::MemoryError};
 use zydeco_syntax::{ForeignImport, ForeignLibraryName, ForeignSymbolName};
 
 #[cfg(unix)]
@@ -27,8 +26,6 @@ pub enum ForeignRuntimeError {
     MissingSymbol { library: ForeignLibraryName, symbol: ForeignSymbolName, message: String },
     #[error("foreign symbol `{0}` received values inconsistent with its checked classifier")]
     InvalidArguments(ForeignSymbolName),
-    #[error("foreign symbol `{symbol}` cannot borrow memory: {fault:?}")]
-    Memory { symbol: ForeignSymbolName, fault: MemoryError },
 }
 
 /// Process-local dynamic libraries retained for one interpreter invocation.
@@ -60,20 +57,11 @@ impl ForeignRuntime {
 
     #[cfg(unix)]
     pub(crate) fn invoke(
-        &mut self, import: &ForeignImport, arguments: Vec<ds::SemValue>, memory: &BufferArena,
+        &mut self, import: &ForeignImport, arguments: Vec<ds::SemValue>,
     ) -> Result<ds::Computation, ForeignRuntimeError> {
         // Validate before loading: malformed runtime values must never reach foreign code.
-        let arguments =
-            ForeignArguments::new(&import.signature, &arguments, memory).map_err(|error| {
-                match error {
-                    | ForeignArgumentError::InvalidValue => {
-                        ForeignRuntimeError::InvalidArguments(import.target.symbol.clone())
-                    }
-                    | ForeignArgumentError::Memory(fault) => {
-                        ForeignRuntimeError::Memory { symbol: import.target.symbol.clone(), fault }
-                    }
-                }
-            })?;
+        let arguments = ForeignArguments::new(&import.signature, &arguments)
+            .map_err(|_| ForeignRuntimeError::InvalidArguments(import.target.symbol.clone()))?;
         let function = self.function(import)?;
         let result = function.invoke(&arguments);
         Ok(ds::Computation::Ret(Return(Rc::new(result))))
@@ -81,7 +69,7 @@ impl ForeignRuntime {
 
     #[cfg(not(unix))]
     pub(crate) fn invoke(
-        &mut self, _import: &ForeignImport, _arguments: Vec<ds::SemValue>, _memory: &BufferArena,
+        &mut self, _import: &ForeignImport, _arguments: Vec<ds::SemValue>,
     ) -> Result<ds::Computation, ForeignRuntimeError> {
         Err(ForeignRuntimeError::UnsupportedPlatform)
     }
@@ -157,11 +145,11 @@ impl ForeignFunction {
         }
     }
 
-    fn invoke(&self, arguments: &ForeignArguments<'_>) -> ds::Value {
+    fn invoke(&self, arguments: &ForeignArguments) -> ds::Value {
         let arguments = arguments.scalars.iter().map(ForeignScalar::as_arg).collect::<Vec<_>>();
         // SAFETY: the call interface and scalar storage follow the same checked signature.
         // The declaration author must ensure that the external symbol actually obeys that
-        // signature, neither retains nor mutates borrowed memory, and does not call back
+        // signature, upholds the validity, extent, and ownership of raw pointer arguments, and does not call back
         // into this interpreter invocation. Independent compiled-library instances are permitted.
         unsafe {
             let integer = match self.result {
@@ -202,35 +190,31 @@ impl ForeignFunction {
     }
 }
 
-/// Retain the allocation arena for the complete borrowed foreign call.
+/// Argument storage for the complete foreign call; raw pointer validity is a caller obligation.
 #[cfg(unix)]
-struct ForeignArguments<'a> {
-    _memory: &'a BufferArena,
+struct ForeignArguments {
     scalars: Vec<ForeignScalar>,
 }
 
 #[cfg(unix)]
-impl<'a> ForeignArguments<'a> {
+impl ForeignArguments {
     fn new(
-        signature: &ForeignSignature, source: &[ds::SemValue], memory: &'a BufferArena,
+        signature: &ForeignSignature, source: &[ds::SemValue],
     ) -> Result<Self, ForeignArgumentError> {
         if signature.parameters().len() != source.len() {
             return Err(ForeignArgumentError::InvalidValue);
         }
         let scalars = signature
             .arguments()
-            .map(|argument| {
-                ForeignScalar::new(argument.component, &source[argument.parameter], memory)
-            })
+            .map(|argument| ForeignScalar::new(argument.component, &source[argument.parameter]))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self { _memory: memory, scalars })
+        Ok(Self { scalars })
     }
 }
 
 #[cfg(unix)]
 enum ForeignArgumentError {
     InvalidValue,
-    Memory(MemoryError),
 }
 
 #[cfg(unix)]
@@ -242,23 +226,13 @@ enum ForeignScalar {
 #[cfg(unix)]
 impl ForeignScalar {
     fn new(
-        component: ForeignComponent, value: &ds::SemValue, memory: &BufferArena,
+        component: ForeignComponent, value: &ds::SemValue,
     ) -> Result<Self, ForeignArgumentError> {
         match (component, value) {
-            | (ForeignComponent::MemoryPointer, ds::SemValue::VCons(fields)) => {
-                let [
-                    ds::SemValue::Host(HostValue::Access(access)),
-                    ds::SemValue::Host(HostValue::Address(address)),
-                    ds::SemValue::Literal(Literal::Integer(IntegerLiteral::Int64(length))),
-                ] = fields.as_slice()
-                else {
-                    return Err(ForeignArgumentError::InvalidValue);
-                };
-                memory
-                    .read_memory(*access, *address, *length)
-                    .map(|bytes| Self::Pointer(bytes.as_ptr()))
-                    .map_err(ForeignArgumentError::Memory)
-            }
+            | (
+                ForeignComponent::MemoryPointer,
+                ds::SemValue::Host(HostValue::Address(address)),
+            ) => Ok(Self::Pointer(address.pointer())),
             | (
                 ForeignComponent::Integer(integer),
                 ds::SemValue::Literal(Literal::Integer(value)),

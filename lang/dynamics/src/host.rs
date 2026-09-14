@@ -3,17 +3,12 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufReader},
 };
-use zydeco_machine::{
-    buffer::{BufferArena, BufferHandle},
-    memory::{AccessHandle, AddressHandle, MemoryError},
-};
+use zydeco_machine::memory::{Address, MemoryError, RetainedMemory};
 
 /// Opaque values whose representation belongs to the interpreter runtime.
 #[derive(Clone, Debug)]
 pub enum HostValue {
-    Buffer(BufferHandle),
-    Address(AddressHandle),
-    Access(AccessHandle),
+    Address(Address),
     Reader(ReaderHandle),
     Writer(WriterHandle),
 }
@@ -38,7 +33,7 @@ impl WriterHandle {
 /// File resources owned by one interpreter invocation.
 #[derive(Debug)]
 pub struct HostRuntime {
-    pub(crate) buffers: BufferArena,
+    pub(crate) memory: RetainedMemory,
     next_reader: usize,
     next_writer: usize,
     readers: HashMap<ReaderHandle, BufReader<File>>,
@@ -48,7 +43,7 @@ pub struct HostRuntime {
 impl HostRuntime {
     pub(crate) fn new() -> Self {
         Self {
-            buffers: BufferArena::default(),
+            memory: RetainedMemory::default(),
             next_reader: 1,
             next_writer: 2,
             readers: HashMap::new(),
@@ -56,17 +51,18 @@ impl HostRuntime {
         }
     }
 
-    pub(crate) fn import_memory(&mut self, bytes: &[u8]) -> io::Result<AccessHandle> {
-        self.buffers.import_memory(bytes).map_err(HostIoError::memory)
+    pub(crate) fn import_memory(&mut self, bytes: &[u8]) -> io::Result<Address> {
+        self.memory.import(bytes).map_err(HostIoError::memory)
     }
 
     pub(crate) fn write_memory(
-        &mut self, writer: WriterHandle, access: AccessHandle, address: AddressHandle, length: i64,
-        output: &mut dyn io::Write, stderr: &mut dyn io::Write,
+        &mut self, writer: WriterHandle, address: Address, length: i64, output: &mut dyn io::Write,
+        stderr: &mut dyn io::Write,
     ) -> io::Result<()> {
         use io::Write;
-        let bytes =
-            self.buffers.read_memory(access, address, length).map_err(HostIoError::memory)?;
+        let length =
+            usize::try_from(length).map_err(|_| HostIoError::memory(MemoryError::InvalidLayout))?;
+        let bytes = unsafe { address.bytes(length) };
         match writer {
             | WriterHandle::STDOUT => output.write_all(bytes),
             | WriterHandle::STDERR => stderr.write_all(bytes),
@@ -167,9 +163,6 @@ struct HostIoError;
 impl HostIoError {
     fn memory(error: MemoryError) -> io::Error {
         let kind = match error {
-            | MemoryError::Closed => io::ErrorKind::NotConnected,
-            | MemoryError::Permission => io::ErrorKind::PermissionDenied,
-            | MemoryError::Uninitialized => io::ErrorKind::InvalidData,
             | MemoryError::AllocationFailed => io::ErrorKind::OutOfMemory,
             | _ => io::ErrorKind::InvalidInput,
         };

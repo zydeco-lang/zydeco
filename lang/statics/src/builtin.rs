@@ -22,8 +22,6 @@ pub enum BuiltinValueAtom {
     Char,
     String,
     Addr,
-    Access,
-    Buffer,
     Reader,
     Writer,
 }
@@ -32,8 +30,6 @@ impl BuiltinValueAtom {
     fn capability_role(self) -> Option<BuiltinTypeRole> {
         match self {
             | Self::Addr => Some(BuiltinTypeRole::Addr),
-            | Self::Access => Some(BuiltinTypeRole::Access),
-            | Self::Buffer => Some(BuiltinTypeRole::Buffer),
             | Self::Reader => Some(BuiltinTypeRole::Reader),
             | Self::Writer => Some(BuiltinTypeRole::Writer),
             | Self::Integer(_) | Self::Float(_) | Self::Char | Self::String => None,
@@ -47,7 +43,7 @@ impl BuiltinValueAtom {
             | Self::Float(float) => PrimitiveType::Float(float),
             | Self::Char => PrimitiveType::Char,
             | Self::String => PrimitiveType::String,
-            | Self::Addr | Self::Access | Self::Buffer | Self::Reader | Self::Writer => {
+            | Self::Addr | Self::Reader | Self::Writer => {
                 return None;
             }
         })
@@ -124,12 +120,8 @@ impl BuiltinOperationAbi {
                         Self::branch([atom, atom])
                     }
                     | IntegerOperation::ToString => Self::pure([atom], Atom::String),
-                    | IntegerOperation::StoreLe => {
-                        Self::memory_operation([Atom::Access, Atom::Addr, atom], None)
-                    }
-                    | IntegerOperation::LoadLe => {
-                        Self::memory_operation([Atom::Access, Atom::Addr], Some(atom))
-                    }
+                    | IntegerOperation::StoreLe => Self::memory_success([Atom::Addr, atom], None),
+                    | IntegerOperation::LoadLe => Self::memory_success([Atom::Addr], Some(atom)),
                 }
             }
             | Role::Float(float, operation) => {
@@ -143,12 +135,8 @@ impl BuiltinOperationAbi {
                         Self::branch([atom, atom])
                     }
                     | FloatOperation::ToString => Self::pure([atom], Atom::String),
-                    | FloatOperation::StoreLe => {
-                        Self::memory_operation([Atom::Access, Atom::Addr, atom], None)
-                    }
-                    | FloatOperation::LoadLe => {
-                        Self::memory_operation([Atom::Access, Atom::Addr], Some(atom))
-                    }
+                    | FloatOperation::StoreLe => Self::memory_success([Atom::Addr, atom], None),
+                    | FloatOperation::LoadLe => Self::memory_success([Atom::Addr], Some(atom)),
                 }
             }
             | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], int64),
@@ -161,56 +149,40 @@ impl BuiltinOperationAbi {
             | Role::CharCodepoint => Self::pure([Atom::Char], int64),
             | Role::CharFromCodepoint => Self::optional([int64], Atom::Char),
             | Role::StrParseInt => Self::optional([Atom::String], int64),
-            | Role::MemoryAllocate => Self::memory_operation([int64, int64], Some(Atom::Buffer)),
-            | Role::MemoryClose => Self::memory_operation([Atom::Buffer], None),
-            | Role::MemoryFreeze => Self::memory_operation([Atom::Buffer], Some(Atom::Access)),
-            | Role::MemoryImmutableLength => Self::memory_operation([Atom::Access], Some(int64)),
-            | Role::MemoryCheckWrite => {
-                Self::memory_operation([Atom::Access, Atom::Addr, int64, int64], None)
+            | Role::MemoryNull => Self::pure([], Atom::Addr),
+            | Role::MemoryOffset => Self::pure([Atom::Addr, int64], Atom::Addr),
+            | Role::MemoryAllocate => Self::memory_operation([int64, int64], Some(Atom::Addr)),
+            | Role::MemoryFree | Role::MemoryRetain => {
+                Self::memory_operation([Atom::Addr, int64, int64], None)
             }
-            | Role::MemoryFromString => Self::memory_operation([Atom::String], Some(Atom::Access)),
+            | Role::MemoryFromString => Self::memory_operation([Atom::String], [Atom::Addr, int64]),
             | Role::MemoryToString => {
-                Self::memory_operation([Atom::Access, Atom::Addr, int64], Some(Atom::String))
+                Self::memory_operation([Atom::Addr, int64], Some(Atom::String))
             }
-            | Role::MemoryGrant => {
-                Self::memory_operation([Atom::Buffer, int64, int64, int64], Some(Atom::Access))
-            }
-            | Role::MemoryRevoke => Self::memory_operation([Atom::Access], None),
-            | Role::MemoryBase => Self::memory_operation([Atom::Access], Some(Atom::Addr)),
-            | Role::MemoryOffset => {
-                Self::memory_operation([Atom::Access, Atom::Addr, int64], Some(Atom::Addr))
-            }
-            | Role::MemoryCheck => {
-                Self::memory_operation([Atom::Access, Atom::Addr, int64, int64], None)
-            }
-            | Role::MemoryLoadAddr => {
-                Self::memory_operation([Atom::Access, Atom::Addr], Some(Atom::Addr))
-            }
-            | Role::MemoryStoreAddr => {
-                Self::memory_operation([Atom::Access, Atom::Addr, Atom::Addr], None)
+            | Role::MemoryLoadAddr => Self::memory_success([Atom::Addr], Some(Atom::Addr)),
+            | Role::MemoryStoreAddr => Self::memory_success([Atom::Addr, Atom::Addr], None),
+            | Role::MemoryCopy => Self::memory_success([Atom::Addr, Atom::Addr, int64], None),
+            | Role::MemoryFill => {
+                Self::memory_success([Atom::Addr, int64, Atom::Integer(IntegerType::UInt8)], None)
             }
             | Role::Stdin => Self::pure([], Atom::Reader),
             | Role::Stdout | Role::Stderr => Self::pure([], Atom::Writer),
             | Role::IoRead => Self::io_effect(
                 [Self::atom(Atom::Reader), Self::atom(int64)],
-                Self::continuation(Atom::Access),
+                Self::continuation_with([Atom::Addr, int64]),
             ),
-            | Role::IoReadAll => {
-                Self::io_effect([Self::atom(Atom::Reader)], Self::continuation(Atom::Access))
-            }
+            | Role::IoReadAll => Self::io_effect(
+                [Self::atom(Atom::Reader)],
+                Self::continuation_with([Atom::Addr, int64]),
+            ),
             | Role::IoReadLine => Self::effect([
                 Self::atom(Atom::Reader),
                 Self::io_error_continuation(),
                 Self::os_continuation(),
-                Self::continuation(Atom::Access),
+                Self::continuation_with([Atom::Addr, int64]),
             ]),
             | Role::IoWriteAll => Self::io_effect(
-                [
-                    Self::atom(Atom::Writer),
-                    Self::atom(Atom::Access),
-                    Self::atom(Atom::Addr),
-                    Self::atom(int64),
-                ],
+                [Self::atom(Atom::Writer), Self::atom(Atom::Addr), Self::atom(int64)],
                 Self::os_continuation(),
             ),
             | Role::IoFlush | Role::IoCloseWriter => {
@@ -297,8 +269,19 @@ impl BuiltinOperationAbi {
         Self::thunk(BuiltinComputationClassifier::ForallCType(Box::new(body)))
     }
 
+    fn memory_success(
+        parameters: impl IntoIterator<Item = BuiltinValueAtom>,
+        output: impl IntoIterator<Item = BuiltinValueAtom>,
+    ) -> BuiltinValueClassifier {
+        let result = BuiltinComputationClassifier::Bound(0);
+        let success = Self::thunk(Self::arrows(output.into_iter().map(Self::atom), result.clone()));
+        let body = Self::arrows(parameters.into_iter().map(Self::atom).chain([success]), result);
+        Self::thunk(BuiltinComputationClassifier::ForallCType(Box::new(body)))
+    }
+
     fn memory_operation(
-        parameters: impl IntoIterator<Item = BuiltinValueAtom>, output: Option<BuiltinValueAtom>,
+        parameters: impl IntoIterator<Item = BuiltinValueAtom>,
+        output: impl IntoIterator<Item = BuiltinValueAtom>,
     ) -> BuiltinValueClassifier {
         let result = BuiltinComputationClassifier::Bound(0);
         let error = Self::thunk(Self::arrows(

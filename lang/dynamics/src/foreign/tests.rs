@@ -1,11 +1,11 @@
 use super::*;
 use std::{path::PathBuf, process::Command};
-use zydeco_machine::memory::{AccessHandle, AddressHandle, Permission};
+use zydeco_machine::memory::{Address, MemoryLayout, RetainedMemory};
 use zydeco_syntax::{ForeignParameter, ForeignTarget};
 
 struct ForeignFixture {
     runtime: ForeignRuntime,
-    memory: BufferArena,
+    memory: RetainedMemory,
     _directory: tempfile::TempDir,
 }
 
@@ -37,7 +37,7 @@ impl ForeignFixture {
         let library = DynamicLibrary::open_filename(&name, &filename).unwrap();
         let mut runtime = ForeignRuntime::new();
         runtime.libraries.insert(name, library);
-        Self { runtime, memory: BufferArena::default(), _directory: directory }
+        Self { runtime, memory: RetainedMemory::default(), _directory: directory }
     }
 
     fn import(symbol: &str, parameters: Vec<ForeignParameter>) -> ForeignImport {
@@ -60,25 +60,18 @@ impl ForeignFixture {
     }
 
     fn window(&mut self, value: &[u8]) -> ds::SemValue {
-        let access = self.memory.import_memory(value).unwrap();
-        let address = self.memory.base_address(access).unwrap();
-        Self::borrowed(access, address, value.len() as i64)
+        HostValue::Address(self.memory.import(value).unwrap()).into()
     }
 
-    fn borrowed(access: AccessHandle, address: AddressHandle, length: i64) -> ds::SemValue {
-        ds::SemValue::VCons(vec![
-            HostValue::Access(access).into(),
-            HostValue::Address(address).into(),
-            ds::SemValue::Literal(Literal::Integer(IntegerLiteral::Int64(length))),
-        ])
+    fn address(address: Address) -> ds::SemValue {
+        HostValue::Address(address).into()
     }
 
     fn call(
         &mut self, symbol: &str, parameters: Vec<ForeignParameter>, arguments: Vec<ds::SemValue>,
     ) -> u64 {
         let import = Self::import(symbol, parameters);
-        let ds::Computation::Ret(Return(value)) =
-            self.runtime.invoke(&import, arguments, &self.memory).unwrap()
+        let ds::Computation::Ret(Return(value)) = self.runtime.invoke(&import, arguments).unwrap()
         else {
             panic!("C call must return through Ret")
         };
@@ -101,8 +94,7 @@ impl ForeignFixture {
             .into_iter()
             .map(|value| ds::SemValue::Literal(Literal::Integer(value)))
             .collect();
-        let ds::Computation::Ret(Return(value)) =
-            self.runtime.invoke(&import, arguments, &self.memory).unwrap()
+        let ds::Computation::Ret(Return(value)) = self.runtime.invoke(&import, arguments).unwrap()
         else {
             panic!("C call must return through Ret")
         };
@@ -171,7 +163,7 @@ fn void_calls_execute_and_resume_with_unit() {
 
 #[test]
 fn calls_c_with_zero_scalar_and_borrowed_arguments() {
-    use ForeignParameter::BorrowedMemory as B;
+    use ForeignParameter::Address as B;
     const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
     let mut fixture = ForeignFixture::new();
     assert_eq!(fixture.call("zyffi_zero", vec![], vec![]), u64::MAX);
@@ -198,21 +190,14 @@ fn calls_c_with_zero_scalar_and_borrowed_arguments() {
 #[test]
 fn borrows_shared_subranges_of_retained_immutable_storage() {
     let mut fixture = ForeignFixture::new();
-    let access = fixture.memory.import_memory(b"..hello!!").unwrap();
-    let base = fixture.memory.base_address(access).unwrap();
+    let base = fixture.memory.import(b"..hello!!").unwrap();
     for (offset, length, expected) in [(2, 5, 1389), (3, 3, 872), (7, 0, 0)] {
-        let address = fixture.memory.offset_address(access, base, offset).unwrap();
+        let address = base.offset(offset);
         assert_eq!(
             fixture.call(
                 "zyffi_bytes",
-                vec![
-                    ForeignParameter::BorrowedMemory,
-                    ForeignParameter::Integer(IntegerType::UInt64)
-                ],
-                vec![
-                    ForeignFixture::borrowed(access, address, length),
-                    ForeignFixture::integer(length as u64)
-                ]
+                vec![ForeignParameter::Address, ForeignParameter::Integer(IntegerType::UInt64)],
+                vec![ForeignFixture::address(address), ForeignFixture::integer(length as u64)]
             ),
             expected
         );
@@ -221,7 +206,7 @@ fn borrows_shared_subranges_of_retained_immutable_storage() {
 
 #[test]
 fn preserves_source_order_across_six_explicit_c_arguments() {
-    use ForeignParameter::BorrowedMemory as B;
+    use ForeignParameter::Address as B;
     const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
     let mut fixture = ForeignFixture::new();
     let hello = fixture.window(b"hello");
@@ -265,10 +250,9 @@ fn preserves_source_order_across_six_explicit_c_arguments() {
 
 #[test]
 fn rejects_invalid_runtime_arguments_before_loading_or_calling() {
-    use ForeignParameter::BorrowedMemory as B;
+    use ForeignParameter::Address as B;
     const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
     let mut runtime = ForeignRuntime::new();
-    let memory = BufferArena::default();
     for (parameters, arguments) in [
         (vec![U], vec![]),
         (vec![], vec![ForeignFixture::integer(1)]),
@@ -278,7 +262,7 @@ fn rejects_invalid_runtime_arguments_before_loading_or_calling() {
     ] {
         let import = ForeignFixture::import("zyffi_echo", parameters);
         assert!(
-            matches!(runtime.invoke(&import, arguments, &memory), Err(ForeignRuntimeError::InvalidArguments(symbol)) if symbol == import.target.symbol)
+            matches!(runtime.invoke(&import, arguments), Err(ForeignRuntimeError::InvalidArguments(symbol)) if symbol == import.target.symbol)
         );
         assert!(runtime.libraries.is_empty());
         assert!(runtime.functions.is_empty());
@@ -286,46 +270,14 @@ fn rejects_invalid_runtime_arguments_before_loading_or_calling() {
 }
 
 #[test]
-fn invalid_memory_windows_reject_before_loading_and_preserve_the_allocation() {
-    let mut runtime = ForeignRuntime::new();
-    let mut memory = BufferArena::default();
-    let owner = memory.allocate_uninitialized(8, 8).unwrap();
-    let access = memory.grant(owner, 0, 8, Permission::ReadWrite).unwrap();
-    let write = memory.grant(owner, 0, 8, Permission::Write).unwrap();
-    let address = memory.base_address(access).unwrap();
-    let import = ForeignFixture::import("zyffi_bytes", vec![ForeignParameter::BorrowedMemory]);
-    for (grant, length, expected) in [
-        (access, 9, MemoryError::Bounds),
-        (access, -1, MemoryError::Bounds),
-        (access, 8, MemoryError::Uninitialized),
-        (write, 8, MemoryError::Permission),
-    ] {
-        let argument = ForeignFixture::borrowed(grant, address, length);
-        assert!(matches!(runtime.invoke(&import, vec![argument], &memory),
-            Err(ForeignRuntimeError::Memory { fault, .. }) if fault == expected));
-        assert!(runtime.libraries.is_empty());
-        assert!(runtime.functions.is_empty());
-        assert_eq!(memory.load_u8(access, address), Err(MemoryError::Uninitialized));
-    }
-    memory.close(owner).unwrap();
-    let argument = ForeignFixture::borrowed(access, address, 0);
-    assert!(matches!(
-        runtime.invoke(&import, vec![argument], &memory),
-        Err(ForeignRuntimeError::Memory { fault: MemoryError::Closed, .. })
-    ));
-    assert!(runtime.libraries.is_empty());
-}
-
-#[test]
 fn missing_library_is_a_recoverable_loader_error() {
     let mut runtime = ForeignRuntime::new();
-    let memory = BufferArena::default();
     let mut import = ForeignFixture::import("zyffi_zero", vec![]);
     import.target.library =
         ForeignLibraryName::parse("zydeco_ffi_missing_library_83710a6f").unwrap();
     for _ in 0..2 {
         assert!(
-            matches!(runtime.invoke(&import, vec![], &memory), Err(ForeignRuntimeError::OpenLibrary { library, .. }) if library == import.target.library)
+            matches!(runtime.invoke(&import, vec![]), Err(ForeignRuntimeError::OpenLibrary { library, .. }) if library == import.target.library)
         );
         assert!(runtime.libraries.is_empty());
         assert!(runtime.functions.is_empty());
@@ -337,7 +289,7 @@ fn missing_symbol_does_not_poison_subsequent_calls() {
     let mut fixture = ForeignFixture::new();
     let import = ForeignFixture::import("zyffi_missing_symbol", vec![]);
     assert!(
-        matches!(fixture.runtime.invoke(&import, vec![], &fixture.memory), Err(ForeignRuntimeError::MissingSymbol { library, symbol, .. })
+        matches!(fixture.runtime.invoke(&import, vec![]), Err(ForeignRuntimeError::MissingSymbol { library, symbol, .. })
         if library == import.target.library && symbol == import.target.symbol)
     );
     assert!(fixture.runtime.functions.is_empty());
@@ -350,25 +302,68 @@ fn foreign_borrows_preserve_concrete_storage_alignment_and_contents() {
     let mut octets = vec![0; 64];
     octets[0] = 7;
     octets[4..8].copy_from_slice(&16909060u32.to_le_bytes());
-    let owner = fixture.memory.allocate(64, 64).unwrap();
-    fixture.memory.write(owner, 0, &octets).unwrap();
-    let access = fixture.memory.freeze_memory(owner).unwrap();
-    let base = fixture.memory.base_address(access).unwrap();
+    let layout = MemoryLayout::for_request(64, 64).unwrap();
+    let base = layout.allocate().unwrap();
+    // SAFETY: this allocation is exclusive and octets initializes its entire extent.
+    unsafe {
+        base.write(&octets);
+        fixture.memory.retain(base, layout).unwrap();
+    }
     for (offset, length, expected) in [(0, 64, 1), (1, 63, 0), (0, 64, 1)] {
-        let address = fixture.memory.offset_address(access, base, offset).unwrap();
+        let address = base.offset(offset);
         assert_eq!(
             fixture.call(
                 "zyffi_record",
-                vec![
-                    ForeignParameter::BorrowedMemory,
-                    ForeignParameter::Integer(IntegerType::UInt64)
-                ],
-                vec![
-                    ForeignFixture::borrowed(access, address, length),
-                    ForeignFixture::integer(length as u64)
-                ]
+                vec![ForeignParameter::Address, ForeignParameter::Integer(IntegerType::UInt64)],
+                vec![ForeignFixture::address(address), ForeignFixture::integer(length as u64)]
             ),
             expected
         );
+    }
+}
+
+#[test]
+fn mutable_c_output_preserves_failed_preflight_and_initializes_fields() {
+    let mut fixture = ForeignFixture::new();
+    let layout = MemoryLayout::for_request(8, 4).unwrap();
+    let address = layout.allocate().unwrap();
+    // SAFETY: exclusive allocation of eight bytes; both C calls receive its correct base.
+    unsafe {
+        address.write(&[0x58; 8]);
+    }
+    let mut import = ForeignFixture::import("zyffi_write_record", vec![]);
+    import.signature = ForeignSignature::new(
+        vec![
+            ForeignParameter::Address,
+            ForeignParameter::Integer(IntegerType::UInt64),
+            ForeignParameter::Integer(IntegerType::UInt8),
+            ForeignParameter::Integer(IntegerType::UInt32),
+        ],
+        ForeignResult::Integer(IntegerType::Int32),
+    )
+    .unwrap();
+    for (capacity, expected) in [(7, -1), (8, 0)] {
+        let arguments = vec![
+            ForeignFixture::address(address),
+            ForeignFixture::integer(capacity),
+            ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt8(7))),
+            ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt32(42))),
+        ];
+        let ds::Computation::Ret(Return(value)) =
+            fixture.runtime.invoke(&import, arguments).unwrap()
+        else {
+            panic!("C result must return");
+        };
+        assert!(
+            matches!(*value, ds::Value::Lit(Literal::Integer(IntegerLiteral::Int32(actual))) if actual == expected)
+        );
+        if capacity == 7 {
+            assert_eq!(unsafe { address.bytes(8) }, &[0x58; 8]);
+        }
+    }
+    assert_eq!(unsafe { address.bytes(4) }, &[7, 0x58, 0x58, 0x58]);
+    assert_eq!(unsafe { address.offset(4).bytes(4) }, &42u32.to_ne_bytes());
+    unsafe {
+        layout.deallocate(address);
     }
 }

@@ -169,8 +169,6 @@ impl std::fmt::Display for IntrinsicRole {
 #[strum(serialize_all = "lowercase")]
 pub enum BuiltinTypeRole {
     Addr,
-    Access,
-    Buffer,
     Reader,
     Writer,
     OS,
@@ -193,9 +191,7 @@ impl BuiltinTypeRole {
 
     pub fn universe(self) -> BuiltinTypeUniverse {
         match self {
-            | Self::Addr | Self::Access | Self::Buffer | Self::Reader | Self::Writer => {
-                BuiltinTypeUniverse::Value
-            }
+            | Self::Addr | Self::Reader | Self::Writer => BuiltinTypeUniverse::Value,
             | Self::OS => BuiltinTypeUniverse::Computation,
         }
     }
@@ -432,8 +428,8 @@ impl IntegerOperation {
             | Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod => 2,
             | Self::Eq | Self::Lt | Self::Gt => 4,
             | Self::ToString => 1,
-            | Self::StoreLe => 5,
-            | Self::LoadLe => 4,
+            | Self::StoreLe => 3,
+            | Self::LoadLe => 2,
         }
     }
 
@@ -483,8 +479,8 @@ impl FloatOperation {
             | Self::Add | Self::Sub | Self::Mul | Self::Div => 2,
             | Self::Eq | Self::Lt | Self::Gt => 4,
             | Self::ToString => 1,
-            | Self::StoreLe => 5,
-            | Self::LoadLe => 4,
+            | Self::StoreLe => 3,
+            | Self::LoadLe => 2,
         }
     }
 
@@ -526,18 +522,15 @@ pub enum BuiltinValueRole {
     CharCodepoint,
     CharFromCodepoint,
     StrParseInt,
+    MemoryNull,
+    MemoryCopy,
+    MemoryFill,
     MemoryAllocate,
-    MemoryClose,
-    MemoryFreeze,
-    MemoryImmutableLength,
-    MemoryCheckWrite,
+    MemoryFree,
+    MemoryRetain,
     MemoryFromString,
     MemoryToString,
-    MemoryGrant,
-    MemoryRevoke,
-    MemoryBase,
     MemoryOffset,
-    MemoryCheck,
     MemoryLoadAddr,
     MemoryStoreAddr,
     Stdin,
@@ -650,7 +643,7 @@ impl BuiltinValueRole {
         match self {
             | Self::Integer(_, operation) => operation.arity(),
             | Self::Float(_, operation) => operation.arity(),
-            | Self::Stdin | Self::Stdout | Self::Stderr => 0,
+            | Self::Stdin | Self::Stdout | Self::Stderr | Self::MemoryNull => 0,
             | Self::StrScalarLength
             | Self::StrByteLength
             | Self::CharToStr
@@ -663,7 +656,9 @@ impl BuiltinValueRole {
             | Self::WriteStr
             | Self::WriteInt
             | Self::WriteLine
-            | Self::ReadLineAsInt => 2,
+            | Self::ReadLineAsInt
+            | Self::MemoryOffset
+            | Self::MemoryLoadAddr => 2,
             | Self::ArgAt
             | Self::CharFromCodepoint
             | Self::StrParseInt
@@ -674,12 +669,8 @@ impl BuiltinValueRole {
             | Self::FsOpenReader
             | Self::FsCreateWriter
             | Self::FsAppendWriter
-            | Self::MemoryClose
-            | Self::MemoryFreeze
-            | Self::MemoryImmutableLength
             | Self::MemoryFromString
-            | Self::MemoryRevoke
-            | Self::MemoryBase => 3,
+            | Self::MemoryStoreAddr => 3,
             | Self::StrSplitOnce
             | Self::StrSplitAt
             | Self::StrEq
@@ -687,11 +678,10 @@ impl BuiltinValueRole {
             | Self::IoRead
             | Self::IoReadLine
             | Self::MemoryAllocate
-            | Self::MemoryLoadAddr => 4,
-            | Self::MemoryOffset | Self::MemoryToString | Self::MemoryStoreAddr => 5,
-            | Self::MemoryCheck | Self::MemoryCheckWrite | Self::MemoryGrant | Self::IoWriteAll => {
-                6
-            }
+            | Self::MemoryToString
+            | Self::MemoryCopy
+            | Self::MemoryFill => 4,
+            | Self::MemoryFree | Self::MemoryRetain | Self::IoWriteAll => 5,
         }
     }
 
@@ -725,10 +715,7 @@ impl BuiltinValueRole {
             ) => {
                 Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
             }
-            | Self::MemoryImmutableLength
-            | Self::StrParseInt
-            | Self::ReadLineAsInt
-            | Self::RandomInt => Some(SpareBox::Opaque),
+            | Self::StrParseInt | Self::ReadLineAsInt | Self::RandomInt => Some(SpareBox::Opaque),
             | _ => None,
         }
     }
@@ -919,15 +906,15 @@ pub struct ForeignTarget {
 /// One source-level parameter whose C representation is known to the compiler.
 #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ForeignParameter {
-    /// Borrow a checked `Access * Addr * Int64` window as one `const void *`.
-    BorrowedMemory,
+    /// Pass an unmanaged `Addr` as one C data pointer. Its validity is a caller obligation.
+    Address,
     Integer(IntegerType),
 }
 
 impl ForeignParameter {
     pub fn components(self) -> impl Iterator<Item = ForeignComponent> {
         core::iter::once(match self {
-            | Self::BorrowedMemory => ForeignComponent::MemoryPointer,
+            | Self::Address => ForeignComponent::MemoryPointer,
             | Self::Integer(integer) => ForeignComponent::Integer(integer),
         })
     }

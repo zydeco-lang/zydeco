@@ -8,12 +8,12 @@ use std::{
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
 };
-use zydeco_machine::buffer::{BufferArena, BufferHandle};
 #[cfg(not(feature = "compact-environments"))]
 use zydeco_machine::frames::Frames as NativeFrames;
 #[cfg(feature = "compact-environments")]
 use zydeco_machine::frames::fragments::Fragments as NativeFrames;
 use zydeco_machine::frames::{Action, FrameError, storage::Growable};
+use zydeco_machine::memory::RetainedMemory;
 use zydeco_machine::native::{
     AllocationKind, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word,
 };
@@ -303,9 +303,6 @@ struct HostIoError;
 impl HostIoError {
     fn memory(error: zydeco_machine::memory::MemoryError) -> io::Error {
         let kind = match error {
-            | zydeco_machine::memory::MemoryError::Closed => io::ErrorKind::NotConnected,
-            | zydeco_machine::memory::MemoryError::Permission => io::ErrorKind::PermissionDenied,
-            | zydeco_machine::memory::MemoryError::Uninitialized => io::ErrorKind::InvalidData,
             | zydeco_machine::memory::MemoryError::AllocationFailed => io::ErrorKind::OutOfMemory,
             | _ => io::ErrorKind::InvalidInput,
         };
@@ -320,10 +317,17 @@ impl HostIoError {
 struct IoBranch;
 
 impl IoBranch {
-    fn memory(bytes: &[u8]) -> io::Result<Word> {
-        RuntimeInstance::with_buffers(|arena| arena.borrow_mut().import_memory(bytes))
-            .map(|access| HostHandle::encode(access.raw()))
+    fn memory(bytes: &[u8]) -> io::Result<(Word, Word)> {
+        RuntimeInstance::with_memory(|memory| memory.borrow_mut().import(bytes))
+            .map(|address| (address.expose(), Immediate::expect_signed(bytes.len() as i64)))
             .map_err(HostIoError::memory)
+    }
+
+    fn bytes(result: io::Result<(Word, Word)>, error: Word, success: Word) -> Word {
+        match result {
+            | Ok((address, length)) => HostControl::with_two_arguments(success, address, length),
+            | Err(fault) => Self::error(error, fault),
+        }
     }
 
     fn error(continuation: Word, error: io::Error) -> Word {
@@ -433,7 +437,6 @@ extern "sysv64" fn zydeco_integer_remainder_by_zero() -> ! {
 
 enum RuntimeFailure {
     PatternMatch,
-    ForeignMemory(zydeco_machine::memory::MemoryError),
     IntegerDivisionByZero,
     IntegerRemainderByZero,
 }
@@ -442,7 +445,6 @@ impl RuntimeFailure {
     fn exit(self) -> ! {
         let message = match self {
             | Self::PatternMatch => "pattern match failed",
-            | Self::ForeignMemory(error) => error.message(),
             | Self::IntegerDivisionByZero => "integer division by zero",
             | Self::IntegerRemainderByZero => "integer remainder by zero",
         };
@@ -503,23 +505,6 @@ extern "sysv64" fn zydeco_frame_step(action: &'static Action<Word>, token: Word)
     // SAFETY: action and trailing indices are static descriptors from matched codegen.
     unsafe { action.apply(&mut *RuntimeInstance::frames(), token) }
         .unwrap_or_else(|error| out_of_frames(error))
-}
-
-#[unsafe(export_name = "\x01zydeco_ffi_borrow_memory")]
-extern "sysv64" fn zydeco_ffi_borrow_memory(window: Word) -> *const u8 {
-    // The checked classifier fixes this ordinary product's three word fields.
-    let fields = unsafe { std::slice::from_raw_parts(window as *const Word, 3) };
-    RuntimeInstance::with_buffers(|arena| {
-        arena
-            .borrow()
-            .read_memory(
-                memory::MemoryBranch::access(fields[0]),
-                memory::MemoryBranch::address(fields[1]),
-                <i64 as RuntimeInteger>::decode(fields[2]),
-            )
-            .map(|bytes| bytes.as_ptr())
-    })
-    .unwrap_or_else(|error| RuntimeFailure::ForeignMemory(error).exit())
 }
 
 macro_rules! foreign_integer {
@@ -921,7 +906,7 @@ extern "sysv64" fn zydeco_io_read(
             IoBranch::memory(&bytes)
         })
     });
-    IoBranch::value(result, when_error, when_success)
+    IoBranch::bytes(result, when_error, when_success)
 }
 
 #[unsafe(export_name = "\x01zydeco_io_read_line")]
@@ -944,7 +929,7 @@ extern "sysv64" fn zydeco_io_read_line(
     });
     match result {
         | Ok((0, _)) => HostControl::without_arguments(when_eof),
-        | Ok((_, bytes)) => IoBranch::value(IoBranch::memory(&bytes), when_error, when_line),
+        | Ok((_, bytes)) => IoBranch::bytes(IoBranch::memory(&bytes), when_error, when_line),
         | Err(error) => IoBranch::error(when_error, error),
     }
 }
@@ -959,26 +944,20 @@ extern "sysv64" fn zydeco_io_read_all(reader: Word, when_error: Word, when_succe
             IoBranch::memory(&bytes)
         })
     });
-    IoBranch::value(result, when_error, when_success)
+    IoBranch::bytes(result, when_error, when_success)
 }
 
 #[unsafe(export_name = "\x01zydeco_io_write_all")]
 extern "sysv64" fn zydeco_io_write_all(
-    writer: Word, access: Word, address: Word, length: Word, when_error: Word, when_success: Word,
+    writer: Word, address: Word, length: Word, when_error: Word, when_success: Word,
 ) -> Word {
     let writer = HostHandle::decode(writer);
-    let result = RuntimeInstance::with_buffers(|arena| {
-        let arena = arena.borrow();
-        let bytes = arena
-            .read_memory(
-                memory::MemoryBranch::access(access),
-                memory::MemoryBranch::address(address),
-                <i64 as RuntimeInteger>::decode(length),
-            )
-            .map_err(HostIoError::memory)?;
-        RuntimeInstance::with_io(|runtime| {
-            runtime.borrow_mut().write(writer, |writer| writer.write_all(bytes))
-        })
+    let bytes = unsafe {
+        memory::MemoryBranch::address(address)
+            .bytes(<i64 as RuntimeInteger>::decode(length) as usize)
+    };
+    let result = RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().write(writer, |writer| writer.write_all(bytes))
     });
     IoBranch::unit(result, when_error, when_success)
 }
@@ -1145,7 +1124,7 @@ struct RuntimeInstance {
     frames: NativeFrames<Growable>,
     stack_end: *mut Word,
     transfer: HostTransfer<Word>,
-    buffers: RefCell<BufferArena>,
+    memory: RefCell<RetainedMemory>,
     io: RefCell<HostIoRuntime>,
     arguments: Vec<Word>,
     // Stable, host-owned strings contain no managed references.
@@ -1184,8 +1163,8 @@ impl RuntimeInstance {
         unsafe { &raw mut (*Self::current()).transfer }
     }
 
-    fn with_buffers<T>(f: impl FnOnce(&RefCell<BufferArena>) -> T) -> T {
-        f(unsafe { &(*Self::current()).buffers })
+    fn with_memory<T>(f: impl FnOnce(&RefCell<RetainedMemory>) -> T) -> T {
+        f(unsafe { &(*Self::current()).memory })
     }
 
     fn with_io<T>(f: impl FnOnce(&RefCell<HostIoRuntime>) -> T) -> T {
@@ -1210,7 +1189,7 @@ extern "sysv64" fn entry_begin(stack_end: *mut Word, guard: *const std::sync::at
     let instance = Box::new(RuntimeInstance {
         heap: CheneyHeap::new(), frames: NativeFrames::EMPTY, stack_end,
         transfer: HostTransfer { resume: 0, closure: 0, first: 0, second: 0 },
-        buffers: RefCell::new(BufferArena::default()), io: RefCell::new(HostIoRuntime::new()),
+        memory: RefCell::new(RetainedMemory::default()), io: RefCell::new(HostIoRuntime::new()),
         arguments: Vec::new(), strings: Vec::new(), previous, guard,
     });
     CURRENT_INSTANCE.with(|current| current.set(Box::into_raw(instance)));

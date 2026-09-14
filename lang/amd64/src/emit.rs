@@ -443,13 +443,17 @@ impl<'e> Emitter<'e> {
                 Reg::Rdi,
                 Arg64::Mem(MemRef { reg: Reg::Rsp, offset: scratch_bytes + (index * 8) as i32 }),
             )));
-            let helper = match parameter {
-                | ForeignParameter::BorrowedMemory => "zydeco_ffi_borrow_memory".to_string(),
-                | ForeignParameter::Integer(integer) => {
-                    format!("zydeco_ffi_decode_{}", integer.source_name())
+            match parameter {
+                | ForeignParameter::Address => {
+                    self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdi))));
                 }
-            };
-            self.emit_aligned_call(JmpArgs::Label(helper));
+                | ForeignParameter::Integer(integer) => {
+                    self.emit_aligned_call(JmpArgs::Label(format!(
+                        "zydeco_ffi_decode_{}",
+                        integer.source_name()
+                    )));
+                }
+            }
             self.asm.text.extend(
                 arguments
                     .iter()
@@ -623,7 +627,6 @@ impl Emitter<'_> {
             // construct an owned host string from static UTF-8 bytes
             Instr::Extern("zydeco_string_literal".to_string()),
             // source-to-C marshalling helpers
-            Instr::Extern("zydeco_ffi_borrow_memory".to_string()),
         ]);
         for integer in <IntegerType as strum::VariantArray>::VARIANTS {
             for operation in ["decode", "encode"] {

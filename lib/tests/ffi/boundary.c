@@ -1,19 +1,12 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdio.h>
 
 uint64_t zyffi_first(const void *data) { return ((const uint8_t *)data)[0]; }
 
 uint64_t zyffi_options(const void *data, uint64_t a, uint64_t b,
                         uint64_t c, uint64_t d, uint64_t e) {
     return zyffi_first(data) + a + 3 * b + 5 * c + 7 * d + 11 * e;
-}
-
-uint64_t zyffi_must_not_run(const void *data) {
-    (void)data;
-    puts("unexpected foreign effect");
-    return 0;
 }
 
 uint64_t zyffi_zero(void) { return UINT64_MAX; }
@@ -107,3 +100,12 @@ int64_t zyffi_integer_mix(int8_t a, int16_t b, int32_t c,
 static int64_t zyffi_saved;
 void zyffi_save(int64_t value) { zyffi_saved = value; }
 int64_t zyffi_saved_value(void) { return zyffi_saved; }
+
+/* A status-returning output operation: failed capacity preflight performs no writes. */
+int32_t zyffi_write_record(void *data, uint64_t capacity, uint8_t tag, uint32_t payload) {
+    if (capacity < 8) return -1;
+    uint8_t *bytes = data;
+    bytes[0] = tag;
+    memcpy(bytes + 4, &payload, sizeof payload);
+    return 0;
+}

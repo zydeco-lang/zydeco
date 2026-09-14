@@ -1,17 +1,18 @@
+-- Share the pointer types and CPS operations across a source-module boundary.
 begin
-  param val (/VType; /Thk; /OS; /UInt8; /UInt32; /numeric) : @(import("../../../std/builtin.zy")) that
-  param val Bytes : VType in
-  let Storage = (@(import("../../../std/memory/storage.type.zy"))) Bytes in
-  let (/Function; calls) = (@(import("../../../std/memory/call.zy"))) Bytes in
-  let val worker (Stored : VType) (storage : Storage (UInt8 * UInt32) Stored) :
-    Thk (Function Stored Stored OS) =
-      let boundary = calls/between (UInt8 * UInt32) (UInt8 * UInt32) Stored Stored storage storage
-      in
-      boundary/encode OS {
-        fn (tag, payload) no yes =>
-          do next <- ! numeric/uint32/add payload 1;
-          ! yes (tag, next)
-      }
+  param val (/VType; /CType; /Thk; /UInt8; /UInt32; /numeric) : @(import("../../../std/builtin.zy")) in
+  let Record = UInt8 * UInt32 in
+  let val worker (Live : VType) (Vacant : VType)
+    (take : Thk (forall (R : CType) . Live -> Thk (Vacant -> Record -> R) -> R))
+    (init : Thk (forall (R : CType) . Vacant -> Record -> Thk (Live -> R) -> R))
+  : Thk (forall (R : CType) . Live -> Thk (Live -> R) -> R) = {
+      fn R pointer yes =>
+        ! take R pointer {
+          fn vacant (tag, payload) =>
+            do next <- ! numeric/uint32/add payload 1;
+            ! init R vacant (tag, next) yes
+        }
+    }
   in
   worker
 end

@@ -33,18 +33,13 @@ impl HostCallMode {
             | BuiltinValueRole::StrGet
             | BuiltinValueRole::CharFromCodepoint
             | BuiltinValueRole::StrParseInt
-            | BuiltinValueRole::MemoryClose
-            | BuiltinValueRole::MemoryFreeze
-            | BuiltinValueRole::MemoryImmutableLength
-            | BuiltinValueRole::MemoryCheckWrite
+            | BuiltinValueRole::MemoryFree
+            | BuiltinValueRole::MemoryRetain
             | BuiltinValueRole::MemoryFromString
             | BuiltinValueRole::MemoryToString
+            | BuiltinValueRole::MemoryCopy
+            | BuiltinValueRole::MemoryFill
             | BuiltinValueRole::MemoryAllocate
-            | BuiltinValueRole::MemoryGrant
-            | BuiltinValueRole::MemoryRevoke
-            | BuiltinValueRole::MemoryBase
-            | BuiltinValueRole::MemoryOffset
-            | BuiltinValueRole::MemoryCheck
             | BuiltinValueRole::MemoryLoadAddr
             | BuiltinValueRole::MemoryStoreAddr
             | BuiltinValueRole::IoRead

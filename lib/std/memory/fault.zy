@@ -1,14 +1,10 @@
 begin
   let Unit = @(intrinsic(unit)) in
   data
-  | +Closed : Unit
-  | +Bounds : Unit
-  | +Permission : Unit
-  | +Overflow : Unit
-  | +Alignment : Unit
-  | +Uninitialized : Unit
-  | +InvalidValue : Unit
-  | +Unavailable : Unit
+  | +InvalidLayout : Unit
   | +AllocationFailed : Unit
+  | +InvalidEncoding : Unit
+  | +Bounds : Unit
+  | +Overflow : Unit
   end
 end

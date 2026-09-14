@@ -28,7 +28,7 @@ The available surface names are:
 | Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt64` |
 | Floating point | `Float32`, `Float64` |
 | Text | `Char`, `String` |
-| Capabilities | `Addr`, `Access`, `Buffer`, `Reader`, `Writer`, `OS` |
+| Capabilities | `Addr`, `Reader`, `Writer`, `OS` |
 
 Host operations live in the same contract under the `numeric`, `text`, and `system` groups,
 and the search descends through them: `param (/stdio; /process) : @(import(std/builtin)) in` selects two operations
@@ -67,9 +67,8 @@ Tails are ordinary reusable computations, and host runtimes need no special clos
 [Argument semantics](../../docs/references/language.md#13-primitive-values-and-capabilities) specify lookup failures
 and repeated forcing.
 
-The optional `memory/package.zy` and `memory/static-layout.zy` builders are imported directly,
-like the control libraries.
-Their explicit signatures prescribe abstract layouts, plans, and storage types.
+The optional `memory/package.zy` builder is imported directly, like the control libraries.
+It supplies fixed and dynamic layouts, typed pointers, and explicit allocation operations.
 See [explicit storage](#explicit-storage).
 
 ## Source packages and tests
@@ -123,24 +122,22 @@ numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
 numeric/package.zy         the ten width modules and their capability dictionaries
 numeric/codecs.zy          source byte codecs over exact-width memory leaves
 
-text/bytes.zy              abstract immutable byte sequences over checked memory
+text/bytes.zy              abstract immutable byte sequences over retained raw allocations
 text/bytes.type.zy         shared byte-package witness and primitive-free sequence API
 text/package.zy            text conveniences and byte collection operations
 
-memory/package.zy          layout composition and checked concrete storage
-memory/static-layout.zy    value-calculated plans with inspectable placement
-memory/size.zy             total checked size and alignment calculations
+memory/package.zy          manual-memory package and shared pointer/state witnesses
+memory/types.zy            erased Ptr<L,S> abstraction and state markers
+memory/layout.zy           static layout plans and typed destination operations
+memory/dynamic-layout.zy   explicitly dynamic placement and realization
+memory/size.zy             checked static size and alignment calculations
 memory/shape.zy            inspectable scalar widths and product placement
-memory/buffer.zy           zeroed allocation, snapshots, writes, freeze, and close
-memory/allocation.zy       allocator service and allocation computations
-memory/access.zy           checked offset reads and caller-provided destinations
-memory/views.zy            source cells, padding, alignment, views, pointers, and slices
-memory/native.zy           checked native addresses, grants, and typed memory operations
-memory/fault.zy            ordinary source memory errors
-memory/call.zy             stored call interfaces, composition, and conversion adapters
-memory/package.type.zy     abstract layout builder interface
-memory/representation.type.zy  per-realization abstract stored type and operations
-memory/storage.type.zy     storage dictionary parameterized by its shared carrier
+memory/codec.zy            direct destination scalar/product recipes
+memory/buffer.zy           incremental byte construction, snapshots, retention, release
+memory/allocation.zy       explicit allocator services
+memory/slice.zy            counted typed pointers and checked index arithmetic
+memory/native.zy           raw memory adapter and source fault values
+memory/representation.type.zy  layout witness and typed CPS access interface
 
 system/package.zy          system data types and capability-preserving assembly
 
@@ -162,7 +159,7 @@ constructors, and fixed-representation types — followed by generative host cap
 and its body groups the runtime operations:
 
 - Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the ten fixed-width numeric types, `Char`, `String`,
-  then abstract `Addr`, `Access`, `Buffer`, `Reader`, `Writer`, and `OS`.
+  then abstract `Addr`, `Reader`, `Writer`, and `OS`.
 - `numeric`: exact-width arithmetic, branch comparisons, rendering, and checked scalar loads/stores.
 - `text`: operations crossing `Char`, `String`, and `Int64`.
 - `system`: the re-exposed capabilities plus checked memory, I/O, filesystem, standard stream, argument,
@@ -314,8 +311,9 @@ A `Char` is one Unicode scalar value.
 surrogate code points, and values above the Unicode range with `none`.
 
 `Bytes` is an abstract source-defined immutable sequence of octets with no encoding attached.
-[text/bytes.zy](text/bytes.zy) supplies the type and algorithms using generic checked memory;
-[the owning design](../../docs/references/language.md#immutable-owners-and-source-bytes) specifies freeze and retention.
+[text/bytes.zy](text/bytes.zy) supplies the type and algorithms using explicitly retained memory;
+[the owning design](../../docs/references/language.md#immutable-owners-and-source-bytes) specifies publication
+and retention.
 The compiler has no byte-sequence type or operation family.
 Positions and lengths count octets, not scalars, and `bytes/get` reports one octet as a `UInt8`.
 `bytes/slice value start length` returns the window `[start, start + length)`.
@@ -332,129 +330,65 @@ of these foundational operations.
 
 ## Explicit storage
 
-Two optional builders share the [layout laws](../../docs/references/language.md#layout-laws) and byte codecs.
-Use `memory/static-layout.zy` when source value functions can determine placement;
-use `memory/package.zy` when sizes and alignment come from runtime computations.
+Import [std/memory](memory/package.zy) directly with a shared Builtin opening.
+Its `fixed` builder calculates placement in source value functions; `dynamic` accepts runtime inputs.
+The [language reference](../../docs/references/language.md#manual-memory) owns memory state,
+layout laws, unsafe obligations, and retention.
+The package introduces no lifetimes or borrow checker.
 
-The static builder returns a `Result` containing an opaque successful plan:
-
-```zydeco
-let make_memory = @(import("memory/static-layout.zy")) in
-let (/Bytes; byte_package) = builtin |> (@(import("text/bytes.zy"))) in
-let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
-let record = memory/align (UInt8 * UInt32) 16
-  (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
-match record
-| +Err(error) => ...
+```zydeco check
+param (/VType; /CType; /Thk; /OS; /UInt8; /process; builtin) : @(import("builtin.zy")) in
+let (/Uninit; /Init; /Ptr; /fixed; /allocation) = builtin |> (@(import("memory/package.zy"))) in
+let (= Plan, = Layout, layouts) = fixed in
+let (/Alloc; /heap) = allocation in
+let Fault = @(import("memory/fault.zy")) in
+let fail = { ! process/exit 1 } in
+let no = { fn (_ : Fault) => ! fail } in
+match layouts/uint8
+| +Err(_) => ! fail
 | +Ok(plan) =>
-  let shape = memory/inspect (UInt8 * UInt32) plan in
-  let (= Stored, repr) = memory/realize (UInt8 * UInt32) plan in
-  ! repr/store OS ((7 : UInt8), (16909060 : UInt32)) failure { fn stored => ... }
+  let (= L, repr) = layouts/realize UInt8 plan in
+  ! repr/allocate OS heap no { fn vacant =>
+    ! repr/unsafe/init OS vacant 7 { fn live =>
+      ! repr/unsafe/take OS live { fn vacant value =>
+        ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+      }
+    }
+  }
 end
 ```
 
-`shape` exposes `size`, `alignment`, and `form`. Product forms contain `offset`, `left`,
-and `right`; scalar forms retain their original `width` through alignment changes.
-Both `inspect` and `realize` are value functions.
-The [complete byte example](../tests/std/static-layout.zy), [buffer example](../tests/std/static-storage-access.zy),
-and [C example](../tests/ffi/static-layout.zy) exercise the resulting interface.
-[Static-plan rules and limits](../../docs/references/language.md#static-layout-plans) explain construction errors,
-runtime transport, and the remaining boundary before layout-directed machine calls.
+`Ptr L S` contains one address. `L`, `Uninit`, and `Init` are erased type parameters.
+The types guide transitions, while the caller remains responsible for stale aliases,
+allocation lifetime, initialization, and matching release.
+`unsafe` is an ordinary library namespace documenting those obligations.
 
-Import [memory/package.zy](memory/package.zy) and apply it to Builtin and the same byte package:
+| Need | API or example |
+| --- | --- |
+| Fixed fields, padding, and alignment | [layout.zy](memory/layout.zy), [aligned record](../tests/std/static-layout.zy) |
+| Runtime placement | [dynamic-layout.zy](memory/dynamic-layout.zy), [example](../tests/std/representation.zy) |
+| Explicit allocation service | [allocation.zy](memory/allocation.zy) and [Alloc](memory/allocator.type.zy) |
+| Typed pointer access | [representation interface](memory/representation.type.zy) |
+| Expose/assert a raw pointer interpretation | `pointer/unsafe/address` and `pointer/unsafe/from_address` |
+| Counted pointer views and checked indexing | [slice.zy](memory/slice.zy), [example](../tests/std/memory-views.zy) |
+| Raw memory effects | [native.zy](memory/native.zy) |
+| Share a pointer with another source module | [CPS worker](../tests/std/represented-call/main.zy) |
+| C input and mutable output | [aligned input](../tests/ffi/static-layout.zy), [output](../tests/ffi/mutable-output.zy) |
 
-```zydeco
-let make_memory = @(import("memory/package.zy")) in
-let (= Layout, = Representation, memory) = (builtin |> make_memory) byte_package in
-let record = memory/align (UInt8 * UInt32) 16
-  (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
-! memory/realize (UInt8 * UInt32) OS record failure {
-  fn (= Stored, repr) =>
-    ! repr/store OS ((7 : UInt8), (16909060 : UInt32)) failure {
-      fn value =>
-        do buffer <- ! repr/bytes value;
-        ...
-    }
-}
-```
-
-The import path is relative to this directory.
-`failure` is a caller-supplied `Thk OS`; realization and storage also work with other computation types.
-`Stored` is local to the opened representation, and `repr/load` accepts that stored type.
-Use `repr/from_bytes` to validate external bytes against the contract.
-The [layout design](../../docs/references/language.md#explicit-storage-contracts) owns all layout laws,
-validation, address guarantees, and current costs.
-[The complete example](../tests/ffi/representation.zy) passes stored bytes to C
-through the existing borrowed-buffer interface.
-
-[memory/call.zy](memory/call.zy) shares that opened carrier with callers and callees.
-Its `Function A B R` computation type takes an argument, a failure continuation, and a result continuation.
-Given an opened `repr : Storage Record Stored`, a logical worker can expose a stored interface:
-
-```zydeco
-let (/Function; calls) = (@(import("memory/call.zy"))) Bytes in
-let boundary = calls/between Record Record Stored Stored repr repr in
-let encoded = boundary/encode OS logical_worker in
-! encoded stored failure { fn result => ... }
-```
-
-`boundary/decode OS encoded` supplies the corresponding logical interface.
-`compose` connects calls sharing exactly the intermediate type; `convert` inserts explicit decoding
-and encoding when that intermediate representation changes.
-The [complete example](../tests/std/represented-call/main.zy) imports a generic worker,
-chooses thunks and provider packages at runtime, and converts between 16-byte and 64-byte aligned records.
-The [owning call design](../../docs/references/language.md#stored-call-interfaces) specifies identity agreement,
-sequencing, costs, and the boundary before changing physical call slots.
-
-Mutable construction uses the source `buffer` module exported by std: allocate a fixed-capacity destination,
-write checked ranges, then freeze it into immutable bytes or close it.
-`memory/allocation.zy` provides the source-defined allocator service and a per-request size-limiting provider.
-See [the owning buffer protocol](../../docs/references/language.md#mutable-destination-capabilities)
-for state transitions and [the example](../tests/std/buffer.zy) for complete use.
-
-[memory/access.zy](memory/access.zy) adds `read_at` for decoding a checked field window
-and `write_to` for encoding into a caller-provided `Buffer`.
-It consumes the existing representation package and works with runtime-selected contracts.
-See [access rules](../../docs/references/language.md#access-through-existing-representation-contracts)
-and [the C construction example](../tests/ffi/storage-access.zy).
-
-## Cells and memory views
-
-[The view library](memory/views.zy) receives address and access types as ordinary `VType` parameters.
-[The native provider](memory/native.zy) instantiates it with Builtin `Addr` and `Access`
-and supplies checked owned memory on the interpreter, AMD64, and the WebAssembly host.
-A cell describes a fixed stored representation; a view interprets a thin, fat, or header-bearing handle.
-Views need no handle cell until an operation actually stores that handle.
-`padding`, `align`, and `product` calculate cell placement with source value functions.
-`read_at` and `index` perform runtime checks through the supplied memory provider.
-The `pointer` and `slice` factories seal handles behind ordinary existential packages specialized to an element cell.
-
-Select the native module through the same Builtin opening as its buffer owner:
-
-```zydeco
-let (/Fault; /views; /memory; /address_cell; native) =
-  builtin |> (@(import("memory/native.zy"))) in
-let prefixed = views/indirect Int64 views/int64 -8 0 in
-...
-```
-
-`native/allocate R` produces uninitialized owned storage; source `buffer/allocate` produces zeroed storage.
-`native/freeze R` transfers initialized memory to a retained immutable grant and closes every old mutable alias.
-`native/grant` gives a checked range `Read`, `Write`, or `ReadWrite` permissions.
-A mutable grant can be revoked independently; closing the buffer invalidates all its mutable grants.
-The source reader preflights the entire cell, including padding and over-alignment, before loading its fields.
-Typed stores initialize their footprint; only a typed address store establishes an address slot.
-See the [complete example](../tests/std/memory-views.zy), [failure cases](../tests/std/memory-faults.zy),
-and [owning contracts](../../docs/references/language.md#checked-memory-capabilities).
-The native pointer slot is 8 bytes; the WebAssembly host uses virtual addresses and does not expose a C pointer.
+The [byte builder](memory/buffer.zy) is also exposed as `std/buffer`, with a source-defined abstract `Buffer`.
+It allocates a capacity, advances an initialized prefix with `unsafe/push` or `unsafe/extend`,
+and provides copying snapshots or explicit release.
+`unsafe/finish_heap` transfers a builtin-heap allocation into retained `Bytes` without copying its prefix.
+See the [builder example](../tests/std/buffer.zy).
+Callers must retire old handles after mutation, publication, or release.
 
 ## Byte operation costs
 
 These costs describe the current contiguous-buffer implementations, excluding general allocation/GC overhead.
 [text/bytes.zy](text/bytes.zy) implements sequence operations;
 [text/package.zy](text/package.zy) adds collection and option conveniences.
-The checked memory arena retains frozen allocations for its lifetime, so small slices can retain larger owners.
-Grant and address lookup costs are excluded from the byte-work counts below.
+The runtime retains immutable backing allocations until teardown, so small slices can retain larger owners.
+The counts below describe payload work; Wasm host address lookup and ordinary source allocations are additional costs.
 
 | Operation | Work |
 | --- | --- |
@@ -462,17 +396,17 @@ Grant and address lookup costs are excluded from the byte-work counts below.
 | `slice` | Constant byte work: shares the immutable owner on every backend. |
 | `eq`, `lt` | At most the shorter buffer's length in byte comparisons, with early exit. |
 | `append` | Copies both inputs: O(n + m). |
-| Low-level `aligned` | Allocates aligned storage and copies O(n) visible bytes; host reservation and zeroing can cost O(n + alignment). |
+| Low-level `aligned` | Allocates aligned storage and copies O(n) visible bytes; host allocation costs are separate. |
 | `to_list` | O(n) indexed observations and list cells. |
 | `from_list` | Repeated append of a singleton to the accumulated tail: O(n²) copied bytes. |
 | `concat` | Sum of the lengths copied by the right fold; quadratic for a list of equal-sized chunks. |
 
 [numeric/codecs.zy](numeric/codecs.zy) gives every scalar `to_le_bytes` and `from_le_bytes`;
 std includes these operations in its numeric modules.
-The low-level byte package also exposes `from_immutable`, `with_window`, `copy_to`,
-and a fixed-size `build` operation with an explicit fill continuation.
-A read-only mutable grant cannot supply `from_immutable`; use the freeze transition first.
-
+The low-level byte package groups `from_retained`, `with_window`, `copy_to`,
+and fixed-size `build` under `bytes/unsafe`.
+Their [caller contracts](../../docs/references/language.md#immutable-owners-and-source-bytes) cover initialized extents,
+retention, immutable aliases, and one completion per fill.
 A future [memory-backed writer](../../docs/proposals/filesystem.md#memory-backed-writer-and-byte-builder)
 would provide incremental construction without changing immutable-byte observations.
 

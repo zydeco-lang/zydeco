@@ -15,7 +15,7 @@ begin
   in
   let (/Bytes; byte_package) = builtin |> (@(import("text/bytes.zy"))) in
   let codecs = (builtin |> (@(import("numeric/codecs.zy")))) byte_package in
-  let buffer = (builtin |> (@(import("memory/buffer.zy")))) byte_package in
+  let (= Buffer, buffer) = (builtin |> (@(import("memory/buffer.zy")))) byte_package in
   let (/char; /string; /bytes; text) = (builtin |> make_text) byte_package base in
   let (/Path; /IoErrorKind; /IoError; /io; /fs; /stdio; /process; system) =
     (builtin |> make_system) byte_package base
@@ -41,6 +41,7 @@ begin
       (= Option as Option : VType -> VType)
       (= Result as Result : VType -> VType -> VType)
       (= Bytes : VType) is Bytes
+      (= Buffer : VType) is Buffer
       (= List : VType -> VType) is List
       (= Path : VType) is Path
       (= IoErrorKind : VType) is IoErrorKind

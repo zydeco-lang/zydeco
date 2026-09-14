@@ -1,20 +1,20 @@
 -- Sequence codecs compose scalar memory leaves with immutable source bytes.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Int64; /Addr; /Access;
+  param val (/VType; /CType; /Thk; /Ret; /Int64; /Addr;
     /Int8; /Int16; /Int32; /UInt8; /UInt16; /UInt32; /UInt64; /Float32; /Float64;
     /numeric; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr Access that
+  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr that
   let int = numeric/int64 in
   let val scalar (A : VType) (width : Int64)
-    (store : Thk (forall (R : CType) . Access -> Addr -> A -> Thk (Int64 -> R) -> Thk R -> R))
-    (load : Thk (forall (R : CType) . Access -> Addr -> Thk (Int64 -> R) -> Thk (A -> R) -> R))
+    (store : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
+    (load : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
   =
     (
       #to_le_bytes = {
         fn (value : A) =>
-          ! bytes/build (Ret Bytes) width 1 {
-            fn access address no yes =>
-              ! store (Ret Bytes) access address value { fn _ => ! no +InvalidValue() } yes
+          ! bytes/unsafe/build (Ret Bytes) width 1 {
+            fn address _ yes =>
+              ! store (Ret Bytes) address value yes
           } {
             fn _ =>
               @[partial]
@@ -26,8 +26,8 @@ begin
         fn (R : CType) (value : Bytes) (no : Thk R) (yes : Thk (A -> R)) =>
           do count <- ! bytes/length value;
           ! int/eq R count width {
-            ! bytes/with_window R value { fn _ => ! no } {
-              fn access address _ => ! load R access address { fn _ => ! no } yes
+            ! bytes/unsafe/with_window R value { fn _ => ! no } {
+              fn address _ => ! load R address yes
             }
           } no
       }

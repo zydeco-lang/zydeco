@@ -5,8 +5,7 @@ use std::collections::HashSet;
 use thiserror::Error;
 use zydeco_syntax::{
     App, Arrow, BuiltinRole, BuiltinTypeRole, ForeignImport, ForeignParameter, ForeignResult,
-    ForeignSignature, ForeignSignatureError, ForeignTarget, IntegerType, Named, PrimitiveType,
-    Prod,
+    ForeignSignature, ForeignSignatureError, ForeignTarget, Named, PrimitiveType,
 };
 use zydeco_utils::prelude::ArenaAccess;
 
@@ -14,14 +13,12 @@ use zydeco_utils::prelude::ArenaAccess;
 #[derive(Clone, Debug, Error)]
 pub enum ForeignClassifierError {
     #[error(
-        "C export argument {index} must be a fixed-width integer; incoming memory grants are not supported"
+        "C export argument {index} must be a fixed-width integer; incoming pointers are not supported"
     )]
     UnsupportedExportParameter { index: usize, classifier: ss::TypeId },
     #[error("C ffi requires a thunk classified by `Thk (A1 -> ... -> Ret B)`")]
     ExpectedThunk { classifier: ss::TypeId },
-    #[error(
-        "C ffi argument {index} must be a readable `Access * Addr * Int64` window or a fixed-width integer"
-    )]
+    #[error("C ffi argument {index} must be an `Addr` pointer or a fixed-width integer")]
     UnsupportedParameter { index: usize, classifier: ss::TypeId },
     #[error("C ffi computation must end in `Ret B`")]
     ExpectedReturn { classifier: ss::TypeId },
@@ -75,9 +72,9 @@ impl<'a> ForeignClassifier<'a> {
             let representation = match self.primitive(parameter) {
                 | Some(PrimitiveType::Integer(integer)) => ForeignParameter::Integer(integer),
                 | _ if matches!(direction, ForeignDirection::Import)
-                    && self.memory_window(parameter) =>
+                    && self.capability(parameter, BuiltinTypeRole::Addr) =>
                 {
-                    ForeignParameter::BorrowedMemory
+                    ForeignParameter::Address
                 }
                 | _ if matches!(direction, ForeignDirection::Export) => {
                     return Err(ForeignClassifierError::UnsupportedExportParameter {
@@ -106,18 +103,6 @@ impl<'a> ForeignClassifier<'a> {
             | _ => return Err(ForeignClassifierError::UnsupportedResult { classifier: result }),
         };
         Ok(ForeignSignature::new(parameters, representation)?)
-    }
-
-    fn memory_window(&self, ty: ss::TypeId) -> bool {
-        let Some(ss::Type::Prod(Prod(fields))) = self.type_view(ty) else {
-            return false;
-        };
-        let [access, address, length] = fields.as_slice() else {
-            return false;
-        };
-        self.capability(*access, BuiltinTypeRole::Access)
-            && self.capability(*address, BuiltinTypeRole::Addr)
-            && self.primitive(*length) == Some(PrimitiveType::Integer(IntegerType::Int64))
     }
 
     fn capability(&self, ty: ss::TypeId, role: BuiltinTypeRole) -> bool {

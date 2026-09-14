@@ -380,7 +380,13 @@ impl HostContinuation {
         host: &mut HostRuntime, bytes: Vec<u8>, error: &ZValue, success: &ZValue,
     ) -> Result<ZCompute, i32> {
         match host.import_memory(&bytes) {
-            | Ok(access) => Ok(Self::one(success, HostValue::Access(access).into())),
+            | Ok(access) => Ok(crate::memory::MemoryRuntime::resume(
+                success,
+                [
+                    HostValue::Address(access).into(),
+                    crate::memory::MemoryRuntime::int_value(bytes.len() as i64),
+                ],
+            )),
             | Err(fault) => Self::io_error(error, fault),
         }
     }
@@ -552,12 +558,11 @@ pub fn io_write_all(
     match args.as_slice() {
         | [
             ZValue::Host(HostValue::Writer(writer)),
-            ZValue::Host(HostValue::Access(access)),
             ZValue::Host(HostValue::Address(address)),
             ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(length))),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
-        ] => match host.write_memory(*writer, *access, *address, *length, output, stderr) {
+        ] => match host.write_memory(*writer, *address, *length, output, stderr) {
             | Ok(()) => Ok(HostContinuation::force(when_success)),
             | Err(error) => HostContinuation::io_error(when_error, error),
         },

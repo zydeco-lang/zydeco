@@ -2028,7 +2028,7 @@ Local unboxing removes cells where justified, without interpreting a source dict
 
 | Description | Established evidence | Limit |
 | --- | --- | --- |
-| [Source `Representation A` and `Storage A Stored`](language.md#explicit-storage-contracts) | One abstract carrier shared by codecs and call signatures, with size/alignment values | No selected register class or argument width |
+| [Source `Representation A`](language.md#typed-pointers-and-slices) | One layout witness shared by typed pointers and CPS operations | No selected register class or argument width |
 | [Source `Plan A`](language.md#static-layout-plans) | Validated byte placement and inspectable field offsets | No type identity for each placement, reference map, or calling convention |
 | SPSLow `ProductLayout` | Logical arity and producer/consumer structure | No byte padding or scalar register classification |
 | [Word entries](#word-entry-contracts) | Ordered administrative environment/result words and code/package provenance | No different component transport or complete source stack protocol |
@@ -2254,7 +2254,7 @@ Aligned host-owned objects outside the managed spaces remain unchanged by tracin
 ### Runtime instances
 
 [RuntimeInstance](../../runtime/stub.rs) owns the managed heap, frame store, stack root bound,
-host-transfer record, memory grants and buffers, I/O handles, invocation arguments, and host-owned strings.
+host-transfer record, retained immutable allocations, I/O handles, invocation arguments, and host-owned strings.
 A thread-local pointer dispatches helpers to the active instance; it owns no language state itself.
 Entry saves its predecessor and installs a fresh instance, while normal completion restores
 that predecessor and drops the completed instance before releasing its unit guard.
@@ -2395,31 +2395,35 @@ Strings are immutable UTF-8 text. `Bytes` is a source-defined abstraction
 whose [owning design](language.md#immutable-owners-and-source-bytes) specifies its representation and operations.
 The compiler and host recognize general memory capabilities, without a byte-sequence type or operation family.
 
-[BufferArena](../../lang/machine/src/buffer.rs) and its [memory model](../../lang/machine/src/memory.rs) are shared
-by the interpreter and native host.
-Non-reused handles identify allocations, addresses, and access grants.
-Native allocation uses a checked reservation with an aligned visible range,
-initialized-byte tracking, and pointer-slot provenance.
-Freezing transfers storage to the arena's retained immutable-owner table; source slices retain
-that grant and never copy the visible payload merely to change a window.
-The arena retains frozen storage until runtime teardown.
-It contains no managed Zydeco references.
-The Node host supplies the same capability checks with virtual addresses and no native C pointer export.
-[Memory laws](language.md#checked-memory-capabilities) own the source-visible permissions, state transitions,
-alignment, initialization, and failure-before-mutation guarantees.
+[Manual memory](../../lang/machine/src/memory.rs) is shared by the interpreter and native host.
+`Address` wraps a raw pointer; `MemoryLayout` validates allocation requests using the platform allocator layout.
+Allocation is uninitialized, and explicit release receives the exact base and original layout.
+Native `Addr` words contain pointer bits directly.
+The tracing collector leaves unmanaged addresses outside its managed semispaces unchanged;
+raw storage must not contain unrooted managed references.
+There are no grant records, liveness tables, pointer-slot maps, or initialization bitmaps.
+`RetainedMemory` owns explicitly transferred immutable allocations until runtime teardown.
+It reserves retention bookkeeping before accepting ownership, so failure leaves ownership with the caller.
 
-Scalar `store_le` and `load_le` operations access a checked extent of the scalar's exact width at byte alignment.
-Native cells impose stronger alignment through an explicit preflight check.
-Loads use a continuation-selecting host call and a trailing spare box: opaque for `Int64`,
-`UInt64`, and `Float64`, unused for narrow results.
-Float adapters manipulate raw payload bits on every backend, including Node,
-so a round-trip does not canonicalize NaNs through a host floating-point conversion.
-Source byte codecs allocate and freeze storage, and reject windows of the wrong length before loading.
+The [Node host](../../cli/wasm/wasm-memory.mjs) emulates unmanaged memory with virtual 64-bit addresses and byte arrays.
+Its range lookup is an embedding implementation cost; it is not a source guarantee of recoverable raw-access errors.
+The virtual address space is separate from managed Wasm memory and exports no native pointer.
+[L13](language.md#manual-memory) owns caller obligations and the distinction between static evidence and runtime data.
 
-String conversion imports UTF-8 into immutable memory or validates a checked window before producing a string.
-Primitive I/O reads likewise return an immutable grant; writes receive `Access`, `Addr`,
-and byte count, and validate readability and initialization before the stream effect.
-The source system library converts between these windows and its shared byte package.
+Scalar `store_le` takes an address, value, and completion; `load_le` takes an address and result successor.
+Native loads and stores use byte copies or unaligned pointer-slot accesses without runtime access validation.
+Continuation-selecting loads have a trailing spare box for `Int64`, `UInt64`, and `Float64`; narrow loads need none.
+Float adapters preserve raw payload bits, including NaNs, on every backend.
+The [source codecs](../../lib/std/memory/codec.zy) write products directly into destination fields.
+Padding contributes no load or store. Fixed realization requires statically evaluable size and alignment;
+dynamic realization captures the required placement in its source operations.
+Types and state witnesses erase, while explicit queries may materialize constants and ordinary closures may allocate.
+
+String imports and primitive I/O reads return a retained address and byte count through a two-argument successor.
+UTF-8 decoding validates the bytes in a caller-established readable range.
+I/O writes receive a writer, raw address, count, error successor, and completion.
+The source system library mediates these raw interfaces through its shared immutable byte package.
+Byte codecs validate exact lengths before raw scalar reads.
 
 Argument lookup returns one string or selects the missing branch; it retains no Zydeco continuation.
 The native host caches argument strings outside the managed heap, with no managed references in the snapshot.
@@ -2443,10 +2447,9 @@ Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resou
 ### Foreign calls
 
 [ForeignSignature](../../lang/statics/src/foreign.rs) is a checked call plan for a returning C thunk.
-Arguments are fixed-width integers or an explicit `Access * Addr * Int64` readable window.
-A window contributes one borrowed pointer; its integer is a checked extent, not an implicit C length argument.
-Bindings supply any length as a separate integer. At most six C arguments are accepted.
-Results are fixed-width integers or `Unit` (C `void`).
+Arguments are fixed-width integers or `Addr`. An address contributes one raw pointer.
+Bindings supply any length or capacity as a separate integer.
+At most six C arguments are accepted. Results are fixed-width integers or `Unit` (C `void`).
 Its constructor enforces the flattened bound, and the validated fields remain private.
 Expansion yields ordered `ForeignArgument` entries identifying the source parameter and its integer,
 or pointer component; both execution paths consume that plan.
@@ -2466,11 +2469,12 @@ leaves excess integer register bits unspecified.
 Only 64-bit integer results need a spare opaque box; narrow integers and unit fit immediate words.
 The libffi adapter uses exact scalar storage and return types for integers,
 and its explicit void-return operation avoids reading nonexistent result storage.
-Marshalling validates every window's live grant, read permission, bounds, and initialization before C entry.
-Invalid memory fails without calling C. The arena retains each borrowed allocation
-across the synchronous call; marshalling helpers do not collect.
-The admitted pointer borrow lasts for the synchronous C call; the adapter does not implement a retained
-or mutable foreign-borrow protocol.
+Native address marshalling moves the pointer word directly, with no host conversion call.
+The interpreter verifies that the source value is an `Address` and passes its raw pointer to libffi.
+Neither path validates the allocation or establishes a borrow: memory validity
+and foreign ownership are caller obligations.
+Marshalling helpers do not collect. Explicit retention protects `Bytes` storage across the call;
+manual allocations remain live until their owner releases them.
 The `Ret` classifier alone establishes neither termination nor a cleanup scope.
 Callbacks into the active instance remain unsupported. Explicit compiled-library manifests select exact artifacts
 through the [unit linker](#compilation-unit-preparation-and-artifacts);
@@ -2481,7 +2485,7 @@ Native foreign imports are unsupported in Wasm and the ZASM interpreter.
 and [FFI integration tests](../../lang/tests/tests/ffi.rs) pair valid shapes with unsupported arities,
 argument sorts, results, loader failures, and borrowing cases.
 Scalar exports use the [C entry adapter](#compilation-unit-preparation-and-artifacts) and the same scalar call plan.
-Incoming windows are rejected directionally because raw pointers cannot reconstruct grants.
+Incoming pointers remain outside the scalar export profile; they need a separate entry adapter and binding contract.
 [Callbacks and retained values](../proposals/c-ffi.md#closures-callbacks-and-reentry) still require ownership
 and entry protocols beyond fresh scalar calls.
 

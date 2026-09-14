@@ -1,145 +1,122 @@
-//! Interpreter binding for the checked memory provider.
-
+//! Interpreter adapter for manual memory. Source unsafe contracts establish validity.
 use crate::{
     host::{HostRuntime, HostValue},
     syntax::*,
 };
 use std::rc::Rc;
-use zydeco_machine::{
-    buffer::BufferHandle,
-    memory::{AccessHandle, AddressHandle, MemoryError, Permission},
-};
+use zydeco_machine::memory::{Address, MemoryError, MemoryLayout};
 
 pub(crate) struct MemoryRuntime;
-
 impl MemoryRuntime {
     pub(crate) fn invoke(
         role: BuiltinValueRole, args: Vec<SemValue>, host: &mut HostRuntime,
     ) -> Result<Computation, i32> {
-        let arena = &mut host.buffers;
-        let result = match role {
-            | BuiltinValueRole::MemoryAllocate => arena
-                .allocate_uninitialized(Self::integer(&args[0]), Self::integer(&args[1]))
-                .map_err(MemoryError::from)
-                .map(|handle| Some(HostValue::Buffer(handle).into())),
-            | BuiltinValueRole::MemoryClose => {
-                arena.close(Self::buffer(&args[0])).map_err(MemoryError::from).map(|()| None)
+        use BuiltinValueRole as Role;
+        let result: Result<Vec<SemValue>, MemoryError> = match role {
+            | Role::MemoryNull => {
+                return Ok(Return(Rc::new(
+                    SemValue::Host(HostValue::Address(Address::NULL)).into(),
+                ))
+                .into());
             }
-            | BuiltinValueRole::MemoryFreeze => arena
-                .freeze_memory(Self::buffer(&args[0]))
-                .map(|handle| Some(HostValue::Access(handle).into())),
-            | BuiltinValueRole::MemoryImmutableLength => arena
-                .immutable_length(Self::access(&args[0]))
-                .map(|value| Some(Literal::Integer(IntegerLiteral::Int64(value)).into())),
-            | BuiltinValueRole::MemoryCheckWrite => arena
-                .check_write(
-                    Self::access(&args[0]),
-                    Self::address(&args[1]),
-                    Self::integer(&args[2]),
-                    Self::integer(&args[3]),
-                )
-                .map(|()| None),
-            | BuiltinValueRole::MemoryFromString => {
+            | Role::MemoryOffset => {
+                let address = Self::address(&args[0]).offset(Self::integer(&args[1]));
+                return Ok(
+                    Return(Rc::new(SemValue::Host(HostValue::Address(address)).into())).into()
+                );
+            }
+            | Role::MemoryAllocate => {
+                MemoryLayout::for_request(Self::integer(&args[0]), Self::integer(&args[1]))
+                    .and_then(MemoryLayout::allocate)
+                    .map(|p| vec![HostValue::Address(p).into()])
+            }
+            | Role::MemoryFree | Role::MemoryRetain => {
+                MemoryLayout::for_request(Self::integer(&args[1]), Self::integer(&args[2]))
+                    .and_then(|layout| {
+                        let address = Self::address(&args[0]);
+                        if role == Role::MemoryFree {
+                            unsafe { layout.deallocate(address) };
+                            Ok(vec![])
+                        } else {
+                            unsafe { host.memory.retain(address, layout) }.map(|()| vec![])
+                        }
+                    })
+            }
+            | Role::MemoryFromString => {
                 let SemValue::Literal(Literal::String(string)) = &args[0] else {
-                    unreachable!("checked string")
+                    unreachable!("typed String")
                 };
-                arena
-                    .import_memory(string.as_str().as_bytes())
-                    .map(|handle| Some(HostValue::Access(handle).into()))
-            }
-            | BuiltinValueRole::MemoryToString => arena
-                .read_memory(
-                    Self::access(&args[0]),
-                    Self::address(&args[1]),
-                    Self::integer(&args[2]),
-                )
-                .and_then(|bytes| std::str::from_utf8(bytes).map_err(|_| MemoryError::InvalidValue))
-                .map(|string| Some(Literal::String(string.into()).into())),
-            | BuiltinValueRole::MemoryGrant => Permission::try_from(Self::integer(&args[3]))
-                .and_then(|permission| {
-                    arena.grant(
-                        Self::buffer(&args[0]),
-                        Self::integer(&args[1]),
-                        Self::integer(&args[2]),
-                        permission,
-                    )
+                host.memory.import(string.as_str().as_bytes()).map(|p| {
+                    vec![
+                        HostValue::Address(p).into(),
+                        Self::int_value(string.as_str().len() as i64),
+                    ]
                 })
-                .map(|handle| Some(HostValue::Access(handle).into())),
-            | BuiltinValueRole::MemoryRevoke => arena.revoke(Self::access(&args[0])).map(|()| None),
-            | BuiltinValueRole::MemoryBase => arena
-                .base_address(Self::access(&args[0]))
-                .map(|handle| Some(HostValue::Address(handle).into())),
-            | BuiltinValueRole::MemoryOffset => arena
-                .offset_address(
-                    Self::access(&args[0]),
-                    Self::address(&args[1]),
-                    Self::integer(&args[2]),
-                )
-                .map(|handle| Some(HostValue::Address(handle).into())),
-            | BuiltinValueRole::MemoryCheck => arena
-                .check_access(
-                    Self::access(&args[0]),
-                    Self::address(&args[1]),
-                    Self::integer(&args[2]),
-                    Self::integer(&args[3]),
-                )
-                .map(|()| None),
-            | BuiltinValueRole::MemoryLoadAddr => arena
-                .load_address(Self::access(&args[0]), Self::address(&args[1]))
-                .map(|handle| Some(HostValue::Address(handle).into())),
-            | BuiltinValueRole::MemoryStoreAddr => arena
-                .store_address(
-                    Self::access(&args[0]),
-                    Self::address(&args[1]),
-                    Self::address(&args[2]),
-                )
-                .map(|()| None),
-            | _ => unreachable!("memory adapter requires a memory role"),
-        };
-        Ok(Self::finish(result, &args[args.len() - 2], &args[args.len() - 1]))
-    }
-
-    pub(crate) fn finish(
-        result: Result<Option<SemValue>, MemoryError>, error: &SemValue, success: &SemValue,
-    ) -> Computation {
-        let (continuation, argument) = match result {
-            | Ok(value) => (success, value),
-            | Err(code) => {
-                (error, Some(Literal::Integer(IntegerLiteral::Int64(code as i64)).into()))
             }
+            | Role::MemoryToString => {
+                let bytes =
+                    unsafe { Self::address(&args[0]).bytes(Self::integer(&args[1]) as usize) };
+                std::str::from_utf8(bytes)
+                    .map(|s| vec![Literal::String(s.into()).into()])
+                    .map_err(|_| MemoryError::InvalidEncoding)
+            }
+            | Role::MemoryLoadAddr => {
+                let address = unsafe { Self::address(&args[0]).load_address() };
+                return Ok(Self::resume(&args[1], [HostValue::Address(address).into()]));
+            }
+            | Role::MemoryStoreAddr => {
+                unsafe { Self::address(&args[0]).store_address(Self::address(&args[1])) };
+                return Ok(Self::resume(&args[2], []));
+            }
+            | Role::MemoryCopy => {
+                let count = Self::integer(&args[2]) as usize;
+                if count != 0 {
+                    unsafe {
+                        std::ptr::copy(
+                            Self::address(&args[0]).pointer(),
+                            Self::address(&args[1]).pointer(),
+                            count,
+                        )
+                    };
+                }
+                return Ok(Self::resume(&args[3], []));
+            }
+            | Role::MemoryFill => {
+                let SemValue::Literal(Literal::Integer(IntegerLiteral::UInt8(value))) = args[2]
+                else {
+                    unreachable!("typed UInt8")
+                };
+                let count = Self::integer(&args[1]) as usize;
+                if count != 0 {
+                    unsafe { Self::address(&args[0]).pointer().write_bytes(value, count) };
+                }
+                return Ok(Self::resume(&args[3], []));
+            }
+            | _ => unreachable!("memory role"),
         };
-        let force: Computation = Force(Rc::new(continuation.clone().into())).into();
-        match argument {
-            | None => force,
-            | Some(argument) => App(Rc::new(force), Rc::new(argument.into())).into(),
-        }
+        Ok(match result {
+            | Ok(values) => Self::resume(&args[args.len() - 1], values),
+            | Err(error) => Self::resume(&args[args.len() - 2], [Self::int_value(error as i64)]),
+        })
     }
-
+    pub(crate) fn resume(
+        success: &SemValue, arguments: impl IntoIterator<Item = SemValue>,
+    ) -> Computation {
+        arguments.into_iter().fold(Force(Rc::new(success.clone().into())).into(), |body, arg| {
+            App(Rc::new(body), Rc::new(arg.into())).into()
+        })
+    }
+    pub(crate) fn int_value(value: i64) -> SemValue {
+        Literal::Integer(IntegerLiteral::Int64(value)).into()
+    }
     fn integer(value: &SemValue) -> i64 {
         let SemValue::Literal(Literal::Integer(IntegerLiteral::Int64(value))) = value else {
-            unreachable!("checked memory operation requires Int64")
+            unreachable!("typed Int64")
         };
         *value
     }
-
-    pub(crate) fn access(value: &SemValue) -> AccessHandle {
-        let SemValue::Host(HostValue::Access(value)) = value else {
-            unreachable!("checked memory operation requires Access")
-        };
-        *value
-    }
-
-    pub(crate) fn address(value: &SemValue) -> AddressHandle {
-        let SemValue::Host(HostValue::Address(value)) = value else {
-            unreachable!("checked memory operation requires Addr")
-        };
-        *value
-    }
-
-    fn buffer(value: &SemValue) -> BufferHandle {
-        let SemValue::Host(HostValue::Buffer(value)) = value else {
-            unreachable!("checked grant operation requires Buffer")
-        };
+    pub(crate) fn address(value: &SemValue) -> Address {
+        let SemValue::Host(HostValue::Address(value)) = value else { unreachable!("typed Addr") };
         *value
     }
 }

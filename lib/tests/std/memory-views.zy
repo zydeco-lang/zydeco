@@ -1,72 +1,56 @@
 @[package(test(of(std)))]
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /OS; /Addr; /Access;
-  /numeric; /process; builtin) : @(import(std/builtin)) in
-let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
-let buffer = (builtin |> (@(import("../../std/memory/buffer.zy")))) byte_package in
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /UInt32; /Addr; /OS;
+    /numeric; /process; builtin) : @(import(std/builtin)) that
+  let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
+    builtin |> (@(import(std/memory)))
+  in
+  let (= Plan, = Layout, layout) = fixed in
+  let (/Alloc; /heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
 
-let (/Fault; /Memory; /Cell; /Fat; /View; /views; /memory; /address_cell; native) =
-  builtin |> (@(import("../../std/memory/native.zy")))
-in
-let pointer = address_cell in
-let exit = process/exit in
-let fail = { ! exit 1 } in
-let no = { fn (_ : Fault) => ! fail } in
-let buffer_no = { fn (_ : Int64) => ! fail } in
-! native/allocate OS 32 64 no {
-  fn owner =>
-    ! native/grant OS owner 0 32 +ReadWrite() no {
-      fn access =>
-        ! native/base OS access no {
-          fn base =>
-            ! memory OS .offset access base 8 no {
-              fn payload =>
-                ! memory OS .offset access base 16 no {
-                  fn second =>
-                    ! memory OS .offset access base 24 no {
-                      fn object =>
-                        ! native/store_i64 OS access base 2 no {
-                          ! native/store_i64 OS access payload 42 no {
-                            ! native/store_i64 OS access second 9223372036854775807 no {
-                              ! native/store_addr OS access object payload no {
-                                let prefix = views/indirect Int64 views/int64 -8 0 in
-                                do last <- ! views/index Addr Int64 (Ret Int64) prefix views/int64
-                                  access payload 1
-                                  { ! memory (Ret Int64) } { fn _ => ret -1 } {
-                                  fn value => ret value
-                                };
-                                ! numeric/int64/eq OS last 9223372036854775807 {
-                                  let object_view = views/indirect Addr pointer 0 0 in
-                                  ! object_view/open OS access object { ! memory OS } no {
-                                    fn (_, target) =>
-                                      ! views/read_at Int64 OS views/int64 access target {
-                                        ! memory OS
-                                      } no {
-                                        fn first =>
-                                          ! numeric/int64/eq OS first 42 {
-                                            ! buffer/close owner buffer_no {
-                                              ! views/read_at Int64 OS views/int64 access target {
-                                                ! memory OS
-                                              }
-                                                {
-                                                  fn fault =>
-                                                    match fault
-                                                    | +Closed() => ! exit 0
-                                                    | _ => ! fail
-                                                    end
-                                                }
-                                                { fn _ => ! fail }
-                                            }
-                                          } fail
-                                      }
-                                  }
-                                } fail
-                              }
-                            }
-                          }
-                        }
-                    }
+  match layout/int64
+  | +Err(_) => ! fail
+  | +Ok(plan) =>
+    let (= L, repr) = layout/realize Int64 plan in
+    ! raw/allocate OS 24 8 no {
+      fn base =>
+        do second <- ! raw/unsafe/offset base 8;
+        do slot <- ! raw/unsafe/offset base 16;
+        ! repr/unsafe/init OS (pointer/unsafe/from_address L Uninit base) 11 {
+          fn first =>
+            ! repr/unsafe/init OS (pointer/unsafe/from_address L Uninit second) 22 {
+              fn _ =>
+                ! raw/unsafe/store_addr OS slot base {
+                  ! raw/unsafe/load_addr OS slot {
+                    fn restored =>
+                      ! slices/unsafe/from_parts L Init OS (
+                        pointer/unsafe/from_address L Init restored
+                      ) 2 no {
+                        fn slice =>
+                          ! slices/unsafe/at L Init OS repr/size slice 2 {
+                            fn fault =>
+                              match fault
+                              | +Bounds() =>
+                                ! slices/unsafe/at L Init OS repr/size slice 1 no {
+                                  fn pointer =>
+                                    ! repr/unsafe/read OS pointer {
+                                      fn value =>
+                                        ! numeric/int64/eq OS value 22 {
+                                          ! raw/unsafe/free OS base 24 8 no { ! process/exit 0 }
+                                        } fail
+                                    }
+                                }
+                              | _ => ! fail
+                              end
+                          } { fn _ => ! fail }
+                      }
+                  }
                 }
             }
         }
     }
-}
+  end
+end

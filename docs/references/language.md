@@ -905,9 +905,9 @@ Compiled artifacts already have [manifest compatibility checks](compiler.md#comp
 
 [Builtin](../../lib/std/builtin.zy) exposes canonical kinds and fixed-representation types as manifest fields.
 Repeating an intrinsic splice denotes the same canonical kind or type across independently checked sources.
-`Addr`, `Access`, `Buffer`, `Reader`, `Writer`, and `OS` are abstract provider capabilities sharing one opening.
-`Addr` and `Access` support [checked memory and views](#checked-memory-capabilities);
-their kinds remain `VType`, and the view constructors add no compiler type forms.
+`Addr`, `Reader`, `Writer`, and `OS` are abstract provider capabilities sharing one opening.
+`Addr` supports [manual memory](#manual-memory); its kind remains `VType`.
+Typed pointers and initialization states are ordinary library types.
 Pure libraries can name canonical carriers without requiring a numeric or resource provider merely to name a type.
 Resource operations instead share their provider's abstract opening,
 so a composition root must forward the capability and its operations together.
@@ -919,12 +919,12 @@ The memory interfaces build on those capabilities using ordinary packages and co
 
 | Question | Owning section |
 | --- | --- |
-| Which allocation may an address access? | [Checked memory capabilities](#checked-memory-capabilities) |
-| How is a handle stored and interpreted? | [Cells and views](#cells-describe-storage-views-interpret-handles) |
+| How are addresses allocated and released? | [Manual memory](#manual-memory) |
+| What does the type checker know about memory state? | [Typed pointers and slices](#typed-pointers-and-slices) |
+| Which layout information is static? | [Static layout plans](#static-layout-plans) |
 | What makes a byte sequence immutable? | [Immutable owners](#immutable-owners-and-source-bytes) |
-| How are destinations allocated, written, and closed? | [Mutable buffers](#mutable-destination-capabilities) |
-| How are logical values encoded with explicit placement? | [Storage contracts](#explicit-storage-contracts) |
-| How do separately checked workers share a stored carrier? | [Stored calls](#stored-call-interfaces) |
+| How are bytes constructed incrementally? | [Byte builders](#byte-builders) |
+| How do source modules share pointers? | [Stored calls](#stored-call-interfaces) |
 
 | Family | Source behavior |
 | --- | --- |
@@ -949,7 +949,8 @@ Negative or out-of-range positions, invalid Unicode scalars, and invalid UTF-8 s
 The public library reifies these as `Option` or `Result`.
 The [immutable byte contract](#immutable-owners-and-source-bytes) below explains ownership and library operations.
 
-Every scalar Builtin module provides checked `store_le` and `load_le` operations over `Access` and `Addr`.
+Every scalar Builtin module provides raw `store_le` and `load_le` operations over `Addr`.
+Callers establish writable or initialized readable extents; source byte codecs validate their own lengths.
 They preserve exact little-endian bits; float loads and stores preserve NaN payloads without arithmetic.
 The [source codecs](../../lib/std/numeric/codecs.zy) provide `to_le_bytes` and `from_le_bytes`,
 and std includes them in its numeric modules.
@@ -984,814 +985,293 @@ process control is separate.
 A UTF-8 `Path` prevents text/path interchange but cannot represent every native path.
 Growable writers, seeking, and asynchronous protocols remain in the [stream proposal](../proposals/filesystem.md).
 
-### Checked memory capabilities
+### Manual memory
 
-A pointer to a record, a pointer paired with a length, and a pointer whose length lives just
-before its payload share memory operations.
-Their differences are source-defined representation choices: which value crosses a boundary,
-where its runtime metadata lives, and how that information is obtained.
-Length and capacity are examples of runtime metadata; so are strides, tags, allocator handles, and vtable pointers.
-There is no fixed compiler record of optional fields.
+Systems code needs to choose storage, initialize it, and release it explicitly.
+[std/memory](../../lib/std/memory/package.zy) provides that interface using ordinary packages,
+abstract type witnesses, and [CPS](#ret-and-explicit-cps).
+It introduces no lifetimes, borrow checker, affine types, or special continuation kind.
 
-The [source library](../../lib/std/memory/views.zy) implements these types and constructors
-with the existing `VType` and `CType` kinds.
-The [native provider](../../lib/std/memory/native.zy) binds them to checked host memory;
-[examples](../../lib/tests/std/memory-views.zy) run on the interpreter, AMD64, and both WebAssembly backends.
-The [bounded model](../../lib/tests/ffi/views/model.zy) supplies a deterministic alternative provider
-for [source composition and phase tests](../../lang/tests/tests/memory_views.rs).
-The WebAssembly host models addresses in its own virtual address space and exposes no C pointer.
-The source `Bytes` and `Storage` interfaces use this same memory provider and its retained immutable-owner transition.
+The compiler supplies `Addr`, existing scalars, `Ret`, `Thk`, and the primitive memory operations.
+`Addr` is an unmanaged data address; it carries no allocation identity, extent, permission, or initialization flag.
+The library supplies the other types:
 
-#### The primitive boundary
-
-The Builtin provider exposes two abstract value types:
-
-| Type | Meaning | Runtime responsibility |
+| Type | Purpose | Runtime payload |
 | --- | --- | --- |
-| `Addr : VType` | An opaque data address. It carries no element type, length, capacity, ownership, or permission. | The implemented native address cell occupies one 8-byte pointer slot. Copying an address does not keep its allocation alive; the explicit readable-window transport supplies one C pointer. |
-| `Access : VType` | Authority to access a live allocation or granted range with particular permissions. | The checked implementation identifies an owned allocation and a range grant, checks liveness and bounds, and rejects invalid operations. |
+| `Uninit`, `Init` | Whole-object initialization states, used as type parameters | None |
+| `Ptr L S` | An address interpreted with layout witness `L` and state `S` | One `Addr`; no wrapper or state tag |
+| `Slice L S` | Contiguous elements with an explicit dynamic extent | Pointer and element count |
+| `fixed/Layout A` | A static `Result (Plan A) LayoutError` | Construction evidence eliminates before fixed realization |
+| `Representation A` | An existential layout witness with its allocation and typed access operations | Selected operations; dynamic layouts also capture placement |
+| `dynamic/Layout A` | Runtime layout computation | Captured dynamic inputs and operations |
+| `Alloc` | Allocation and release service | Ordinary source operations and any selected allocator context |
+| `Buffer` | Incremental byte construction | Address, capacity, initialized-prefix length |
 
-`Access` is separate from `Addr`, so a thin external handle can remain one pointer.
-A source wrapper can retain both when it should own or retain the resource.
-Mutable grants come from `Buffer` owners; frozen grants retain immutable allocations.
-The current provider grants access only to its owned storage; foreign-owned grants remain unsupported.
-A length read from an arbitrary address cannot grant authority to read that address or its surrounding allocation.
-Revocation invalidates every alias of a grant; copying the handle does not duplicate ownership or release rights.
-The checked runtime record stores a shared live/revoked grant, an allocation identity
-and range, and read/write permissions.
-The buffer owner controls allocation lifetime.
-Those fields belong to the provider's abstract grant representation, not to every raw pointer.
+The table describes payload requirements. Products, closures, and runtime-selected dictionaries still use
+the [ordinary representation policy](compiler.md#c10-zasm-stack-analysis-and-local-representation-choices).
+CPS alone does not guarantee allocation-free callbacks or stack frames.
+`Buffer` currently builds bytes; a generic element builder
+and partial-record `Fields` states remain [extensions](../proposals/memory.md).
+No `Frozen` state is needed for this manual interface.
 
-The provider takes an explicit `Access` on every memory operation.
-It checks the addressed range, required alignment, initialization and leaf representation before exposing a value.
-Offsetting checks signed displacement without overflow and stays within the granted allocation,
-including its one-past address; a subsequent nonempty load rejects one-past access.
-A negative offset is therefore valid when the grant includes the header before the payload.
-Loading an address from a pointer slot checks that slot; accessing its target requires a suitable target grant.
-Addresses remain pointer values through native loads and stores; generic integer casts
-or byte codecs do not manufacture pointer validity or a foreign grant.
+#### Unsafe obligations
 
-The source read interface is:
+A library field named `unsafe` documents caller obligations; it is not a language keyword or a checked effect.
+Raw addresses and typed pointers may be copied freely.
+The caller establishes lifetime, allocation extent, initialized fields, valid scalar
+or pointer representations, alias discipline, and synchronization before each access.
+Use of a freed pointer or stale state alias is a contract violation, with no required recoverable runtime fault.
+The native and interpreter accesses perform no grant lookup or initialized-byte tracking.
 
-```zydeco
-let Memory (R : CType) = codata
-| .check : Access -> Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R
-| .load_u8 : Access -> Addr -> Thk (Fault -> R) -> Thk (UInt8 -> R) -> R
-| .offset : Access -> Addr -> Int64 -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
-| .load_i64 : Access -> Addr -> Thk (Fault -> R) -> Thk (Int64 -> R) -> R
-| .load_addr : Access -> Addr -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
-end in
-let Mem (A : VType) (R : CType) =
-  Thk (Memory R) -> Thk (Fault -> R) -> Thk (A -> R) -> R in
-...
-```
+An ordinary `Thk R` may escape, be dropped, or be forced repeatedly.
+CPS successors therefore establish neither unique ownership nor guaranteed cleanup.
+After invoking a completion that releases or publishes storage, a callback must not use an old mutable alias.
+A caller that abandons cleanup leaks its manually allocated storage.
+There are no implicit destructors.
+Raw storage must not contain movable managed references without a separate rooting protocol;
+the supplied layouts cover scalars and unmanaged addresses.
 
-`Mem A R` abbreviates a computation supplied with a memory provider and failure/success continuations.
-Its answer protocol `R` belongs to the caller.
-It does not promise purity, termination, or one invocation.
-The provider must validate a primitive access before performing it and reporting success.
-The faults are ordinary source constructors `Closed`, `Bounds`, `Permission`, `Overflow`,
-`Alignment`, `Uninitialized`, `InvalidValue`, `Unavailable`, and `AllocationFailed`.
-The integer model implements only a bounded read space and uses `Bounds` for displacements outside that space.
-The native provider checks initialization for every loaded leaf.
-Its `check` operation validates the complete footprint and alignment without reading padding
-or requiring padding bytes to be initialized.
+### Allocation and release
 
-The native module also exports `allocate`, `close`, `freeze`, `immutable_length`, `grant`, `base`,
-`revoke`, and the typed operations `store_i64`, `store_u8`, and `store_addr`.
-Allocation returns a `Buffer` owner and starts uninitialized; the existing `buffer/allocate` remains zero-initializing.
-`grant R owner offset length permission no yes` creates a range grant
-with ordinary source permissions `Read`, `Write`, or `ReadWrite`.
-A grant does not embed itself in an address. `base` obtains the grant's first address,
-and `revoke` invalidates every copy of that grant without closing the allocation or independent grants.
-Closing invalidates all mutable grants. Freezing transfers the allocation to an immutable owner,
-invalidates the old grants, and returns a new retained grant as specified below.
-Address identity is preserved across that transfer; using an address still requires a valid grant.
-Failed writes leave bytes, initialization information, and pointer slots unchanged.
-Freezing an incompletely initialized buffer reports `Uninitialized` and preserves the live owner.
+The [allocator interface](../../lib/std/memory/allocator.type.zy) receives byte size and alignment explicitly.
+`allocation/heap` uses the host allocator; `allocation/limited maximum parent` rejects oversized requests
+before calling its parent.
+Runtime selection of an allocator is ordinary source dispatch.
+There is no hidden allocator field on a pointer.
 
-Integer and byte stores initialize their footprint.
-Pointer stores additionally record the target's allocation identity and offset
-and write the native pointer into the slot.
-Any overlapping byte or scalar store removes that pointer information, even when it writes identical bits.
-Loading such a slot as an address reports `InvalidValue`;
-loading a properly stored address preserves the target identity, including after that target has closed.
-A later target access checks its own grant and reports `Closed`.
-The shared [runtime model](../../lang/machine/src/memory.rs) owns these checks for the interpreter and AMD64.
-Generic runtime address values are opaque handles into that model;
-an explicit address cell has the separate 8-byte native storage representation.
-No new kind or compiler rule recognizes thin, fat, or header views.
+The raw [memory adapter](../../lib/std/memory/native.zy) exposes allocation and an `unsafe` operation group.
+Allocation validates nonnegative size, positive power-of-two alignment, and a representable rounded extent;
+invalid requests report `InvalidLayout`, and reservation failures report `AllocationFailed`.
+The resulting storage is uninitialized.
+Zero-sized allocations require no backing bytes and cannot be dereferenced.
+Release receives the original base, exact requested size and alignment, and matching allocator.
+It must occur exactly once, after the caller has settled the initialized contents and all uses of aliases.
 
-This is a checked capability design.
-It makes no claim that current typing proves pointer lifetimes or that all checks erase.
-Static region retirement and transitive support remain unimplemented;
-their separate proposal is [reachability regions](../proposals/reachability-regions.typ).
-`Ret A` remains an installed continuation accepting `A`; it supplies neither a memory lifetime nor cleanup scope.
+`null` and signed wrapping `offset` are pure address calculations returning through `Ret`.
+Dereference validity is a separate obligation; an offset calculation does not prove bounds.
+`load_addr` and `store_addr` access unmanaged pointer slots.
+Scalar `load_le` and `store_le` access the exact little-endian width without requiring natural alignment.
+`copy source destination count` permits overlapping ranges; `fill address count octet` writes a byte pattern.
+Valid raw loads, stores, copies, and fills use only a success/completion continuation.
+There is no runtime initialization check and no implicit initialization of padding.
 
-### Cells describe storage; views interpret handles
+### Typed pointers and slices
 
-`Cell A` describes a fixed memory representation of an `A` and a computation that reads it:
-
-```zydeco
-let Cell (A : VType) =
-    (#size :: Int64)
-  * (#alignment :: Int64)
-  * (#read :: Thk (forall (R : CType) . Access -> Addr -> Mem A R)) in
-let Fat (RuntimeMetadata : VType) =
-  (#address :: Addr) * (#runtime_metadata :: RuntimeMetadata) in
-let View (Handle : VType) (RuntimeMetadata : VType) =
-  (#open :: Thk (forall (R : CType) . Access -> Handle -> Mem (Addr * RuntimeMetadata) R)) in
-...
-```
-
-The three questions have different answers: `Handle` is the value being passed,
-`Cell Handle` describes its explicit stored form, and `open` obtains a payload address
-and runtime metadata from that handle.
-A view descriptor is an ordinary reusable dictionary; it need not be stored inside each handle.
-Opening a logical handle requires no physical `Cell Handle`; the caller supplies a cell separately when storing it.
-`Fat M` permits any representable `M`.
-Its fields are logical source fields until a `Cell (Fat M)` or call adapter supplies physical placement.
-A source product alone does not promise adjacent native words.
-
-Cell construction follows the [layout laws](#layout-laws): nonnegative size,
-power-of-two alignment, checked rounding, and checked addition.
-The complete cell size includes tail padding and is its array-element stride.
-Product construction places the second cell at `round_up(left.size, right.alignment)`
-and rounds the complete size to the larger alignment.
-The library reuses the existing [size value functions](../../lib/std/memory/size.zy) for those calculations.
-Before reading any field, a product validates its complete size and alignment through `Memory.check`.
-It then reads fields through their cells, leaving padding uninterpreted.
-`padding count` constructs a `Cell Unit` with size `count` and alignment one;
-its read checks the footprint and returns unit without loading bytes.
-`align A boundary cell` raises alignment to the larger of `boundary` and the cell's current alignment,
-rounds its size accordingly, and preserves every field offset.
-It validates that new footprint before delegating to the original cell.
-Thus a small field cannot make an out-of-bounds padded or misaligned enclosing cell succeed.
-All three constructors return `Result (Cell A) LayoutError` using source value calculations.
-The read interface does not grant mutation permission; native stores require a writable access grant.
-
-The public `Cell A` dictionary type does not prove its size, alignment, and decoder agree.
-Caller-authored cells must satisfy those laws; checked builders can hide successful layouts behind package abstraction.
-All cells for `A` share `Cell A`; this is not a type index distinguishing their placements.
-The supplied native leaves are `UInt8` (size/alignment 1), `Int64` (8),
-and an address cell (8) for the current 64-bit native target.
-The integer model uses that same sample format.
-Additional primitive formats can extend the provider without changing the view constructors.
-Native address cells cannot be obtained by serializing an integer through `Bytes`:
-the existing portable byte contract has a different carrier and validity boundary.
-
-### Concrete view forms
-
-The source constructors use the following representations.
-`p` is the supplied handle address, and offsets are byte displacements checked by the provider.
-
-| Form | `Handle` | `RuntimeMetadata` | `open` behavior |
-| --- | --- | --- | --- |
-| Thin | `Addr` | `Unit` | Return `(p, ())`; no memory operation. |
-| Fat length | `Fat Int64` | `Int64` | Project `(handle/address, handle/runtime_metadata)`; no memory operation. |
-| Fat length and capacity | `Fat ((#length :: Int64) * (#capacity :: Int64))` | The named pair | Project the carried record; no memory operation. |
-| Prefix header | `Addr` | Any `M` with a `Cell M` | Read `M` at `p - header_delta`, return payload `p`. |
-| Inline header | `Addr` | Any `M` with a `Cell M` | Read `M` at `p`, return payload `p + payload_offset`. |
-| Object header | `Addr` | `Addr`, for a vtable slot | Read the slot at `p`, return the original object address and the vtable address. |
-
-The last three are applications of one source constructor:
-
-```zydeco
-indirect M runtime_cell runtime_offset data_offset
-```
-
-It offsets to the runtime metadata, reads it through `runtime_cell`, offsets to the payload,
-and invokes success only after these operations succeed.
-A runtime metadata cell can itself be a product; following more
-than one indirection is another ordinary `open` computation.
-The caller supplies the original allocation grant, so prefix recovery does not attempt
-to validate itself using the header it is about to read.
-
-On the model's chosen 64-bit format, a thin handle occupies 8 bytes,
-a fat length handle 16, and a fat length/capacity handle 24.
-A prefix or inline-header handle still occupies 8 bytes; the runtime metadata resides in the referenced allocation.
-Header size, payload alignment, and the position of an embedded pointer are choices of the source cell plan.
-The object view loads a data address from a checked slot; it does not load or invoke a callable code value.
-[Code-pointer and external-ABI bindings](../proposals/c-ffi.md#external-handle-conventions) remain proposed.
-
-### Typed pointers, slices, and immutable bytes
-
-The typed operation layer receives a cell for the element it accesses:
+Selecting a representation introduces an abstract layout witness `L` shared by its pointers and operations.
+[Ptr](../../lib/std/memory/types.zy) privately aliases `Addr` and has no runtime wrapper.
+After opening a representation for logical type `A`, its operations have the following schematic shapes,
+with `R` universally quantified:
 
 ```text
-read_at : forall A R. Cell A -> Access -> Addr -> Mem A R
-index  : forall H A R. View H Int64 -> Cell A -> Access -> H -> Int64 -> Mem A R
+allocate    : Alloc -> Thk (Fault -> R) -> Thk (Ptr L Uninit -> R) -> R
+unsafe/init : Ptr L Uninit -> A -> Thk (Ptr L Init -> R) -> R
+unsafe/read : Ptr L Init -> Thk (A -> R) -> R
+unsafe/take : Ptr L Init -> Thk (Ptr L Uninit -> A -> R) -> R
+unsafe/free : Alloc -> Ptr L Uninit -> Thk (Fault -> R) -> Thk R -> R
 ```
 
-`read_at` validates the selected cell's complete footprint and then delegates to its reader.
-`index` opens the handle, checks `0 <= index < length`, checks multiplication by the element stride for overflow,
-offsets within the grant, and reads through the element cell.
-Thus a slice length counts elements, and its stride comes from `Cell A`.
-For byte slices the element is `UInt8` with stride one.
-Runtime checks and numeric arithmetic are computations; the length does not become a dependent integer index such
-as `Slice A n`.
+`init` writes directly into the supplied destination.
+`read` copies a logical value without changing its state.
+`take` reads the value and supplies a pointer interpreted as uninitialized; it does not clear the storage.
+These types reject reading an uninitialized pointer, initializing an initialized one,
+freeing through the wrong state, and interchanging independently opened layouts.
+They do not invalidate the old pointer or consume any aliases.
+In particular, copying a pointer before a transition can leave a well-typed stale alias.
 
-The source factories `pointer A carrier element` and `slice H A carrier view element` export an abstract `Ptr`
-or `Slice` together with operations specialized to the chosen element cell.
-The pointer factory provides `from_address`, `address_of`, `pointer_cell`, and `get`;
-the slice factory provides `from_handle`, `handle_of`, `slice_cell`, and indexed `get`.
-Their expected existential signatures hide the selected handle representation
-while sharing its witness with the returned operations.
-For example, `let (= Slice, slices) = views/slice H A carrier view element in ...` opens the slice factory once,
-and `slices/get` receives that opening's `Slice`.
-Constructing a wrapper only preserves the handle; access still validates the grant when `get` runs.
-This binds the chosen representation to an API without a compiler builtin for `Slice`.
-For a concrete instance, `Handle` may be `Addr`, `Fat Int64`, or a retained pair containing an owner.
-Clients that need to select different handle types dynamically package the handle
-with its matching operations: `exists (= H : VType) . H * View H Int64 * Cell A`.
-Clients sharing one `H` can select a view at runtime directly.
+`pointer/unsafe/address L S` exposes the address; `from_address L S` asserts an interpretation.
+The latter requires the caller to establish layout, initialization state, extent, and lifetime.
+It supplies the explicit boundary for foreign memory and manually calculated field pointers.
+No typed field-path or partial-record tracker is implied by an integer offset.
 
-Capacity has a separate meaning from length. A growable container's source API validates `0 <= length <= capacity`,
-manages initialized elements, and supplies a writable grant for mutations.
-Copying its runtime metadata proves none of those facts and does not authorize a write.
-The same separation supports runtime strides, allocator records, and application-specific tags.
+The [slice operations](../../lib/std/memory/slice.zy) share these pointer and state types.
+`from_parts` checks a nonnegative count and wraps a caller-validated pointer and extent.
+`at` takes an explicit element stride, rejects negative stride or index, checks the index
+against the count, and rejects multiplication overflow before offsetting.
+Zero-sized elements have zero stride. The resulting element pointer keeps the same `L` and `S`.
+The caller supplies a stride matching `L` and an allocation covering the elements;
+bounds checks do not verify that assertion.
+A raw slice does not retain its allocation.
 
-#### Compile-time and runtime behavior
+### Static layout plans
 
-The existing [value-function](#8-value-functions-and-views)
-and [static-elimination](#10-static-elimination) rules remain authoritative.
-The following table applies those rules to memory views:
+Fixed placement belongs to source value calculation.
+The [fixed builder](../../lib/std/memory/layout.zy) exposes `Layout A = Result (Plan A) LayoutError`,
+with an abstract successful plan and [inspectable shape](../../lib/std/memory/shape.zy).
+Its constructors support scalars, unmanaged addresses, unit, padding, products, and increased alignment.
+Invalid alignment, negative size, and overflow produce typed `Err` results during static construction;
+only an `Ok` plan can be realized.
+The caller handles that static result explicitly.
+Unknown runtime inputs to placement or fixed realization produce a `StaticElimination` diagnostic.
 
-| Expression or information | During checking | At runtime |
-| --- | --- | --- |
-| `Addr`, `Access`, `M`, and `H` | Check ordinary kinds, types, and package witnesses. | Types, witnesses, and field labels erase; their values remain as needed. |
-| Fixed cell size, alignment, and product offsets | Value arithmetic requires known operands and checks its ordinary error result. | A retained descriptor may carry those calculated integers and read thunks. |
-| Fat-handle construction and runtime metadata projection | A value function may forward unknown runtime fields inside known structure. | The residual program constructs or projects ordinary values; it contains no value-function closure. |
-| Thin/fat `open` | Check the suspended computation; never force it to discover static information. | Invoke success with carried fields, without accessing memory. |
-| Header recovery and element indexing | Check types and operation protocols. Runtime lengths cannot drive static arithmetic. | Execute checked offsets, loads, and numeric computations through the supplied provider. |
-| Runtime-selected view or cell | Check that the selected values have a common type, or open an existential package. | Keep required dictionaries, offsets, and captured values. Selection does not make their integers statically known. |
-| Explicit native ABI layout | Require a known target leaf layout and argument/result transport plan. | Apply the validated marshalling plan to runtime payloads. |
+`realize A plan` introduces `L` with the [representation interface](../../lib/std/memory/representation.type.zy).
+Size and alignment are known constants at this boundary.
+The source recipes specialize field offsets and selected accesses; the pointer carries none of this evidence.
+Explicit queries can materialize size or alignment as an `Int64`, and allocation receives those constants.
+Transporting a plan through an unknown runtime argument does not make its placement static.
+Use `dynamic` when execution chooses sizes or alignment.
 
-Runtime metadata names the information's role in a representation, not a requirement that it be unknown during checking.
-A literal length may fold away while still describing that representation's runtime metadata.
-Conversely, ordinary layout descriptions may be constructed and selected at runtime.
-Neither is a [meta annotation](#meta-annotations-compile-time-metadata).
-
-An `open` result is a snapshot of the observations its computation made.
-It neither freezes the referenced allocation nor promises an atomic snapshot of a mutable multifield header.
-Shared mutable runtime metadata needs its own synchronization protocol, and later accesses recheck their grants.
-
-### Immutable owners and source Bytes
-
-A byte sequence has immutable octet contents.
-Sharing storage cannot create a mutation channel. Foreign borrowing can also observe an address;
-equality of contents promises neither pointer identity nor the same allocation behavior.
-This permits sharing or copying a slice while preserving source content observations.
-Start-and-length windows match explicit pointer-and-length borrowing, and `UInt8` makes singleton construction total.
-Library-defined options and booleans stay outside the host ABI.
-
-[`text/bytes.zy`](../../lib/std/text/bytes.zy) defines `Bytes` as an ordinary abstract std type.
-Its private representation is either an allocation-free empty value
-or a retained immutable `Access` paired with `Fat Int64`.
-The fat handle carries the visible address and byte count.
-Length, indexing, slicing, comparisons, singleton construction, concatenation, and copying are source algorithms.
-The compiler has no `Bytes` intrinsic, byte-sequence operation roles, or special byte foreign classifier.
-
-`freeze R owner no yes` checks that the entire allocation is initialized before changing ownership.
-Success transfers the same allocation to retained immutable storage and returns a new read grant.
-Every old `Buffer` alias and mutable-owner grant becomes closed.
-The new grant cannot be revoked, used for writes, or used to obtain a mutable owner.
-Its address identity and physical alignment are preserved.
-Failed freeze leaves the original owner, grants, contents, and initialization state unchanged.
-The runtime arena retains frozen allocations for its lifetime; per-value reclamation remains open.
-
-A read-only grant over mutable storage is insufficient for `Bytes`: other grants may still write or close it.
-`from_immutable R access no yes` checks the immutable-owner state before constructing a byte value.
-`build R count alignment fill no yes` allocates a private owner, gives `fill` a writable range,
-and freezes after `fill` invokes its completion.
-Failure closes the private mutable owner.
-A retained writable alias therefore fails after a successful build.
-Completion is reusable at the type level; repeated completion encounters the checked closed state
-and does not recreate mutation authority.
-
-`slice` takes a start and length, checks its bounds, and shares the immutable owner without copying its contents.
-An empty window at the end is valid; negative or out-of-range windows select failure.
-`copy_to` validates the full destination extent and write permission before its first write.
-`aligned` allocates with the requested alignment and copies the visible bytes before freezing.
-It requires positive power-of-two alignment; invalid requests and detected reservation failures select failure.
-`with_window R value no yes` exposes retained access, visible address, and count to a source adapter;
-an allocation-free empty value obtains a valid empty immutable allocation when a window is requested.
-A zero-length window grants no readable octet and need not have a null address.
-
-The [byte package signature](../../lib/std/text/bytes.type.zy) shares one abstract `Bytes` witness
-with all its operations.
-A composition root passes that package to text, system, buffer, layout, and codec builders;
-independently opened byte packages cannot exchange their abstract values without an explicit conversion.
-The assembled std package exports that same type with its convenient `Option` and `Bool` operations.
-
-Scalar leaves exchange checked memory through `store_le` and `load_le`, preserving exact bits;
-source codecs provide `to_le_bytes` and `from_le_bytes` with exact-width validation.
-UTF-8 conversion and primitive I/O exchange immutable grants or explicit readable windows.
-These boundary operations need no knowledge of the source byte representation.
-The [C adapter](#storage-and-foreign-transport) consumes an explicit readable window as one pointer;
-a separate integer argument supplies a C length when the binding requires it.
-
-Contiguous storage gives constant-time indexing and avoids flattening before each foreign borrow.
-Shared windows also make decomposition cheap, but a small retained window can keep a large parent alive.
-Slices share retained immutable allocations on every backend.
-The runtime arena retains these allocations for its lifetime;
-dropping a source window does not currently reclaim its owner.
-The [cost table](../../lib/std/README.md#byte-operation-costs) makes these target differences explicit.
-
-### Mutable destination capabilities
-
-Fixed-capacity destination storage extends the representation boundary with an explicit resource protocol.
-The host-owned `Buffer` capability supplies allocation identity.
-The [source buffer interface](../../lib/std/memory/buffer.zy) composes the general memory provider
-and one shared byte package.
-Its convenience operations run in `OS`;
-the underlying memory operations accept the caller's answer protocol `R : CType`.
-A source integer or immutable `Bytes` cannot stand in for a buffer handle.
-
-`allocate size alignment error success` creates zero-initialized storage
-with the requested nonnegative size and positive power-of-two alignment.
-`write handle offset bytes error done` replaces a checked range without resizing.
-`read handle offset length error success` returns a detached immutable snapshot of that range.
-An empty range at the end is valid.
-Negative or overflowing ranges are rejected before any byte is changed.
-
-`freeze handle error success` produces aligned immutable bytes and closes the handle on success.
-`close handle error done` frees mutable storage without producing bytes.
-Both transitions invalidate every alias.
-Closed handles are never reused, and read, write, freeze, or close through an old alias report `Closed`.
-A failed freeze leaves the handle open.
-Snapshots and frozen bytes remain immutable after later writes or close.
-These are resource-state guarantees, not a static uniqueness or lexical-lifetime claim.
-
-The stable error codes are `InvalidLayout = 0`, `Closed = 1`, `Bounds = 2`,
-`AllocationFailed = 3`, and `Uninitialized = 4`.
-The last applies to buffers created by the uninitialized memory allocator described above.
-Operations on a closed handle report `Closed` before inspecting their range.
-Detected allocation and layout failures create no returned handle; range and capability rejections precede copying.
-General host allocator aborts remain outside this fallible protocol, as for immutable storage.
-Native/interpreter buffers use real aligned allocations; the Wasm host retains its opaque-address limitation.
-Reads copy a detached snapshot; freeze transfers the initialized allocation under the immutable-owner rule above.
-
-#### Choosing an allocator on the computation stack
-
-[allocation.zy](../../lib/std/memory/allocation.zy) defines an ordinary codata `Allocator`
-with an `.allocate` observation.
-`Allocate A` is a computation accepting that service, an error continuation, and a result continuation.
-`allocate size alignment : Allocate Buffer` requests storage from the supplied service rather
-than selecting an allocator inside the compiler.
-The heap provider delegates to the source zeroing buffer allocator;
-the `limited maximum parent` value function intercepts requests larger
-than its per-allocation ceiling and delegates the rest.
-This is a size policy, not a cumulative quota or a distinct physical allocator.
-A negative ceiling rejects every nonnegative request.
-
-Consumers may supply other source-defined services without changing the host ABI or the layout language.
-This makes allocator choice explicit at participating call sites; it does not prevent a program
-with Builtin access from calling the heap operation directly.
-[The checked example](../../lib/tests/std/buffer.zy) exercises the service, a restrictive provider,
-alias invalidation, detached snapshots, and failure without mutation on all backends.
-
-Lexically scoped borrowing and automatic cleanup are deferred.
-A thunk may be retained, invoked twice, or invoke its completion continuation zero or multiple times.
-A scope-shaped helper cannot derive single invocation or cleanup from these types.
-The current interface provides checked close and freeze.
-Stronger lifetime protocols remain in the [memory proposal](../proposals/bytes.md#remaining-questions).
-
-### Explicit storage contracts
-
-A `Bytes` value alone does not say where fields live, how many bytes a scalar occupies,
-or which alignment a borrowed address satisfies.
-An ordinary Zydeco product also leaves its physical layout to the compiler.
-The implemented memory libraries supply an explicit representation boundary:
-a logical type `A` has a source-authored layout, which can be realized into a storage contract.
-The concrete stored payload is one contiguous immutable buffer, without retaining the original logical product.
-The surrounding runtime value is an ordinary source value retaining its immutable memory grant.
-
-#### Descriptions, computations, and abstract storage
-
-The [runtime builder](../../lib/std/memory/package.zy) has an abstract `Layout A`.
-It constructs layouts with ordinary total value functions: `product A B left right`,
-`padding count`, and `align A boundary layout`.
-Their bodies construct thunks; applying these value functions does not execute numeric arithmetic during type checking.
-Forcing a layout through `realize A R layout no yes` calculates
-and validates its layout information using ordinary returning computations,
-then selects one of the supplied `R` continuations.
-The choice of `R : CType` belongs to the caller, so construction requires no `OS` stack.
-The static builder performs the layout calculation within [value functions](#8-value-functions-and-views).
-
-A successful realization supplies [Representation A](../../lib/std/memory/representation.type.zy),
-an existential package `exists (= Stored : VType) . Storage A Stored`.
-[Storage A Stored](../../lib/std/memory/storage.type.zy) names its dictionary independently of the opening,
-so a consumer can receive the shared carrier and its operations as explicit parameters.
-The dictionary contains `size`, `alignment`, and four operations:
-
-| Operation | Contract |
-| --- | --- |
-| `store R value no yes` | Encode `A`, establish backing-buffer alignment, and deliver `Stored` on success. |
-| `load R stored no yes` | Decode `Stored` into `A`. A valid stored value satisfies this decoder; its interface retains the explicit failure branch. |
-| `bytes stored` | Return the immutable byte buffer for observation or foreign borrowing. |
-| `from_bytes R buffer no yes` | Check exact size and canonical contents, establish alignment, and deliver `Stored` on success. |
-
-Only `store` and `from_bytes` introduce `Stored` through this interface.
-Arbitrary `Bytes` cannot be passed to `load`, and different existential openings cannot exchange stored values even
-when their logical types coincide.
-A caller can transfer storage between contracts by explicitly extracting bytes
-and validating them at the second contract.
-This scopes representation evidence with ordinary package abstraction;
-layouts are not runtime indices in the type system.
-The [call interface](#stored-call-interfaces) uses the same opening to share stored argument and result types
-across separately checked workers, with explicit logical conversion between different carriers.
-The [module signature](../../lib/std/memory/package.type.zy) uses an expected existential annotation to prescribe
-that abstraction rather than attempting to infer it from the concrete byte implementation.
-
-The current checker cannot derive a total byte decoder from size and layout evidence.
-Consequently `load` retains a failure continuation even though these constructors establish its input invariant.
-Likewise, two independently opened contracts have no type-level proof that their runtime layouts agree.
-These are remaining expressiveness limits: the nominal storage boundary is enforced,
-while its byte-level laws are implemented and tested by the library rather than represented as value-dependent proofs.
-The public `Storage A Stored` type also permits caller-authored dictionaries.
-Its classifier specifies the operations; implementing one carries the same layout-law obligations as a builder.
-Reusing a carrier while silently changing its interpretation is not ruled out by a dependent proof.
-
-#### Static layout plans
-
-Foreign records and fixed buffer operations often need placement before execution.
-The [static builder](../../lib/std/memory/static-layout.zy) answers that requirement using ordinary value functions.
-Its [signature](../../lib/std/memory/static-layout.type.zy) hides `Plan A`
-and discloses `Layout A = Result (Plan A) Error`.
-Constructors have the same composition syntax as the runtime builder: scalar leaves,
-`unit`, `padding`, `product`, and `align`.
-Each successful plan contains validated placement and the codecs derived from that placement.
-Callers cannot introduce a successful plan from a layout-information record.
-
-With `builtin` and its `UInt8` and `UInt32` carriers in scope, the following fragment constructs an aligned plan.
-Import paths are relative to this reference:
-
-```zydeco
-let make_memory = @(import("../../lib/std/memory/static-layout.zy")) in
-let (/Bytes; byte_package) = builtin |> (@(import("../../lib/std/text/bytes.zy"))) in
-let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
-let record = memory/align (UInt8 * UInt32) 16
-  (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
-match record
-| +Err(error) => ...
-| +Ok(plan) =>
-  let shape = memory/inspect (UInt8 * UInt32) plan in
-  let (= Stored, repr) = memory/realize (UInt8 * UInt32) plan in
-  ...
-end
-```
-
-`inspect` and `realize` are value functions.
-`inspect` returns a [Shape](../../lib/std/memory/shape.zy) with `size`, `alignment`, and `form`.
-A scalar form retains its original byte width, padding is a leaf,
-and a product form records the right `offset` and both child shapes.
-The left offset is zero.
-Raising alignment preserves that form, so an over-aligned scalar still exposes its original width
-and an over-aligned product retains its field offsets.
-For the example, the shape exposes size 16, alignment 16, and right offset 4.
-`realize` constructs the usual `Representation A`; it needs no failure continuation
-because placement has already been checked.
-Its `store` and `from_bytes` operations still perform fallible backing allocation.
-
-[Size calculations](../../lib/std/memory/size.zy) are source-defined value functions returning `Result Int64 Error`.
-They check the nonnegative signed range, power-of-two alignment, and overflow,
-using only [L8's total integer leaves](#8-value-functions-and-views).
-`NegativeSize`, `InvalidAlignment`, and `SizeOverflow` are ordinary constructors
-in [Error](../../lib/std/memory/layout-error.zy); callers can handle them with value matches.
-Product construction propagates the left error before the right error;
-alignment validates the requested boundary before inspecting its input layout.
-No allocation or byte operation runs to calculate a plan, including a representable but impractically large plan.
-
-Both builders use the same [descriptor](../../lib/std/memory/descriptor.type.zy)
-and [codec implementation](../../lib/std/memory/codec.zy).
-They pass completed offsets, gaps, and tails to codecs, so byte writes do not repeat placement arithmetic.
-These internal codec constructors assume validated placement; only the public builders expose opaque successful plans.
-The common descriptor remains an internal implementation interface, not an independently checked proof
-of arbitrary user-supplied codecs.
-
-The [static elimination contract](#10-static-elimination) determines when a value calculation must resolve.
-A runtime size cannot supply a static `padding` calculation; the runtime builder supports that use.
-Validated plans themselves can be transported or selected at runtime,
-and `inspect` can forward their layout information as ordinary values.
-A runtime-selected plan does not thereby supply known integers to a later static calculation.
-Neither API executes `Ret` computations during checking.
-
-This is source-level construction evidence, with practical limits.
-All plans for one logical `A` have the same `Plan A` type; the type does not distinguish two different placements.
-`Shape` is an inspection result, not a dependent proof or a compiler calling-convention descriptor.
-It contains no managed-reference map or target register classification.
-The [call-boundary proposal](../proposals/escape-unboxing.md#remaining-machine-call-boundary) owns the
-additional evidence required before compiler policies may choose among source-constrained call layouts.
-The current Rust representation policies continue to govern only locally justified word representations.
+The [complete fixed-layout example](../../lib/tests/std/static-layout.zy) allocates a 16-byte aligned record,
+initializes and reads its fields, then takes the value and releases the allocation.
+[Type and phase tests](../../lang/tests/tests/static_layout.rs) pair accepted layouts with invalid arithmetic,
+forged plans, mismatched logical types, and runtime placement operands.
 
 #### Layout laws
 
-All sizes and offsets are nonnegative `Int64` values.
-Alignment is a positive power of two.
-Arithmetic checks the `Int64` bound before adding or rounding; invalid inputs and overflow select `no`
-during runtime realization or return a static-construction `Err`, without allocating a payload.
-A representable size does not guarantee that storage can be allocated.
-Type checking enforces the logical type and abstract storage boundary; the builders implement the arithmetic laws.
+Supported scalar widths are 1, 2, 4, or 8 bytes, with matching natural alignment.
+The current interpreter/native 64-bit profiles and Wasm's virtual-address profile use an 8-byte address slot.
+This is an explicit storage format; it does not select a C aggregate ABI or the compiler's logical product layout.
 
-The ten scalar leaves use explicit little-endian storage.
-Integers occupy their exact declared width, with signed integers using two's complement.
-`Float32` and `Float64` occupy their IEEE bit patterns, including signed zero and NaN payloads.
-Scalar size and alignment are both the width in bytes.
-Each scalar decoder accepts exactly that many bytes.
-The [scalar primitives](../../lib/std/builtin/numeric) load and store exact-width bits through checked memory.
-[Source codecs](../../lib/std/numeric/codecs.zy) construct immutable byte results and enforce exact decoder widths.
+For a product, the second field starts at the first field's size rounded up to the second field's alignment.
+Aggregate alignment is the maximum field alignment; total size rounds the field end up to that alignment.
+All size arithmetic is checked against nonnegative `Int64` bounds before any wrapping primitive arithmetic.
+Raising alignment preserves internal field offsets and rounds the final size to the greater boundary.
+Unit has size zero and alignment one.
+`padding count` reserves bytes and contributes only a logical `Unit`.
 
-`unit` has size zero and alignment one.
-`padding n : Layout Unit` has size `n` and alignment one, and stores exactly `n` zero octets.
-It can occur as a field in an ordinary product layout.
-For a product with field sizes and alignments `(left_size, left_alignment)` and `(right_size, right_alignment)`:
+For example, `UInt8 * UInt32` has offsets 0 and 4, size 8, and alignment 4.
+Raising alignment to 16 retains offsets 0 and 4 and gives size 16.
+Typed initialization writes the fields directly; reading ignores the intervening and trailing padding.
+No temporary `Bytes` encoding or canonical-zero-padding check participates in these operations.
+Serialization and foreign functions that inspect every byte require the caller to initialize padding explicitly,
+for example with `raw/unsafe/fill` before field initialization.
 
-```text
-right_offset = round_up(left_size, right_alignment)
-alignment    = max(left_alignment, right_alignment)
-size         = round_up(right_offset + right_size, alignment)
-```
+### Dynamic layouts
 
-The left field begins at zero; the right field begins at `right_offset`.
-Every gap and trailing byte is zero.
-Nested products obey the same rule, so grouping is significant: `A * (B * C)` contains a nested aggregate.
-A standalone padding layout may have any nonnegative size; product composition establishes its own aligned stride.
+The [dynamic builder](../../lib/std/memory/dynamic-layout.zy) supports the same layout combinators
+when their inputs are runtime values.
+Its `realize A R layout no yes` validates sizes, alignment, and overflow at execution,
+then supplies a `Representation A` with the corresponding witness and operations.
+Invalid placement selects `no` before allocation or writes.
+Dynamic size, alignment, and offsets remain captured where needed; they are not appended to each typed pointer.
+The [runtime-layout example](../../lib/tests/std/representation.zy) exercises this distinction.
 
-`align A boundary layout` preserves field offsets, raises alignment to the maximum of the requested
-and existing alignment, and rounds size up to that alignment with zero tail padding.
-It never weakens a field's requirement. For example:
+### Immutable owners and source bytes
 
-```zydeco
-let record = memory/align (UInt8 * UInt32) 16
-  (memory/product UInt8 UInt32 memory/uint8 memory/uint32) in
-...
-```
+[Bytes](../../lib/std/text/bytes.zy) is a source abstraction with a private address and byte count.
+Its backing allocations are explicitly retained until the runtime instance is destroyed.
+Copying and slicing share storage without per-copy reference counting; a small slice can retain a large allocation.
+Text conversion and I/O reads import their results into that retained storage.
+No mutable operation is available through the immutable content interface.
 
-This description has size 16 and alignment 16.
-Its stored bytes are:
+`bytes/unsafe/build R count alignment fill no yes` allocates a private destination.
+The fill callback receives its address, a failure successor, and completion.
+It must initialize every published byte and invoke exactly one successor.
+Failure frees the allocation before forwarding the error; completion transfers ownership
+to runtime retention before publishing `Bytes`.
+A retention reservation failure also frees the allocation.
+After success, no alias may mutate or free the storage.
+Escaped aliases and repeated completions violate this caller contract; the callback type does not prevent them.
 
-| Byte offsets | Contents |
-| --- | --- |
-| 0 | `UInt8` field |
-| 1–3 | Zero gap |
-| 4–7 | `UInt32` field, little endian |
-| 8–15 | Zero tail padding |
+`bytes/unsafe/from_retained` wraps an address and nonnegative length whose retention,
+immutability, and initialized extent the caller establishes.
+`with_window` exposes the address and byte count for a trusted read-only consumer.
+`copy_to` copies initialized contents into a caller-provided destination.
+Retaining an allocation with unused spare capacity is permitted when only its initialized prefix is published.
+Retention transfers ownership, without scanning bytes or tracking initialization.
 
-`from_bytes` validates the complete canonical representation.
-It rejects truncated or oversized buffers and nonzero padding.
-The current implementation decodes and re-encodes to check canonical contents before aligning the supplied buffer.
-This deliberately distinguishes an accepted storage contract from arbitrary C struct bytes:
-C code must initialize padding to the required value before importing a complete object through this interface.
-Alternatively, a [foreign input decoder](#foreign-decoding-and-canonical-storage) can read the meaningful fields
-and use `store` to construct canonical storage.
+`empty`, `length`, content comparison, slicing, concatenation, scalar codecs,
+and UTF-8 conversion preserve immutable-content semantics.
+Bounds and UTF-8 failures remain explicit branches.
+Concatenation allocates once and copies each input; alignment conversion allocates a suitably aligned copy.
+These pure-content wrappers may use internal allocation while following the [Ret convention](#ret-and-explicit-cps).
+The [byte regressions](../../lib/tests/std/source-bytes.zy) exercise slicing, bounds, UTF-8, copying, and retention.
 
-#### Address realization and FFI
+### Byte builders
 
-Alignment is implemented by source `bytes/aligned` using the general memory allocator and byte copying.
-Numeric size calculation, power-of-two validation, and field placement remain library code,
-using value functions or returning computations according to the builder.
-Zero-padding construction remains a suspended computation.
-No layout annotation or special compiler interpretation of `product`, `padding`, or `align` is involved.
+The source [Buffer](../../lib/std/memory/buffer.zy) is a manually managed byte builder.
+`allocate` takes an explicit allocator and capacity and starts with an empty initialized prefix.
+`unsafe/push` and `unsafe/extend` check capacity before writes and deliver an updated handle through CPS.
+A capacity failure leaves storage and the supplied handle's prefix unchanged.
+Copying a handle does not keep its prefix metadata synchronized with later updates; callers retire stale handles.
 
-Interpreter and native realizations preserve the buffer's contents at a borrowed address divisible
-by the contract's alignment.
-`bytes/with_window` supplies the retained access, address, and byte count;
-the binding passes its explicit readable window as one C pointer and supplies a separate length if required.
-Subsequent byte transformations produce ordinary buffers and carry no stored-type proof;
-re-import them through the contract to reestablish its invariants.
-The Wasm host models checked memory and alignment in a virtual address space, with no native C pointer export.
+`unsafe/snapshot` copies the initialized prefix into retained `Bytes`.
+`unsafe/finish_heap` transfers a builtin-heap allocation to retention and publishes its initialized prefix
+without copying its payload; the caller must not reuse any old handle.
+It requires builtin-heap allocation, since retention eventually frees through that allocator.
+`unsafe/close` instead releases storage through the original allocator.
+Neither repeated finish nor access after close is a checked operation.
+The [builder example](../../lib/tests/std/buffer.zy) covers capacity preflight,
+independent snapshots, spare capacity at publication, and explicit cleanup.
+Growth and integration
+with `Writer` remain [proposed](../proposals/filesystem.md#memory-backed-writer-and-byte-builder).
 
-The [C example](../../lib/tests/ffi/representation.zy) constructs an over-aligned record
-and passes it to a [C fixture](../../lib/tests/ffi/boundary.c) that checks address alignment,
-`sizeof`, field offsets, contents, and zero padding.
-This exercises byte borrowing through the existing FFI, not C aggregate argument classification.
-The example's native scalar layout matches the supported little-endian targets;
-this is not a portable derivation of every platform's C ABI.
-C reads through `memcpy` to avoid assigning an effective C type to the byte allocation.
-The [static-plan variant](../../lib/tests/ffi/static-layout.zy) exercises the same C checks
-with placement calculated before execution.
+### Stored-call interfaces
 
-#### Construction costs and limits
-
-Layout realization constructs ordinary closure environments.
-Storage construction currently creates intermediate buffers and concatenates them;
-decoding shares slices, while `from_bytes` also re-encodes for canonical validation.
-Deep composition can therefore copy a payload repeatedly.
-Static plans remove placement arithmetic and its continuation structure,
-without proving fewer executed allocations or a faster program.
-The [representation comparison tool](../../cli/examples/representations.rs) reports generated allocation sites.
-
-Retained immutable allocations live outside managed GC until runtime teardown.
-Stored carriers still use ordinary words at calls, and an inspected offset remains an integer rather
-than a typed field path.
-[Memory extensions](../proposals/bytes.md#remaining-questions) retain direct destination codecs,
-ownership-aware reuse, typed field paths, and reclamation questions;
-[machine representation work](../proposals/escape-unboxing.md#remaining-machine-call-boundary) requires explicit call
-and tracing evidence.
-Neither the source storage dictionary nor its numerical shape changes an ABI.
-
-### Access through existing representation contracts
-
-[access.zy](../../lib/std/memory/access.zy) consumes the existential `Representation A` interface.
-It introduces no compiler rule and does not couple the immutable layout builder to `OS` or `Buffer`.
-
-`read_at A R representation source offset no yes` checks a window of the representation's exact size,
-validates its canonical contents, and decodes an `A`.
-It accepts dynamically supplied representation packages: unpacking occurs inside the body
-because the result does not depend on their hidden stored type.
-It returns through the caller's `R` stack and can inspect a field of a larger immutable buffer.
-Invalid ranges or representations select `no`.
-
-`write_to A representation destination offset value error done` encodes an `A`
-and writes it into a caller-provided `Buffer`.
-Destination bounds and closed-handle errors are the buffer protocol's errors;
-detected temporary storage allocation failure uses `AllocationFailed`.
-No destination byte changes unless encoding and bounds checking succeed.
-The operation still constructs a temporary encoding, but repeated field writes reuse the destination allocation rather
-than reconstructing the whole record.
-The caller chooses its capacity and base alignment through an allocator.
-
-A successful write proves that the bytes fit; it does not turn the destination
-into `Stored` or prove that the chosen offset is aligned for a field.
-Freeze and import through a complete representation when that proof boundary is needed.
-Typed field paths relating parent and child layouts remain deferred:
-the current types carry no value-dependent offset or layout-equality evidence.
-These explicit checked offset operations remain useful without claiming those proofs.
-
-[Access tests](../../lib/tests/std/storage-access.zy) cover field decoding, wrong ranges,
-and failed writes preserving other fields on all backends.
-[The C construction example](../../lib/tests/ffi/storage-access.zy) creates the existing 64-byte-aligned record
-by writing fields into one destination and freezing it before foreign borrowing.
-Reads share byte windows, and writes currently allocate temporary encodings;
-a direct destination codec is a later optimization that must preserve these failure and canonical-padding contracts.
-
-### Stored call interfaces
-
-A consumer needs to name the chosen carrier without creating another abstract opening.
-The storage library therefore factors its existing package
-into `Representation A = exists (= Stored : VType) . Storage A Stored`.
-The [storage contract](#descriptions-computations-and-abstract-storage) defines that dictionary and its laws.
-A composition root opens a representation once and passes `Stored` and the dictionary to its workers.
-Those workers can live in separately checked sources and export `Thk` computations over that same carrier.
-
-The ordinary [call library](../../lib/std/memory/call.zy) defines the computation protocol:
-
-```text
-Function A B R = A -> Thk R -> Thk (B -> R) -> R
-```
-
-It receives an argument, a failure continuation, and a continuation accepting its result.
-`R : CType` describes the required residual stack; using `OS` or `Ret Int64` does not require another adapter design.
-The protocol itself places no purity, termination, or single-invocation requirement on user-authored workers.
-The library's adapters perform the following sequences, forwarding the same failure continuation at every step:
-
-| Operation | Resulting interface | Sequence when each preceding stage succeeds |
-| --- | --- | --- |
-| `between A B Input Output input output`, then `encode R logical` | `Thk (Function Input Output R)` | Load input; invoke logical worker; store output; invoke result continuation |
-| The same boundary, then `decode R encoded` | `Thk (Function A B R)` | Store input; invoke stored worker; load output; invoke result continuation |
-| `compose A B C R first second` | `Thk (Function A C R)` | Invoke first; forward its result directly to second |
-| `convert A From To source target R` | `Thk (Function From To R)` | Load with source; store with target |
-
-Construction is by value functions; execution occurs only when the resulting thunk is forced.
-Runtime dictionaries and dynamically selected worker thunks may be captured by these adapters.
-No metadata arithmetic is needed to forward a stored value, and composition inserts no codec conversion itself.
-`convert` preserves the logical value through decoding and encoding; it does not reinterpret bytes or equate carriers.
-For a worker whose interface already uses the desired carriers, an ordinary call passes them directly.
-
-For example, after opening a representation of `Record = UInt8 * UInt32`:
-
-```zydeco
-let boundary = calls/between Record Record Stored Stored repr repr in
-let increment = boundary/encode OS {
-  fn (tag, payload) no yes =>
-    do next <- ! numeric/uint32/add payload 1;
-    ! yes (tag, next)
-} in
-! increment stored failure { fn result => ... }
-```
-
-Here the argument and result have the same abstract `Stored` type.
-The [checked example](../../lib/tests/std/represented-call/main.zy) imports this kind of worker,
-passes its result to recursive polymorphic code, and selects an alternative thunk at runtime.
-The alternative explicitly converts a 16-byte aligned record into a 64-byte aligned record and back.
-Both thunks expose the original carrier, so selection and continuation calls agree on their interface.
-The example also dynamically chooses a provider package of the ordinary form:
-
-```zydeco
-exists (Stored : VType) . Storage Record Stored * Thk (Function Stored Stored OS)
-```
-
-Opening that package gives its consumer a coherent codec and worker even when the provider's byte layout is unknown.
-Packaging preserves agreement by carrying both together; it does not recover an unknown witness from metadata.
-
-Identity is deliberately nominal at this boundary.
-Tests reject arguments, result continuations, and composed workers from independently opened representations,
-including different alignment, different field width, and identical placement opened twice.
-Matching callers share the opening; numerical equality of sizes, alignments, or shapes never introduces type equality.
-Caller-authored dictionaries carry the [storage laws](#layout-laws).
-The checker does not prove that two implementations at one carrier use identical codecs.
-
-[Stored-call regressions](../../lang/tests/tests/represented_calls.rs) check direct and dynamic calls,
-failure propagation, canonical conversion, and distinct-opening rejection across the execution backends.
-This interface uses the existing word convention.
-Encoding performs a load and store; decoding adds a store and load.
-Matching carriers do not by themselves remove these potentially allocating conversions.
+Source modules share pointer types and CPS operations from the same layout opening.
+A worker can accept `Ptr L Init`, take its fields, initialize the same destination,
+and deliver `Ptr L Init` without allocating another payload.
+The [cross-module example](../../lib/tests/std/represented-call/main.zy) uses this sequence with ordinary thunks.
+There is no separate storage-conversion or call-adapter package.
+A different layout needs an explicit allocation and field conversion, with both allocations' lifetimes settled.
+Equal numerical placement does not equate independent witnesses.
+These calls use the existing source word convention; managed logical values and continuations may still allocate.
 
 ## 14. Foreign interfaces
 
 A foreign implementation is an annotated hole:
 
 ```zydeco check
-param val (/Thk; /Ret; /Access; /Addr; /Int64; /UInt64) : @(import("../../lib/std/builtin.zy")) in
-(@(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk ((Access * Addr * Int64) -> Int64 -> Ret UInt64))
+param val (/Thk; /Ret; /Addr; /Int64; /UInt64) : @(import("../../lib/std/builtin.zy")) in
+(@(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk (Addr -> Int64 -> Ret UInt64))
 ```
 
 The supported classifier is `Thk (A1 -> ... -> An -> Ret B)`, including zero arguments.
-Each fixed-width integer (`Int8` through `Int64`, `UInt8` through `UInt64`) contributes the matching C `intN_t`
-or `uintN_t`.
-An explicit product `Access * Addr * Int64` contributes one `const void *`;
-its count states the readable extent checked before C entry.
-Any C length parameter is a separate integer argument.
-The result `B` is a fixed-width integer or `Unit`; `Ret Unit` calls a C `void` function
-and resumes the Zydeco continuation with `()`.
-The declaration specifies exact widths: C `int`, `long`, enums, and typedefs require platform-specific agreement.
-At most six flattened C arguments are accepted.
-Integer results preserve the declared width and signedness when re-encoded.
+Each fixed-width integer contributes its matching C `intN_t` or `uintN_t`; `Addr` contributes one raw data pointer.
+Any C length or capacity parameter is a separate integer argument.
+The result is a fixed-width integer or `Unit`; `Ret Unit` corresponds to C `void`.
+At most six C arguments are accepted. The declaration chooses exact widths and signedness; C `int`, `long`,
+enums, and typedefs require platform-specific agreement.
 
-A readable-window argument lends its contiguous memory for the duration of the call.
-The adapter checks liveness, read permission, bounds, and initialization before C entry.
-The binding validates any stronger alignment, element format, and relationship between extent and explicit length;
-a mismatched C length is still an incorrect trusted declaration or adapter.
-The callee must neither modify nor retain the pointer, and must not dereference it for a zero-length window.
-The declaration author is responsible for the actual symbol's signature and these borrowing obligations.
-A returning call must use the C return protocol; unwinding and nonlocal jumps across this boundary are unsupported.
-An import may call another compiled Zydeco library under its [entry discipline](#compiled-libraries-and-c-exports);
-callbacks into an active instance remain unsupported.
-Here `Ret` records the C return protocol even when the C function has effects.
-Apply the [public API convention](#ret-and-explicit-cps) in source wrappers: keep pure operations returning,
-and expose effectful ones by binding the raw result and invoking an explicit successor.
-The declaration establishes neither purity nor termination.
+The declaration author supplies the real symbol's ABI and pointer contract.
+For every pointer argument, the binding establishes lifetime, extent, alignment, initialized readable fields,
+writable ranges, alias compatibility, and any foreign retention or release requirements.
+There is no automatic bounds, liveness, or permission check before C entry.
+An empty range has no readable byte and need not have a null address; nullability belongs to the binding.
+A function receiving immutable `Bytes` storage must not modify or free it.
+Manual mutable allocations can be passed directly when their foreign contract permits it.
 
-Checking validates the declared classifier without loading a library or inspecting headers.
-The Unix interpreter loads symbols lazily; native AMD64 links the named library.
-Missing libraries or symbols fail at loading/linking.
+Here `Ret` records the C return protocol even when the function has effects.
+The [public Ret/CPS convention](#ret-and-explicit-cps) applies to source wrappers: keep pure observations returning;
+bind an effectful raw result, interpret its status, then invoke an explicit successor.
+The classifier establishes neither purity nor termination.
+C may leave partial writes on a reported failure; only the particular binding can promise failure before mutation.
+A normal return uses the C return protocol.
+Unwinding, nonlocal jumps, and callbacks into an active instance are unsupported.
+An import may enter a separate compiled library under its [entry discipline](#compiled-libraries-and-c-exports).
+
+Checking validates the declared classifier without loading libraries or inspecting headers.
+The Unix interpreter loads symbols lazily; AMD64 links the named library.
+Missing libraries or symbols fail at loading or linking.
 Wasm and the ZASM interpreter reject native imports.
-Callbacks, floating-point or aggregate values, ungranted or mutable pointers,
-and larger signatures are outside this subset.
-[Concrete boundary examples](../proposals/c-ffi.md#examples-and-observed-gaps) motivate proposed extensions.
+Callbacks, pointer results, floating-point and aggregate ABI values,
+and larger signatures remain [extensions](../proposals/c-ffi.md).
+C exports currently admit only scalar arguments and scalar or unit results.
 
 ### Storage and foreign transport
 
-A `Cell H` specifies the storage of a handle; its view interprets that handle.
-The foreign signature separately specifies what the callee receives.
-Opening a fat handle can supply an address and count for a pointer-plus-length call,
-but its logical product does not become a C aggregate or expand into arguments automatically.
-A prefix-header handle can pass its payload address without reading the header
-when the binding already knows the extent.
-The supported 64-bit targets use a 64-bit `size_t`; a checked nonnegative `Int64` byte count has the same bits.
+A storage layout determines byte placement; the foreign signature independently determines argument transport.
+`Ptr L S` requires explicit address exposure before a C import; its abstract library type is not a foreign classifier.
+A logical product or `Slice L S` does not become a C aggregate or expand into arguments automatically.
+A binding passes the address and any required count separately.
+The current 64-bit profiles use a 64-bit `size_t`; a validated nonnegative `Int64` count has the same bits.
 
-A source `Storage A Stored` can validate and encode a record, then expose a readable window to an import.
-The [record fixture](../../lib/tests/ffi/boundary.zy) exercises one pointer plus five integer parameters:
-the validation extent consumes no additional C argument.
-Using `Stored` itself, or a logical product of record fields, as the foreign classifier is rejected.
-Declaring integers instead would describe a different C signature; checking cannot discover that mismatch
-with the actual header.
+The [aligned record fixture](../../lib/tests/ffi/static-layout.zy) allocates storage, explicitly initializes padding
+because its C inspector reads every byte, writes the typed fields, calls C with the address, and releases storage.
+The [mutable output fixture](../../lib/tests/ffi/mutable-output.zy) passes an uninitialized destination to C,
+interprets the C status through a CPS wrapper, and asserts `Init` only after the promised fields have been written.
+The raw adapter supplies no ownership inference for these transitions.
 
-The binding's record contract and physical alignment remain explicit obligations.
-A generic window validates initialized readable bytes,
-but infers neither element alignment nor a relationship between its extent and another integer parameter.
-Source wrappers can expose recoverable preflight failure through `Memory.check`
-and the required leaf reads before invoking the foreign thunk.
-An empty window has no readable byte and need not have a null address;
-nullability and sentinel conventions belong to the binding.
-Raw pointer results require an ownership, extent, and release contract before they can yield a grant.
+#### Foreign decoding
 
-#### Foreign decoding and canonical storage
-
-The [C specimen](../../lib/tests/ffi/contracts.c) writes a `UInt8` tag and `UInt32` payload
-and deliberately fills padding with `0x58`.
-The C inspector reads the expected logical record.
-The test feeds these actual C-produced bytes into Zydeco: the existing whole-record `from_bytes` rejects them,
-because that operation checks canonical encoding, including zero padding.
-This rejection is correct for its [storage contract](#layout-laws).
-
-The [record input example](../../lib/tests/ffi/record-input.zy) demonstrates a separate foreign decoder
-in ordinary CBPV.
-It obtains the size and field positions from the existing source layout plan, checks exact extent,
-decodes the two fixed-width integer fields, and ignores only the layout's padding.
-The caller then uses `store` to construct canonical `Stored`.
-The same test checks that these canonical bytes pass `from_bytes`; short and oversized inputs select failure
-before any logical fields are exposed to the success continuation.
-The canonicalization program executes on all four backends with the bytes produced by the C specimen.
-
-This example needs no new compiler feature.
-It establishes the direction for C output adapters: decode the foreign representation to `A`,
-then store through the selected `Storage A Stored` contract.
-Keep strict `from_bytes` for callers that require canonical bytes.
-Other foreign decoders must account for their own endianness, valid field encodings, active union alternative,
-and length conventions; the integer record does not establish a generic decoder for arbitrary C objects.
-The fixture checks its native layout and little-endian byte order explicitly.
+The [C specimen](../../lib/tests/ffi/contracts.c) produces a `UInt8` tag and `UInt32` payload with `0x58` padding.
+The [source decoder](../../lib/tests/ffi/record-input.zy) obtains size and offsets from a static plan,
+checks exact byte extent, and decodes only those fields.
+Padding is not part of the logical record and need not be canonicalized before typed use.
+Short and oversized inputs fail before exposing fields to the consumer.
+The [integration test](../../lang/tests/tests/ffi_examples.rs) runs the decoder
+on all four backends using actual output from the C specimen.
+Other bindings must establish their own endianness, valid field encodings, union alternatives, and length conventions.
+Canonical serialization, when required, is a separate codec contract.
 
 ### Compiled libraries and C exports
 
@@ -1838,7 +1318,7 @@ Preparing the interface never executes the exported computation.
 The export classifier is `Thk (I1 -> ... -> In -> Ret R)`, with zero through six fixed-width integer parameters
 and a fixed-width integer or `Unit` result.
 It shares the import signature's widths and scalar conversions, but reverses the transport direction.
-An incoming pointer cannot establish an `Access` grant, owner, permission, or extent;
+Incoming pointer adapters and their binding-specific ownership contracts remain unimplemented;
 therefore the outgoing readable-window adapter cannot serve as an export parameter.
 Abstract source values, closures, floating-point and aggregate values, `OS` results,
 and extra arguments are rejected at this boundary.

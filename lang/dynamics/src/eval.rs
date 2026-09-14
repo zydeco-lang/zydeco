@@ -344,7 +344,7 @@ impl<'rt> Eval<'rt> for Computation {
                         | _ => panic!("foreign call argument not at stack top"),
                     })
                     .collect();
-                match runtime.foreign.invoke(&import, arguments, &runtime.host.buffers) {
+                match runtime.foreign.invoke(&import, arguments) {
                     | Ok(computation) => Step::Step(computation),
                     | Err(error) => Step::Done(ProgKont::Error(error.into())),
                 }

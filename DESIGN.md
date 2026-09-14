@@ -863,7 +863,7 @@ These are distinct from grapheme clusters and from compiler source spans, which 
 `Char` is one Unicode scalar value.
 Source-defined `Bytes` is an immutable octet sequence with no implicit encoding; its indices and lengths count bytes.
 Its [ownership and composition rules](docs/references/language.md#immutable-owners-and-source-bytes) use
-retained immutable memory grants, with source slicing, comparison, copying, and scalar codecs.
+explicitly retained immutable allocations, with source slicing, comparison, copying, and scalar codecs.
 
 String and character literals share the escapes `\\`, `\"`, `\'`, `\n`, `\r`, `\t`, and `\0`.
 Unicode escapes use `\u{...}` with one to six hexadecimal digits denoting a Unicode scalar value;
@@ -879,21 +879,17 @@ The [text and library contracts](lib/std/README.md#text-model)
 and [filesystem design](docs/proposals/filesystem.md) describe these boundaries independently of runtime storage.
 
 Explicit storage is available through the ordinary [memory library](lib/std/memory/package.zy).
-The [static builder](lib/std/memory/static-layout.zy) computes checked plans with value functions,
-exposes their placement information, and shares codecs with the runtime builder.
-Its [owning design](docs/references/language.md#explicit-storage-contracts) specifies typed storage,
-source-composed alignment and padding, and the boundary between logical values,
-concrete buffers, and existing foreign borrowing.
-The [stored-call interface](docs/references/language.md#stored-call-interfaces) shares abstract storage carriers
-across source modules and supplies ordinary CBPV call and conversion adapters.
-These calls use the existing runtime word transport.
+Its [owning design](docs/references/language.md#manual-memory) specifies manual allocation,
+erased pointer state, fixed versus dynamic layouts, and direct CPS destination writes.
+The [cross-module example](lib/tests/std/represented-call/main.zy) shares a typed pointer and its operations.
+The [library guide](lib/std/README.md#explicit-storage) locates the source interfaces and examples.
 
 ### Returning C Imports
 
 A foreign annotation supplies an implementation for a thunk.
 The supported classifier has the form `Thk (A1 -> ... -> An -> Ret B)`, with each argument either a fixed-width integer
-or explicit `Access * Addr * Int64` readable windows, and result `B` a fixed-width integer or `Unit` (C `void`).
-A checked window supplies one C pointer; the binding supplies any length separately.
+or `Addr`, and result `B` a fixed-width integer or `Unit` (C `void`).
+An address supplies one C pointer; the binding supplies any length separately and establishes validity.
 The C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
@@ -902,10 +898,8 @@ The [foreign-interface reference](docs/references/language.md#14-foreign-interfa
 and borrowing obligations.
 The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record,
 output-buffer, callback, and component examples to motivate the next extensions.
-The implemented [memory views](docs/references/language.md#checked-memory-capabilities) use source-defined cells
-and thin, fat, or header-based handles over a small address/access interface.
-The implemented [readable-window adapter](docs/references/language.md#storage-and-foreign-transport)
-supplies one pointer with any C length passed separately.
+The [raw pointer adapter](docs/references/language.md#storage-and-foreign-transport) supports immutable inputs
+and manually managed mutable destinations.
 Aggregate and code-pointer transport remain proposed extensions.
 
 ## WebAssembly backend

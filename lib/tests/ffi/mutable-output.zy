@@ -1,0 +1,46 @@
+begin
+  param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt64; /Int32;
+    /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+  let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = builtin |> (
+    @(import("../../std/memory/package.zy"))
+  ) in
+  let (= Plan, = Layout, layouts) = fixed in
+  let (/Alloc; /heap) = allocation in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  let write : Thk (Addr -> UInt64 -> UInt8 -> UInt32 -> Ret Int32) =
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_write_record")))
+  in
+  match layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32
+  | +Err(_) => ! fail
+  | +Ok(plan) =>
+    let (= L, repr) = layouts/realize (UInt8 * UInt32) plan in
+    -- The binding exposes effects through CPS and interprets C's status before asserting Init.
+    let initialize : Thk (Ptr L Uninit -> Thk (Ptr L Init -> OS) -> OS) = {
+      fn vacant yes =>
+        let address = pointer/unsafe/address L Uninit vacant in
+        do rejected <- ! write address 7 99 99;
+        ! numeric/int32/eq OS rejected -1 {
+          do status <- ! write address 8 7 42;
+          ! numeric/int32/eq OS status 0 {
+            ! yes (pointer/unsafe/from_address L Init address)
+          } fail
+        } fail
+    } in
+    ! repr/allocate OS heap no {
+      fn vacant =>
+        ! initialize vacant {
+          fn value =>
+            ! repr/unsafe/take OS value {
+              fn vacant (tag, payload) =>
+                ! numeric/uint8/eq OS tag 7 {
+                  ! numeric/uint32/eq OS payload 42 {
+                    ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+                  } fail
+                } fail
+            }
+        }
+    }
+  end
+end

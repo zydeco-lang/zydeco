@@ -1,4 +1,4 @@
--- An immutable byte sequence; memory capabilities are supplied by its provider.
+-- Immutable bytes retain their backing allocations until runtime teardown.
 begin
   let VType = @(intrinsic(vtype)) in
   let CType = @(intrinsic(ctype)) in
@@ -9,7 +9,6 @@ begin
   let String = @(intrinsic(string)) in
   let Fault = @(import("../memory/fault.zy")) in
   param Addr : VType in
-  param Access : VType in
   exists (= Bytes : VType) .
     (
       #bytes ::
@@ -29,28 +28,27 @@ begin
       * (#lt :: Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R))
       * (#aligned :: Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (Bytes -> R) -> R))
       * (
-          #from_immutable :: Thk (
-            forall (R : CType) . Access -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
-          )
-        )
-      * (
-          #with_window :: Thk (
-            forall (R : CType) .
-              Bytes -> Thk (Fault -> R) -> Thk (Access -> Addr -> Int64 -> R) -> R
-          )
-        )
-      * (
-          #copy_to :: Thk (
-            forall (R : CType) . Bytes -> Access -> Addr -> Thk (Fault -> R) -> Thk R -> R
-          )
-        )
-      * (
-          #build :: Thk (
-            forall (R : CType) .
-              Int64 -> Int64 -> Thk (Access -> Addr -> Thk (Fault -> R) -> Thk R -> R) -> Thk (
-                Fault -> R
-              ) -> Thk (Bytes -> R) -> R
-          )
+          #unsafe ::
+            (
+              #from_retained :: Thk (
+                forall (R : CType) . Addr -> Int64 -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
+              )
+            )
+          * (
+              #with_window :: Thk (
+                forall (R : CType) . Bytes -> Thk (Fault -> R) -> Thk (Addr -> Int64 -> R) -> R
+              )
+            )
+          * (#copy_to :: Thk (forall (R : CType) . Bytes -> Addr -> Thk R -> R))
+          * (
+              #build :: Thk (
+                forall (R : CType) .
+                     Int64 -> Int64
+                  -> Thk (Addr -> Thk (Fault -> R) -> Thk R -> R) -> Thk (Fault -> R) -> Thk (
+                       Bytes -> R
+                     ) -> R
+              )
+            )
         )
     )
 end

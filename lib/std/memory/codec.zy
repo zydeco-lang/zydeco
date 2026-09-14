@@ -1,109 +1,90 @@
--- Codec construction consumes placements already established by a layout builder.
+-- Direct destination recipes. No intermediate Bytes, allocation, or padding reads.
 begin
-  param val (/Addr; /Access; /VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8;
-    /numeric; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes; byte_package) : (@(import("../text/bytes.type.zy"))) Addr Access that
-  let int = numeric/int64 in
-  let Descriptor = (@(import("descriptor.type.zy"))) Bytes in
-  let Representation = (@(import("representation.type.zy"))) Bytes in
-  let fix zeros (count : Int64) : Ret Bytes =
-    ! int/eq (Ret Bytes) count 0 bytes/empty {
-      ! int/eq (Ret Bytes) count 1 { ! bytes/singleton (0 : UInt8) } {
-        do half <- ! int/div count 2;
-        do prefix <- ! zeros half;
-        do doubled <- ! bytes/append prefix prefix;
-        do remainder <- ! int/mod count 2;
-        ! int/eq (Ret Bytes) remainder 0 { ret doubled } {
-          do last <- ! bytes/singleton (0 : UInt8);
-          ! bytes/append doubled last
-        }
-      }
-    }
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /memory; builtin) : @(import(
+    "../builtin.zy"
+  )) that
+  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  let Descriptor = (@(import("descriptor.type.zy"))) Addr in
+  let Representation = (@(import("representation.type.zy"))) Addr Uninit Init Ptr in
+  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let Fault = @(import("fault.zy")) in
+  let val scalar (A : VType) (size : Int64) (alignment : Int64)
+    (write : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
+    (read : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
+  : Descriptor A =
+      (
+        = size,
+        = alignment,
+        #write = { fn R value address done => ! write R address value done },
+        = read
+      )
   in
-  let ! extend (buffer : Bytes) (count : Int64) : Ret Bytes =
-    do padding <- ! zeros count;
-    ! bytes/append buffer padding
-  in
-  let val scalar (A : VType) (size : Int64)
-    (write : Thk (A -> Ret Bytes))
-    (read : Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R))
-  : Descriptor A = (= size, #alignment = size, = write, = read) in
   let val padding (count : Int64) : Descriptor Unit =
-    (#size = count, #alignment = 1,
-      #write = { fn _ => ! zeros count },
-      #read = { fn R _ _ yes => ! yes () })
+    (
+      #size = count,
+      #alignment = 1,
+      #write = { fn R _ _ done => ! done },
+      #read = { fn R _ yes => ! yes () }
+    )
   in
   let val product (A : VType) (B : VType) (left : Descriptor A) (right : Descriptor B)
-    (offset : Int64) (size : Int64) (alignment : Int64) (gap : Int64) (tail : Int64)
+    (offset : Int64) (size : Int64) (alignment : Int64)
   : Descriptor (A * B) =
       (
         = size,
         = alignment,
         #write = {
-          fn (a, b) =>
-            do first <- ! left/write a;
-            do prefix <- ! extend first gap;
-            do second <- ! right/write b;
-            do body <- ! bytes/append prefix second;
-            ! extend body tail
+          fn R (a, b) address done =>
+            ! left/write R a address {
+              do target <- ! memory/offset address offset;
+              ! right/write R b target done
+            }
         },
         #read = {
-          fn R buffer no yes =>
-            ! bytes/slice R buffer 0 left/size no {
-              fn first =>
-                ! bytes/slice R buffer offset right/size no {
-                  fn second =>
-                    ! left/read R first no {
-                      fn a => ! right/read R second no { fn b => ! yes (a, b) }
-                    }
-                }
+          fn R address yes =>
+            ! left/read R address {
+              fn a =>
+                do target <- ! memory/offset address offset;
+                ! right/read R target { fn b => ! yes (a, b) }
             }
         }
       )
   in
-  let val align (A : VType) (layout : Descriptor A) (size : Int64) (alignment : Int64)
-    (tail : Int64)
-  : Descriptor A =
-      (
-        = size,
-        = alignment,
-        #write = {
-          fn value =>
-            do body <- ! layout/write value;
-            ! extend body tail
-        },
-        #read = {
-          fn R buffer no yes =>
-            ! bytes/slice R buffer 0 layout/size no { fn body => ! layout/read R body no yes }
-        }
-      )
+  let val align (A : VType) (layout : Descriptor A) (size : Int64) (alignment : Int64) : Descriptor
+    A =
+    (= size, = alignment, #write = layout/write, #read = layout/read)
   in
   let val realize (A : VType) (layout : Descriptor A) : Representation A =
     (
       (
-        #Stored = Bytes,
-        (
-          #size = layout/size,
-          #alignment = layout/alignment,
-          #store = {
-            fn R value no yes =>
-              do buffer <- ! layout/write value;
-              ! bytes/aligned R buffer layout/alignment no yes
+        #L = Unit,
+        #size = layout/size,
+        #alignment = layout/alignment,
+        #allocate = {
+          fn R allocator no yes =>
+            ! allocator/allocate R layout/size layout/alignment no {
+              fn address =>
+                ! yes (unsafe/from_address Unit Uninit address)
+            }
+        },
+        #unsafe = (
+          #init = {
+            fn R pointer value yes =>
+              let address = unsafe/address Unit Uninit pointer in
+              ! layout/write R value address { ! yes (unsafe/from_address Unit Init address) }
           },
-          #load = layout/read,
-          #bytes = { fn buffer => ret buffer },
-          #from_bytes = {
-            fn R buffer no yes =>
-              do length <- ! bytes/length buffer;
-              ! int/eq R length layout/size {
-                ! layout/read R buffer no {
-                  fn value =>
-                    do canonical <- ! layout/write value;
-                    ! bytes/eq R buffer canonical {
-                      ! bytes/aligned R buffer layout/alignment no yes
-                    } no
-                }
-              } no
+          #read = { fn R pointer yes => ! layout/read R (unsafe/address Unit Init pointer) yes },
+          #take = {
+            fn R pointer yes =>
+              let address = unsafe/address Unit Init pointer in
+              ! layout/read R address {
+                fn value => ! yes (unsafe/from_address Unit Uninit address) value
+              }
+          },
+          #free = {
+            fn R allocator pointer no done =>
+              ! allocator/free R (unsafe/address Unit Uninit pointer) layout/size layout/alignment
+                no done
           }
         )
       ) : Representation A

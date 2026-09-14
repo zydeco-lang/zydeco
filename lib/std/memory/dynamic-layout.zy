@@ -1,0 +1,116 @@
+begin
+  param val (/Addr; /VType; /CType; /Thk; /Ret; /Unit;
+    /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;
+    /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) that
+  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr that
+  let int = numeric/int64 in
+  let Representation = (@(import("representation.type.zy"))) Addr Uninit Init Ptr in
+  let Descriptor = (@(import("descriptor.type.zy"))) Addr in
+  let make_codec = @(import("codec.zy")) in
+  let codec = (builtin |> make_codec) types in
+  let Layout (A : VType) =
+    Thk (forall (R : CType) . Thk R -> Thk (Descriptor A -> R) -> R)
+  in
+
+  -- All arithmetic here operates on nonnegative sizes and validated alignments.
+  let ! add (R : CType) (left : Int64) (right : Int64)
+    (no : Thk R) (yes : Thk (Int64 -> R))
+  : R =
+      do limit <- ! int/sub 9223372036854775807 right;
+      ! int/gt R left limit no {
+        do sum <- ! int/add left right;
+        ! yes sum
+      }
+  in
+  let ! round_up (R : CType) (size : Int64) (alignment : Int64)
+    (no : Thk R) (yes : Thk (Int64 -> R))
+  : R =
+      do remainder <- ! int/mod size alignment;
+      ! int/eq R remainder 0 { ! yes size } {
+        do extra <- ! int/sub alignment remainder;
+        ! add R size extra no yes
+      }
+  in
+  let fix power_of_two (R : CType) (value : Int64) (no : Thk R) (yes : Thk R) : R =
+    ! int/lt R value 1 no {
+      ! int/eq R value 1 yes {
+        do remainder <- ! int/mod value 2;
+        ! int/eq R remainder 0 {
+          do half <- ! int/div value 2;
+          ! power_of_two R half no yes
+        } no
+      }
+    }
+  in
+  let val scalar (A : VType) (size : Int64)
+    (write : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
+    (read : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
+  : Layout A = { fn R _ yes => ! yes (codec/scalar A size size write read) } in
+  let val padding (count : Int64) : Layout Unit = {
+    fn R no yes => ! int/lt R count 0 no { ! yes (codec/padding count) }
+  } in
+  let val product (A : VType) (B : VType) (left : Layout A) (right : Layout B) :
+    Layout (A * B) = {
+      fn R no yes =>
+        ! left R no {
+          fn left =>
+            ! right R no {
+              fn right =>
+                ! round_up R left/size right/alignment no {
+                  fn offset =>
+                    ! add R offset right/size no {
+                      fn field_end =>
+                        do alignment <- ! int/gt (Ret Int64) left/alignment right/alignment
+                          { ret left/alignment } { ret right/alignment };
+                        ! round_up R field_end alignment no {
+                          fn size =>
+                            ! yes (codec/product A B left right offset size alignment)
+                        }
+                    }
+                }
+            }
+        }
+    }
+  in
+  let val align (A : VType) (boundary : Int64) (layout : Layout A) : Layout A = {
+    fn R no yes =>
+      ! power_of_two R boundary no {
+        ! layout R no {
+          fn layout =>
+            do alignment <- ! int/gt (Ret Int64) boundary layout/alignment
+              { ret boundary } { ret layout/alignment };
+            ! round_up R layout/size alignment no {
+              fn size =>
+                ! yes (codec/align A layout size alignment)
+            }
+        }
+      }
+  } in
+  let ! realize (A : VType) (R : CType) (layout : Layout A)
+    (no : Thk R) (yes : Thk (Representation A -> R))
+  : R =
+      ! layout R no {
+        fn layout => ! yes (codec/realize A layout)
+      }
+  in
+  (
+    (
+      = Layout,
+      = Representation,
+      (
+        #unit = padding 0, = padding, = product, = align, = realize,
+        #int8 = scalar Int8 1 numeric/int8/store_le numeric/int8/load_le,
+        #int16 = scalar Int16 2 numeric/int16/store_le numeric/int16/load_le,
+        #int32 = scalar Int32 4 numeric/int32/store_le numeric/int32/load_le,
+        #int64 = scalar Int64 8 numeric/int64/store_le numeric/int64/load_le,
+        #uint8 = scalar UInt8 1 numeric/uint8/store_le numeric/uint8/load_le,
+        #uint16 = scalar UInt16 2 numeric/uint16/store_le numeric/uint16/load_le,
+        #uint32 = scalar UInt32 4 numeric/uint32/store_le numeric/uint32/load_le,
+        #uint64 = scalar UInt64 8 numeric/uint64/store_le numeric/uint64/load_le,
+        #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le,
+        #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le,
+        #addr = scalar Addr 8 memory/store_addr memory/load_addr
+      )
+    ) : (@(import("dynamic-layout.type.zy"))) Addr Uninit Init Ptr
+  )
+end

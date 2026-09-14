@@ -1,12 +1,12 @@
+-- Internal layout recipes. Fixed builders eliminate their placement; dynamic layouts retain it.
 begin
   let VType = @(intrinsic(vtype)) in
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
-  let Ret = @(intrinsic(ret)) in
-  param Bytes : VType in
   let Int64 = @(intrinsic(i64)) in
+  param Addr : VType in
   fn (A : VType) =>
       (#size :: Int64) * (#alignment :: Int64)
-    * (#write :: Thk (A -> Ret Bytes))
-    * (#read :: Thk (forall (R : CType) . Bytes -> Thk R -> Thk (A -> R) -> R))
+    * (#write :: Thk (forall (R : CType) . A -> Addr -> Thk R -> R))
+    * (#read :: Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
 end

@@ -1175,8 +1175,7 @@ mod tests {
             Err(LibraryError::Target)
         ));
         Fixture::edit(&path, |manifest| {
-            manifest["exports"][0]["signature"]["parameters"] =
-                serde_json::json!(["BorrowedMemory"])
+            manifest["exports"][0]["signature"]["parameters"] = serde_json::json!(["Address"])
         });
         assert!(matches!(
             LinkedLibraries::load(std::slice::from_ref(&path)),

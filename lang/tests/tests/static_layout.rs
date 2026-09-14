@@ -1,30 +1,17 @@
-use std::path::PathBuf;
+#[path = "support/memory.rs"]
+mod memory;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{e2e_sources, utils::SourceCase};
 
 e2e_sources!({
     static_layout => "tests/std/static-layout.zy",
-    static_storage_access => "tests/std/static-storage-access.zy",
 });
 
 struct LayoutCase;
 
 impl LayoutCase {
     fn source(body: &str) -> String {
-        let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/memory")
-            .canonicalize()
-            .unwrap();
-        format!(
-            r#"
-let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{directory}/../text/bytes.zy"))) in
-let make_memory = @(import("{directory}/static-layout.zy")) in
-let (= Plan, = Layout, memory) = (builtin |> make_memory) byte_package in
-let size = @(import("{directory}/size.zy")) in
-{body}
-"#,
-            directory = directory.display()
-        )
+        memory::source(body)
     }
 
     fn accepts(expression: &str, pattern: &str) {
@@ -148,23 +135,14 @@ end
 }
 
 #[test]
-fn transporting_a_plan_keeps_its_contract_but_does_not_make_runtime_metadata_static() {
-    SourceCase::assert_accepted(SourceCase::run(&LayoutCase::source(
-        r#"
-let use : Thk (Plan UInt8 -> OS) = { fn plan =>
-  let shape = memory/inspect UInt8 plan in
-  let (= Stored, repr) = memory/realize UInt8 plan in
-  ! numeric/int64/eq OS shape/size 1 {
-    ! repr/store OS 7 { ! exit 1 } { fn stored =>
-      ! repr/load OS stored { ! exit 1 } { fn byte =>
-        ! numeric/uint8/eq OS byte 7 { ! exit 0 } { ! exit 1 }
-      }
-    }
-  } { ! exit 1 }
-} in
-match memory/uint8 | +Ok(plan) => ! use plan | +Err(_) => ! exit 1 end
-"#,
-    )));
+fn runtime_plans_cannot_drive_fixed_realization_or_placement() {
+    SourceCase::assert_rejected(
+        SourceCase::check(&LayoutCase::source(
+            "let use : Thk (Plan UInt8 -> OS) = { fn plan => \
+             let (= L, repr) = memory/realize UInt8 plan in ! exit 0 } in ! exit 0",
+        )),
+        TyckDiagnosticCode::StaticElimination,
+    );
     SourceCase::assert_rejected(
         SourceCase::check(&LayoutCase::source(
             r#"

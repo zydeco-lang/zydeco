@@ -48,9 +48,9 @@ impl BuiltinRuntime {
                     integer_branch(integer, operation, args)
                 }
                 | IntegerOperation::ToString => integer_to_string(integer, args),
-                | IntegerOperation::StoreLe => ScalarMemory::store(args, host),
+                | IntegerOperation::StoreLe => ScalarMemory::store(args),
                 | IntegerOperation::LoadLe => {
-                    ScalarMemory::load(PrimitiveType::Integer(integer), args, host)
+                    ScalarMemory::load(PrimitiveType::Integer(integer), args)
                 }
             },
             | Role::Float(float, operation) => match operation {
@@ -64,10 +64,8 @@ impl BuiltinRuntime {
                     float_branch(float, operation, args)
                 }
                 | FloatOperation::ToString => float_to_string(float, args),
-                | FloatOperation::StoreLe => ScalarMemory::store(args, host),
-                | FloatOperation::LoadLe => {
-                    ScalarMemory::load(PrimitiveType::Float(float), args, host)
-                }
+                | FloatOperation::StoreLe => ScalarMemory::store(args),
+                | FloatOperation::LoadLe => ScalarMemory::load(PrimitiveType::Float(float), args),
             },
             | Role::StrScalarLength => str_scalar_length(args),
             | Role::StrByteLength => str_byte_length(args),
@@ -80,18 +78,15 @@ impl BuiltinRuntime {
             | Role::CharCodepoint => char_codepoint(args),
             | Role::CharFromCodepoint => char_from_codepoint_branch(args),
             | Role::StrParseInt => str_parse_int_branch(args),
+            | Role::MemoryCopy
+            | Role::MemoryFill
+            | Role::MemoryNull
             | Role::MemoryAllocate
-            | Role::MemoryClose
-            | Role::MemoryFreeze
-            | Role::MemoryImmutableLength
-            | Role::MemoryCheckWrite
+            | Role::MemoryFree
+            | Role::MemoryRetain
             | Role::MemoryFromString
             | Role::MemoryToString
-            | Role::MemoryGrant
-            | Role::MemoryRevoke
-            | Role::MemoryBase
             | Role::MemoryOffset
-            | Role::MemoryCheck
             | Role::MemoryLoadAddr
             | Role::MemoryStoreAddr => crate::memory::MemoryRuntime::invoke(role, args, host),
             | Role::Stdin => stdin(args),
