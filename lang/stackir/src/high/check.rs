@@ -4,9 +4,10 @@
 //! additionally exposes the paper's stack-join placement as a checked boundary.
 
 use super::syntax::*;
+use super::traverse::{Edge, Node, Occurrence, Traversal, Visitor};
 use super::variables::FreeVars;
-use std::collections::HashSet;
 use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
+use zydeco_surface::diagnostic::Diagnostics;
 
 /// A lexical Stack IR tree whose stack joins occur exactly at value-coproduct branches.
 #[derive(Debug)]
@@ -32,11 +33,11 @@ pub enum BranchJoinError {
 
 impl BranchJoinProgram {
     /// Recheck lexical ownership and branch joins without rebuilding the program.
-    pub fn validate(&self) -> Result<(), BranchJoinError> {
+    pub fn validate(&self) -> Result<(), BranchJoinErrors> {
         BranchJoinValidator::validate(&self.program)
     }
 
-    pub fn try_new(program: StackirProgram) -> Result<Self, BranchJoinError> {
+    pub fn try_new(program: StackirProgram) -> Result<Self, BranchJoinErrors> {
         BranchJoinValidator::validate(&program)?;
         Ok(Self { program })
     }
@@ -57,7 +58,7 @@ impl AsRef<StackirProgram> for BranchJoinProgram {
 }
 
 impl TryFrom<StackirProgram> for BranchJoinProgram {
-    type Error = BranchJoinError;
+    type Error = BranchJoinErrors;
 
     fn try_from(program: StackirProgram) -> Result<Self, Self::Error> {
         Self::try_new(program)
@@ -70,136 +71,52 @@ impl From<BranchJoinProgram> for StackirProgram {
     }
 }
 
-struct BranchJoinValidator<'a> {
-    arena: &'a StackirInnerArena,
-    compus: HashSet<CompuId>,
-    stacks: HashSet<StackId>,
-    values: HashSet<ValueId>,
-    patterns: HashSet<VPatId>,
+pub type BranchJoinErrors = Diagnostics<BranchJoinError>;
+
+/// Independent observer of ownership and immediate branch-join placement.
+#[derive(Default)]
+pub struct BranchJoinValidator {
+    errors: Vec<BranchJoinError>,
 }
 
-impl<'a> BranchJoinValidator<'a> {
-    fn validate(program: &'a StackirProgram) -> Result<(), BranchJoinError> {
-        let mut validator = Self {
-            arena: &program.arena().inner,
-            compus: HashSet::new(),
-            stacks: HashSet::new(),
-            values: HashSet::new(),
-            patterns: HashSet::new(),
-        };
-        validator.compu(program.root(), false)
+impl BranchJoinValidator {
+    fn validate(program: &StackirProgram) -> Result<(), BranchJoinErrors> {
+        let mut validator = Self::default();
+        Traversal { arena: &program.arena().inner }.run(program.root().into(), &mut validator);
+        validator.into_result()
     }
 
-    fn compu(&mut self, id: CompuId, guarded: bool) -> Result<(), BranchJoinError> {
-        if !self.compus.insert(id) {
-            return Err(BranchJoinError::SharedComputation { compu: id });
-        }
-
-        match self.arena.compus[&id].clone() {
-            | Computation::Hole(SHole(stack)) => self.stack(stack),
-            | Computation::Force(SForce { thunk, stack }) => {
-                self.value(thunk)?;
-                self.stack(stack)
-            }
-            | Computation::Ret(SReturn { stack, value }) => {
-                self.stack(stack)?;
-                self.value(value)
-            }
-            | Computation::Fix(SFix { param: _, stack, body }) => {
-                self.stack(stack)?;
-                self.compu(body, false)
-            }
-            | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
-                self.value(scrut)?;
-                self.pattern(binder)?;
-                self.compu(body, false)
-            }
-            | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
-                if !guarded {
-                    return Err(BranchJoinError::UnguardedCoprodMatch { compu: id });
-                }
-                self.value(scrut)?;
-                arms.into_iter().try_for_each(|Matcher { binder, tail }| {
-                    self.pattern(binder)?;
-                    self.compu(tail, false)
-                })
-            }
-            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
-                self.value(bindee)?;
-                self.pattern(binder)?;
-                self.compu(tail, false)
-            }
-            | Computation::Join(LetJoin::Stack(Let { binder: Bullet, bindee, tail })) => {
-                self.stack(bindee)?;
-                if !matches!(self.arena.compus[&tail], Computation::CoprodMatch(_)) {
-                    return Err(BranchJoinError::NonBranchStackLet { compu: id, body: tail });
-                }
-                self.compu(tail, true)
-            }
-            | Computation::LetArg(Let { binder: Cons(binder, Bullet), bindee, tail }) => {
-                self.stack(bindee)?;
-                self.pattern(binder)?;
-                self.compu(tail, false)
-            }
-            | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                self.stack(scrut)?;
-                arms.into_iter().try_for_each(|CoMatcher { dtor: _, tail }| self.compu(tail, false))
-            }
-            | Computation::ExternCall(ExternCall { function: _, stack }) => self.stack(stack),
-        }
+    pub fn errors(&self) -> &[BranchJoinError] {
+        &self.errors
     }
 
-    fn stack(&mut self, id: StackId) -> Result<(), BranchJoinError> {
-        if !self.stacks.insert(id) {
-            return Err(BranchJoinError::SharedStack { stack: id });
-        }
-
-        match self.arena.stacks[&id].clone() {
-            | Stack::Kont(Kont { binder, body }) => {
-                self.pattern(binder)?;
-                self.compu(body, false)
-            }
-            | Stack::Var(Bullet) => Ok(()),
-            | Stack::Arg(Cons(value, stack)) => {
-                self.value(value)?;
-                self.stack(stack)
-            }
-            | Stack::Tag(Cons(_, stack)) => self.stack(stack),
+    pub fn into_result(self) -> Result<(), BranchJoinErrors> {
+        match Diagnostics::with_errors(self.errors) {
+            | Some(errors) => Err(errors),
+            | None => Ok(()),
         }
     }
+}
 
-    fn value(&mut self, id: ValueId) -> Result<(), BranchJoinError> {
-        if !self.values.insert(id) {
-            return Err(BranchJoinError::SharedValue { value: id });
+impl Visitor for BranchJoinValidator {
+    fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
+        if let Edge::BranchJoin(parent) = edge
+            && let Node::Computation(body, computation) = node
+            && !matches!(computation, Computation::CoprodMatch(_))
+        {
+            self.errors.push(BranchJoinError::NonBranchStackLet { compu: parent, body });
         }
-
-        match self.arena.values[&id].clone() {
-            | Value::Hole(Hole) | Value::Var(_) | Value::Triv(Triv) | Value::Literal(_) => Ok(()),
-            | Value::Closure(Closure { stack: Bullet, body }) => self.compu(body, false),
-            | Value::Ctor(Ctor(_, value)) => self.value(value),
-            | Value::VCons(VCons { items, layout: _ }) => {
-                items.into_iter().try_for_each(|value| self.value(value))
-            }
-            | Value::Primitive(Primitive { operation: _, operands }) => {
-                operands.into_iter().try_for_each(|value| self.value(value))
-            }
-        }
-    }
-
-    fn pattern(&mut self, id: VPatId) -> Result<(), BranchJoinError> {
-        if !self.patterns.insert(id) {
-            return Err(BranchJoinError::SharedPattern { pattern: id });
-        }
-
-        match self.arena.vpats[&id].clone() {
-            | ValuePattern::Hole(Hole) | ValuePattern::Var(_) | ValuePattern::Triv(Triv) => Ok(()),
-            | ValuePattern::Ctor(Ctor(_, pattern)) => self.pattern(pattern),
-            | ValuePattern::Alias(Alias(patterns)) => {
-                patterns.into_iter().try_for_each(|pattern| self.pattern(pattern))
-            }
-            | ValuePattern::VCons(VCons { items, layout: _ }) => {
-                items.into_iter().try_for_each(|pattern| self.pattern(pattern))
-            }
+        if occurrence != Occurrence::First {
+            self.errors.push(match node {
+                | Node::Pattern(pattern, _) => BranchJoinError::SharedPattern { pattern },
+                | Node::Value(value, _) => BranchJoinError::SharedValue { value },
+                | Node::Stack(stack, _) => BranchJoinError::SharedStack { stack },
+                | Node::Computation(compu, _) => BranchJoinError::SharedComputation { compu },
+            });
+        } else if let Node::Computation(compu, Computation::CoprodMatch(_)) = node
+            && !matches!(edge, Edge::BranchJoin(_))
+        {
+            self.errors.push(BranchJoinError::UnguardedCoprodMatch { compu });
         }
     }
 }
@@ -273,7 +190,7 @@ mod tests {
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
-            BranchJoinError::UnguardedCoprodMatch { compu: root }
+            BranchJoinError::UnguardedCoprodMatch { compu: root }.into()
         );
     }
 
@@ -287,7 +204,7 @@ mod tests {
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
-            BranchJoinError::NonBranchStackLet { compu: root, body: fixture.branch }
+            BranchJoinError::NonBranchStackLet { compu: root, body: fixture.branch }.into()
         );
     }
 
@@ -303,7 +220,7 @@ mod tests {
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
-            BranchJoinError::SharedValue { value }
+            BranchJoinError::SharedValue { value }.into()
         );
     }
 }

@@ -14,5 +14,7 @@ pub mod lower;
 pub mod normalize;
 /// High Stack IR syntax and identifiers.
 pub mod syntax;
+/// Shared structural traversal and independent analysis composition.
+pub mod traverse;
 /// Free-variable analysis for high Stack IR.
 pub mod variables;

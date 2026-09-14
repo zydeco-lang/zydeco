@@ -125,14 +125,14 @@ fn verification_identifies_the_stage_that_introduced_an_open_root() {
     assert!(!executed.get());
     assert!(matches!(
         error.cause,
-        PassFailureCause::Before(HighSpsObservationError::FreeDefinitions(_))
+        PassFailureCause::Before(HighSpsObservationError::Invalid(errors)) if errors.iter().any(|error| matches!(error, HighSpsInvariant::FreeDefinitions(_)))
     ));
     let error = pass.run(Fixture::program(false)).unwrap_err();
     assert!(executed.get());
     assert_eq!(error.invocation.location, location);
     assert!(matches!(
         error.cause,
-        PassFailureCause::After(HighSpsObservationError::FreeDefinitions(_))
+        PassFailureCause::After(HighSpsObservationError::Invalid(errors)) if errors.iter().any(|error| matches!(error, HighSpsInvariant::FreeDefinitions(_)))
     ));
     let result = Identity.with_observer(location, &mut observer).run(Fixture::program(false));
     assert!(result.is_ok());

@@ -3,9 +3,7 @@
 use super::{check::SpsLowProgram, syntax as low};
 use crate::arena::{Construct as _, DefinitionNames as _};
 use crate::high::{
-    check::BranchJoinProgram,
-    syntax as high,
-    variables::{FreeVars as _, Vars as _},
+    check::BranchJoinProgram, syntax as high, traverse::Traversal, variables::Variables,
 };
 use crate::protocol::{StackProtocol, ValueProtocol};
 use derive_more::{AsMut, AsRef};
@@ -55,11 +53,14 @@ struct ClosureConversion<'a> {
     scoped: &'a ScopedArena,
     statics: &'a StaticsArena,
     envs: Vec<RenameEnv>,
+    variables: Variables,
 }
 
 impl<'a> ClosureConversion<'a> {
     fn new(program: BranchJoinProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
         let high::StackirRebuild { source, target, root } = program.into_program().into_rebuild();
+        let mut variables = Variables::default();
+        Traversal { arena: &source.inner }.run(root.into(), &mut variables);
         let arena = low::SpsLowArena {
             admin: low::SpsLowAdminArena::from_high(target.admin),
             inner: low::SpsLowInnerArena {
@@ -74,6 +75,7 @@ impl<'a> ClosureConversion<'a> {
             scoped,
             statics,
             envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
+            variables,
         }
     }
 
@@ -144,7 +146,11 @@ impl<'a> ClosureConversion<'a> {
     fn sorted_free_vars(
         &self, body: high::CompuId, excluded: Context<high::DefId>,
     ) -> Vec<high::DefId> {
-        let mut vars: Vec<_> = (body.free_vars(&self.source) - excluded).into_iter().collect();
+        let mut vars: Vec<_> =
+            (self.variables.free_variables(body.into()).expect("validated closure body").clone()
+                - excluded)
+                .into_iter()
+                .collect();
         vars.sort_unstable();
         vars
     }
@@ -330,7 +336,10 @@ impl<'a> ClosureConversion<'a> {
     ) -> low::StackId {
         let protocol =
             self.source.inner.pattern_protocols.get(&binder).cloned().unwrap_or_default();
-        let captures = self.sorted_free_vars(body, binder.vars(&self.source));
+        let captures = self.sorted_free_vars(
+            body,
+            self.variables.bound_variables(binder).expect("validated continuation binder").clone(),
+        );
         let capture_bindings = self.capture_bindings(&captures);
         let PatternTranslation { pattern: binder, bindings: binder_bindings } =
             self.translate_pattern(binder);

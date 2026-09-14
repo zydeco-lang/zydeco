@@ -135,24 +135,16 @@ A unique-node walk could miss the more restrictive occurrence.
 Further migrations must use occurrence traversal or memo keys containing the relevant environment,
 and invalidate results when the state they depend on changes.
 
-## Further applications and review sequence
+## Remaining review sequence
 
-High SPS has structural variable collection and validation clients,
-but its normalizer propagates producer facts forward and demands backward through the same reconstruction.
-Preserve the [consumer-demand dependency](../references/compiler.md#consumer-demands) when extracting its rule modules.
-Its [lexical ownership checks](../../lang/stackir/src/high/check.rs) also reject repeated syntax ownership;
-deduplicating visits must never hide that rejection.
+High SPS variable collection
+and ownership validation now use the [shared analysis traversal](../references/compiler.md#high-sps-analysis-traversal).
+Verification composes those analyzers, and closure conversion reuses variable facts across its capture queries.
+The normalizer's forward producer facts and backward demands retain their established semantic schedule.
+Further reconstruction work should be driven by a concrete shared rule,
+preserving the [consumer-demand dependency](../references/compiler.md#consumer-demands).
 
-The remaining work fits one migration sequence:
-
-1. Extend diagnostic collection at the [remaining producer boundaries](#diagnostic-collection-and-recovery).
-2. Apply the established interfaces to SPS analyses where they simplify concrete callers.
-
-For each migration, compare separate and composed results and retain visit-count regressions on shared graphs.
-Measure allocations and representative compilation time before making broader performance claims.
-Run focused crate and source-case tests; use the full workspace suite only when explicitly requested.
-Move each implemented, approved contract into its owning reference section and remove its settled design text here.
-
-The remaining choices are the precise cross-phase folder interface, whether structural code generation pays for itself,
-which consumers need independent pruning, and which measured workloads justify shared analysis inventories.
-Resolve each at its first concrete client rather than committing the entire compiler to those choices in advance.
+Continue the [diagnostic producer audit](#diagnostic-collection-and-recovery).
+Structural code generation, independent pruning masks, and further graph views remain optional extensions
+that require concrete clients.
+Measure traversal work, allocations, and temporary storage before claiming compilation-time or memory improvements.

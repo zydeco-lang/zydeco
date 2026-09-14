@@ -4,7 +4,7 @@
 
 use crate::{
     BranchJoinError, BranchJoinProgram,
-    high::{fmt::Pretty, normalize::Normalizer, syntax::DefId, variables::FreeVars},
+    high::{fmt::Pretty, normalize::Normalizer, syntax::DefId},
 };
 use std::{
     cell::RefCell,
@@ -187,12 +187,18 @@ impl HighSpsInspection {
 
 #[derive(Debug, thiserror::Error)]
 pub enum HighSpsObservationError {
-    #[error("high-SPS invariant failed: {0}")]
-    BranchJoin(#[from] BranchJoinError),
-    #[error("high-SPS invariant failed: root has free definitions {0:?}")]
-    FreeDefinitions(Vec<DefId>),
+    #[error(transparent)]
+    Invalid(#[from] zydeco_surface::diagnostic::Diagnostics<HighSpsInvariant>),
     #[error("could not write high-SPS inspection output: {0}")]
     Output(#[from] io::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum HighSpsInvariant {
+    #[error("high-SPS invariant failed: {0}")]
+    BranchJoin(BranchJoinError),
+    #[error("high-SPS invariant failed: root has free definitions {0:?}")]
+    FreeDefinitions(Vec<DefId>),
 }
 
 pub type HighSpsFailure = PassFailure<Infallible, HighSpsObservationError>;
@@ -208,13 +214,33 @@ pub struct HighSpsObserver<'a, W> {
 impl<W: Write> HighSpsObserver<'_, W> {
     fn inspect(&mut self, program: &BranchJoinProgram) -> Result<(), HighSpsObservationError> {
         if self.inspection.verify {
-            program.validate()?;
+            use crate::high::{
+                check::BranchJoinValidator,
+                traverse::{Together, Traversal},
+                variables::Variables,
+            };
             let program = program.as_program();
-            let free = program.root().free_vars(program.arena());
-            if !free.is_empty() {
-                return Err(HighSpsObservationError::FreeDefinitions(
-                    free.iter().copied().collect(),
-                ));
+            let mut analyses =
+                Together { first: BranchJoinValidator::default(), second: Variables::default() };
+            Traversal { arena: &program.arena().inner }.run(program.root().into(), &mut analyses);
+            let errors = analyses
+                .first
+                .errors()
+                .iter()
+                .cloned()
+                .map(HighSpsInvariant::BranchJoin)
+                .chain(
+                    analyses
+                        .second
+                        .free_variables(program.root().into())
+                        .filter(|free| !free.is_empty())
+                        .map(|free| {
+                            HighSpsInvariant::FreeDefinitions(free.iter().copied().collect())
+                        }),
+                )
+                .collect();
+            if let Some(errors) = zydeco_surface::diagnostic::Diagnostics::with_errors(errors) {
+                return Err(errors.into());
             }
         }
         if self.inspection.dump {

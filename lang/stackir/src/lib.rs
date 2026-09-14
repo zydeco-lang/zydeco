@@ -27,6 +27,6 @@ pub mod high;
 
 pub use high::{
     arena::*,
-    check::{BranchJoinError, BranchJoinProgram},
+    check::{BranchJoinError, BranchJoinErrors, BranchJoinProgram},
     lower::{BuiltinRootLowerError, BuiltinRootLowerer, Lowerer, RootLowerer, SpsLowerError},
 };

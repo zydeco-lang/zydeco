@@ -11,6 +11,7 @@ readme = { workspace = true }
 description = "zydeco in stack-passing style"
 
 [dependencies]
+rustc-hash = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }

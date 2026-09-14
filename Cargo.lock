@@ -2716,6 +2716,7 @@ dependencies = [
  "derive_more",
  "indexmap",
  "pretty",
+ "rustc-hash",
  "serde",
  "serde_plain",
  "thiserror",

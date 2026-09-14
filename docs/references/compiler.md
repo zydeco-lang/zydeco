@@ -1010,6 +1010,36 @@ These optimizations are optional consequences of known runtime structure;
 they do not relax L10's source elimination boundary.
 The normalizer preserves definition identities while allocating fresh syntax for the surviving lexical tree.
 
+### High SPS analysis traversal
+
+Lexical ownership, branch-join placement, and free variables all depend on the same high SPS structure.
+The [shared traversal](../../lang/stackir/src/high/traverse.rs) owns its exhaustive child enumeration.
+It exposes borrowed pattern, value, stack, and computation nodes; definitions remain leaves.
+An entry event identifies the immediate incoming edge and whether the occurrence is first, shared, or cyclic.
+A stack-let tail carries its owning join ID so placement checks do not need their own recursive descent.
+
+Every incoming edge is observed, including repeated ownership.
+Children and exit events are scheduled once per node; repeated edges do not expand the same subtree again,
+and active back edges terminate traversal of that edge.
+`BranchJoinValidator` reports repeated owners and misplaced joins without stopping independent checks.
+`BranchJoinProgram` is constructed only when its complete `BranchJoinErrors` collection is empty.
+This preserves lexical-tree ownership even though the structural driver can safely inspect a malformed graph.
+
+`Variables` computes bound and free variable summaries at exit, reading completed child facts.
+Pattern binders remove names only from their lexical bodies; recursive binders,
+continuations, and match arms retain their existing scope rules.
+A cyclic graph has no free-variable result. The public `Vars` and `FreeVars` operations use this analyzer,
+and closure conversion computes one set of facts for its immutable input, reusing them for every capture list.
+Those transient facts are released with conversion; keeping summaries trades temporary memory
+for avoiding repeated walks through nested closure bodies.
+
+`Together` delivers the same events to independent analyzers.
+High SPS verification composes ownership and variable analysis in one traversal
+and retains both invariant failures when the graph is acyclic.
+The normalizer still owns forward producer propagation and backward consumer demands.
+[Traversal regressions](../../lang/stackir/src/high/traverse/tests.rs) compare separate and composed results,
+count entries and exits on shared syntax, and cover binders and cycles with independent ownership failures.
+
 ### Local reductions
 
 The [normalizer](../../lang/stackir/src/high/normalize.rs) records lexical facts for aliases,
