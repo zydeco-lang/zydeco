@@ -446,7 +446,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let known = self.norm.shared(scrut, scope.values);
         if self.norm.movable_stack(bindee) {
             for arm in &arms {
-                match self.norm.matches(arm.binder, &known) {
+                match self.norm.matches::<D>(arm.binder, &known) {
                     | Some(true) => {
                         let value = ScopedValue { node: scrut, env: scope.values };
                         let stack = Some(

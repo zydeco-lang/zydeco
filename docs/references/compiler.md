@@ -1387,8 +1387,8 @@ count entries and exits on shared syntax, and cover binders and cycles with inde
 After residual lowering, the unoptimized lexical tree can still contain long binding and closure chains.
 The [normalization folder](../../lang/stackir/src/high/normalize/fold.rs) reconstructs values, computations,
 and stacks through the shared [resumable folder driver](#resumable-folder-execution).
-`Normalizer::run_with_driver::<D>` selects continuation storage for this reconstruction
-and its pattern subwalks; production normalization selects `Explicit`.
+`Normalizer::run_with_driver::<D>` selects continuation storage for this reconstruction, pattern copying,
+and [pattern decisions](#pattern-decisions-and-validation); production normalization selects `Explicit`.
 Frames retain unfinished consumers and their producer environments,
 while typed result stacks retain completed syntax and its consumer demands.
 Product and branch cursors request one child at a time; split-binding iterators resume their components
@@ -1533,6 +1533,27 @@ Word decoding, encoding, and conditional boxing still follow the target represen
 this optimization does not prove that all scalar boxes disappear.
 
 ### Pattern decisions and validation
+
+A known scrutinee permits branch selection only after every earlier arm has been ruled out.
+The [decision folder](../../lang/stackir/src/high/normalize/decision.rs) compares a pattern
+with borrowed producer facts and returns true, false, or uncertainty.
+Alias members and product fields are considered in source order.
+The first false or uncertain child ends that decision; a later mismatch does not override earlier uncertainty.
+Unknown product shape remains uncertain, while distinct known constructor tags decide false.
+
+The folder uses the normalizer's selected execution driver.
+Requests retain pattern IDs and borrowed fact views; product suffixes are slices of the existing physical fields.
+They create no temporary product fact or reference-counted field copies.
+Constructor payloads transfer directly to the next decision; alias and product cursors retain the next position.
+Deciding a pattern creates no syntax or binder identities.
+
+Bounded comparisons cover accepted, rejected, and uncertain decisions, suffix layouts,
+empty and wide patterns, and early termination before later children are inspected.
+An alias chain of 16,384 levels executes and drops on a 512 KiB stack.
+A separate 8,192-level product comparison borrows facts whose fixture retains and releases each level explicitly.
+That fixture establishes decision depth, not depth-independent destruction of production `KnownValue` trees.
+Owned fact construction
+and demand operations remain [separate work](../proposals/traversals.md#normalization-fact-ownership).
 
 Integer literal match plans lower to the raw `BuiltinValueRole::Integer(t, Eq)` branch
 with success and failure continuations.

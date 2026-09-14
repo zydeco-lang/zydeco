@@ -20,6 +20,7 @@ use zydeco_utils::{
 
 mod fold;
 mod pattern;
+mod decision;
 
 #[cfg(test)]
 mod driver_tests;
@@ -39,7 +40,7 @@ impl CompilerPass<BranchJoinProgram> for Normalizer {
 }
 
 impl Normalizer {
-    /// Select continuation storage for reconstruction and its pattern subwalks.
+    /// Select continuation storage for reconstruction, pattern copying, and pattern decisions.
     pub fn run_with_driver<D: Driver>(
         &mut self, program: BranchJoinProgram,
     ) -> Result<BranchJoinProgram, Infallible> {
@@ -371,38 +372,11 @@ impl Normalization {
     }
 
     /// A decision is useful only when no earlier arm could match instead.
-    fn matches(&self, binder: VPatId, known: &KnownValue) -> Option<bool> {
-        match &self.source.inner.vpats[&binder] {
-            | ValuePattern::Hole(_) | ValuePattern::Var(_) | ValuePattern::Triv(_) => Some(true),
-            | ValuePattern::Ctor(Ctor(ctor, body)) => match known {
-                | KnownValue::Constructor(tag, value) if tag == ctor => self.matches(*body, value),
-                | KnownValue::Constructor(..) => Some(false),
-                | _ => None,
-            },
-            | ValuePattern::Alias(Alias(patterns)) => {
-                patterns.iter().try_fold(true, |matched, pattern| {
-                    if matched { self.matches(*pattern, known) } else { Some(false) }
-                })
-            }
-            | ValuePattern::VCons(VCons { items, layout }) => match known {
-                | KnownValue::Product(fields) if fields.len() == layout.arity => {
-                    items.iter().enumerate().try_fold(true, |matched, (position, pattern)| {
-                        if !matched {
-                            return Some(false);
-                        }
-                        if position + 1 == items.len() && items.len() < layout.arity {
-                            self.matches(
-                                *pattern,
-                                &KnownValue::Product(fields[position..].to_vec()),
-                            )
-                        } else {
-                            self.matches(*pattern, &fields[position])
-                        }
-                    })
-                }
-                | _ => None,
-            },
-        }
+    fn matches<D: Driver>(&self, binder: VPatId, known: &KnownValue) -> Option<bool> {
+        D::run(
+            &mut decision::DecisionFolder { source: &self.source.inner },
+            (binder, decision::KnownView::Value(known)),
+        )
     }
 
     fn fold_primitive(

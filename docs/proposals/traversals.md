@@ -44,9 +44,9 @@ or the phase's acceptance boundary.
 
 ## Further resumable folder migrations
 
-The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution)
-provides statically selected native and explicit-stack drivers for residual lowering,
-Builtin package materialization, high SPS normalization, closure conversion, and SPSLow structural analysis.
+The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution) provides
+statically selected native and explicit-stack drivers for residual lowering, Builtin package materialization,
+high SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, and local unboxing.
 Their equivalence and depth checks support using the interface for those boundaries.
 The following sections record boundaries skipped after evaluation because their ownership
 or consumer interfaces need a further design choice.
@@ -159,6 +159,43 @@ Keep entry kind, opening identity, environment arity, alias propagation, and res
 Include both successful and rejected deep products, argument stacks, aliases, and branch contexts,
 and drop retained facts and error payloads on the small test stack.
 
+### Normalization fact ownership
+
+Borrowed [pattern decisions](../references/compiler.md#pattern-decisions-and-validation) now use the common driver,
+including suffix views that borrow existing physical fields.
+The remaining owned [producer facts](../../lang/stackir/src/high/normalize.rs)
+and [consumer demands](../../lang/stackir/src/high/demand.rs) are a medium–high difficulty case,
+skipped because traversal and fact lifetime must be addressed together.
+
+`known` recursively constructs product and constructor facts through `shared`,
+and primitive fact evaluation calls back into `known` for its operands.
+`KnownValue` shares children through `Rc`, so copying a child handle is shallow,
+but releasing its last owner can recursively destroy the entire nested fact.
+Moving syntax descent to frames would not address temporary facts, environment teardown,
+or early-return paths that release such owners.
+
+`Demand::Fields` owns nested demands in a `BTreeMap`.
+Pattern translation, `join`, suffix extraction, cloning, equality, and destruction depend on that structure.
+Even `Used.join(deep_fields)` can recurse while discarding the absorbed operand,
+although the join needs no recursive semantic work.
+An explicit join folder alone therefore cannot establish a useful depth guarantee.
+Inline source protocol operations have the related evidence-ownership boundary described above.
+
+Compare a per-normalization fact arena with IDs and suffix ranges against retaining owned trees
+with iterative construction, combination, cloning, and destruction.
+An arena would make sharing and teardown explicit, but requires a retention policy
+and changes consumers that currently move or cheaply share values.
+Owned trees preserve more interfaces, but every ownership exit needs an audit;
+changing `Drop` also affects how Rust permits moving fields from consumed values.
+Do not add an input-depth cutoff or claim that a reference-counted pointer alone solves destruction depth.
+
+Preserve the reference's producer-before-consumer schedule, alias restrictions on moving closures,
+physical suffix positions, empty product-shape demands, and `Used` absorption.
+Acceptance should exercise deep facts retained by several environments, last-owner release, short-circuit decisions,
+primitive operand recursion, and nested demands joined and discarded through branches.
+Measure retained memory as well as traversal depth before selecting an arena policy;
+the [compiler memory proposal](arena-gc.md) owns the broader retention questions.
+
 ### Other execution adapters
 
 The scoped and high SPS analysis visitors already enumerate children directly into one traversal vector.
@@ -226,8 +263,8 @@ rebuilding must preserve the established [consumer-demand schedule](../reference
 Residual lowering and high SPS normalization now use explicit reconstruction frames,
 as recorded in [C8](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand).
 Further depth work should distinguish those completed migrations from recursive semantic helpers:
-normalization's known-value construction and pattern decisions, structured demand
-and protocol operations, and low verification still have recursive paths.
+normalization's owned known-value construction, structured demand and protocol operations,
+and low verification still have recursive paths.
 Use direct phase fixtures to establish each remaining limit before choosing its work frames or fact representation;
 include destruction of nested retained facts in that audit.
 The compiler has no end-to-end arbitrary-depth guarantee.
