@@ -324,6 +324,54 @@ and token ranges in non-ASCII text and in files beyond the first merged source.
 Allocation and provenance changes should exercise arena tests and source-location tests,
 including repeated checking and the distinction between local and merged spans.
 
+### Choosing and composing traversals
+
+Repeated structural recursion belongs beside the representation that defines its children.
+A visitor observes that structure and accumulates facts; a folder transforms children and rebuilds their parent.
+Clients supply semantic rules, while the shared operation describes how to reach or reconstruct ordinary children.
+Phase-specific builders retain authority over allocation and provenance.
+
+The implemented interfaces serve different questions and therefore expose different views:
+
+| Input and purpose | Shared operation | Identity and scheduling contract |
+| --- | --- | --- |
+| File directives and documentation | [Source scan and analyzers](#shared-source-analysis) | File-local textual identities; analyzer interests select allocated terms, reachable terms, and text blocks |
+| Bitter or scoped syntax reconstruction | [Owned surface folder](#surface-structural-rebuilding) | Child IDs flow through client hooks; the folder supplies copying, reference, scope, and rejection policies |
+| Desugaring and lexical resolution | [Desugaring folders](#desugaring-folders) and [resolution events](#name-resolution) | Semantic handlers own telescope and scope transitions; builders and event consumers own their respective results |
+| Resolved syntax analysis | [Scoped traversal](#scoped-structural-traversal) | Borrowed nodes; choose unique identities or path occurrences; cycles reject the traversal |
+| Raw inferred classifiers | [Classifier folders](#classifier-folders) | Owned child reconstruction; preserve unchanged IDs; clients select substitution environments and reductions |
+| Executable typed terms | [Residual runtime traversal](#residual-runtime-traversal) | Borrowed runtime nodes from the residual root; visit each identity once and exclude static evidence |
+| Lexical high SPS | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
+
+Before reusing a traversal, establish its input view, child environments, occurrence policy, and output identity policy.
+A raw classifier, its normalized view, and a residual executable are different inputs even
+when they share arena storage.
+A source-node count, an occurrence count, and an allocation count likewise answer different questions.
+Memoization belongs to the client contract: a node ID suffices only when the result is independent
+of inherited context and of any state that can change during the cache's lifetime.
+The concrete sharing and cache rules live with each interface above.
+
+Independent analyzers can receive the same stream of events when their input view,
+boundaries, and schedule agree and neither analysis consumes the other's evolving state.
+They retain separate facts and diagnostics; composition does not require coupling their domain logic.
+A validator should record independent failures while the shared traversal continues
+under its established recovery rules.
+The [diagnostic contract](#diagnostic-collection) distinguishes recoverable facts from a valid phase product.
+
+Successive transformations require their own scheduling argument before fusion.
+For example, folding literal addition and then incrementing every literal transforms `Add(Lit(1), Lit(2))`
+into `Lit(4)`.
+Running both rewrites at each node in postorder instead produces `Lit(6)`
+because the parent receives incremented children.
+A common input/output IR does not establish equivalence.
+[Explicit pass composition](#compiler-pass-composition) preserves those stage boundaries;
+the [SPS demand schedule](#consumer-demands) similarly remains a semantic dependency of normalization.
+
+Traversal tests compare separate and composed facts, diagnostics, sharing, and provenance.
+Visit and allocation counts establish the work removed by a migration; compilation-time
+or memory claims additionally require measurements that include callback work and retained summaries.
+[Further extensions](../proposals/traversals.md) remain proposals until a concrete client justifies them.
+
 ### Surface structural rebuilding
 
 Bitter and scoped syntax share `Pattern` and `Term<Ref>`, with source names
@@ -371,7 +419,6 @@ The folder is used for binder copies in annotated abstractions, generated bindin
 and recursive binding sugar.
 Its regressions check distinct resolved binders, retained provenance, copattern order,
 shared annotation copying, and sealed payloads.
-Further typed and lower-level migrations remain in the [traversal proposal](../proposals/traversals.md).
 
 ### Scoped structural traversal
 
@@ -434,7 +481,6 @@ callback order and early breaks, cycles, dependent binders, and deep syntax.
 A repeated-import graph with 37 distinct term nodes has 16,381 occurrences;
 the unique-node traversal delivers 37 entries and exits.
 This checks traversal work, not end-to-end compilation speed.
-The [folder proposal](../proposals/traversals.md) contains the remaining cross-representation migrations.
 
 ## C3. Source loading, sessions, queries, and memory retention
 
@@ -522,6 +568,10 @@ Package duplicate checks retain the first valid declaration in source order.
 Discovery validates each site's arguments and checks duplicates over the complete annotation set;
 placement is checked when there is one unambiguous declaration.
 Successful query ordering remains source order, with packages ordered by name.
+The inventory is keyed by file-local textual identities.
+Assembly and desugaring consume syntax at later identity and span boundaries;
+reusing decoded inventory facts there would require an explicit remapping
+under the [provenance contract](#c2-compiler-data-identities-arenas-and-source-provenance).
 The loader concatenates typed diagnostic collections and publishes a `SourceTemplate` only after every analyzer accepts.
 Diagnostic order is a presentation choice, not an API guarantee; strict query facades return the full collection.
 Individual malformed directives may stop at their first local error until a further recovery point is justified.
@@ -1938,8 +1988,17 @@ Diagnostic ordering is not an API guarantee; successful fact ordering retains it
 Tests compare contents, multiplicity, and locations rather than presentation order,
 and pair rejected inputs with valid counterparts.
 Equal spans alone do not identify duplicate errors.
-Source graph loading follows the [provider recovery contract](#c3-source-loading-sessions-queries-and-memory-retention).
-Later-pass recovery work remains
+Checker publication deduplicates complete `TyckDiagnostic` values. It suppresses unresolved-classifier consequences
+when the fill's originating expression contains an already reported rejection site, including related sites
+of an unconstrained-inference diagnostic; unresolved fills in independent expressions remain reportable.
+
+Recovery boundaries are owned by their producing phases:
+[source loading](#c3-source-loading-sessions-queries-and-memory-retention),
+[shared source analysis](#shared-source-analysis), [desugaring](#desugaring-folders),
+[resolution](#name-resolution), [checking and finalization](#checker-recovery),
+[execution readiness](#residual-runtime-traversal), and [high SPS verification](#high-sps-analysis-traversal).
+These contracts state which work continues and which dependent product remains unavailable.
+Further diagnostic producers and presentation customization remain
 in the [traversal proposal](../proposals/traversals.md#diagnostic-collection-and-recovery).
 
 ### Formatting and typed rendering
