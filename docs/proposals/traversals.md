@@ -9,15 +9,18 @@ and reporting behavior.
 
 ## Diagnostic collection and recovery
 
-Continue auditing producers for early exits across independent work.
-Two concrete candidates remain:
+Two concrete followups remain, in recommended implementation order:
 
-- Package catalog construction visits selected roots and discovered files through separate fallible requests.
-  Collect independent provider and discovery failures without publishing an incomplete catalog.
-- [SPSLow validation](../../lang/stackir/src/low/check.rs) returns the first structural,
-  entry-contract, or protocol failure.
-  Establish recoverable structural regions before batching dependent contract checks;
-  malformed ownership and cyclic input cannot supply the evidence those checks expect.
+| Priority | Work | Estimated difficulty | Expected benefit |
+| --- | --- | --- | --- |
+| 1 | Collect [package catalog and discovery](../../lang/session/src/source/query.rs) failures across selected roots and discovered files | Medium | Report several broken packages in one run, reducing correction cycles |
+| 2 | Collect independent [SPSLow validation](../../lang/stackir/src/low/check.rs) failures | Medium–high | Expose multiple structural or contract problems during compiler development |
+
+Package catalog construction currently visits roots and discovered files through separate fallible requests.
+Collect independent provider and discovery failures without publishing an incomplete catalog.
+SPSLow validation currently returns the first structural, entry-contract, or protocol failure.
+Establish recoverable structural regions before batching dependent contract checks;
+malformed ownership and cyclic input cannot supply the evidence those checks expect.
 
 More checker recovery should begin with a demonstrated diagnostic or tooling gap.
 The implemented [checker recovery](../references/compiler.md#checker-recovery) covers independent components,
@@ -57,6 +60,17 @@ Independent pruning needs a separate design: one analyzer cannot discard a subtr
 Candidate approaches are per-analyzer activity masks or separate traversal groups.
 Specify callback balancing, partial-result status, and diagnostic collection before choosing an approach.
 Neither facility is needed by the current composed analyzers.
+
+## Performance validation
+
+End-to-end performance measurement is an optional followup of low–medium estimated difficulty.
+Existing tests establish traversal and allocation counts, but do not establish compilation-time or peak-memory gains.
+Compare the implementations before and after these migrations on representative programs,
+including repeated imports and nested closures, with the same inputs and toolchain.
+Measure cold and warm checks separately, repeat timings, and record peak memory alongside traversal
+and allocation counts.
+In particular, account for the temporary variable summaries retained during closure conversion.
+The benefit is evidence of the overall effect and identification of any memory regressions before further optimization.
 
 ## Migration acceptance
 
