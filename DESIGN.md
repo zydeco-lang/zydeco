@@ -5,8 +5,7 @@ stack-manipulating computation, and relative monads.
 This document gives the project design and repository map.
 The [language reference](docs/references/language.md) specifies source behavior,
 and the [compiler reference](docs/references/compiler.md) follows phase contracts and maintenance entry points.
-Linked proposals retain independently reviewable rationale and open decisions;
-[CONTRIBUTING.md](CONTRIBUTING.md) covers tooling,
+Linked proposals retain unimplemented extensions and open decisions; [CONTRIBUTING.md](CONTRIBUTING.md) covers tooling,
 and the [language guide](docs/tutorial/zydeco-guide.md) provides a longer source-level walkthrough.
 
 ## Language Model
@@ -62,8 +61,10 @@ exit  : Thk (Int64 -> OS)
 The successor is suspended code, not automatically a captured machine stack.
 An FFI must therefore return an `A` for `Ret A`, but select a successor or terminate for `OS`.
 
-The [returning C import proposal](docs/proposals/c-ffi.md) specifies the initial classifier-to-ABI mapping,
-its borrowed-buffer contract, and the call plan shared by the interpreter and native backend.
+The [foreign-interface reference](docs/references/language.md#14-foreign-interfaces) specifies supported classifiers
+and borrowing.
+The [compiler reference](docs/references/compiler.md#foreign-calls) owns the call plan shared
+by the interpreter and native backend.
 
 ## Source Terms and Imports
 
@@ -77,7 +78,7 @@ a source root is resolved and type checked under an empty context and must synth
 An expected classifier at an import site may be compared with that result, but it does not participate
 in elaborating the imported source.
 
-Imports are typed metadata on holes, such as `@(import("library.zy"))`.
+Imports are typed metadata on holes, such as `@[import("library.zy")] _`.
 Parenthesized metadata `@(meta)` abbreviates the bracket form whose payload is a hole,
 so `@(import("library.zy"))` names the same import.
 A compiler session discovers the file dependency graph, orders providers before their consumers,
@@ -128,7 +129,7 @@ The resulting condensation graph orders acyclic parameters and definitions;
 recursive type components retain an explicit `RecGroup` so the checker introduces identities before equations.
 The scoped elaboration uses `Abs`, `ValAbs`, `Let`, and `Sealed` for the corresponding ordinary judgments.
 Lexical `in` forms elaborate directly, while runtime recursion remains explicit through `fix`.
-The [term design](docs/proposals/term.md) specifies the binding and scheduling rules.
+The [term design](docs/references/language.md#3-bindings-and-scope) specifies the binding and scheduling rules.
 The [language reference](docs/references/language.md#2-lexical-structure-and-syntax) specifies surface syntax;
 the [style guide](docs/style.md#reading-the-surface-syntax) explains how classifier arrows, term bodies,
 and constructor and destructor spines guide the reader.
@@ -489,8 +490,7 @@ Fixed-width numbers, `Char`, and `String` are compiler-canonical types.
 `Reader`, `Writer`, and `OS` are abstract provider capabilities whose uses share one generative opening.
 This separates stable data representations from runtime ownership.
 The [language reference](docs/references/language.md#13-primitive-values-and-capabilities) defines
-that identity boundary;
-the [package design](docs/proposals/package-modularization.md#primitive-identity-and-package-boundaries)
+that identity boundary; the [package design](docs/references/language.md#13-primitive-values-and-capabilities)
 explains the resulting organization.
 
 `lib/std/std.zy` is a value function that assembles the public library from a Builtin argument.
@@ -606,7 +606,8 @@ and orders candidates by exact spelling match, classifier compatibility, lexical
 Compatibility checks use a disposable recovered analysis; they do not solve holes in a strict analysis.
 Cajun renders optional kind or type details and inserts only the selected name.
 Missing type information does not itself hide a candidate.
-The [completion design](docs/proposals/completion.md) records recovery, filtering, and edit-range contracts.
+The compiler reference owns [recovery](docs/references/compiler.md#recovering-parsing),
+[completion filtering, and edit ranges](docs/references/compiler.md#completion-and-documentation).
 
 Compiler annotations have one typed catalog in `lang/surface/src/metadata.rs`.
 Metadata decoding and editor suggestions share argument shapes and enum spellings, including nested options.
@@ -614,19 +615,13 @@ Unknown metadata stays structurally valid without compiler-defined suggestions.
 Import-path completion uses the importer's canonical parent, merges filesystem entries with active overlays,
 and offers directories and supported source files while excluding the importing file and its symlink aliases.
 
-The session's `DocumentationIndex` connects `@[doc]` attachments to resolved bindings, expressions, and named members
-through exact source origins; field provenance recorded during type checking survives normalization and substitution.
-Hover, completion, reference generation, and the VS Code documentation panel consume this shared model.
-The [project documentation proposal](docs/proposals/documentation.md) records the invariants,
-and the [authoring guide](docs/documentation.md) describes the workflow.
-
-`zydeco doc show`, `search`, and `build` present a selected root's exposed classifier rather
-than private source bindings: public paths distinguish named fields from function and computation results,
-reject ambiguous exposures, and never contain arena identifiers.
-`doc check` verifies explicitly opted-in examples in a bounded subprocess worker
-and maps diagnostics back to their code fences without interpreting them.
-Cajun versions documentation and example requests against a shared source revision,
-so editing an imported file also invalidates a consumer's cached documentation.
+The session's `DocumentationIndex` supplies shared semantic subjects to hover,
+completion, reference generation, and the VS Code documentation panel.
+The compiler reference owns [identity and provenance](docs/references/compiler.md#documentation-subjects-and-provenance)
+and [publication and verification](docs/references/compiler.md#documentation-publication-and-verification).
+The [language reference](docs/references/language.md#source-documentation) describes source authoring,
+and the [tooling workflow](docs/references/compiler.md#documentation-workflow) covers commands and editor use;
+the [documentation proposal](docs/proposals/documentation.md) contains extensions to that feature.
 
 Each parsed entity, including nested metadata, has its own source span.
 The assembled program uses a shared `SourceMap` to associate byte offsets with their files;
@@ -822,8 +817,9 @@ Native preparation uses checked continuation provenance to replace a return cont
 with a frame token.
 Resumption reads the retained slots directly and binds the returned value.
 Ordinary closures continue to own explicit capture environments, which can outlive their creating activation.
-The [native activation frame proposal](docs/proposals/native-frames.md) owns the implemented lifetime,
-entry, reclamation, root, and bounded tail-space invariants, together with the remaining optimization questions.
+The compiler reference owns [activation lifetime](docs/references/compiler.md#activation-lifetime),
+entry, reclamation, roots, and bounded tail-space invariants.
+The [native environment proposal](docs/proposals/native-frames.md) retains remaining storage and optimization questions.
 
 ### Native Garbage Collection
 
@@ -866,8 +862,8 @@ String indices and lengths count Unicode scalar values; `byte_length` measures i
 These are distinct from grapheme clusters and from compiler source spans, which use byte offsets.
 `Char` is one Unicode scalar value.
 Source-defined `Bytes` is an immutable octet sequence with no implicit encoding; its indices and lengths count bytes.
-Its [ownership and composition rules](docs/proposals/bytes.md#immutable-owners-and-source-bytes) use retained
-immutable memory grants, with source slicing, comparison, copying, and scalar codecs.
+Its [ownership and composition rules](docs/references/language.md#immutable-owners-and-source-bytes) use
+retained immutable memory grants, with source slicing, comparison, copying, and scalar codecs.
 
 String and character literals share the escapes `\\`, `\"`, `\'`, `\n`, `\r`, `\t`, and `\0`.
 Unicode escapes use `\u{...}` with one to six hexadecimal digits denoting a Unicode scalar value;
@@ -885,10 +881,10 @@ and [filesystem design](docs/proposals/filesystem.md) describe these boundaries 
 Explicit storage is available through the ordinary [memory library](lib/std/memory/package.zy).
 The [static builder](lib/std/memory/static-layout.zy) computes checked plans with value functions,
 exposes their placement information, and shares codecs with the runtime builder.
-Its [owning design](docs/proposals/bytes.md#explicit-storage-contracts) specifies typed storage,
+Its [owning design](docs/references/language.md#explicit-storage-contracts) specifies typed storage,
 source-composed alignment and padding, and the boundary between logical values,
 concrete buffers, and existing foreign borrowing.
-The [stored-call interface](docs/proposals/escape-unboxing.md#stored-call-interfaces) shares abstract storage carriers
+The [stored-call interface](docs/references/language.md#stored-call-interfaces) shares abstract storage carriers
 across source modules and supplies ordinary CBPV call and conversion adapters.
 These calls use the existing runtime word transport.
 
@@ -906,10 +902,11 @@ The [foreign-interface reference](docs/references/language.md#14-foreign-interfa
 and borrowing obligations.
 The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record,
 output-buffer, callback, and component examples to motivate the next extensions.
-The implemented [memory views](docs/proposals/bytes.md#addresses-cells-and-views) use source-defined cells and thin,
-fat, or header-based handles over a small address/access interface.
-Their proposed foreign adapters choose pointer, scalar-sequence, or aggregate transport;
-the existing native foreign classifiers remain unchanged.
+The implemented [memory views](docs/references/language.md#checked-memory-capabilities) use source-defined cells
+and thin, fat, or header-based handles over a small address/access interface.
+The implemented [readable-window adapter](docs/references/language.md#storage-and-foreign-transport)
+supplies one pointer with any C length passed separately.
+Aggregate and code-pointer transport remain proposed extensions.
 
 ## WebAssembly backend
 
@@ -994,11 +991,11 @@ and `memory`, but the embedding must supply the imports before invoking either f
 - Value-function application inlines each body at its use, so emitted code and compiler recursion depth grow
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; factoring repeated residual code remains future work recorded
-  in [residual-code sharing todos](docs/todos/deferred-designs.md#residual-code-sharing).
+  in [deferred residual-code sharing](docs/ideas/residual-code-sharing.md).
 - Static reduction has the documented [resource bounds](docs/references/language.md#10-static-elimination)
   and does not enter computations to discover static functions or witnesses.
-  Demand does not yet flow through runtime package-dependent computation applications,
-  so their arguments materialize whole ([Package modularization](docs/proposals/package-modularization.md)).
+  Demand does not yet flow through runtime package-dependent computation applications, so their arguments
+  materialize whole ([Package modularization](docs/references/language.md#module-interfaces-and-shared-openings)).
 - Native execution is AMD64 on Linux or macOS.
   `build` defaults to the host architecture, so an ARM host needs explicit AMD64 target selection.
   `run -t exe` and `test -t exe` select AMD64 directly; execution still requires appropriate tools and host support.

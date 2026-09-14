@@ -21,7 +21,7 @@ Those events need not each create an activation.
 A local entry can inherit available bindings, a return entry can recover suspended bindings,
 and an escaping closure needs captures with an adequate lifetime.
 The useful compilation boundary preserves these distinctions before choosing where the bindings live.
-The [entry-context contract](../proposals/native-frames.md#entry-contexts) establishes this for native frames;
+The [entry-context contract](../references/compiler.md#activation-lifetime) establishes this for native frames;
 a general treatment of context-bearing joins remains further work.
 
 This is flexibility in the programming and compilation model. C can host an explicit machine or CPS translation,

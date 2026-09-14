@@ -174,7 +174,7 @@ Fixed representations are compiler-canonical intrinsics, so independent selectio
 Only the runtime-owned system capabilities are generative existential types.
 A composition root that must pass the dependency onward keeps the whole-alias `builtin` beside its selections.
 The [language reference](../../docs/references/language.md#13-primitive-values-and-capabilities) defines primitive
-identity; the [package design](../../docs/proposals/package-modularization.md#primitive-identity-and-package-boundaries)
+identity; the [package design](../../docs/references/language.md#13-primitive-values-and-capabilities)
 explains how it determines these boundaries.
 Compiler intrinsics are spliced inline as `@(intrinsic(name))` wherever a contract needs the canonical term,
 so no one-line indirection files sit between type expressions and the compiler metadata they name.
@@ -220,8 +220,8 @@ in
 ```
 
 The annotation discloses the kind equations, while the inner `pack` supplies a type constructor.
-The shared [package design](../../docs/proposals/package-modularization.md) explains when inferred
-and authored interfaces serve different maintenance needs.
+The shared [package design](../../docs/references/language.md#module-interfaces-and-shared-openings) explains
+when inferred and authored interfaces serve different maintenance needs.
 
 ## Explicit runtime contracts
 
@@ -315,7 +315,7 @@ surrogate code points, and values above the Unicode range with `none`.
 
 `Bytes` is an abstract source-defined immutable sequence of octets with no encoding attached.
 [text/bytes.zy](text/bytes.zy) supplies the type and algorithms using generic checked memory;
-[the owning design](../../docs/proposals/bytes.md#immutable-owners-and-source-bytes) specifies freeze and retention.
+[the owning design](../../docs/references/language.md#immutable-owners-and-source-bytes) specifies freeze and retention.
 The compiler has no byte-sequence type or operation family.
 Positions and lengths count octets, not scalars, and `bytes/get` reports one octet as a `UInt8`.
 `bytes/slice value start length` returns the window `[start, start + length)`.
@@ -332,7 +332,7 @@ of these foundational operations.
 
 ## Explicit storage
 
-Two optional builders share the [layout laws](../../docs/proposals/bytes.md#layout-laws) and byte codecs.
+Two optional builders share the [layout laws](../../docs/references/language.md#layout-laws) and byte codecs.
 Use `memory/static-layout.zy` when source value functions can determine placement;
 use `memory/package.zy` when sizes and alignment come from runtime computations.
 
@@ -358,7 +358,7 @@ and `right`; scalar forms retain their original `width` through alignment change
 Both `inspect` and `realize` are value functions.
 The [complete byte example](../tests/std/static-layout.zy), [buffer example](../tests/std/static-storage-access.zy),
 and [C example](../tests/ffi/static-layout.zy) exercise the resulting interface.
-[Static-plan rules and limits](../../docs/proposals/bytes.md#static-layout-plans) explain construction errors,
+[Static-plan rules and limits](../../docs/references/language.md#static-layout-plans) explain construction errors,
 runtime transport, and the remaining boundary before layout-directed machine calls.
 
 Import [memory/package.zy](memory/package.zy) and apply it to Builtin and the same byte package:
@@ -382,7 +382,7 @@ The import path is relative to this directory.
 `failure` is a caller-supplied `Thk OS`; realization and storage also work with other computation types.
 `Stored` is local to the opened representation, and `repr/load` accepts that stored type.
 Use `repr/from_bytes` to validate external bytes against the contract.
-The [layout design](../../docs/proposals/bytes.md#explicit-storage-contracts) owns all layout laws,
+The [layout design](../../docs/references/language.md#explicit-storage-contracts) owns all layout laws,
 validation, address guarantees, and current costs.
 [The complete example](../tests/ffi/representation.zy) passes stored bytes to C
 through the existing borrowed-buffer interface.
@@ -403,19 +403,19 @@ let encoded = boundary/encode OS logical_worker in
 and encoding when that intermediate representation changes.
 The [complete example](../tests/std/represented-call/main.zy) imports a generic worker,
 chooses thunks and provider packages at runtime, and converts between 16-byte and 64-byte aligned records.
-The [owning call design](../../docs/proposals/escape-unboxing.md#stored-call-interfaces) specifies identity agreement,
+The [owning call design](../../docs/references/language.md#stored-call-interfaces) specifies identity agreement,
 sequencing, costs, and the boundary before changing physical call slots.
 
 Mutable construction uses the source `buffer` module exported by std: allocate a fixed-capacity destination,
 write checked ranges, then freeze it into immutable bytes or close it.
 `memory/allocation.zy` provides the source-defined allocator service and a per-request size-limiting provider.
-See [the owning buffer protocol](../../docs/proposals/bytes.md#mutable-destination-capabilities)
+See [the owning buffer protocol](../../docs/references/language.md#mutable-destination-capabilities)
 for state transitions and [the example](../tests/std/buffer.zy) for complete use.
 
 [memory/access.zy](memory/access.zy) adds `read_at` for decoding a checked field window
 and `write_to` for encoding into a caller-provided `Buffer`.
 It consumes the existing representation package and works with runtime-selected contracts.
-See [access rules](../../docs/proposals/bytes.md#access-through-existing-representation-contracts)
+See [access rules](../../docs/references/language.md#access-through-existing-representation-contracts)
 and [the C construction example](../tests/ffi/storage-access.zy).
 
 ## Cells and memory views
@@ -445,7 +445,7 @@ A mutable grant can be revoked independently; closing the buffer invalidates all
 The source reader preflights the entire cell, including padding and over-alignment, before loading its fields.
 Typed stores initialize their footprint; only a typed address store establishes an address slot.
 See the [complete example](../tests/std/memory-views.zy), [failure cases](../tests/std/memory-faults.zy),
-and [owning contracts](../../docs/proposals/bytes.md#addresses-cells-and-views).
+and [owning contracts](../../docs/references/language.md#checked-memory-capabilities).
 The native pointer slot is 8 bytes; the WebAssembly host uses virtual addresses and does not expose a C pointer.
 
 ## Byte operation costs

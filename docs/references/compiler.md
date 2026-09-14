@@ -609,6 +609,10 @@ That analysis is a source and fact snapshot, not a complete typed tree.
 | Fill sites, solutions, scopes, and abstract identities | Per-occurrence kinds and types |
 | Data/codata definitions, term facts, normalized top annotations, and provenance indexes | Derived node columns needed during full-tree traversal |
 
+Retained facts support random access by semantic identity where recovery would require a regional recheck.
+Occurrence payload is materialized for full traversal; retaining it longer requires a measured consumer benefit.
+Keyed `type_sites` and `term_norms` serve current top-annotation queries without replaying arbitrary inner nodes.
+
 Fact queries read those retained indexes. Full-tree consumers call `materialize_arena`, `checked_program`,
 or `executable_program`, which recover the arena through the coarse check.
 Materialization uses the session's current inputs, so callers must pair an analysis
@@ -634,6 +638,125 @@ Strict parsing supplies compilation input; recovering parsing supplies structure
 and recovery evidence for tooling.
 A recovered edit is not silently accepted as an executable program.
 Formatting consumes the same textual model, so parser changes must preserve the information required by C15.
+
+### Recovering parsing
+
+Completion is normally requested while a token or surrounding construct is incomplete.
+A successful strict parse therefore cannot be a prerequisite.
+Reusing an older successful parse alone is insufficient: the edit may introduce a new binder, change shadowing,
+move the cursor into another scope, or establish a new expected type.
+
+The grammar uses LALRPOP's special `!` symbol for recovery.
+At a parser error, LALRPOP can inject that symbol, execute a recovery action,
+discard input until the grammar can continue, and report both the parse error and discarded tokens.
+Recovery points must be selected by the grammar author, and lexer failures are not recovered automatically.
+
+That mechanism is suitable for retaining surrounding syntax, but it is not itself a completion model.
+Zydeco needs two additional distinctions:
+
+- A **completion hole** deliberately marks the cursor.
+  It is not a user error and must remain identifiable through textual syntax, desugaring, resolution, and checking.
+- A **recovery node** replaces malformed or missing syntax around the cursor.
+  It carries a typed recovery identity and diagnostic range rather than becoming indistinguishable
+  from an authored `_` hole.
+
+The normal lexer never emits a completion token.
+A tooling iterator wraps the ordinary token stream, removes the active token when appropriate,
+and inserts one zero-width completion marker at the cursor.
+The marker is deliberately not an authored `_` token and is not accepted as an ordinary grammar terminal.
+A term or pattern recovery point turns it into a typed hole when that category is admissible;
+otherwise the parser records fixed expectations such as `in`, `=>`, or `end` at the marker.
+A marker-only issue is then removed from ordinary syntax diagnostics.
+If the same recovery discards source tokens too, its diagnostic is retained at the first discarded source token.
+The synthetic marker never appears among the discarded source tokens reported to callers.
+
+LALRPOP's `expected` lists contain diagnostic terminal names.
+They may be useful evidence while prototyping, but Cajun must not parse those strings.
+The surface parser converts them into typed `TokenKind` values before exposing them.
+These payload-free kinds are derived from the lexer's `Tok` declaration,
+so an expected identifier needs no invented source text and no separately maintained terminal inventory.
+
+`TokenMetadata` reads fixed spellings directly from Logos's `#[token(...)]` attributes.
+A token with several aliases selects one registered spelling explicitly: both `def`
+and `define` lex as `Define`, whose canonical spelling remains `define`.
+Variable lexical categories have no fixed source spelling.
+Their grammar names default to the variant name, with explicit overrides for existing labels such as `LowerId`.
+Trivia and malformed lexical tokens are marked as excluded from parser expectations;
+the synthetic `Completion` and `Invalid` terminals stay private to the parser.
+
+The same generated metadata supplies fixed-token formatting and the parser's terminal-name conversion.
+The LALRPOP external-token table remains explicit grammar integration:
+conformance tests compare both terminal names and their mapped lexer variants.
+This preserves the grammar as the syntax specification while avoiding an additional runtime catalog.
+Unknown settings, ambiguous canonical spellings, and conflicting terminal names fail macro expansion.
+
+#### Strict and recovering modes
+
+The parser exposes two explicit outcomes over the same grammar:
+
+- **Strict parsing** is used by compilation, formatting, and normal source loading.
+  Any recovery issue makes the source invalid, preserving the current language acceptance boundary.
+- **Recovering parsing** returns the partial textual arena, its root when one was recovered,
+  and a collection of typed recovery issues.
+  Editor queries may continue through recovered holes.
+
+The generated LALRPOP parser sits behind this surface API so strict callers cannot accept a recovered source
+by ignoring its issues.
+
+#### Trust boundary and recovery contracts
+
+The implementation keeps `parser/grammar.lalrpop` as the single syntax specification
+and its generated parser as the reference implementation.
+Both modes run that parser; strict mode accepts only a returned root with no issues.
+Recovery policy lives in the two `!` productions and LALRPOP's runtime.
+There is no handwritten parser, synchronization algorithm, repair-search engine, or separate proof system to maintain.
+
+The surrounding Rust code establishes smaller integration contracts.
+A grammar semantic value carries either ordinary syntax or an opaque recovery handle.
+The enclosing allocation rule records the exact `PatId` or `TermId` against that handle.
+An authored hole at the same span, a previous parse's allocation, and a second zero-width hole
+therefore cannot be mistaken for the same recovery event.
+An abandoned semantic value can have no allocated hole; an allocated node can also outlive its parser stack entry.
+Completion exposes an allocated hole only when it remains reachable from the returned root.
+Ordinary recovery issues can retain links to abandoned allocations for diagnostics.
+
+`RecoveringParser::new(source)` borrows a source snapshot,
+and `RecoveringParser::at(source, offset)` additionally validates and binds a completion cursor.
+Parsing then takes only `&mut Parser`, never a second source argument.
+The cursor's bounds, UTF-8 boundary, and replacement range consequently belong to the actual input being parsed.
+One lexical stream supplies comment and quoted-literal boundaries to the parser and Cajun,
+including the EOF cursor of an unfinished token.
+Byte ranges are retained as byte ranges; layout lookup uses character boundaries.
+
+Lexical failures become a grammar-known `Invalid` terminal with a typed `LexicalError` payload.
+Like `Completion`, it has no successful production and is excluded from public expectations.
+This lets LALRPOP recover using its existing points instead of treating a lexer error
+as an early return or an apparent EOF.
+Diagnostics retain typed invalid tokens even when they are discarded alongside the completion marker.
+
+Numeric conversions use LALRPOP's fallible actions.
+Metadata integers remain signed 64-bit values, while ordinary integer literals remain arbitrary precision.
+A failed conversion returns a source-located `LiteralError`, keeps any earlier recovery issues,
+and returns no syntax root.
+Fallible-action errors are fatal in LALRPOP; they do not run `!`.
+Recoverable invalid metadata values remain unsupported; conversion failure returns diagnostics without a syntax root.
+
+These contracts are regression-tested against the reference parser.
+They do not claim formally verified parsing, minimal edits, or maximal context retention.
+LALRPOP may pop consumed stack entries as well as discard unread tokens; its `dropped_tokens` list describes the latter,
+not every source fragment replaced during recovery.
+
+The grammar currently recovers at term and pattern atoms.
+Malformed lists can retain later complete bindings through those points;
+additional list or arm productions need a concrete lost-context regression.
+A second handwritten repair parser would create a competing syntax contract.
+Recovered nodes remain semantic holes with recorded origins,
+while strict parsing rejects the recovery before elaboration.
+The [recovery tests](../../lang/surface/src/textual/parser/tests/recovery.rs) pair retained contexts
+with strict rejection, including authored holes, Unicode cursors, invalid literals, and abandoned recovery events.
+Further grammar and candidate extensions remain in the [completion proposal](../proposals/completion.md).
+
+### Desugaring boundary
 
 [Bitter desugaring](../../lang/surface/src/bitter/README.md) removes surface sugar while keeping unresolved names.
 It expands binding headers and telescopes, makes nominal sealing and CBPV introductions explicit,
@@ -739,7 +862,8 @@ other failures retain captured observations but prevent program publication.
 No rejected strict result reaches type checking or execution as a normal program.
 Parser and completion tests, observer visit counts, dependency lifecycle tests,
 and the [uniform-term fixtures](../../lang/tests/cases/uniform-term) exercise this boundary.
-The [term design](../proposals/term.md) retains its binding motivation and remaining recursion questions.
+The [binding rules](language.md#3-bindings-and-scope) explain placement and identity;
+[deferred recursion work](../ideas/recursive-admissibility.md) retains stronger admissibility questions.
 
 ## C5. Typed representation, judgments, and inference
 
@@ -1033,7 +1157,11 @@ with the accepted residual root that erases them; foreign-interface tests cover 
 
 ### Typed-arena lint
 
-[LintChecker](../../lang/statics/src/validate/lint.rs) is an optional independent verifier over a complete arena.
+[LintChecker](../../lang/statics/src/validate/lint.rs) is an optional verifier over a complete arena.
+It independently inspects the artifact, but shared derivation rules establish consistency rather
+than a separate soundness proof: a faulty rule can reproduce the same wrong result.
+Its practical boundary is corruption introduced by mutation, normalization, retries,
+or generated syntax, demonstrated with seeded defects.
 It checks fill closure, annotation presence and sorts, agreement of surface-keyed and node-keyed views,
 and existence of referenced nodes and definitions.
 Kind comparisons resolve normalized structure; raw kind-ID equality is insufficient after reconciliation.
@@ -1052,8 +1180,22 @@ operand-dependent checks exclude abstract identities and applications other than
 Shared nodes can have different use-site instantiations,
 so the verifier cannot soundly compare every recorded parent/child annotation
 or reconstruct every lexical reference context from this artifact.
-Its visited-node cache checks a shared node under the first encountered scope only.
-Those limits and proposed stronger checks remain in the [lint design](../proposals/tyck-lint.md).
+Arena-wide annotation integrity includes abandoned allocations,
+while structural scope reconstruction applies only to reachable roots.
+A shared node can carry a generic or labeled annotation at one recording site and an instantiated or plain annotation
+at another; the artifact lacks the per-use evidence needed for unrestricted parent/child re-derivation.
+Product checks and definition-reference scope across imports and aliases remain deferred;
+reference existence is still checked.
+
+A reachable abstract witness must be structurally bound or ambient.
+The ambient set includes seals, existential skolems, definition-denoted identities,
+and named witnesses: recursive groups allocate identities together,
+and package elaboration can distribute bindings without one structural encloser.
+This policy detects unbound anonymous witnesses with existing table entries,
+but does not reconstruct every source non-escape proof.
+The visited-node cache checks a shared node under the first encountered scope only.
+Scope-sensitive traversal, finer export provenance, and use-site derivation evidence remain
+in the [lint proposal](../proposals/tyck-lint.md).
 
 `CommandCompiler::with_lint_types`, exposed as `--lint-types`, runs the verifier
 after a successful check and outside query memoization.
@@ -1557,6 +1699,27 @@ The [execution fixture](../../lib/tests/core/representation-policies.zy) exercis
 with live captured values.
 See [the contribution workflow](../../CONTRIBUTING.md#representation-experiments) for reproducible commands.
 
+### Storage evidence and machine calls
+
+Source storage and compiler representation choices provide complementary evidence.
+A logical `UInt8 * UInt32` can have an eight-byte natural encoding or a 64-byte aligned stored representation;
+both still cross ordinary Zydeco calls through the established word convention.
+Local unboxing removes cells where justified, without interpreting a source dictionary's padding or alignment.
+
+| Description | Established evidence | Limit |
+| --- | --- | --- |
+| [Source `Representation A` and `Storage A Stored`](language.md#explicit-storage-contracts) | One abstract carrier shared by codecs and call signatures, with size/alignment values | No selected register class or argument width |
+| [Source `Plan A`](language.md#static-layout-plans) | Validated byte placement and inspectable field offsets | No type identity for each placement, reference map, or calling convention |
+| SPSLow `ProductLayout` | Logical arity and producer/consumer structure | No byte padding or scalar register classification |
+| [Word entries](#word-entry-contracts) | Ordered administrative environment/result words and code/package provenance | No different component transport or complete source stack protocol |
+| [Partial source protocols](#partial-source-protocols) | Known components, scoped parameters, and regular recursive codata | No nominal storage identity, explicit type-application evidence, or physical stack extent |
+| [Native frame plans](#c11-native-preparation-activation-frames-and-amd64-emission) | Live tagged-word slots, entry roles, and suspension ownership | No layout mixing raw scalar bits with managed references |
+
+[Stored source calls](language.md#stored-call-interfaces) share a carrier and its dictionary without changing transport.
+Selecting another machine ABI requires the
+[remaining call-boundary work](../proposals/escape-unboxing.md#remaining-machine-call-boundary)
+to establish representation identity, agreement at both ends, target placement, and tracing together.
+
 ## C11. Native preparation, activation frames, and AMD64 emission
 
 [NativeProgram::prepare](../../lang/assembly/src/frames.rs) validates the frame-aware ZASM result
@@ -1595,6 +1758,24 @@ Deterministic greedy coloring assigns canonical definitions to slots; aliases in
 Packed size is a safe bound from the assigned slots, not an optimal-coloring or recursion theorem.
 The same offsets are used for accesses, capture descriptors, and active root maps.
 
+### Activation lifetime
+
+An activation is one dynamic invocation, potentially spanning local blocks and several resumptions;
+a block label alone does not establish a new activation.
+The environment stores the current bindings, while a capture environment stores the values needed
+when suspended code begins or resumes.
+Portable lowering copies continuation captures into a heap product and unpacks it on return.
+Retained native frames preserve the same values in their existing slots, avoiding that capture copying.
+Ordinary escaping closures still own heap capture environments.
+
+With the control-stack top on the left, a portable call enters with `E_f :: argument :: L_k :: E_k :: S`,
+where `E_k` is the continuation's capture product.
+Native preparation replaces it with `E_f :: argument :: L_k :: token(F) :: S`;
+the token retains the caller activation `F` and the entry descriptor identifies its resumption layout.
+An independent allocation frontier tracks reserved environment storage as well as the active base.
+Restoring only the base would not reclaim or preserve the correct extent.
+The environment and control stacks remain separate, preserving the ordinary argument protocol.
+
 The default retained environment stores frames in growable Rust-owned storage.
 Closure entry may reserve and relocate that storage; generated code reloads its active base into `rbp`.
 Saved references are logical offsets and tokens, never raw environment-slot pointers in managed values or closures.
@@ -1611,13 +1792,36 @@ Source `Ret` types and lexical node occurrence counts alone do not establish thi
 Escaping ordinary closures own heap captures with adequate lifetime.
 A future machine-stack capture or multi-shot continuation operation must revisit preparation and storage together.
 
+Arguments and closure captures must be staged before their source storage can be reused.
+Every pending continuation preserves its own binding set;
+resuming an inner continuation cannot destroy an older continuation's captures.
+A return stages its result and target before restoring the owner and frontier.
+Environment transitions do not collect managed values.
+
+A jump is not itself evidence of a tail call: calls with explicit continuations also lower to jumps.
+With a fixed pending continuation set, a tail chain's logical frame extent is bounded
+by its retained storage plus the largest active frame, independently of chain length.
+Cached capacity can retain earlier peaks.
+Reclamation requires that active use has ended and no pending continuation can reach the frame.
+No managed value, escaping closure, or foreign borrow may contain a raw pointer to an environment slot.
+Knowing an entry layout establishes slot availability, not constant contents or a general static fact system.
+
+At collection, root maps include active and all suspended live slots, together with control-stack and host roots.
+Reserved or dead slots are not roots even when their words look pointer-shaped.
+Changing frame storage must preserve this distinction:
+retaining one small capture must not keep a dead large value alive.
+The [environment capability](#environment-actions-and-roots) defines address stability and model transitions.
+
 The emitter serializes model-defined actions and implements SysV register placement,
 stack alignment, jumps, return prologues, and host bridges.
 [Native packaging](../../cli/src/native.rs) bundles the runtime and shared model
 and invokes the target toolchain using [CONTRIBUTING's build contract](../../CONTRIBUTING.md#compile-programs).
 [Native-model tests](../../lang/tests/tests/native_model.rs) check preparation and transitions;
-[native frame design](../proposals/native-frames.md) retains the detailed lifetime argument
-and experimental comparisons.
+[native frame proposal](../proposals/native-frames.md) retains alternative storage and evaluation decisions.
+Model regressions reject mismatched layouts, uninitialized reads, stale or out-of-order tokens,
+and reservation overflow without corrupting callers.
+Tail-chain tests check bounded usage, while GC tests keep a moved object alive solely through a suspension
+and exclude dead slots in the same frame.
 
 ### Compilation-unit preparation and artifacts
 
@@ -1768,9 +1972,9 @@ emitted records and target carriers share checked alignment.
 A return prologue removes `token(F)` while preserving `result :: S`, resumes the owner,
 restores `rbp`, and then binds the result.
 Returning host and C calls enter that same prologue.
-The experimental compact engine implements the same narrower action capability with suspension fragments;
-experimental moving environments require a different relocation contract and are not an AMD64 backend.
-[The frame design](../proposals/native-frames.md) owns those representation alternatives.
+
+The [native environment proposal](../proposals/native-frames.md) retains the compact-storage
+and moving-root experiments; they do not extend the default environment contract described here.
 
 ### Managed allocation
 
@@ -1798,6 +2002,17 @@ Frame storage reclamation and managed-value liveness are separate obligations.
 Both emitters produce core `wasm32` modules with `memory`, `entry`, and `_start` exports.
 An embedding supplies the `zydeco` import namespace; the module is not a standalone WASI program.
 [wasm-common](../../lang/wasm-common/src) owns shared role and word conventions.
+
+The pipeline forks after shared closure conversion: SPSLow still retains lexical blocks,
+while ZASM has decomposed them into machine program points.
+Starting at high SPS would duplicate closure conversion; recovering structure
+from ZASM would require reconstructing lexical regions and stack effects.
+Direct SPS emission can use structured Wasm and locals within a block and remains independent
+of lazy ZASM construction and native preparation.
+AM emission reuses ZASM's local representation and stack work and closely matches its interpreter,
+at the cost of one emitted function per program point.
+Both use module-owned dispatch because recursive host calls would consume the engine's stack
+on unbounded source transfers.
 
 | Backend | Input and control representation | Storage consequences |
 | --- | --- | --- |
@@ -1851,15 +2066,13 @@ Canonical representation types have shared intrinsic identities;
 provider-owned resource capabilities acquire witnesses through their package opening.
 Named structural routes and static fields erase before backend layout.
 [L13](language.md#13-primitive-values-and-capabilities) owns source observations,
-and [package rationale](../proposals/package-modularization.md#primitive-identity-and-package-boundaries)
-explains dependency choices.
+and [module interfaces](language.md#module-interfaces-and-shared-openings) explain dependency choices.
 Returning and continuation-selecting operations have distinct host call plans.
 C8 owns arithmetic exposure and folding; C11–C13 own the resulting target words and calls.
 The dynamic and ZASM interpreters share `PrimitiveOp::evaluate` with constant folding.
 
 Strings are immutable UTF-8 text. `Bytes` is a source-defined abstraction
-whose [owning design](../proposals/bytes.md#immutable-owners-and-source-bytes) specifies its representation
-and operations.
+whose [owning design](language.md#immutable-owners-and-source-bytes) specifies its representation and operations.
 The compiler and host recognize general memory capabilities, without a byte-sequence type or operation family.
 
 [BufferArena](../../lang/machine/src/buffer.rs) and its [memory model](../../lang/machine/src/memory.rs) are shared
@@ -1872,8 +2085,8 @@ that grant and never copy the visible payload merely to change a window.
 The arena retains frozen storage until runtime teardown.
 It contains no managed Zydeco references.
 The Node host supplies the same capability checks with virtual addresses and no native C pointer export.
-[Memory laws](../proposals/bytes.md#addresses-cells-and-views) own the source-visible permissions,
-state transitions, alignment, initialization, and failure-before-mutation guarantees.
+[Memory laws](language.md#checked-memory-capabilities) own the source-visible permissions, state transitions,
+alignment, initialization, and failure-before-mutation guarantees.
 
 Scalar `store_le` and `load_le` operations access a checked extent of the scalar's exact width at byte alignment.
 Native cells impose stronger alignment through an explicit preflight check.
@@ -1936,7 +2149,10 @@ and its explicit void-return operation avoids reading nonexistent result storage
 Marshalling validates every window's live grant, read permission, bounds, and initialization before C entry.
 Invalid memory fails without calling C. The arena retains each borrowed allocation
 across the synchronous call; marshalling helpers do not collect.
-Explicit compiled-library manifests select exact artifacts
+The admitted pointer borrow lasts for the synchronous C call; the adapter does not implement a retained
+or mutable foreign-borrow protocol.
+The `Ret` classifier alone establishes neither termination nor a cleanup scope.
+Callbacks into the active instance remain unsupported. Explicit compiled-library manifests select exact artifacts
 through the [unit linker](#compilation-unit-preparation-and-artifacts);
 otherwise native linking uses the library's linker name and interpreter loading uses platform shared-library names.
 Native foreign imports are unsupported in Wasm and the ZASM interpreter.
@@ -2003,26 +2219,323 @@ in the [traversal proposal](../proposals/traversals.md#diagnostic-collection-and
 
 ### Formatting and typed rendering
 
-The [textual formatter](../../lang/surface/src/textual/pretty.rs) owns source layout through grammar contexts,
-punning, anchored trivia, retained intentions, and boundary composition.
-Its laws are semantic preservation, comment retention, canonical convergence, and the selected layout lower bound.
-`@[format(...)]` supplies policy to CLI and editor alike; frontend settings must not define another formatter.
-[Formatting design](../proposals/formatting.md) owns the detailed layout algebra and families.
+Formatting is a semantics-preserving normalizer over the parsed textual arena.
+Canonical syntax gives equivalent spellings one form; retained intentions preserve author layout only
+at declared grammatical boundaries.
+A pretty-printer maps that model to a document, and a formatter parses, prints, and replaces source.
+The CLI and Cajun share that implementation.
+The [textual formatter](../../lang/surface/src/textual/pretty.rs) owns source layout;
+its [options](../../lang/surface/src/textual/pretty/config.rs) default to width 100, indentation 2,
+preserved layout intentions, and minimal parentheses.
+
+#### Terminology
+
+A **sequence binding** is one of `let`, `do`, `def`, or `param`: a binding whose computation continues into a tail.
+Sequence bindings are block-like: their tail always breaks onto a new line at the binding's indentation,
+and the binding itself starts on a line of its own.
+
+A **tail marker** is one of `in`, `that`, or `;`: the token that closes a sequence binding and begins its tail.
+The **placement markers** are `in` and `that` in particular.
+The printer places them through the inline, attached, and aligned tiers, mirroring the definition separator.
+
+A **stage separator** is `:` or `=`: `:` joins a head with its type, and `=` joins the type with its bindee.
+A **scope marker** is `.` or `=>` and introduces a scope body.
+An **arm block** is one of `match`, `comatch`, `data`, or `codata`: a construct whose arms each occupy their own line.
+Arm blocks are block-like: they always expand, so they begin on a line of their own.
+A **delimited region** is a `{ }` or `( )` group, or a `begin`...`end` block:
+its contents nest inside its delimiters while the delimiters themselves hug the surrounding line.
+
+#### Layout laws
+
+Every formatter guarantee and layout family below follows from four layout laws.
+The printer may introduce or remove a break, or add or remove indentation, only where a layout law permits it;
+everywhere else it keeps the canonical compact layout.
+
+**A break belongs to a boundary.** Every line break is owned by exactly one grammatical boundary.
+Punctuation placement and continuation indentation belong to the boundary,
+never to either neighboring child in isolation.
+A gap without a declared boundary is canonical spacing and never breaks.
+
+**Indentation comes from the owning boundary.** A boundary contributes indentation only
+through its declared continuation policy: a broken boundary hangs its continuation one level below the boundary's line,
+or aligns it for aligned families; a joined boundary contributes nothing.
+There is no other source of nesting, and no fixed offsets: the printer measures the boundary's indentation dynamically.
+
+**Closers return to their boundary.** A delimiter closer returns to its opener's line.
+A stage separator or tail marker returns to the binding's indentation through three tiers:
+it stays with a single-line payload, follows the payload's final line when that line returned
+to the boundary (the delimited closer), or takes a line of its own at the boundary.
+
+**Blocks anchor; delimiters hug.** A construct whose interior aligns with its head — a sequence binding,
+whose tail aligns with the binding, or an arm block, whose arms align with the keyword — must begin on a boundary line.
+A delimited region instead hugs the line it lands on: the opener stays put,
+the contents nest one level inside, and the closer returns to the opener's line.
+A singleton group therefore keeps its delimiters whenever its contents span more than one line.
+
+This section specifies textual formatting: boundaries consult retained intentions,
+carry trivia, and honor `@[format(...)]` directives.
+The [statics renderer](#elaborated-type-rendering) has its own grammar and layout implementation.
+It uses breakable document gaps and precedence-aware grouping, without source intentions or trivia;
+it does not implement every textual layout family.
+The scoped formatter is a debug renderer, and the dynamics printers render linked IR;
+neither defines canonical source layout.
+
+#### Retained source information
+
+A parsed source has three kinds of printable information:
+
+| Kind | Examples | Preservation contract |
+| --- | --- | --- |
+| Canonical syntax | binders, applications, precedence, field payloads | Preserve meaning and choose one spelling. |
+| Trivia | documentation, line, and block comments | Preserve content and effective attachment. |
+| Intentions | a joined line, a break, one empty line, a multiline group | Use only at declared layout boundaries. |
+
+Spans provide evidence for trivia and intentions; they are not a second printable syntax tree.
+A leading comment extends the layout start of its anchor,
+so the boundary compositor sees the separation before the comment.
+The comment text itself remains stored once in `SurfaceTrivia`.
+
+```text
+source -> lexer and parser -> textual arenas and spans
+       -> presentation capture -> trivia and intentions
+       -> grammar-aware document construction
+       -> width selection -> formatted source
+```
+
+Punning belongs to canonical syntax rather than intention.
+If a named term or pattern contains the same-named variable, the printer always chooses its concise form.
+An annotation with a hole payload prints in its parenthesized `@(meta)` form;
+`@[intrinsic(i64)] _` and `@(intrinsic(i64))` therefore converge.
+Line comments use `--` or `--|`; nested block comments retain their delimiters and relative indentation.
+Raw whitespace is not retained except under an explicit `@[format(verbatim)]` directive.
+
+#### Formatter laws
+
+The following laws elaborate the layout laws for concrete constructs.
+
+##### Semantic identity
+
+Formatted output must parse and desugar to the same structure.
+Parentheses are removed only when the exact parser position accepts the enclosed term or pattern.
+Annotation payloads are checked separately because moving an annotation across a named
+or projected pattern changes the tree even when the printed tokens look similar.
+
+##### Content retention
+
+Every comment survives. Documentation starts on a fresh line at the indentation of its anchor,
+and only an adjacent documentation block attaches to `@[doc]`.
+An unattached block remains visible and produces a warning.
+
+##### Canonical convergence
+
+Equivalent spellings converge on one form. Horizontal spacing and puns are canonical,
+empty regions contain at most one empty line, and a complete source ends with one newline.
+Formatting twice with the same options must have no further effect.
+
+##### Layout as a lower bound
+
+Vertical separation has the following order:
+
+```text
+joined < broken < one empty line
+```
+
+Under the `Preserve` policy an observed break is not collapsed and a larger empty region becomes one empty line.
+Under `BlankLinesOnly` the same holds for blank lines, while every single break is left to the width decision.
+Under `Ignore` no observed separation is retained.
+
+A joined boundary can still break when its compact form does not fit.
+A boundary that always breaks, such as the gap between match arms or between the stages of a `do` chain,
+retains one empty line where the source had at least one.
+Local groups remain compact when they fit, even inside an expanded parent.
+Because a retained break persists, a line that the width forced to wrap in an earlier run stays wrapped
+until the author rejoins it; the lower bound never re-joins automatically.
+
+##### Boundary composition
+
+A syntax case combines child documents through a named boundary policy.
+It must not inspect rendered text to discover whether a child fits or spans lines.
+Punctuation placement and continuation indentation belong to the relationship between children rather than
+to either child in isolation.
+
+#### Boundary algebra
+
+`LayoutFragment` carries a document and the first and last syntax anchors represented by that document.
+`LayoutBoundary` names the source gap to consult:
+
+- `Between` lies between consecutive entities.
+- `AfterStart` lies between an enclosing construct and its first child.
+- `AfterArmPrefix` lies between an arm header and its payload.
+- `AfterExistentialOpen` lies just inside a grammar-owned parameter delimiter, between the `(` and its binder.
+- `BeforeExistentialParameter` lies before a grammar-owned parameter delimiter that is not part of its binder.
+- `BeforeEnd` lies between the final child and its closing delimiter.
+
+The printer then chooses how much of that source information applies.
+A boundary can be canonical, preserve the full break intention, or preserve only an empty line
+after moving a marker onto its own line.
+
+`BoundaryLayout` supplies the compact gap, expanded gap, marker placement, and continuation nesting.
+Its common forms are named by their effect: `aligned`, `hanging`, and `nested`.
+`StagedBoundary` distinguishes an ordinary annotation from the `:` and `=` stages of a binding,
+because their expanded forms carry different indentation.
+
+Document alternatives use the `pretty` algebra directly.
+A flexible boundary exposes its compact projection to an enclosing group
+while retaining a complete expanded alternative.
+A candidate that is valid only on one line contains a flat-mode guard.
+The final renderer therefore performs the only width selection; the printer does not render temporary strings
+or maintain a syntax-specific boundary mode.
+
+##### Canonical gaps
+
+A source gap participates in intention preservation only when a syntax case declares a layout boundary for it.
+Every other gap between entities is canonical spacing.
+Postfix projections and destructors never break, so a source break before `/` or `.` joins the operator to its head.
+`in` and `that` belong to the bindee's line; an empty line written
+before the placement marker is re-anchored between the tail marker and the following tail.
+Sequence tails always start a new line even when the source joined them.
+Declaring a new boundary is the only way to make a gap intention-aware.
+
+#### Canonical layout families
+
+Most constructs use one of these families:
+
+| Family | Compact form | Expanded form |
+| --- | --- | --- |
+| Delimited region | Contents stay between delimiters; a thunk is `{ body }`. | Contents nest once and the closer returns to the opener. |
+| Juxtaposition or list | Items use their canonical separator on one line. | Continuations nest once while fitting subgroups remain intact. |
+| Parameter telescope | A fitting telescope follows its head. | A joined first row stays beside the head; the remaining rows hang one level below. The head stands alone only when the source broke the first row away or the row does not fit, while width expansion gives each parameter a row. |
+| Infix chain | Operators have one space on each side. | `*` and `->` lead continuation lines without recursive indentation. |
+| Headed scope | A short head keeps `.`, `=>`, and its body together. | A multiline head ends with an aligned marker, then the body nests once. |
+| Staged binding | Header, type, bindee, and placement remain together when they fit. | `:`, `=`, and then `in` or `that` close the stages at the binding indentation. |
+| Sequence binding | A short stage may remain compact. | The tail marker (`in`, `that`, or `;`) always breaks, the tail returns to the binding indentation, and the binding starts on a line of its own. |
+| Arm block | A short arm header and payload share a line. | Arms begin with aligned `\|`; a broken payload nests once, while comments before `|` remain at the arm boundary. Blank lines between arms, after the head, and before `end` survive as one empty line. |
+
+Each grammatical group makes one width decision for the boundaries it owns.
+If a delimited row overflows, the delimiters and item separators enter their expanded layout together;
+boundaries inside each item remain independent.
+A grammar-owned parameter delimiter carries no syntax entity of its own,
+so a delimited group whose content anchor is its own entity spans no source gap after its opener:
+the group reads its retained break from the recorded `AfterExistentialOpen` boundary instead of an anchor pair.
+A comment written before the `(` anchors at the parameter boundary and stays outside the delimiters,
+while a comment after the `(` belongs to the binder payload and keeps its line for that boundary.
+Staged bindings follow one nesting discipline. A joined stage boundary never nests its continuation:
+the continuation's own layout families measure from the binding's indentation,
+so a delimited type hangs its contents one level below the binding and returns its closer to the binding.
+Only a broken boundary hangs the continuation one level below.
+The `=` stage then chooses between three tiers: the whole `type = bindee` stage on one line, the separator attached
+to the type's final line when that line returns to the binding indentation (the delimited closer),
+or the separator on its own line at the binding indentation.
+The placement marker mirrors the same three tiers: it stays on a single-line bindee,
+follows the bindee's final line when that line returns to the binding indentation (a delimited closer,
+as in `end in` or `} that`), and otherwise breaks onto its own line at the binding indentation.
+A broken bindee hangs one level below its separator,
+and the printer captures the binding indentation dynamically instead of assuming fixed offsets.
+Preserved source breaks partition fitting rows, but an overflowing row expands the complete outer layer rather
+than whichever nested boundary happens to encounter the width limit first.
+
+For layout purposes the scope markers `.` and `=>` and the tail markers `in` and `that` are scope-boundary markers.
+This is a presentation role shared by several grammar categories.
+A constituent is “short” exactly when its complete compact alternative fits in the remaining configured width;
+there is no second length threshold.
+
+Canonical textual printing folds adjacent scopes of the same form into one parameter telescope.
+Under `Preserve`, a source line break before the nested introducer stops the fold;
+under `BlankLinesOnly` only a blank line does.
+This rule applies to `fn`, `pi`, `forall`, `sigma`, and `exists`.
+Consecutive existential nodes also normalize to one telescope during desugaring,
+so the compact and repeated spellings have the same elaboration.
+
+Minimal parenthesis formatting retains grammar-required groups.
+It also retains a singleton group whenever its contents span more than one line,
+so the delimiters can hug the enclosing line while the contents nest inside.
+Applications are the one self-grouping family: their own compact-or-hanging boundary subsumes a singleton wrapper.
+`Parentheses::Preserve` is available when every parsed singleton group must remain.
+
+#### Formatter directives
+
+Printer policy is expressed in the source as a `format` meta annotation:
+
+```text
+@[format(width(100), indent(4), layout(blank_lines))] expression
+```
+
+Each option is a nested call taking one argument, except `verbatim`, which takes no argument:
+
+- `width(columns)` sets the target line width;
+- `indent(columns)` sets the indentation width;
+- `layout(preserve)`, `layout(blank_lines)`, or `layout(ignore)` selects how much recorded layout is retained;
+- `parentheses(minimal)` or `parentheses(preserve)` selects singleton-group treatment;
+- `verbatim` copies the annotated expression's original source text unchanged, including its internal line breaks,
+  indentation, and comments.
+
+A directive applies to the annotated expression and everything inside it.
+Options without a directive keep their enclosing values, so nested annotations override enclosing options field
+by field and the innermost directive wins.
+A malformed `format` annotation is inert: the printer renders it as ordinary metadata and applies no options,
+leaving the misspelled directive visible in the output.
+
+Metadata calls are structured delimiter groups rather than opaque rendered strings.
+A fitting call stays compact; an overflowing call expands its immediate argument list,
+while nested calls make their own width decisions.
+This choice is local to the annotation, so the length of its following payload cannot force short metadata to wrap.
+Under `Preserve`, argument rows authored on separate lines remain separate,
+and comments anchored to nested metadata arguments remain in the group.
+A comment before an annotation's `@` remains outside its brackets; a comment
+after the opening bracket remains inside the metadata wrapper.
+
+Structural options (indentation, layout intentions, parenthesis treatment) shape the payload document directly.
+A width change instead pre-renders the payload at its own width and embeds the result below the annotation,
+because the document renderer applies one width to the whole document.
+An embedded multiline payload keeps its relative indentation and its empty lines free of trailing whitespace.
+A verbatim payload is emitted as source text rather than through the document algebra,
+so it is the explicit way to opt a region out of canonical formatting.
+
+#### Components and policy
+
+`PrettyFormatter` coordinates three reusable components over one arena.
+`GrammarContext` classifies rendered terms and patterns against parser requirements.
+`Punning` recognizes concise field payloads.
+The boundary compositor combines anchored documents with retained layout.
+
+Semantic preservation, comment retention, punning, and convergence are laws rather than options.
+Printer policy controls the positive `IndentWidth`, target line width, how much recorded layout is retained,
+treatment of transparent parentheses, and the explicit `verbatim` escape hatch.
+The layout policy has three tiers: `Preserve` keeps every observed break and blank line,
+`BlankLinesOnly` keeps blank lines while the width decides single breaks,
+and `Ignore` leaves every optional break to the width decision.
+Policy comes from `@[format(...)]` directives in the source rather than frontend settings,
+so `zydeco fmt` and Cajun share one behavior and must not introduce independent formatting rules.
+`zydeco fmt --check` remains the only frontend option: it reports files that would change without writing them.
+
+#### Verification and extension
+
+The regression matrix covers each layout family in compact, source-broken, and width-broken forms.
+Corpus checks reparse formatted source, compare desugared structure, preserve comments, and require idempotence.
+The current source corpus and runner boundaries belong to [C16](#source-fixtures-and-runtime-oracles);
+[CONTRIBUTING](../../CONTRIBUTING.md) owns formatting commands.
+
+When syntax is added, first identify each child's parser requirement,
+then choose its canonical spelling and an existing layout family for each boundary.
+Add a new primitive only when those choices require a new invariant.
+Comments use entity anchors, typed arm and delimiter boundaries, and exclusion ranges.
+
+#### Elaborated type rendering
 
 The [scoped formatter](../../lang/surface/src/scoped/fmt.rs) is for debug output.
 The [statics formatter](../../lang/statics/src/fmt.rs) renders elaborated types for hovers,
 diagnostics, and IR inspection.
 It uses precedence-aware parentheses, declaration hints for abstract witnesses, and source-shaped manifest entries.
 Synthesized projection types cannot generally be recovered by slicing source text.
-Typed rendering has no retained trivia and follows the layout rules with ignored source intentions.
+It has no retained trivia; width chooses breaks at its declared document gaps.
 
-The typed renderer remains separate because diagnostics need elaborated distinctions
-and some typed entities have no faithful source spelling.
-Primitive names and witness hints can be readable without forming a reparseable annotation.
-A typed-to-textual reifier or shared precedence vocabulary would introduce another translation contract;
-[rendering design choices](../proposals/formatting.md#elaborated-type-rendering) record
-when that cost becomes justified.
+The textual and statics renderers keep separate grammar contexts and construct their own documents.
+Typed quantifier heads can remain unbreakable and exceed the width budget;
+adjacent quantifiers are not generally folded.
+Readable primitive names and witness hints need not form reparseable annotations.
 Interactive type links require semantic anchors from the renderer, never reparsing its text.
+Remaining questions concern [round-trip source generation](../ideas/typed-source-generation.md)
+and [telescope layouts](../ideas/type-rendering-layout.md).
 
 ### Completion and documentation
 
@@ -2058,28 +2571,168 @@ Directories sort before conventional source files.
 The edit replaces the current path component with source-language escapes,
 preserving quotes, the written directory prefix, and following components.
 Numbered imports, unrelated strings, comments, and unfinished escape sequences receive no path suggestions.
-[Completion design](../proposals/completion.md) owns recovery guarantees and further candidate families.
+[Recovering parsing](#recovering-parsing) owns syntax recovery and cursor identity;
+the [completion proposal](../proposals/completion.md) retains further candidate families and stale-state policy.
+
+#### Documentation workflow
+
+[Source documentation](language.md#source-documentation) specifies `@[doc]` attachments and semantic links.
+Cajun uses the first top-level prose paragraph as a hover summary and shows full prose in name completion.
+Semantic links and invalid-link diagnostics use standard LSP; the persistent panel is a VS Code client feature.
+
+##### Reading documentation in the editor
+
+Place the cursor on a name or expression and run **Zydeco: Show Documentation**
+from the VS Code command palette or editor context menu.
+The panel displays complete Markdown and offers these actions:
+
+| Action | Behavior |
+| --- | --- |
+| Follow and Pin | Follow the cursor, or retain the selected source occurrence. Edits before a pin move its position; overlapping edits invalidate it and require a new selection. |
+| Type views | Switch between the type at the cursor and the documented declaration when both are available. |
+| Source and Back | Open the explanation's source and navigate through related documentation. Entries in edited files are discarded rather than reusing old positions. |
+| Check and Open scratch | Verify an opted-in example or open a complete editable copy in a temporary file. Ordinary hover, completion, and diagnostics work on the copy; Save As keeps it. |
+
+The panel requires Cajun's version 1 documentation capability.
+It refreshes after source changes and discards results from older revisions, including example checks.
+During incomplete edits, available semantic facts still provide documentation;
+where resolution fails, surviving comments can be read without an inferred type.
+The panel links to the selected documentation origin; separate contract/implementation tabs, clickable subterms
+of panel types, signature help, and expected-type search remain [proposed features](../proposals/documentation.md).
+
+##### Building a project reference
+
+Build the CLI with `cargo build --bin zydeco` or install it with `cargo install --path cli`.
+The [counter example](../examples/documentation/counter.zy) has a companion interface and a guide.
+From the repository root:
+
+```sh
+zydeco doc show docs/examples/documentation/counter.zy value
+zydeco doc search docs/examples/documentation/counter.zy counter
+zydeco doc build docs/examples/documentation/counter.zy \
+  --guide docs/examples/documentation/guide.md --output /tmp/counter-docs.html
+zydeco doc check docs/examples/documentation/counter.zy \
+  --guide docs/examples/documentation/guide.md
+```
+
+Use `target/debug/zydeco` if you built without installing.
+`doc show` defaults to the entry subject, `.`.
+Field paths use `/`; `()` selects a function or computation's result interface,
+so a selector such as `'()/value'` describes a field of a generic result.
+These are documentation paths, not executable Zydeco expressions.
+Search covers public names and prose; HTML search also includes the selected guides.
+The publication and verification contracts below define what each command includes and checks.
+
+#### Documentation subjects and provenance
 
 [Documentation analysis](../../lang/session/src/source/documentation.rs) connects authored attachment,
 typed subject, origin, contract, and use context.
-Exposure paths preserve public interface selection and abstraction; renaming a field
-or re-exporting a value does not justify inventing a new documentation origin.
-Generated references, search, and editor panels share the same semantic index.
-The public graph follows exposed classifiers and generic result interfaces without executing arbitrary runtime terms;
-recursive paths link back to established subjects.
-Selectors use slash-separated field names, `()` for results, and `.` for the root.
+An authored origin identifies the prose, source location, and lexical scope of its links.
+A use context identifies the selected occurrence, exposed interface, current classifier, and established instantiation.
+One explanation can appear with several instantiated signatures; same-spelled fields
+in unrelated interfaces have no such relationship.
+Two existential openings can share documentation while retaining distinct witnesses.
+Documentation identity participates in neither type equality nor runtime representation.
+
+Resolved variables, simple aliases, imports, and transparent wrappers follow recorded origin edges.
+Field projections and projection patterns use the owning interface and resolved member provenance,
+which survives substitution and package opening.
+A field label or similar printed type is insufficient evidence.
+Arbitrary computations constructing a package do not establish origin relationships for every value they use.
+When those relationships are unavailable, views show the known type and directly attached prose.
+
+Direct prose appears as local context before inherited content, without rewriting the provider's explanation.
+An explicit annotation selects documented interface prose in preference to its implementation;
+at a binding with an established implementation edge, a docless annotation can fall back along that edge.
+A projected field with an explicit contract instead follows that contract's member provenance:
+the implementation relationship needed to recover a docless field's body is not generally available.
+Imported type terms and `.zyi` companions establish the same kind of public contract;
+paired filenames alone cannot associate every nested field with an implementation definition.
+Contract/implementation navigation
+and broader field fallback remain [proposed extensions](../proposals/documentation.md).
+
+[Semantic links](language.md#semantic-documentation-links) retain typed lexical
+or member targets and exact authored ranges for diagnostics and navigation.
+An unresolved lexical name does not become an ownerless field search.
+Frontends render compiler-resolved targets without reconstructing identities from display text.
+This shared semantic index supports generated references, search, hover, and the editor panel;
+an editor-owned index or a Markdown-only extractor could not establish the same typed relationships.
+
+Attachments can remain useful after an unrelated failure when the actual annotation and payload survive recovery.
+Recovery cannot attach detached prose to a guessed subject, a same-spelled field, or a coincident old source range.
+Transient subject IDs and editor actions are checked against their source revision.
+[Semantic regressions](../../lang/session/src/source/documentation/semantic/tests.rs) pair preserved origins
+with shadowing, unrelated fields, contract boundaries, recovery, and stale IDs.
+
+#### Documentation publication and verification
+
+The public graph follows the selected entry's exposed classifier, named fields,
+and generic result interfaces without executing arbitrary runtime terms.
+Recursive paths link back to established subjects.
+Exposed signatures preserve abstraction; local inspection of a private binding does not publish it.
 Published anchors start with `api`, use UTF-8 hexadecimal `-f-...` field segments
 and `-result` result segments, and reject duplicate public paths.
 They contain no arena IDs or source offsets.
-Builds record the compiler version and SHA3-256 hashes of exact source and guide inputs.
-[The authoring guide](../documentation.md) owns user syntax;
-the [documentation design](../proposals/documentation.md) retains publication and recovery decisions.
+Formatting-only changes therefore preserve named routes.
+Stable anonymous anchors, internal publication, and release-version URLs remain future work.
+
+Only explicitly supplied `--guide` pages join the reference's search and link index.
+Repeat the flag to include more pages; guide filenames must have distinct stems.
+Guides use `[value](zydeco:member:./value)` to refer to the selected public root.
+They have no implicit lexical source scope.
+
+The output is one self-contained HTML file with local search, source links, stable public anchors,
+the compiler version, and SHA3-256 hashes of exact source and guide inputs.
+Dependency documentation describes the sources actually analyzed and remains usable offline.
+Raw author HTML is rendered as text and images are represented by their alt text.
+An older published build remains a distinct snapshot.
+`doc build` validates semantic links but does not check or execute examples, and the page claims no verification result.
+Use `doc check` separately in CI.
+
+##### Verifying documentation examples
+
+A plain `zydeco` fence displays code.
+Add `check` to require a complete source term that checks successfully.
+For a guide in this reference directory:
+
+````markdown
+```zydeco check
+let counter = @(import("../examples/documentation/counter.zy")) in counter/value
+```
+````
+
+An expected-rejection example declares both a compiler diagnostic code and a position:
+
+````markdown
+```zydeco reject=tyck.missing-named-field at=1:15
+(#value = 42)/missing
+```
+````
+
+Positions are one-based line and UTF-16 column within the displayed example.
+Every reported type diagnostic must match the expected code and contain that position.
+A successful program, a different error, a missing import, a compiler crash,
+or a timeout cannot satisfy an expected rejection.
 
 [Example checking](../../lang/session/src/source/documentation/examples.rs) constructs isolated source requests
 with paths relative to the owning document.
-Worker execution is bounded by time and request/result size.
-Checked/rejected fences verify static outcomes and specified diagnostic positions; they do not execute examples.
-Run fences are rejected. Revision-sensitive editor actions must reject stale IDs.
+Verified fences must be top-level, unindented Markdown blocks containing complete source with explicit imports.
+There is no implicit surrounding lexical context or hidden setup.
+Imported inputs participate in verification identity.
+**Open scratch** rewrites compiler-recognized file imports to absolute paths so the temporary copy keeps its context;
+numbered REPL imports cannot be copied this way.
+Scratch edits have their own source identity and do not verify the original published text.
+
+`doc check` validates links and opted-in examples from the analyzed dependency graph and selected guides.
+It fails for invalid options or failed checks and reports diagnostic locations in the authored comments or guide.
+The panel checks a selected example with the editor's current overlays.
+Both use the same isolated compiler worker with a 30-second timeout, 64 KiB example limit,
+16 MiB request limit, and 1 MiB response limit.
+These are time and data limits, not an operating-system memory sandbox.
+The checker does not execute examples and rejects `run` fences.
+[Example regressions](../../lang/session/src/source/documentation/examples/tests.rs) check isolated outcomes
+and locations.
+Runtime examples and composed setup remain in the [documentation proposal](../proposals/documentation.md).
 
 ### Interactive engine
 
@@ -2101,7 +2754,8 @@ Root command metadata is parsed into typed commands before ordinary submission h
 Help and quit do not consume a source number; unsupported command arguments are rejected,
 and unrecognized metadata remains ordinary language syntax.
 [CONTRIBUTING](../../CONTRIBUTING.md#use-the-interactive-repl) owns commands, keys, and retry interaction.
-[Deferred interaction work](../todos/deferred-designs.md#repl-history-and-replay) covers persistence and pruning.
+Deferred interaction work covers [history persistence and replay](../ideas/repl-history-replay.md)
+and [history pruning](../ideas/repl-history-pruning.md).
 
 ## C16. Validation, debugging, and extending the implementation
 

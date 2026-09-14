@@ -133,7 +133,7 @@ The existing [existential tests](../../lang/tests/tests/existential.rs) include 
 so a change must preserve intended uses as well as diagnose misleading ones.
 Decide whether to warn about a concrete exported payload or revise the annotation behavior.
 Any semantic decision belongs in the existing package-introduction section, with a linked summary
-in the [package proposal](../proposals/package-modularization.md).
+in the [package proposal](../references/language.md#module-interfaces-and-shared-openings).
 
 ## Results against the original report
 

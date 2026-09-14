@@ -1,9 +1,9 @@
 //! Formatters for scoped and statics entities in the type checker.
 //!
-//! Gap discipline follows the layout meta-rules of `docs/proposals/formatting.md`:
+//! Gap discipline follows the [layout laws](../../../docs/references/compiler.md#layout-laws):
 //! a gap the canonical families declare as a boundary renders as `RcDoc::line()`
 //! inside a group, so the width can break it, while `RcDoc::space()` is reserved
-//! for gaps the meta-rules pin as canonical spacing, which never break.
+//! for gaps the layout laws pin as canonical spacing, which never break.
 
 use super::syntax::*;
 use crate::arena::StaticsArena;

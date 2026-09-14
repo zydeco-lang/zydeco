@@ -9,7 +9,8 @@
 //!
 //! Zydeco has no top level: a file is one term whose `begin` blocks
 //! dependency-order their mobile bindings into ordinary telescopes
-//! (`docs/proposals/term.md`). The elaborated term therefore obeys strict
+//! ([binding rules](../../../../docs/references/language.md#3-bindings-and-scope)).
+//! The elaborated term therefore obeys strict
 //! lexical scope, with two named exceptions this pass treats as ambient:
 //! recursive type components, whose identities are allocated together, and
 //! package openings, whose witnesses bind through the elaborated program.
@@ -999,7 +1000,7 @@ impl<'a> RederiveChecker<'a> {
             | Value::Var(def) => {
                 let _ = def;
                 // Definition references legitimately cross import edges and
-                // alias boundaries (`docs/proposals/term.md`: repeated
+                // alias boundaries (language reference §12: repeated
                 // imports share one checked root), whose binding context the
                 // finished arena does not record per reference. Existence is
                 // the well-formedness lint's check; definition scoping stays deferred.

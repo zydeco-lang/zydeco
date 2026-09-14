@@ -1,230 +1,22 @@
-# Native activation frames and return continuations
+# Native environment alternatives and evaluation
 
-## Status and scope
+Retained activation frames are implemented and remain the AMD64 default.
+[C11](../references/compiler.md#activation-lifetime) owns their preparation and lifetime justification;
+[C12](../references/compiler.md#environment-actions-and-roots) owns default environment transitions and roots.
+The compact-storage and moving-root experiments remain here with their remaining integration or evaluation decisions.
+A tested model component does not establish a completed alternative backend or a new default.
 
-Retained activation frames are the current AMD64 environment representation.
-[C11](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) owns native preparation,
-slot assignment, and the lifetime justification;
-[C12](../references/compiler.md#environment-actions-and-roots) owns the shared model and root contract.
-Portable ZASM and WebAssembly retain capture-based lowering.
+The remaining work compares storage choices and integrates stronger lifetime or relocation mechanisms.
+[Escape analysis](escape-unboxing.md) owns individual value representation selection;
+[reachability regions](reachability-regions.typ) proposes support typing and explicit retirement.
+The [runtime study](../ideas/cbpv-runtime-evaluation.md) keeps dated evidence and measurement limits.
+No new default or source control restriction follows from these experiments.
 
-This record owns the reasons for retaining frames, the lifetime requirements any alternative must meet,
-and the experimental storage choices.
-[Escape and unboxing](escape-unboxing.md) owns individual value representations.
-The [reachability and regions formalization](reachability-regions.typ) proposes general support typing
-for values and captured storage.
-Relating that proposal to physical activation lifetimes remains a lowering obligation.
-The [runtime study](../ideas/cbpv-runtime-evaluation.md) keeps dated evidence and measurement limits;
-source computation protocols belong to [L6](../references/language.md#6-computations-and-control).
+## Experimental implementations and integration limits
 
-## Motivation and the previous implementation
-
-There are two different meanings of environment at runtime.
-The current environment stores bindings available to the executing code.
-A captured environment stores the values needed when suspended code starts or resumes.
-The previous AMD64 backend implemented the former with a reusable buffer and the latter with ordinary products.
-
-At native entry, `rbp` was initialized to the buffer supplied by the Rust stub.
-Generated Zydeco code left that base unchanged.
-Binding a value stored it at the next compiler-assigned slot; reading it loaded from the corresponding offset.
-An SPSLow jump staged its outgoing control stack and target, then started the destination with an empty local context.
-`AllocContext` emitted no pointer adjustment or allocation.
-
-Closure conversion makes this reuse safe. It gives each closure a capture tuple and code label,
-and each return continuation a code label followed by its capture tuple and residual control stack.
-If a caller needs `x` and `y` after calling `f`, the continuation captures their value words
-before the callee overwrites the current environment.
-Heap pointers in those words preserve the referenced objects; they do not point back
-into the reusable environment buffer.
-
-With the control-stack top on the left, the usual layout is:
-
-```text
-closure f:            [E_f, L_f]
-return continuation: L_k :: E_k :: S       where E_k = (x, y)
-
-entry to f:          E_f :: argument :: L_k :: E_k :: S
-entry to k:          result :: E_k :: S
-```
-
-The generated continuation entry bound the result and unpacked `E_k` into its newly assigned environment slots.
-Local unboxing eliminated some product allocations,
-but a nonempty capture product crossing an ordinary continuation entry generally remained boxed.
-Portable lowering still uses this representation.
-
-This representation has a useful property: suspended code retains an explicit set of captures,
-and the current environment can always be reused.
-Its cost is transferring surviving locals out to a capture tuple and back into local storage.
-Retained frames preserve their storage location across the call.
-
-## Preferred representation
-
-Use an environment stack of activation frames, initially separate from the existing machine control stack.
-An activation is a dynamic invocation with local storage; it may execute several blocks
-and resume at several continuation labels.
-A block label alone does not identify a fresh activation.
-
-An active frame has a base, a known layout, and a description of its initialized live slots.
-`rbp` addresses the active frame.
-An allocation frontier identifies the end of reserved environment storage independently of that base.
-A suspended return continuation retains a reference to its owner's frame and enough entry metadata to resume it.
-The implementation keeps the frontier and ownership metadata in the shared model, separately from frame words.
-
-```text
-environment stack, older to newer:
-
-    older retained frames
-    caller frame F: [x, y, ...]     <- retained by continuation k
-    callee frame G: [...]           <- current rbp
-
-control stack at entry to f, top first:
-
-    E_f :: argument :: L_k :: token(F) :: S
-```
-
-The continuation label identifies a resumption layout: where its captured bindings already reside,
-where to bind the result, and which environment extent to retain on resumption.
-The implementation attaches static descriptors to generated entries and uses checked tokens on the control stack.
-No heap tuple of `x` and `y` is needed for this continuation.
-
-Keeping the environment stack separate preserves the existing argument and continuation push/pop convention
-while frame management is evaluated.
-A single machine stack could hold both locals and control frames later, but would need
-to coordinate local reservations with consumption of arbitrary SPS stack protocols.
-Choosing separate storage here does not prescribe an eventual unified stack ABI.
-
-## Frame lifetime and entry invariants
-
-### Entry contexts
-
-A continuation entry must be compiled under the layout of the frame it resumes.
-Every incoming transfer must establish that layout and initialize all slots the entry can read.
-The available bindings are an explicit entry contract, even when the corresponding frame reference is passed
-in a hidden machine location.
-This gives a concrete runtime meaning to a block having a known context.
-
-Three entry roles need distinct treatment:
-
-- A local branch continues in the current activation and preserves its applicable slot bindings.
-- A closure entry establishes an activation from its explicit closure environment and incoming arguments.
-- A return-continuation entry restores a retained activation and binds the returned value in its resumption layout.
-
-Physical slot availability and knowledge of a slot's contents are different properties.
-This proposal preserves the former and provides a place to attach the latter;
-it does not introduce a general static fact system or assume that a known frame makes every captured value constant.
-
-### Suspension and preservation
-
-Before entering a callee, construct the return continuation and publish the caller frame state it requires.
-In the retained engine, the callee's frame must occupy disjoint storage.
-Slots needed by any pending continuation cannot be overwritten or reused while that continuation remains live.
-The [compact alternative](#experimental-compact-environments) preserves those bindings
-in separate snapshots before reusing their original active storage.
-Outgoing arguments and closure captures must also be read before their source storage becomes reusable.
-
-Several continuations can refer to the same activation.
-Their entry descriptors may require different slots or extents.
-Preservation and root tracking must account for all pending uses,
-rather than assuming one saved frame reference per activation.
-Resuming an inner continuation cannot invalidate an outer continuation's slots.
-
-Logical frame references must remain valid while frames are retained.
-The retained engine saves word offsets in activation metadata and indices in suspension records.
-Entry may relocate the contiguous allocation; it returns the new active base,
-which generated code loads into `rbp` before accessing any environment slot.
-Earlier raw bases and root-slot addresses expire at entry.
-No managed value, escaping closure, foreign borrow, or saved continuation can contain an environment-slot pointer.
-Suspend, Resume, root enumeration, and managed collection do not relocate this storage.
-A nonmoving store satisfies the same protocol with a stronger physical-address guarantee.
-
-### Return and reclamation
-
-A return stages its result and continuation target, identifies the retained frame
-and its resumption extent, reclaims the younger environment storage that is no longer retained,
-restores the active base and frontier, and transfers control.
-The result remains rooted if any step can allocate or trigger collection.
-The resumed code reads existing captured slots and establishes the result binding without unpacking a capture tuple.
-
-Reclamation follows proven nesting and lifetime relationships.
-A frame may be reclaimed only after its active use has ended and no pending continuation
-or permitted borrow can reach it.
-Resumption metadata must describe the actual retained extent; restoring only `rbp` is insufficient
-when allocation also has a separate frontier.
-
-### Tail transfers
-
-Machine jumps do not by themselves determine frame lifetime: both source tail transfers
-and calls with explicit return continuations currently become jumps.
-Allocating a frame at every jump would destroy bounded-space tail recursion.
-
-A tail transfer that leaves no continuation retaining the current activation reuses
-or reclaims that activation's storage before entering the destination.
-If a continuation retains it, the activation becomes suspended, and the callee uses other storage.
-A tail-call chain beneath a fixed set of suspended continuations must have environment usage bounded by
-that retained storage plus its largest active frame, independent of chain length.
-
-### Escaping values and control
-
-An ordinary closure that outlives an activation must own captures with a sufficient lifetime.
-It cannot retain a raw reference to that activation's reclaimed slots.
-Existing heap capture environments remain a valid representation for such closures.
-Sharing a frame with a closure requires a separate lifetime justification; it is not a consequence
-of knowing the closure's code label.
-
-The native backend already realizes control through destructive stack operations,
-but the source classifier `Ret A` is not itself a linearity or non-escape proof.
-The compiler must justify the nesting and lifetime of the concrete continuations that use retained frames.
-Lexical single occurrence of an IR node also does not prove a dynamic one-shot property.
-Library encodings of control must be checked through their actual lowered operations,
-rather than classified by their names.
-
-An implementation that supports detached, duplicated,
-or later-reentered machine continuations would need a corresponding ownership and storage model,
-such as copied stack segments or heap frames.
-Such behavior cannot be obtained by retaining unchecked pointers into a reclaimed environment stack.
-This proposal does not add a source restriction to make the representation fit.
-
-## Collection and space behavior
-
-The native collector receives the active control-stack range and a sparse list of mutable root addresses.
-That list includes live slots in active and suspended frames, together with registered host roots.
-The [existing word and collector contracts](../../DESIGN.md#native-garbage-collection) still determine how
-those values are traced and updated; frame references are control metadata, not managed heap objects.
-
-At every collecting operation, the active frame, all suspended live slots,
-staged arguments, and temporary results must be discoverable.
-Publishing a new frame and changing the active base must either be a sequence
-with no intervening safepoint or expose a complete intermediate root state.
-Reserved but uninitialized frame capacity must not be scanned as runtime values.
-
-Retaining a frame can retain more than compact capture tuples do.
-A dead slot pointing to a large object must not keep that object reachable just
-because another slot in the same frame is needed.
-Suspension descriptors can identify live slot sets, or generated code can clear dead slots before exposing a scan range.
-If multiple continuations retain a frame, the required roots are the union of their live slots.
-Word tags answer whether a live word is pointer-shaped; they do not answer whether a slot is live.
-
-Evaluation must measure both frame capacity and retained heap data.
-Avoiding capture allocation is not a sufficient space result if large frame reservations
-or dead references remain live through deep calls.
-Slot reuse, smaller retained extents, or compact continuation captures may be preferable for some activations.
-
-## Boundary with compiler and runtime
-
-The common [preparation contract](../references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
-provides initialized bindings, ownership, packed slots, and suspension maps.
-An alternative storage engine must preserve every pending capture,
-not merely the currently executing block's live locals.
-The [environment capability](../references/compiler.md#environment-actions-and-roots) permits suspended values
-to move between transitions but constrains the active base and published root addresses.
-This is the boundary against which the following experiments are compared.
-
-For example, an inner resumption cannot reuse `x`'s slot while an older continuation still captures `x`,
-even if the inner block never reads it.
-Ordinary backward liveness is therefore insufficient for slot reuse.
-Likewise, implementing a copied source-level control closure does not grant permission
-to copy or detach a machine token.
-A new machine-stack operation would require revisiting the lifetime proof before selecting storage.
+The following code supports ongoing comparisons. Its existence is evidence about the stated experimental component,
+not adoption of the full storage design into the canonical runtime contract.
+Retained frames remain the reference implementation while these alternatives are evaluated.
 
 ### Experimental compact environments
 
@@ -314,9 +106,9 @@ For example, `L_k :: pointer_to_tuple(x, y) :: S` becomes `L_k :: x :: y :: S`.
 The producer and continuation entry must agree on field count and order; this is a calling-convention change,
 not just omitting `PackProduct` locally.
 
-The preferred candidate is retained frames for continuations with the required stack lifetime.
-The previous implementation and flattened captures are useful measurement baselines,
-not permanent compatibility paths required by this proposal.
+Retained frames are the current baseline for continuations with the required stack lifetime.
+The previous implementation and proposed flattened captures can isolate capture costs in comparisons;
+the experiment does not require keeping them as compatibility paths.
 Heap frames remain a distinct candidate when lifetime flexibility or closure sharing outweighs stack reclamation.
 The experiments should determine which combinations are worth keeping.
 
@@ -341,17 +133,8 @@ Existing native programs, including control-library examples and returning C imp
 Focused tests should compare interpreter results with each candidate native scheme and check heap pointer survival
 under forced collection.
 
-The focused regressions live in the `frames` modules of `zydeco-machine` and `zydeco-assembly`,
-SPSLow continuation-conversion tests, and the `native_model` and `native_gc` integration targets.
-They cover mismatched metadata, missing initialized bindings, invalid layouts and slot indices,
-stale or out-of-order resumption, overflow without corrupting a caller,
-and a 100,000-transfer tail chain with bounded environment usage.
-The collector regression keeps a moved object solely through a suspended slot
-while collecting a dead object in another slot of the same frame.
-A source regression compares interpreter and native results for an escaping closure held
-across a 100,000-call tail chain.
-Emission checks confirm that returning calls with captures no longer allocate continuation products.
-Existing core, builtin, control-library, and C-boundary cases exercise the integrated ABI.
+Use the existing [native model and GC regressions](../references/compiler.md#activation-lifetime) as the baseline
+when introducing another engine; extend them with its distinct failure and relocation cases.
 
 Measure execution time, capture allocations, value words copied, collection work,
 environment and control-stack high-water usage, peak live heap, and generated code size.

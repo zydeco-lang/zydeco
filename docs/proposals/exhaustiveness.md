@@ -66,4 +66,4 @@ Supporting `/field = p` with a refutable `p` would need nested failure to reach 
 while retaining one package opening and the selected field's type evidence.
 Review that together with the existing refutable conjunction questions;
 accepted nesting must have a corresponding missing-case rejection.
-[Refutable value-view coverage](../todos/deferred-designs.md#value-views) remains a separate todo.
+[Refutable value-view coverage](../ideas/view-coverage.md) remains a separate design question.

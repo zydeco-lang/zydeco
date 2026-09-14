@@ -58,7 +58,7 @@ Registry dependencies keep their artifacts in `target/debug/deps` and are unaffe
 Check a reusable source independently, or run an executable source with optional program arguments:
 
 ```sh
-zydeco check lib/std/prelude.zy
+zydeco check lib/std/builtin.zy
 zydeco run lib/tests/oopsla/polynomial.zydeco
 zydeco run path/to/main.zy -- first-argument second-argument
 zydeco run path/to/main.zy -t wasm-sps -- first-argument second-argument
@@ -90,8 +90,8 @@ A companion `foo.zyi` is an optional, independently checked type contract for `f
 Use it when maintaining that contract separately is useful; otherwise, annotate introductions
 in place or let `pack` synthesize an existential package type.
 `pack` currently accepts type witnesses but not kind witnesses such as `VType` and `CType`.
-The [package design](lib/std/README.md#package-composition) explains the prelude's annotated kind prefix
-and its use of `@[typeof]` to reuse the remaining package type.
+The [package examples](lib/std/README.md#package-composition) show an annotated kind prefix and use `@[typeof]`
+to reuse the remaining package type.
 
 ## Use Source Packages
 
@@ -412,7 +412,7 @@ end
 `parentheses(minimal)` and `parentheses(preserve)` control singleton groups;
 `verbatim` preserves the payload's source text.
 Nested annotations override enclosing options.
-The [formatting design](docs/proposals/formatting.md) describes the complete policy.
+The [formatting design](docs/references/compiler.md#formatting-and-typed-rendering) describes the complete policy.
 
 `cargo fmt` does not format Zydeco embedded in Rust strings.
 After a repository-wide Zydeco formatting pass, run affected Rust tests and update embedded fixtures or snapshots.
@@ -525,6 +525,63 @@ make -C docs/spell build
 ```
 
 The script builds the release CLI and writes chapter Markdown beside the sources under `docs/spell/`.
+Use the [documentation reference](docs/references/compiler.md#building-a-project-reference) for `zydeco doc` commands,
+and [source documentation](docs/references/language.md#source-documentation) for attachments and semantic links.
+
+## Maintain Documentation
+
+Start with the [documentation index](docs/README.md) to choose a document's purpose.
+The language reference answers what a source program means and requires;
+the compiler reference explains the representations and algorithms implementing it.
+The [reference ownership map](docs/references/README.md#rule-ownership) locates those boundaries.
+Tutorials introduce concepts progressively, library guides show their uses, and component guides locate local modules.
+Keep each detailed contract in its reference chapter and link to it from those guides.
+
+Promote only user-approved design that is fully implemented within the stated scope.
+Verify both accepted behavior and claimed rejection cases against the implementation
+and relevant regressions, including every backend named by the account.
+A tested model helper does not establish an integrated feature.
+Document actual limitations. Keep concrete unimplemented designs in [proposals](docs/proposals/README.md),
+and exploratory questions and studies in [ideas](docs/ideas/README.md).
+Observed behavior is evidence to reconcile with the approved design, not automatic authorization
+to change either the language or its reference.
+
+When consolidating a record, transfer its implemented rules and rationale to their existing owner,
+and keep unfinished designs in the appropriate proposal or exploratory questions
+in [design ideas](docs/ideas/README.md).
+Keep each design idea in its own file; the ideas index provides navigation.
+Update incoming links in the same change, then remove the superseded sections or emptied file.
+Keep only outstanding discrepancies in [todos](docs/todos/README.md),
+with the governing rule, evidence, and bounded repair.
+Completed plans and repair histories belong in version history; extract durable evidence before deleting a scratch log.
+
+A reference section is ready when its concepts precede their use, its supported constructs have syntax,
+classification, scope, and behavior, and its rejection cases identify the relevant failure boundary.
+An implementation section also names its entry points, representations, invariants, and downstream consumers.
+Keep source stack protocols separate from physical frame layout,
+and required static elimination separate from optional residual optimization.
+Library operation inventories should point to checked source interfaces.
+Maintain one mathematical companion instead of copying another set of formal rules into the books.
+Performance evidence needs a workload, revision, build profile, and target; old measurements remain dated evidence.
+
+Use complete source terms with explicit imports for examples.
+The [example contract](docs/references/compiler.md#verifying-documentation-examples) defines opted-in static checks
+and rejections; runtime behavior uses the existing integration harness.
+Check the reference and library examples from the repository root:
+
+```sh
+cargo run --quiet --bin zydeco -- doc check docs/examples/documentation/counter.zy \
+  --guide docs/references/language.md --guide docs/references/compiler.md --guide lib/std/README.md
+```
+
+The counter supplies the documentation command's required source root.
+Guide examples are independent terms with paths relative to their guide.
+The checker verifies acceptance and specified rejections without executing them;
+`doc build` alone does not verify examples.
+Run focused implementation tests when changing their rules or examples;
+prose-only organization does not require the full Rust suite.
+Validate local links and anchors, then read each edited document in sequence.
+
 After editing Markdown prose, reflow the named files:
 
 ```sh

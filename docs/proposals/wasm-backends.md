@@ -3,38 +3,11 @@
 The prototypes remain separately named `wasm-am` and `wasm-sps` while the default target is undecided.
 [C13](../references/compiler.md#c13-webassembly-backends-and-embedding) owns their current emitters,
 module ABI, representations, and embedding limits.
-This design owns the choice of lowering boundary, common constraints, alternatives, and selection evidence.
+This proposal retains default-target criteria, optional target features,
+reclamation choices, and historical selection evidence.
 The numerical prototype record below dates to 2026-08-30;
 [the 2026-09-08 runtime study](../ideas/cbpv-runtime-evaluation.md#webassembly-memory) supplies later
 bounded memory evidence.
-
-## Why the pipeline forks at SPSLow
-
-High SPS has not selected first-order closure and continuation layouts.
-Starting there would duplicate closure conversion inside a target.
-ZASM has already decomposed lexical computations into machine program points; recovering
-that structure would answer a different question from preserving it through lowering.
-SPSLow retains lexical blocks after the shared closure-conversion decision.
-
-The structured path can therefore use Wasm locals and ordinary instructions inside each block,
-while the abstract-machine path reuses ZASM's stack, environment, and local-unboxing work.
-The latter's close correspondence to the ZASM interpreter is useful for diagnosis,
-but one emitted function per machine program point increases module and validation work.
-The former retains structure but must separately address product boxing, local plans, and persistent-stack storage.
-[Current pipeline ownership](../references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
-keeps direct SPS emission independent of lazy ZASM construction and native preparation.
-
-## Constraints on either strategy
-
-Backend names and artifact suffixes identify the chosen lowering boundary.
-Both paths share typed module exports and host-import semantics;
-clients should not reconstruct builtin meaning per backend.
-Dynamic source control uses module-owned dispatch rather than unbounded host-stack recursion.
-Runtime data and private dispatch state remain distinct even when both contain table indices.
-Deterministic emission and typed rejection of unsupported forms remain required when representations change.
-
-These constraints do not select fixed stack capacity, uniform boxing, bump allocation, or whole-program local plans.
-The CLI's bundled Node host provides local execution; standalone WASI support remains a separate question.
 
 ## Prototype Comparison
 
@@ -85,26 +58,6 @@ The historical stress result demonstrates growth rather than an acceptable long-
 
 ## Alternatives Considered
 
-### Start from high SPS
-
-High SPS preserves even more structure, but it has not yet selected explicit closure and continuation layouts.
-A backend starting there would either duplicate closure conversion or make WebAssembly-specific choices
-that other targets could not reuse.
-SPSLow retains the useful structure after that shared semantic decision.
-
-### Recover structure from ZASM
-
-Grouping ZASM points back into WebAssembly functions would require discovering lexical regions
-and stack effects after they have been erased.
-It could reduce the abstract-machine module mechanically,
-but would not test whether SPSLow is a better compiler boundary.
-
-### Use direct recursive indirect calls
-
-Calling the next block directly is simpler than maintaining a program counter,
-but unbounded Zydeco recursion would then consume the engine's native call stack.
-A trampoline keeps source control behavior independent of engine stack limits.
-
 ### Require tail calls or typed function references
 
 WebAssembly proposals could express dynamic tail transfer more directly.
@@ -147,8 +100,6 @@ Make that support decision explicit when introducing `wasm`.
   Compare per-block local plans with the current whole-program plan.
 - Which word layouts and spare-box conventions should external hosts rely on, and how should that ABI be versioned?
 - Should control transfers use a typed record instead of the current four results and two-argument limit?
-- Should process arguments use an indexed returning API or an explicit bridge
-  for host-created module-compatible closures?
 - Should a WASI adapter own process startup and exit, and which layouts belong in shared Wasm support?
 - What maintained role should `wasm-am` have if `wasm-sps` becomes the default?
 

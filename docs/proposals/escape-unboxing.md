@@ -22,26 +22,24 @@ typed dependencies of value representations, environments, and residual stacks, 
 This proposal continues to own representation selection; those lifetime rules are not implemented by the local analysis.
 
 The constraint analysis below is a design for extending local selection.
-The following experiment evaluates the implemented local boundary before extending it.
+The historical fixture comparison below motivates further measurement at that local boundary.
 
-## Configurable local representation experiment
+## Existing evidence and representation experiments
 
-Different layout preferences should reuse the same validity evidence.
-[C10's policy boundary](../references/compiler.md#policy-selection) now lets a Rust policy select
-among locally justified opportunities, using either a policy type or a per-compilation enum.
-This makes small experiments independently reviewable while preserving one lowerer and one tracing convention.
-It configures compiler choices for runtime values; it does not parameterize the type checker's Rust arenas.
-
-The accepted experimental extension is local closure splitting: retain the environment
-and code as separate field words when the closure is only opened locally.
-This reuses variable field slots and closure opening; it needs no new calling convention.
-The environment transported to the code entry remains an ordinary value.
-The existing default is retained because the benefit depends on what survives earlier SPS normalization.
+The [local policy contract](../references/compiler.md#policy-selection) separates validity evidence
+from a Rust policy's preferences, including optional local closure splitting.
+[Stored-call interfaces](../references/language.md#stored-call-interfaces) share source carriers
+over the existing word convention; [word entries](../references/compiler.md#word-entry-contracts)
+and [partial source protocols](../references/compiler.md#partial-source-protocols) validate complementary call evidence.
+Their implemented rules are owned by those references.
+The open question is which further representations justify their lifetime, entry, and tracing costs.
 
 The [comparison program](../../cli/examples/representations.rs) lowers each source once to SPSLow,
 then measures the resulting portable assembly for all policies.
 It also composes `Shared` with a const-generic field limit.
-On the checked-in fixtures, product/closure allocation **sites** are:
+The earlier proposal recorded these product/closure allocation **sites**.
+Its table does not identify a complete revision/profile baseline and has not been rerun for this consolidation;
+reproduce it before selecting a policy:
 
 | Source fixture | Boxed | Direct | Local | Shared | Shared, maximum 1 field | Shared, maximum 4 fields |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -51,7 +49,7 @@ On the checked-in fixtures, product/closure allocation **sites** are:
 | `builtin/argument-contract.zy` | 59 | 59 | 59 | 59 | 59 | 59 |
 | `std/storage-access.zy` | 85 | 85 | 85 | 85 | 85 | 85 |
 
-These are code counts from this implementation, not runtime allocation or speed measurements.
+These are historical code counts, not runtime allocation or speed measurements.
 The first fixture loses one two-word closure cell in its recursive walker;
 the maximum-one-field policy declines that expansion.
 It retains a runtime-derived wide integer and a second captured scalar across repeated traversal,
@@ -66,200 +64,7 @@ Frame-resident products, mixed raw/reference fields, and layout-directed machine
 they need lifetime or entry evidence that the current policy cannot supply.
 The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduction and validation commands.
 
-## Representation contracts at call boundaries
-
-The [explicit storage library](bytes.md#explicit-storage-contracts) raises a related question:
-can a caller use its chosen representation directly as a function argument or result?
-That would make representation choice part of an interface rather than merely an allocation optimization.
-The implemented source interface now shares storage evidence across calls using the existing word transport.
-Selecting a different physical calling convention remains a separate compiler extension.
-
-The implementation carries several complementary descriptions:
-
-| Description | Evidence available today | What it does not establish |
-| --- | --- | --- |
-| Source `Representation A` and `Storage A Stored` | An abstract carrier shared by codecs and call signatures, runtime size/alignment | A statically selected argument width or register class |
-| Source `Plan A` | Validated byte placement computed by value functions; inspectable widths and offsets | Type-level identity of a particular placement, reference maps, or register classes |
-| SPSLow `ProductLayout` | Logical product arity and explicit producer/consumer structure | Byte offsets, padding, or scalar register classes |
-| SPSLow word entries | Ordered environment/result words and checked code/package provenance | Complete source stack protocols or a different component transport |
-| SPSLow partial source protocols | Known components, scoped value/computation parameters, and instantiated recursive codata retained across normalization | Nominal storage identity, explicit type-application choices, general nonregular protocols, or physical stack extent |
-| Native frame and root plans | Live tagged-word slots, entry roles, and suspension/resumption ownership | A mixed layout containing raw scalars alongside managed references |
-
-For example, the ordinary logical type `UInt8 * UInt32` can have natural storage of eight bytes,
-or a 64-byte aligned representation with tail padding.
-Choosing the latter storage contract does not change the logical function type,
-nor does it make a stored byte handle occupy 64 bytes in a Zydeco call frame.
-The caller and callee currently agree on the existing word convention in either case.
-Local product unboxing can remove a cell while still passing tagged field words;
-it does not interpret the memory library's padding and alignment operations.
-
-### Stored call interfaces
-
-A consumer needs to name the chosen carrier without creating another abstract opening.
-The storage library therefore factors its existing package
-into `Representation A = exists (= Stored : VType) . Storage A Stored`.
-The [storage design](bytes.md#descriptions-computations-and-abstract-storage) owns that dictionary and its laws.
-A composition root opens a representation once and passes `Stored` and the dictionary to its workers.
-Those workers can live in separately checked sources and export `Thk` computations over that same carrier.
-
-The ordinary [call library](../../lib/std/memory/call.zy) defines the computation protocol:
-
-```zydeco
-Function A B R = A -> Thk R -> Thk (B -> R) -> R
-```
-
-It receives an argument, a failure continuation, and a continuation accepting its result.
-`R : CType` describes the required residual stack; using `OS` or `Ret Int64` does not require another adapter design.
-The protocol itself places no purity, termination, or single-invocation requirement on user-authored workers.
-The library's adapters perform the following sequences, forwarding the same failure continuation at every step:
-
-| Operation | Resulting interface | Sequence when each preceding stage succeeds |
-| --- | --- | --- |
-| `between A B Input Output input output`, then `encode R logical` | `Thk (Function Input Output R)` | Load input; invoke logical worker; store output; invoke result continuation |
-| The same boundary, then `decode R encoded` | `Thk (Function A B R)` | Store input; invoke stored worker; load output; invoke result continuation |
-| `compose A B C R first second` | `Thk (Function A C R)` | Invoke first; forward its result directly to second |
-| `convert A From To source target R` | `Thk (Function From To R)` | Load with source; store with target |
-
-Construction is by value functions; execution occurs only when the resulting thunk is forced.
-Runtime dictionaries and dynamically selected worker thunks may be captured by these adapters.
-No metadata arithmetic is needed to forward a stored value, and composition inserts no codec conversion itself.
-`convert` preserves the logical value through decoding and encoding; it does not reinterpret bytes or equate carriers.
-For a worker whose interface already uses the desired carriers, an ordinary call passes them directly.
-
-For example, after opening a representation of `Record = UInt8 * UInt32`:
-
-```zydeco
-let boundary = calls/between Record Record Stored Stored repr repr in
-let increment = boundary/encode OS {
-  fn (tag, payload) no yes =>
-    do next <- ! numeric/uint32/add payload 1;
-    ! yes (tag, next)
-} in
-! increment stored failure { fn result => ... }
-```
-
-Here the argument and result have the same abstract `Stored` type.
-The [checked example](../../lib/tests/std/represented-call/main.zy) imports this kind of worker,
-passes its result to recursive polymorphic code, and selects an alternative thunk at runtime.
-The alternative explicitly converts a 16-byte aligned record into a 64-byte aligned record and back.
-Both thunks expose the original carrier, so selection and continuation calls agree on their interface.
-The example also dynamically chooses a provider package of the ordinary form:
-
-```zydeco
-exists (Stored : VType) . Storage Record Stored * Thk (Function Stored Stored OS)
-```
-
-Opening that package gives its consumer a coherent codec and worker even when the provider's byte layout is unknown.
-Packaging preserves agreement by carrying both together; it does not recover an unknown witness from metadata.
-
-Identity is deliberately nominal at this boundary.
-Tests reject arguments, result continuations, and composed workers from independently opened representations,
-including different alignment, different field width, and identical placement opened twice.
-Matching callers share the opening; numerical equality of sizes, alignments, or shapes never introduces type equality.
-Caller-authored storage dictionaries still carry the law obligations documented in the storage design.
-The checker does not prove that two implementations at one carrier use identical codecs.
-
-The tests run direct calls and dynamic selection on the interpreter, AMD64, and both Wasm backends,
-including every configurable word policy on AMD64 and AM Wasm.
-They check canonical bytes after conversion and failure propagation through each adapter stage in `Ret Int64`.
-This establishes a usable source interface with conservative identity checking.
-It does not establish a new machine ABI: each stored value remains the existing immutable-buffer handle.
-An encoded logical worker still performs a load and a store, and its decoded wrapper adds a store and a load.
-Those explicit conversions may allocate and are not removed merely because the carriers match.
-
-### Checked word entry experiment
-
-The compiler now represents the administrative part of a call as explicit SPSLow entry parameters and transfers.
-[C9's word entry contract](../references/compiler.md#word-entry-contracts) owns their order,
-provenance checks, and lowering rules.
-This makes the existing convention inspectable with `zydeco build --target zir` and checked
-before either assembly lowering or direct SPS Wasm emission.
-
-The useful distinction is between the environment/result words introduced by closure conversion
-and the source computation's remaining stack protocol.
-The former have fixed roles even when the source worker or its representation provider is selected at runtime.
-The partial source protocol extension below supplies known parts of the latter.
-The administrative contract checks entry roles and package agreement independently of that source evidence.
-It leaves ordinary argument consumption in the block body and retains the current word transport.
-
-Direct entries, recursive labels, and package openings now supply code evidence to the verifier.
-Regression tests pair accepted transfers with mismatched entry kinds, environment arities,
-crossed closure environments, and replaced or partially consumed continuation stacks.
-Aliases preserve the association when their producer is known.
-The existing execution fixtures exercise recursive and dynamic calls on all backends;
-policy tests keep wide captured values live across native collection.
-These checks improve the compiler boundary without making a new runtime representation or performance claim.
-
-### Partial source protocol experiment
-
-Source protocol evidence survives lowering, normalization, and closure conversion.
-[C9's partial source protocols](../references/compiler.md#partial-source-protocols) own the descriptors,
-propagation, and validation rules.
-They require no new source annotations.
-This gives known scalar, product, thunk, and recursive codata components a checkable interface at direct
-and indirect transfers, while keeping unknown remainders explicit.
-
-The boundary deliberately preserves the distinction between a computation protocol and its physical stack extent.
-[Ret and stack extent](../references/language.md#ret-and-stack-extent) explains why a
-return continuation cannot establish a frame boundary.
-The implemented descriptor records what that continuation accepts; its hidden saved stack contributes no size
-or allocation claim.
-
-The [source regression](../../lib/tests/core/stack-protocols.zy) defines a recursive codata protocol
-with `.item : Int64 -> Stream` and `.done : Ret Int64` observations.
-Its producer pushes a runtime-selected number of item arguments and tags,
-and its consumer drains them before delivering a result to the installed continuation.
-The retained graph connects the item observation back to the same stream interface.
-The consumer is selected at runtime, returned as a thunk, and passed into the recursive producer;
-the graph reference survives each of those boundaries.
-The same program returns a dynamically selected worker thunk and calls it
-through a recursive forwarder polymorphic in its residual computation protocol.
-Tests inspect retained entry evidence and execute different stack depths on the interpreter,
-AMD64, and both Wasm backends.
-Mutated low IR is rejected for known argument/result conflicts, invalid observation names or indices,
-malformed recursive tails, incomplete cases, missing graph definitions, and inconsistent entry metadata.
-Graph comparisons exercise distinct but equivalent recursive descriptions, including cycles through returned thunks,
-and reject conflicts reached after a recursive back edge.
-
-The [declaration-order regression](../../lib/tests/core/codata-order.zy) exposed a related lowering defect:
-two structurally equal codata interfaces could assign different runtime indices to the same destructor.
-Canonical observation numbering now keeps those calls coherent across all backends.
-This is evidence for sharing one descriptor between producers and consumers, including the tag identity itself.
-
-The accepted instantiation extension interprets available type definitions with captured source arguments.
-The [parameterized stream](../../lib/tests/core/parameterized-protocols.zy) exercises `Stream A R`
-at `Int64`/`Ret Int64` and `Char`/`Ret Char`.
-Previously, its recursive `.item` tails and returned stream thunk became unknown during extraction.
-They now retain their instantiated interfaces, so a wrong second item is rejected after following the recursive edge.
-This supplies evidence for ordinary generic source definitions without changing their representation
-or requiring annotations.
-The [growing-family example](../../lib/tests/core/growing-protocols.zy) deliberately changes its argument from `A`
-to `A * A` at each observation and remains executable with a conservative unknown tail.
-Both examples run on all four backends.
-
-The accepted symbolic extension retains first-order parameter occurrences and universal scopes.
-The [polymorphic relay](../../lib/tests/core/symbolic-protocols.zy) receives two values
-of one abstract type `A` and a callback consuming both under a shared computation protocol `R`.
-It invokes the same recursive worker separately at `Int64`/`Ret Int64` and `Char`/`Ret Char`.
-Replacing one integer argument with a character in low IR now fails the transfer check;
-the earlier independent unknowns admitted that inconsistent combination.
-Parameter constraints are fresh for each comparison and universal occurrence,
-so checking one use does not specialize later uses of the worker.
-Tests also distinguish captured parameters from nested binders, retain conflicts in partial product shapes,
-and relate parameters across recursive observations.
-
-This remains a check of shape consistency, with the limits owned
-by [C9's partial source protocols](../references/compiler.md#partial-source-protocols).
-Universal binders introduced inside codata observations remain symbolically recorded,
-but their parameter correlations are conservatively omitted from agreement for now.
-Treating such a binder as one instantiation shared by every observation would be incorrect.
-Tracking explicit type-argument choices through SPS rewriting and rechecking generic-body parametricity are deferred;
-source typing continues to own those obligations.
-
-This establishes partial source agreement through the existing word ABI.
-It does not select byte layouts or raw slots, equate abstract carriers, or infer physical stack size.
-
-### Remaining machine-call boundary
+## Remaining machine-call boundary
 
 The [local analysis](../../lang/assembly/src/unbox.rs) deliberately treats call arguments and argument-stack uses
 of a variable as escapes, and the [lowerer](../../lang/assembly/src/lower.rs) consumes its local pack/unpack decisions.
@@ -270,8 +75,9 @@ Automatic layout-directed calls are deferred.
 A modular extension needs the following boundaries in order:
 
 1. **Representation identity from source composition.** The implemented
-   [static layout plans](bytes.md#static-layout-plans) calculate and validate scalar/product byte placement
-   with ordinary value functions, expose its shape, and use the same codecs as runtime layout construction.
+   [static layout plans](../references/language.md#static-layout-plans) calculate
+   and validate scalar/product byte placement with ordinary value functions,
+   expose its shape, and use the same codecs as runtime layout construction.
    They establish the source-calculation part of this prerequisite.
    The stored-call interface supplies a shared nominal carrier for particular source contracts.
    What remains is compiler-consumable placement evidence, including reference-bearing components.
@@ -315,7 +121,7 @@ Static layout identity by structural equality, dependent size proofs, raw scalar
 mixed reference layouts, and C aggregate classification remain separate open work.
 The accepted source library needs none of those mechanisms to express stored interfaces today.
 
-## Design
+## Proposed constraint analysis
 
 ### Analysis site
 
@@ -439,7 +245,7 @@ Uses of the variable push those slots back in the same order as an unboxed `VCon
 The proposed `rep(v) = S` representation keeps a single pointer but allocates the cell
 in the current stack frame instead of calling `zydeco_alloc_scanned`.
 This representation requires the explicit lifetime and reclamation discipline described
-in [native activation frames](native-frames.md#frame-lifetime-and-entry-invariants),
+in [native activation frames](../references/compiler.md#activation-lifetime),
 including proof that references cannot survive the owning frame.
 Native caller environments already survive return continuations; choosing storage
 for an individual product remains a decision here.
@@ -605,7 +411,7 @@ The proposed conservative choice boxes from the start on such paths, avoiding du
   The proposed conservative constraint forces external arguments to `R`.
 - How much of the analysis must cross recursive `Fix` blocks before the results are useful?
 - How much fixed environment space should one function activation be allowed to use?
-  The current [retained-frame model](native-frames.md#collection-and-space-behavior) must account
+  The current [retained-frame model](../references/compiler.md#activation-lifetime) must account
   for active and suspended activations, packed capacity, and their live data.
   Retention does not authorize a raw frame pointer to escape its activation.
 

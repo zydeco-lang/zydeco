@@ -120,7 +120,8 @@ Both names can also be passed directly wherever their thunk type is expected.
 A package value uses plain `let` or `def`; adding `!` would require its body to be a computation.
 
 Documentation uses `--|` Markdown blocks attached to a following `@[doc]` annotation.
-Use `--` for ordinary comments; see [the documentation guide](../documentation.md) for checked examples and links.
+Use `--` for ordinary comments; see [the documentation reference](../references/language.md#source-documentation)
+for checked examples and links.
 
 ## 3. Kinds, types, and type-level terms
 

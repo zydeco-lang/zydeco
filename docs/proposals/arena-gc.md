@@ -7,22 +7,13 @@ The [compiler reference](../references/compiler.md#analysis-facts-and-materializ
 between retained keyed facts, shared full materializations, and query memo lifetimes.
 This record concerns the remaining choices about what to retain and when to recompute it.
 
-## Retention criteria
+## Retention policy extensions
 
-Retain a fact when consumers need random access by semantic identity and recovering it would require a regional recheck.
-Retain occurrence payload only while a consumer needs a full traversal, unless measurements justify caching it longer.
-Deterministic allocation permits the same inputs to reproduce identities;
-it does not make every intermediate solver state a pure function of an allocation site.
-The [query/checker boundary](../references/compiler.md#query-and-checker-ownership) explains that distinction.
-
-The current coarse check and fine-grained judgment memos have different costs and lifetimes.
-A one-entry arena LRU can release a large materialization while leaving the database's interned inputs
-and judgment memos.
-Database generations give the test pool a deterministic reclamation boundary;
-a general interactive-session policy must also account for active projects,
-overlays, and outstanding analysis snapshots.
-Any replacement should preserve keyed facts after arena eviction and pair materialization
-with the correct source revision.
+The current [retained-fact contract](../references/compiler.md#analysis-facts-and-materialization)
+separates full-arena lifetime from fine-grained memos.
+Extend reclamation to interactive sessions only with an account of active projects, overlays, and outstanding snapshots.
+A replacement must preserve keyed facts after arena eviction and pair materialization with the correct revision;
+a smaller arena cache alone cannot bound database storage.
 
 ## Historical measurements and alternatives
 

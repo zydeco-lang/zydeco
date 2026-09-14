@@ -42,9 +42,7 @@ and exact I/O in the Rust harness, which can express their relationships.
 The [compiler reference](../../../docs/references/compiler.md#source-fixtures-and-runtime-oracles) explains discovery,
 diagnostic-code ownership, and runtime oracles.
 
-Program arguments and expected exit codes for `run` fixtures remain possible extensions,
-as do stable desugaring-rejection spellings.
-Extend directives when another consumer establishes the required contract;
-an inapplicable expectation must continue to fail the trial.
+Possible argument, exit, and desugaring-rejection directives are tracked
+in [deferred designs](../../../docs/ideas/fixture-directives.md).
 The surface corpus retains its aggregate runner because recovery tests use in-crate contracts;
 its failure reports identify all violating files.

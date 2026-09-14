@@ -1,56 +1,44 @@
 # Documentation
 
 Start with [the language guide](tutorial/zydeco-guide.md) for a source-level walkthrough
-and [DESIGN.md](../DESIGN.md) for the project design and repository map.
-[CONTRIBUTING.md](../CONTRIBUTING.md) covers building, testing, formatting, and documentation workflows.
+and [DESIGN](../DESIGN.md) for the project overview and repository map.
+[CONTRIBUTING](../CONTRIBUTING.md) covers building, testing, formatting, and documentation maintenance.
 
-Two concise references serve expert programmers and compiler maintainers:
+The [references](references/README.md) own approved, implemented language and compiler contracts,
+with one home for each rule.
+[Proposals](proposals/README.md) contain concrete unfinished designs;
+[ideas](ideas/README.md) contain exploratory questions and studies;
+[todos](todos/README.md) record observed discrepancies requiring repair.
+The [ownership map](references/README.md#rule-ownership) connects source rules to their implementation accounts.
 
-- [Language reference](references/language.md): syntax, typing, computation, static composition, packages,
-  host interfaces, and execution profiles.
-- [Compiler implementation reference](references/compiler.md): phase contracts, representations, checking,
-  lowering, runtimes, tooling, and validation.
-- [Documentation todos](todos/README.md): drift findings, proposed repairs, source inventory, ownership,
-  and the consolidation sequence.
-
-The references own the rules and implementation accounts transferred
-through the [completed consolidations](todos/reference-plan.md#completed-proposal-retirements).
-Remaining proposals retain independent rationale and open design questions;
-[deferred designs](todos/deferred-designs.md) collects follow-ups from retired records.
-
-Other documentation serves distinct purposes:
-
-| Material | Purpose |
+| Material | Reader's purpose |
 | --- | --- |
-| [Standard library guide](../lib/std/README.md) | Current interfaces, capabilities, and package composition |
-| [Code style](style.md) | Syntax rationale, naming, layout, and composition conventions |
-| [Project documentation guide](documentation.md) | `@[doc]`, editor interaction, references, and verified examples |
-| [Editor guide](../editor/README.md) | Cajun behavior, client setup, and runtime configuration |
-| [Literate chapters](spell) | Executable explanations and examples |
-| [Design proposals](proposals) | Mechanisms, invariants, rationale, and remaining decisions |
-| [Explorations](ideas) | Alternatives, experiments, and decision criteria |
-| [Component guides](../lang) | Local implementation maps alongside the relevant source |
-| [OOPSLA artifact overview](../lib/tests/oopsla/README.md) | Paper-specific examples and evaluation instructions |
-| [Earlier tutorial](tutorial/intro_to_zydeco.md), [legacy notes](legacy) | Historical language designs |
+| [Language reference](references/language.md) | Look up syntax, typing, behavior, packages, capabilities, and execution boundaries |
+| [Compiler reference](references/compiler.md) | Find phase contracts, representations, algorithms, runtimes, and validation |
+| [Standard library guide](../lib/std/README.md) | Use current interfaces, capabilities, and package composition |
+| [Code style](style.md) | Choose readable names, source layout, and composition idioms |
+| [Editor guide](../editor/README.md) | Configure Cajun and find client setup |
+| [Literate chapters](spell) | Read executable explanations and examples |
+| [Design proposals](proposals/README.md) | Review unimplemented extensions and their validation criteria |
+| [Explorations](ideas/README.md) | Read research discussions and dated experimental evidence |
+| [Component guides](../lang) | Locate local implementation modules |
+| [OOPSLA artifact overview](../lib/tests/oopsla/README.md) | Follow paper-specific examples and evaluation instructions |
+| [Earlier tutorial](tutorial/intro_to_zydeco.md), [legacy notes](legacy) | Inspect historical language designs |
 
-Scratch records under [logs](logs) are supplementary; durable rules belong in their owning design document
-or completed reference chapter.
+## Writing and maintaining documentation
 
-[Binary products with right-spine layout](proposals/binary-products.md) preserves an unimplemented alternative
-to the current n-ary product semantics.
-It requires a separate design decision before adoption.
+Documentation tooling and maintenance of this repository's books are different tasks.
+Choose the corresponding reference section or design record below.
 
-[Reachability and regions for SPSLow](proposals/reachability-regions.typ) formalizes proposed value support,
-environment and stack dependencies, explicit arena operations, and the obligations for safe region retirement.
-It is a design draft; the current compiler does not implement these rules.
+| Task | Home |
+| --- | --- |
+| Write `@[doc]` prose, semantic links, and examples; use the panel or `zydeco doc` | [Source documentation](references/language.md#source-documentation), [tooling workflow](references/compiler.md#documentation-workflow), and [a complete example](examples/documentation/guide.md) |
+| Understand implemented attachment, provenance, publication, and verification | [C4: source analysis](references/compiler.md#shared-source-analysis), [C15: documentation](references/compiler.md#documentation-subjects-and-provenance) |
+| Design new documentation features | [Documentation proposal](proposals/documentation.md) |
+| Improve completion or generated type/source text | [Completion proposal](proposals/completion.md), [type-layout ideas](ideas/type-rendering-layout.md), [source-generation ideas](ideas/typed-source-generation.md) |
+| Review, consolidate, format, and verify repository documentation | [Contribution workflow](../CONTRIBUTING.md#maintain-documentation) |
+| Repair an observed disagreement or duplicated account | [Reference drift](todos/reference-drift.md) |
 
-[Reusable folders and traversal composition](proposals/traversals.md) collects the remaining migration of desugaring,
-source-directive analysis, resolution, and typed rebuilding onto shared structural operations.
-It also records the planned diagnostic collection and recovery boundaries for reporting multiple errors across passes.
-The compiler reference defines the implemented [scoped visitor](references/compiler.md#scoped-structural-traversal)
-and [surface folder](references/compiler.md#surface-structural-rebuilding).
-
-[Compiled libraries and C exports](references/language.md#compiled-libraries-and-c-exports)
-define independently emitted library boundaries. The compiler reference owns their
-[preparation, linking, and publication](references/compiler.md#compilation-unit-preparation-and-artifacts);
-[CONTRIBUTING](../CONTRIBUTING.md#compile-and-consume-c-libraries) gives complete producer and consumer commands.
+Exploratory questions live in [design ideas](ideas/README.md) until they develop into concrete proposals.
+Scratch records under [logs](logs) are temporary: extract durable evidence into its owner before deleting the record.
+Completed consolidation plans and repair histories remain available in version history.
