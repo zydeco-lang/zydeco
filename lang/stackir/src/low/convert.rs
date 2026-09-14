@@ -19,6 +19,7 @@ use zydeco_utils::{
 };
 
 mod pattern;
+mod fold;
 
 /// Convert lexical high SPS into first-order SPSLow with fresh construction state.
 pub struct SpsLowConverter<'a> {
@@ -31,7 +32,16 @@ impl CompilerPass<BranchJoinProgram> for SpsLowConverter<'_> {
     type Error = Infallible;
 
     fn run(&mut self, program: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
-        Ok(ClosureConversion::new(program, self.scoped, self.statics).convert())
+        self.run_with_driver::<Explicit>(program)
+    }
+}
+
+impl SpsLowConverter<'_> {
+    /// Select continuation storage for reconstruction and pattern translation.
+    pub fn run_with_driver<D: Driver>(
+        &mut self, program: BranchJoinProgram,
+    ) -> Result<SpsLowProgram, Infallible> {
+        Ok(ClosureConversion::new(program, self.scoped, self.statics).convert::<D>())
     }
 }
 
@@ -86,8 +96,9 @@ impl<'a> ClosureConversion<'a> {
         }
     }
 
-    fn convert(mut self) -> SpsLowProgram {
-        let root = self.translate_compu(self.root, RenameEnvId(0));
+    fn convert<D: Driver>(mut self) -> SpsLowProgram {
+        let source = self.root;
+        let root = fold::ConversionFolder::<D>::new(&mut self).run(source);
         SpsLowProgram::try_new(self.arena, root)
             .expect("closure conversion produces closed first-order SPSLow")
     }
@@ -209,276 +220,6 @@ impl<'a> ClosureConversion<'a> {
             captures.iter().map(|capture| self.translated_var(*capture, env, site)).collect();
         self.build_product_value(values, site)
     }
-
-    fn translate_pattern(&mut self, id: high::VPatId) -> PatternTranslation {
-        Explicit::run(&mut pattern::PatternFolder { conversion: self }, id)
-    }
-
-    fn translate_value(&mut self, id: high::ValueId, env: RenameEnvId) -> low::ValueId {
-        let site = self.value_site(id);
-        let protocol = self.source.inner.value_protocols.get(&id).cloned();
-        let translated = match self.source.inner.values[&id].clone() {
-            | high::Value::Hole(high::Hole) => low::Hole.build(self, site),
-            | high::Value::Var(def) => self.translated_var(def, env, site),
-            | high::Value::Closure(high::Closure { stack: high::Bullet, body }) => {
-                let entry = match &protocol {
-                    | Some(ValueProtocol::Thunk(stack)) => *stack.clone(),
-                    | _ => StackProtocol::Unknown,
-                };
-                self.translate_closure(body, entry, env, site)
-            }
-            | high::Value::Ctor(high::Ctor(ctor, body)) => {
-                let body = self.translate_value(body, env);
-                low::Ctor(ctor, body).build(self, site)
-            }
-            | high::Value::Triv(high::Triv) => low::Triv.build(self, site),
-            | high::Value::VCons(high::VCons { items, layout }) => {
-                let items = items.into_iter().map(|item| self.translate_value(item, env)).collect();
-                low::VCons::new(items, layout).build(self, site)
-            }
-            | high::Value::Literal(literal) => literal.build(self, site),
-            | high::Value::Primitive(high::Primitive { operation, operands }) => {
-                let operands = operands.map(|operand| self.translate_value(operand, env));
-                low::Primitive { operation, operands }.build(self, site)
-            }
-        };
-        if let Some(protocol) = protocol {
-            self.arena.inner.value_protocols.insert_new(translated, protocol);
-        }
-        translated
-    }
-
-    fn translate_closure(
-        &mut self, body: high::CompuId, protocol: StackProtocol, env: RenameEnvId,
-        site: Option<ss::TermId>,
-    ) -> low::ValueId {
-        let captures = self.sorted_free_vars(body, Context::new());
-        let capture_bindings = self.capture_bindings(&captures);
-        let body_env = self.extend_env(env, capture_bindings.iter().copied());
-        let body = self.translate_compu(body, body_env);
-        let environment_pattern = self.captured_pattern(&capture_bindings);
-        let label = self.alloc_label("closure");
-        let entry = low::EntryParameters::Closure { environment: environment_pattern };
-        let code = low::Block { label, entry, body }.build(self, site);
-        self.arena.inner.entry_protocols.insert_new(code, low::EntryProtocol::Closure(protocol));
-        let environment = self.captured_value_outside(&captures, env, site);
-        low::ClosurePackage { environment, code }.build(self, site)
-    }
-
-    fn translate_stack(&mut self, id: high::StackId, env: RenameEnvId) -> low::StackId {
-        let site = self.stack_site(id);
-        match self.source.inner.stacks[&id].clone() {
-            | high::Stack::Kont(high::Kont { binder, body }) => {
-                self.translate_continuation(binder, body, env, site)
-            }
-            | high::Stack::Var(high::Bullet) => low::Bullet.build(self, site),
-            | high::Stack::Arg(high::Cons(value, stack)) => {
-                let value = self.translate_value(value, env);
-                let stack = self.translate_stack(stack, env);
-                low::Cons(value, stack).build(self, site)
-            }
-            | high::Stack::Tag(high::Cons(dtor, stack)) => {
-                let stack = self.translate_stack(stack, env);
-                low::Cons(dtor, stack).build(self, site)
-            }
-        }
-    }
-
-    fn translate_continuation(
-        &mut self, binder: high::VPatId, body: high::CompuId, env: RenameEnvId,
-        site: Option<ss::TermId>,
-    ) -> low::StackId {
-        let protocol =
-            self.source.inner.pattern_protocols.get(&binder).cloned().unwrap_or_default();
-        let captures = self.sorted_free_vars(
-            body,
-            self.variables.bound_variables(binder).expect("validated continuation binder").clone(),
-        );
-        let capture_bindings = self.capture_bindings(&captures);
-        let PatternTranslation { pattern: binder, bindings: binder_bindings } =
-            self.translate_pattern(binder);
-        let capture_env = self.extend_env(env, capture_bindings.iter().copied());
-        let body_env = self.extend_env(capture_env, binder_bindings);
-        let body = self.translate_compu(body, body_env);
-
-        let entry = low::ContinuationEntry {
-            result: binder,
-            body,
-            captures: capture_bindings
-                .iter()
-                .map(|&(source, binding)| low::CaptureBinding {
-                    source: self.renamed_def(env, source),
-                    binding,
-                })
-                .collect(),
-        };
-
-        let environment_pattern = self.captured_pattern(&capture_bindings);
-        let label = self.alloc_label("continuation");
-        let parameters =
-            low::EntryParameters::Continuation { result: binder, environment: environment_pattern };
-        let code = low::Block { label, entry: parameters, body }.build(self, site);
-        self.arena
-            .inner
-            .entry_protocols
-            .insert_new(code, low::EntryProtocol::Continuation(protocol));
-
-        let environment = self.captured_value_outside(&captures, env, site);
-        let ambient = low::Bullet.build(self, site);
-        let residual = low::Cons(environment, ambient).build(self, site);
-        let package = low::ContinuationPackage { code, residual }.build(self, site);
-        self.arena.inner.continuations.insert_new(package, entry);
-        package
-    }
-
-    fn translate_compu(&mut self, id: high::CompuId, env: RenameEnvId) -> low::CompuId {
-        let site = self.compu_site(id);
-        match self.source.inner.compus[&id].clone() {
-            | high::Computation::Hole(high::SHole(stack)) => {
-                let stack = self.translate_stack(stack, env);
-                low::SHole(stack).build(self, site)
-            }
-            | high::Computation::Force(force) => self.translate_force(force, env, site),
-            | high::Computation::Ret(ret) => self.translate_return(ret, env, site),
-            | high::Computation::Fix(fix) => {
-                let protocol =
-                    self.source.inner.compu_protocols.get(&id).cloned().unwrap_or_default();
-                self.translate_fix(fix, protocol, env, site)
-            }
-            | high::Computation::ProductMatch(high::SProductMatch { scrut, binder, body }) => {
-                let scrut = self.translate_value(scrut, env);
-                let PatternTranslation { pattern: binder, bindings } =
-                    self.translate_pattern(binder);
-                let body_env = self.extend_env(env, bindings);
-                let body = self.translate_compu(body, body_env);
-                low::SProductMatch { scrut, binder, body }.build(self, site)
-            }
-            | high::Computation::CoprodMatch(high::SCoprodMatch { scrut, arms }) => {
-                let scrut = self.translate_value(scrut, env);
-                let arms = arms
-                    .into_iter()
-                    .map(|high::Matcher { binder, tail }| {
-                        let PatternTranslation { pattern: binder, bindings } =
-                            self.translate_pattern(binder);
-                        let body_env = self.extend_env(env, bindings);
-                        low::Matcher { binder, tail: self.translate_compu(tail, body_env) }
-                    })
-                    .collect();
-                low::SCoprodMatch { scrut, arms }.build(self, site)
-            }
-            | high::Computation::Join(high::LetJoin::Value(high::Let { binder, bindee, tail })) => {
-                let bindee = self.translate_value(bindee, env);
-                let PatternTranslation { pattern: binder, bindings } =
-                    self.translate_pattern(binder);
-                let body_env = self.extend_env(env, bindings);
-                let body = self.translate_compu(tail, body_env);
-                low::LetValue { binder, bindee, tail: body }.build(self, site)
-            }
-            | high::Computation::Join(high::LetJoin::Stack(high::Let {
-                binder: high::Bullet,
-                bindee,
-                tail,
-            })) => {
-                let bindee = self.translate_stack(bindee, env);
-                let body = self.translate_compu(tail, env);
-                low::LetStack { binder: low::Bullet, bindee, tail: body }.build(self, site)
-            }
-            | high::Computation::LetArg(high::Let {
-                binder: high::Cons(binder, high::Bullet),
-                bindee,
-                tail,
-            }) => {
-                let bindee = self.translate_stack(bindee, env);
-                let PatternTranslation { pattern: binder, bindings } =
-                    self.translate_pattern(binder);
-                let body_env = self.extend_env(env, bindings);
-                let body = self.translate_compu(tail, body_env);
-                low::LetArg { binder: low::Cons(binder, low::Bullet), bindee, tail: body }
-                    .build(self, site)
-            }
-            | high::Computation::CoCase(high::SCoMatch { scrut, arms }) => {
-                let scrut = self.translate_stack(scrut, env);
-                let arms = arms
-                    .into_iter()
-                    .map(|high::CoMatcher { dtor, tail }| low::CoMatcher {
-                        dtor,
-                        tail: self.translate_compu(tail, env),
-                    })
-                    .collect();
-                let case = low::SCoMatch { scrut, arms }.build(self, site);
-                if let Some(protocol) = self.source.inner.compu_protocols.get(&id) {
-                    self.arena.inner.case_protocols.insert_new(case, protocol.clone());
-                }
-                case
-            }
-            | high::Computation::ExternCall(high::ExternCall { function, stack }) => {
-                let stack = self.translate_stack(stack, env);
-                low::ExternCall { function, stack }.build(self, site)
-            }
-        }
-    }
-
-    fn translate_force(
-        &mut self, force: high::SForce, env: RenameEnvId, site: Option<ss::TermId>,
-    ) -> low::CompuId {
-        let package = self.translate_value(force.thunk, env);
-        let stack = self.translate_stack(force.stack, env);
-        let environment_def = self.alloc_def(VarName("__environment__".into()));
-        let code_def = self.alloc_def(VarName("__closure_code__".into()));
-        let environment: low::VPatId = environment_def.build(self, None);
-        let code: low::VPatId = code_def.build(self, None);
-        let environment_value: low::ValueId = environment_def.build(self, site);
-        let code_value: low::ValueId = code_def.build(self, site);
-        let argument = low::EntryArgument::Closure { environment: environment_value };
-        let body = low::Jump { target: code_value, argument, stack }.build(self, site);
-        low::OpenClosure { package, environment, code, body }.build(self, site)
-    }
-
-    fn translate_return(
-        &mut self, ret: high::SReturn, env: RenameEnvId, site: Option<ss::TermId>,
-    ) -> low::CompuId {
-        let package = self.translate_stack(ret.stack, env);
-        let value = self.translate_value(ret.value, env);
-        let code_def = self.alloc_def(VarName("__continuation_code__".into()));
-        let code: low::VPatId = code_def.build(self, None);
-        let code_value: low::ValueId = code_def.build(self, site);
-        let residual = low::Bullet.build(self, site);
-        let argument = low::EntryArgument::Continuation { result: value };
-        let body = low::Jump { target: code_value, argument, stack: residual }.build(self, site);
-        low::OpenContinuation { package, code, body }.build(self, site)
-    }
-
-    fn translate_fix(
-        &mut self, fix: high::SFix, protocol: StackProtocol, env: RenameEnvId,
-        site: Option<ss::TermId>,
-    ) -> low::CompuId {
-        let stack = self.translate_stack(fix.stack, env);
-        let captures = self.sorted_free_vars(fix.body, Context::singleton(fix.param));
-        let capture_bindings = self.capture_bindings(&captures);
-        let recursive_closure = self.alloc_like(fix.param);
-        let label = self.alloc_label("fix");
-        let body_env = self.extend_env(
-            env,
-            capture_bindings.iter().copied().chain([(fix.param, recursive_closure)]),
-        );
-        let body = self.translate_compu(fix.body, body_env);
-
-        let environment_inside = self.captured_value_inside(&capture_bindings, site);
-        let code_inside: low::ValueId = label.build(self, site);
-        let closure = low::ClosurePackage { environment: environment_inside, code: code_inside }
-            .build(self, site);
-        let closure_pattern: low::VPatId = recursive_closure.build(self, None);
-        let body = low::LetValue { binder: closure_pattern, bindee: closure, tail: body }
-            .build(self, site);
-        let environment_pattern = self.captured_pattern(&capture_bindings);
-        let entry = low::EntryParameters::Closure { environment: environment_pattern };
-        let block = low::Block { label, entry, body }.build(self, site);
-        self.arena.inner.entry_protocols.insert_new(block, low::EntryProtocol::Closure(protocol));
-
-        let environment = self.captured_value_outside(&captures, env, site);
-        let argument = low::EntryArgument::Closure { environment };
-        low::Jump { target: block, argument, stack }.build(self, site)
-    }
 }
 
 #[cfg(test)]
@@ -511,10 +252,8 @@ mod tests {
         }
 
         fn convert(self, root: high::CompuId) -> SpsLowProgram {
-            let program =
-                BranchJoinProgram::try_new(high::StackirProgram::new(self.arena, root)).unwrap();
             let statics = StaticsArena::default();
-            SpsLowConverter { scoped: &self.scoped, statics: &statics }.run_infallible(program)
+            fold::tests::Drivers::convert(&self.arena, root, &self.scoped, &statics)
         }
     }
 

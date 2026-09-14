@@ -46,7 +46,7 @@ or the phase's acceptance boundary.
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution)
 provides statically selected native and explicit-stack drivers for residual lowering,
-Builtin package materialization, high SPS normalization, and closure conversion pattern translation.
+Builtin package materialization, high SPS normalization, and closure conversion.
 Their equivalence and depth checks support using the interface for those boundaries.
 Classifier scope handling remains deferred.
 The next evaluated boundary is surface rebuilding, where shared structural callbacks
@@ -173,8 +173,8 @@ rebuilding must preserve the established [consumer-demand schedule](../reference
 Residual lowering and high SPS normalization now use explicit reconstruction frames,
 as recorded in [C8](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand).
 Further depth work should distinguish those completed migrations from recursive semantic helpers:
-normalization's known-value construction and pattern decisions, structured demand and protocol operations,
-and later closure conversion still have recursive paths.
+normalization's known-value construction and pattern decisions, structured demand
+and protocol operations, and low verification still have recursive paths.
 Use direct phase fixtures to establish each remaining limit before choosing its work frames or fact representation;
 include destruction of nested retained facts in that audit.
 The compiler has no end-to-end arbitrary-depth guarantee.

@@ -344,6 +344,7 @@ The implemented interfaces serve different questions and therefore expose differ
 | Typed terms to lexical high SPS | [Residual lowering folder](#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh output syntax for every input occurrence |
 | Lexical high SPS analysis | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
 | Lexical high SPS normalization | [Normalization reconstruction](#normalization-reconstruction) | Explicit frames retain forward producer scopes and resume rebuilding with backward consumer demands |
+| Lexical high SPS to first-order SPSLow | [Closure conversion folders](#closure-conversion-folders) | Occurrence-local renaming and ordered captures; fresh syntax with preserved allocation and publication order |
 
 Before reusing a traversal, establish its input view, child environments, occurrence policy, and output identity policy.
 A raw classifier, its normalized view, and a residual executable are different inputs even
@@ -394,8 +395,9 @@ they cannot borrow the mutable folder itself.
 `Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
 `Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
 Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
-Production residual lowering, Builtin package materialization, and high SPS normalization use `Explicit`;
-`Recursive` supports bounded comparisons and consumes native stack proportional to pending calls.
+Production residual lowering, Builtin package materialization, high SPS normalization,
+and closure conversion use `Explicit`; `Recursive` supports bounded comparisons
+and consumes native stack proportional to pending calls.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
 Frame payloads and outputs may allocate according to the folder's representation.
 
@@ -1568,19 +1570,32 @@ Structured Wasm can consume this representation directly because block boundarie
 
 ### Closure conversion folders
 
-[Pattern translation](../../lang/stackir/src/low/convert/pattern.rs) uses the shared
-[resumable execution interface](#resumable-folder-execution).
+[Closure conversion](../../lang/stackir/src/low/convert/fold.rs) uses the shared
+[resumable execution interface](#resumable-folder-execution) for mutually dependent value,
+stack, and computation translation.
+`SpsLowConverter::run_with_driver::<D>` selects execution statically; the compiler pass selects `Explicit`.
+Requests carry source IDs and indices into the conversion's renaming environments.
+Frames retain ordered captures, translated binders, and branch positions
+while typed result vectors hold completed children until their parent can be allocated.
+Capture bindings, recursive labels, block entries, and package metadata retain their established allocation order.
+Each source occurrence creates fresh output syntax with its corresponding origins and protocols.
+
+[Pattern translation](../../lang/stackir/src/low/convert/pattern.rs) is a separate folder using the same driver.
 Each completed pattern returns both first-order syntax and its ordered source-to-fresh-binder assignments.
 Constructor frames retain one payload; alias and product cursors accumulate children
 and assignments in structural order.
-Production translation selects `Explicit`, while bounded comparisons exercise `Recursive` with the same folder.
-Origins, product layouts, and pattern protocols follow the reconstructed nodes.
+Pattern syntax has no edge back to values, stacks, or computations, so this subwalk does not retain a recursive cycle
+through the conversion folder.
 
-Pattern regressions compare binder order, fresh identities, origins, layouts, and protocols under both drivers,
-including empty field vectors and rejected layouts that cannot publish their parent.
+Bounded regressions compare `Explicit` and `Recursive` syntax, binder order, allocation slots,
+origins, layouts, entry protocols, and continuation capture metadata.
+Pattern regressions also cover empty field vectors and rejected layouts that cannot publish their parent.
 An 8,192-level alias fixture constructs, translates, and drops on a 512 KiB stack.
-This guarantee covers pattern translation; the remaining conversion methods
-and downstream validation retain their own execution and depth requirements.
+Direct conversion fixtures additionally reconstruct and drop 4,096 nested bindings
+in a closure and a 16,384-frame argument stack on that stack size.
+These fixtures isolate reconstruction from downstream validation.
+Semantic protocol cloning and destruction, low verification, and later phases retain their own depth requirements;
+explicit conversion does not establish an end-to-end depth guarantee.
 
 ### Word entry contracts
 
