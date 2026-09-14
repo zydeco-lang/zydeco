@@ -9,7 +9,6 @@ use zydeco_utils::fold::{Folder, Step};
 
 /// Internal IDs never consume an assembly allocation slot. Links are affine:
 /// a value hole may abandon a consumer, but no consumer may run twice.
-#[derive(Clone, Copy)]
 pub(super) struct ContId(usize);
 
 pub(super) enum ContextUpdate {
@@ -111,8 +110,8 @@ pub(super) enum Frame {
 
 pub(super) struct Lowering<'lo, 'ir> {
     pub(super) lo: &'lo mut Lowerer<'ir>,
-    // Taking a slot retires its payload without recursively owning the next one.
-    // Unused slots, including abandoned sequence cursors, drop with this run.
+    // Consumed suffix slots are reused; interior holes preserve outstanding IDs.
+    // Abandoned consumers remain occupied and drop without following their links.
     continuations: Vec<Option<Continuation>>,
     pending: Vec<PendingInstruction>,
 }
@@ -170,7 +169,15 @@ impl<'lo, 'ir> Lowering<'lo, 'ir> {
     }
 
     fn apply(&mut self, id: ContId, context: Context) -> Step<Self> {
-        let continuation = self.continuations[id.0].take().expect("consumer already applied");
+        let continuation = if id.0 + 1 == self.continuations.len() {
+            self.continuations.pop().flatten().expect("consumer already applied")
+        } else {
+            self.continuations[id.0].take().expect("consumer already applied")
+        };
+        // Retire the vacant suffix without shifting any outstanding consumer.
+        while self.continuations.last().is_some_and(Option::is_none) {
+            self.continuations.pop();
+        }
         match continuation {
             | Continuation::Body(body) => Step::TailCall(Work::Compu(body, context)),
             | Continuation::End(end) => {
@@ -249,6 +256,9 @@ impl<'lo, 'ir> Lowering<'lo, 'ir> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 impl Folder for Lowering<'_, '_> {
     type Input = Work;

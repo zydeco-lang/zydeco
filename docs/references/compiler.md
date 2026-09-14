@@ -1888,8 +1888,12 @@ Applying a consumer takes its slot once and moves its payload into the next oper
 Links are affine, meaning they can be used at most once: a value hole emits `Abort`
 and can abandon an entire consumer chain, including an unfinished field sequence.
 Unused records drop with the run without recursively following their links.
-Slots are not reused during a run; their storage grows with the number of saved consumers,
-while consumed payloads are released or transferred immediately.
+`ContId` is neither `Copy` nor `Clone`, so applying a consumer also consumes its handle.
+Consumption removes a vacant suffix from the vector, allowing subsequent consumers to reuse that storage.
+Interior vacancies stay in place until consumers above them finish; outstanding IDs never shift.
+Abandoned consumers remain occupied until the run ends, and the vector retains its allocated capacity.
+This bounds storage across sequential completed steps without promising space proportional only
+to live consumers for every schedule.
 This assembly-local storage policy does not change the generic driver.
 
 Instruction construction reserves a `ProgId` and queues a typed pending instruction.
@@ -1924,6 +1928,9 @@ Pipeline comparisons include the finished native activation layouts, owners, slo
 The [depth regression](../../lang/assembly/src/lower/tests/depth.rs) lowers and drops 16,384-level argument/tag stacks,
 constructors, unboxed patterns, nested branch tables, and portable/native continuation entries on a 256 KiB stack.
 It also abandons and destroys a deep consumer chain at a value hole.
+The [storage regression](../../lang/assembly/src/lower/folder/tests.rs) checks
+that 16,384 sequential completed consumers retain the same vector capacity as 32 steps,
+while preserving the emitted terminator.
 These direct fixtures isolate folder execution from semantic validation and stack analysis.
 The guarantee covers lowering's control flow and flat continuation teardown; context cloning,
 retained assembly contexts, and the separate validators and analyzers still determine other costs.
