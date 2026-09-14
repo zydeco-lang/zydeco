@@ -2,6 +2,25 @@
 
 use super::*;
 use crate::check::judgment::Switch;
+use std::ops::ControlFlow;
+use zydeco_surface::scoped::traverse::{Node, Traversal, Visitor};
+
+/// Closed source boundaries are independent of an importing term's failed binders.
+#[derive(Default)]
+struct IndependentSources {
+    boundaries: Vec<su::TermId>,
+}
+
+impl Visitor for IndependentSources {
+    type Break = std::convert::Infallible;
+
+    fn exit(&mut self, node: Node<'_>) -> ControlFlow<Self::Break> {
+        if let Node::Term(id, su::Term::SourceBoundary(_) | su::Term::SignatureBoundary(_)) = node {
+            self.boundaries.push(id);
+        }
+        ControlFlow::Continue(())
+    }
+}
 
 /// Immutable source diagnostics produced by one rejected check.
 #[derive(Clone, Debug)]
@@ -86,15 +105,15 @@ pub(super) struct InferenceRegion {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct CheckedTerm(pub(super) TermAnnId);
 
-/// The one checked root retained for a resolved term. Later references may
+/// The synthesis outcome retained for a resolved term. Later references may
 /// extend this context, but must preserve its existing bindings and witnesses.
 #[derive(Clone, Debug)]
 struct CheckedTermEntry {
     environment: TyEnv,
-    checked: CheckedTerm,
+    checked: ResultKont<CheckedTerm>,
 }
 
-/// Checker-global repository of typed term roots.
+/// Checker-global repository of typed term roots and recorded rejections.
 #[derive(Default)]
 pub(super) struct CheckedTermRepository {
     entries: std::collections::HashMap<su::TermId, CheckedTermEntry>,
@@ -142,7 +161,9 @@ impl CheckedTerm {
 }
 
 impl CheckedTermRepository {
-    pub(super) fn get(&self, term: su::TermId, environment: &TyEnv) -> Option<CheckedTerm> {
+    pub(super) fn get(
+        &self, term: su::TermId, environment: &TyEnv,
+    ) -> Option<ResultKont<CheckedTerm>> {
         let entry = self.entries.get(&term)?;
         assert!(
             environment.is_extension_of(&entry.environment),
@@ -153,26 +174,30 @@ impl CheckedTermRepository {
 
     /// Retain the canonical result after synthesis. A nested elaborator may
     /// have completed the same request while the outer synthesis was running;
-    /// in that case both paths must have produced the same arena root.
+    /// successful paths must agree on the arena root. A later failure rejects
+    /// the whole request, even if a nested elaborator retained a root already.
     pub(super) fn retain(
-        &mut self, term: su::TermId, environment: TyEnv, checked: CheckedTerm,
-    ) -> CheckedTerm {
+        &mut self, term: su::TermId, environment: TyEnv, checked: ResultKont<CheckedTerm>,
+    ) -> ResultKont<CheckedTerm> {
         use std::collections::hash_map::Entry;
         match self.entries.entry(term) {
             | Entry::Vacant(entry) => {
                 entry.insert(CheckedTermEntry { environment, checked });
                 checked
             }
-            | Entry::Occupied(entry) => {
-                let canonical = entry.get();
+            | Entry::Occupied(mut entry) => {
+                let canonical = entry.get_mut();
                 assert!(
                     environment.is_extension_of(&canonical.environment),
                     "one resolved term was requested outside its original typing context"
                 );
-                assert_eq!(
-                    canonical.checked, checked,
-                    "one resolved term produced distinct checked roots"
-                );
+                match (canonical.checked, checked) {
+                    | (Ok(previous), Ok(checked)) => assert_eq!(
+                        previous, checked,
+                        "one resolved term produced distinct checked roots"
+                    ),
+                    | _ => canonical.checked = Err(KontFailure),
+                }
                 canonical.checked
             }
         }
@@ -222,17 +247,31 @@ impl InferenceRegion {
 }
 
 impl Tycker<'_> {
+    /// After rejection, check unreached providers in dependency order. No local
+    /// body is resumed without the typing environment its binders establish.
+    pub(super) fn check_independent_sources(&mut self, root: su::TermId) {
+        let mut sources = IndependentSources::default();
+        let _ = Traversal::new(self.scoped)
+            .run(root.into(), &mut sources)
+            .expect("resolved source syntax is acyclic");
+        for boundary in sources.boundaries {
+            if self.check_counts.get(&su::EntityId::Term(boundary)).is_none() {
+                let _ = TyEnvT::new(TyEnv::new(), boundary).tyck_k(self, Action::syn());
+            }
+        }
+    }
+
     /// Synthesize one resolved term in its lexical context, retaining the
-    /// resulting typed root for every later reference to that term.
+    /// resulting typed root or recorded failure for every later reference.
     pub(super) fn synthesize_once_k(
         &mut self, term: su::TermId, environment: &TyEnv,
         synthesize: impl FnOnce(&mut Self) -> ResultKont<TermAnnId>,
     ) -> ResultKont<CheckedTerm> {
         if let Some(checked) = self.checked_terms.get(term, environment) {
-            return Ok(checked);
+            return checked;
         }
-        let checked = CheckedTerm(synthesize(self)?);
-        Ok(self.checked_terms.retain(term, environment.clone(), checked))
+        let checked = synthesize(self).map(CheckedTerm);
+        self.checked_terms.retain(term, environment.clone(), checked)
     }
 }
 
@@ -374,6 +413,62 @@ mod tests {
                 assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1),);
                 assert_eq!(tycker.checked_terms.entries.len(), 1);
                 assert!(tycker.errors.is_empty());
+            },
+        );
+    }
+
+    #[test]
+    fn nested_synthesis_rejection_supersedes_a_retained_root_without_rechecking() {
+        with_tycker(
+            |allocator, scoped| {
+                let provider = allocator.alloc();
+                scoped.terms.insert_new(provider, su::Triv.into());
+                (provider, provider)
+            },
+            |tycker, provider| {
+                let environment = TyEnv::new();
+                let rejected = tycker.synthesize_once_k(provider, &environment, |tycker| {
+                    tycker.synthesize_once_k(provider, &environment, |tycker| {
+                        TyEnvT::new(environment.clone(), provider).tyck_k(tycker, Action::syn())
+                    })?;
+                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())
+                });
+                assert_eq!(rejected, Err(KontFailure));
+                let repeated = tycker.synthesize_once_k(provider, &environment, |_| {
+                    panic!("a recorded rejection must not replay synthesis")
+                });
+                assert_eq!(repeated, Err(KontFailure));
+                assert_eq!(tycker.check_counts.get(&su::EntityId::Term(provider)), Some(&1));
+                assert_eq!(tycker.errors.len(), 1);
+                assert!(tycker.statics.term_annotation(provider).is_some());
+            },
+        );
+    }
+
+    #[test]
+    fn independent_source_failures_are_checked_once_and_publish_no_parent() {
+        with_tycker(
+            |allocator, scoped| {
+                let hole = allocator.alloc();
+                let provider = allocator.alloc();
+                let first = allocator.alloc();
+                let second = allocator.alloc();
+                let root = allocator.alloc();
+                scoped.terms.insert_new(hole, su::Hole.into());
+                scoped.terms.insert_new(provider, su::Return(hole).into());
+                scoped.terms.insert_new(first, su::SourceBoundary(provider).into());
+                scoped.terms.insert_new(second, su::SourceBoundary(provider).into());
+                scoped.terms.insert_new(root, su::Term::Cons(vec![first, second]));
+                (root, (provider, first, second))
+            },
+            |tycker, (provider, first, second)| {
+                let root = tycker.data.root(tycker.db);
+                assert!(tycker.run_judgments_k(root).is_err());
+                for source in [provider, first, second] {
+                    assert_eq!(tycker.check_counts.get(&su::EntityId::Term(source)), Some(&1));
+                }
+                assert_eq!(tycker.errors.len(), 1);
+                assert!(tycker.statics.term_annotation(root).is_none());
             },
         );
     }

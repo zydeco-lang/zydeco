@@ -165,7 +165,7 @@ impl CopatternElaborator {
                 )?;
                 Ok(ss::Matcher { binder, tail })
             })
-            .collect::<ResultKont<Vec<_>>>()?;
+            .collect_k::<Vec<_>>()?;
         let computation = Alloc::alloc(
             tycker,
             ss::Match { scrut: scrutinee, arms },
@@ -281,7 +281,7 @@ impl CopatternElaborator {
                     .elaborate_k(tycker)?;
                 Ok(ss::CoMatcher { dtor, tail })
             })
-            .collect::<ResultKont<Vec<_>>>()?;
+            .collect_k::<Vec<_>>()?;
         let computation =
             Alloc::alloc(tycker, ss::CoMatch { arms }, self.expected, &self.allocation_env);
         tycker.statics.codata_hints.insert_new(computation, codata);
@@ -340,7 +340,7 @@ impl CopatternElaborator {
                 clause.pending.push(PendingArgument { binder, value: argument.value, ty: domain });
                 Ok(clause)
             })
-            .collect::<ResultKont<Vec<_>>>()?;
+            .collect_k::<Vec<_>>()?;
         let body =
             self.with_clauses(codomain, clauses, argument.body_env.clone()).elaborate_k(tycker)?;
         let abstraction = Alloc::alloc(
@@ -410,7 +410,7 @@ impl CopatternElaborator {
                     self.extend_forall_env_k(tycker, &source_binder, binder, &clause.env)?;
                 Ok(clause)
             })
-            .collect::<ResultKont<Vec<_>>>()?;
+            .collect_k::<Vec<_>>()?;
         let binder = first_binder.expect("a nonempty forall copattern has a binder");
         let env = self.extend_forall_env_k(tycker, &source_binder, binder, &self.allocation_env)?;
         let body = self.with_clauses(body, clauses, env).elaborate_k(tycker)?;

@@ -161,3 +161,94 @@ fn type_mismatches_preserve_expected_and_found_direction() {
         );
     }
 }
+
+#[test]
+fn independent_components_and_arms_report_all_type_errors() {
+    use TyckDiagnosticCode::{KindMismatch, TypeMismatch};
+    for (rejected, accepted, code) in [
+        (r#"(("left" : Int64), ("right" : Int64))"#, "((1 : Int64), (2 : Int64))", TypeMismatch),
+        (r#"(("left", "right") : Int64 * Int64)"#, "((1, 2) : Int64 * Int64)", TypeMismatch),
+        (
+            r#"((Int64, "left", "right") : exists (A : VType) . A * A)"#,
+            "((Int64, 1, 2) : exists (A : VType) . A * A)",
+            TypeMismatch,
+        ),
+        ("(Ret Unit, Ret Unit, Int64)", "(Unit, Unit, Int64)", KindMismatch),
+        (
+            r#"match 0 | 0 => 1 | 1 => "left" | _ => "right" end"#,
+            "match 0 | 0 => 1 | 1 => 2 | _ => 3 end",
+            TypeMismatch,
+        ),
+        (
+            "data | +Left : Ret Unit | +Right : Ret Int64 end",
+            "data | +Left : Unit | +Right : Int64 end",
+            KindMismatch,
+        ),
+        (
+            "codata | .left : Unit | .right : Int64 end",
+            "codata | .left : Ret Unit | .right : Ret Int64 end",
+            KindMismatch,
+        ),
+        (
+            r#"match 0 | 0 => ("left" : Int64) | _ => ("right" : Int64) end"#,
+            "match 0 | 0 => (1 : Int64) | _ => (2 : Int64) end",
+            TypeMismatch,
+        ),
+        (
+            r#"let C = codata | .left : Ret Int64 | .right : Ret Int64 end in
+            (comatch | .left => ret "left" | .right => ret "right" end : C)"#,
+            "let C = codata | .left : Ret Int64 | .right : Ret Int64 end in
+            (comatch | .left => ret 1 | .right => ret 2 end : C)",
+            TypeMismatch,
+        ),
+    ] {
+        let rejected = format!("let classifier = @[typeof] ({rejected}) in ret ()");
+        let accepted = format!("let classifier = @[typeof] ({accepted}) in ret ()");
+        let result = SourceCase::check(&rejected);
+        let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
+            panic!("expected checking rejection for {rejected}: {result:?}");
+        };
+        assert!(analysis.outcome().root().is_none());
+        let diagnostics = analysis.outcome().diagnostics().unwrap();
+        assert_eq!(diagnostics.len(), 2, "{rejected}: {diagnostics:?}");
+        assert!(
+            diagnostics.iter().all(|diagnostic| diagnostic.code == code),
+            "{rejected}: {diagnostics:?}"
+        );
+        let spans = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.primary.as_ref().unwrap().span)
+            .collect::<Vec<_>>();
+        assert_ne!(spans[0], spans[1], "independent errors retain their own sites");
+        SourceCase::assert_accepted(SourceCase::check_linted(&accepted));
+    }
+}
+
+#[test]
+fn failed_patterns_do_not_invent_bindings_for_their_bodies() {
+    let source = "match 0 | +Bad(x) => (x : String) | _ => (() : Int64) end";
+    let result = SourceCase::check(source);
+    let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
+        panic!("expected checking rejection: {result:?}");
+    };
+    let diagnostics = analysis.outcome().diagnostics().unwrap();
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+    assert!(
+        diagnostics.iter().any(|diagnostic| diagnostic.code == TyckDiagnosticCode::TypeExpected)
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| diagnostic.code == TyckDiagnosticCode::TypeMismatch)
+    );
+    SourceCase::assert_accepted(SourceCase::check_linted("ret (match 0 | 0 => 1 | _ => 2 end)"));
+}
+
+#[test]
+fn an_oversized_package_payload_is_rejected_before_indexing_its_expected_components() {
+    SourceCase::assert_rejected(
+        SourceCase::check_value("((Int64, 1, 2, 3, 4) : exists (A : VType) . A * A)"),
+        TyckDiagnosticCode::TypeExpected,
+    );
+    SourceCase::assert_accepted(SourceCase::check_value(
+        "((Int64, 1, 2) : exists (A : VType) . A * A)",
+    ));
+}

@@ -54,17 +54,22 @@ impl<'a> Tycker<'a> {
         self.statics.def_name(self.scoped, id)
     }
 
-    /// Type-check one complete source term.
     /// Check the complete source term without the finish phase.
     pub fn run_judgments_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
-        let env = TyEnvT::new(Default::default(), ());
-        let inference = InferenceRegion::enter(self);
-        let root = env.mk(root).tyck_k(self, Action::syn())?;
-        if matches!(root, TermAnnId::Hole(_)) {
-            self.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+        let checked = self.guarded(|tycker| {
+            let env = TyEnvT::new(Default::default(), ());
+            let inference = InferenceRegion::enter(tycker);
+            let root = env.mk(root).tyck_k(tycker, Action::syn())?;
+            if matches!(root, TermAnnId::Hole(_)) {
+                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+            }
+            inference.close_k(tycker)?;
+            Ok(root)
+        });
+        if checked.is_err() {
+            self.check_independent_sources(root);
         }
-        inference.close_k(self)?;
-        Ok(root)
+        checked
     }
 
     pub fn run_source_k(&mut self, root: su::TermId) -> ResultKont<TermAnnId> {
@@ -161,26 +166,22 @@ impl<'a> Tycker<'a> {
     /// phase.
     pub(crate) fn normalize_and_validate_k(&mut self) -> ResultKont<()> {
         let mut normalizer = crate::normalize::FilledNormalizer::default();
-        // normalize all kinds
-        {
-            let kind_ids: Vec<_> =
-                self.statics.kinds_pre.iter().map(|(id, _)| id.to_owned()).collect();
-            for id in kind_ids {
-                normalizer.normalize_kind_k(id, self)?;
-            }
-        }
-        // normalize all types
-        {
-            let type_ids: Vec<_> =
-                self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
-            for id in type_ids {
-                normalizer.normalize_type_k(id, self)?;
-            }
-            self.validate_foreign_imports();
-            // Retain one normalized classifier per distinct top annotation so
-            // editor facts can answer without the occurrence payload.
-            self.statics.retain_normalized_annotations();
-        }
+        let kind_ids: Vec<_> = self.statics.kinds_pre.iter().map(|(id, _)| *id).collect();
+        let kinds = kind_ids
+            .into_iter()
+            .map(|id| normalizer.normalize_kind_k(id, self).map(|_| ()))
+            .collect_k::<()>();
+        let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id).collect();
+        let types = type_ids
+            .into_iter()
+            .map(|id| normalizer.normalize_type_k(id, self).map(|_| ()))
+            .collect_k::<()>();
+        kinds?;
+        types?;
+        self.validate_foreign_imports();
+        // Retain one normalized classifier per distinct top annotation so
+        // editor facts can answer without the occurrence payload.
+        self.statics.retain_normalized_annotations();
         if self.errors.is_empty() {
             let blame = std::panic::Location::caller();
             let coverage = CoverageChecker::new(&self.statics).validate();

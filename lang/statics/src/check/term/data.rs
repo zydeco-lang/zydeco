@@ -18,19 +18,18 @@ impl TermChecker<'_> {
                     Lub::lub_k(vtype, ann_kd, tycker)?
                 }
             };
-            let mut arms_vec = rpds::VectorSync::new_sync();
-            for su::DataArm { name, param } in arms {
-                let param = self.mk(param).tyck_k(tycker, Action::ana(vtype.into()))?;
-                let TermAnnId::Type(ty, _kd) = param else {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                };
-                arms_vec.push_back_mut((name, ty));
-            }
+            let arms = arms
+                .into_iter()
+                .map(|su::DataArm { name, param }| {
+                    let checked = self.mk(param).tyck_k(tycker, Action::ana(vtype.into()))?;
+                    let TermAnnId::Type(ty, _) = checked else {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    };
+                    Ok((name, ty))
+                })
+                .collect_k::<Vec<_>>()?;
             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-            let arms_interned = crate::query::InternedDataArms::new(
-                tycker.db,
-                arms_vec.iter().cloned().collect::<Vec<_>>(),
-            );
+            let arms_interned = crate::query::InternedDataArms::new(tycker.db, arms);
             let kd_interned = crate::query::InternedKind::new(tycker.db, vtype);
             let Some(outcome) = crate::query::data_syn_judgment(
                 tycker.db,
@@ -68,19 +67,18 @@ impl TermChecker<'_> {
                     Lub::lub_k(ctype, ann_kd, tycker)?
                 }
             };
-            let mut arms_vec = rpds::VectorSync::new_sync();
-            for su::CoDataArm { name, out } in arms {
-                let out = self.mk(out).tyck_k(tycker, Action::ana(ctype.into()))?;
-                let TermAnnId::Type(ty, _kd) = out else {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                };
-                arms_vec.push_back_mut((name, ty));
-            }
+            let arms = arms
+                .into_iter()
+                .map(|su::CoDataArm { name, out }| {
+                    let checked = self.mk(out).tyck_k(tycker, Action::ana(ctype.into()))?;
+                    let TermAnnId::Type(ty, _) = checked else {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    };
+                    Ok((name, ty))
+                })
+                .collect_k::<Vec<_>>()?;
             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
-            let arms_interned = crate::query::InternedCoDataArms::new(
-                tycker.db,
-                arms_vec.iter().cloned().collect::<Vec<_>>(),
-            );
+            let arms_interned = crate::query::InternedCoDataArms::new(tycker.db, arms);
             let kd_interned = crate::query::InternedKind::new(tycker.db, ctype);
             let Some(outcome) = crate::query::codata_syn_judgment(
                 tycker.db,
@@ -183,32 +181,42 @@ impl TermChecker<'_> {
                 }
                 | _ => {}
             }
-            let mut matchers = Vec::new();
             let mut result_type = None;
-            for su::Matcher { binder, tail } in arms {
-                let binding =
-                    self.mk(binder).tyck_k(tycker, PatternAction::ana(scrut_ty_unroll.into()))?;
-                let (binder, _) = binding.try_as_value(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-                let action = match switch {
-                    | Switch::Syn => Action::syn(),
-                    | Switch::Ana(annotation) => Action::ana(annotation),
-                };
-                let tail = TyEnvT::new(binding.info.clone(), tail).tyck_k(tycker, action)?;
-                let ty = match tail {
-                    | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => ty,
-                    | _ => tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
-                };
-                binding.close_scope_k(tycker, ty)?;
-                result_type = Some(match result_type {
-                    | Some(previous) => Lub::lub_k(previous, ty, tycker)?,
-                    | None => ty,
-                });
-                matchers.push((binder, tail));
-            }
+            let matchers = arms
+                .into_iter()
+                .map(|su::Matcher { binder, tail }| {
+                    let binding = self
+                        .mk(binder)
+                        .tyck_k(tycker, PatternAction::ana(scrut_ty_unroll.into()))?;
+                    let (binder, _) = binding.try_as_value(
+                        tycker,
+                        TyckError::SortMismatch,
+                        std::panic::Location::caller(),
+                    )?;
+                    let action = match switch {
+                        | Switch::Syn => Action::syn(),
+                        | Switch::Ana(annotation) => Action::ana(annotation),
+                    };
+                    let source_tail = tail;
+                    let tail = TyEnvT::new(binding.info.clone(), tail).tyck_k(tycker, action)?;
+                    let ty = match tail {
+                        | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => ty,
+                        | _ => {
+                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                    };
+                    let joined = tycker.guarded(|tycker| {
+                        tycker.tasks.push_back_mut(TyckTask::Term(source_tail, switch));
+                        binding.close_scope_k(tycker, ty)?;
+                        match result_type {
+                            | Some(previous) => Lub::lub_k(previous, ty, tycker),
+                            | None => Ok(ty),
+                        }
+                    })?;
+                    result_type = Some(joined);
+                    Ok((binder, tail))
+                })
+                .collect_k::<Vec<_>>()?;
             let ty = match (result_type, switch) {
                 | (Some(ty), _) | (None, Switch::Ana(AnnId::Type(ty))) => ty,
                 | (None, Switch::Syn) => {
@@ -310,21 +318,23 @@ impl TermChecker<'_> {
                 )?
             };
             let arms = tycker.statics.codatas[&codata_id].clone();
-            let mut comatchers_new = Vec::new();
-            for su::CoMatcher { dtor, tail } in comatchers {
-                let arm_ty = match arms.get(&dtor) {
-                    | Some(arm_ty) => arm_ty,
-                    | None => tycker.err_k(
-                        TyckError::UnknownCoDataDestructor(dtor.clone()),
-                        std::panic::Location::caller(),
-                    )?,
-                };
-                let tail_out_ann = self.mk(tail).tyck_k(tycker, Action::ana(arm_ty.into()))?;
-                let TermAnnId::Compu(tail, _ty) = tail_out_ann else {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                };
-                comatchers_new.push(ss::CoMatcher { dtor, tail });
-            }
+            let comatchers_new = comatchers
+                .into_iter()
+                .map(|su::CoMatcher { dtor, tail }| {
+                    let arm_ty = match arms.get(&dtor) {
+                        | Some(arm_ty) => arm_ty,
+                        | None => tycker.err_k(
+                            TyckError::UnknownCoDataDestructor(dtor.clone()),
+                            std::panic::Location::caller(),
+                        )?,
+                    };
+                    let tail_out_ann = self.mk(tail).tyck_k(tycker, Action::ana(arm_ty.into()))?;
+                    let TermAnnId::Compu(tail, _ty) = tail_out_ann else {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    };
+                    Ok(ss::CoMatcher { dtor, tail })
+                })
+                .collect_k::<Vec<_>>()?;
             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
             let input = crate::query::InternedCoMatchInput::new(
                 tycker.db,

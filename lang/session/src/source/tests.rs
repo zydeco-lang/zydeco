@@ -2860,3 +2860,52 @@ fn source_graph_collects_cycles_even_through_a_rejected_importer() {
     fixture.write("second.zy", "()");
     assert!(SourceGraph::load(&root).is_ok(), "{first:?}, {second:?}");
 }
+
+#[test]
+fn checking_recovers_independent_imports_after_a_failed_binding() {
+    let fixture = SourceFixture::new();
+    let root = fixture.write(
+        "main.zy",
+        r#"
+        let left = @(import("left.zy")) in
+        let right = @(import("right.zy")) in
+        let Signature = @(import("contract.zyi")) in
+        (left, right, @(import("left.zy")), @(import("right.zy")))
+    "#,
+    );
+    let left = fixture.write("left.zy", "let value : @(intrinsic(i64)) = () in value");
+    let right = fixture.write("right.zy", "let value : @(intrinsic(string)) = () in value");
+    let signature = fixture.write("contract.zyi", "()");
+    let mut session = CompilerSession::default();
+    let analysis = session.analyze(&root).unwrap();
+    assert!(analysis.outcome().root().is_none());
+    let diagnostics = analysis.outcome().diagnostics().unwrap();
+    assert_eq!(diagnostics.len(), 3, "{diagnostics:?}");
+    let mut sites = diagnostics
+        .iter()
+        .map(|diagnostic| {
+            let span = diagnostic.primary.as_ref().unwrap().span;
+            (span_file(analysis.spans(), &span).unwrap(), diagnostic.code)
+        })
+        .collect::<Vec<_>>();
+    sites.sort_by(|left, right| left.0.cmp(&right.0));
+    use zydeco_statics::TyckDiagnosticCode::{SignatureNotType, TypeMismatch};
+    assert_eq!(
+        sites,
+        vec![
+            ("contract.zyi".into(), SignatureNotType),
+            ("left.zy".into(), TypeMismatch),
+            ("right.zy".into(), TypeMismatch),
+        ]
+    );
+    for provider in [&left, &right] {
+        session.set_overlay(provider, "()".into()).unwrap();
+    }
+    session.set_overlay(&signature, "@(intrinsic(unit))".into()).unwrap();
+    assert!(session.analyze(&root).unwrap().outcome().root().is_some());
+    session.set_overlay(&right, "let value : @(intrinsic(string)) = () in value".into()).unwrap();
+    let analysis = session.analyze(&root).unwrap();
+    let diagnostics = analysis.outcome().diagnostics().unwrap();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics.iter().next().unwrap().code, TypeMismatch);
+}

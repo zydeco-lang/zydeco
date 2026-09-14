@@ -220,9 +220,10 @@ impl TermChecker<'_> {
                     let mut components = items;
                     components.push(tail);
                     let outcomes = components
-                        .into_iter()
+                        .iter()
+                        .copied()
                         .map(|component| self.mk(component).tyck_k(tycker, Action::syn()))
-                        .collect::<ResultKont<Vec<_>>>()?;
+                        .collect_k::<Vec<_>>()?;
                     let typed = matches!(outcomes.first(), Some(TermAnnId::Type(_, _)));
                     let mixed = outcomes.iter().any(|outcome| match outcome {
                         | TermAnnId::Type(_, _) => !typed,
@@ -238,25 +239,29 @@ impl TermChecker<'_> {
                         let vtype = ss::VType.build(tycker, &self.info);
                         let component_tys = outcomes
                             .into_iter()
-                            .map(|outcome| match outcome {
-                                | TermAnnId::Type(ty, kd) => {
-                                    Lub::lub_k(vtype, kd, tycker)?;
-                                    Ok(ty)
-                                }
-                                | _ => unreachable!("sorted outcomes are uniform"),
+                            .zip(components)
+                            .map(|(outcome, source)| {
+                                tycker.guarded(|tycker| {
+                                    tycker.tasks.push_back_mut(TyckTask::Term(source, Switch::Syn));
+                                    match outcome {
+                                        | TermAnnId::Type(ty, kd) => {
+                                            Lub::lub_k(vtype, kd, tycker)?;
+                                            Ok(ty)
+                                        }
+                                        | _ => unreachable!("sorted outcomes are uniform"),
+                                    }
+                                })
                             })
-                            .collect::<ResultKont<Vec<_>>>()?;
+                            .collect_k::<Vec<_>>()?;
                         let prod = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
                         TermAnnId::Type(prod, vtype)
                     } else {
                         let (mut output, mut annotations): (Vec<_>, Vec<_>) = outcomes
                             .into_iter()
                             .map(|outcome| match outcome {
-                                | TermAnnId::Value(item, item_ty) => Ok((item, item_ty)),
+                                | TermAnnId::Value(item, item_ty) => (item, item_ty),
                                 | _ => unreachable!("sorted outcomes are uniform"),
                             })
-                            .collect::<ResultKont<Vec<_>>>()?
-                            .into_iter()
                             .unzip();
                         let tail =
                             output.pop().expect("a cons term carries at least two components");
@@ -313,10 +318,10 @@ impl TermChecker<'_> {
                                     std::panic::Location::caller(),
                                 )?
                             }
-                            let item_count = items.len();
-                            let (output, annotations): (Vec<_>, Vec<_>) = items
+                            let (components, annotations): (Vec<_>, Vec<_>) = items
                                 .into_iter()
-                                .zip(component_tys.iter().copied())
+                                .chain([tail])
+                                .zip(component_tys)
                                 .map(|(item, item_ty)| -> ResultKont<_> {
                                     let checked = self.mk(item).tyck_k(
                                         tycker,
@@ -328,26 +333,12 @@ impl TermChecker<'_> {
                                         std::panic::Location::caller(),
                                     )
                                 })
-                                .collect::<ResultKont<Vec<_>>>()?
+                                .collect_k::<Vec<_>>()?
                                 .into_iter()
                                 .unzip();
-
-                            let checked = self.mk(tail).tyck_k(
-                                tycker,
-                                Action::ana_prepared(component_tys[item_count].into(), &self.info),
-                            )?;
-                            let (tail, ann) = checked.try_as_value(
-                                tycker,
-                                TyckError::SortMismatch,
-                                std::panic::Location::caller(),
-                            )?;
                             let vtype = ss::VType.build(tycker, &self.info);
-                            let mut component_tys = annotations;
-                            component_tys.push(ann);
                             let ann =
-                                Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
-                            let mut components = output;
-                            components.push(tail);
+                                Alloc::alloc(tycker, ss::Prod(annotations), vtype, &self.info);
                             let cons =
                                 Alloc::alloc(tycker, ss::Value::VCons(components), ann, &self.info);
                             TermAnnId::Value(cons, ann)
@@ -437,10 +428,25 @@ impl TermChecker<'_> {
                                 let ss::Prod(body_component_tys) =
                                     body_view.view_prepared_product_k(tycker, &self.info)?;
 
-                                let (output, annotations): (Vec<_>, Vec<_>) = body_items
+                                if body_component_tys.len() < body_items.len() {
+                                    tycker.err_k(
+                                        TyckError::TypeExpected {
+                                            expected: "a product with matching components"
+                                                .to_string(),
+                                            found: body_view,
+                                        },
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+                                let remaining = tycker.rest_product_k(
+                                    &body_component_tys[body_items.len()..],
+                                    &self.info,
+                                )?;
+                                let (components, annotations): (Vec<_>, Vec<_>) = body_items
                                     .iter()
                                     .copied()
                                     .zip(body_component_tys.iter().copied())
+                                    .chain([(tail, remaining)])
                                     .map(|(item, item_ty)| -> ResultKont<_> {
                                         let checked = self.mk(item).tyck_k(
                                             tycker,
@@ -452,34 +458,12 @@ impl TermChecker<'_> {
                                             std::panic::Location::caller(),
                                         )
                                     })
-                                    .collect::<ResultKont<Vec<_>>>()?
+                                    .collect_k::<Vec<_>>()?
                                     .into_iter()
                                     .unzip();
-
-                                let remaining = tycker.rest_product_k(
-                                    &body_component_tys[body_items.len()..],
-                                    &self.info,
-                                )?;
-                                let checked = self.mk(tail).tyck_k(
-                                    tycker,
-                                    Action::ana_prepared(remaining.into(), &self.info),
-                                )?;
-                                let (tail, ann) = checked.try_as_value(
-                                    tycker,
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?;
                                 let vtype = ss::VType.build(tycker, &self.info);
-                                let mut component_tys = annotations;
-                                component_tys.push(ann);
-                                let ann = Alloc::alloc(
-                                    tycker,
-                                    ss::Prod(component_tys),
-                                    vtype,
-                                    &self.info,
-                                );
-                                let mut components = output;
-                                components.push(tail);
+                                let ann =
+                                    Alloc::alloc(tycker, ss::Prod(annotations), vtype, &self.info);
                                 Alloc::alloc(tycker, ss::Value::VCons(components), ann, &self.info)
                             };
                             let cons = Alloc::alloc(

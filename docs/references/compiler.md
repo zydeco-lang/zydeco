@@ -732,15 +732,61 @@ Lexical and abstract-witness substitution follow solved type holes before rewrit
 This lets an inferred factory result specialize independently at each application, including value-function fields;
 the shared solution itself remains unchanged.
 
-`CheckedTermRepository` retains a canonical result per resolved term for sources,
+`CheckedTermRepository` retains a canonical synthesis outcome per resolved term for sources,
 classifier queries, and monadic payloads.
 Reuse requires a context extension preserving every original binding and visible witness;
-repeated or nested requests must agree on the arena root.
+successful repeated or nested requests must agree on the arena root.
 This permits a recursive annotation to be revisited after recursive bindings are installed.
+A failed synthesis is retained as a recorded rejection within that checker,
+including an outer request that fails after a nested request has retained a root.
+Later references propagate that failure without repeating synthesis.
+Use-site reconciliation still runs separately; a caller's incompatible expectation does not reject the shared provider.
 A `TypeOf` boundary synthesizes its operand once, extracts and scope-checks the existing classifier IDs,
 and reconciles expectations afterward.
 It does not forward its own expectation, annotation, or seal into the operand.
 In particular, direct extraction from `ret v` relies on recording `Ret A : CType` correctly.
+
+### Checker recovery
+
+Checking can continue after an error when the next judgment's inputs are already established.
+The checker owns typing environments and inference constraints, so its recovery points follow judgment dependencies.
+A structural visitor alone cannot supply the missing classifier of a failed function or the scope of a failed binder.
+
+[ResultKontIterator::collect_k](../../lang/utils/src/err.rs) exhausts a sequence of independent `_k` requests.
+Each failing request stores its diagnostic and returns `KontFailure`;
+the collector returns all successful results in order only when every request succeeds.
+Any failure rejects the combined result, so callers cannot accidentally publish an incomplete product or case tree.
+The migrated judgment boundaries are:
+
+| Boundary | Work that continues | Required evidence |
+| --- | --- | --- |
+| Product synthesis and checking | Every component, including the final component | A shared lexical environment; checking first establishes component classifiers and arity |
+| Package payload checking | Every remaining runtime component | The dependent witness prefix has succeeded and instantiated the body classifier |
+| Data and codata declarations | Constructor parameter types and destructor result types | The declaration's required kind |
+| Match arms | Other patterns and their bodies, including result-type reconciliation | A checked scrutinee; each body requires its own successful pattern and scope closure |
+| Comatch elaboration | Independent clause bodies, destructor groups, and argument-pattern checks | The expected computation classifier and the current clause prefix |
+| Finalization | All kind and type roots | Completed source judgments; dependent validation still requires successful normalization |
+
+Kind and result-type reconciliation retain the corresponding component or arm as their diagnostic site.
+A failed match pattern skips that arm's body while other arms continue.
+Dependent telescope witnesses, sequential local bindings, and malformed shared clause prefixes remain prerequisites:
+recovery does not invent their environments or annotations.
+The [diagnostic contract](#diagnostic-collection) owns collection, deduplication, and frontend reporting.
+
+Imports provide a further independent boundary because each provider checks in its own empty source environment.
+If root judgments reject, `IndependentSources` uses the [scoped visitor](#scoped-structural-traversal)
+to collect reachable source and signature boundaries in postorder.
+The checker then synthesizes boundaries that ordinary checking did not reach, visiting dependencies before importers.
+This recovers a later imported source even when an earlier local binding prevented traversal of the importing body.
+The existing source-boundary rules close inference and check signature requirements;
+canonical synthesis outcomes prevent repeated provider work.
+Successful programs incur no recovery scan.
+
+These outcomes belong to one checker invocation; an edited source starts a new check against the current query inputs.
+Rejected checks retain established static facts for diagnostics and tooling, but expose no checked root.
+The [source diagnostics regressions](../../lang/tests/tests/diagnostics.rs)
+and [session regressions](../../lang/session/src/source/tests.rs) cover independent errors, exact locations,
+shared providers, unavailable binder scopes, rejected parent products, and correction through overlays.
 
 ### Package evidence and lookup
 
