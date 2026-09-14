@@ -42,6 +42,68 @@ Error presentation customization remains deferred.
 A future renderer can group or sort the retained diagnostics without changing producer order
 or the phase's acceptance boundary.
 
+## Further resumable folder migrations
+
+The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution)
+provides statically selected native and explicit-stack drivers, with Builtin package materialization
+and high SPS pattern reconstruction as its first clients.
+Their equivalence and depth checks support using the interface for those boundaries.
+The next evaluation reached classifier scope handling, where migration requires an environment design decision.
+
+### Classifier environments and suspension
+
+The [raw classifier folder](../../lang/statics/src/fold.rs) supplies immediate recursive callbacks.
+For `ValPi`, it first rebuilds a parameter's domain, then lends the updated local binder
+to `fold_body` through `TypeScope::ValueFunction`.
+Package bodies similarly receive a reference to their local witness telescope.
+[Abstract substitution](../../lang/statics/src/normalize/substitution.rs) filters its ordered assignments
+into a local vector and lends that vector to a temporary child folder.
+These references remain valid while the original Rust calls are active.
+A resumable request must retain the necessary state after those calls have returned.
+
+This is the first difficult migration boundary: a generic driver alone cannot choose the ownership
+of child environments, the representation of updated binders, or the lifetime of filtered assignment sequences.
+Wrapping each existing callback in a fresh `Explicit::run` would retain the recursive callers around those runs.
+The recursive call cycle must instead cross the shared suspension protocol.
+
+Two concrete alternatives remain open:
+
+| Alternative | Benefit | Cost and required decisions |
+| --- | --- | --- |
+| Own scope descriptors and assignment sequences in each child request | Direct correspondence with the current lexical calls; compiler borrows end before suspension | Decide when to move, copy, or share binder and assignment data; repeated filtering and copying need measurement |
+| Store environments in a per-run table and pass environment IDs plus assignment suffix positions | Stable small requests and explicit environment lifetimes; can reuse common prefixes | Introduces storage and retirement rules; filtering must preserve ordered replacement semantics and binder shadowing |
+
+Prefer evaluating owned requests first for clarity, then introduce table storage only
+if concrete clients justify its additional machinery.
+This preference does not adopt either representation.
+The shared raw-type layer should describe structural child slots once, while semantic clients choose child environments
+and retain their existing allocation, normalization, and cache policies.
+`Tycker` remains shared mutable run state and is reborrowed between folder steps.
+
+Before resuming this migration, compare a simple raw structural client with abstract substitution,
+hole resolution, and filled normalization.
+The validation set must include unchanged-ID reuse, changed labels and provenance,
+shared solved tails, several missing solutions, updated parameter domains,
+ordered assignment suffixes, and witness shadowing through each body boundary.
+Include reduction calls reached after reconstruction:
+an explicit structural subwalk alone does not bound recursive normalization or substitution helpers.
+Replace the affected callback interfaces and their callers together once the ownership choice is settled.
+
+### Remaining execution adapters
+
+The complete residual lowering and consumer-demand normalization machines still use their existing domain worklists.
+Migrating them requires expressing their heterogeneous pattern, value, computation, and stack results
+through domain request/result types or a separately justified adapter for the existing typed result stacks.
+Preserve the established interleaving of allocations and child visits and compare error multiplicity,
+source evidence, and output ownership under both drivers.
+
+Surface rebuilding, desugaring, resolution, and assembly lowering retain their current execution mechanisms.
+The existing analysis visitors already use explicit traversal stacks;
+a driver migration there needs a concrete maintenance benefit and must preserve entry/exit balancing,
+cycle handling, and occurrence policies.
+Do not expand the common folder protocol merely to accommodate all these mechanisms at once.
+Each subsequent migration should first demonstrate a simpler client under both drivers and retain its depth fixture.
+
 ## Additional graph views and adapters
 
 A borrowed adapter for both bitter and scoped syntax may become useful if another analysis needs it.
