@@ -345,6 +345,7 @@ The implemented interfaces serve different questions and therefore expose differ
 | Lexical high SPS analysis | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
 | Lexical high SPS normalization | [Normalization reconstruction](#normalization-reconstruction) | Explicit frames retain forward producer scopes and resume rebuilding with backward consumer demands |
 | Lexical high SPS to first-order SPSLow | [Closure conversion folders](#closure-conversion-folders) | Occurrence-local renaming and ordered captures; fresh syntax with preserved allocation and publication order |
+| First-order SPSLow analysis | [SPSLow traversal and analyzers](#spslow-traversal-and-analyzers) | Observe ownership edges and compute variable summaries in one scan; metadata adds no executable occurrences |
 
 Before reusing a traversal, establish its input view, child environments, occurrence policy, and output identity policy.
 A raw classifier, its normalized view, and a residual executable are different inputs even
@@ -1596,6 +1597,41 @@ in a closure and a 16,384-frame argument stack on that stack size.
 These fixtures isolate reconstruction from downstream validation.
 Semantic protocol cloning and destruction, low verification, and later phases retain their own depth requirements;
 explicit conversion does not establish an end-to-end depth guarantee.
+
+### SPSLow traversal and analyzers
+
+The [SPSLow traversal](../../lang/stackir/src/low/traverse.rs) describes executable children once.
+Its resumable folder retains a borrowed node and the next child position.
+Each child selection takes constant time, including wide products and branch vectors; frames do not copy those vectors.
+`Traversal::run_with_driver::<D>` selects the shared execution driver, with `Explicit` as the default.
+
+Every incoming edge produces an entry event marked first, shared, or cyclic.
+Only the first occurrence expands children and receives an exit event.
+Block entry patterns precede their body in stack-consumption order;
+the tail of a stack let carries its immediate branch-join owner.
+Continuation metadata and provenance refer to existing syntax and add no executable edges.
+`Together` sends the same events to independent observers.
+
+[Variable analysis](../../lang/stackir/src/low/variables.rs) computes bound patterns and free terms at exit.
+Block labels and entry words bind only their body; package openings and local bindings likewise remove definitions
+from their dependent body rather than from the package or bindee.
+A cyclic traversal exposes no usable variable summaries.
+The [structural validator](../../lang/stackir/src/low/check.rs) observes ownership
+and branch-join edges alongside these summaries, then checks block captures,
+continuation contexts, and root closure from the completed facts.
+This avoids rescanning each block body and continuation context.
+Malformed structure is rejected before dependent capture checks consume summaries.
+The temporary summaries are dropped before entry-contract and protocol validation.
+Validation still returns one error;
+broader diagnostic recovery remains [unfinished work](../proposals/traversals.md#diagnostic-collection-and-recovery).
+
+Driver comparisons cover event order, sharing, cycles, entry words, lexical binders,
+empty and wide fields, and rejection without publishing an invalid program.
+Direct fixtures analyze and drop 16,384 nested bindings on a 512 KiB stack,
+including a block whose capture check reuses those summaries.
+Entry-contract and protocol validation remain separate semantic traversals with their own depth requirements.
+Summary storage is proportional to retained facts, which can exceed syntax size;
+these tests establish traversal counts and depth behavior rather than memory or compilation-time gains.
 
 ### Word entry contracts
 

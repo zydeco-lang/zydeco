@@ -8,6 +8,7 @@ pub mod entry;
 pub mod protocols;
 pub mod fmt;
 pub mod syntax;
+pub mod traverse;
 pub mod variables;
 
 pub use arena::*;

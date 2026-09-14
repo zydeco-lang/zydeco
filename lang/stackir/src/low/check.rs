@@ -1,8 +1,10 @@
 //! Structural validation for first-order SPS.
 
 use super::syntax::*;
-use super::variables::{FreeVars as _, Vars as _};
+use super::traverse::{Edge, Node, Occurrence, Together, Traversal, Visitor};
+use super::variables::Variables;
 use std::collections::HashSet;
+use zydeco_utils::fold::{Driver, Explicit};
 
 /// A lexical first-order SPS tree whose joins remain attached to coproduct branches.
 #[derive(Debug)]
@@ -41,12 +43,18 @@ pub enum SpsLowError {
 
 impl SpsLowProgram {
     pub fn try_new(arena: SpsLowArena, root: CompuId) -> Result<Self, SpsLowError> {
-        SpsLowValidator::validate(&arena.inner, root)?;
-        let mut variables = root.free_vars(&arena.inner).into_iter().collect::<Vec<_>>();
+        let facts = SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root)?;
+        let mut variables = facts
+            .free_variables(root.into())
+            .expect("validated syntax")
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
         variables.sort_unstable();
         if !variables.is_empty() {
             return Err(SpsLowError::OpenRoot { variables });
         }
+        drop(facts);
         super::contracts::EntryValidator::validate(&arena.inner, root)?;
         super::protocols::ProtocolValidator::validate(&arena.inner, root)?;
         Ok(Self { arena: FrozenArena::new(arena), root })
@@ -71,17 +79,18 @@ impl AsRef<SpsLowArena> for SpsLowProgram {
     }
 }
 
-struct SpsLowValidator<'a> {
-    arena: &'a SpsLowInnerArena,
-    compus: HashSet<CompuId>,
+#[derive(Default)]
+struct SpsLowValidator {
+    error: Option<SpsLowError>,
     stacks: HashSet<StackId>,
-    values: HashSet<ValueId>,
-    patterns: HashSet<VPatId>,
     labels: HashSet<DefId>,
+    blocks: Vec<ValueId>,
 }
 
 impl ContinuationEntry {
-    fn matches_package(&self, arena: &SpsLowInnerArena, stack: StackId) -> bool {
+    fn matches_package(
+        &self, arena: &SpsLowInnerArena, stack: StackId, variables: &Variables,
+    ) -> bool {
         let Some(Stack::ContinuationPackage(ContinuationPackage { code, residual })) =
             arena.stacks.get(&stack)
         else {
@@ -116,167 +125,93 @@ impl ContinuationEntry {
                 && matches!(arena.vpats[pattern], ValuePattern::Var(binding) if binding == capture.binding)
         }) { return false; }
         let bindings = self.captures.iter().map(|capture| capture.binding).collect::<HashSet<_>>();
-        let free = self.body.free_vars(arena) - self.result.vars(arena);
+        let free = variables
+            .free_variables(self.body.into())
+            .expect("validated continuation body")
+            .clone()
+            - variables
+                .bound_variables(self.result)
+                .expect("validated continuation result")
+                .clone();
         bindings.len() == self.captures.len()
             && !free.iter().any(|variable| variable == label)
             && free.iter().all(|variable| bindings.contains(variable))
     }
 }
 
-impl<'a> SpsLowValidator<'a> {
-    fn validate(arena: &'a SpsLowInnerArena, root: CompuId) -> Result<(), SpsLowError> {
-        let mut validator = Self {
-            arena,
-            compus: HashSet::new(),
-            stacks: HashSet::new(),
-            values: HashSet::new(),
-            patterns: HashSet::new(),
-            labels: HashSet::new(),
-        };
-        validator.compu(root, false)?;
+impl SpsLowValidator {
+    fn validate_with_driver<D: Driver>(
+        arena: &SpsLowInnerArena, root: CompuId,
+    ) -> Result<Variables, SpsLowError> {
+        let mut analyses = Together { first: Self::default(), second: Variables::default() };
+        Traversal { arena }.run_with_driver::<D>(root.into(), &mut analyses);
+        let Together { first: validator, second: variables } = analyses;
+        if let Some(error) = validator.error {
+            return Err(error);
+        }
+        for block in validator.blocks {
+            let Value::Block(Block { label, .. }) = arena.values[&block] else { unreachable!() };
+            let captures = variables
+                .free_variables(block.into())
+                .expect("validated block")
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
+            if !captures.is_empty() {
+                return Err(SpsLowError::ImplicitBlockCapture { label, captures });
+            }
+        }
         for (stack, entry) in &arena.continuations {
-            if !validator.stacks.contains(stack) || !entry.matches_package(arena, *stack) {
+            if !validator.stacks.contains(stack)
+                || !entry.matches_package(arena, *stack, &variables)
+            {
                 return Err(SpsLowError::ContinuationContext { stack: *stack });
+            }
+        }
+        Ok(variables)
+    }
+
+    fn check(
+        &mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence,
+    ) -> Result<(), SpsLowError> {
+        if occurrence != Occurrence::First {
+            return Err(match node {
+                | Node::Pattern(pattern, _) => SpsLowError::SharedPattern { pattern },
+                | Node::Value(value, _) => SpsLowError::SharedValue { value },
+                | Node::Stack(stack, _) => SpsLowError::SharedStack { stack },
+                | Node::Computation(compu, _) => SpsLowError::SharedComputation { compu },
+            });
+        }
+        match node {
+            | Node::Pattern(_, _) => {}
+            | Node::Value(id, Value::Block(Block { label, .. })) => {
+                if !self.labels.insert(*label) {
+                    return Err(SpsLowError::DuplicateBlockLabel { label: *label });
+                }
+                self.blocks.push(id);
+            }
+            | Node::Value(_, _) => {}
+            | Node::Stack(id, _) => {
+                self.stacks.insert(id);
+            }
+            | Node::Computation(id, computation) => {
+                if let Edge::BranchJoin(compu) = edge {
+                    if !matches!(computation, Computation::CoprodMatch(_)) {
+                        return Err(SpsLowError::NonBranchStackLet { compu, body: id });
+                    }
+                } else if matches!(computation, Computation::CoprodMatch(_)) {
+                    return Err(SpsLowError::UnguardedCoprodMatch { compu: id });
+                }
             }
         }
         Ok(())
     }
+}
 
-    fn compu(&mut self, id: CompuId, guarded: bool) -> Result<(), SpsLowError> {
-        if !self.compus.insert(id) {
-            return Err(SpsLowError::SharedComputation { compu: id });
-        }
-
-        match self.arena.compus[&id].clone() {
-            | Computation::Hole(SHole(stack)) => self.stack(stack),
-            | Computation::Jump(Jump { target, argument, stack }) => {
-                self.value(target)?;
-                self.value(argument.word().1)?;
-                self.stack(stack)
-            }
-            | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
-                self.value(scrut)?;
-                self.pattern(binder)?;
-                self.compu(body, false)
-            }
-            | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
-                if !guarded {
-                    return Err(SpsLowError::UnguardedCoprodMatch { compu: id });
-                }
-                self.value(scrut)?;
-                arms.into_iter().try_for_each(|Matcher { binder, tail }| {
-                    self.pattern(binder)?;
-                    self.compu(tail, false)
-                })
-            }
-            | Computation::LetValue(LetValue { binder, bindee, tail: body }) => {
-                self.value(bindee)?;
-                self.pattern(binder)?;
-                self.compu(body, false)
-            }
-            | Computation::LetStack(LetStack { binder: Bullet, bindee, tail: body }) => {
-                self.stack(bindee)?;
-                if !matches!(self.arena.compus[&body], Computation::CoprodMatch(_)) {
-                    return Err(SpsLowError::NonBranchStackLet { compu: id, body });
-                }
-                self.compu(body, true)
-            }
-            | Computation::LetArg(LetArg { binder: Cons(binder, Bullet), bindee, tail: body }) => {
-                self.stack(bindee)?;
-                self.pattern(binder)?;
-                self.compu(body, false)
-            }
-            | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                self.stack(scrut)?;
-                arms.into_iter().try_for_each(|CoMatcher { dtor: _, tail }| self.compu(tail, false))
-            }
-            | Computation::OpenClosure(OpenClosure { package, environment, code, body }) => {
-                self.value(package)?;
-                self.pattern(environment)?;
-                self.pattern(code)?;
-                self.compu(body, false)
-            }
-            | Computation::OpenContinuation(OpenContinuation { package, code, body }) => {
-                self.stack(package)?;
-                self.pattern(code)?;
-                self.compu(body, false)
-            }
-            | Computation::ExternCall(ExternCall { function: _, stack }) => self.stack(stack),
-        }
-    }
-
-    fn stack(&mut self, id: StackId) -> Result<(), SpsLowError> {
-        if !self.stacks.insert(id) {
-            return Err(SpsLowError::SharedStack { stack: id });
-        }
-
-        match self.arena.stacks[&id].clone() {
-            | Stack::Var(Bullet) => Ok(()),
-            | Stack::Arg(Cons(value, stack)) => {
-                self.value(value)?;
-                self.stack(stack)
-            }
-            | Stack::Tag(Cons(_, stack)) => self.stack(stack),
-            | Stack::ContinuationPackage(ContinuationPackage { code, residual }) => {
-                self.value(code)?;
-                self.stack(residual)
-            }
-        }
-    }
-
-    fn value(&mut self, id: ValueId) -> Result<(), SpsLowError> {
-        if !self.values.insert(id) {
-            return Err(SpsLowError::SharedValue { value: id });
-        }
-
-        match self.arena.values[&id].clone() {
-            | Value::Hole(Hole) | Value::Var(_) | Value::Triv(Triv) | Value::Literal(_) => Ok(()),
-            | Value::Block(Block { label, entry, body }) => {
-                if !self.labels.insert(label) {
-                    return Err(SpsLowError::DuplicateBlockLabel { label });
-                }
-                let free = entry.words().fold(body.free_vars(self.arena), |free, (_, pattern)| {
-                    free - pattern.vars(self.arena)
-                });
-                let mut captures = free.into_iter().collect::<Vec<_>>();
-                captures.retain(|capture| *capture != label);
-                captures.sort_unstable();
-                if !captures.is_empty() {
-                    return Err(SpsLowError::ImplicitBlockCapture { label, captures });
-                }
-                for (_, pattern) in entry.words() {
-                    self.pattern(pattern)?;
-                }
-                self.compu(body, false)
-            }
-            | Value::ClosurePackage(ClosurePackage { environment, code }) => {
-                self.value(environment)?;
-                self.value(code)
-            }
-            | Value::Ctor(Ctor(_, value)) => self.value(value),
-            | Value::VCons(VCons { items, layout: _ }) => {
-                items.into_iter().try_for_each(|value| self.value(value))
-            }
-            | Value::Primitive(Primitive { operation: _, operands }) => {
-                operands.into_iter().try_for_each(|value| self.value(value))
-            }
-        }
-    }
-
-    fn pattern(&mut self, id: VPatId) -> Result<(), SpsLowError> {
-        if !self.patterns.insert(id) {
-            return Err(SpsLowError::SharedPattern { pattern: id });
-        }
-
-        match self.arena.vpats[&id].clone() {
-            | ValuePattern::Hole(Hole) | ValuePattern::Var(_) | ValuePattern::Triv(Triv) => Ok(()),
-            | ValuePattern::Ctor(Ctor(_, pattern)) => self.pattern(pattern),
-            | ValuePattern::Alias(Alias(patterns)) => {
-                patterns.into_iter().try_for_each(|pattern| self.pattern(pattern))
-            }
-            | ValuePattern::VCons(VCons { items, layout: _ }) => {
-                items.into_iter().try_for_each(|pattern| self.pattern(pattern))
-            }
+impl Visitor for SpsLowValidator {
+    fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
+        if self.error.is_none() {
+            self.error = self.check(node, edge, occurrence).err();
         }
     }
 }
@@ -284,10 +219,18 @@ impl<'a> SpsLowValidator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zydeco_utils::fold::Recursive;
 
     struct Fixture;
 
     impl Fixture {
+        fn program(arena: SpsLowArena, root: CompuId) -> Result<SpsLowProgram, SpsLowError> {
+            let explicit = SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root);
+            let recursive = SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, root);
+            assert_eq!(explicit.err(), recursive.err());
+            SpsLowProgram::try_new(arena, root)
+        }
+
         fn argument(arena: &mut SpsLowArena) -> EntryArgument {
             EntryArgument::Closure { environment: Triv.build(arena, None) }
         }
@@ -307,7 +250,7 @@ mod tests {
             .build(&mut arena, None);
 
         assert_eq!(
-            SpsLowProgram::try_new(arena, root).unwrap_err(),
+            Fixture::program(arena, root).unwrap_err(),
             SpsLowError::SharedValue { value: shared }
         );
     }
@@ -333,7 +276,7 @@ mod tests {
                 .build(&mut arena, None);
 
         assert_eq!(
-            SpsLowProgram::try_new(arena, root).unwrap_err(),
+            Fixture::program(arena, root).unwrap_err(),
             SpsLowError::ImplicitBlockCapture { label, captures: vec![captured] }
         );
     }
@@ -348,7 +291,7 @@ mod tests {
             Jump { argument: Fixture::argument(&mut arena), target, stack }.build(&mut arena, None);
 
         assert_eq!(
-            SpsLowProgram::try_new(arena, root).unwrap_err(),
+            Fixture::program(arena, root).unwrap_err(),
             SpsLowError::OpenRoot { variables: vec![free] }
         );
     }
@@ -387,8 +330,79 @@ mod tests {
                 .build(&mut arena, None);
 
         assert_eq!(
-            SpsLowProgram::try_new(arena, root).unwrap_err(),
+            Fixture::program(arena, root).unwrap_err(),
             SpsLowError::DuplicateBlockLabel { label }
         );
+    }
+
+    #[test]
+    fn branch_join_edges_accept_only_an_immediate_coproduct_body() {
+        let mut arena = SpsLowArena::default();
+        let scrut = Triv.build(&mut arena, None);
+        let branch = SCoprodMatch { scrut, arms: vec![] }.build(&mut arena, None);
+        for error in [
+            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch).err(),
+            SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch).err(),
+        ] {
+            assert_eq!(error, Some(SpsLowError::UnguardedCoprodMatch { compu: branch }));
+        }
+        let stack = Bullet.build(&mut arena, None);
+        let root = LetStack { binder: Bullet, bindee: stack, tail: branch }.build(&mut arena, None);
+        let program = Fixture::program(arena, root).unwrap();
+        let (mut arena, root) = program.into_parts();
+        let stack = Bullet.build(&mut arena, None);
+        arena.inner.compus[&branch] = SHole(stack).into();
+        assert_eq!(
+            Fixture::program(arena, root).unwrap_err(),
+            SpsLowError::NonBranchStackLet { compu: root, body: branch }
+        );
+    }
+
+    #[test]
+    fn cyclic_blocks_are_rejected_before_capture_summaries_are_consumed() {
+        let mut arena = SpsLowArena::default();
+        let stack = Bullet.build(&mut arena, None);
+        let body = SHole(stack).build(&mut arena, None);
+        let binder = Hole.build(&mut arena, None);
+        let bindee = Triv.build(&mut arena, None);
+        arena.inner.compus[&body] = LetValue { binder, bindee, tail: body }.into();
+        let label = arena.admin.fresh_def();
+        let block =
+            Block { label, entry: Fixture::entry(&mut arena), body }.build(&mut arena, None);
+        let ambient = Bullet.build(&mut arena, None);
+        let stack = Cons(block, ambient).build(&mut arena, None);
+        let root = SHole(stack).build(&mut arena, None);
+        assert_eq!(
+            Fixture::program(arena, root).unwrap_err(),
+            SpsLowError::SharedComputation { compu: body }
+        );
+    }
+
+    #[test]
+    fn deep_block_validation_uses_completed_variable_summaries() {
+        std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(|| {
+                let mut arena = SpsLowArena::default();
+                let stack = Bullet.build(&mut arena, None);
+                let mut body = SHole(stack).build(&mut arena, None);
+                for _ in 0..16_384 {
+                    let binder = Hole.build(&mut arena, None);
+                    let bindee = Triv.build(&mut arena, None);
+                    body = LetValue { binder, bindee, tail: body }.build(&mut arena, None);
+                }
+                let label = arena.admin.fresh_def();
+                let block = Block { label, entry: Fixture::entry(&mut arena), body }
+                    .build(&mut arena, None);
+                let ambient = Bullet.build(&mut arena, None);
+                let stack = Cons(block, ambient).build(&mut arena, None);
+                let root = SHole(stack).build(&mut arena, None);
+                let variables =
+                    SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root).unwrap();
+                assert!(variables.free_variables(root.into()).unwrap().is_empty());
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 }

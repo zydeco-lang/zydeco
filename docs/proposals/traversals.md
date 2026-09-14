@@ -1,7 +1,7 @@
 # Reusable folders and traversal composition
 
 This proposal retains unfinished extensions to compiler traversal and diagnostic recovery.
-The implemented surface, classifier, runtime, and high SPS interfaces are indexed
+The implemented surface, classifier, runtime, and SPS interfaces are indexed
 by [choosing and composing traversals](../references/compiler.md#choosing-and-composing-traversals).
 That reference owns their shared design rules and links to the detailed phase contracts.
 The [diagnostic collection contract](../references/compiler.md#diagnostic-collection) records current recovery
@@ -46,11 +46,10 @@ or the phase's acceptance boundary.
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution)
 provides statically selected native and explicit-stack drivers for residual lowering,
-Builtin package materialization, high SPS normalization, and closure conversion.
+Builtin package materialization, high SPS normalization, closure conversion, and SPSLow structural analysis.
 Their equivalence and depth checks support using the interface for those boundaries.
-Classifier scope handling remains deferred.
-The next evaluated boundary is surface rebuilding, where shared structural callbacks
-and recovery must become resumable together.
+The following sections record boundaries skipped after evaluation because their ownership
+or consumer interfaces need a further design choice.
 
 ### Classifier environments and suspension
 
@@ -135,6 +134,30 @@ origins, annotation and view children, and copattern spines.
 Pair successful name resolution with several unresolved siblings; preserve diagnostic multiplicity,
 reference and scope events, dependency cleanup, and the absence of a published strict-resolution product on failure.
 A direct deep fixture must cross pattern-to-term edges and include destruction of retained layer state.
+
+### SPSLow semantic evidence
+
+The implemented [SPSLow scan](../references/compiler.md#spslow-traversal-and-analyzers) covers structural ownership
+and variable summaries.
+The [entry-contract validator](../../lang/stackir/src/low/contracts.rs)
+and [protocol validator](../../lang/stackir/src/low/protocols.rs) require more than the same structural events.
+They propagate entry-specific evidence through bindings, open packages, and branch-local contexts.
+
+`ValueEvidence::Product` owns nested field evidence, while `StackEvidence` owns boxed argument and tag tails.
+Branch contexts and alias binders clone those structures.
+The protocol validator adds `ValueFact::fields`, constructs nested facts from source protocols,
+and clones inline `ValueProtocol` and `StackProtocol` components.
+An explicit syntax folder would leave recursive construction, cloning, and destruction of these facts in place.
+The existing protocol graph names recursive definitions; it does not flatten every inline field or stack prefix.
+
+This is a medium–high difficulty migration, deferred until evidence ownership is chosen.
+Compare per-validation fact arenas with IDs and shared context prefixes against retaining owned trees
+with iterative fact operations and destruction.
+Arena IDs make suspension and teardown straightforward but introduce fact lifetimes and storage policy;
+owned trees retain the current interfaces but require coordinated changes to every recursive operation.
+Keep entry kind, opening identity, environment arity, alias propagation, and restored-stack checks unchanged.
+Include both successful and rejected deep products, argument stacks, aliases, and branch contexts,
+and drop retained facts and error payloads on the small test stack.
 
 ### Other execution adapters
 
