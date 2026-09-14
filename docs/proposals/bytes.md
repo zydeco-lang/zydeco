@@ -33,6 +33,11 @@ A write invokes a completion continuation without constructing an intermediate i
 freeze delivers the completed bytes to their consumer.
 This separates advancing a construction from publishing its contents.
 
+The interface combines continuation-passing style (CPS), which makes the next computation explicit,
+with destination-passing style (DPS), which makes result storage explicit.
+DPS can also use ordinary returns; continuation representation and result placement are independent decisions.
+The [local CPS compilation proposal](escape-unboxing.md#local-cps-continuations-proposed) owns callback lowering.
+
 The [Ret and CPS convention](../references/language.md#ret-and-explicit-cps) governs these public interfaces.
 Choosing explicit successors does not by itself remove allocations or make a thunk single-use.
 
@@ -72,8 +77,9 @@ an atomic batch would need its own whole-batch preflight or private staging cont
 Pair accepted nested encodings with invalid destinations, overflow,
 and a failing late field that leaves all bytes unchanged.
 Compare the completed bytes with the existing encoder, including padding and scalar bit patterns.
-Measure executed temporary allocations and copied bytes in the runtime and static-plan C construction fixtures.
-CPS alone is not evidence that either count decreased.
+Measure executed payload allocations and copied bytes in the runtime and static-plan C construction fixtures,
+separately from the [callback and frame costs](escape-unboxing.md#local-cps-continuations-proposed).
+CPS alone is not evidence that any of these costs decreased.
 
 ### Composed workers and result destinations
 
@@ -150,9 +156,26 @@ avoiding a payload copy alone does not establish the stronger FIP bound on total
 
 ## Related work
 
+- Amir Shaikhha, Andrew Fitzgibbon, Simon Peyton Jones, and Dimitrios Vytiniotis.
+  [*Destination-Passing Style for Efficient Memory Management*](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/11/dps-fhpc17.pdf).
+  FHPC 2017. Caller-provided result storage and compositional shape calculation support efficient allocation in a
+  restricted functional array language. This motivates starting with known-layout codecs; its stack-like allocation
+  guarantees do not extend automatically to arbitrary Zydeco callbacks.
+- OCaml's [tail-modulo-constructor transformation](https://ocaml.org/manual/tail_mod_cons.html)
+  generates destination-passing workers that initialize constructor fields through private mutation.
+  It supplies an implemented precedent for constructing immutable results directly in their final storage.
+- MLIR's [bufferization](https://mlir.llvm.org/docs/Bufferization/#destination-passing-style) uses destination operands
+  and alias/use analysis to choose between reusing a buffer and allocating another.
+  Immutable tensor semantics are preserved when an earlier value remains observable.
+  This supports separating destination placement from the ownership evidence required for reuse.
+
+These precedents support the components; Zydeco's checked grants, freeze transition,
+and failure-before-mutation contract still need their own validation.
+
 [Perceus](https://doi.org/10.1145/3453483.3454032)
 and [FP²](https://doi.org/10.1145/3607840) motivate preserving functional observations while reusing consumed storage.
-The [compiler proposal](escape-unboxing.md#related-work) gives the bibliographic records and their distinct guarantees.
+The [compiler proposal](escape-unboxing.md#allocation-reuse) gives the bibliographic records
+and their distinct guarantees.
 Their application here is ownership-aware reuse of a backing allocation; read permission alone cannot authorize it.
 The [region proposal](reachability-regions.typ) addresses the separate lifetime and retirement obligations.
 

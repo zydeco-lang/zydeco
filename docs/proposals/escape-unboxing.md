@@ -8,6 +8,8 @@ owns the implemented pack/unpack fusion and variable-level projection analysis.
 This proposal extends that boundary to constraint-based representation choices over SPSLow:
 unboxed fields, a frame-resident cell, or a managed heap cell.
 Stack-product allocation and interprocedural escape constraints are not implemented.
+The complementary [local CPS experiment](#local-cps-continuations-proposed) would remove eligible callback machinery
+before closure conversion.
 
 SPSLow has explicit closure captures and a single lexical occurrence per value node; sharing uses named variables.
 That makes producer/consumer structure available before ZASM decomposes it into stack operations. The runtime's
@@ -63,6 +65,34 @@ It does not establish a general speedup or justify a new default.
 Frame-resident products, mixed raw/reference fields, and layout-directed machine calls remain deferred:
 they need lifetime or entry evidence that the current policy cannot supply.
 The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduction and validation commands.
+
+## Local CPS continuations (proposed)
+
+The [destination codecs](bytes.md#cps-destination-construction) expose completion as a source thunk.
+Under [closure conversion](../references/compiler.md#c9-closure-conversion-and-first-order-spslow),
+remaining thunks use ordinary closure environments;
+installed return continuations have separate [native lifetime evidence](../references/compiler.md#activation-lifetime).
+Explicit CPS can therefore introduce callback allocations even when it avoids an intermediate result buffer.
+The existing [local reductions](../references/compiler.md#local-reductions) remove some immediate cases.
+
+Contification turns eligible functions into local continuations, represented as control-flow blocks.
+The proposed extension would analyze uses in high SPS before closure conversion, requiring known,
+fully applied, nonescaping uses with compatible ambient-stack and entry contracts.
+Preserve the proven local-continuation status through normalization and lower invocations to jumps;
+escaping or unknown uses keep an adequate first-class environment and lifetime.
+A callback passed to a host operation needs an explicit callee contract before analysis can assume it is not retained.
+The [related work](#cps-compilation) supports this distinction between local control flow and general closures.
+It does not replace native frame validation or the separate ownership analysis for destination storage.
+
+Start by following one small destination encoder through lowering and execution.
+Inspect whether its local success and failure paths need callback closures,
+and measure executed closure allocations and retained frame storage separately from payload allocations and copies.
+Pair the local case with a callback retained in another thunk, an unknown callee,
+and valid calls whose different residual stacks prevent contification.
+Retain the general path when the proof is unavailable.
+Preserve effect order and invocation multiplicity in every case.
+This experiment should establish whether existing simplification suffices or contification is needed;
+the [Ret/CPS API convention](../references/language.md#ret-and-explicit-cps) supplies no optimization proof.
 
 ## Remaining machine-call boundary
 
@@ -261,7 +291,7 @@ the [byte-memory application](bytes.md#functional-updates-with-allocation-reuse-
 to retained byte allocations.
 General allocation reuse and immutable byte-owner reuse are not implemented yet.
 
-The [related work](#related-work) suggests treating consumed storage as an explicit compiler resource.
+The [related work](#allocation-reuse) suggests treating consumed storage as an explicit compiler resource.
 For example, this schematic functional reversal consumes and reconstructs one list cell per step:
 
 ```text
@@ -317,12 +347,9 @@ This would be a compiler resource contract, with no new kind family selected her
 Payload reuse must be distinguished from allocating grant records, boxes, closure environments, or call frames;
 a source callback's allocations also count toward any whole-call guarantee.
 
-The proposed [destination codecs](bytes.md#direct-destination-codecs) make a completion successor explicit.
-That successor can still capture the destination or other live values, so its closure
-and retained roots belong in the same cost and ownership analysis as result continuations.
-Changing from `Ret A` to an explicit successor does not itself justify a tail-frame bound,
-cell reuse, or elimination of an output allocation.
-Measure these source compositions through lowering and execution before assigning a FIP guarantee.
+The [local CPS experiment](#local-cps-continuations-proposed) separates callback costs from payload construction.
+Its completion can still capture the destination or other live values; include those retained roots
+in reuse analysis before assigning a FIP guarantee.
 
 Start with list reversal and equal-layout tree-to-zipper rewrites under a closed ownership proof.
 Pair each successful reuse with a shared input, a captured alias,
@@ -423,6 +450,20 @@ The proposed conservative choice boxes from the start on such paths, avoiding du
   Retention does not authorize a raw frame pointer to escape its activation.
 
 ## Related work
+
+### CPS compilation
+
+- Andrew Kennedy.
+  [*Compiling with Continuations, Continued*](https://www.microsoft.com/en-us/research/wp-content/uploads/2007/10/compilingwithcontinuationscontinued.pdf).
+  ICFP 2007, especially Section 5. SML.NET distinguishes ordinary functions from local continuations and uses
+  contification to turn eligible functions into blocks and jumps.
+- Luke Maurer, Paul Downen, Zena M. Ariola, and Simon Peyton Jones.
+  [*Compiling without Continuations*](https://pauldownen.com/publications/pldi17.pdf).
+  PLDI 2017, especially Sections 2, 4, and 7. GHC's join points preserve nonescaping local control flow
+  through optimization and compile without heap-allocated callback closures.
+  This supports explicitly preserving proven continuation roles, even in a compiler with direct-style constructs.
+
+### Allocation reuse
 
 - Alex Reinking, Ningning Xie, Leonardo de Moura, and Daan Leijen.
   *Perceus: Garbage Free Reference Counting with Reuse*.
