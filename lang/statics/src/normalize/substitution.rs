@@ -1,6 +1,7 @@
 //! Substitute lexical environments and ordered abstract-witness assignments.
 
 use super::*;
+use crate::fold::{TypeFolder, TypeRebuilder, TypeScope};
 
 impl TypeId {
     pub fn subst_env_k(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> ResultKont<TypeId> {
@@ -8,222 +9,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst_env(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<TypeId> {
-        let kd = tycker.statics.type_kind(*self);
-        let ty = tycker.statics.types_pre[self].to_owned();
-        let ty = match ty {
-            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
-                | Some(AnnId::Type(solution)) => solution.subst_env(tycker, env)?,
-                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
-                // An unsolved hole still needs deferred substitution obligations.
-                | None => *self,
-            },
-            | Fillable::Done(ty) => match ty {
-                | Type::Var(def) => match env.get(&def) {
-                    | Some(ann) => match ann {
-                        | AnnId::Set | AnnId::Kind(_) => {
-                            tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                        | AnnId::Type(with) => *with,
-                    },
-                    | None => *self,
-                },
-                | Type::Abst(_) => *self,
-                | Type::Abs(abs) => {
-                    let TypeAbstraction { binder, body } = abs;
-                    let body_ = body.subst_env(tycker, env)?;
-                    if body == body_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, TypeAbstraction { binder, body: body_ }, kd, env)
-                    }
-                }
-                | Type::App(app) => {
-                    let App(ty1, ty2) = app;
-                    let ty1_ = ty1.subst_env(tycker, env)?;
-                    let ty2_ = ty2.subst_env(tycker, env)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, App(ty1_, ty2_), kd, env)
-                    }
-                }
-                | Type::Named(named) => {
-                    let Named(name, inner) = named;
-                    let inner_ = inner.subst_env(tycker, env)?;
-                    if inner == inner_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Named(name, inner_), kd, env)
-                    }
-                }
-                | Type::Label(label) => {
-                    let Label(name, inner) = label;
-                    let inner_ = inner.subst_env(tycker, env)?;
-                    if inner == inner_ {
-                        *self
-                    } else {
-                        let target = Alloc::alloc(tycker, Label(name, inner_), kd, env);
-                        tycker
-                            .statics
-                            .builtin_roles
-                            .transfer_value(*self, target)
-                            .expect("a fresh substituted label cannot have a conflicting role");
-                        tycker.statics.member_provenance.transfer((*self).into(), target.into());
-                        target
-                    }
-                }
-                | Type::Proj(proj) => {
-                    let Proj(head, name) = proj;
-                    let head_ = head.subst_env(tycker, env)?;
-                    if head == head_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Proj(head_, name), kd, env)
-                    }
-                }
-                | Type::Thk(_)
-                | Type::Ret(_)
-                | Type::Unit(_)
-                | Type::Opaque(_)
-                | Type::Primitive(_)
-                | Type::OS(_) => *self,
-                | Type::ValPi(pi) => {
-                    let ValPi { binder, codomain } = *pi;
-                    let (binder, domain_changed) = match binder {
-                        | ValPiBinder::Type(binder) => (ValPiBinder::Type(binder), false),
-                        | ValPiBinder::Value(parameter) => {
-                            let domain = parameter.domain.subst_env(tycker, env)?;
-                            let changed = domain != parameter.domain;
-                            (
-                                ValPiBinder::Value(ValueParameter {
-                                    domain,
-                                    witnesses: parameter.witnesses,
-                                    witness_projection: parameter.witness_projection,
-                                }),
-                                changed,
-                            )
-                        }
-                    };
-                    let codomain_ = codomain.subst_env(tycker, env)?;
-                    if !domain_changed && codomain == codomain_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, ValPi { binder, codomain: codomain_ }, kd, env)
-                    }
-                }
-                | Type::Arrow(arr) => {
-                    let Arrow(ty1, ty2) = arr;
-                    let ty1_ = ty1.subst_env(tycker, env)?;
-                    let ty2_ = ty2.subst_env(tycker, env)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd, env)
-                    }
-                }
-                | Type::Forall(forall) => {
-                    let Forall(tpat, ty) = forall;
-                    let ty_ = ty.subst_env(tycker, env)?;
-                    if ty == ty_ { *self } else { Alloc::alloc(tycker, Forall(tpat, ty_), kd, env) }
-                }
-                | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = domain.subst_env(tycker, env)?;
-                    let codomain_ = codomain.subst_env(tycker, env)?;
-                    if domain == domain_ && codomain == codomain_ {
-                        *self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            PackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            kd,
-                            env,
-                        )
-                    }
-                }
-                | Type::Prod(prod) => {
-                    let Prod(components) = prod;
-                    let components_ = components
-                        .iter()
-                        .map(|ty| ty.subst_env(tycker, env))
-                        .collect::<Result<Vec<_>>>()?;
-                    if *components == components_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Prod(components_), kd, env)
-                    }
-                }
-                | Type::Exists(exists) => {
-                    let Exists { binder, mode, body } = *exists;
-                    let (mode, definition_changed) = match mode {
-                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
-                        | ExistsMode::Manifest(definition) => {
-                            let definition_ = definition.subst_env(tycker, env)?;
-                            (ExistsMode::Manifest(definition_), definition != definition_)
-                        }
-                    };
-                    let body_ = body.subst_env(tycker, env)?;
-                    if !definition_changed && body == body_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Exists { binder, mode, body: body_ }, kd, env)
-                    }
-                }
-                | Type::ManifestKind(manifest) => {
-                    let ManifestKind { binder, definition, body } = manifest;
-                    let body_ = body.subst_env(tycker, env)?;
-                    if body == body_ {
-                        *self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ManifestKind { binder, definition, body: body_ },
-                            kd,
-                            env,
-                        )
-                    }
-                }
-                | Type::Data(id) => {
-                    let arms = tycker.statics.datas[&id].clone();
-                    let arms_ = arms
-                        .iter()
-                        .map(|(ctor, ty)| Ok((ctor.clone(), ty.subst_env(tycker, env)?)))
-                        .collect::<Result<rpds::VectorSync<_>>>()?;
-                    let unchanged = arms
-                        .iter()
-                        .zip(arms_.iter())
-                        .all(|((_, original), (_, substituted))| original == substituted);
-                    if unchanged {
-                        *self
-                    } else {
-                        let id_: DataId = tycker.fresh();
-                        tycker.statics.datas.insert_new(id_, Data::new(arms_.iter().cloned()));
-                        Alloc::alloc(tycker, id_, kd, env)
-                    }
-                }
-                | Type::CoData(id) => {
-                    let arms = tycker.statics.codatas[&id].clone();
-                    let arms_ = arms
-                        .iter()
-                        .map(|(dtor, ty)| Ok((dtor.clone(), ty.subst_env(tycker, env)?)))
-                        .collect::<Result<rpds::VectorSync<_>>>()?;
-                    let unchanged = arms
-                        .iter()
-                        .zip(arms_.iter())
-                        .all(|((_, original), (_, substituted))| original == substituted);
-                    if unchanged {
-                        *self
-                    } else {
-                        let id_: CoDataId = tycker.fresh();
-                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_.iter().cloned()));
-                        Alloc::alloc(tycker, id_, kd, env)
-                    }
-                }
-            },
-        };
-        let kd = tycker.statics.type_kind(ty);
-        let ty = ty.normalize(tycker, kd)?;
-        Ok(ty)
+        LexicalSubstitution { env }.fold_type(tycker, *self)
     }
     pub fn subst_k(&self, tycker: &mut Tycker<'_>, var: DefId, with: TypeId) -> ResultKont<TypeId> {
         let res = self.subst(tycker, var, with);
@@ -259,261 +45,96 @@ impl TypeId {
     pub fn subst_absts(
         &self, tycker: &mut Tycker<'_>, assignments: &[(AbstId, TypeId)],
     ) -> Result<TypeId> {
-        if assignments.is_empty() {
-            return Ok(*self);
-        }
-        let kd = tycker.statics.type_kind(*self);
-        let env = tycker.statics.env_at(*self);
-        let ty = match tycker.statics.types_pre[self].to_owned() {
+        AbstractSubstitution { assignments }.fold_type(tycker, *self)
+    }
+}
+
+struct LexicalSubstitution<'a> {
+    env: &'a TyEnv,
+}
+
+impl TypeFolder for LexicalSubstitution<'_> {
+    fn fold_type(&mut self, tycker: &mut Tycker<'_>, source: TypeId) -> Result<TypeId> {
+        let kind = tycker.statics.type_kind(source);
+        let target = match tycker.statics.types_pre[&source].clone() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
-                | Some(AnnId::Type(solution)) => solution.subst_absts(tycker, assignments)?,
+                | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution)?,
                 | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
-                // An unsolved hole still needs deferred substitution obligations.
-                | None => *self,
+                | None => source,
             },
-            | Fillable::Done(ty) => match ty {
-                | Type::Var(_) => *self,
-                | Type::Abst(abst) => {
-                    match assignments.iter().position(|(witness, _)| *witness == abst) {
-                        | Some(position) => assignments[position]
-                            .1
-                            .subst_absts(tycker, &assignments[position + 1..])?,
-                        | None => *self,
-                    }
-                }
-                | Type::Abs(abs) => {
-                    let TypeAbstraction { binder, body } = abs;
-                    let body_assignments = assignments
-                        .iter()
-                        .filter(|(witness, _)| *witness != binder.witness)
-                        .copied()
-                        .collect::<Vec<_>>();
-                    let body_ = body.subst_absts(tycker, &body_assignments)?;
-                    if body == body_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, TypeAbstraction { binder, body: body_ }, kd, &env)
-                    }
-                }
-                | Type::App(app) => {
-                    let App(ty1, ty2) = app;
-                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
-                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, App(ty1_, ty2_), kd, &env)
-                    }
-                }
-                | Type::Named(named) => {
-                    let Named(name, inner) = named;
-                    let inner_ = inner.subst_absts(tycker, assignments)?;
-                    if inner == inner_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Named(name, inner_), kd, &env)
-                    }
-                }
-                | Type::Label(label) => {
-                    let Label(name, inner) = label;
-                    let inner_ = inner.subst_absts(tycker, assignments)?;
-                    if inner == inner_ {
-                        *self
-                    } else {
-                        let target = Alloc::alloc(tycker, Label(name, inner_), kd, &env);
-                        tycker
-                            .statics
-                            .builtin_roles
-                            .transfer_value(*self, target)
-                            .expect("a fresh substituted label cannot have a conflicting role");
-                        tycker.statics.member_provenance.transfer((*self).into(), target.into());
-                        target
-                    }
-                }
-                | Type::Proj(proj) => {
-                    let Proj(head, name) = proj;
-                    let head_ = head.subst_absts(tycker, assignments)?;
-                    match tycker.type_filled(&head_)?.to_owned() {
-                        | Type::Named(Named(found, inner)) if found == name => inner,
-                        | _ if head == head_ => *self,
-                        | _ => Alloc::alloc(tycker, Proj(head_, name), kd, &env),
-                    }
-                }
-                | Type::Thk(_)
-                | Type::Ret(_)
-                | Type::Unit(_)
-                | Type::Opaque(_)
-                | Type::Primitive(_)
-                | Type::OS(_) => *self,
-                | Type::ValPi(pi) => {
-                    let ValPi { binder, codomain } = *pi;
-                    let (binder, domain_changed, bound) = match binder {
-                        | ValPiBinder::Type(binder) => {
-                            let witness = binder.witness;
-                            (ValPiBinder::Type(binder), false, vec![witness])
-                        }
-                        | ValPiBinder::Value(parameter) => {
-                            let domain = parameter.domain.subst_absts(tycker, assignments)?;
-                            let changed = domain != parameter.domain;
-                            let bound = parameter
-                                .witnesses
-                                .as_ref()
-                                .map(|witnesses| witnesses.iter().copied().collect())
-                                .unwrap_or_default();
-                            (
-                                ValPiBinder::Value(ValueParameter {
-                                    domain,
-                                    witnesses: parameter.witnesses,
-                                    witness_projection: parameter.witness_projection,
-                                }),
-                                changed,
-                                bound,
-                            )
-                        }
-                    };
-                    let codomain_assignments = assignments
-                        .iter()
-                        .filter(|(witness, _)| !bound.contains(witness))
-                        .copied()
-                        .collect::<Vec<_>>();
-                    let codomain_ = codomain.subst_absts(tycker, &codomain_assignments)?;
-                    if !domain_changed && codomain == codomain_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, ValPi { binder, codomain: codomain_ }, kd, &env)
-                    }
-                }
-                | Type::Arrow(arr) => {
-                    let Arrow(ty1, ty2) = arr;
-                    let ty1_ = ty1.subst_absts(tycker, assignments)?;
-                    let ty2_ = ty2.subst_absts(tycker, assignments)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd, &env)
-                    }
-                }
-                | Type::Forall(forall) => {
-                    let Forall(tpat, ty) = forall;
-                    let ty_ = ty.subst_absts(tycker, assignments)?;
-                    if ty == ty_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Forall(tpat, ty_), kd, &env)
-                    }
-                }
-                | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = domain.subst_absts(tycker, assignments)?;
-                    let codomain_assignments = assignments
-                        .iter()
-                        .filter(|(witness, _)| !witnesses.contains(witness))
-                        .copied()
-                        .collect::<Vec<_>>();
-                    let codomain_ = codomain.subst_absts(tycker, &codomain_assignments)?;
-                    if domain == domain_ && codomain == codomain_ {
-                        *self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            PackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            kd,
-                            &env,
-                        )
-                    }
-                }
-                | Type::Prod(prod) => {
-                    let Prod(components) = prod;
-                    let components_ = components
-                        .iter()
-                        .map(|ty| ty.subst_absts(tycker, assignments))
-                        .collect::<Result<Vec<_>>>()?;
-                    if *components == components_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Prod(components_), kd, &env)
-                    }
-                }
-                | Type::Exists(exists) => {
-                    let Exists { binder, mode, body } = *exists;
-                    let (mode, definition_changed) = match mode {
-                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
-                        | ExistsMode::Manifest(definition) => {
-                            let definition_ = definition.subst_absts(tycker, assignments)?;
-                            (ExistsMode::Manifest(definition_), definition != definition_)
-                        }
-                    };
-                    let body_ = body.subst_absts(tycker, assignments)?;
-                    if !definition_changed && body == body_ {
-                        *self
-                    } else {
-                        Alloc::alloc(tycker, Exists { binder, mode, body: body_ }, kd, &env)
-                    }
-                }
-                | Type::ManifestKind(manifest) => {
-                    let ManifestKind { binder, definition, body } = manifest;
-                    let body_ = body.subst_absts(tycker, assignments)?;
-                    if body == body_ {
-                        *self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ManifestKind { binder, definition, body: body_ },
-                            kd,
-                            &env,
-                        )
-                    }
-                }
-                | Type::Data(id) => {
-                    let arms = tycker.statics.datas[&id].clone();
-                    let mut unchanged = true;
-                    let arms_ = arms
-                        .into_iter()
-                        .map(|(ctor, ty)| {
-                            let ty_ = ty.subst_absts(tycker, assignments)?;
-                            if ty == ty_ {
-                                Ok((ctor, ty))
-                            } else {
-                                unchanged = false;
-                                Ok((ctor, ty_))
-                            }
-                        })
-                        .collect::<Result<rpds::VectorSync<_>>>()?;
-                    if unchanged {
-                        *self
-                    } else {
-                        let id_: DataId = tycker.fresh();
-                        tycker.statics.datas.insert_new(id_, Data::new(arms_.iter().cloned()));
-                        Alloc::alloc(tycker, id_, kd, &env)
-                    }
-                }
-                | Type::CoData(id) => {
-                    let arms = tycker.statics.codatas[&id].clone();
-                    let mut unchanged = true;
-                    let arms_ = arms
-                        .into_iter()
-                        .map(|(dtor, ty)| {
-                            let ty_ = ty.subst_absts(tycker, assignments)?;
-                            if ty == ty_ {
-                                Ok((dtor, ty))
-                            } else {
-                                unchanged = false;
-                                Ok((dtor, ty_))
-                            }
-                        })
-                        .collect::<Result<rpds::VectorSync<_>>>()?;
-                    if unchanged {
-                        *self
-                    } else {
-                        let id_: CoDataId = tycker.fresh();
-                        tycker.statics.codatas.insert_new(id_, CoData::new(arms_.iter().cloned()));
-                        Alloc::alloc(tycker, id_, kd, &env)
-                    }
-                }
+            | Fillable::Done(Type::Var(definition)) => match self.env.get(&definition) {
+                | Some(AnnId::Type(replacement)) => *replacement,
+                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
+                | None => source,
             },
+            | Fillable::Done(node) => self.fold_children(tycker, source, node, kind, self.env)?,
         };
-        let kd = tycker.statics.type_kind(ty);
-        let ty = ty.normalize(tycker, kd)?;
-        Ok(ty)
+        target.normalize(tycker, tycker.statics.type_kind(target))
+    }
+}
+
+struct AbstractSubstitution<'a> {
+    assignments: &'a [(AbstId, TypeId)],
+}
+
+impl TypeFolder for AbstractSubstitution<'_> {
+    fn fold_type(&mut self, tycker: &mut Tycker<'_>, source: TypeId) -> Result<TypeId> {
+        if self.assignments.is_empty() {
+            return Ok(source);
+        }
+        let kind = tycker.statics.type_kind(source);
+        let env = tycker.statics.env_at(source);
+        let target = match tycker.statics.types_pre[&source].clone() {
+            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
+                | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution)?,
+                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
+                | None => source,
+            },
+            | Fillable::Done(Type::Abst(witness)) => {
+                match self.assignments.iter().position(|(bound, _)| *bound == witness) {
+                    | Some(position) => {
+                        AbstractSubstitution { assignments: &self.assignments[position + 1..] }
+                            .fold_type(tycker, self.assignments[position].1)?
+                    }
+                    | None => source,
+                }
+            }
+            | Fillable::Done(Type::Proj(Proj(head, name))) => {
+                let target = self.fold_type(tycker, head)?;
+                match tycker.type_filled(&target)? {
+                    | Type::Named(Named(found, inner)) if found == name => inner,
+                    | _ => TypeRebuilder::rebuild(
+                        tycker,
+                        source,
+                        Proj(target, name).into(),
+                        kind,
+                        &env,
+                        target != head,
+                    ),
+                }
+            }
+            | Fillable::Done(node) => self.fold_children(tycker, source, node, kind, &env)?,
+        };
+        target.normalize(tycker, tycker.statics.type_kind(target))
+    }
+
+    fn fold_body(
+        &mut self, tycker: &mut Tycker<'_>, source: TypeId, scope: TypeScope<'_>,
+    ) -> Result<TypeId> {
+        match scope {
+            | TypeScope::Abstraction(_)
+            | TypeScope::ValueFunction(_)
+            | TypeScope::PackageFunction(_) => {
+                let assignments = self
+                    .assignments
+                    .iter()
+                    .copied()
+                    .filter(|(witness, _)| !scope.binds(*witness))
+                    .collect::<Vec<_>>();
+                AbstractSubstitution { assignments: &assignments }.fold_type(tycker, source)
+            }
+            // Telescope opening intentionally substitutes through universal/existential bodies.
+            | TypeScope::Universal(_) | TypeScope::Existential(_) => self.fold_type(tycker, source),
+        }
     }
 }

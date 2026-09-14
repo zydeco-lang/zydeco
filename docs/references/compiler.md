@@ -763,6 +763,39 @@ Selected runtime fields elaborate to ordinary typed patterns; unselected static 
 A whole-package alias carries the same opening's prefix for forwarding.
 Witness inspection uses C6's static reducer and never obtains evidence by executing a computation.
 
+### Classifier folders
+
+Substitution and finalization repeatedly rebuild the same classifier shapes.
+The [classifier folder](../../lang/statics/src/fold.rs) owns that exhaustive structural reconstruction;
+`LexicalSubstitution`, `AbstractSubstitution`, `HoleResolver`, and `FilledNormalizer` supply its local rules.
+`TypeFolder::fold_children` consumes a raw `Type` and transforms its immediate children in field order.
+It reads the inferred graph through `types_pre`; following solutions, unfolding definitions,
+reducing applications or projections, and consulting normalized views remain explicit client operations.
+
+A body callback receives `TypeScope`, distinguishing type abstractions, universal
+and existential telescopes, value functions, and package-dependent functions.
+Domains precede their dependent bodies.
+The callback chooses the inherited substitution: ordered abstract substitution removes formal witnesses
+under type abstractions, `ValPi`, and `PackPi`, and applies only later assignments to a replacement.
+Universal and existential bodies retain the substitution used when opening their telescopes.
+Lexical substitution uses the supplied lexical environment.
+Binder pattern IDs, witness identities, and witness projections are preserved by structural rebuilding.
+
+`TypeRebuilder` returns the original ID when children and kind are unchanged.
+Changed paths allocate through `Tycker` with the caller's environment and classifier;
+rebuilt labels transfer Builtin roles and member provenance.
+Nominal data and codata definitions receive fresh IDs only when their arms change.
+Filled normalization keeps nominal definition IDs and finalizes their arm classifiers through the arena-wide loop.
+This preserves the normalized lookup view attached to the existing arm IDs.
+
+The folder introduces no implicit memo table. Substitution can depend on an environment or assignment suffix,
+whereas finalization shares caches only after inference closes, as specified below.
+Occurrence-sensitive support collection retains its own scope-aware traversal.
+[Folder regressions](../../lang/statics/tests/folders.rs) check unchanged identity
+and allocation counts on shared tails; [substitution](../../lang/statics/tests/substitution.rs),
+[dependent arrows](../../lang/statics/tests/pack_pi.rs),
+and [scope rejection](../../lang/statics/tests/existential_scope.rs) exercise the semantic client rules.
+
 ### Finalization
 
 After inference closes, hole solutions are stable for the remainder of finalization.

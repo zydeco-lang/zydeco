@@ -1093,17 +1093,3 @@ mod tests {
         assert_eq!(statics.term_annotation(term), Some(TermAnnId::Kind(second)));
     }
 }
-
-/* -------------------------------- LocalFold ------------------------------- */
-
-/// A set of local actions on static arena items.
-#[auto_impl::auto_impl(&mut, Box)]
-pub trait LocalFoldStatics<Cx> {
-    fn action_kind(&mut self, kind: KindId, ctx: &Cx);
-    fn action_kpat(&mut self, kpat: KPatId, ctx: &Cx);
-    fn action_tpat(&mut self, tpat: TPatId, ctx: &Cx);
-    fn action_type(&mut self, r#type: TypeId, ctx: &Cx);
-    fn action_vpat(&mut self, vpat: VPatId, ctx: &Cx);
-    fn action_value(&mut self, value: ValueId, ctx: &Cx);
-    fn action_compu(&mut self, compu: CompuId, ctx: &Cx);
-}

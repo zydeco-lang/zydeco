@@ -14,8 +14,8 @@ with presentation customization left for later.
 
 Adding a syntax constructor currently requires updating many operations that each describe how
 to recurse through the same representation.
-Typed substitution, hole resolution, and normalization still repeat much of their rebuilding structure.
-This spreads structural knowledge across passes and makes each pass responsible for both traversal and its own rules.
+The implemented classifier folders remove repeated rebuilding from substitution and finalization.
+Remaining traversal clients should be migrated when their shared structure simplifies the code.
 
 The intended separation is between a representation's structural operations
 and the specific visitor or folder using them.
@@ -119,33 +119,21 @@ Compare separate and composed facts and diagnostics, including multiplicity and 
 Verify accepted-program behavior, rejected inputs' failure status, and the absence of invalid normal products.
 Count visits and allocations on shared graphs before making compilation-time claims.
 
-## Typed folders and graph views
+## Remaining graph views
 
-Use typed substitution and hole resolution as the first rebuilding clients after the surface folder settles.
-The unused `LocalFoldStatics` declaration can then be replaced by the implemented interface.
-Retain unchanged node identities where the current operation does, including provenance
-and Builtin-role transfer on rebuilt nodes.
-Type checking remains a judgment-driven algorithm; only its structural operations are candidates for these folders.
-
-Typed syntax has several relevant graph views: raw inferred nodes,
-solved and normalized classifiers, and the residual runtime graph.
-The [finalization contract](../references/compiler.md#finalization) establishes
-when solutions are stable enough for shared memoization.
-The [execution readiness check](../../lang/statics/src/validate/executable.rs) deliberately
-follows residual runtime children and excludes eliminated static material.
-A single undifferentiated children iterator would erase that distinction.
+Typed substitution, hole resolution,
+and filled normalization now use the [classifier folder](../references/compiler.md#classifier-folders).
+The unused `LocalFoldStatics` interface is removed.
+The raw inferred graph, normalized classifier views, and residual runtime graph remain distinct.
+The next runtime traversal migration should make the residual view explicit
+while preserving the [execution readiness boundary](../../lang/statics/src/validate/executable.rs).
 
 Context-sensitive analyses need more than a node-ID cache.
-For example, [type support collection](../../lang/statics/src/normalize/scope.rs) intersects the admissible scope
+[Type support collection](../../lang/statics/src/normalize/scope.rs) intersects the admissible scope
 of a shared inference hole across its occurrences.
 A unique-node walk could miss the more restrictive occurrence.
-Use occurrence traversal or a memo key that includes the relevant environment;
-discard or invalidate results when the state they depend on changes.
-Share caches across multiple roots only within one stable analysis invocation.
-
-Validate substitution under binders, accepted and escaping witnesses, missing solutions,
-shared classifier tails, and reuse of unchanged identities.
-Pair a hole in reachable runtime syntax with a hole confined to eliminated static code.
+Further migrations must use occurrence traversal or memo keys containing the relevant environment,
+and invalidate results when the state they depend on changes.
 
 ## Further applications and review sequence
 
@@ -158,7 +146,7 @@ deduplicating visits must never hide that rejection.
 The remaining work fits one migration sequence:
 
 1. Extend diagnostic collection at the [remaining producer boundaries](#diagnostic-collection-and-recovery).
-2. Introduce typed graph views and folders for substitution and finalization.
+2. Make the residual runtime graph view explicit.
 3. Apply the established interfaces to SPS analyses where they simplify concrete callers.
 
 For each migration, compare separate and composed results and retain visit-count regressions on shared graphs.

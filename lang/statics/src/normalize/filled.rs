@@ -2,6 +2,7 @@
 
 use super::reduction::TypeApplicationSpine;
 use super::*;
+use crate::fold::TypeFolder;
 
 /// Pass-wide memoization for filled kind and type normalization.
 ///
@@ -127,34 +128,6 @@ impl TypeId {
                 }
             },
             | Fillable::Done(ty) => match ty {
-                | Type::Var(def) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, def, kd_norm, &env)
-                    }
-                }
-                | Type::Abst(abst) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, abst, kd_norm, &env)
-                    }
-                }
-                | Type::Abs(abs) => {
-                    let TypeAbstraction { binder, body } = abs;
-                    let body_norm = body.filled_norm_id(tycker, norm)?;
-                    if body_norm == body && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            TypeAbstraction { binder, body: body_norm },
-                            kd_norm,
-                            &env,
-                        )
-                    }
-                }
                 | Type::App(app) => {
                     let App(f_ty, a_ty) = app;
                     let f_norm = f_ty.filled_norm_id(tycker, norm)?;
@@ -183,31 +156,6 @@ impl TypeId {
                         }
                     }
                 }
-                | Type::Named(named) => {
-                    let Named(name, inner) = named;
-                    let inner_norm = inner.filled_norm_id(tycker, norm)?;
-                    if inner_norm == inner && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, Named(name, inner_norm), kd_norm, &env)
-                    }
-                }
-                | Type::Label(label) => {
-                    let Label(name, inner) = label;
-                    let inner_norm = inner.filled_norm_id(tycker, norm)?;
-                    if inner_norm == inner && kd_norm == kd {
-                        self
-                    } else {
-                        let target = Alloc::alloc(tycker, Label(name, inner_norm), kd_norm, &env);
-                        tycker
-                            .statics
-                            .builtin_roles
-                            .transfer_value(self, target)
-                            .expect("a fresh normalized label cannot have a conflicting role");
-                        tycker.statics.member_provenance.transfer(self.into(), target.into());
-                        target
-                    }
-                }
                 | Type::Proj(proj) => {
                     let Proj(head, name) = proj;
                     let head_norm = head.filled_norm_id(tycker, norm)?;
@@ -219,167 +167,8 @@ impl TypeId {
                         | _ => Alloc::alloc(tycker, Proj(head_norm, name), kd_norm, &env),
                     }
                 }
-                | Type::Thk(ThkTy) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, ThkTy, kd_norm, &env)
-                    }
-                }
-                | Type::Ret(RetTy) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, RetTy, kd_norm, &env)
-                    }
-                }
-                | Type::Unit(UnitTy) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, UnitTy, kd_norm, &env)
-                    }
-                }
-                | Type::Opaque(OpaqueTy) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, OpaqueTy, kd_norm, &env)
-                    }
-                }
                 | Type::Primitive(primitive) => primitive.build(tycker, &env),
-                | Type::OS(OSTy) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, OSTy, kd_norm, &env)
-                    }
-                }
-                | Type::ValPi(pi) => {
-                    let ValPi { binder, codomain } = *pi;
-                    let (binder, domain_changed) = match binder {
-                        | ValPiBinder::Type(binder) => (ValPiBinder::Type(binder), false),
-                        | ValPiBinder::Value(parameter) => {
-                            let domain = parameter.domain.filled_norm_id(tycker, norm)?;
-                            let changed = domain != parameter.domain;
-                            (
-                                ValPiBinder::Value(ValueParameter {
-                                    domain,
-                                    witnesses: parameter.witnesses,
-                                    witness_projection: parameter.witness_projection,
-                                }),
-                                changed,
-                            )
-                        }
-                    };
-                    let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
-                    if !domain_changed && codomain_norm == codomain && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValPi { binder, codomain: codomain_norm },
-                            kd_norm,
-                            &env,
-                        )
-                    }
-                }
-                | Type::Arrow(arr) => {
-                    let Arrow(ty1, ty2) = arr;
-                    let ty1_norm = ty1.filled_norm_id(tycker, norm)?;
-                    let ty2_norm = ty2.filled_norm_id(tycker, norm)?;
-                    if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, Arrow(ty1_norm, ty2_norm), kd_norm, &env)
-                    }
-                }
-                | Type::Forall(forall) => {
-                    let Forall(abst, body) = forall;
-                    let body_norm = body.filled_norm_id(tycker, norm)?;
-                    if body_norm == body && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, Forall(abst, body_norm), kd_norm, &env)
-                    }
-                }
-                | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_norm = domain.filled_norm_id(tycker, norm)?;
-                    let codomain_norm = codomain.filled_norm_id(tycker, norm)?;
-                    if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            PackPi { domain: domain_norm, witnesses, codomain: codomain_norm },
-                            kd_norm,
-                            &env,
-                        )
-                    }
-                }
-                | Type::Prod(prod) => {
-                    let Prod(components) = prod;
-                    let components_norm = components
-                        .iter()
-                        .map(|ty| ty.filled_norm_id(tycker, norm))
-                        .collect::<Result<Vec<_>>>()?;
-                    if components_norm == *components && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, Prod(components_norm), kd_norm, &env)
-                    }
-                }
-                | Type::Exists(exists) => {
-                    let Exists { binder, mode, body } = *exists;
-                    let (mode, definition_changed) = match mode {
-                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
-                        | ExistsMode::Manifest(definition) => {
-                            let definition_norm = definition.filled_norm_id(tycker, norm)?;
-                            (ExistsMode::Manifest(definition_norm), definition_norm != definition)
-                        }
-                    };
-                    let body_norm = body.filled_norm_id(tycker, norm)?;
-                    if !definition_changed && body_norm == body && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            Exists { binder, mode, body: body_norm },
-                            kd_norm,
-                            &env,
-                        )
-                    }
-                }
-                | Type::ManifestKind(manifest) => {
-                    let ManifestKind { binder, definition, body } = manifest;
-                    let definition_norm = definition.filled_norm_id(tycker, norm)?;
-                    let body_norm = body.filled_norm_id(tycker, norm)?;
-                    if definition_norm == definition && body_norm == body && kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ManifestKind { binder, definition: definition_norm, body: body_norm },
-                            kd_norm,
-                            &env,
-                        )
-                    }
-                }
-                | Type::Data(data) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, data, kd_norm, &env)
-                    }
-                }
-                | Type::CoData(codata) => {
-                    if kd_norm == kd {
-                        self
-                    } else {
-                        Alloc::alloc(tycker, codata, kd_norm, &env)
-                    }
-                }
+                | node => norm.fold_children(tycker, self, node, kd_norm, &env)?,
             },
         };
         norm.types.insert(self, res);
@@ -396,5 +185,24 @@ impl TypeId {
             let _ = tycker.statics.types_normalized.upsert(self, ty);
         }
         Ok(res)
+    }
+}
+
+impl TypeFolder for FilledNormalizer {
+    fn fold_type(&mut self, tycker: &mut Tycker<'_>, source: TypeId) -> Result<TypeId> {
+        source.filled_norm_id(tycker, self)
+    }
+
+    fn fold_kind(&mut self, tycker: &mut Tycker<'_>, source: KindId) -> Result<KindId> {
+        source.filled_norm_id(tycker, self)
+    }
+
+    // Nominal arm classifiers are finalized as arena roots; their IDs retain normalized views.
+    fn fold_data(&mut self, _tycker: &mut Tycker<'_>, source: DataId) -> Result<DataId> {
+        Ok(source)
+    }
+
+    fn fold_codata(&mut self, _tycker: &mut Tycker<'_>, source: CoDataId) -> Result<CoDataId> {
+        Ok(source)
     }
 }

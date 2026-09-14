@@ -42,6 +42,9 @@ pub mod destruct;
 pub mod check;
 pub use check::*;
 
+/// Shared rebuilding for the raw typed classifier graph.
+pub mod fold;
+
 /// Normalization, substitution, hole solving, and scope support.
 pub mod normalize;
 /// Type-directed source elaborations.

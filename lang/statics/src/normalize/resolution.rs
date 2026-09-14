@@ -1,6 +1,7 @@
 //! Resolve the frozen graph of inference solutions with pass-wide memoization.
 
 use super::*;
+use crate::fold::{TypeFolder, TypeRebuilder};
 
 /// Pass-wide hole resolution after inference has stopped mutating solutions.
 #[derive(Default)]
@@ -36,6 +37,12 @@ impl HoleResolver {
         let mut missing = self.missing.into_iter().collect::<Vec<_>>();
         missing.sort_unstable();
         missing
+    }
+}
+
+impl TypeFolder for HoleResolver {
+    fn fold_type(&mut self, tycker: &mut Tycker<'_>, source: TypeId) -> Result<TypeId> {
+        self.resolve(source, tycker)
     }
 }
 
@@ -78,255 +85,23 @@ impl TypeId {
                 resolver.missing.insert(fill);
                 res
             }
-            | Fillable::Done(ty) => match ty {
-                | Type::Var(_) | Type::Abst(_) => res,
-                | Type::Abs(ty) => {
-                    let TypeAbstraction { binder, body } = ty;
-                    let body_ = resolver.resolve(body, tycker)?;
-                    if body == body_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            TypeAbstraction { binder, body: body_ },
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
+            | Fillable::Done(Type::Proj(Proj(head, name))) => {
+                let target = resolver.resolve(head, tycker)?;
+                match tycker.statics.types_pre[&target].clone() {
+                    | Fillable::Done(Type::Named(Named(found, inner))) if found == name => inner,
+                    | _ => TypeRebuilder::rebuild(
+                        tycker,
+                        res,
+                        Proj(target, name).into(),
+                        tycker.statics.type_kind(res),
+                        &env,
+                        target != head,
+                    ),
                 }
-                | Type::App(ty) => {
-                    let App(f_ty, a_ty) = ty;
-                    let f_ty_ = resolver.resolve(f_ty, tycker)?;
-                    let a_ty_ = resolver.resolve(a_ty, tycker)?;
-                    if f_ty == f_ty_ && a_ty == a_ty_ {
-                        res
-                    } else {
-                        Alloc::alloc(tycker, App(f_ty_, a_ty_), tycker.statics.type_kind(res), &env)
-                    }
-                }
-                | Type::Named(ty) => {
-                    let Named(name, inner) = ty;
-                    let inner_ = resolver.resolve(inner, tycker)?;
-                    if inner == inner_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            Named(name, inner_),
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::Label(ty) => {
-                    let Label(name, inner) = ty;
-                    let inner_ = resolver.resolve(inner, tycker)?;
-                    if inner == inner_ {
-                        res
-                    } else {
-                        let target = Alloc::alloc(
-                            tycker,
-                            Label(name, inner_),
-                            tycker.statics.type_kind(res),
-                            &env,
-                        );
-                        tycker
-                            .statics
-                            .builtin_roles
-                            .transfer_value(res, target)
-                            .expect("a fresh resolved label cannot have a conflicting role");
-                        tycker.statics.member_provenance.transfer(res.into(), target.into());
-                        target
-                    }
-                }
-                | Type::Proj(ty) => {
-                    let Proj(head, name) = ty;
-                    let head_ = resolver.resolve(head, tycker)?;
-                    match tycker.statics.types_pre[&head_].to_owned() {
-                        | Fillable::Done(Type::Named(Named(found, inner))) if found == name => {
-                            inner
-                        }
-                        | _ if head == head_ => res,
-                        | _ => Alloc::alloc(
-                            tycker,
-                            Proj(head_, name),
-                            tycker.statics.type_kind(res),
-                            &env,
-                        ),
-                    }
-                }
-                | Type::Thk(_)
-                | Type::Ret(_)
-                | Type::Unit(_)
-                | Type::Opaque(_)
-                | Type::Primitive(_)
-                | Type::OS(_) => res,
-                | Type::ValPi(pi) => {
-                    let ValPi { binder, codomain } = *pi;
-                    let (binder, domain_changed) = match binder {
-                        | ValPiBinder::Type(binder) => (ValPiBinder::Type(binder), false),
-                        | ValPiBinder::Value(parameter) => {
-                            let domain = resolver.resolve(parameter.domain, tycker)?;
-                            let changed = domain != parameter.domain;
-                            (
-                                ValPiBinder::Value(ValueParameter {
-                                    domain,
-                                    witnesses: parameter.witnesses,
-                                    witness_projection: parameter.witness_projection,
-                                }),
-                                changed,
-                            )
-                        }
-                    };
-                    let codomain_ = resolver.resolve(codomain, tycker)?;
-                    if !domain_changed && codomain == codomain_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ValPi { binder, codomain: codomain_ },
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::Arrow(ty) => {
-                    let Arrow(ty1, ty2) = ty;
-                    let ty1_ = resolver.resolve(ty1, tycker)?;
-                    let ty2_ = resolver.resolve(ty2, tycker)?;
-                    if ty1 == ty1_ && ty2 == ty2_ {
-                        res
-                    } else {
-                        Alloc::alloc(tycker, Arrow(ty1_, ty2_), tycker.statics.type_kind(res), &env)
-                    }
-                }
-                | Type::Forall(ty) => {
-                    let Forall(tpat, ty) = ty;
-                    let tpat_ = tpat;
-                    let ty_ = resolver.resolve(ty, tycker)?;
-                    if ty == ty_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            Forall(tpat_, ty_),
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::PackPi(pack_pi) => {
-                    let PackPi { domain, witnesses, codomain } = *pack_pi;
-                    let domain_ = resolver.resolve(domain, tycker)?;
-                    let codomain_ = resolver.resolve(codomain, tycker)?;
-                    if domain == domain_ && codomain == codomain_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            PackPi { domain: domain_, witnesses, codomain: codomain_ },
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::Prod(ty) => {
-                    let Prod(components) = ty;
-                    let components_ = components
-                        .iter()
-                        .map(|ty| resolver.resolve(*ty, tycker))
-                        .collect::<Result<Vec<_>>>()?;
-                    if *components == components_ {
-                        res
-                    } else {
-                        Alloc::alloc(tycker, Prod(components_), tycker.statics.type_kind(res), &env)
-                    }
-                }
-                | Type::Exists(ty) => {
-                    let Exists { binder, mode, body } = *ty;
-                    let (mode, definition_changed) = match mode {
-                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
-                        | ExistsMode::Manifest(definition) => {
-                            let definition_ = resolver.resolve(definition, tycker)?;
-                            (ExistsMode::Manifest(definition_), definition != definition_)
-                        }
-                    };
-                    let body_ = resolver.resolve(body, tycker)?;
-                    if !definition_changed && body == body_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            Exists { binder, mode, body: body_ },
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::ManifestKind(manifest) => {
-                    let ManifestKind { binder, definition, body } = manifest;
-                    let body_ = resolver.resolve(body, tycker)?;
-                    if body == body_ {
-                        res
-                    } else {
-                        Alloc::alloc(
-                            tycker,
-                            ManifestKind { binder, definition, body: body_ },
-                            tycker.statics.type_kind(res),
-                            &env,
-                        )
-                    }
-                }
-                | Type::Data(data) => {
-                    let arms = tycker.statics.datas[&data].clone();
-                    let mut unchanged = true;
-                    let arms_ = arms
-                        .into_iter()
-                        .map(|(ctor, ty)| {
-                            let ty_ = resolver.resolve(ty, tycker)?;
-                            if ty == ty_ {
-                                Ok((ctor, ty))
-                            } else {
-                                unchanged = false;
-                                Ok((ctor, ty_))
-                            }
-                        })
-                        .collect::<Result<rpds::VectorSync<_>>>()?;
-                    if unchanged {
-                        res
-                    } else {
-                        let data: DataId = tycker.fresh();
-                        tycker.statics.datas.insert_new(data, Data::new(arms_.iter().cloned()));
-                        Alloc::alloc(tycker, data, tycker.statics.type_kind(res), &env)
-                    }
-                }
-                | Type::CoData(codata) => {
-                    let arms = tycker.statics.codatas[&codata].clone();
-                    let mut unchanged = true;
-                    let arms_ = arms
-                        .into_iter()
-                        .map(|(dtor, ty)| {
-                            let ty_ = resolver.resolve(ty, tycker)?;
-                            if ty == ty_ {
-                                Ok((dtor, ty))
-                            } else {
-                                unchanged = false;
-                                Ok((dtor, ty_))
-                            }
-                        })
-                        .collect::<Result<rpds::VectorSync<_>>>()?;
-                    if unchanged {
-                        res
-                    } else {
-                        let codata: CoDataId = tycker.fresh();
-                        tycker
-                            .statics
-                            .codatas
-                            .insert_new(codata, CoData::new(arms_.iter().cloned()));
-                        Alloc::alloc(tycker, codata, tycker.statics.type_kind(res), &env)
-                    }
-                }
-            },
+            }
+            | Fillable::Done(node) => {
+                resolver.fold_children(tycker, res, node, tycker.statics.type_kind(res), &env)?
+            }
         };
         Ok(resolver.remember(aliases.into_iter().chain([root, res]), res))
     }
