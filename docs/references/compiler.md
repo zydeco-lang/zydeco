@@ -337,10 +337,16 @@ Internal terms are leaves, and sealing retains its wrapper around the transforme
 
 The folder supplies `fold_def`, `fold_pat`, and `fold_term` for ID-bearing children;
 those hooks own arena lookup, recursive descent, and identity policy.
-`fold_ref` handles a variable reference separately and preserves it by default.
-Changing a binder identity therefore does not implicitly rename references; a folder
-over resolved syntax must supply the corresponding reference behavior when required.
+`InputRef` and `OutputRef` distinguish source and resolved references, and `Error` makes rebuilding fallible.
+`fold_var` returns an output term: successful resolution can produce `Var(definition)`,
+while supported recovery can produce an internal hole after recording an error.
+Changing a binder identity does not implicitly rename references; each folder supplies its reference behavior.
+Freshening preserves source names and uses `Infallible`.
 The structural operations themselves neither issue arena IDs nor memoize and do not establish lexical environments.
+Fixed independent child hooks are evaluated before propagating rejection.
+`fold_items` controls iteration over collections: recovery-aware folders visit every independent item,
+record each diagnostic at its producer, and propagate only the already-reported failure token.
+A semantic handler retains responsibility for children that require a preceding child's environment.
 
 Rebuilding follows the existing bitter copying order: annotations process payload then classifier,
 view patterns process function then pattern, and binder-bearing forms process binder before body or bindee.
@@ -365,7 +371,7 @@ The folder is used for binder copies in annotated abstractions, generated bindin
 and recursive binding sugar.
 Its regressions check distinct resolved binders, retained provenance, copattern order,
 shared annotation copying, and sealed payloads.
-Further lowering and resolution decomposition remains in the [traversal proposal](../proposals/traversals.md).
+Further typed and lower-level migrations remain in the [traversal proposal](../proposals/traversals.md).
 
 ### Scoped structural traversal
 
@@ -612,21 +618,65 @@ Existential parameter annotations use their own allowed-role validation and reta
 
 ### Name resolution
 
-[Resolution](../../lang/surface/src/scoped/README.md) replaces names with `DefId`s and records lexical contexts.
-A source boundary resets the environment.
-In a block, resolution first collects mobile contributions and installs all their binders,
-then resolves occurrences and builds dependency edges from right-hand sides and annotations.
-SCCs form a condensation DAG; source order breaks ties and orders recursive members.
-Parameters become abstractions, acyclic definitions become lets, and recursive type components become `RecGroup`.
-`Residual` indirections preserve ownership at the original mobile sites after binders move.
+[`ResolveFolder`](../../lang/surface/src/scoped/resolver.rs) replaces names with `DefId`s
+while preserving source identities.
+A scoped builder materializes resolved nodes and issues new identities only for context elaboration.
+The folder owns the diagnostic collector, required dependency analyzer, and a statically composed observer product.
+Its standard profile always includes reference indexing and documentation; `with_observer` adds passive consumers.
+The [scope module](../../lang/surface/src/scoped/scope.rs) supplies the same shadowing rules for lookup and enumeration.
 
-Resolution establishes binder identity before dependency ordering moves syntax;
-scheduling must preserve those identities.
-The checker subsequently verifies the admissibility of a recursive group.
+The inherited `ResolveEnv` is explicit.
+Pattern resolution returns its identity and extended environment.
+Classifiers precede their annotated binders; dependent pattern sequences
+and copattern spines thread environments left to right.
+Match arms receive independent environments. Monadic blocks resolve their basis before their body.
+An exhaustive constructor classification delegates ordinary reconstruction to the shared structural folder;
+constructors with binding, boundary, or scheduling effects have explicit semantic handlers.
+
+Source and signature boundaries start with isolated environments.
+A shared provider is resolved once; cached success and rejection do not replay its events or diagnostics.
+Successful lookup emits a borrowed `ResolvedReference` containing the occurrence,
+selected definition, optional owning `BindingSite`, and active enclosing bindings.
+Failed lookup records its diagnostic and emits no successful-reference event.
+It becomes a hole only inside the resolving computation so other names can be checked.
+
+[`ResolutionObserver`](../../lang/surface/src/scoped/observers.rs) receives references
+and scope events without access to mutation, pruning, or rejection.
+Pairs forward events and pair their final outputs.
+Reference indexing constructs the definition-to-use relation.
+Documentation captures the scope before an annotated payload.
+Hole events retain their exact textual origins; completion captures only the requested origin
+and keeps its last actual visit.
+Holes synthesized from failed name lookup do not emit further scope events.
+The scope view is borrowed; snapshots are allocated only by consumers that retain them.
+Context elaboration emits no second event stream for generated wrappers.
+
+Blocks require a preparatory binder scan so forward references can resolve before their definitions are visited.
+The [block collector](../../lang/surface/src/scoped/blocks.rs) respects nested block and provider boundaries,
+projects candidate binders once, and installs an unambiguous block-wide environment.
+[`DependencyAnalyzer`](../../lang/surface/src/scoped/dependencies.rs) receives the same reference events
+but is a required collaborator: each block needs its result before it can be elaborated.
+`begin_block` seeds every candidate, including candidates with no edges.
+An event adds dependencies to every active binding whose owner matches the dependency's owner;
+nested block graphs remain separate.
+`finish_block` removes and returns the completed graph, while `abort_block` discards an incomplete graph
+before recovery continues outside that block.
+All graphs must be closed when resolution finishes.
+
+Strongly connected components form a condensation DAG; source order breaks ties and orders recursive members.
+All recursive parameter components are diagnosed before elaboration.
+Parameters become abstractions, acyclic definitions become lets, and recursive definition components become `RecGroup`;
+the checker subsequently verifies those groups' admissibility.
+`Residual` indirections preserve ownership at the original mobile sites after binders move.
 The [context collector](#scoped-structural-traversal) summarizes free definitions in the elaborated term for checking.
-Resolution captures authoring scopes for documentation and exact cursor scopes
-for completion before later transformations change the syntax.
-Parser agreement, recovery laws, formatting laws,
+
+Strict publication rejects the entire scoped program when any diagnostic was recorded.
+Independent children and block candidates continue after a failure where their inputs remain available.
+Duplicate binders are all diagnosed, then resolution skips the ambiguous block scope instead of choosing a winner.
+Completion can retain a request-local program with unbound-reference recovery;
+other failures retain captured observations but prevent program publication.
+No rejected strict result reaches type checking or execution as a normal program.
+Parser and completion tests, observer visit counts, dependency lifecycle tests,
 and the [uniform-term fixtures](../../lang/tests/cases/uniform-term) exercise this boundary.
 The [term design](../proposals/term.md) retains its binding motivation and remaining recursion questions.
 
@@ -1725,6 +1775,27 @@ Retained rejected facts can support useful tooling, while later errors caused so
 by an earlier failure should not manufacture independent evidence.
 Definition, reference, rename, hover, and semantic-token operations use current provenance and lexical identity.
 UTF-16 conversion happens when reading or writing client positions.
+
+### Diagnostic collection
+
+Source analyzers, desugaring, and resolution retain vectors of typed domain errors.
+Strict transformation failures carry a nonempty `Diagnostics<E>` collection together with their source context;
+`Err` means no valid phase product is available, regardless of how many errors were established.
+Analyses may expose partial facts separately, and completion has its explicit recovered-program contract.
+Dependent phases still require valid input.
+A failed binder cannot justify inventing a scope for its body.
+
+Semantic folders record each diagnostic once and propagate `ReportedError` when reconstruction fails.
+Independent siblings continue where their input contracts remain satisfied; cached rejection does not replay errors.
+The session and CLI, TUI, and LSP retain and render every reported error with its own source location.
+Primary-location convenience APIs do not replace complete diagnostic enumeration.
+
+Producers append diagnostics and composition concatenates collections.
+Diagnostic ordering is not an API guarantee; successful fact ordering retains its own contract.
+Tests compare contents, multiplicity, and locations rather than presentation order,
+and pair rejected inputs with valid counterparts.
+Equal spans alone do not identify duplicate errors. Broader recovery at loading and later pass boundaries remains
+in the [traversal proposal](../proposals/traversals.md#diagnostic-collection-and-recovery).
 
 ### Formatting and typed rendering
 

@@ -15,7 +15,10 @@ impl DiagnosticText {
             }
             | AnalysisError::Resolve { error, graph, spans } => {
                 let mut output = Vec::new();
-                let _ = error.to_report(spans).write(SourceCaches::graph(graph), &mut output);
+                let mut cache = SourceCaches::graph(graph);
+                for error in error.iter() {
+                    let _ = error.to_report(spans).write(&mut cache, &mut output);
+                }
                 Self::plain(output)
             }
             | _ => error.to_string(),
@@ -70,4 +73,23 @@ enum EscapeState {
     Text,
     Escape,
     ControlSequence,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolution_text_keeps_each_error_and_its_location() {
+        let mut session = zydeco_session::CompilerSession::default();
+        let path = std::env::temp_dir().join("zydeco-tui-resolution-diagnostics.zy");
+        session.set_overlay(&path, "(\nmissing,\nabsent\n)".into()).unwrap();
+        let error = session.analyze(&path).unwrap_err();
+        let text = DiagnosticText::analysis_error(&error);
+        assert_eq!(text.matches("Unbound variable").count(), 2);
+        assert!(text.contains("resolution-diagnostics.zy:2:"), "{text}");
+        assert!(text.contains("resolution-diagnostics.zy:3:"), "{text}");
+        session.set_overlay(&path, "(1, 2)".into()).unwrap();
+        assert!(session.analyze(&path).unwrap().outcome().root().is_some());
+    }
 }

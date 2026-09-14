@@ -94,3 +94,32 @@ fn source_scanning_reports_multiple_directive_categories() {
         .unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
+
+#[test]
+fn resolution_reports_every_unbound_reference_at_its_own_location() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("resolution.zy");
+    fs::write(&path, "(\n  missing,\n  absent\n)\n").unwrap();
+    for command in ["check", "run", "build"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .current_dir(directory.path())
+            .arg(command)
+            .arg(&path)
+            .output()
+            .unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(error.contains("resolution.zy:2:"), "{error}");
+        assert!(error.contains("resolution.zy:3:"), "{error}");
+        assert_eq!(error.matches("Unbound variable").count(), 2, "{error}");
+        assert!(!error.contains("panicked"), "{error}");
+    }
+    fs::write(&path, "(1, 2)").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+        .current_dir(directory.path())
+        .arg("check")
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}

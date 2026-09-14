@@ -1,7 +1,8 @@
 use super::*;
+use crate::scoped::scope::*;
 use crate::{
     bitter::{SourceDesugarOut, SourceUnitDesugarer},
-    scoped::{ResolveError, Resolver},
+    scoped::{ResolveError, ResolveFolder},
     textual::{ParsedHole, RecoveringParser, syntax as t},
 };
 use zydeco_utils::pass::CompilerPass;
@@ -29,7 +30,8 @@ impl Fixture {
     }
 
     fn complete(self) -> CompletionResolution {
-        Resolver::new(&self.spans, self.bitter.arena).run_completion(self.bitter.root, self.target)
+        ResolveFolder::new(&self.spans, self.bitter.arena)
+            .run_completion(self.bitter.root, self.target)
     }
 }
 
@@ -94,7 +96,7 @@ fn unbound_references_are_diagnosed_and_replaced_only_for_completion() {
     let program = completion.program.unwrap();
     assert_eq!(completion.site.unwrap().scope.definitions[0].name.0, "value");
     let unbound = completion
-        .unbound
+        .diagnostics
         .iter()
         .map(|error| match error {
             | ResolveError::UnboundVar(name) => name.inner.0.as_str(),
@@ -107,12 +109,17 @@ fn unbound_references_are_diagnosed_and_replaced_only_for_completion() {
     );
 
     let strict = Fixture::new(source);
-    let error = Resolver::new(&strict.spans, strict.bitter.arena)
+    let error = ResolveFolder::new(&strict.spans, strict.bitter.arena)
         .run_source(strict.bitter.root)
         .err()
-        .expect("strict resolution must reject the first unbound reference");
-    assert!(matches!(*error, ResolveError::UnboundVar(ref name) if name.inner.0 == "missing"));
-    assert!(Fixture::new("let missing = 1 in (missing, ¦)").complete().unbound.is_empty());
+        .expect("strict resolution must reject every unbound reference");
+    assert_eq!(error.len(), 2);
+    for expected in ["missing", "absent"] {
+        assert!(error.iter().any(
+            |error| matches!(error, ResolveError::UnboundVar(name) if name.inner.0 == expected)
+        ));
+    }
+    assert!(Fixture::new("let missing = 1 in (missing, ¦)").complete().diagnostics.is_empty());
 }
 
 #[test]
@@ -120,7 +127,7 @@ fn a_cursor_identity_from_another_parse_cannot_match_an_equal_span() {
     let old = Fixture::new("fn value => ¦").target;
     let current = Fixture::new("fn value => ¦");
     assert_ne!(old, current.target);
-    let completion = Resolver::new(&current.spans, current.bitter.arena)
+    let completion = ResolveFolder::new(&current.spans, current.bitter.arena)
         .run_completion(current.bitter.root, old);
     assert!(completion.site.is_none());
     assert!(completion.program.is_ok());
@@ -129,10 +136,10 @@ fn a_cursor_identity_from_another_parse_cannot_match_an_equal_span() {
 }
 
 #[test]
-fn fatal_resolution_errors_do_not_invent_an_unvisited_scope() {
+fn fatal_resolution_errors_allow_independent_sibling_scope_capture() {
     let completion = Fixture::new("(param invalid that invalid, fn value => ¦)").complete();
-    assert!(completion.site.is_none());
+    assert_eq!(completion.site.unwrap().scope.definitions[0].name.0, "value");
     assert!(
-        matches!(completion.program, Err(error) if matches!(*error, ResolveError::UnenclosedThat(_)))
+        matches!(completion.program, Err(error) if error.len() == 1 && error.iter().any(|error| matches!(error, ResolveError::UnenclosedThat(_))))
     );
 }

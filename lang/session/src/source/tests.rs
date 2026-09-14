@@ -1056,7 +1056,10 @@ fn imported_free_names_do_not_capture_importer_bindings() {
     let Err(failure) = resolve_program(program) else {
         panic!("expected name resolution to reject caller capture")
     };
-    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = failure.error.as_ref() else {
+    assert_eq!(failure.error.len(), 1);
+    let zydeco_surface::scoped::ResolveError::UnboundVar(name) =
+        failure.error.iter().next().unwrap()
+    else {
         panic!("expected an unbound imported name, got {}", failure.error)
     };
 
@@ -1074,7 +1077,10 @@ fn imported_mobile_bindings_do_not_move_into_an_importer_block() {
     let Err(failure) = resolve_program(program) else {
         panic!("expected name resolution to reject cross-file mobility")
     };
-    let zydeco_surface::scoped::ResolveError::UnenclosedThat(span) = failure.error.as_ref() else {
+    assert_eq!(failure.error.len(), 1);
+    let zydeco_surface::scoped::ResolveError::UnenclosedThat(span) =
+        failure.error.iter().next().unwrap()
+    else {
         panic!("expected an unenclosed imported binding, got {}", failure.error)
     };
 
@@ -1283,7 +1289,10 @@ fn the_declaration_free_unbound_fixture_fails_during_resolution() {
     let Err(failure) = resolve_program(program) else {
         panic!("the unbound fixture unexpectedly resolved")
     };
-    let zydeco_surface::scoped::ResolveError::UnboundVar(name) = failure.error.as_ref() else {
+    assert_eq!(failure.error.len(), 1);
+    let zydeco_surface::scoped::ResolveError::UnboundVar(name) =
+        failure.error.iter().next().unwrap()
+    else {
         panic!("expected an unbound variable, got {}", failure.error)
     };
 

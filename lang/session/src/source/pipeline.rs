@@ -5,7 +5,7 @@ use zydeco_surface::{
         syntax::TermId as BitterTermId,
     },
     scoped::{
-        ResolveError, ResolveSourceOut, Resolver, arena::ScopedArena,
+        ResolveErrors, ResolveFolder, ResolveSourceOut, arena::ScopedArena,
         syntax::TermId as ScopedTermId,
     },
     textual::syntax as t,
@@ -46,14 +46,14 @@ impl TextualProgram {
 /// diagnostics can still resolve the error's spans after the failure.
 #[derive(Debug)]
 pub(crate) struct ResolveFailure {
-    pub error: Box<ResolveError>,
+    pub error: Box<ResolveErrors>,
     pub spans: FrozenArena<t::SpanArena>,
 }
 
 impl BitterProgram {
     pub(crate) fn resolve(self) -> Result<ScopedProgram, ResolveFailure> {
         let Self { spans, arena, root } = self;
-        let resolved = Resolver::new(&spans, arena).run_source(root);
+        let resolved = ResolveFolder::new(&spans, arena).run_source(root);
         match resolved {
             | Ok(ResolveSourceOut { arena, root }) => Ok(ScopedProgram { spans, arena, root }),
             | Err(error) => Err(ResolveFailure { error, spans }),

@@ -92,5 +92,7 @@ impl ResolveError {
     }
 }
 
-/// Name-resolution result with boxed error for cheap cloning.
-pub type Result<T> = std::result::Result<T, Box<ResolveError>>;
+pub type ResolveErrors = crate::diagnostic::Diagnostics<ResolveError>;
+
+/// Strict name resolution rejects publication with every recorded error.
+pub type Result<T> = std::result::Result<T, Box<ResolveErrors>>;

@@ -111,6 +111,14 @@ pub mod scoped {
     pub use binders::*;
     /// Collection, dependency analysis, and elaboration of nested term blocks.
     mod blocks;
+    /// Lookup and borrowed lexical scope views.
+    pub mod scope;
+    pub use scope::*;
+    /// Passive consumers of reference and scope events.
+    pub mod observers;
+    pub use observers::*;
+    mod dependencies;
+    mod alloc;
     /// Visible definitions captured by completion-oriented resolution.
     mod completion;
     pub use completion::*;

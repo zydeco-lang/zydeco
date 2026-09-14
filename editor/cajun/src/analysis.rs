@@ -841,6 +841,32 @@ mod tests {
     }
 
     #[test]
+    fn resolution_failures_publish_each_unbound_reference() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("resolution.zy");
+        let source = "(let value = \"😀\" in missing, absent)";
+        std::fs::write(&path, source).unwrap();
+        let error = zydeco_session::CompilerSession::default().analyze(&path).unwrap_err();
+        let diagnostics =
+            ProjectFailure::from_analysis_error(&error).diagnostics(Some(&path), Some(source));
+        assert_eq!(diagnostics.len(), 2);
+        for name in ["missing", "absent"] {
+            let diagnostic =
+                diagnostics.iter().find(|diagnostic| diagnostic.message.contains(name)).unwrap();
+            assert_eq!(diagnostic.range.start, source_position(source, name));
+        }
+        std::fs::write(&path, "(1, 2)").unwrap();
+        assert!(
+            zydeco_session::CompilerSession::default()
+                .analyze(&path)
+                .unwrap()
+                .outcome()
+                .root()
+                .is_some()
+        );
+    }
+
+    #[test]
     fn failed_analysis_ranges_are_measured_in_utf16() {
         let path = Path::new("unicode-error.zy");
         let failure = ProjectFailure {

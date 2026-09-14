@@ -17,7 +17,7 @@ use zydeco_statics::{
 };
 use zydeco_surface::{
     bitter::DesugarErrors,
-    scoped::{ResolveError, arena::ScopedArena},
+    scoped::{ResolveErrors, arena::ScopedArena},
     textual::syntax::SpanArena,
 };
 use zydeco_utils::arena::ArenaAccess;
@@ -192,7 +192,7 @@ pub enum AnalysisError {
     #[error("Resolution error: {error}")]
     Resolve {
         #[source]
-        error: Box<ResolveError>,
+        error: Box<ResolveErrors>,
         graph: Arc<SourceGraph>,
         /// The merged program's span arena, whose source map resolves spans.
         spans: Arc<SpanArena>,
@@ -204,6 +204,13 @@ impl AnalysisError {
     pub fn diagnostics(&self) -> Vec<super::SourceDiagnostic> {
         match self {
             | Self::Source { error } => error.diagnostics(),
+            | Self::Resolve { error, spans, .. } => error
+                .iter()
+                .map(|error| super::SourceDiagnostic {
+                    message: error.to_string(),
+                    site: SourceDiagnosticSite::from_span(spans, error.primary_span()),
+                })
+                .collect(),
             | Self::Desugar { error, spans } => error
                 .iter()
                 .map(|error| super::SourceDiagnostic {
@@ -226,9 +233,9 @@ impl AnalysisError {
             | Self::Desugar { error, spans } => {
                 error.iter().find_map(|error| SourceDiagnosticSite::from_span(spans, error.span()))
             }
-            | Self::Resolve { error, spans, .. } => {
-                SourceDiagnosticSite::from_span(spans, error.primary_span())
-            }
+            | Self::Resolve { error, spans, .. } => error
+                .iter()
+                .find_map(|error| SourceDiagnosticSite::from_span(spans, error.primary_span())),
         }
     }
 }

@@ -1,7 +1,7 @@
 # Reusable folders and traversal composition
 
 This proposal collects the remaining work on reusable compiler traversals.
-The core interfaces below are a design draft for discussion before implementation.
+The surface migrations are implemented; this document retains extensions that still need concrete clients.
 The implemented [scoped visitor](../references/compiler.md#scoped-structural-traversal)
 and [surface rebuilding and freshening](../references/compiler.md#surface-structural-rebuilding) contracts live
 in the compiler reference.
@@ -14,8 +14,7 @@ with presentation customization left for later.
 
 Adding a syntax constructor currently requires updating many operations that each describe how
 to recurse through the same representation.
-Desugaring and resolution contain their own recursive dispatch; typed substitution,
-hole resolution, and normalization repeat much of their rebuilding structure.
+Typed substitution, hole resolution, and normalization still repeat much of their rebuilding structure.
 This spreads structural knowledge across passes and makes each pass responsible for both traversal and its own rules.
 
 The intended separation is between a representation's structural operations
@@ -88,351 +87,41 @@ the [recovery contract](#diagnostic-collection-and-recovery) determines which wo
 
 ## Diagnostic collection and recovery
 
-The source loader currently propagates the first failed directive query. Desugaring and strict resolution also return
-individual failures, while the parser retains multiple issues and the type checker already exposes a diagnostic
-collection. The intended direction is multiple-error reporting throughout the compiler. A pass should report the
-independent errors it can establish from its available input, and the session and frontends must preserve that
-collection instead of selecting one entry. Follow the
-[diagnostic provenance contract](../references/compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling)
-when retaining rejected facts and suppressing consequences of an earlier failure.
+The implemented [diagnostic collection contract](../references/compiler.md#diagnostic-collection) covers source
+analyzers, desugaring, and resolution, including complete frontend reporting and explicit recovery boundaries.
+The agreed direction extends to every pass: report independent errors justified by available input,
+and preserve their complete collection through the session and frontends.
+This does not require executing a dependent pass on an invalid intermediate representation.
 
-### Collections and phase outcomes
+The remaining audit should follow concrete producer and publication boundaries:
 
-Use a vector of typed domain diagnostics in each analyzer or semantic folder.
-Pure analyses can return useful facts and diagnostics together:
+1. Render every retained parser issue, including its own location, instead of selecting its primary issue.
+2. Collect failures from independently available sources and imports.
+   A rejected source must not become a cached successful graph node,
+   and shared rejected providers must not replay their diagnostics.
+3. Inspect checker and later validation loops for early exits over independent work.
+   Reuse their domain diagnostic collections and suppress consequences of an unavailable prerequisite.
 
-```rust
-struct Analysis<T, D> {
-    facts: T,
-    diagnostics: Vec<D>,
-}
-```
-
-For example, an import analyzer retains every successfully decoded site and every independently rejected directive.
-Its facts are partial when diagnostics reject some sites; they are not themselves a validated source template.
-Keep existing domain error enums, source identities, and related locations rather than flattening failures to strings.
-The session maps collections into its source-aware diagnostic types at the phase boundary.
-
-Strict transformation entry points can keep `Result<Output, Failure>`.
-Their failure type carries a nonempty diagnostic collection and the source context needed to render every entry.
-This fits the existing `CompilerPass` interface: `Err` means that a valid phase product is unavailable,
-not that only one error was found.
-Retained tooling facts belong in a phase-specific rejected outcome,
-following the checker's existing checked/rejected distinction.
-Do not represent a partially built arena as a successful normal output merely because traversal continued.
-
-Inside a semantic folder, record a diagnostic once and return a small `ReportedError` token
-when the current node cannot produce its required result.
-Propagating that token does not emit the diagnostic again.
-Local `Result` remains useful for dependent operations; the driver decides where
-to catch a rejected node and continue with independent work.
-Memoized rejected source nodes must not replay their diagnostics on subsequent visits.
-
-### Difficult tradeoff: where recovery is meaningful
-
-Accumulating errors requires deciding what remains meaningful after a failure.
-An invalid import has no effect on decoding a separate literal annotation.
-An invalid binder, however, can prevent establishing the environment needed by its body.
-The structural folder cannot invent that environment or an arbitrary replacement binder.
-
-For ordinary children with independent inputs, evaluate every child before propagating a failed result.
-The shared structural mapper can stage those child results and reconstruct the parent only when all are available.
-A short-circuiting `collect::<Result<_, _>>()` must not prevent visiting the remaining independent children.
-Sequential telescope and scope handlers retain explicit recovery boundaries for children that depend on earlier results.
-Use existing, justified recovery forms where possible; otherwise reject the affected construct
-and continue with its independent siblings or source units.
-Do not promise an exhaustive list of errors whose interpretation depends on missing semantic information.
-
-This distinction also applies between passes. Continue later analysis only when it has input satisfying its contract,
-or through a specifically supported recovered outcome.
-An invalid program must never reach execution or code generation as a successful compilation.
-The first migrations can accumulate errors within a pass while keeping strict phase boundaries;
-broader analysis of recovered intermediate representations needs an explicit recovery contract.
-The same reporting direction applies to parsing, loading, checking, and later validation passes,
-using their own unit and dependency boundaries rather than one universal recovery mechanism.
-
-### Initial presentation order
-
-Append diagnostics as each producer collects them and concatenate composed analyzers' collections
-in their existing composition order.
-Keep current ordering of successful facts where callers require it.
-Do not add category priorities, a global source-position sort, or ordering configuration in these migrations.
-Arena iteration may affect presentation order; that order is not an API guarantee.
-Future frontend ordering can use the retained typed categories and source locations without changing traversal.
-
-Tests should assert diagnostic contents, multiplicity, and locations independently of presentation order.
-Distinct errors at the same span remain distinct; matching a span alone is not a deduplication rule.
-Known dependency failures should suppress consequent diagnostics at their producer,
-as the checker already does for missing solutions caused by a rejected expression.
-
-## Core interfaces for the three surface migrations
-
-Desugaring rule ownership is implemented in the [compiler reference](../references/compiler.md#desugaring-folders).
-Shared source analysis is implemented in the [compiler reference](../references/compiler.md#shared-source-analysis).
-The remaining immediate work covers resolution events.
-These mechanisms operate at different boundaries:
-
-| Boundary | Driver | Local operations or consumers | Published result |
-| --- | --- | --- | --- |
-| One parsed file | `SourceScan` | Typed source analyzers | Facts used to construct a `SourceTemplate` |
-| Assembled textual syntax | `DesugarFolder` | Telescope, binding, CBPV, and meta annotation rules | Bitter syntax through `BitterBuilder` |
-| Bitter syntax with lexical environments | `ResolveFolder` | Dependency analysis and resolution observers | Scoped syntax and resolution facts |
-
-The source scan runs before assembly.
-Its IDs and spans belong to one parsed file; desugaring consumes the assembled program's identities.
-The two stages can share meta annotation decoders,
-but transferring cached facts between them requires an explicit remapping.
-These migrations do not introduce that additional cache.
-
-### Structural folders and semantic scheduling
-
-The current shared `Folder` is infallible and preserves the reference type.
-Resolution needs fallible lookup, changes `VarName` to `DefId`, and can replace an unbound variable
-with an internal hole to continue diagnostic collection or completion recovery.
-Extend that existing interface only as those concrete requirements demand.
-The following signatures sketch the intended boundary; they are not implemented APIs:
-
-```rust
-trait Folder {
-    type InputRef;
-    type OutputRef;
-    type Error;
-
-    fn fold_def(&mut self, id: DefId) -> Result<DefId, Self::Error>;
-    fn fold_pat(&mut self, id: PatId) -> Result<PatId, Self::Error>;
-    fn fold_term(&mut self, id: TermId) -> Result<TermId, Self::Error>;
-    fn fold_var(&mut self, name: Self::InputRef)
-        -> Result<Term<Self::OutputRef>, Self::Error>;
-}
-```
-
-`Term<R>::fold_with` would return `Result<Term<F::OutputRef>, F::Error>` for a folder with `InputRef = R`.
-The variable hook returns a term so the recovery policy can produce either `Var(definition)` or `Hole`.
-An error recorded while producing a recovery hole still rejects the strict phase outcome.
-`FreshenFolder` uses `VarName` on both sides and `Infallible` as its error;
-its copying and provenance policies remain those in the reference.
-Replace the existing structural implementation and migrate its callers together.
-Do not maintain separate infallible and fallible constructor matches.
-
-The structural mapper supplies ordinary child reconstruction.
-A semantic folder supplies inherited information and receives synthesized results:
-for resolution, the inherited information is the lexical environment,
-and a pattern additionally returns the environment extended by its binders.
-Use explicit `ResolveEnv` arguments and a short-lived adapter containing the current node
-and environment when delegating ordinary reconstruction.
-An adapter passes the same input environment to independent children;
-it does not mutate one ambient scope that accidentally leaks between siblings.
-Ordinary reconstruction follows the collection rule above: evaluate independent child hooks
-before deciding whether the parent can be built.
-Semantic folders use `ReportedError` for already-recorded source failures.
-
-Resolution must classify constructors exhaustively into ordinary reconstruction or a semantic handler.
-A new constructor must require reviewing that classification, even if the shared mapper already knows its children.
-Annotations, binders, source boundaries, blocks, and monadic blocks have scheduling requirements beyond field order.
-For example, resolution visits an annotation's classifier before its payload,
-while copying visits payload before classifier.
-Scope-changing handlers therefore choose child order and environments explicitly.
-
-Textual lowering changes constructors and node categories, so `DesugarFolder` has its own typed entry points.
-Do not parameterize every textual enum merely to force it through the same Rust trait.
-Both semantic folders centralize recursion and publication; their rule modules
-and analyzers do not implement another independent recursive walk.
-
-The tradeoff is deliberate: one universal fold algebra would expose more opportunities for automatic composition,
-but would also require encoding lexical effects, recovery, constructor changes, and scheduling barriers in its types.
-Small structural interfaces plus explicit semantic folders make the current dependencies reviewable.
-Generate structural declarations only after their shared requirements have been demonstrated by real clients.
-
-## Resolution decomposition
-
-### Folder, environment, and publication
-
-`ResolveFolder` should own a scoped builder, the required dependency analyzer, a composed set of observers,
-a diagnostic collector, and an explicit strict or completion publication policy.
-Move name lookup and scope enumeration to a shared scope module; both references
-and captured scopes continue to use the same shadowing rules.
-The core entry points have these semantic results:
-
-```rust
-fn term(&mut self, id: TermId, env: ResolveEnv) -> Result<TermId, ReportedError>;
-fn pattern(&mut self, id: PatId, env: ResolveEnv) -> Result<ResolvedPattern, ReportedError>;
-
-struct ResolvedPattern {
-    pattern: PatId,
-    env: ResolveEnv,
-}
-```
-
-Ordinary resolution preserves existing IDs. The builder materializes their resolved contents, retains origins,
-and allocates new IDs only for the established context elaboration operations.
-An accepted result publishes `ScopedArena` together with completed reference and documentation facts.
-The existing free-variable analyzer still runs on the elaborated scoped structure.
-
-Pattern annotations resolve their classifier before introducing the annotated binders.
-Dependent pattern sequences and copattern spines thread the returned environment left to right;
-match arms receive independent input environments.
-A source or signature boundary starts with an isolated environment and resolves a shared provider only once.
-The ordinary child adapter is used only for constructors whose children inherit the same environment and
-whose current order agrees with structural reconstruction.
-
-### Typed facts and passive observers
-
-Emit a resolved-reference event after successful lookup, containing the occurrence ID,
-selected definition, and the selected definition's optional `BindingSite`.
-Also expose a borrowed view of all active enclosing binding sites.
-The dependency analyzer needs every active binding with the same block owner as the selected dependency;
-choosing only the innermost binding would lose edges in nested contexts.
-An observer must never repeat name lookup to recover the selected definition.
-Failed lookup records a diagnostic without emitting a successful-reference event or an invented dependency edge.
-
-```rust
-struct ResolvedReference<'event> {
-    occurrence: TermId,
-    definition: DefId,
-    dependency: Option<BindingSite>,
-    active_bindings: ActiveBindings<'event>,
-}
-```
-
-`ActiveBindings` is a borrowed iterator view over the existing persistent sequence;
-an event does not allocate a vector of enclosing bindings.
-
-Emit scope events at the original sites already observed today: an authored documentation annotation
-before its payload, and a source hole when that hole is visited.
-Include the current ID, textual origin, site kind, and a borrowed scope view.
-The completion observer matches the exact remapped textual target, not an equal span.
-Recovered unbound variables become holes as a resolution policy decision;
-those generated holes are not additional authored cursor events.
-
-```rust
-trait ResolutionObserver {
-    type Output;
-    fn reference(&mut self, event: &ResolvedReference<'_>);
-    fn scope(&mut self, event: &ScopeEvent<'_>);
-    fn finish(self) -> Self::Output;
-}
-```
-
-The reference-index observer constructs the existing definition-to-use relation.
-The documentation observer retains scopes only for documentation sites.
-The completion observer materializes a snapshot only at its exact target.
-Scope events borrow the environment; observers explicitly own the small snapshots they retain.
-Do not construct and store a scope snapshot at every visited node or retain a complete event log.
-Observers cannot mutate the builder, alter lookup, prune descent, or abort resolution.
-Their event order follows the semantic folder's actual schedule, not a second structural traversal.
-Composition forwards each event and pairs the final outputs, as with source analyzers.
-The standard compilation profile includes reference indexing and documentation facts;
-the completion profile additionally captures its requested site.
-Publication requires the facts expected by `ScopedArena`; optional observation must not silently omit those fields.
-
-Events describe source resolution, so a provider cache hit does not replay its references or scopes,
-and context elaboration does not emit a second stream for generated wrappers.
-The source and provider identities in the existing indexes remain the unit of indexing.
-Preserve the current rule when several visited nodes share an origin: completion replaces its retained site
-on each exact-origin match in the existing visit order.
-
-### Difficult tradeoff: dependencies are required intermediate results
-
-Reference indexing and tooling are passive observers.
-Dependency analysis is separate logic, but its result is required before resolution can finish a block.
-Give it the same reference events plus an explicit block lifecycle:
-
-```text
-begin_block(block, candidate_ids)
-    resolve candidate annotations and bindees
-    resolve residual body
-finish_block(block) -> DepGraph<BindingId>
-    schedule strongly connected components
-    elaborate the block through the scoped builder
-```
-
-`begin_block` seeds every candidate, including those with no references.
-The collector keeps independent active graphs keyed by block owner, so nested blocks do not steal outer edges.
-`finish_block` removes and returns exactly that block's graph.
-Scheduling receives it as a typed input; no observer downcast or globally shared side table is needed.
-Successful publication requires all block graphs to have been consumed.
-An explicit `abort_block` removes an incomplete graph when a failure skips the rest of that block.
-This cleanup is required before recovery continues with a sibling; unfinished graphs cannot leak into later analysis.
-Validate independent strongly connected components before deciding whether block elaboration can succeed,
-so several illegal recursive parameter groups can contribute diagnostics.
-A graph from incomplete traversal cannot be published as a complete dependency result.
-
-Keep this analyzer as a required collaborator of `ResolveFolder`, alongside the optional observer product.
-Dispatch reference events to it and the observers without exposing their mutable state to each other.
-This gives independent ownership and testing while retaining the actual data dependency.
-A uniform optional-observer interface would misleadingly allow a configuration without the facts needed for scheduling,
-or would have to recover them through a hidden channel.
-
-Block candidate discovery remains before binder installation and reference resolution.
-Record candidate binders once where possible and reuse that record when establishing ownership,
-but preserve the collector's source, nested-block, and mobile-binding boundaries.
-A reference-event stream cannot discover a forward binder in time to resolve an earlier use.
-This is why the design shares the reference-resolution traversal without claiming
-that the complete block algorithm is one ordinary depth-first traversal.
-
-### Recovery and partial results
-
-Both strict and completion analysis collect independent resolution errors.
-Reuse the existing unbound-reference recovery where it permits continuing lexical resolution:
-record the error and use an internal hole at that occurrence.
-Keep its recovery origin available so it cannot become a fresh authored cursor event
-or independent evidence for a consequent diagnostic.
-Strict compilation still rejects the result when any resolution error was recorded,
-even if those internal replacements allowed traversal to finish.
-Completion can retain a request-local recovered program under its existing tooling contract.
-The completion observer only captures scope; it does not own error collection or decide whether analysis continues.
-
-For failures without a justified replacement, skip the affected dependent region and resume with independent siblings.
-Binder discovery can collect multiple duplicate declarations before rejecting an ambiguous block scope.
-Initially, skip resolution that needs that scope rather than selecting an arbitrary winning definition.
-An absent enclosing block or invalid context component likewise prevents publishing its affected construction.
-Extending recovery through ambiguous scopes can be considered separately when it provides useful additional diagnostics.
-
-On success, publish complete syntax and required facts.
-On rejection, retain all collected diagnostics and supported observations in a phase-specific failed outcome;
-strict resolution publishes no normal scoped program.
-Completion retains captured sites even when a later, unrecoverable region prevents producing its recovered program.
-An unvisited target still has no invented scope.
-Observers see the actual visits made during recovery, potentially including siblings after a rejected branch.
-There is no replay or rollback promise, and facts from rejected analysis are not presented as a complete index.
-The same successful input should produce identical reference and dependency facts under strict and completion policies.
+Recovery within one malformed directive remains local to its decoder.
+A missing package name prevents duplicate-name checks for that site but does not prevent validating other sites.
+Extending recovery through ambiguous scopes or into later intermediate representations requires a specific contract
+for the missing information; it should follow a demonstrated tooling or diagnostic need.
 
 ## Migration order and acceptance criteria
 
-Implement these as separate reviewable changes after the design choices are settled:
+The implemented surface boundaries have one canonical home each:
+[structural rebuilding](../references/compiler.md#surface-structural-rebuilding),
+[desugaring folders](../references/compiler.md#desugaring-folders),
+[shared source analysis](../references/compiler.md#shared-source-analysis),
+and [resolution events and dependencies](../references/compiler.md#name-resolution).
+The file scan precedes assembly and therefore has different identities and spans from desugaring;
+sharing decoded facts across that boundary would require an explicit remapping.
 
-1. Extract the resolution policy, typed events, and passive observers while preserving the existing semantic schedule.
-   Use its diagnostic collector in strict analysis as well as completion, with explicit recovery boundaries.
-2. Move dependency accumulation behind the explicit block lifecycle and connect ordinary resolution reconstruction
-   to the extended shared folder.
-   Remove the superseded recursion and accumulation paths as their callers migrate.
-3. Audit the remaining pass and source-unit boundaries for early exits over independent work.
-   Reuse parser issues and checker diagnostics, collect failures from independently available sources or imports,
-   and extend checking and later validators at their own recovery boundaries.
-   Dependent lowering stages continue to require a valid preceding product.
-
-Each migration must carry its complete diagnostic collection through session queries and CLI, TUI, and LSP presentation.
-Update the producer and its callers together; a frontend
-that displays only the first entry would leave the work incomplete.
-This reporting direction extends across all passes, while the first three changes complete the three surface tasks.
-
-Validation must distinguish accepted-program equivalence from recovery behavior:
-
-| Area | Positive and boundary cases |
-| --- | --- |
-| Desugaring | Every binding flavor; annotated and unannotated telescopes; accepted and rejected destructor parameters; fresh classifier binders; retained origins; multiple independent child errors; no invented binders after rejection |
-| Meta annotations | Accepted and rejected raw payloads and arguments; partial source binders; existential role placement; exact error spans; shared rejected terms reported once |
-| Source analyzers | Separate versus composed facts and diagnostic collections; reachable versus abandoned allocations; term versus parameter annotations; multiple errors within and across categories; duplicate package/discovery errors; selected nested package roots |
-| Resolution observers | Shadowing, exact cursor identity, documentation timing, shared provider reuse, independent arms, multiple unbound references in strict and completion analysis, strict/recovering agreement on valid sources |
-| Dependency lifecycle | Forward references, nested block ownership, candidates with no edges, legal recursive groups, multiple rejected components, graph cleanup before continuing after a rejected block |
-| Reporting and phase boundaries | Every diagnostic reaches the frontend with its source location; rejected inputs keep a failure exit status; no normal product reaches a dependent phase after rejection; no errors invented solely from recovery placeholders |
-
-Retain count-based tests showing that the file-loading profile performs one reachability computation and one term sweep,
-and that composing resolution observers does not add another resolution walk.
-These establish work performed; compilation-time benefits still require measurement.
-Compare diagnostics as collections, retaining multiplicity and source locations without asserting presentation order.
-Pair rejected multi-error fixtures with valid counterparts to verify
-that accumulation does not alter successful compilation.
+Next, audit diagnostic publication and independent source loading, then migrate typed structural operations.
+For each migration, remove the superseded recursion and update all callers in the same change.
+Compare separate and composed facts and diagnostics, including multiplicity and exact locations.
+Verify accepted-program behavior, rejected inputs' failure status, and the absence of invalid normal products.
+Count visits and allocations on shared graphs before making compilation-time claims.
 
 ## Typed folders and graph views
 
@@ -472,7 +161,7 @@ deduplicating visits must never hide that rejection.
 
 The remaining work fits one migration sequence:
 
-1. Complete the [surface migrations and their acceptance criteria](#migration-order-and-acceptance-criteria).
+1. Extend diagnostic collection at the [remaining producer boundaries](#diagnostic-collection-and-recovery).
 2. Introduce typed graph views and folders for substitution and finalization.
 3. Apply the established interfaces to SPS analyses where they simplify concrete callers.
 

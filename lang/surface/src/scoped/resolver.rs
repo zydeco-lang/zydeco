@@ -1,571 +1,411 @@
-use super::completion::{CompletionCapture, NameScope};
-use crate::scoped::{syntax::*, *};
-use zydeco_utils::prelude::{ArenaAccess, DepGraph, FrozenArena};
+//! Scope-sensitive rebuilding with independent event consumers.
+use super::{
+    alloc::ScopedBuilder, dependencies::DependencyAnalyzer, scope::ResolveEnv, syntax::*, *,
+};
+use crate::{
+    diagnostic::{CollectReported, Diagnostics, ReportedError},
+    fold::Folder,
+};
+use std::collections::HashSet;
+use zydeco_utils::prelude::FrozenArena;
 
-/// Global name environment collected from top-level binders.
-#[derive(Clone, Debug, Default)]
-pub struct Global {
-    /// map from variable names to their definitions
-    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, DefId>,
-    /// map from definitions to their context bindings
-    pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
-}
+type FoldResult<T> = std::result::Result<T, ReportedError>;
 
-#[derive(Copy, Clone, Debug)]
-pub(super) struct BindingSite {
-    pub(super) owner: TermId,
-    pub(super) id: BindingId,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct LocalDefinition {
-    pub(super) definition: DefId,
-    pub(super) depth: usize,
-}
-
-/// Local name environment built from pattern binders.
-#[derive(Clone, Debug)]
-pub struct Local {
-    /// Context bindings whose dependencies are currently being collected,
-    /// from outermost to innermost.
-    pub(super) under: rpds::VectorSync<BindingSite>,
-    /// map from variable names to their definitions
-    pub(super) var_to_def: rpds::HashTrieMapSync<VarName, LocalDefinition>,
-    pub(super) depth: usize,
-    /// Context candidates associated with block-wide definitions.
-    pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
-    /// The nearest block currently resolving its residual syntax.
-    pub(super) boundary: Option<TermId>,
-}
-
-impl Local {
-    fn for_body() -> Self {
-        Self {
-            under: rpds::VectorSync::new_sync(),
-            var_to_def: rpds::HashTrieMapSync::new_sync(),
-            depth: 0,
-            under_map: rpds::HashTrieMapSync::new_sync(),
-            boundary: None,
-        }
-    }
-
-    pub(super) fn bind_group(
-        mut self, binders: impl IntoIterator<Item = (VarName, DefId)>,
-    ) -> Self {
-        self.depth += 1;
-        self.var_to_def = binders.into_iter().fold(self.var_to_def, |scope, (name, definition)| {
-            scope.insert(name, LocalDefinition { definition, depth: self.depth })
-        });
-        self
-    }
-}
-
-/// Name-resolution state and accumulators.
-pub struct Resolver<'a> {
-    pub(super) allocator: IdAllocator<ScopedScope>,
+pub struct ResolveFolder<'a, O = ()> {
     pub spans: &'a SpanArena,
     pub bitter: FrozenArena<BitterArena>,
-    pub origins: TextualOrigins,
-
-    // arenas
-    pub defs: ArenaSparse<ScopedScope, DefId>,
-    pub pats: ArenaIndexed<ScopedScope, PatId>,
-    pub terms: ArenaIndexed<ScopedScope, TermId>,
-    pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
-
-    pub users: ArenaForth<DefId, TermId>,
-    pub(super) block_deps: ArenaAssoc<TermId, DepGraph<BindingId>>,
-    completion: Option<CompletionCapture>,
-    documentation_scopes: ArenaAssoc<TermId, ScopeSnapshot>,
+    pub(super) builder: ScopedBuilder,
+    pub(super) dependencies: DependencyAnalyzer,
+    observers: ((ReferenceIndex, DocumentationObserver), O),
+    diagnostics: Vec<ResolveError>,
+    failed_providers: HashSet<TermId>,
 }
 
-/// Output of name resolution for one complete source term.
 pub struct ResolveSourceOut {
     pub arena: FrozenArena<ScopedArena>,
     pub root: TermId,
 }
 
-impl<'a> Resolver<'a> {
+/// Observations remain available after rejection; only accepted syntax is published.
+pub struct ResolutionOutput<T> {
+    pub program: Result<ResolveSourceOut>,
+    pub observations: T,
+    pub diagnostics: Vec<ResolveError>,
+}
+
+#[derive(Clone, Copy)]
+enum Publication {
+    Strict,
+    Completion,
+}
+
+impl<'a> ResolveFolder<'a> {
     pub fn new(spans: &'a SpanArena, bitter: FrozenArena<BitterArena>) -> Self {
-        let BitterArena { defs, pats: bitter_pats, terms: bitter_terms, origins, partial_binders } =
-            bitter.into_inner();
-        let bitter = FrozenArena::new(BitterArena {
-            defs,
-            pats: bitter_pats,
-            terms: bitter_terms,
-            origins: TextualOrigins::default(),
-            partial_binders,
-        });
-        let mut pats = ArenaIndexed::default();
-        pats.reserve_ids(bitter.pats.iter().map(|(pattern, _)| pattern));
-        // Context elaboration emits one term per SCC. Every SCC contains at
-        // least one mobile source binding, so their source-node count is a
-        // cheap upper bound available before resolution discovers the graph.
-        let generated_term_upper_bound = bitter
-            .terms
-            .iter()
-            .filter(|(_, term)| matches!(term, Term::MobileParam(_) | Term::MobileBind(_)))
-            .count();
-        let mut terms = ArenaIndexed::default();
-        terms.reserve_ids_with_additional(
-            bitter.terms.iter().map(|(term, _)| term),
-            generated_term_upper_bound,
-        );
+        let mut bitter = bitter.into_inner();
+        let origins = std::mem::take(&mut bitter.origins);
+        let builder = ScopedBuilder::new(&bitter, origins);
         Self {
-            allocator: IdAllocator::new(),
             spans,
-            bitter,
-            origins,
-
-            defs: ArenaSparse::default(),
-            pats,
-            terms,
-            blocks: ArenaAssoc::default(),
-
-            users: ArenaForth::default(),
-            block_deps: ArenaAssoc::default(),
-            completion: None,
-            documentation_scopes: ArenaAssoc::default(),
+            bitter: FrozenArena::new(bitter),
+            builder,
+            dependencies: DependencyAnalyzer::default(),
+            observers: ((ReferenceIndex::default(), DocumentationObserver::default()), ()),
+            diagnostics: Vec::new(),
+            failed_providers: HashSet::new(),
         }
     }
 
-    /// Run name resolution over one complete source term.
-    pub fn run_source(mut self, root: TermId) -> Result<ResolveSourceOut> {
-        root.resolve(&mut self, (Local::for_body(), &Global::default()))?;
-        let arena = self.finish();
-        Ok(ResolveSourceOut { arena: FrozenArena::new(arena), root })
+    pub fn with_observer<O: ResolutionObserver>(self, observer: O) -> ResolveFolder<'a, O> {
+        ResolveFolder {
+            spans: self.spans,
+            bitter: self.bitter,
+            builder: self.builder,
+            dependencies: self.dependencies,
+            observers: (self.observers.0, observer),
+            diagnostics: self.diagnostics,
+            failed_providers: self.failed_providers,
+        }
     }
 
-    /// Resolve a recovered source while preserving the exact cursor's lexical scope.
-    /// Unbound references become semantic holes only in this request-local program;
-    /// the strict entry point continues to reject them.
     pub fn run_completion(
-        mut self, root: TermId, target: crate::textual::syntax::TermId,
+        self, root: TermId, target: crate::textual::syntax::TermId,
     ) -> CompletionResolution {
-        self.completion = Some(CompletionCapture { target, site: None, unbound: Vec::new() });
-        let resolved = root.resolve(&mut self, (Local::for_body(), &Global::default()));
-        let CompletionCapture { site, unbound, .. } = self.completion.take().unwrap();
-        let program = resolved.map(|()| {
-            let arena = self.finish();
-            ResolveSourceOut { arena: FrozenArena::new(arena), root }
-        });
-        CompletionResolution { site, unbound, program }
-    }
-
-    fn capture_scope(&mut self, term: TermId, local: &Local, global: &Global) {
-        if let Some(completion) = &mut self.completion
-            && self.origins.source(&term.into()) == Some(completion.target.into())
-        {
-            completion.site = Some(CompletionSite {
-                target: term,
-                scope: NameScope { local, global }.snapshot(),
-            });
+        let output =
+            self.with_observer(CompletionObserver::new(target)).run(root, Publication::Completion);
+        CompletionResolution {
+            site: output.observations,
+            diagnostics: output.diagnostics,
+            program: output.program,
         }
     }
+}
 
-    fn finish(self) -> ScopedArena {
-        let Resolver {
-            allocator,
-            spans: _,
-            bitter,
-            origins,
-
-            defs,
-            pats,
-            terms,
-            blocks,
-
-            users,
-            block_deps,
-            completion: _,
-            documentation_scopes,
-        } = self;
-        let _ = allocator;
-        assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
-        let partial_binders = bitter.into_inner().partial_binders;
-        ScopedArena {
-            defs,
-            pats,
-            terms,
-            origins,
-            partial_binders,
-            users,
-            blocks,
-            documentation_scopes,
-        }
+impl<O: ResolutionObserver> ResolveFolder<'_, O> {
+    pub fn run_source(self, root: TermId) -> Result<ResolveSourceOut> {
+        self.run_observed(root).program
     }
 
-    fn add_dependency(&mut self, local: &Local, dependency: BindingSite) {
-        local.under.iter().copied().filter(|binding| binding.owner == dependency.owner).for_each(
-            |binding| {
-                self.block_deps[&binding.owner].add(binding.id, [dependency.id]);
-            },
-        );
+    pub fn run_observed(self, root: TermId) -> ResolutionOutput<O::Output> {
+        self.run(root, Publication::Strict)
     }
 
-    fn resolve_reference(
-        &mut self, user: TermId, name: &VarName, local: &Local, global: &Global,
-    ) -> Result<Option<DefId>> {
-        let Some(binding) = (NameScope { local, global }).lookup(name) else {
-            let error = ResolveError::UnboundVar(user.span(self).make(name.clone()));
-            if let Some(completion) = &mut self.completion {
-                completion.unbound.push(error);
-                return Ok(None);
-            }
-            return Err(error.into());
+    fn run(mut self, root: TermId, policy: Publication) -> ResolutionOutput<O::Output> {
+        let resolved =
+            self.term(root, ResolveEnv { local: Local::for_body(), global: &Global::default() });
+        self.dependencies.assert_closed();
+        let ((users, documentation), observations) = self.observers.finish();
+        let rejected = resolved.is_err()
+            || matches!(policy, Publication::Strict) && !self.diagnostics.is_empty();
+        let program = if rejected {
+            Err(Box::new(
+                Diagnostics::with_errors(self.diagnostics.clone())
+                    .expect("rejection has a recorded diagnostic"),
+            ))
+        } else {
+            Ok(ResolveSourceOut {
+                arena: FrozenArena::new(self.builder.finish(
+                    self.bitter.into_inner(),
+                    users,
+                    documentation,
+                )),
+                root,
+            })
         };
-        let definition = binding.definition;
-        self.users.insert_new(definition, user);
-        if let Some(dependency) = binding.dependency {
-            self.add_dependency(local, dependency);
-        }
-        Ok(Some(definition))
+        ResolutionOutput { program, observations, diagnostics: self.diagnostics }
     }
-}
 
-/// Performs name resolution, turning `VarName`s into `DefId`s with dependency tracking.
-pub trait Resolve {
-    type Out;
-    type Lookup<'a>;
-    fn resolve(&self, resolver: &mut Resolver, lookup: Self::Lookup<'_>) -> Result<Self::Out>;
-}
-
-impl Resolve for DefId {
-    type Out = ();
-
-    type Lookup<'a> = ();
-
-    fn resolve(&self, resolver: &mut Resolver, _lookup: Self::Lookup<'_>) -> Result<Self::Out> {
-        resolver.defs.insert_new(*self, resolver.bitter.defs[self].clone());
-        Ok(())
+    pub(super) fn report(&mut self, error: ResolveError) -> ReportedError {
+        self.diagnostics.push(error);
+        ReportedError
     }
-}
-impl Resolve for PatId {
-    // Note: returns the context yielded **after** the pattern
-    type Out = Local;
-    type Lookup<'a> = (Local, &'a Global);
-    fn resolve(
-        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'_>,
-    ) -> Result<Self::Out> {
-        let pat = resolver.bitter.pats[self].clone();
-        let local = match &pat {
-            | Pattern::Ann(pat) => {
-                let Ann { tm, ty } = pat;
-                let () = ty.resolve(resolver, (local.clone(), global))?;
-                tm.resolve(resolver, (local, global))?
+
+    fn scope_event(&mut self, id: TermId, kind: ScopeKind, env: &ResolveEnv<'_>) {
+        self.observers.scope(&ScopeEvent {
+            occurrence: id,
+            origin: self.builder.origins.source(&id.into()),
+            kind,
+            scope: env.scope(),
+        });
+    }
+
+    fn reference(&mut self, id: TermId, name: VarName, env: &ResolveEnv<'_>) -> Term<DefId> {
+        let Some(binding) = env.scope().lookup(&name) else {
+            self.report(ResolveError::UnboundVar(id.span(self).make(name)));
+            return Term::Hole(Hole);
+        };
+        let event = ResolvedReference {
+            occurrence: id,
+            definition: binding.definition,
+            dependency: binding.dependency,
+            active_bindings: &env.local.under,
+        };
+        self.dependencies.reference(&event);
+        self.observers.reference(&event);
+        Term::Var(binding.definition)
+    }
+
+    pub(super) fn pattern<'e>(
+        &mut self, id: PatId, mut env: ResolveEnv<'e>,
+    ) -> FoldResult<ResolvedPattern<'e>> {
+        let pat = self.bitter.pats[&id].clone();
+        match &pat {
+            | Pattern::Ann(Ann { tm, ty }) => {
+                self.term(*ty, env.clone())?;
+                env = self.pattern(*tm, env)?.env;
             }
-            | Pattern::Hole(pat) => {
-                let Hole = pat;
-                local
-            }
-            | Pattern::Lit(_) => local,
-            | Pattern::Triv(Triv) => local,
             | Pattern::Var(def) => {
-                let () = def.resolve(resolver, ())?;
-                local.bind_group([(resolver.bitter.defs[def].clone(), *def)])
+                let name = self.bitter.defs[def].clone();
+                self.builder.defs.insert_new(*def, name.clone());
+                env.local = env.local.bind_group([(name, *def)]);
             }
-            | Pattern::Named(pat) => {
-                let Named(_name, inner) = pat;
-                inner.resolve(resolver, (local, global))?
-            }
-            | Pattern::Ctor(pat) => {
-                let Ctor(_ctor, args) = pat;
-                args.resolve(resolver, (local, global))?
-            }
-            | Pattern::Project(ProjectionPattern(_, pattern)) => {
-                pattern.resolve(resolver, (local, global))?
+            | Pattern::Named(Named(_, inner))
+            | Pattern::Ctor(Ctor(_, inner))
+            | Pattern::Project(ProjectionPattern(_, inner)) => {
+                env = self.pattern(*inner, env)?.env;
             }
             | Pattern::View(ViewPattern { function, pattern }) => {
-                function.resolve(resolver, (local.clone(), global))?;
-                pattern.resolve(resolver, (local, global))?
+                self.term(*function, env.clone())?;
+                env = self.pattern(*pattern, env)?.env;
             }
-            | Pattern::Alias(Alias(pat)) => {
-                // Later items can depend on binders introduced by earlier items.
-                for item in pat {
-                    local = item.resolve(resolver, (local, global))?;
+            | Pattern::Alias(Alias(patterns)) => {
+                for pat in patterns {
+                    env = self.pattern(*pat, env)?.env;
                 }
-                local
             }
-            | Pattern::Cons(pat) => {
-                // Later items can depend on binders introduced by earlier items.
-                for item in pat {
-                    local = item.resolve(resolver, (local, global))?;
+            | Pattern::Cons(patterns) => {
+                for pat in patterns {
+                    env = self.pattern(*pat, env)?.env;
                 }
-                local
             }
-        };
-        // no id changed, reuse old inner pat structure
-        resolver.pats.insert_new(*self, pat);
-        Ok(local)
+            | Pattern::Hole(_) | Pattern::Lit(_) | Pattern::Triv(_) => {}
+        }
+        self.builder.pats.insert_new(id, pat);
+        Ok(ResolvedPattern { pattern: id, env })
     }
-}
-impl Resolve for TermId {
-    type Out = ();
-    type Lookup<'a> = (Local, &'a Global);
-    fn resolve(
-        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'_>,
-    ) -> Result<Self::Out> {
-        let term = resolver.bitter.terms[self].clone();
-        let res: Term<DefId> = match term {
+
+    fn provider(&mut self, id: TermId) -> FoldResult<()> {
+        if self.failed_providers.contains(&id) {
+            return Err(ReportedError);
+        }
+        if self.builder.terms.get(&id).is_none() {
+            let result =
+                self.term(id, ResolveEnv { local: Local::for_body(), global: &Global::default() });
+            if result.is_err() {
+                self.failed_providers.insert(id);
+            }
+            result?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn term(&mut self, id: TermId, env: ResolveEnv<'_>) -> FoldResult<TermId> {
+        let term = self.bitter.terms[&id].clone();
+        // This classification is exhaustive: new constructors require a scope review.
+        let term = match term {
             | Term::Meta(term) => {
                 if term.0.is(crate::metadata::MetadataKind::Doc.name()) {
-                    resolver
-                        .documentation_scopes
-                        .insert_new(*self, NameScope { local: &local, global }.snapshot());
+                    self.scope_event(id, ScopeKind::Documentation, &env);
                 }
-                let MetaT(_, inner) = *term;
-                let () = inner.resolve(resolver, (local, global))?;
+                self.term(term.1, env)?;
                 term.into()
             }
-            | Term::TypeOf(TypeOf(operand)) => {
-                operand.resolve(resolver, (local, global))?;
-                TypeOf(operand).into()
+            | Term::Hole(hole) => {
+                self.scope_event(id, ScopeKind::Hole, &env);
+                hole.into()
             }
-            | Term::SourceBoundary(term) => {
-                let SourceBoundary(inner) = term;
-                if resolver.terms.get(&inner).is_none() {
-                    let global = Global::default();
-                    let () = inner.resolve(resolver, (Local::for_body(), &global))?;
-                }
+            | Term::SourceBoundary(SourceBoundary(inner)) => {
+                self.provider(inner)?;
                 SourceBoundary(inner).into()
             }
-            | Term::SignatureBoundary(term) => {
-                let SignatureBoundary(inner) = term;
-                if resolver.terms.get(&inner).is_none() {
-                    let global = Global::default();
-                    let () = inner.resolve(resolver, (Local::for_body(), &global))?;
-                }
+            | Term::SignatureBoundary(SignatureBoundary(inner)) => {
+                self.provider(inner)?;
                 SignatureBoundary(inner).into()
             }
-            | Term::Internal(internal) => internal.into(),
-            | Term::Sealed(term) => {
-                let Sealed(inner) = &term;
-                let () = inner.resolve(resolver, (local, global))?;
-                term.into()
+            | Term::Ann(Ann { tm, ty }) => {
+                let ty = self.term(ty, env.clone());
+                let tm = self.term(tm, env);
+                Ann { tm: tm?, ty: ty? }.into()
             }
-            | Term::Ann(term) => {
-                let Ann { tm, ty } = &term;
-                let () = ty.resolve(resolver, (local.clone(), global))?;
-                let () = tm.resolve(resolver, (local, global))?;
-                term.into()
+            | Term::Abs(Abs(binder, body)) => {
+                let binder = self.pattern(binder, env)?;
+                self.term(body, binder.env)?;
+                Abs(binder.pattern, body).into()
             }
-            | Term::Hole(term) => {
-                resolver.capture_scope(*self, &local, global);
-                let Hole = &term;
-                term.into()
+            | Term::ValAbs(Abs(binder, body)) => {
+                let binder = self.pattern(binder, env)?;
+                self.term(body, binder.env)?;
+                Term::ValAbs(Abs(binder.pattern, body))
             }
-            | Term::Var(var) => {
-                let definition = resolver.resolve_reference(*self, &var, &local, global)?;
-                resolver
-                    .terms
-                    .insert_new(*self, definition.map(Term::Var).unwrap_or(Term::Hole(Hole)));
-                return Ok(());
+            | Term::Fix(Fix(binder, body)) => {
+                let binder = self.pattern(binder, env)?;
+                self.term(body, binder.env)?;
+                Fix(binder.pattern, body).into()
             }
-            | Term::Named(term) => {
-                let Named(_name, inner) = &term;
-                let () = inner.resolve(resolver, (local, global))?;
-                term.into()
+            | Term::Pi(Pi(binder, body)) => {
+                let binder = self.pattern(binder, env)?;
+                self.term(body, binder.env)?;
+                Pi(binder.pattern, body).into()
             }
-            | Term::Label(term) => {
-                let Label(_name, inner) = &term;
-                let () = inner.resolve(resolver, (local, global))?;
-                term.into()
+            | Term::ValPi(ValPi(binder, body)) => {
+                let binder = self.pattern(binder, env)?;
+                self.term(body, binder.env)?;
+                ValPi(binder.pattern, body).into()
             }
-            | Term::Triv(term) => {
-                let Triv = &term;
-                term.into()
-            }
-            | Term::Cons(term) => {
-                for item in &term {
-                    let () = item.resolve(resolver, (local.clone(), global))?;
-                }
-                term.into()
-            }
-            | Term::Abs(term) => {
-                let Abs(copat, body) = &term;
-                local = copat.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local, global))?;
-                term.into()
-            }
-            | Term::ValAbs(term) => {
-                let Abs(pattern, body) = &term;
-                local = pattern.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local, global))?;
-                Term::ValAbs(term)
-            }
-            | Term::App(term) => {
-                let App(a, b) = &term;
-                let () = a.resolve(resolver, (local.clone(), global))?;
-                let () = b.resolve(resolver, (local.clone(), global))?;
-                term.into()
-            }
-            | Term::Fix(term) => {
-                let Fix(pat, body) = &term;
-                local = pat.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local, global))?;
-                term.into()
-            }
-            | Term::Pi(term) => {
-                let Pi(copat, body) = &term;
-                local = copat.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local, global))?;
-                term.into()
-            }
-            | Term::ValPi(term) => {
-                let ValPi(pattern, body) = &term;
-                local = pattern.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local, global))?;
-                Term::ValPi(term)
-            }
-            | Term::Sigma(term) => {
-                let Sigma(copat, body) = &term;
-                local = copat.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local, global))?;
-                term.into()
+            | Term::Sigma(Sigma(binder, body)) => {
+                let binder = self.pattern(binder, env)?;
+                self.term(body, binder.env)?;
+                Sigma(binder.pattern, body).into()
             }
             | Term::ManifestExists(term) => {
-                let ManifestExists { binder, definition, body } = &*term;
-                let () = definition.resolve(resolver, (local.clone(), global))?;
-                local = binder.resolve(resolver, (local, global))?;
-                let () = body.resolve(resolver, (local, global))?;
+                let definition = self.term(term.definition, env.clone());
+                let binder = self.pattern(term.binder, env);
+                definition?;
+                let binder = binder?;
+                self.term(term.body, binder.env)?;
                 term.into()
             }
             | Term::Pack(term) => {
-                let Pack { mode: _, binder, definition, body } = &*term;
-                let () = definition.resolve(resolver, (local.clone(), global))?;
-                local = binder.resolve(resolver, (local, global))?;
-                let () = body.resolve(resolver, (local, global))?;
-                term.into()
-            }
-            | Term::Thunk(term) => {
-                let Thunk(body) = &term;
-                let () = body.resolve(resolver, (local.clone(), global))?;
-                term.into()
-            }
-            | Term::Force(term) => {
-                let Force(body) = &term;
-                let () = body.resolve(resolver, (local.clone(), global))?;
-                term.into()
-            }
-            | Term::Ret(term) => {
-                let Return(body) = &term;
-                let () = body.resolve(resolver, (local.clone(), global))?;
+                let definition = self.term(term.definition, env.clone());
+                let binder = self.pattern(term.binder, env);
+                definition?;
+                let binder = binder?;
+                self.term(term.body, binder.env)?;
                 term.into()
             }
             | Term::Do(term) => {
-                let Bind { binder, bindee, tail } = &*term;
-                let () = bindee.resolve(resolver, (local.clone(), global))?;
-                local = binder.resolve(resolver, (local.clone(), global))?;
-                let () = tail.resolve(resolver, (local, global))?;
+                let bindee = self.term(term.bindee, env.clone());
+                let binder = self.pattern(term.binder, env);
+                bindee?;
+                let binder = binder?;
+                self.term(term.tail, binder.env)?;
                 term.into()
             }
             | Term::Let(term) => {
-                let Let { binder, bindee, tail } = &*term;
-                let () = bindee.resolve(resolver, (local.clone(), global))?;
-                local = binder.resolve(resolver, (local.clone(), global))?;
-                let () = tail.resolve(resolver, (local, global))?;
+                let bindee = self.term(term.bindee, env.clone());
+                let binder = self.pattern(term.binder, env);
+                bindee?;
+                let binder = binder?;
+                self.term(term.tail, binder.env)?;
                 term.into()
             }
-            | Term::MobileParam(term) => {
-                let MobileParam { flavor: _, binder: _, tail } = term;
-                if local.boundary.is_none() {
-                    Err(ResolveError::UnenclosedThat(*self.span(resolver)))?
+            | Term::MobileParam(MobileParam { tail, .. }) => {
+                if env.local.boundary.is_none() {
+                    return Err(self.report(ResolveError::UnenclosedThat(*id.span(self))));
                 }
-                tail.resolve(resolver, (local, global))?;
+                self.term(tail, env)?;
                 Residual(tail).into()
             }
             | Term::MobileBind(term) => {
-                let MobileBind { binder: _, bindee: _, tail } = *term;
-                if local.boundary.is_none() {
-                    Err(ResolveError::UnenclosedThat(*self.span(resolver)))?
+                if env.local.boundary.is_none() {
+                    return Err(self.report(ResolveError::UnenclosedThat(*id.span(self))));
                 }
-                tail.resolve(resolver, (local, global))?;
-                Residual(tail).into()
+                self.term(term.tail, env)?;
+                Residual(term.tail).into()
             }
-            | Term::Residual(_) => {
-                unreachable!("residual nodes are introduced only during name resolution")
-            }
-            | Term::Block(term) => {
-                let Block(body) = term;
-                resolver.resolve_block(*self, body, local, global)?
-            }
-            | Term::RecGroup(_) => {
-                unreachable!("recursive groups are introduced only after name resolution")
-            }
+            | Term::Block(Block(body)) => self.resolve_block(id, body, env)?,
             | Term::MoBlock(term) => {
-                let MoBlock { body, basis } = &*term;
-                basis.monad.resolve(resolver, (local.clone(), global))?;
-                basis.algebra.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local.clone(), global))?;
-                term.into()
-            }
-            | Term::Data(term) => {
-                let Data { arms } = &term;
-                for arm in arms {
-                    let DataArm { name: _, param } = arm;
-                    let () = param.resolve(resolver, (local.clone(), global))?;
-                }
-                term.into()
-            }
-            | Term::CoData(term) => {
-                let CoData { arms } = &term;
-                for arm in arms {
-                    let CoDataArm { name: _, out } = arm;
-                    let () = out.resolve(resolver, (local.clone(), global))?;
-                }
-                term.into()
-            }
-            | Term::Ctor(term) => {
-                let Ctor(_ctor, body) = &term;
-                let () = body.resolve(resolver, (local.clone(), global))?;
+                let monad = self.term(term.basis.monad, env.clone());
+                let algebra = self.term(term.basis.algebra, env.clone());
+                let body = self.term(term.body, env);
+                monad?;
+                algebra?;
+                body?;
                 term.into()
             }
             | Term::Match(term) => {
-                let Match { scrut, arms } = &term;
-                let () = scrut.resolve(resolver, (local.clone(), global))?;
-                for arm in arms {
-                    let mut local = local.clone();
-                    let Matcher { binder, tail } = arm;
-                    local = binder.resolve(resolver, (local.clone(), global))?;
-                    let () = tail.resolve(resolver, (local.clone(), global))?;
-                }
+                let scrut = self.term(term.scrut, env.clone());
+                let arms = term
+                    .arms
+                    .iter()
+                    .map(|arm| {
+                        let binder = self.pattern(arm.binder, env.clone())?;
+                        self.term(arm.tail, binder.env)
+                    })
+                    .collect_reported();
+                scrut?;
+                arms?;
                 term.into()
             }
             | Term::CoMatchClauses(term) => {
-                let CoMatchClauses { clauses } = &term;
-                for CoPatternClause { spine, tail } in clauses {
-                    let mut clause_local = local.clone();
-                    for item in spine.iter() {
-                        if let CoPatternItem::Pat(pattern) = item {
-                            clause_local = pattern.resolve(resolver, (clause_local, global))?;
+                term.clauses
+                    .iter()
+                    .map(|clause| {
+                        let mut clause_env = env.clone();
+                        for item in clause.spine.iter() {
+                            if let CoPatternItem::Pat(pattern) = item {
+                                clause_env = self.pattern(*pattern, clause_env)?.env;
+                            }
                         }
-                    }
-                    let () = tail.resolve(resolver, (clause_local, global))?;
-                }
+                        self.term(clause.tail, clause_env)
+                    })
+                    .collect_reported()?;
                 term.into()
             }
-            | Term::CoMatch(term) => {
-                let CoMatch { arms } = &term;
-                for arm in arms {
-                    let CoMatcher { dtor: _, tail } = arm;
-                    let () = tail.resolve(resolver, (local.clone(), global))?;
-                }
-                term.into()
+            | Term::Residual(_) | Term::RecGroup(_) => {
+                unreachable!("generated context syntax is not a resolver input")
             }
-            | Term::Dtor(term) => {
-                let Dtor(body, _dtor) = &term;
-                let () = body.resolve(resolver, (local.clone(), global))?;
-                term.into()
-            }
-            | Term::Proj(term) => {
-                let Proj(head, _name) = &term;
-                let () = head.resolve(resolver, (local, global))?;
-                term.into()
-            }
-            | Term::Lit(term) => term.into(),
+            | ordinary @ (Term::Var(_)
+            | Term::TypeOf(_)
+            | Term::Internal(_)
+            | Term::Sealed(_)
+            | Term::Named(_)
+            | Term::Label(_)
+            | Term::Triv(_)
+            | Term::Cons(_)
+            | Term::App(_)
+            | Term::Thunk(_)
+            | Term::Force(_)
+            | Term::Ret(_)
+            | Term::Data(_)
+            | Term::CoData(_)
+            | Term::Ctor(_)
+            | Term::CoMatch(_)
+            | Term::Dtor(_)
+            | Term::Proj(_)
+            | Term::Lit(_)) => ordinary.fold_with(&mut OrdinaryFolder {
+                resolver: self,
+                occurrence: id,
+                env: &env,
+            })?,
         };
-        // save the new term structure
-        resolver.terms.insert_new(*self, res);
-        Ok(())
+        self.builder.terms.insert_new(id, term);
+        Ok(id)
     }
 }
+
+pub(super) struct ResolvedPattern<'a> {
+    pub pattern: PatId,
+    pub env: ResolveEnv<'a>,
+}
+
+struct OrdinaryFolder<'a, 'r, 'e, O> {
+    resolver: &'r mut ResolveFolder<'a, O>,
+    occurrence: TermId,
+    env: &'r ResolveEnv<'e>,
+}
+impl<O: ResolutionObserver> Folder for OrdinaryFolder<'_, '_, '_, O> {
+    type InputRef = VarName;
+    type OutputRef = DefId;
+    type Error = ReportedError;
+    fn fold_def(&mut self, _id: DefId) -> FoldResult<DefId> {
+        unreachable!("ordinary terms have no binders")
+    }
+    fn fold_pat(&mut self, _id: PatId) -> FoldResult<PatId> {
+        unreachable!("ordinary terms have no binding patterns")
+    }
+    fn fold_term(&mut self, id: TermId) -> FoldResult<TermId> {
+        self.resolver.term(id, self.env.clone())
+    }
+    fn fold_var(&mut self, name: VarName) -> FoldResult<Term<DefId>> {
+        Ok(self.resolver.reference(self.occurrence, name, self.env))
+    }
+    fn fold_items<T, U>(
+        &mut self, items: impl IntoIterator<Item = T>,
+        mut fold: impl FnMut(&mut Self, T) -> FoldResult<U>,
+    ) -> FoldResult<Vec<U>> {
+        items.into_iter().map(|item| fold(self, item)).collect_reported()
+    }
+}
+
+#[cfg(test)]
+mod tests;

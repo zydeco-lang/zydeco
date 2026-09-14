@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     bitter::{SourceUnitDesugarer, fmt::Formatter},
-    scoped::Resolver,
+    scoped::ResolveFolder,
     textual::{StrictParser, arena::TextualScope, syntax as t},
 };
 use std::collections::{HashMap, HashSet};
@@ -59,7 +59,7 @@ fn shared_pattern_annotations_copy_every_occurrence_and_retain_origins() {
     let originals = fixture.entities();
     let original_text = root.ugly(&Formatter::new(&fixture.builder.arena));
 
-    let copied = FreshenFolder { builder: &mut fixture.builder }.fold_pat(root);
+    let copied = FreshenFolder { builder: &mut fixture.builder }.fold_pat(root).unwrap();
     assert_ne!(copied, root);
     assert_eq!(copied.ugly(&Formatter::new(&fixture.builder.arena)), original_text);
     assert_eq!(root.ugly(&Formatter::new(&fixture.builder.arena)), original_text);
@@ -114,7 +114,7 @@ fn copattern_spines_retain_order_and_freshen_all_binders() {
             tail,
         }],
     });
-    let copied = FreshenFolder { builder: &mut fixture.builder }.fold_term(root);
+    let copied = FreshenFolder { builder: &mut fixture.builder }.fold_term(root).unwrap();
     let arena = &fixture.builder.arena;
     assert_eq!(root.ugly(&Formatter::new(arena)), copied.ugly(&Formatter::new(arena)));
     let Term::CoMatchClauses(CoMatchClauses { clauses }) = &arena.terms[&copied] else { panic!() };
@@ -152,7 +152,7 @@ fn sealed_annotations_and_internal_leaves_are_preserved_by_copying() {
     let sealed = fixture.term(Sealed(unit));
     let binder = fixture.pattern(Hole);
     let root = fixture.pattern(Ann { tm: binder, ty: sealed });
-    let copied = FreshenFolder { builder: &mut fixture.builder }.fold_pat(root);
+    let copied = FreshenFolder { builder: &mut fixture.builder }.fold_pat(root).unwrap();
     let arena = &fixture.builder.arena;
     let Pattern::Ann(Ann { ty, .. }) = arena.pats[&copied] else { panic!() };
     let Term::Sealed(Sealed(copied_unit)) = arena.terms[&ty] else { panic!() };
@@ -177,7 +177,7 @@ fn unannotated_abstractions_do_not_allocate_classifier_binders() {
             .run(source)
             .unwrap();
         assert_eq!(output.arena.defs.iter().count(), definitions, "{text}");
-        Resolver::new(&parser.spans, output.arena).run_source(output.root).unwrap();
+        ResolveFolder::new(&parser.spans, output.arena).run_source(output.root).unwrap();
     }
 }
 
@@ -209,7 +209,7 @@ fn annotated_abstractions_resolve_each_generated_binder_independently() {
         output.arena.origins.source(&term_definition.into()),
         output.arena.origins.source(&type_definition.into())
     );
-    let resolved = Resolver::new(&parser.spans, output.arena).run_source(output.root).unwrap();
+    let resolved = ResolveFolder::new(&parser.spans, output.arena).run_source(output.root).unwrap();
     assert!(matches!(resolved.arena.terms[&body], Term::Var(id) if id == term_definition));
     assert!(matches!(resolved.arena.terms[&classifier], Term::Var(id) if id == type_definition));
 }
@@ -231,7 +231,7 @@ fn binding_classifiers_copy_parameter_binders_before_resolution() {
         output.arena.origins.source(&term_definition.into()),
         output.arena.origins.source(&type_definition.into())
     );
-    let resolved = Resolver::new(&parser.spans, output.arena).run_source(output.root).unwrap();
+    let resolved = ResolveFolder::new(&parser.spans, output.arena).run_source(output.root).unwrap();
     assert!(matches!(resolved.arena.terms[&body], Term::Var(id) if id == term_definition));
     assert!(matches!(resolved.arena.terms[&classifier], Term::Var(id) if id == type_definition));
 }
@@ -254,7 +254,7 @@ fn recursive_binding_sugar_keeps_the_fix_binder_distinct_from_the_let_binder() {
         output.arena.origins.source(&outer.into()),
         output.arena.origins.source(&inner.into())
     );
-    let resolved = Resolver::new(&parser.spans, output.arena).run_source(output.root).unwrap();
+    let resolved = ResolveFolder::new(&parser.spans, output.arena).run_source(output.root).unwrap();
     assert!(matches!(resolved.arena.terms[&body], Term::Var(id) if id == inner));
     assert!(matches!(resolved.arena.terms[&tail], Term::Var(id) if id == outer));
 }

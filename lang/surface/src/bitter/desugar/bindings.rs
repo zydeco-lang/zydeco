@@ -31,7 +31,7 @@ impl Abstraction {
         let body = Alloc::alloc(builder, term, source);
         let classifier = match self.classifier {
             | Classifier::Telescope(classifier) => {
-                let pattern = FreshenFolder { builder }.fold_pat(pattern);
+                let pattern = FreshenFolder { builder }.fold_pat(pattern).unwrap();
                 let ty = match flavor {
                     | t::ParameterFlavor::Plain => b::Pi(pattern, classifier).into(),
                     | t::ParameterFlavor::Value => b::ValPi(pattern, classifier).into(),
@@ -108,7 +108,7 @@ impl DesugarFolder<'_> {
             }
         }
         if flavor == t::BindingFlavor::Recursive {
-            let binder = FreshenFolder { builder: &mut self.builder }.fold_pat(binder);
+            let binder = FreshenFolder { builder: &mut self.builder }.fold_pat(binder).unwrap();
             abstraction.body =
                 Alloc::alloc(&mut self.builder, b::Fix(binder, abstraction.body).into(), source);
         }

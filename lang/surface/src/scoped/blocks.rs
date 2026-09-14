@@ -1,8 +1,11 @@
+use super::scope::ResolveEnv;
+use crate::diagnostic::{CollectReported, ReportedError};
 use crate::{
     bitter::syntax::{self as b, Term},
     scoped::{syntax::*, *},
 };
-use zydeco_utils::prelude::{DepGraph, IdAllocator};
+use zydeco_utils::prelude::IdAllocator;
+type FoldResult<T> = std::result::Result<T, ReportedError>;
 
 /// One syntactic contribution discovered within a `begin` boundary.
 #[derive(Clone, Debug)]
@@ -22,21 +25,22 @@ impl MobileCandidate {
         self.source()
     }
 
-    fn resolve(
-        &self, resolver: &mut Resolver<'_>, block: TermId, local: &Local, global: &Global,
+    fn resolve<O: ResolutionObserver>(
+        &self, resolver: &mut ResolveFolder<'_, O>, block: TermId, mut env: ResolveEnv<'_>,
         source_order: usize,
-    ) -> Result<Binding> {
+    ) -> FoldResult<Binding> {
         let id = self.binding_id();
-        let mut local = local.clone();
-        local.under.push_back_mut(BindingSite { owner: block, id });
+        env.local.under.push_back_mut(BindingSite { owner: block, id });
         let inner = match self {
             | Self::Parameter { flavor, binder, .. } => {
-                let _ = binder.resolve(resolver, (local, global))?;
+                resolver.pattern(*binder, env)?;
                 BindingForm::Parameter(Parameter { flavor: *flavor, binder: *binder })
             }
             | Self::Definition { binder, bindee, .. } => {
-                bindee.resolve(resolver, (local.clone(), global))?;
-                let _ = binder.resolve(resolver, (local, global))?;
+                let bindee_result = resolver.term(*bindee, env.clone());
+                let binder_result = resolver.pattern(*binder, env);
+                bindee_result?;
+                binder_result?;
                 BindingForm::Definition(Definition { binder: *binder, bindee: *bindee })
             }
         };
@@ -219,57 +223,43 @@ struct BlockScope {
 }
 
 impl BlockScope {
-    fn new(
-        resolver: &Resolver<'_>, block: TermId, candidates: &[MobileCandidate], mut local: Local,
-    ) -> Result<Self> {
-        let binders = candidates.iter().try_fold(
-            rpds::HashTrieMapSync::<VarName, DefId>::new_sync(),
-            |binders, candidate| -> Result<_> {
-                match candidate {
-                    | MobileCandidate::Parameter { binder, .. }
-                    | MobileCandidate::Definition { binder, .. } => {
-                        let binders = binder.binders(&resolver.bitter).iter().try_fold(
-                            binders,
-                            |binders, (name, definition)| -> Result<_> {
-                                if let Some(previous) = binders.get(name) {
-                                    Err(ResolveError::DuplicateDefinition(
-                                        previous.span(resolver).clone().make(name.clone()),
-                                        definition.span(resolver).clone().make(name.clone()),
-                                    ))?
-                                }
-                                Ok(binders.insert(name.clone(), *definition))
-                            },
-                        )?;
-                        Ok(binders)
-                    }
-                }
-            },
-        )?;
-        let owner = block;
-        local.boundary = Some(block);
-        local.under_map = candidates
+    fn new<O: ResolutionObserver>(
+        resolver: &mut ResolveFolder<'_, O>, block: TermId, candidates: &[MobileCandidate],
+        mut local: Local,
+    ) -> FoldResult<Self> {
+        let projected = candidates
             .iter()
             .flat_map(|candidate| {
-                let site = BindingSite { owner, id: candidate.binding_id() };
-                let definitions = match candidate {
+                let binder = match candidate {
                     | MobileCandidate::Parameter { binder, .. }
-                    | MobileCandidate::Definition { binder, .. } => binder
-                        .binders(&resolver.bitter)
-                        .iter()
-                        .map(|(_, definition)| *definition)
-                        .collect::<Vec<_>>(),
+                    | MobileCandidate::Definition { binder, .. } => binder,
                 };
-                definitions
-                    .into_iter()
-                    .map(move |definition| (definition, site))
+                let site = BindingSite { owner: block, id: candidate.binding_id() };
+                binder
+                    .binders(&resolver.bitter)
+                    .iter()
+                    .map(|(name, definition)| (name.clone(), *definition, site))
                     .collect::<Vec<_>>()
             })
-            .fold(local.under_map, |under_map, (definition, site)| {
-                under_map.insert(definition, site)
-            });
-        // Names contributed by this block shadow names inherited from its
-        // enclosing lexical scope. Apply them individually so that precedence
-        // remains explicit.
+            .collect::<Vec<_>>();
+        let mut binders = rpds::HashTrieMapSync::<VarName, DefId>::new_sync();
+        let mut rejected = false;
+        for (name, definition, site) in projected {
+            if let Some(previous) = binders.get(&name) {
+                resolver.report(ResolveError::DuplicateDefinition(
+                    previous.span(resolver).make(name.clone()),
+                    definition.span(resolver).make(name.clone()),
+                ));
+                rejected = true;
+            } else {
+                binders.insert_mut(name, definition);
+            }
+            local.under_map.insert_mut(definition, site);
+        }
+        if rejected {
+            return Err(ReportedError);
+        }
+        local.boundary = Some(block);
         local =
             local.bind_group(binders.iter().map(|(name, definition)| (name.clone(), *definition)));
         Ok(Self { local })
@@ -282,18 +272,27 @@ struct ContextElaboration<'a> {
     context: &'a BindingContext,
 }
 
-impl<'a> ContextElaboration<'a> {
-    fn new(context: &'a BindingContext) -> Self {
-        Self { context }
-    }
-
-    fn build(
-        &self, resolver: &mut Resolver<'_>, residual: TermId, block: TermId,
-    ) -> Result<TermId> {
-        self.context.topological_order().into_iter().rev().try_fold(residual, |tail, node| {
-            match self.context.nodes[&node].clone() {
+impl ContextElaboration<'_> {
+    fn build<O: ResolutionObserver>(
+        &self, resolver: &mut ResolveFolder<'_, O>, residual: TermId, block: TermId,
+    ) -> FoldResult<TermId> {
+        let mut rejected = false;
+        for (_, node) in self.context.nodes.iter() {
+            if let ContextNode::Recursive(bindings) = node
+                && bindings.iter().any(|binding| matches!(binding.inner, BindingForm::Parameter(_)))
+            {
+                let source = bindings.first().map_or(block, |binding| binding.id);
+                resolver.report(ResolveError::RecursiveParameter(*source.span(resolver)));
+                rejected = true;
+            }
+        }
+        if rejected {
+            return Err(ReportedError);
+        }
+        Ok(self.context.topological_order().into_iter().rev().fold(
+            residual,
+            |tail, node| match self.context.nodes[&node].clone() {
                 | ContextNode::Acyclic(binding) => {
-                    let source = binding.id;
                     let term = match binding.inner {
                         | BindingForm::Parameter(Parameter { flavor, binder }) => match flavor {
                             | ParameterFlavor::Plain => b::Abs(binder, tail).into(),
@@ -303,69 +302,58 @@ impl<'a> ContextElaboration<'a> {
                             b::Let { binder, bindee, tail }.into()
                         }
                     };
-                    Ok(resolver.alloc_scoped_term(source, term))
+                    resolver.builder.term(binding.id, term)
                 }
                 | ContextNode::Recursive(bindings) => {
-                    let source = bindings.first().map(|binding| binding.id).unwrap_or(block);
+                    let source = bindings.first().map_or(block, |binding| binding.id);
                     let definitions = bindings
                         .into_iter()
                         .map(|binding| match binding.inner {
                             | BindingForm::Definition(Definition { binder, bindee }) => {
-                                Ok(b::RecursiveDefinition { binder, bindee })
+                                b::RecursiveDefinition { binder, bindee }
                             }
-                            | BindingForm::Parameter(_) => {
-                                Err(ResolveError::RecursiveParameter(*source.span(resolver)).into())
-                            }
+                            | BindingForm::Parameter(_) => unreachable!(
+                                "recursive parameters were rejected before elaboration"
+                            ),
                         })
-                        .collect::<Result<Vec<_>>>()?;
-                    Ok(resolver.alloc_scoped_term(source, b::RecGroup { definitions, tail }.into()))
+                        .collect();
+                    resolver.builder.term(source, b::RecGroup { definitions, tail }.into())
                 }
-            }
-        })
+            },
+        ))
     }
 }
 
-impl Resolver<'_> {
+impl<O: ResolutionObserver> ResolveFolder<'_, O> {
     pub(super) fn resolve_block(
-        &mut self, block: TermId, body: TermId, local: Local, global: &Global,
-    ) -> Result<Term<DefId>> {
+        &mut self, block: TermId, body: TermId, env: ResolveEnv<'_>,
+    ) -> FoldResult<Term<DefId>> {
         let candidates = BlockCandidateCollector::new(&self.bitter).collect(body);
-        let scope = BlockScope::new(self, block, &candidates, local)?;
-        let dependencies = candidates.iter().fold(DepGraph::new(), |mut graph, candidate| {
-            graph.add(candidate.binding_id(), []);
-            graph
-        });
-        self.block_deps.insert_new(block, dependencies);
+        let scope = BlockScope::new(self, block, &candidates, env.local)?;
+        let env = ResolveEnv { local: scope.local, global: env.global };
+        self.dependencies.begin_block(block, candidates.iter().map(MobileCandidate::binding_id));
         let bindings = candidates
             .iter()
             .enumerate()
-            .map(|(source_order, candidate)| {
-                candidate.resolve(self, block, &scope.local, global, source_order)
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .map(|binding| (binding.id, binding))
-            .collect();
-        body.resolve(self, (scope.local, global))?;
-        let dependencies =
-            self.block_deps.remove(&block).expect("the active block dependency graph must exist");
+            .map(|(order, candidate)| candidate.resolve(self, block, env.clone(), order))
+            .collect_reported();
+        let residual = self.term(body, env);
+        let bindings = match (bindings, residual) {
+            | (Ok(bindings), Ok(_)) => {
+                bindings.into_iter().map(|binding| (binding.id, binding)).collect()
+            }
+            | _ => {
+                self.dependencies.abort_block(block);
+                return Err(ReportedError);
+            }
+        };
+        let dependencies = self.dependencies.finish_block(block);
         let context = BindingContext::from_bindings(IdAllocator::new(), bindings, dependencies);
-        let elaborated = ContextElaboration::new(&context).build(self, body, block)?;
-        self.blocks.insert_new(
+        let elaborated = ContextElaboration { context: &context }.build(self, body, block)?;
+        self.builder.blocks.insert_new(
             block,
             ContextualTerm { context, body: BlockBody { residual: body, elaborated } },
         );
         Ok(b::Block(elaborated).into())
-    }
-
-    fn alloc_scoped_term(&mut self, source: TermId, term: Term<DefId>) -> TermId {
-        let id = self.allocator.alloc();
-        self.terms.insert_new(id, term);
-        let textual = self
-            .origins
-            .source(&source.into())
-            .expect("a source term must retain its textual origin");
-        self.origins.insert_new(textual, id.into());
-        id
     }
 }

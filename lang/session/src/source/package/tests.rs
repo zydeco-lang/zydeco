@@ -386,7 +386,7 @@ fn annotations_preserve_local_scope_but_separate_entries_require_self_contained_
         .analyze_package(&fixture.named("workspace.zy", "open"), catalog.bindings.clone())
         .unwrap_err();
     assert!(
-        matches!(&error, AnalysisError::Resolve { error, .. } if matches!(&**error, ResolveError::UnboundVar(name) if name.inner.0 == "outer"))
+        matches!(&error, AnalysisError::Resolve { error, .. } if error.iter().any(|error| matches!(error, ResolveError::UnboundVar(name) if name.inner.0 == "outer")))
     );
     let site = error.diagnostic_site().unwrap();
     assert_eq!(site.path(), path.canonicalize().unwrap());

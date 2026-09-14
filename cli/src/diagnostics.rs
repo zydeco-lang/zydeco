@@ -30,7 +30,10 @@ impl DiagnosticRenderer {
             }
             | CompileError::Analysis(AnalysisError::Resolve { error, graph, spans }) => {
                 Self::graph_warnings(graph);
-                let _ = error.to_report(spans).eprint(SourceCaches::graph(graph));
+                let mut cache = SourceCaches::graph(graph);
+                for error in error.iter() {
+                    let _ = error.to_report(spans).eprint(&mut cache);
+                }
             }
             | CompileError::SpsLower(failure) => {
                 let mut cache = SourceCaches::span_arena(&failure.spans);

@@ -14,7 +14,7 @@ use zydeco_statics::{
     syntax::{AnnId, DefId},
 };
 use zydeco_surface::{
-    scoped::{CompletionResolution, Resolver, VisibleDefinition, arena::ScopedArena},
+    scoped::{CompletionResolution, ResolveFolder, VisibleDefinition, arena::ScopedArena},
     textual::{
         CompletionCursor, CompletionCursorError, LexicalTokenKind, ParsedHole, RecoveringParser,
         TokenKind, syntax::Parser,
@@ -151,7 +151,7 @@ fn complete_source(
         AnalysisError::Desugar { error: failure.error, spans: Arc::new(failure.spans.into_inner()) }
     })?;
     let CompletionResolution { site: resolved, program, .. } =
-        Resolver::new(&spans, arena).run_completion(root, target);
+        ResolveFolder::new(&spans, arena).run_completion(root, target);
     let Some(resolved) = resolved else {
         return Ok(None);
     };

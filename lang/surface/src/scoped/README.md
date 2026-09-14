@@ -14,9 +14,13 @@ textual -> bitter -> scoped -> statics
 | --- | --- |
 | [`syntax`](syntax.rs) | Scoped syntax aliases, contextual bindings, and block plans. |
 | [`arena`](arena.rs) | Resolved storage, source origins, and dependency graphs. |
-| [`resolver`](resolver.rs) | Name lookup, lexical environments, and resolution entry points. |
+| [`resolver`](resolver.rs) | Semantic scheduling, structural rebuilding, recovery, and publication. |
+| [`scope`](scope.rs) | Shared name lookup and lexical scope enumeration. |
+| [`alloc`](alloc.rs) | Scoped syntax construction and provenance. |
+| [`observers`](observers.rs) | Reference indexing, documentation scopes, and exact cursor capture. |
+| [`dependencies`](dependencies.rs) | Required block graphs with begin, finish, and abort boundaries. |
 | [`binders`](binders.rs), [`blocks`](blocks.rs) | Mobile binding discovery and dependency-directed elaboration. |
-| [`completion`](completion.rs) | Exact cursor scope capture and completion results. |
+| [`completion`](completion.rs) | Recovered resolution results for completion. |
 | [`traverse`](traverse.rs) | Shared structural traversal and visitor composition. |
 | [`context`](context.rs) | Free-variable analysis and the term summaries retained for checking. |
 | [`err`](err.rs), [`fmt`](fmt.rs), [`span`](span.rs) | Diagnostics, debug formatting, and source locations. |
