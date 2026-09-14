@@ -1862,6 +1862,23 @@ while producer/consumer relationships remain explicit.
 It marks immediate product construction/elimination pairs, direct closure forcing, variable-bound products
 whose uses are all suitable projections, and local closure bindings whose uses all open the closure.
 Lowering then omits the corresponding pack/unpack pair or expands a variable into field slots.
+
+The collector observes entry events from the [shared SPSLow traversal](#spslow-traversal-and-analyzers).
+Its variable-use folder reuses that traversal's child cursor with a different semantic view:
+closed blocks and binding patterns are boundaries, while immediate projection
+and closure-opening children receive their respective use roles.
+Other value uses are escapes, including captures carried by package environments and continuation residuals.
+This preserves the closed-block rule without duplicating structural child enumeration.
+`LocalUnboxing::with_policy_and_driver::<D>` selects execution for both walks;
+ordinary policy entry points select `Explicit`.
+The use folder does not invoke the collector, so a candidate's subwalk introduces no recursive callback cycle.
+
+Bounded tests compare both drivers across static and dynamic policies, accepted expansions,
+escaping counterparts, and the order of calls to a stateful policy.
+Small-stack fixtures collect through 16,384 bindings and classify a 16,384-level nested escaping value,
+including destruction of the arena and results.
+The latter fixture isolates classification from semantic validation.
+Variable candidates still require their own use scans; driver selection does not claim to remove those scans.
 Alias uses and escaping or unknown consumers retain the ordinary boxed representation.
 Escape classification follows occurrences of the candidate variable through values and residual stacks;
 an unrelated primitive, constructor, or closed block does not constitute an escape.

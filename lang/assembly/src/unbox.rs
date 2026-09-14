@@ -10,6 +10,9 @@
 
 use crate::representation::{Local, RepresentationPolicy, UnboxingOpportunity, UnboxingReason};
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
+use zydeco_stackir::low::traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor};
+use zydeco_utils::fold::{Driver, Explicit, Folder, Step};
 
 use zydeco_stackir::{SpsLowProgram, low::syntax as sk};
 
@@ -30,156 +33,57 @@ impl LocalUnboxing {
     pub fn with_policy<P: RepresentationPolicy + ?Sized>(
         program: &SpsLowProgram, policy: &P,
     ) -> Self {
+        Self::with_policy_and_driver::<Explicit>(program, policy)
+    }
+
+    pub fn with_policy_and_driver<D: Driver>(
+        program: &SpsLowProgram, policy: &(impl RepresentationPolicy + ?Sized),
+    ) -> Self {
         let arena = program.arena();
-        let mut collector = Collector { arena, policy, unboxing: Self::default() };
-        collector.compu(program.root());
+        let mut collector =
+            Collector::<_, D> { arena, policy, unboxing: Self::default(), driver: PhantomData };
+        Traversal { arena: &arena.inner }
+            .run_with_driver::<D>(program.root().into(), &mut collector);
         collector.unboxing
     }
 }
 
-struct Collector<'a, P: ?Sized> {
+struct Collector<'a, P: ?Sized, D> {
     arena: &'a sk::SpsLowArena,
     policy: &'a P,
     unboxing: LocalUnboxing,
+    driver: PhantomData<D>,
 }
 
-impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
-    fn compu(&mut self, id: sk::CompuId) {
-        match self.arena.inner.compus[&id].clone() {
-            | sk::Computation::Hole(sk::SHole(stack)) => self.stack(stack),
-            | sk::Computation::Jump(sk::Jump { target, argument, stack }) => {
-                self.value(target);
-                self.value(argument.word().1);
-                self.stack(stack);
+impl<P: RepresentationPolicy + ?Sized, D: Driver> Visitor for Collector<'_, P, D> {
+    fn enter(&mut self, node: Node<'_>, _edge: Edge, occurrence: Occurrence) {
+        debug_assert_eq!(occurrence, Occurrence::First, "validated SPSLow ownership");
+        match node {
+            | Node::Computation(
+                _,
+                sk::Computation::ProductMatch(sk::SProductMatch { scrut, binder, .. }),
+            ) => {
+                self.mark_product_pair(*scrut, *binder);
             }
-            | sk::Computation::ProductMatch(sk::SProductMatch { scrut, binder, body }) => {
-                self.mark_product_pair(scrut, binder);
-                self.value(scrut);
-                self.pattern(binder);
-                self.compu(body);
+            | Node::Computation(
+                _,
+                sk::Computation::LetValue(sk::LetValue { binder, bindee, tail }),
+            ) => {
+                self.mark_product_pair(*bindee, *binder);
+                self.try_unbox_variable(*binder, *bindee, *tail);
             }
-            | sk::Computation::CoprodMatch(sk::SCoprodMatch { scrut, arms }) => {
-                self.value(scrut);
-                for sk::Matcher { binder, tail } in arms {
-                    self.pattern(binder);
-                    self.compu(tail);
-                }
+            | Node::Computation(
+                _,
+                sk::Computation::OpenClosure(sk::OpenClosure { package, environment, .. }),
+            ) => {
+                self.mark_closure(*package, *environment);
             }
-            | sk::Computation::LetValue(sk::LetValue { binder, bindee, tail: body }) => {
-                self.mark_product_pair(bindee, binder);
-                self.try_unbox_variable(binder, bindee, body);
-                self.value(bindee);
-                self.pattern(binder);
-                self.compu(body);
-            }
-            | sk::Computation::LetStack(sk::LetStack {
-                binder: sk::Bullet,
-                bindee,
-                tail: body,
-            }) => {
-                self.stack(bindee);
-                self.compu(body);
-            }
-            | sk::Computation::LetArg(sk::LetArg {
-                binder: sk::Cons(binder, sk::Bullet),
-                bindee,
-                tail: body,
-            }) => {
-                self.stack(bindee);
-                self.pattern(binder);
-                self.compu(body);
-            }
-            | sk::Computation::CoCase(sk::SCoMatch { scrut, arms }) => {
-                self.stack(scrut);
-                for sk::CoMatcher { dtor: _, tail } in arms {
-                    self.compu(tail);
-                }
-            }
-            | sk::Computation::OpenClosure(sk::OpenClosure {
-                package,
-                environment,
-                code,
-                body,
-            }) => {
-                self.mark_closure(package, environment);
-                self.value(package);
-                self.pattern(environment);
-                self.pattern(code);
-                self.compu(body);
-            }
-            | sk::Computation::OpenContinuation(sk::OpenContinuation { package, code, body }) => {
-                self.stack(package);
-                self.pattern(code);
-                self.compu(body);
-            }
-            | sk::Computation::ExternCall(sk::ExternCall { function: _, stack }) => {
-                self.stack(stack);
-            }
+            | _ => {}
         }
     }
+}
 
-    fn value(&mut self, id: sk::ValueId) {
-        match self.arena.inner.values[&id].clone() {
-            | sk::Value::Hole(_)
-            | sk::Value::Var(_)
-            | sk::Value::Triv(_)
-            | sk::Value::Literal(_) => {}
-            | sk::Value::Block(sk::Block { entry, body, .. }) => {
-                for (_, pattern) in entry.words() {
-                    self.pattern(pattern);
-                }
-                self.compu(body);
-            }
-            | sk::Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
-                self.value(environment);
-                self.value(code);
-            }
-            | sk::Value::Ctor(sk::Ctor(_, value)) => self.value(value),
-            | sk::Value::VCons(sk::VCons { items, layout: _ }) => {
-                for item in items {
-                    self.value(item);
-                }
-            }
-            | sk::Value::Primitive(sk::Primitive { operation: _, operands }) => {
-                for operand in operands {
-                    self.value(operand);
-                }
-            }
-        }
-    }
-
-    fn pattern(&mut self, id: sk::VPatId) {
-        match self.arena.inner.vpats[&id].clone() {
-            | sk::ValuePattern::Hole(_) | sk::ValuePattern::Var(_) | sk::ValuePattern::Triv(_) => {}
-            | sk::ValuePattern::Ctor(sk::Ctor(_, pattern)) => self.pattern(pattern),
-            | sk::ValuePattern::Alias(sk::Alias(patterns)) => {
-                for pattern in patterns {
-                    self.pattern(pattern);
-                }
-            }
-            | sk::ValuePattern::VCons(sk::VCons { items, layout: _ }) => {
-                for item in items {
-                    self.pattern(item);
-                }
-            }
-        }
-    }
-
-    fn stack(&mut self, id: sk::StackId) {
-        match self.arena.inner.stacks[&id].clone() {
-            | sk::Stack::Var(sk::Bullet) => {}
-            | sk::Stack::Arg(sk::Cons(value, stack)) => {
-                self.value(value);
-                self.stack(stack);
-            }
-            | sk::Stack::Tag(sk::Cons(_, stack)) => self.stack(stack),
-            | sk::Stack::ContinuationPackage(sk::ContinuationPackage { code, residual }) => {
-                self.value(code);
-                self.stack(residual);
-            }
-        }
-    }
-
+impl<P: RepresentationPolicy + ?Sized, D: Driver> Collector<'_, P, D> {
     fn mark_product_pair(&mut self, value: sk::ValueId, pattern: sk::VPatId) {
         let Some((value_items, value_arity)) = self.vcons_shape(value) else { return };
         let Some((pattern_items, pattern_arity)) = self.vpat_shape(pattern) else { return };
@@ -237,7 +141,7 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
             ),
             | _ => return,
         };
-        let info = classify_var(&self.arena.inner, body, *def, shape);
+        let info = VarUse::classify_with_driver::<D>(&self.arena.inner, body, *def, shape);
         if info.all_eliminations
             && !info.escapes
             && self.policy.unbox(UnboxingOpportunity { reason, fields })
@@ -266,7 +170,7 @@ impl<P: RepresentationPolicy + ?Sized> Collector<'_, P> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 struct VarUse {
     all_eliminations: bool,
     escapes: bool,
@@ -280,156 +184,40 @@ enum VariableShape {
     Closure,
 }
 
-fn classify_var(
-    arena: &sk::SpsLowInnerArena, root: sk::CompuId, def: sk::DefId, shape: VariableShape,
-) -> VarUse {
-    let mut info = VarUse { all_eliminations: true, ..VarUse::default() };
-    let mut visitor = VarVisitor { arena, def, shape, info: &mut info };
-    visitor.compu(root);
-    info
+impl VarUse {
+    fn classify_with_driver<D: Driver>(
+        arena: &sk::SpsLowInnerArena, root: sk::CompuId, def: sk::DefId, shape: VariableShape,
+    ) -> Self {
+        let mut folder = VariableUsesFolder {
+            arena,
+            def,
+            shape,
+            info: Self { all_eliminations: true, ..Self::default() },
+        };
+        D::run(&mut folder, Use::Node(root.into()));
+        folder.info
+    }
 }
 
-struct VarVisitor<'a> {
+/// This view follows executable uses of one variable. Closed blocks and binding patterns
+/// are boundaries; projections and closure openings give their immediate value child a role.
+struct VariableUsesFolder<'a> {
     arena: &'a sk::SpsLowInnerArena,
     def: sk::DefId,
     shape: VariableShape,
-    info: &'a mut VarUse,
+    info: VarUse,
 }
 
-impl VarVisitor<'_> {
-    fn compu(&mut self, id: sk::CompuId) {
-        match self.arena.compus[&id].clone() {
-            | sk::Computation::Hole(sk::SHole(stack)) => self.stack(stack),
-            | sk::Computation::Jump(sk::Jump { target, argument, stack }) => {
-                self.value_escape(target);
-                self.value_escape(argument.word().1);
-                self.stack(stack);
-            }
-            | sk::Computation::ProductMatch(sk::SProductMatch { scrut, binder, body }) => {
-                self.value_in_projection(scrut, Some(binder));
-                self.compu(body);
-            }
-            | sk::Computation::CoprodMatch(sk::SCoprodMatch { scrut, arms }) => {
-                self.value_escape(scrut);
-                for sk::Matcher { binder: _, tail } in arms {
-                    self.compu(tail);
-                }
-            }
-            | sk::Computation::LetValue(sk::LetValue { binder, bindee, tail: body }) => {
-                self.value_in_projection(bindee, Some(binder));
-                self.compu(body);
-            }
-            | sk::Computation::LetStack(sk::LetStack {
-                binder: sk::Bullet,
-                bindee,
-                tail: body,
-            }) => {
-                self.stack(bindee);
-                self.compu(body);
-            }
-            | sk::Computation::LetArg(sk::LetArg {
-                binder: sk::Cons(_, sk::Bullet),
-                bindee,
-                tail: body,
-            }) => {
-                self.stack(bindee);
-                self.compu(body);
-            }
-            | sk::Computation::CoCase(sk::SCoMatch { scrut, arms }) => {
-                self.stack(scrut);
-                for sk::CoMatcher { dtor: _, tail } in arms {
-                    self.compu(tail);
-                }
-            }
-            | sk::Computation::OpenClosure(sk::OpenClosure {
-                package,
-                environment: _,
-                code: _,
-                body,
-            }) => {
-                if self.shape == VariableShape::Closure
-                    && matches!(self.arena.values[&package], sk::Value::Var(def) if def == self.def)
-                {
-                    self.info.closures.push(package);
-                } else {
-                    self.value_escape(package);
-                }
-                self.compu(body);
-            }
-            | sk::Computation::OpenContinuation(sk::OpenContinuation {
-                package,
-                code: _,
-                body,
-            }) => {
-                self.stack(package);
-                self.compu(body);
-            }
-            | sk::Computation::ExternCall(sk::ExternCall { function: _, stack }) => {
-                self.stack(stack);
-            }
-        }
-    }
+enum Use {
+    Node(EntityId),
+    Projection { value: sk::ValueId, pattern: sk::VPatId },
+    ClosureOpening(sk::ValueId),
+}
 
-    fn value_in_projection(&mut self, value: sk::ValueId, pattern: Option<sk::VPatId>) {
-        if let sk::Value::Var(def) = &self.arena.values[&value]
-            && *def == self.def
-        {
-            match pattern {
-                | Some(pattern) if self.vpat_shape_matches(pattern) => {
-                    self.info.projections.push(pattern);
-                }
-                | _ => {
-                    self.info.all_eliminations = false;
-                    self.info.escapes = true;
-                }
-            }
-        } else {
-            self.value_escape(value);
-        }
-    }
-
-    fn value_escape(&mut self, value: sk::ValueId) {
-        match self.arena.values[&value].clone() {
-            | sk::Value::Var(def) if def == self.def => {
-                self.info.all_eliminations = false;
-                self.info.escapes = true;
-            }
-            | sk::Value::Var(_) => {}
-            | sk::Value::VCons(sk::VCons { items, layout: _ }) => {
-                for item in items {
-                    self.value_escape(item);
-                }
-            }
-            | sk::Value::ClosurePackage(sk::ClosurePackage { environment, code }) => {
-                self.value_escape(environment);
-                self.value_escape(code);
-            }
-            | sk::Value::Ctor(sk::Ctor(_, payload)) => self.value_escape(payload),
-            | sk::Value::Primitive(sk::Primitive { operands, .. }) => {
-                for operand in operands {
-                    self.value_escape(operand);
-                }
-            }
-            // SpsLowProgram validates that blocks are closed. Captures occur in package
-            // environments and continuation residuals, which are visited separately.
-            | sk::Value::Block(_) => {}
-            | sk::Value::Hole(_) | sk::Value::Triv(_) | sk::Value::Literal(_) => {}
-        }
-    }
-
-    fn stack(&mut self, stack: sk::StackId) {
-        match self.arena.stacks[&stack].clone() {
-            | sk::Stack::Var(sk::Bullet) => {}
-            | sk::Stack::Arg(sk::Cons(value, stack)) => {
-                self.value_escape(value);
-                self.stack(stack);
-            }
-            | sk::Stack::Tag(sk::Cons(_, stack)) => self.stack(stack),
-            | sk::Stack::ContinuationPackage(sk::ContinuationPackage { code, residual }) => {
-                self.value_escape(code);
-                self.stack(residual);
-            }
-        }
+impl VariableUsesFolder<'_> {
+    fn escape(&mut self) {
+        self.info.all_eliminations = false;
+        self.info.escapes = true;
     }
 
     fn vpat_shape_matches(&self, pattern: sk::VPatId) -> bool {
@@ -442,6 +230,74 @@ impl VarVisitor<'_> {
     }
 }
 
+impl<'a> Folder for VariableUsesFolder<'a> {
+    type Input = Use;
+    type Output = ();
+    type Frame = (Node<'a>, usize);
+
+    fn enter(&mut self, usage: Use) -> Step<Self> {
+        match usage {
+            | Use::Node(id) => {
+                let node = id.node(self.arena);
+                match node {
+                    | Node::Pattern(_, _) | Node::Value(_, sk::Value::Block(_)) => {}
+                    | Node::Value(_, sk::Value::Var(def)) if *def == self.def => self.escape(),
+                    | _ => return self.resume((node, 0), ()),
+                }
+            }
+            | Use::Projection { value, pattern } => {
+                if matches!(self.arena.values[&value], sk::Value::Var(def) if def == self.def) {
+                    if self.vpat_shape_matches(pattern) {
+                        self.info.projections.push(pattern);
+                    } else {
+                        self.escape();
+                    }
+                } else {
+                    return Step::TailCall(Use::Node(value.into()));
+                }
+            }
+            | Use::ClosureOpening(value) => {
+                if self.shape == VariableShape::Closure
+                    && matches!(self.arena.values[&value], sk::Value::Var(def) if def == self.def)
+                {
+                    self.info.closures.push(value);
+                } else {
+                    return Step::TailCall(Use::Node(value.into()));
+                }
+            }
+        }
+        Step::Return(())
+    }
+
+    fn resume(&mut self, (node, position): Self::Frame, (): ()) -> Step<Self> {
+        let Some((child, _)) = node.child(position) else {
+            return Step::Return(());
+        };
+        let input = match (position, node) {
+            | (
+                0,
+                Node::Computation(
+                    _,
+                    sk::Computation::ProductMatch(sk::SProductMatch { scrut, binder, .. }),
+                ),
+            ) => Use::Projection { value: *scrut, pattern: *binder },
+            | (
+                0,
+                Node::Computation(
+                    _,
+                    sk::Computation::LetValue(sk::LetValue { bindee, binder, .. }),
+                ),
+            ) => Use::Projection { value: *bindee, pattern: *binder },
+            | (
+                0,
+                Node::Computation(_, sk::Computation::OpenClosure(sk::OpenClosure { package, .. })),
+            ) => Use::ClosureOpening(*package),
+            | _ => Use::Node(child),
+        };
+        Step::Call { input, frame: (node, position + 1) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -449,6 +305,7 @@ mod tests {
     use zydeco_stackir::arena::Construct as _;
     use zydeco_statics::arena::StaticsScope;
     use zydeco_utils::arena::IdAllocator;
+    use zydeco_utils::fold::Recursive;
 
     struct Fixture;
 
@@ -465,6 +322,15 @@ mod tests {
     }
 
     impl Fixture {
+        fn select(
+            program: &SpsLowProgram, policy: &(impl RepresentationPolicy + ?Sized),
+        ) -> LocalUnboxing {
+            let explicit = LocalUnboxing::with_policy(program, policy);
+            let recursive = LocalUnboxing::with_policy_and_driver::<Recursive>(program, policy);
+            assert_eq!(explicit, recursive);
+            explicit
+        }
+
         fn definition(arena: &mut sk::SpsLowArena) -> sk::DefId {
             let id = IdAllocator::<StaticsScope>::new().alloc();
             arena.admin.defs.insert_new(id, "fixture".into());
@@ -628,7 +494,7 @@ mod tests {
         ] {
             let (program, value, variable) = Fixture::closure(usage);
             for &strategy in RepresentationStrategy::ALL {
-                let selected = LocalUnboxing::with_policy(&program, &strategy);
+                let selected = Fixture::select(&program, &strategy);
                 let expected =
                     strategy == RepresentationStrategy::Shared && matches!(usage, ClosureUse::Open);
                 assert_eq!(selected.values.contains(&value), expected, "{strategy}: {usage:?}");
@@ -683,7 +549,7 @@ mod tests {
         for escape in [false, true] {
             let (program, value, variable) = Fixture::projection(escape);
             for &strategy in RepresentationStrategy::ALL {
-                let selected = LocalUnboxing::with_policy(&program, &strategy);
+                let selected = Fixture::select(&program, &strategy);
                 let expected = !escape
                     && matches!(
                         strategy,
@@ -705,12 +571,9 @@ mod tests {
             (RepresentationStrategy::Local, &Local as &dyn RepresentationPolicy),
             (RepresentationStrategy::Shared, &Shared as &dyn RepresentationPolicy),
         ] {
-            assert_eq!(
-                LocalUnboxing::with_policy(&program, &strategy),
-                LocalUnboxing::with_policy(&program, policy)
-            );
+            assert_eq!(Fixture::select(&program, &strategy), Fixture::select(&program, policy));
         }
-        assert_eq!(LocalUnboxing::collect(&program), LocalUnboxing::with_policy(&program, &Local));
+        assert_eq!(LocalUnboxing::collect(&program), Fixture::select(&program, &Local));
     }
 
     #[test]
@@ -734,10 +597,10 @@ mod tests {
         let body = Fixture::terminal(&mut arena);
         let root = sk::OpenClosure { package, environment, code, body }.build(&mut arena, None);
         let program = SpsLowProgram::try_new(arena, root).unwrap();
-        let selected = LocalUnboxing::with_policy(&program, &KeepClosures);
+        let selected = Fixture::select(&program, &KeepClosures);
         assert!(selected.values.is_empty());
         assert!(selected.patterns.is_empty());
-        let selected = LocalUnboxing::with_policy(&program, &Direct);
+        let selected = Fixture::select(&program, &Direct);
         assert!(selected.values.contains(&package));
         assert!(selected.values.contains(&env_value));
         assert!(selected.patterns.contains(&environment));
@@ -766,8 +629,8 @@ mod tests {
         let unboxing = LocalUnboxing::collect(&program);
         assert!(unboxing.values.contains(&value));
         assert!(unboxing.patterns.contains(&pattern));
-        assert_eq!(unboxing, LocalUnboxing::with_policy(&program, &Direct));
-        assert_eq!(LocalUnboxing::with_policy(&program, &Boxed), LocalUnboxing::default());
+        assert_eq!(unboxing, Fixture::select(&program, &Direct));
+        assert_eq!(Fixture::select(&program, &Boxed), LocalUnboxing::default());
     }
 
     #[test]
@@ -788,5 +651,132 @@ mod tests {
 
         let unboxing = LocalUnboxing::collect(&program);
         assert!(!unboxing.values.contains(&value));
+    }
+
+    #[test]
+    fn drivers_preserve_policy_call_order_for_empty_and_wide_products() {
+        #[derive(Default)]
+        struct Alternating(std::cell::RefCell<Vec<(UnboxingReason, usize)>>);
+        impl RepresentationPolicy for Alternating {
+            fn unbox(&self, opportunity: UnboxingOpportunity) -> bool {
+                let mut calls = self.0.borrow_mut();
+                calls.push((opportunity.reason, opportunity.fields));
+                calls.len() % 2 == 1
+            }
+        }
+        let mut arena = sk::SpsLowArena::default();
+        let mut root = Fixture::terminal(&mut arena);
+        for count in [0usize, 1, 128].into_iter().rev() {
+            let layout = sk::ProductLayout { arity: count.max(1) };
+            let fields = (0..count).map(|_| sk::Triv.build(&mut arena, None)).collect();
+            let bindee = sk::VCons::new(fields, layout).build(&mut arena, None);
+            let patterns = (0..count).map(|_| sk::Hole.build(&mut arena, None)).collect();
+            let binder = sk::VCons::new(patterns, layout).build(&mut arena, None);
+            root = sk::LetValue { binder, bindee, tail: root }.build(&mut arena, None);
+        }
+        let program = SpsLowProgram::try_new(arena, root).unwrap();
+        let explicit = Alternating::default();
+        let recursive = Alternating::default();
+        assert_eq!(
+            LocalUnboxing::with_policy_and_driver::<Explicit>(&program, &explicit),
+            LocalUnboxing::with_policy_and_driver::<Recursive>(&program, &recursive),
+        );
+        assert_eq!(
+            explicit.0.borrow().as_slice(),
+            &[
+                (UnboxingReason::DirectProduct, 0),
+                (UnboxingReason::DirectProduct, 1),
+                (UnboxingReason::DirectProduct, 128),
+            ]
+        );
+        assert_eq!(explicit.0.into_inner(), recursive.0.into_inner());
+    }
+
+    #[test]
+    fn variable_use_classification_stops_at_closed_blocks() {
+        let mut arena = sk::SpsLowArena::default();
+        let label = Fixture::definition(&mut arena);
+        let target = label.build(&mut arena, None);
+        let environment = sk::Triv.build(&mut arena, None);
+        let stack = sk::Bullet.build(&mut arena, None);
+        let body = sk::Jump { target, argument: sk::EntryArgument::Closure { environment }, stack }
+            .build(&mut arena, None);
+        let entry = sk::EntryParameters::Closure { environment: sk::Hole.build(&mut arena, None) };
+        let bindee = sk::Block { label, entry, body }.build(&mut arena, None);
+        let binder = sk::Hole.build(&mut arena, None);
+        let tail = Fixture::terminal(&mut arena);
+        let root = sk::LetValue { binder, bindee, tail }.build(&mut arena, None);
+        let program = SpsLowProgram::try_new(arena, root).unwrap();
+        let shape = VariableShape::Closure;
+        let explicit =
+            VarUse::classify_with_driver::<Explicit>(&program.arena().inner, root, label, shape);
+        let recursive =
+            VarUse::classify_with_driver::<Recursive>(&program.arena().inner, root, label, shape);
+        assert_eq!(explicit, recursive);
+        assert_eq!(explicit, VarUse { all_eliminations: true, ..VarUse::default() });
+    }
+
+    #[test]
+    fn deep_collection_and_variable_uses_run_and_drop_on_a_small_stack() {
+        std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(|| {
+                let mut arena = sk::SpsLowArena::default();
+                let def = Fixture::definition(&mut arena);
+                let scrut = def.build(&mut arena, None);
+                let projection = Fixture::pattern(&mut arena);
+                let body = Fixture::terminal(&mut arena);
+                let mut root =
+                    sk::SProductMatch { scrut, binder: projection, body }.build(&mut arena, None);
+                for _ in 0..16_384 {
+                    let binder = sk::Hole.build(&mut arena, None);
+                    let bindee = sk::Triv.build(&mut arena, None);
+                    root = sk::LetValue { binder, bindee, tail: root }.build(&mut arena, None);
+                }
+                let binder = def.build(&mut arena, None);
+                let bindee = Fixture::product(&mut arena);
+                root = sk::LetValue { binder, bindee, tail: root }.build(&mut arena, None);
+                let program = SpsLowProgram::try_new(arena, root).unwrap();
+                let plan = LocalUnboxing::collect(&program);
+                assert_eq!(plan.unboxed_vars.get(&def), Some(&2));
+                assert!(plan.values.contains(&bindee));
+                assert!(plan.patterns.contains(&projection));
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn deep_nested_escape_classification_does_not_use_native_recursion() {
+        std::thread::Builder::new()
+            .stack_size(512 * 1024)
+            .spawn(|| {
+                let mut arena = sk::SpsLowArena::default();
+                let def = Fixture::definition(&mut arena);
+                let mut value: sk::ValueId = def.build(&mut arena, None);
+                for _ in 0..16_384 {
+                    value = sk::Ctor(
+                        sk::CtorIdx { idx: 0, name: sk::CtorName("nested".into()) },
+                        value,
+                    )
+                    .build(&mut arena, None);
+                }
+                let ambient = sk::Bullet.build(&mut arena, None);
+                let stack = sk::Cons(value, ambient).build(&mut arena, None);
+                let root = sk::SHole(stack).build(&mut arena, None);
+                // Isolate this semantic view from the separate entry and protocol validators.
+                let usage = VarUse::classify_with_driver::<Explicit>(
+                    &arena.inner,
+                    root,
+                    def,
+                    VariableShape::Closure,
+                );
+                assert!(usage.escapes);
+                assert!(!usage.all_eliminations);
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 }

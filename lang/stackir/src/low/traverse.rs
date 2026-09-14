@@ -21,7 +21,7 @@ pub enum Node<'a> {
 }
 
 impl EntityId {
-    fn node(self, arena: &SpsLowInnerArena) -> Node<'_> {
+    pub fn node(self, arena: &SpsLowInnerArena) -> Node<'_> {
         match self {
             | Self::Pattern(id) => Node::Pattern(id, &arena.vpats[&id]),
             | Self::Value(id) => Node::Value(id, &arena.values[&id]),
@@ -43,7 +43,7 @@ impl Node<'_> {
 
     /// Select one child in constant time, without retaining a node's child vector in a frame.
     /// Provenance and continuation metadata describe syntax; they add no executable edges.
-    fn child(self, position: usize) -> Option<(EntityId, Edge)> {
+    pub fn child(self, position: usize) -> Option<(EntityId, Edge)> {
         let child = match self {
             | Self::Pattern(_, pattern) => match pattern {
                 | ValuePattern::Hole(_) | ValuePattern::Var(_) | ValuePattern::Triv(_) => None,
