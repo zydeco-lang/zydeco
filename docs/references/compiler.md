@@ -341,6 +341,7 @@ The implemented interfaces serve different questions and therefore expose differ
 | Resolved syntax analysis | [Scoped traversal](#scoped-structural-traversal) | Borrowed nodes; choose unique identities or path occurrences; cycles reject the traversal |
 | Raw inferred classifiers | [Classifier folders](#classifier-folders) | Owned child reconstruction; preserve unchanged IDs; clients select substitution environments and reductions |
 | Executable typed terms | [Residual runtime traversal](#residual-runtime-traversal) | Borrowed runtime nodes from the residual root; visit each identity once and exclude static evidence |
+| Typed terms to lexical high SPS | [Residual lowering folder](#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh output syntax for every input occurrence |
 | Lexical high SPS | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
 
 Before reusing a traversal, establish its input view, child environments, occurrence policy, and output identity policy.
@@ -1247,6 +1248,42 @@ The [selection and inspection guide](#selecting-and-inspecting-passes) gives the
 These optimizations are optional consequences of known runtime structure;
 they do not relax L10's source elimination boundary.
 The normalizer preserves definition identities while allocating fresh syntax for the surviving lexical tree.
+
+### Residual lowering folder
+
+Static composition can produce thousands of nested bindings from a small authored program.
+The [lowering folder](../../lang/stackir/src/high/lower/fold.rs) stores visits and unfinished reconstruction frames
+in a vector, so residual term depth does not consume the Rust call stack.
+Its work loop covers patterns, values, computations, and ordered match decisions together;
+thunk bodies and branch tails resume through the same loop.
+`Lowerer` retains allocation, provenance, product layout, protocol extraction, and diagnostic state.
+Builtin package materialization also uses an explicit work stack.
+
+Computation visits inherit the high SPS stack that consumes their result.
+Reconstruction preserves the semantic child schedule: application arguments precede their function body;
+a `do` continuation is lowered before its bindee; value-binding plans wrap their completed continuation
+in evaluation order.
+Closures and coproduct branches receive fresh ambient-stack nodes.
+Definitions retain their identity, and generated patterns and terms retain their typed source sites
+and applicable protocols.
+Erased witnesses and type applications produce no runtime nodes.
+
+Input sharing always expands into fresh output syntax for each occurrence.
+Memoizing lowered nodes by typed ID would violate lexical ownership and ignore inherited continuation stacks.
+Ordered pattern plans may share flat plan IDs, including fallback decisions,
+but each execution of a plan constructs its own syntax.
+Constructor fallthrough binds the remaining rows once as a closure and resumes it
+from rejected payloads or unmatched tags.
+Flat plan storage also avoids recursive cloning and destruction of long decision chains.
+
+Residual static-value failures accumulate in occurrence order; any failure prevents publication of a program.
+Successful reconstruction validates lexical ownership and branch joins before returning `BranchJoinProgram`.
+[Depth regressions](../../lang/stackir/src/high/lower/tests.rs) construct and drop residual fixtures
+on a 512 KiB worker stack, covering mixed computation and thunk nesting, value lets,
+structural aliases, literal fallthrough, and Builtin products.
+Separate assertions cover fresh ownership, provenance, protocols, and independent rejected values.
+This guarantee concerns residual reconstruction; classifier protocol extraction and subsequent normalization
+and conversion have their own traversal contracts.
 
 ### High SPS analysis traversal
 

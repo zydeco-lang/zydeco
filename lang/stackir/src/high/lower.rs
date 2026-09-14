@@ -73,12 +73,9 @@ pub enum BuiltinRootLowerError {
     Sps(Vec<SpsLowerError>),
 }
 
-/// Lower typed syntax nodes into stack IR.
-trait Lower {
-    type Kont;
-    type Out;
-    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
-}
+mod fold;
+
+use fold::LoweringFolder;
 
 #[derive(Clone)]
 struct ValueBinding {
@@ -96,20 +93,6 @@ enum ValueStep {
 struct ValuePlan<T> {
     steps: Vec<ValueStep>,
     value: T,
-}
-
-/// Ordered residual pattern decisions, including comparisons and fallthrough.
-#[derive(Clone)]
-enum MatchPlan {
-    Fail,
-    Tail(ss::CompuId),
-    Continue(DefId),
-    Pattern {
-        scrutinee: DefId,
-        pattern: ss::VPatId,
-        success: Box<MatchPlan>,
-        failure: Box<MatchPlan>,
-    },
 }
 
 impl<T> ValuePlan<T> {
@@ -134,13 +117,9 @@ impl<T> ValuePlan<T> {
     }
 }
 
-impl ValuePlan<ValueId> {
-    fn lower_into(
-        self, lo: &mut Lowerer, kont: impl FnOnce(ValueId, &mut Lowerer) -> CompuId,
-    ) -> CompuId {
-        let Self { steps, value } = self;
-        let tail = kont(value, lo);
-        steps.into_iter().rev().fold(tail, |tail, step| match step {
+impl<T> ValuePlan<T> {
+    fn bind(self, lo: &mut Lowerer, tail: CompuId) -> CompuId {
+        self.steps.into_iter().rev().fold(tail, |tail, step| match step {
             | ValueStep::Bind(ValueBinding { binder, bindee, site }) => {
                 Let { binder, bindee, tail }.build(lo, site)
             }
@@ -221,223 +200,47 @@ impl<'a> Lowerer<'a> {
     /// instead of a structural binder: it contains a refutable literal row,
     /// possibly nested under other patterns.
     fn pattern_needs_match_plan(&self, pattern: ss::VPatId) -> bool {
-        match &self.statics.vpats[&pattern] {
-            | ss::ValuePattern::Lit(_) => true,
-            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
-            | ss::ValuePattern::Named(Named(_, pattern))
-            | ss::ValuePattern::Ctor(Ctor(_, pattern))
-            | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => {
-                self.pattern_needs_match_plan(*pattern)
-            }
-            | ss::ValuePattern::Alias(Alias(patterns)) => {
-                patterns.iter().any(|pattern| self.pattern_needs_match_plan(*pattern))
-            }
-            | ss::ValuePattern::VCons(patterns) => {
-                patterns.iter().any(|pattern| self.pattern_needs_match_plan(*pattern))
-            }
-            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
-                false
-            }
-        }
-    }
-
-    fn match_plan(&self, scrutinee: DefId, arms: &[Matcher<ss::VPatId, ss::CompuId>]) -> MatchPlan {
-        arms.iter().rev().fold(MatchPlan::Fail, |failure, arm| MatchPlan::Pattern {
-            scrutinee,
-            pattern: arm.binder,
-            success: Box::new(MatchPlan::Tail(arm.tail)),
-            failure: Box::new(failure),
-        })
-    }
-
-    fn lower_match_plan(
-        &mut self, plan: MatchPlan, stack: StackId, site: Option<ss::TermId>,
-    ) -> CompuId {
-        match plan {
-            | MatchPlan::Fail => SHole(stack).build(self, site),
-            | MatchPlan::Tail(tail) => tail.lower(self, stack),
-            | MatchPlan::Continue(continuation) => {
-                let thunk = continuation.build(self, site);
-                SForce { thunk, stack }.build(self, site)
-            }
-            | MatchPlan::Pattern { scrutinee, pattern, success, failure } => {
-                match self.statics.vpats[&pattern].clone() {
-                    | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => {
-                        self.lower_match_plan(*success, stack, site)
-                    }
-                    | ss::ValuePattern::Var(definition) => {
-                        let bindee: ValueId = scrutinee.build(self, site);
-                        let binder: VPatId = definition.build(self, None);
-                        let tail = self.lower_match_plan(*success, stack, site);
-                        Let { binder, bindee, tail }.build(self, site)
-                    }
-                    | ss::ValuePattern::Named(Named(_, inner))
-                    | ss::ValuePattern::SCons(ss::ConsN(_, inner)) => self.lower_match_plan(
-                        MatchPlan::Pattern { scrutinee, pattern: inner, success, failure },
-                        stack,
-                        site,
-                    ),
-                    | ss::ValuePattern::Alias(Alias(patterns)) => {
-                        let success =
-                            patterns.into_iter().rev().fold(*success, |success, pattern| {
-                                MatchPlan::Pattern {
-                                    scrutinee,
-                                    pattern,
-                                    success: Box::new(success),
-                                    failure: failure.clone(),
-                                }
-                            });
-                        self.lower_match_plan(success, stack, site)
-                    }
-                    | ss::ValuePattern::VCons(patterns) => {
-                        let layout = self.product_layout(self.statics.annotations_vpat[&pattern]);
-                        let components = patterns
-                            .iter()
-                            .map(|_| self.alloc_admin_def("__match_component__"))
-                            .collect::<Vec<_>>();
-                        let fields =
-                            components.iter().map(|definition| definition.build(self, None));
-                        let binder = VCons::new(fields.collect(), layout).build(self, None);
-                        let body_plan = patterns
-                            .into_iter()
-                            .zip(components.iter().copied())
-                            .rev()
-                            .fold(*success, |success, (pattern, component)| MatchPlan::Pattern {
-                                scrutinee: component,
-                                pattern,
-                                success: Box::new(success),
-                                failure: failure.clone(),
-                            });
-                        let body = self.lower_match_plan(body_plan, stack, site);
-                        let scrut = scrutinee.build(self, site);
-                        SProductMatch { scrut, binder, body }.build(self, site)
-                    }
-                    | ss::ValuePattern::Ctor(Ctor(name, argument)) => {
-                        let data = self.statics.data_pat_hints[&pattern];
-                        let constructors = self.statics.datas[&data].clone();
-                        // Every unmatched tag, and any rejected payload, resumes
-                        // the same remaining rows. Keep that code bound once.
-                        let continuation = self.alloc_admin_def("__match_fallback__");
-                        let failure_stack = Bullet.build(self, site);
-                        let failure_body = self.lower_match_plan(*failure, failure_stack, site);
-                        let fallback =
-                            Closure { stack: Bullet, body: failure_body }.build(self, site);
-                        let failure = Box::new(MatchPlan::Continue(continuation));
-                        let arms = constructors
-                            .iter()
-                            .enumerate()
-                            .map(|(index, (candidate, _))| {
-                                let branch_stack = Bullet.build(self, site);
-                                if candidate == &name {
-                                    let payload = self.alloc_admin_def("__match_payload__");
-                                    let payload_pattern = payload.build(self, None);
-                                    let binder = Ctor(
-                                        CtorIdx { idx: index, name: candidate.clone() },
-                                        payload_pattern,
-                                    )
-                                    .build(self, None);
-                                    let tail = self.lower_match_plan(
-                                        MatchPlan::Pattern {
-                                            scrutinee: payload,
-                                            pattern: argument,
-                                            success: success.clone(),
-                                            failure: failure.clone(),
-                                        },
-                                        branch_stack,
-                                        site,
-                                    );
-                                    Matcher { binder, tail }
-                                } else {
-                                    let payload = Hole.build(self, None);
-                                    let binder = Ctor(
-                                        CtorIdx { idx: index, name: candidate.clone() },
-                                        payload,
-                                    )
-                                    .build(self, None);
-                                    let tail = self.lower_match_plan(
-                                        (*failure).clone(),
-                                        branch_stack,
-                                        site,
-                                    );
-                                    Matcher { binder, tail }
-                                }
-                            })
-                            .collect();
-                        let scrut = scrutinee.build(self, site);
-                        let body = SCoprodMatch { scrut, arms }.build(self, site);
-                        let tail =
-                            Let { binder: Bullet, bindee: stack, tail: body }.build(self, site);
-                        let binder = continuation.build(self, None);
-                        Let { binder, bindee: fallback, tail }.build(self, site)
-                    }
-                    | ss::ValuePattern::View(_) => {
-                        unreachable!("static elaboration eliminates views")
-                    }
-                    | ss::ValuePattern::Lit(literal) => {
-                        let ss::Literal::Integer(integer) = literal else {
-                            unreachable!("a checked literal pattern carries an integer literal")
-                        };
-                        let integer_type = integer
-                            .integer_type()
-                            .expect("a checked integer literal carries its integer type");
-                        let role = zydeco_syntax::BuiltinValueRole::Integer(
-                            integer_type,
-                            zydeco_syntax::IntegerOperation::Eq,
-                        );
-                        // The same host-function closure the Builtin package
-                        // materializes for `eq`: the raw branch primitive
-                        // `int64_eq_branch(a, b, then, else)`. Force it with
-                        // the scrutinee and literal as operands and the two
-                        // plans as continuations.
-                        let operator = ExternalFunction::Host(role).make_function(self);
-                        let success_stack = Bullet.build(self, site);
-                        let success_body = self.lower_match_plan(*success, success_stack, site);
-                        let then = Closure { stack: Bullet, body: success_body }.build(self, site);
-                        let failure_stack = Bullet.build(self, site);
-                        let failure_body =
-                            self.lower_match_plan((*failure).clone(), failure_stack, site);
-                        let otherwise =
-                            Closure { stack: Bullet, body: failure_body }.build(self, site);
-                        let scrut: ValueId = scrutinee.build(self, site);
-                        let literal_value: ValueId =
-                            zydeco_syntax::Literal::Integer(integer).build(self, site);
-                        let stack = Cons(otherwise, stack).build(self, site);
-                        let stack = Cons(then, stack).build(self, site);
-                        let stack = Cons(literal_value, stack).build(self, site);
-                        let stack = Cons(scrut, stack).build(self, site);
-                        SForce { thunk: operator, stack }.build(self, site)
-                    }
+        let mut pending = vec![pattern];
+        while let Some(pattern) = pending.pop() {
+            match &self.statics.vpats[&pattern] {
+                | ss::ValuePattern::Lit(_) => return true,
+                | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
+                | ss::ValuePattern::Named(Named(_, pattern))
+                | ss::ValuePattern::Ctor(Ctor(_, pattern))
+                | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => pending.push(*pattern),
+                | ss::ValuePattern::Alias(Alias(patterns)) => {
+                    pending.extend(patterns.iter().rev().copied());
                 }
+                | ss::ValuePattern::VCons(patterns) => {
+                    pending.extend(patterns.iter().rev().copied());
+                }
+                | ss::ValuePattern::Hole(_)
+                | ss::ValuePattern::Var(_)
+                | ss::ValuePattern::Triv(_) => {}
             }
         }
-    }
-
-    fn lower_plan_match(
-        &mut self, scrut: ValueId, arms: &[Matcher<ss::VPatId, ss::CompuId>], stack: StackId,
-        site: Option<ss::TermId>,
-    ) -> CompuId {
-        let scrutinee = self.alloc_admin_def("__match_scrutinee__");
-        let binder = scrutinee.build(self, None);
-        let plan = self.match_plan(scrutinee, arms);
-        let tail = self.lower_match_plan(plan, stack, site);
-        Let { binder, bindee: scrut, tail }.build(self, site)
+        false
     }
 
     fn is_coprod_pattern(&self, pattern: ss::VPatId) -> bool {
-        match &self.statics.vpats[&pattern] {
-            | ss::ValuePattern::Ctor(_) => true,
-            | ss::ValuePattern::Named(Named(_, pattern)) => self.is_coprod_pattern(*pattern),
-            | ss::ValuePattern::Alias(Alias(patterns)) => {
-                patterns.iter().any(|pattern| self.is_coprod_pattern(*pattern))
+        let mut pending = vec![pattern];
+        while let Some(pattern) = pending.pop() {
+            match &self.statics.vpats[&pattern] {
+                | ss::ValuePattern::Ctor(_) => return true,
+                | ss::ValuePattern::Named(Named(_, pattern))
+                | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => pending.push(*pattern),
+                | ss::ValuePattern::Alias(Alias(patterns)) => {
+                    pending.extend(patterns.iter().rev().copied());
+                }
+                | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
+                | ss::ValuePattern::Hole(_)
+                | ss::ValuePattern::Var(_)
+                | ss::ValuePattern::Lit(_)
+                | ss::ValuePattern::Triv(_)
+                | ss::ValuePattern::VCons(_) => {}
             }
-            | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => self.is_coprod_pattern(*pattern),
-            | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
-            | ss::ValuePattern::Hole(_)
-            | ss::ValuePattern::Var(_)
-            | ss::ValuePattern::Lit(_)
-            | ss::ValuePattern::Triv(_)
-            | ss::ValuePattern::VCons(_) => false,
         }
+        false
     }
 
     fn is_coprod_match(&self, arms: &[Matcher<ss::VPatId, ss::CompuId>]) -> bool {
@@ -475,20 +278,31 @@ impl<'a> Lowerer<'a> {
 
 impl BuiltinPackageLowering {
     fn lower(value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>) -> ValueId {
-        match value {
-            | BuiltinPackageValue::Unit => Triv.build(lowerer, None),
-            | BuiltinPackageValue::Operation(role) => {
-                ExternalFunction::Host(role).make_function(lowerer)
-            }
-            | BuiltinPackageValue::Product(product) => {
-                let values = product
-                    .into_iter()
-                    .map(|value| Self::lower(value, lowerer))
-                    .collect::<Vec<_>>();
-                let layout = ProductLayout { arity: values.len() };
-                VCons::new(values, layout).build(lowerer, None)
+        enum Work {
+            Value(BuiltinPackageValue),
+            Product(usize),
+        }
+        let mut work = vec![Work::Value(value)];
+        let mut values = Vec::new();
+        while let Some(next) = work.pop() {
+            match next {
+                | Work::Value(BuiltinPackageValue::Unit) => values.push(Triv.build(lowerer, None)),
+                | Work::Value(BuiltinPackageValue::Operation(role)) => {
+                    values.push(ExternalFunction::Host(role).make_function(lowerer));
+                }
+                | Work::Value(BuiltinPackageValue::Product(product)) => {
+                    work.push(Work::Product(product.len()));
+                    work.extend(product.into_iter().rev().map(Work::Value));
+                }
+                | Work::Product(arity) => {
+                    let fields = values.split_off(values.len() - arity);
+                    values.push(VCons::new(fields, ProductLayout { arity }).build(lowerer, None));
+                }
             }
         }
+        let value = values.pop().expect("completed Builtin package");
+        assert!(values.is_empty());
+        value
     }
 }
 
@@ -513,7 +327,7 @@ impl RootLowerer<'_> {
             let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer);
             stack = Cons(package, stack).build(&mut lowerer, None);
         }
-        let root = root.lower(&mut lowerer, stack);
+        let root = LoweringFolder::new(&mut lowerer).lower(root, stack);
         lowerer.finish(root)
     }
 }
@@ -530,386 +344,5 @@ impl CompilerPass<ss::CompuId> for BuiltinRootLowerer<'_> {
     }
 }
 
-impl Lower for ss::VPatId {
-    type Kont = ();
-    type Out = VPatId;
-
-    fn lower(&self, lo: &mut Lowerer, _kont: Self::Kont) -> Self::Out {
-        // Get the pattern from statics arena
-        let ss_vpat = lo.statics.vpats[self].clone();
-        // Map from ss::VPatId to ss::PatId
-        let ss_pat_id = ss::PatId::Value(*self);
-        // Convert statics ValuePattern to stack ValuePattern
-        use super::syntax::ValuePattern as StackVPat;
-        use ss::ValuePattern as SSVPat;
-        let stack_vpat: StackVPat = match ss_vpat {
-            | SSVPat::Hole(hole) => hole.into(),
-            | SSVPat::Var(def) => def.into(),
-            | SSVPat::Named(Named(_, inner)) => {
-                let vpat = inner.lower(lo, ());
-                lo.arena.inner.vpats[&vpat].clone()
-            }
-            | SSVPat::Ctor(ctor) => {
-                use zydeco_syntax::Ctor;
-                let Ctor(name, tail) = ctor;
-                let tail_vpat = tail.lower(lo, ());
-                let data_id = lo.statics.data_pat_hints[self];
-                let idx = lo.statics.datas[&data_id]
-                    .iter()
-                    .position(|(tag_branch, _ty)| tag_branch == &name)
-                    .expect("Constructor tag not found");
-                let ctor_idx = CtorIdx { idx, name };
-                Ctor(ctor_idx, tail_vpat).into()
-            }
-            | SSVPat::Alias(Alias(patterns)) => {
-                let patterns = patterns.into_iter().map(|pattern| pattern.lower(lo, ())).collect();
-                Alias(ConsN::from_vec(patterns).unwrap()).into()
-            }
-            | SSVPat::Triv(Triv) => Triv.into(),
-            | SSVPat::VCons(items) => {
-                let items = items.into_iter().map(|item| item.lower(lo, ())).collect();
-                let ty = lo.statics.annotations_vpat[self];
-                VCons::new(items, lo.product_layout(ty)).into()
-            }
-            | SSVPat::SCons(ss::ConsN(_, body)) => {
-                let vpat = body.lower(lo, ());
-                lo.arena.inner.vpats[&vpat].clone()
-            }
-            | SSVPat::View(_) => {
-                unreachable!("view patterns must be expanded before structural Stack IR lowering")
-            }
-            | SSVPat::Lit(_) => {
-                unreachable!(
-                    "literal patterns must be expanded before structural Stack IR lowering"
-                )
-            }
-        };
-        // Create new VPatId in stack arena and store the mapping
-        let pattern = stack_vpat.build(lo, Some(ss_pat_id));
-        if let Some(&ty) = lo.statics.annotations_vpat.get(self) {
-            lo.arena.inner.pattern_protocols.insert_new(pattern, lo.protocols.value(ty));
-        }
-        pattern
-    }
-}
-
-impl Lower for ss::ValueId {
-    type Kont = ();
-    type Out = ValuePlan<ValueId>;
-
-    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
-        if let Some(import) = lo.statics.foreign_imports.get(self).cloned() {
-            let site = Some(ss::TermId::Value(*self));
-            let stack = Bullet.build(lo, site);
-            let body =
-                ExternCall { function: ExternalFunction::Foreign(import), stack }.build(lo, site);
-            let value = Closure { stack: Bullet, body }.build(lo, site);
-            let protocol = lo.protocols.value(lo.statics.annotations_value[self]);
-            lo.arena.inner.value_protocols.insert_new(value, protocol);
-            return ValuePlan::pure(value);
-        }
-        let value = lo.statics.values[self].clone();
-        let site = Some(ss::TermId::Value(*self));
-        let plan = match value {
-            | ss::Value::Hole(_) => ValuePlan::pure(Hole.build(lo, site)),
-            | ss::Value::Var(def) => ValuePlan::pure(def.build(lo, site)),
-            | ss::Value::Named(Named(_, inner)) => inner.lower(lo, ()),
-            | ss::Value::Let(Let { binder, bindee, tail }) => {
-                let bindee = bindee.lower(lo, ());
-                let tail = tail.lower(lo, ());
-                let bindings = [ValueStep::Bind(ValueBinding {
-                    binder: binder.lower(lo, ()),
-                    bindee: bindee.value,
-                    site,
-                })];
-                ValuePlan {
-                    steps: bindee.steps.into_iter().chain(bindings).chain(tail.steps).collect(),
-                    value: tail.value,
-                }
-            }
-            | ss::Value::ValAbs(_)
-            | ss::Value::ValApp(_)
-            | ss::Value::Match(_)
-            | ss::Value::Int64Op(_) => {
-                lo.lower_errors.push(SpsLowerError::ResidualStaticValue { value: *self });
-                ValuePlan::pure(Hole.build(lo, site))
-            }
-            | ss::Value::Thunk(Thunk(body)) => {
-                let stack = Bullet.build(lo, site);
-                let body = body.lower(lo, stack);
-                ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site))
-            }
-            | ss::Value::Ctor(Ctor(name, body)) => {
-                let data_id = lo.statics.data_hints[self];
-                let idx = lo.statics.datas[&data_id]
-                    .iter()
-                    .position(|(tag_branch, _ty)| tag_branch == &name)
-                    .expect("Constructor tag not found");
-                let body = body.lower(lo, ());
-                body.map(|body| Ctor(CtorIdx { idx, name }, body).build(lo, site))
-            }
-            | ss::Value::Triv(Triv) => ValuePlan::pure(Triv.build(lo, site)),
-            | ss::Value::VCons(items) => {
-                let layout = lo.product_layout(lo.statics.annotations_value[self]);
-                let items = items.lower(lo, ());
-                items.map(|items| VCons::new(items, layout).build(lo, site))
-            }
-            | ss::Value::SCons(ss::ConsN(_witnesses, inner)) => {
-                // Type cons values are erased.
-                inner.lower(lo, ())
-            }
-            | ss::Value::Proj(Proj(head, field)) => {
-                field.target.products.into_iter().fold(head.lower(lo, ()), |head, projection| {
-                    let layout = lo.product_layout(projection.product);
-                    let (binding, projected) =
-                        lo.projection_binding(head.value, projection.position, layout, site);
-                    head.with_binding(binding, projected)
-                })
-            }
-            | ss::Value::Lit(lit) => ValuePlan::pure(lit.build(lo, site)),
-        };
-        if let Some(&ty) = lo.statics.annotations_value.get(self) {
-            let _ = lo.arena.inner.value_protocols.upsert(plan.value, lo.protocols.value(ty));
-        }
-        plan
-    }
-}
-
-impl Lower for Vec<ss::ValueId> {
-    type Kont = ();
-    type Out = ValuePlan<Vec<ValueId>>;
-
-    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
-        ValuePlan::sequence(self.iter().map(|item| item.lower(lo, ())))
-    }
-}
-
-impl Lower for ss::CompuId {
-    type Kont = StackId;
-    type Out = CompuId;
-
-    fn lower(&self, lo: &mut Lowerer, stack: Self::Kont) -> Self::Out {
-        let compu = lo.statics.compus[self].clone();
-        let site = Some(ss::TermId::Compu(*self));
-        use ss::Computation as Compu;
-        match compu {
-            | Compu::Hole(Hole) => SHole(stack).build(lo, site),
-            | Compu::VAbs(Abs(param, body)) => {
-                let body_stack = Bullet.build(lo, site);
-                let (param_vpat, body_compu) = if lo.pattern_needs_match_plan(param) {
-                    let argument = lo.alloc_admin_def("__view_argument__");
-                    let param_vpat = argument.build(lo, None);
-                    let plan = MatchPlan::Pattern {
-                        scrutinee: argument,
-                        pattern: param,
-                        success: Box::new(MatchPlan::Tail(body)),
-                        failure: Box::new(MatchPlan::Fail),
-                    };
-                    let body_compu = lo.lower_match_plan(plan, body_stack, site);
-                    (param_vpat, body_compu)
-                } else {
-                    (param.lower(lo, ()), body.lower(lo, body_stack))
-                };
-                Let { binder: Cons(param_vpat, Bullet), bindee: stack, tail: body_compu }
-                    .build(lo, site)
-            }
-            | Compu::VApp(App(body, arg)) => {
-                let arg = arg.lower(lo, ());
-                arg.lower_into(lo, move |arg, lo| {
-                    let stack = Cons(arg, stack).build(lo, site);
-                    body.lower(lo, stack)
-                })
-            }
-            | Compu::TAbs(Abs(_param, body)) => {
-                // Type abstractions are erased
-                body.lower(lo, stack)
-            }
-            | Compu::TApp(App(body, _arg)) => {
-                // Type applications are erased
-                body.lower(lo, stack)
-            }
-            | Compu::Fix(Fix(param, body)) => {
-                // Extract DefId from binder (should be a Var pattern)
-                use ss::ValuePattern as VPat;
-                let def_id = match &lo.statics.vpats[&param] {
-                    | VPat::Var(def) => *def,
-                    | _ => {
-                        let fmt = zydeco_statics::fmt::Formatter::new(lo.scoped, lo.statics);
-                        let param_str = param.ugly(&fmt);
-                        panic!("Fix param must be a variable, found:\n{}", param_str);
-                    }
-                };
-                let body_stack = Bullet.build(lo, site);
-                let body_compu = body.lower(lo, body_stack);
-                let fix = SFix { param: def_id, stack, body: body_compu }.build(lo, site);
-                if let Some(&ty) = lo.statics.annotations_compu.get(self) {
-                    lo.arena.inner.compu_protocols.insert_new(fix, lo.protocols.stack(ty));
-                }
-                fix
-            }
-            | Compu::Force(Force(body)) => {
-                let body = body.lower(lo, ());
-                body.lower_into(lo, move |thunk, lo| SForce { thunk, stack }.build(lo, site))
-            }
-            | Compu::Ret(Return(body)) => {
-                let body = body.lower(lo, ());
-                body.lower_into(lo, move |value, lo| SReturn { stack, value }.build(lo, site))
-            }
-            | Compu::Do(Bind { binder, bindee, tail }) => {
-                let (binder_vpat, tail_compu) = if lo.pattern_needs_match_plan(binder) {
-                    let returned = lo.alloc_admin_def("__view_returned__");
-                    let binder_vpat = returned.build(lo, None);
-                    let plan = MatchPlan::Pattern {
-                        scrutinee: returned,
-                        pattern: binder,
-                        success: Box::new(MatchPlan::Tail(tail)),
-                        failure: Box::new(MatchPlan::Fail),
-                    };
-                    let tail_compu = lo.lower_match_plan(plan, stack, site);
-                    (binder_vpat, tail_compu)
-                } else {
-                    (binder.lower(lo, ()), tail.lower(lo, stack))
-                };
-                let kont_stack_id = Kont { binder: binder_vpat, body: tail_compu }.build(lo, site);
-                bindee.lower(lo, kont_stack_id)
-            }
-            | Compu::Let(Let { binder, bindee, tail }) => {
-                let bindee = bindee.lower(lo, ());
-                bindee.lower_into(lo, move |bindee, lo| {
-                    if lo.pattern_needs_match_plan(binder) {
-                        let scrutinee = lo.alloc_admin_def("__view_let__");
-                        let binder_vpat = scrutinee.build(lo, None);
-                        let plan = MatchPlan::Pattern {
-                            scrutinee,
-                            pattern: binder,
-                            success: Box::new(MatchPlan::Tail(tail)),
-                            failure: Box::new(MatchPlan::Fail),
-                        };
-                        let tail_compu = lo.lower_match_plan(plan, stack, site);
-                        Let { binder: binder_vpat, bindee, tail: tail_compu }.build(lo, site)
-                    } else {
-                        let binder_vpat = binder.lower(lo, ());
-                        let tail_compu = tail.lower(lo, stack);
-                        Let { binder: binder_vpat, bindee, tail: tail_compu }.build(lo, site)
-                    }
-                })
-            }
-            | Compu::Match(Match { scrut, arms }) => {
-                // A constructor followed by a catch-all needs ordered fallthrough.
-                // Backend coproduct matches contain constructor arms only.
-                let mixed = arms.iter().any(|arm| lo.is_coprod_pattern(arm.binder))
-                    && arms.iter().any(|arm| !lo.is_coprod_pattern(arm.binder));
-                let needs_plan =
-                    mixed || arms.iter().any(|arm| lo.pattern_needs_match_plan(arm.binder));
-                let is_coprod = !needs_plan && lo.is_coprod_match(&arms);
-                let scrut = scrut.lower(lo, ());
-                scrut.lower_into(lo, move |scrut, lo| {
-                    if needs_plan {
-                        lo.lower_plan_match(scrut, &arms, stack, site)
-                    } else if is_coprod {
-                        let lowered_arms = arms
-                            .iter()
-                            .map(|Matcher { binder, tail }| {
-                                let binder = binder.lower(lo, ());
-                                let branch_stack = Bullet.build(lo, site);
-                                let tail = tail.lower(lo, branch_stack);
-                                Matcher { binder, tail }
-                            })
-                            .collect();
-                        let body = SCoprodMatch { scrut, arms: lowered_arms }.build(lo, site);
-                        Let { binder: Bullet, bindee: stack, tail: body }.build(lo, site)
-                    } else {
-                        let [Matcher { binder, tail }] = arms.as_slice() else {
-                            unreachable!("an irrefutable match has exactly one arm")
-                        };
-                        let binder = binder.lower(lo, ());
-                        let body = tail.lower(lo, stack);
-                        SProductMatch { scrut, binder, body }.build(lo, site)
-                    }
-                })
-            }
-            | Compu::CoMatch(CoMatch { arms }) => {
-                let arms = arms
-                    .into_iter()
-                    .map(|arm| {
-                        let CoMatcher { dtor: name, tail } = arm;
-                        let codata_id = lo.statics.codata_hints[self];
-                        let dtor_idx = lo.protocols.tag(codata_id, name);
-                        let branch_stack = Bullet.build(lo, site);
-                        let body_compu = tail.lower(lo, branch_stack);
-                        CoMatcher { dtor: Cons(dtor_idx, Bullet), tail: body_compu }
-                    })
-                    .collect();
-                let case = SCoMatch { scrut: stack, arms }.build(lo, site);
-                let protocol = lo.protocols.codata(lo.statics.codata_hints[self]);
-                lo.arena.inner.compu_protocols.insert_new(case, protocol);
-                case
-            }
-            | Compu::Dtor(Dtor(body, name)) => {
-                let codata_id = lo.statics.codata_hints[&body];
-                let dtor_idx = lo.protocols.tag(codata_id, name);
-                let stack = Cons(dtor_idx, stack).build(lo, site);
-                body.lower(lo, stack)
-            }
-        }
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use zydeco_statics::arena::StaticsScope;
-    use zydeco_utils::prelude::IdAllocator;
-
-    #[test]
-    fn computation_roots_lower_as_single_program_roots() {
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let value = allocator.alloc();
-        let root = allocator.alloc();
-        let mut statics = StaticsArena::default();
-        statics.values.insert_new(value, ss::Triv.into());
-        statics.compus.insert_new(root, ss::Return(value).into());
-        let spans = SpanArena::default();
-        let scoped = ScopedArena::default();
-
-        let stackir =
-            RootLowerer { spans: &spans, scoped: &scoped, statics: &statics }.run(root).unwrap();
-        let stackir = stackir.as_program();
-
-        assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
-        super::super::check::check(stackir, &scoped, &statics);
-    }
-
-    #[test]
-    fn residual_value_functions_report_an_internal_invariant_failure() {
-        let mut allocator = IdAllocator::<StaticsScope>::new();
-        let unit = allocator.alloc();
-        let pattern = allocator.alloc();
-        let abstraction = allocator.alloc();
-        let root = allocator.alloc();
-        let valid_root = allocator.alloc();
-        let mut statics = StaticsArena::default();
-        statics.values.insert_new(unit, ss::Triv.into());
-        statics.vpats.insert_new(pattern, ss::ValuePattern::Triv(ss::Triv));
-        statics.values.insert_new(abstraction, ss::Abs(ss::ValBinder::Value(pattern), unit).into());
-        statics.compus.insert_new(root, ss::Return(abstraction).into());
-        statics.compus.insert_new(valid_root, ss::Return(unit).into());
-        let spans = SpanArena::default();
-        let scoped = ScopedArena::default();
-
-        let mut passes = zydeco_utils::pipeline![
-            RootLowerer { spans: &spans, scoped: &scoped, statics: &statics },
-            crate::SpsLowPipeline { scoped: &scoped, statics: &statics }.with_error(),
-        ];
-        let before = passes.run(valid_root).expect("a complete root reaches SPSLow");
-        let errors = passes.run(root).expect_err("unelaborated static syntax cannot lower");
-        assert!(
-            matches!(errors.as_slice(), [SpsLowerError::ResidualStaticValue { value }] if *value == abstraction)
-        );
-        // Internal fixtures need a useful report even without source spans.
-        let _ = errors[0].to_report(&spans, &scoped, &statics);
-        let after =
-            passes.run(valid_root).expect("failed lowering leaves no state in the next run");
-        assert_eq!(before.arena().inner.compus.len(), after.arena().inner.compus.len());
-    }
-}
+mod tests;
