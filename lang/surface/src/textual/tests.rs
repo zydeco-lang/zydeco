@@ -107,7 +107,10 @@ fn monadic_metadata_rejects_arguments() {
     let error =
         match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
             | Ok(_) => panic!("monadic metadata must not accept arguments"),
-            | Err(error) => error,
+            | Err(errors) => {
+                assert_eq!(errors.len(), 1);
+                errors.into_iter().next().unwrap()
+            }
         };
 
     assert!(matches!(
@@ -145,7 +148,10 @@ fn typeof_metadata_rejects_arguments_at_the_annotation_span() {
     let error =
         match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
             | Ok(_) => panic!("typeof metadata must not accept arguments"),
-            | Err(error) => error,
+            | Err(errors) => {
+                assert_eq!(errors.len(), 1);
+                errors.into_iter().next().unwrap()
+            }
         };
     assert!(matches!(
         &error,
@@ -183,7 +189,10 @@ fn metadata_payload_errors_highlight_the_payload() {
     let error =
         match (SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }).run(unit) {
             | Ok(_) => panic!("intrinsic metadata must reject a non-hole payload"),
-            | Err(error) => error,
+            | Err(errors) => {
+                assert_eq!(errors.len(), 1);
+                errors.into_iter().next().unwrap()
+            }
         };
 
     assert!(matches!(&error, crate::bitter::DesugarError::IntrinsicPayloadNotHole(_)));

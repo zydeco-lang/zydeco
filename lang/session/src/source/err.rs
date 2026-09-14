@@ -15,6 +15,13 @@ use zydeco_surface::textual::{
 };
 use zydeco_utils::span::Span;
 
+/// One presentation-ready source failure, retaining its own primary location.
+#[derive(Clone, Debug)]
+pub struct SourceDiagnostic {
+    pub message: String,
+    pub site: Option<SourceDiagnosticSite>,
+}
+
 /// One compiler failure's primary location in file-relative byte coordinates.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceDiagnosticSite {

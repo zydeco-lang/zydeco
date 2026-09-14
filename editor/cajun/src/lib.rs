@@ -305,7 +305,7 @@ impl Cajun {
                     }
                     | None => None,
                 };
-                vec![failure.diagnostic(path.as_deref(), source.as_deref())]
+                failure.diagnostics(path.as_deref(), source.as_deref())
             }
         };
         if let Some(progress) = progress {

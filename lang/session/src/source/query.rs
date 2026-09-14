@@ -16,7 +16,7 @@ use zydeco_statics::{
     syntax::{Fillable, PackPi, TermAnnId, Type},
 };
 use zydeco_surface::{
-    bitter::DesugarError,
+    bitter::DesugarErrors,
     scoped::{ResolveError, arena::ScopedArena},
     textual::syntax::SpanArena,
 };
@@ -185,7 +185,7 @@ pub enum AnalysisError {
     #[error("Desugaring error: {error}")]
     Desugar {
         #[source]
-        error: Box<DesugarError>,
+        error: Box<DesugarErrors>,
         /// The merged program's span arena, whose source map resolves the rejected construct.
         spans: Arc<SpanArena>,
     },
@@ -200,13 +200,30 @@ pub enum AnalysisError {
 }
 
 impl AnalysisError {
+    /// Every independently reported phase failure with its own source location.
+    pub fn diagnostics(&self) -> Vec<super::SourceDiagnostic> {
+        match self {
+            | Self::Desugar { error, spans } => error
+                .iter()
+                .map(|error| super::SourceDiagnostic {
+                    message: error.to_string(),
+                    site: SourceDiagnosticSite::from_span(spans, error.span()),
+                })
+                .collect(),
+            | _ => vec![super::SourceDiagnostic {
+                message: self.to_string(),
+                site: self.diagnostic_site(),
+            }],
+        }
+    }
+
     /// Primary file and byte range associated with this compiler failure.
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         match self {
             | Self::Source { error } => error.diagnostic_site(),
             | Self::TextualProgram { error } => Some(error.diagnostic_site()),
             | Self::Desugar { error, spans } => {
-                SourceDiagnosticSite::from_span(spans, error.span())
+                error.iter().find_map(|error| SourceDiagnosticSite::from_span(spans, error.span()))
             }
             | Self::Resolve { error, spans, .. } => {
                 SourceDiagnosticSite::from_span(spans, error.primary_span())

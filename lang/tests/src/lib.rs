@@ -279,7 +279,7 @@ pub mod utils {
         /// structural rejections from the surface phase have no diagnostic
         /// codes to match on.
         pub fn assert_desugar_error(
-            result: Result<(), CaseError>, expected: impl FnOnce(&DesugarError) -> bool,
+            result: Result<(), CaseError>, expected: impl FnMut(&DesugarError) -> bool,
         ) {
             let Err(CaseError::Compile(CompileError::Analysis(AnalysisError::Desugar {
                 error,
@@ -288,7 +288,7 @@ pub mod utils {
             else {
                 panic!("expected a desugaring rejection, found: {result:?}")
             };
-            assert!(expected(error.as_ref()), "unexpected desugaring rejection: {error:?}");
+            assert!(error.iter().any(expected), "unexpected desugaring rejection: {error:?}");
         }
 
         /// Assert a case that fails during resolution rather than checking.

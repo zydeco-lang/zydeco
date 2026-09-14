@@ -540,6 +540,33 @@ Source assembly has already resolved import and literal splices.
 Primitive terms have compiler-owned identities, and every generated node records its textual origin.
 A special metadata node must survive whenever ordinary forwarding would change its checking environment or expectation.
 
+### Desugaring folders
+
+[`DesugarFolder`](../../lang/surface/src/bitter/desugar/mod.rs) owns textual lookup,
+recursive lowering, the `BitterBuilder`, and a source-term memo table.
+Successful and rejected terms enter that table through one path;
+reusing a rejected source node does not repeat its diagnostic.
+Independent child checks collect their errors before rejecting the enclosing construction.
+A rejected source returns all collected errors with their source context and publishes no complete bitter arena.
+
+The [telescope rules](../../lang/surface/src/bitter/desugar/telescopes.rs) lower parameter sequences,
+flatten consecutive existential layers, and construct quantifier and package layers.
+The [binding rules](../../lang/surface/src/bitter/desugar/bindings.rs) interpret binding flavors
+and build terms together with classifiers over the same parameter fold.
+Classifier state distinguishes absence, an annotation on the complete binding,
+and an annotation extended across its parameters.
+Only the last case freshens classifier binders.
+Destructor parameters discard a propagated abstraction classifier, replace a binding classifier with a hole,
+or reject a value abstraction, according to the enclosing rule.
+
+Already-lowered construction receives the builder;
+[CBPV introductions](../../lang/surface/src/bitter/desugar/cbpv.rs) share this allocation and provenance boundary.
+Rules retain their semantic child schedules: a binding lowers its binder, bindee, classifier, and parameters;
+a package lowers its body before processing parameters in reverse, with evidence before the parameter form.
+Meta annotation inspection precedes payload lowering when its rule depends on authored syntax.
+
+### Name resolution
+
 [Resolution](../../lang/surface/src/scoped/README.md) replaces names with `DefId`s and records lexical contexts.
 A source boundary resets the environment.
 In a block, resolution first collects mobile contributions and installs all their binders,

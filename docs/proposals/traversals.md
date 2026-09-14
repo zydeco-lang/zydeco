@@ -243,66 +243,9 @@ Generate structural declarations only after their shared requirements have been 
 
 ## Desugaring decomposition
 
-### Driver, rule owners, and builder
-
-`DesugarFolder` should own borrowed textual syntax and spans, the existing source-term memo table, and `BitterBuilder`.
-Its entry points lower definitions, patterns, copatterns, and terms to their corresponding bitter results.
-Successful term results are memoized by the driver at one publication point.
-A rule that returns early, such as an intrinsic annotation, goes through that same point.
-Record rejected term entries too, so shared source roots do not emit the same lowering failure repeatedly.
-Failed lowering returns the collected `DesugarError` values with their span context,
-without publishing a complete bitter product.
-
-Extract the rules in this order:
-
-| Module | Input and responsibility | Result |
-| --- | --- | --- |
-| `telescopes` | Lower parameter sequences, flatten consecutive existential layers, and build quantifier/package layers. | Typed lowered parameters or a constructed bitter root |
-| `bindings` | Interpret binding flavor, build abstractions and their classifiers, introduce recursion, and apply sealing. | `LoweredBinding { binder, bindee }` |
-| `cbpv` | Build explicit thunk/return introductions and the classifier scaffolding they require. | Bitter term IDs |
-| `meta` | Inspect recognized meta annotations and select their payload and construction behavior. | A typed action consumed during lowering |
-
-Keep the small driver in `bitter/desugar/mod.rs` and the rule owners in sibling files.
-The existing public compiler-pass entry point can construct the folder and publish its builder.
-Migrate the old `Desugar` recursion and its callers into these entry points without retaining a parallel lowering path.
-
-There are two useful method boundaries within a rule owner.
-A method inspecting source syntax receives a read-only source view;
-a method constructing already-lowered syntax receives `&mut BitterBuilder`.
-A handler that must recurse receives the folder and invokes its typed child entry points.
-The builder owns allocation and origins; it does not learn about source-term caches or lexical lookup.
-This extracts behavior, rather than moving the existing large match unchanged between files.
-
-Handlers collect failures from independent child terms and telescope checks where their inputs remain available.
-A rejected binder or parameter that prevents constructing the remaining telescope rejects that dependent construction;
-it must not be replaced by an invented binding just to continue descent.
-The enclosing driver can still lower independent siblings.
-Raw meta annotation validation similarly determines whether inspecting a payload remains meaningful after rejection.
-
-### Paired construction and evaluation order
-
-Term and classifier construction should stay together when they describe the same parameter telescope.
-A curried parameter introduces one binder in the term and, when needed, a fresh binder in its classifier.
-Thread both results through the same fold over the parameter sequence,
-using `FreshenFolder` only when a classifier layer actually needs a copy.
-Use domain states for classifier construction: absent, attached without quantifying the parameters,
-or extended across the parameter telescope.
-Keep the existing binding flavor as a domain enum.
-
-Share the primitive construction of an abstraction and its corresponding `Pi` or `ValPi` layer.
-Keep the enclosing rules' decisions explicit: an abstraction can discard its propagated annotation at a destructor,
-a binding can replace the classifier with a hole, and a value abstraction rejects destructor parameters.
-A generic boolean configuration would obscure those different contracts.
-
-Rule extraction must preserve semantic evaluation order as well as output shape.
-Currently a general binding lowers its binder, bindee, optional classifier, and parameters in that order.
-A `pack` lowers its body first and processes its parameters in reverse order;
-within a parameter it lowers evidence before the existential parameter form.
-Consecutive `exists` forms inspect a larger textual shape before ordinary lowering.
-Eagerly lowering all children in textual field order would change when generated origins are allocated
-and could lose the source shape needed by a later rule.
-Keep these schedules in the owning semantic handlers.
-Multi-error tests verify that independent failures are retained, without making their display order a contract.
+The implemented [desugaring folder and rule owners](../references/compiler.md#desugaring-folders) centralize
+recursive lowering, source-term memoization, telescope rules, paired binding construction, and diagnostic collection.
+The remaining extraction concerns meta annotation inspection and dispatch.
 
 ### Meta annotation actions
 
@@ -590,18 +533,16 @@ The same successful input should produce identical reference and dependency fact
 
 Implement these as separate reviewable changes after the design choices are settled:
 
-1. Extract desugaring telescopes and paired binding construction around `BitterBuilder`.
-   Add its diagnostic collector and complete independent child checks before returning a failed phase outcome.
-2. Extract raw meta annotation inspection and typed actions, with one driver-owned memo publication path
+1. Extract raw meta annotation inspection and typed actions, with one driver-owned memo publication path
    for successful and rejected terms.
-3. Introduce `SourceScan`, migrate the full loading profile and smaller query callers, and delete repeated scans.
+2. Introduce `SourceScan`, migrate the full loading profile and smaller query callers, and delete repeated scans.
    Collect errors from every independent directive site and return the full collection.
-4. Extract the resolution policy, typed events, and passive observers while preserving the existing semantic schedule.
+3. Extract the resolution policy, typed events, and passive observers while preserving the existing semantic schedule.
    Use its diagnostic collector in strict analysis as well as completion, with explicit recovery boundaries.
-5. Move dependency accumulation behind the explicit block lifecycle and connect ordinary resolution reconstruction
+4. Move dependency accumulation behind the explicit block lifecycle and connect ordinary resolution reconstruction
    to the extended shared folder.
    Remove the superseded recursion and accumulation paths as their callers migrate.
-6. Audit the remaining pass and source-unit boundaries for early exits over independent work.
+5. Audit the remaining pass and source-unit boundaries for early exits over independent work.
    Reuse parser issues and checker diagnostics, collect failures from independently available sources or imports,
    and extend checking and later validators at their own recovery boundaries.
    Dependent lowering stages continue to require a valid preceding product.
@@ -609,7 +550,7 @@ Implement these as separate reviewable changes after the design choices are sett
 Each migration must carry its complete diagnostic collection through session queries and CLI, TUI, and LSP presentation.
 Update the producer and its callers together; a frontend
 that displays only the first entry would leave the work incomplete.
-This reporting direction extends across all passes, while the first five changes implement the three surface tasks.
+This reporting direction extends across all passes, while the first four changes complete the three surface tasks.
 
 Validation must distinguish accepted-program equivalence from recovery behavior:
 

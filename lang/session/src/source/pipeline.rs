@@ -1,7 +1,7 @@
 use crate::source::TextualProgram;
 use zydeco_surface::{
     bitter::{
-        DesugarError, SourceDesugarOut, SourceUnitDesugarer, arena::BitterArena,
+        DesugarErrors, SourceDesugarOut, SourceUnitDesugarer, arena::BitterArena,
         syntax::TermId as BitterTermId,
     },
     scoped::{
@@ -22,7 +22,7 @@ pub(crate) struct BitterProgram {
 /// A desugaring failure together with the merged span arena needed to locate it.
 #[derive(Debug)]
 pub(crate) struct DesugarFailure {
-    pub error: Box<DesugarError>,
+    pub error: Box<DesugarErrors>,
     pub spans: FrozenArena<t::SpanArena>,
 }
 

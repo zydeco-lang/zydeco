@@ -369,15 +369,18 @@ impl DocumentationExampleRequest {
         {
             | Ok(analysis) => analysis,
             | Err(error) => {
-                let site = error.diagnostic_site();
                 return DocumentationExampleVerification {
                     status: DocumentationExampleStatus::Failed,
-                    diagnostics: vec![DocumentationExampleDiagnostic {
-                        code: None,
-                        message: error.to_string(),
-                        path: site.as_ref().map(|site| site.path().to_owned()),
-                        range: site.map(|site| site.range().clone()),
-                    }],
+                    diagnostics: error
+                        .diagnostics()
+                        .into_iter()
+                        .map(|diagnostic| DocumentationExampleDiagnostic {
+                            code: None,
+                            message: diagnostic.message,
+                            path: diagnostic.site.as_ref().map(|site| site.path().to_owned()),
+                            range: diagnostic.site.map(|site| site.range().clone()),
+                        })
+                        .collect(),
                     inputs: Vec::new(),
                 };
             }

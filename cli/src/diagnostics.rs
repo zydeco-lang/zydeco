@@ -12,6 +12,12 @@ pub struct DiagnosticRenderer;
 impl DiagnosticRenderer {
     pub fn error(error: &CompileError) {
         match error {
+            | CompileError::Analysis(AnalysisError::Desugar { error, spans }) => {
+                let mut cache = SourceCaches::span_arena(spans);
+                for error in error.iter() {
+                    let _ = error.to_report(spans).eprint(&mut cache);
+                }
+            }
             | CompileError::Analysis(AnalysisError::Source { error }) => Self::source_error(error),
             | CompileError::Rejected(analysis) => {
                 Self::warnings(analysis);

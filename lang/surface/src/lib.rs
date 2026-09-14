@@ -15,6 +15,8 @@ pub mod debug;
 /// Owned structural rebuilding for the shared bitter and scoped syntax family.
 pub mod fold;
 
+pub mod diagnostic;
+
 #[doc = include_str!("textual/README.md")]
 pub mod textual {
     /// Author-selected layout attached to canonical textual IDs.

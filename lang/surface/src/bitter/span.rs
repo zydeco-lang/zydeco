@@ -1,6 +1,6 @@
 //! Span lookup for bitter IDs via textual back-mapping.
 
-use super::{Desugarer, syntax::*};
+use super::{DesugarFolder, syntax::*};
 use crate::textual::syntax as t;
 use zydeco_syntax::{SpanView, TextualBack, span_via_back};
 
@@ -13,19 +13,19 @@ impl TextualBack for BitterArena {
     }
 }
 
-macro_rules! impl_span_view_desugarer {
+macro_rules! impl_span_view_folder {
     ($($ty:ty)*) => {
         $(
-            impl<'a> SpanView<'a, Desugarer<'_>> for $ty {
-                fn span(&self, desugarer: &'a Desugarer<'_>) -> &'a Span {
-                    span_via_back(&desugarer.spans, &desugarer.builder.arena, *self)
+            impl<'a> SpanView<'a, DesugarFolder<'_>> for $ty {
+                fn span(&self, folder: &'a DesugarFolder<'_>) -> &'a Span {
+                    span_via_back(&folder.spans, &folder.builder.arena, *self)
                 }
             }
         )*
     };
 }
 
-impl_span_view_desugarer! {
+impl_span_view_folder! {
     DefId
     PatId
     TermId

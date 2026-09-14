@@ -79,17 +79,15 @@ impl ProjectFailureOrigin {
     }
 }
 
-/// A failed project refresh that retains compiler source provenance.
+/// A failed refresh retaining every compiler diagnostic and its provenance.
 #[derive(Debug)]
 pub(crate) struct ProjectFailure {
-    message: String,
-    site: Option<SourceDiagnosticSite>,
-    origin: ProjectFailureOrigin,
+    diagnostics: Vec<ProjectDiagnostic>,
 }
 
 impl ProjectFailure {
     fn compiler(message: impl Into<String>, site: Option<SourceDiagnosticSite>) -> Self {
-        Self { message: message.into(), site, origin: ProjectFailureOrigin::Compiler }
+        Self { diagnostics: vec![ProjectDiagnostic::compiler(message, site)] }
     }
 
     fn from_source_error(error: &SourceLoadError) -> Self {
@@ -97,11 +95,41 @@ impl ProjectFailure {
     }
 
     fn from_analysis_error(error: &AnalysisError) -> Self {
-        Self::compiler(error.to_string(), error.diagnostic_site())
+        Self {
+            diagnostics: error
+                .diagnostics()
+                .into_iter()
+                .map(|diagnostic| ProjectDiagnostic::compiler(diagnostic.message, diagnostic.site))
+                .collect(),
+        }
     }
 
     pub(crate) fn internal(message: impl Into<String>) -> Self {
-        Self { message: message.into(), site: None, origin: ProjectFailureOrigin::Cajun }
+        Self {
+            diagnostics: vec![ProjectDiagnostic {
+                message: message.into(),
+                site: None,
+                origin: ProjectFailureOrigin::Cajun,
+            }],
+        }
+    }
+
+    pub(crate) fn diagnostics(&self, path: Option<&Path>, source: Option<&str>) -> Vec<Diagnostic> {
+        self.diagnostics.iter().map(|diagnostic| diagnostic.diagnostic(path, source)).collect()
+    }
+}
+
+/// A failed project refresh that retains compiler source provenance.
+#[derive(Debug)]
+struct ProjectDiagnostic {
+    message: String,
+    site: Option<SourceDiagnosticSite>,
+    origin: ProjectFailureOrigin,
+}
+
+impl ProjectDiagnostic {
+    fn compiler(message: impl Into<String>, site: Option<SourceDiagnosticSite>) -> Self {
+        Self { message: message.into(), site, origin: ProjectFailureOrigin::Compiler }
     }
 
     fn range(&self, published_path: &Path, source: &str) -> Option<Range> {
@@ -117,9 +145,7 @@ impl ProjectFailure {
         ))
     }
 
-    pub(crate) fn diagnostic(
-        &self, published_path: Option<&Path>, source: Option<&str>,
-    ) -> Diagnostic {
+    fn diagnostic(&self, published_path: Option<&Path>, source: Option<&str>) -> Diagnostic {
         let range = published_path
             .zip(source)
             .and_then(|(path, source)| self.range(path, source))
@@ -773,6 +799,28 @@ mod tests {
     use zydeco_utils::span::{FileMap, LineCol};
 
     #[test]
+    fn desugaring_failures_publish_separate_editor_diagnostics() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("lowering.zy");
+        let source = "(\n  @[typeof(extra)] 1,\n  @[typeof(extra)] 2\n)\n";
+        std::fs::write(&path, source).unwrap();
+        let error = zydeco_session::CompilerSession::default().analyze(&path).unwrap_err();
+        let failure = ProjectFailure::from_analysis_error(&error);
+        let diagnostics = failure.diagnostics(Some(&path), Some(source));
+        assert_eq!(diagnostics.len(), 2);
+        let mut lines =
+            diagnostics.iter().map(|diagnostic| diagnostic.range.start.line).collect::<Vec<_>>();
+        lines.sort();
+        assert_eq!(lines, [1, 2]);
+        assert!(
+            diagnostics.iter().all(|diagnostic| diagnostic.source.as_deref() == Some("zydeco"))
+        );
+        std::fs::write(&path, "(@[typeof] 1, @[typeof] 2)").unwrap();
+        let accepted = zydeco_session::CompilerSession::default().analyze(&path).unwrap();
+        assert!(accepted.outcome().root().is_some());
+    }
+
+    #[test]
     fn failed_analysis_ranges_are_measured_in_utf16() {
         let path = Path::new("unicode-error.zy");
         let failure = ProjectFailure::compiler(
@@ -780,7 +828,8 @@ mod tests {
             Some(SourceDiagnosticSite::new(path.to_path_buf(), 5..6)),
         );
 
-        let diagnostic = failure.diagnostic(Some(path), Some("😀 ?"));
+        let diagnostics = failure.diagnostics(Some(path), Some("😀 ?"));
+        let [diagnostic] = diagnostics.as_slice() else { panic!("one diagnostic") };
 
         assert_eq!(diagnostic.range, Range::new(Position::new(0, 3), Position::new(0, 4)));
     }

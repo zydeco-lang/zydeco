@@ -76,6 +76,20 @@ pub enum DesugarError {
 }
 
 impl DesugarError {
+    pub fn to_report(
+        &self, spans: &t::SpanArena,
+    ) -> ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)> {
+        let span = self.span();
+        let site = spans
+            .source_map()
+            .and_then(|map| map.ariadne_range(span))
+            .unwrap_or_else(zydeco_utils::span::internal_ariadne_span);
+        ariadne::Report::build(ariadne::ReportKind::Error, site.clone())
+            .with_message(self.to_string())
+            .with_label(ariadne::Label::new(site).with_message(self.to_string()))
+            .finish()
+    }
+
     /// Source span of the construct rejected during desugaring.
     pub fn span(&self) -> Span {
         match self {
@@ -101,4 +115,4 @@ impl DesugarError {
     }
 }
 
-pub type Result<T> = std::result::Result<T, DesugarError>;
+pub type DesugarErrors = crate::diagnostic::Diagnostics<DesugarError>;
