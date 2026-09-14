@@ -259,7 +259,7 @@ whose previous contents are no longer observable?
 This section owns the proposed compiler reuse obligations;
 the [byte-memory application](bytes.md#functional-updates-with-allocation-reuse-proposed) owns how they apply
 to retained byte allocations.
-General allocation reuse and the byte update path are not implemented yet.
+General allocation reuse and immutable byte-owner reuse are not implemented yet.
 
 The [related work](#related-work) suggests treating consumed storage as an explicit compiler resource.
 For example, this schematic functional reversal consumes and reconstructs one list cell per step:
@@ -316,6 +316,13 @@ This would be a compiler resource contract, with no new kind family selected her
 `Ret A` alone establishes none of those cost or ownership properties.
 Payload reuse must be distinguished from allocating grant records, boxes, closure environments, or call frames;
 a source callback's allocations also count toward any whole-call guarantee.
+
+The proposed [destination codecs](bytes.md#direct-destination-codecs) make a completion successor explicit.
+That successor can still capture the destination or other live values, so its closure
+and retained roots belong in the same cost and ownership analysis as result continuations.
+Changing from `Ret A` to an explicit successor does not itself justify a tail-frame bound,
+cell reuse, or elimination of an output allocation.
+Measure these source compositions through lowering and execution before assigning a FIP guarantee.
 
 Start with list reversal and equal-layout tree-to-zipper rewrites under a closed ownership proof.
 Pair each successful reuse with a shared input, a captured alias,

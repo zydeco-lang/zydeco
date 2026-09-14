@@ -15,15 +15,51 @@ This is the sole design home for that builder.
 The [immutable-byte reference](../references/language.md#immutable-owners-and-source-bytes) owns the resulting
 value's observations; [memory extensions](bytes.md#alternatives-and-decision-criteria) retain storage alternatives.
 
-Before choosing an interface, decide whether obtaining contents snapshots the buffer or freezes and closes the writer.
-A snapshot must remain unchanged after later writes; a freeze must define what every writer alias observes afterward.
-Specify close, repeated observation, failure, and buffer-transfer ownership together.
+Use the [CPS destination construction](bytes.md#cps-destination-construction) sequence for the proposed builder.
+Each successful push advances to a completion continuation; it does not produce an immutable snapshot.
+The construction's explicit finish should freeze and close its mutable owner before delivering bytes to the consumer.
+An optional snapshot operation would have a distinct name and preserve its contents across later writes.
+Choose the owner representation, public operation names, and integration with `Writer` during implementation;
+the existing stream capability does not yet support this builder.
+
+A memory-only builder can use a caller-chosen answer protocol when its allocator and memory provider support it.
+Adapters using the current stream and allocation services retain their `OS` protocol.
+Growth must reserve capacity and validate sizes before changing the builder's observable state.
+Completion is reached only after the new chunk is committed; failure preserves earlier committed chunks.
+Finish, failure, and explicit close must settle owner state before handing control to external successors.
+Abandoning a completion thunk does not run cleanup, as specified
+by the [current capability boundary](../references/language.md#choosing-an-allocator-on-the-computation-stack).
+
 The builder must not expose a mutable alias to storage already borrowed as immutable bytes by foreign code.
 Compare copying snapshots with a consuming freeze using workloads that construct many small chunks.
 The implemented [fixed-capacity Buffer](../references/language.md#mutable-destination-capabilities)
 uses copying snapshots and closing freeze with checked alias invalidation.
-A growable memory-backed `Writer` remains separate; no spelling or integration
-with the stream capability is selected here.
+Pair successful pushes and finish with failed growth, repeated finish, and writes through closed aliases.
+Measure growth copies, published snapshots, and continuation allocations separately.
+
+## Incremental stream processing
+
+The [current reader](../references/language.md#streams-and-process-arguments) already delivers a chunk
+through a continuation.
+A proposed chunk-processing driver can pass that chunk to its consumer and request the next read only
+when the consumer invokes completion.
+This avoids collecting the entire input before encoding, writing, or deciding to stop.
+Keep the driver in `OS` while it uses the current blocking stream operations.
+Explicit continuations give control over when to request more input;
+asynchronous execution remains a separate extension.
+
+The initial driver should require a positive chunk size so an empty successful read identifies EOF.
+It must distinguish EOF, read failure, consumer failure, and an explicit stop.
+Give each consumer step checked completion state so duplicate or cancelled resumptions are rejected before another read.
+This is an additional driver contract; ordinary `Thk OS` does not provide it.
+An omitted completion pauses the driver without automatically closing a caller-owned reader.
+A file-owning wrapper must route EOF, failure, and stop through its close path before invoking the final successor,
+using the existing whole-file error precedence.
+
+Test a consumer that continues, stops after one chunk, fails, retains a chunk, or invokes completion twice.
+Verify the number of underlying reads and that no read occurs after stop or close.
+Retained chunks keep the immutable-byte contract;
+buffer reuse needs the separate [ownership evidence](bytes.md#functional-updates-with-allocation-reuse-proposed).
 
 ## Other extensions
 

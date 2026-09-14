@@ -69,6 +69,28 @@ Turning a capturing thunk into a foreign callback additionally requires the runt
 The implemented source view reads a vtable data address.
 Method invocation and code-pointer loading require the separate foreign-call extension.
 
+## Source continuation adapters
+
+Use explicit source successors when a binding selects among outcomes or continues a destination construction.
+For an implemented returning C import, ordinary source code can bind its `Ret A` result
+and deliver `A` to a continuation under the caller's `R : CType`.
+This adaptation already follows the [source control rules](../references/language.md#6-computations-and-control);
+it does not change the C declaration, machine return convention, or supported foreign types.
+Status interpretation belongs to the individual binding, including which failures occurred before C entry
+and which were reported after C may have changed memory.
+
+The proposed mutable-output adapter below can then continue work on its destination without first producing `Bytes`.
+Its final consumer may choose to inspect, decode, or freeze according to the particular C API's contract.
+Release per-call borrows and restore runtime state before invoking an external source successor
+on any normal result path.
+A continuation carrying a borrowed address is not permission to retain it beyond the call.
+
+The reverse boundary still needs a C return: a callback invocation must deliver its ABI result to that C caller.
+An internal CPS worker can use a bridge continuation to produce that result,
+but cannot bypass callback rooting, reentry, or the return delimiter described below.
+Source CPS wrappers should be exercised with different caller protocols, preflight rejection without C entry,
+and result successors that immediately perform another allowed operation on the same resource.
+
 ## Mutable output through access grants
 
 `sample_write` is the next mutable-output milestone after the implemented immutable window adapter.

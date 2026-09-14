@@ -18,9 +18,76 @@ No particular tree complexity or default representation is selected here.
 Incremental effectful construction has one separate home:
 the [memory-backed Writer and byte builder](filesystem.md#memory-backed-writer-and-byte-builder).
 A builder can yield an immutable result without adding mutation to `Bytes`.
-The proposed [functional update path](#functional-updates-with-allocation-reuse-proposed) would preserve
-that interface's immutable observations while permitting justified allocation reuse.
+The next memory extension should use [CPS destination construction](#cps-destination-construction)
+to compose writes before publishing an immutable result.
+The optional [functional update path](#functional-updates-with-allocation-reuse-proposed) can build
+on that construction while permitting justified allocation reuse.
 The current implementation has no update or thaw operation for published bytes.
+
+## CPS destination construction
+
+The implemented [destination capabilities](../references/language.md#mutable-destination-capabilities)
+already support repeated writes followed by an explicit freeze.
+Use that sequence as the foundation for further construction APIs.
+A write invokes a completion continuation without constructing an intermediate immutable result;
+freeze delivers the completed bytes to their consumer.
+This separates advancing a construction from publishing its contents.
+
+The [control reference](../references/language.md#6-computations-and-control) owns the meaning of these continuations.
+The caller's `R : CType` describes the remaining computation protocol.
+Completion alone needs `Thk R`; producing a value of type `A` needs `Thk (A -> R)`.
+These are existing source forms; `Ret A` still describes an installed return continuation.
+Choosing explicit successors does not by itself remove allocations or make a thunk single-use.
+
+For a selected codec and memory provider, the proposed computation shape after forcing an encoder is:
+
+```text
+WriteInto A R = A -> Access -> Addr -> Thk (Fault -> R) -> Thk R -> R
+```
+
+This schematic shape describes a direct destination codec; it is not an implemented extension to `Storage`.
+Its destination is explicit, so several encoders can write successive fields before their enclosing builder freezes.
+The existing `Bytes.build` supplies a private destination and a completion that freezes it.
+Caller-owned `Buffer` construction instead leaves the caller responsible for choosing when to freeze or close.
+The general memory provider accepts `R`; the current `buffer` and `access/write_to` conveniences use `OS`.
+Generalizing a source adapter must retain the protocol required by its dependencies.
+
+### Direct destination codecs
+
+The current [storage access path](../references/language.md#access-through-existing-representation-contracts) encodes
+into temporary immutable storage and copies that encoding into a destination.
+A direct codec could remove those temporaries and the repeated concatenation within compound encoding.
+Start with the scalar and product codecs whose complete placement is already known from their representation.
+Write fields, gaps, and tail padding into one destination, then invoke completion once the encoding is established.
+Exact widths, alignment, canonical padding, and the abstract storage boundary remain governed
+by the [storage laws](../references/language.md#layout-laws).
+
+Preserve the existing guarantee that a failed encoding or destination check leaves
+that operation's destination unchanged.
+Preflight must validate the entire footprint, field encodings, offset arithmetic,
+and required reservations before writing.
+The write phase must then exclude later recoverable failures and reentry that could revoke its access.
+An extensible codec whose behavior cannot establish this separation must retain a temporary encoding or other staging.
+Invoking success after several writes does not make those writes transactional.
+Earlier successful operations in a sequence remain committed if a later operation fails;
+an atomic batch would need its own whole-batch preflight or private staging contract.
+
+Pair accepted nested encodings with invalid destinations, overflow,
+and a failing late field that leaves all bytes unchanged.
+Compare the completed bytes with the existing encoder, including padding and scalar bit patterns.
+Measure executed temporary allocations and copied bytes in the runtime and static-plan C construction fixtures.
+CPS alone is not evidence that either count decreased.
+
+### Composed workers and result destinations
+
+The existing [stored-call protocol](../references/language.md#stored-call-interfaces) already delivers results by CPS.
+A further source adapter could let a worker assemble output in a caller-supplied destination
+and invoke completion without transporting a newly encoded `Stored` value at each stage.
+The outer construction would freeze and establish the complete representation before publishing its stored result.
+Keep the shared representation witness and its codec with the participating workers:
+a writable range alone is not a `Stored` value or proof that a field offset has the required alignment.
+This is a source composition extension over the existing word convention; different native result layouts
+still require the separate [call-boundary evidence](escape-unboxing.md#remaining-machine-call-boundary).
 
 ## Functional updates with allocation reuse (proposed)
 
@@ -30,17 +97,11 @@ when the [compiler reuse obligations](escape-unboxing.md#functional-allocation-r
 That section owns the common exclusivity, layout, rooting, and control requirements.
 The following is a proposed application to this memory interface, not an implemented extension.
 
-A first operation could replace one octet without changing the visible length:
-
-```text
-set : forall R. Bytes -> Int64 -> UInt8 -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
-```
-
-The result has the requested octet and otherwise the input's contents.
+A functional update helper is an optional composition of destination writes and publication.
+Its copying implementation can copy the input into a private destination, apply validated edits, and freeze once.
+It delivers the final `Bytes` through a success continuation; each internal write needs only completion.
 Any retained input or slice continues to observe its original sequence.
-The initial source implementation can use `build` and `copy_to`, validate the index
-before writing, and freeze the completed result.
-A batch of validated replacements can amortize this copying over many edits.
+A finite batch can amortize copying over many edits.
 An arbitrary editor callback would need an additional failure and escape contract before promising the same costs.
 
 There are two different allocations to optimize.
@@ -73,8 +134,8 @@ of failure after partial work.
 Reuse may preserve the input's physical alignment, but does not make arbitrary future operations preserve it
 or prove spare capacity for append.
 
-The proposed sequence is source updates with copy fallback, ownership evidence for a restricted reuse path,
-and then dynamic accounting if broader workloads justify it.
+The proposed sequence is direct destination construction, optional functional helpers with copy fallback,
+ownership evidence for a restricted reuse path, and then dynamic accounting if broader workloads justify it.
 The general tracing collector need not be replaced to test statically justified byte reuse.
 Reference counting only the retained byte owners is insufficient unless aliases
 through the managed heap are included or conservatively excluded from reuse.
@@ -100,9 +161,8 @@ The [region proposal](reachability-regions.typ) addresses the separate lifetime 
 
 ## Remaining questions
 
-- Can direct destination codecs avoid intermediate buffers and repeated concatenation
-  while preserving canonical padding, exact-width decoding, and failure before destination mutation?
-  Compare the runtime and static-plan C fixtures using executed allocations and copied bytes, not only generated sites.
+- Which extensible codecs can establish the [preflight and write separation](#direct-destination-codecs),
+  and which require staging to preserve failure before destination mutation?
 - What evidence could relate a parent layout, child cell, and offset as a typed field path?
   Current inspected offsets are ordinary integers;
   numerical equality does not equate independently opened stored carriers.
