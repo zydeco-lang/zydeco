@@ -5,7 +5,7 @@ Builds historical variants together in an archived checkout, optionally comparin
 a compatible assembly-folder candidate. Production sources stay unchanged;
 timings use the normal allocator, and allocation counts come from a separate
 executable. Requires the pinned commits and cached Cargo dependencies.
-See docs/ideas/assembly-lowering-evaluation.md for the boundaries.
+See docs/evaluations/2026-09-14-assembly-lowering/README.md for the boundaries.
 """
 
 import argparse

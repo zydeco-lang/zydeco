@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded runtime experiments; see docs/ideas/cbpv-runtime-evaluation.md.
+"""Bounded runtime experiments; see docs/evaluations/2026-09-08-cbpv-runtime/README.md.
 
 Builds are outside timing, outputs have exact oracles, and every attempted run is
 recorded. Historical compilers and matching runtime directories are explicit

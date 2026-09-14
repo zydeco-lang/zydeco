@@ -7,7 +7,8 @@ and [DESIGN](../DESIGN.md) for the project overview and repository map.
 The [references](references/README.md) own approved, implemented language and compiler contracts,
 with one home for each rule.
 [Proposals](proposals/README.md) contain concrete unfinished designs;
-[ideas](ideas/README.md) contain exploratory questions and studies;
+[ideas](ideas/README.md) contain exploratory questions;
+[evaluations](evaluations/README.md) retain dated experimental reports and their evidence;
 [todos](todos/README.md) record observed discrepancies requiring repair.
 The [ownership map](references/README.md#rule-ownership) connects source rules to their implementation accounts.
 
@@ -20,7 +21,8 @@ The [ownership map](references/README.md#rule-ownership) connects source rules t
 | [Editor guide](../editor/README.md) | Configure Cajun and find client setup |
 | [Literate chapters](spell) | Read executable explanations and examples |
 | [Design proposals](proposals/README.md) | Review unimplemented extensions and their validation criteria |
-| [Explorations](ideas/README.md) | Read research discussions and dated experimental evidence |
+| [Design ideas](ideas/README.md) | Explore research questions and conceptual directions |
+| [Evaluations](evaluations/README.md) | Inspect dated experiments, measurements, and reproduction artifacts |
 | [Component guides](../lang) | Locate local implementation modules |
 | [OOPSLA artifact overview](../lib/tests/oopsla/README.md) | Follow paper-specific examples and evaluation instructions |
 | [Earlier tutorial](tutorial/intro_to_zydeco.md), [legacy notes](legacy) | Inspect historical language designs |

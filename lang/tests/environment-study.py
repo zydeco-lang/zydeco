@@ -2,7 +2,7 @@
 """Compare explicit compiler/runtime pairs for the environment studies.
 
 Reuses the first round's workload generation, exact oracles, build isolation, and
-rotating sample order. See docs/ideas/cbpv-runtime-evaluation.md for interpretation.
+rotating sample order. See docs/evaluations/2026-09-08-cbpv-runtime/README.md for interpretation.
 """
 
 import argparse

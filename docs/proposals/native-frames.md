@@ -9,7 +9,7 @@ A tested model component does not establish a completed alternative backend or a
 The remaining work compares storage choices and integrates stronger lifetime or relocation mechanisms.
 [Escape analysis](escape-unboxing.md) owns individual value representation selection;
 [reachability regions](reachability-regions.typ) proposes support typing and explicit retirement.
-The [runtime study](../ideas/cbpv-runtime-evaluation.md) keeps dated evidence and measurement limits.
+The [runtime study](../evaluations/2026-09-08-cbpv-runtime/README.md) keeps dated evidence and measurement limits.
 No new default or source control restriction follows from these experiments.
 
 ## Experimental implementations and integration limits
@@ -141,7 +141,7 @@ environment and control-stack high-water usage, peak live heap, and generated co
 Useful workloads include repeated non-tail calls with many live locals, nested recursion, long tail-call chains,
 returning callbacks, escaping closures, and calls retaining one small value beside a large dead value.
 Report the compiler settings and hardware, and separate empty captures from calls with substantial saved state.
-The [runtime evaluation](../ideas/cbpv-runtime-evaluation.md) records bounded experiments,
+The [runtime evaluation](../evaluations/2026-09-08-cbpv-runtime/README.md) records bounded experiments,
 including root-enumeration timing and reserved-space accounting; it does not establish a universal winner.
 
 ## Literature pointers
@@ -187,7 +187,8 @@ Their results do not establish that the proposed Zydeco representation is correc
 
 ## Remaining decisions
 
-The [runtime study](../ideas/cbpv-runtime-evaluation.md) motivates these comparisons without choosing a new default:
+The [runtime study](../evaluations/2026-09-08-cbpv-runtime/README.md) motivates these comparisons
+without choosing a new default:
 
 - Remove provably local control transitions when known entry contexts establish
   that no suspension bookkeeping is needed.

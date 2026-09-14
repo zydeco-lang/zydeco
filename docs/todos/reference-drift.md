@@ -47,7 +47,7 @@ not a missing positivity guarantee to add to the reference.
   unresolved reproducers, and historical measurements before deleting them,
   following [the repository's record policy](../../AGENTS.md#documentation-structure-and-design-records).
   Preserve evidence with its original revision and limitations; re-run measurements used to choose a new default.
-  The dated [runtime study](../ideas/cbpv-runtime-evaluation.md) already has a separate evidence role.
+  The dated [runtime study](../evaluations/2026-09-08-cbpv-runtime/README.md) already has a separate evidence role.
   In particular, the September 7 follow-up's `ArgumentFold` root-table mechanism has been removed,
   and `HostString::leak` has been replaced by storage owned and released
   by a [runtime instance](../references/compiler.md#runtime-instances).

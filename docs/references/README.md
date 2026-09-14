@@ -12,7 +12,8 @@ and algorithms implementing them.
 The references own user-approved design that is fully implemented within its stated scope,
 including rationale and explicit limits.
 [Proposals](../proposals/README.md) contain concrete unfinished designs;
-[ideas](../ideas/README.md) contain exploratory questions and studies;
+[ideas](../ideas/README.md) contain exploratory questions;
+[evaluations](../evaluations/README.md) retain dated experimental reports and their evidence;
 [todos](../todos/README.md) record observed discrepancies.
 [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation) describes how to review and consolidate material.
 

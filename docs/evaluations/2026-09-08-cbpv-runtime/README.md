@@ -6,7 +6,7 @@ without changing CBPV's computation protocols.
 Static packing, growable storage, and deferred root discovery are established improvements.
 Retained frames remain the native default; deferred compact environments are a competitive experimental alternative.
 
-The [native frame proposal](../proposals/native-frames.md) owns the entry,
+The [native frame proposal](../../proposals/native-frames.md) owns the entry,
 preservation, reclamation, and collection contracts.
 This report owns their evaluation and the priorities for further exploration.
 All measurements below precede the arithmetic normalization in `77ee657f`; they establish historical costs
@@ -21,12 +21,13 @@ Those events need not each create an activation.
 A local entry can inherit available bindings, a return entry can recover suspended bindings,
 and an escaping closure needs captures with an adequate lifetime.
 The useful compilation boundary preserves these distinctions before choosing where the bindings live.
-The [entry-context contract](../references/compiler.md#activation-lifetime) establishes this for native frames;
+The [entry-context contract](../../references/compiler.md#activation-lifetime) establishes this for native frames;
 a general treatment of context-bearing joins remains further work.
 
-This is flexibility in the programming and compilation model. C can host an explicit machine or CPS translation,
-but its usual call ABI does not supply the required residual-stack and environment-lifetime rules automatically. The
-semantic starting point is [computation types as stack protocols](../../DESIGN.md#computation-types-as-stack-protocols).
+This is flexibility in the programming and compilation model.
+C can host an explicit machine or CPS translation, but its usual call ABI does not supply the required residual-stack
+and environment-lifetime rules automatically. The semantic starting point is
+[computation types as stack protocols](../../../DESIGN.md#computation-types-as-stack-protocols).
 
 ### Combine static layouts with dynamic storage
 
@@ -74,7 +75,7 @@ Precise root maps exclude dead referents, but do not reduce the frame payload co
 Managed frame allocation also competes with ordinary values for semispace capacity.
 
 A native implementation would need collecting-entry rules and base reloads after potentially collecting operations,
-as specified by the [managed-environment boundary](../proposals/native-frames.md#experimental-managed-environments).
+as specified by the [managed-environment boundary](../../proposals/native-frames.md#experimental-managed-environments).
 Copied captures alone do not provide detachable or reusable continuations; those need their own ownership semantics.
 Ordinary escaping closures still own captures independently of the current nested frame tokens.
 
@@ -86,7 +87,7 @@ This demonstrates that storage policy can vary behind a shared contract without 
 
 The useful boundaries are capability-specific: contiguous storage, nested environment transitions,
 and moving-frame roots have different guarantees.
-The [shared Rust model](../../DESIGN.md#shared-rust-runtime-model) owns executable representation rules;
+The [shared Rust model](../../../DESIGN.md#shared-rust-runtime-model) owns executable representation rules;
 compiler checks and integration tests still establish initialized bindings, preservation,
 root completeness, and agreement with emitted instructions.
 Source fingerprints check artifact pairing, not compiler correctness.
@@ -103,8 +104,8 @@ Rust-owned host strings and bytes have a separate reclamation problem.
 
 ## Further work
 
-Actionable design questions now live in [native frame decisions](../proposals/native-frames.md#remaining-decisions)
-and [Wasm decisions](../proposals/wasm-backends.md#open-questions).
+Actionable design questions now live in [native frame decisions](../../proposals/native-frames.md#remaining-decisions)
+and [Wasm decisions](../../proposals/wasm-backends.md#open-questions).
 They cover local transfers, shared captures, reclamation of words and metadata, relocation contracts,
 and long-running host-value and Wasm memory behavior.
 
@@ -122,7 +123,7 @@ to 6% faster than retained frames.
 Small process-wall-time differences do not establish a general throughput ranking.
 Runtime optimization and inlining materially affected the results;
 compiler `--release` alone does not optimize the linked runtime.
-See the [native build workflow](../../CONTRIBUTING.md#compile-programs).
+See the [native build workflow](../../../CONTRIBUTING.md#compile-programs).
 
 Persistent environment figures include word-buffer capacity, Rust owner state, and metadata-vector capacity.
 They exclude allocator overhead, the control stack, managed heap, host roots,
@@ -136,15 +137,14 @@ including pointer relocation and state preservation on rejected transitions.
 The full workspace suite was not run. The managed-frame results are executable collector traces;
 flattened and segmented alternatives have no native measurements in this study.
 
-The [evidence directory](runtime-study-2026-09-08/) retains samples, commands,
-source hashes, probes, pilots, and setup failures.
+The accompanying evidence files retain samples, commands, source hashes, probes, pilots, and setup failures.
 The principal records are:
 
 | Question | Records |
 | --- | --- |
-| Capture copying and root discovery | [Optimized comparison](runtime-study-2026-09-08/optimized.json), [repeated captures](runtime-study-2026-09-08/wide.json), [dev profile](runtime-study-2026-09-08/debug.json), [layout trace](runtime-study-2026-09-08/layouts.csv) |
-| Packing, growth, and moving frames | [Final comparison](runtime-study-2026-09-08/environment-inlined.json), [capacity checks](runtime-study-2026-09-08/environment-capacity.json), [collector/storage traces](runtime-study-2026-09-08/environment-layouts.csv), [manifest](runtime-study-2026-09-08/environment-manifest.json) |
-| Compact suspensions | [Eager comparison](runtime-study-2026-09-08/fragments-eager.json), [final deferred comparison](runtime-study-2026-09-08/fragments-final.json), [collector/storage traces](runtime-study-2026-09-08/fragments-final-layouts.csv), [C-boundary check](runtime-study-2026-09-08/fragments-ffi.json), [manifest](runtime-study-2026-09-08/fragments-final-manifest.json) |
+| Capture copying and root discovery | [Optimized comparison](optimized.json), [repeated captures](wide.json), [dev profile](debug.json), [layout trace](layouts.csv) |
+| Packing, growth, and moving frames | [Final comparison](environment-inlined.json), [capacity checks](environment-capacity.json), [collector/storage traces](environment-layouts.csv), [manifest](environment-manifest.json) |
+| Compact suspensions | [Eager comparison](fragments-eager.json), [final deferred comparison](fragments-final.json), [collector/storage traces](fragments-final-layouts.csv), [C-boundary check](fragments-ffi.json), [manifest](fragments-final-manifest.json) |
 
 Historical implementation anchors are `a3df0fb8` (heap captures), `062d5ce7` (retained frames),
 `88329154` (deferred roots), `77b9c14e` (packing and growth), `26bc3132` (eager compact captures),
@@ -152,9 +152,9 @@ and `a12d087a` (deferred compact captures).
 Recorded source hashes identify intermediate variants.
 Build historical compilers in separate source and target directories and use the model bundled by each compiler.
 
-[`runtime-study.py`](../../lang/tests/runtime-study.py) compares the original capture/root variants;
-[`environment-study.py`](../../lang/tests/environment-study.py) accepts explicit `--variant NAME COMPILER RUNTIME`
-pairs, with `--fragments` for compact comparisons.
+[`runtime-study.py`](../../../lang/tests/runtime-study.py) compares the original capture/root variants;
+[`environment-study.py`](../../../lang/tests/environment-study.py) accepts explicit
+`--variant NAME COMPILER RUNTIME` pairs, with `--fragments` for compact comparisons.
 Enable `compact-environments` in a separate runtime copy's default Cargo features for that variant.
 Both runners expose `--help` and record exact commands and output oracles.
 The executable layout checks are `frame_layouts` in `zydeco-machine`, and `environment_layouts`
@@ -175,7 +175,7 @@ and `environment_fragments` in `zydeco-tests`; run them with `cargo run -p PACKA
 - [Downen's Call-by-Unboxed-Value](https://pauldownen.com/publications/cbuv.pdf):
   a further direction for explicit value representations and calling conventions, beyond choosing environment storage.
 
-The [frame proposal's bibliography](../proposals/native-frames.md#literature-pointers) adds closure space safety,
+The [frame proposal's bibliography](../../proposals/native-frames.md#literature-pointers) adds closure space safety,
 join points, structured continuation use, and compiler/runtime coordination.
 The pinned [Fiddle](https://github.com/zydeco-lang/fiddle/tree/9a8941c224635ccfa1955c4ecaaf3de561e1fde2)
 and [Riddle](https://github.com/UMjoeypeng/riddle_compiler/tree/54f9d9221af412b850172916b5ffacd63f403128)

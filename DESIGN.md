@@ -984,7 +984,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 | `editor/cajun/` | Language server, included in the Rust workspace. |
 | `editor/tree-sitter-zydeco/` | Editor grammar and its conformance checks. |
 | `editor/vscode/`, `editor/zed/` | Client integrations with their own build workflows. |
-| `docs/` | Tutorials, executable literate chapters, proposals, and exploratory notes. |
+| `docs/` | References, tutorials, executable literate chapters, proposals, ideas, and dated evaluations; see the [documentation index](docs/README.md). |
 
 ## Current Limitations
 

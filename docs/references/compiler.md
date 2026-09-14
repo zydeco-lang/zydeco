@@ -1938,7 +1938,7 @@ while preserving the emitted terminator.
 These direct fixtures isolate folder execution from semantic validation and stack analysis.
 The guarantee covers lowering's control flow and flat continuation teardown; context cloning,
 retained assembly contexts, and the separate validators and analyzers still determine other costs.
-The [isolated lowering study](../ideas/assembly-lowering-evaluation.md) records historical timing
+The [isolated lowering study](../evaluations/2026-09-14-assembly-lowering/README.md) records historical timing
 and allocation measurements for the boxed implementation and both folder drivers.
 
 ### Product layout and local unboxing
@@ -3140,7 +3140,7 @@ Automated work reserves the full workspace suite for an explicit request.
 Performance evidence records the revision, workload, build profiles, host/target,
 measured quantity, and default or experimental representation.
 Allocation counts, reserved capacity, peak RSS, and elapsed time answer different questions.
-[Runtime evaluations](../ideas/cbpv-runtime-evaluation.md) retain historical comparisons;
+[Runtime evaluations](../evaluations/2026-09-08-cbpv-runtime/README.md) retain historical comparisons;
 repeat them before selecting a new default or claiming a current improvement.
 Reference examples and local links are checked separately from runtime tests,
 and documentation drift belongs in [the todo records](../todos/README.md).

@@ -543,7 +543,8 @@ Verify both accepted behavior and claimed rejection cases against the implementa
 and relevant regressions, including every backend named by the account.
 A tested model helper does not establish an integrated feature.
 Document actual limitations. Keep concrete unimplemented designs in [proposals](docs/proposals/README.md),
-and exploratory questions and studies in [ideas](docs/ideas/README.md).
+exploratory questions in [ideas](docs/ideas/README.md), and dated experimental reports
+with their reproduction artifacts in [evaluations](docs/evaluations/README.md).
 Observed behavior is evidence to reconcile with the approved design, not automatic authorization
 to change either the language or its reference.
 

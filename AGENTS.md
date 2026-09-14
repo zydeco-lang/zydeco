@@ -100,6 +100,7 @@ and expected output snapshots as needed.
   including language semantics, compiler architecture, and invariants.
 - `docs/proposals/`: concrete design documents for ongoing features not yet implemented.
 - `docs/ideas/`: higher-level academic discussions, research questions, and conceptual exploration.
+- `docs/evaluations/`: dated experimental reports and their reproducible evidence, with one directory per study.
 - `docs/todos/`: urgent codebase drift from the references.
   Link the governing rule, describe the discrepancy, and address it as soon as possible.
 

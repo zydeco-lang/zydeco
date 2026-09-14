@@ -1,6 +1,6 @@
 //! Storage accounting for nested continuations, using the production frame model.
 //! This is a synthetic trace, not an alternative backend or a timing benchmark.
-//! See docs/ideas/cbpv-runtime-evaluation.md for the accounting boundary.
+//! See docs/evaluations/2026-09-08-cbpv-runtime/README.md for the accounting boundary.
 
 use zydeco_machine::{
     frames::{Environment, FrameError, Frames, Layout, LayoutId},

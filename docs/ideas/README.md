@@ -1,11 +1,12 @@
-# Design ideas and studies
+# Design ideas
 
-These exploratory questions and evaluation directions do not extend the current language or implementation contract.
+These exploratory questions and research directions do not extend the current language or implementation contract.
 Each design idea has its own file, linked to its implemented starting point.
 This index only provides navigation. Develop an idea into a [proposal](../proposals/README.md)
 when it has a concrete design, alternatives, and validation criteria.
 Keep observed implementation discrepancies in [todos](../todos/README.md).
 The [references](../references/README.md) own approved, implemented contracts.
+Dated experimental reports and their evidence live in [evaluations](../evaluations/README.md).
 
 ## Design questions
 
@@ -34,14 +35,3 @@ The [references](../references/README.md) own approved, implemented contracts.
 | [Source generation from elaborated terms](typed-source-generation.md) | Which consumers need source reconstruction from typed terms? |
 | [Floating comment anchors](floating-comment-anchors.md) | How should future syntax anchor floating comments? |
 | [Source fixture directive extensions](fixture-directives.md) | Which additional outcomes and inputs belong in source fixture directives? |
-
-## Studies
-
-[CBPV runtime evaluation](cbpv-runtime-evaluation.md) preserves the 2026-09-08 experiments,
-their measurements, and their limits.
-Its linked JSON and CSV files are the original evidence; old results do not establish a current performance ranking.
-
-[Isolated assembly lowering evaluation](assembly-lowering-evaluation.md) records the 2026-09-14 comparison
-of boxed CPS lowering, typed pending jobs, and the shared folder's explicit and recursive drivers.
-It separates pass timing from allocation costs and whole-build observations.
-The follow-up records consumer-slot reuse, reduced administrative dispatch, and the rejected optimization experiments.

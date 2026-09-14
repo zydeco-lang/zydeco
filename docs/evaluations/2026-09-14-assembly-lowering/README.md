@@ -10,7 +10,7 @@ The [cost investigation](#cost-investigation-and-improvements) subsequently iden
 reusing completed consumer slots and avoiding redundant consumer dispatch.
 The initial comparison below remains historical evidence; `823f223a` includes both improvements.
 
-The [compiler reference](../references/compiler.md#cps-assembly-lowering) owns the implemented scheduling,
+The [compiler reference](../../references/compiler.md#cps-assembly-lowering) owns the implemented scheduling,
 ownership, and stack-safety contracts.
 This report owns the measurements and their interpretation.
 
@@ -158,8 +158,8 @@ Two costs stood out. Each consumer slot occupies 96 bytes, and consumed slots ac
 Portable `host-runtime.zy` saved 685 consumers, with at most 14 live simultaneously,
 but its vector reserved 1,024 slots, or 96 KiB.
 The other cost was dispatch: `Work` occupies 88 bytes, a return frame 128 bytes, and `Step` 224 bytes.
-The [generated dispatcher](assembly-study-2026-09-14/optimization/dispatcher.txt) copies the full `Step`
-record between loop iterations, including transfers whose useful payload is much smaller.
+The [generated dispatcher](optimization/dispatcher.txt) copies the full `Step` record between loop iterations,
+including transfers whose useful payload is much smaller.
 Some of those transfers only select a syntax rule that the consumer already knows.
 
 The implemented changes are small and remain local to assembly lowering:
@@ -168,7 +168,7 @@ The implemented changes are small and remain local to assembly lowering:
   On portable `host-runtime.zy`, reserved consumer storage falls from 96 to 6 KiB.
 - `823f223a` dispatches a consumer directly to its selected syntax rule.
   The rule still schedules its descendants through the driver, as specified
-  by the [CPS lowering boundary](../references/compiler.md#cps-assembly-lowering).
+  by the [CPS lowering boundary](../../references/compiler.md#cps-assembly-lowering).
   On the same fixture, calls to `enter` and `resume` fall from 2,390 to 1,860, a 22% reduction.
   Saved consumers, emitted nodes, publication order, and native-entry metadata remain equivalent.
 
@@ -210,20 +210,18 @@ both drivers, native frame plans, rejected patterns, and lowering and dropping 1
 A new regression checks constant retained consumer capacity across 32 and 16,384 sequential completed steps.
 Workspace Clippy and the generated comparison examples pass with warnings denied.
 
-The [optimization evidence](assembly-study-2026-09-14/optimization/manifest.json) records the selection process.
-It includes [before/after counters](assembly-study-2026-09-14/optimization/counters.json),
-[paired timing samples](assembly-study-2026-09-14/optimization/timings.csv),
-[allocation samples](assembly-study-2026-09-14/optimization/allocations.csv),
-[summary statistics](assembly-study-2026-09-14/optimization/summary.csv),
-[screening samples](assembly-study-2026-09-14/optimization/screenings.csv), and the candidate patches.
+The [optimization evidence](optimization/manifest.json) records the selection process.
+It includes [before/after counters](optimization/counters.json), [paired timing samples](optimization/timings.csv),
+[allocation samples](optimization/allocations.csv), [summary statistics](optimization/summary.csv),
+[screening samples](optimization/screenings.csv), and the candidate patches.
 The patches apply to `370195d8` with `git apply --unidiff-zero`.
-The [committed comparison manifest](assembly-study-2026-09-14/optimization/committed-manifest.json),
-[timings](assembly-study-2026-09-14/optimization/committed-timings.csv),
-and [allocations](assembly-study-2026-09-14/optimization/committed-allocations.csv) retain the final check.
+The [committed comparison manifest](optimization/committed-manifest.json),
+[timings](optimization/committed-timings.csv),
+and [allocations](optimization/committed-allocations.csv) retain the final check.
 
 ## Reproduction and evidence
 
-The [runner](../../lang/tests/assembly-lowering-study.py) creates an archived checkout at the pinned revision,
+The [runner](../../../lang/tests/assembly-lowering-study.py) creates an archived checkout at the pinned revision,
 injects the measurement boundary and historical lowerers, builds both profiles offline,
 and writes a manifest plus timing and allocation CSV files.
 The destination must be new. It needs Python with tar extraction filters, Rust, the pinned Git commits,
@@ -250,11 +248,10 @@ This adds a fifth variant, `baseline`, and uses 40 rotating batches per run.
 Shared IR definitions, analyses, and the generic driver come from the candidate,
 so this option compares compatible assembly-folder changes rather than arbitrary compiler or driver revisions.
 
-The [manifest](assembly-study-2026-09-14/manifest.json) records revisions, toolchain,
-source and harness hashes, commands, measurement boundaries, and output checks.
-The [timing samples](assembly-study-2026-09-14/timings.csv) retain every batch from both runs,
-including separate output-destruction durations.
-The [allocation samples](assembly-study-2026-09-14/allocations.csv) retain every counter observation.
+The [manifest](manifest.json) records revisions, toolchain, source and harness hashes,
+commands, measurement boundaries, and output checks.
+The [timing samples](timings.csv) retain every batch from both runs, including separate output-destruction durations.
+The [allocation samples](allocations.csv) retain every counter observation.
 `run` and `round` are zero-based; `native` selects frame-entry lowering; `output_counts` lists programs,
 variables, symbols, and frame entries in that order.
 `lower_ns` and `drop_ns` are batch totals and must be divided by `iterations` before comparing samples.

@@ -6,8 +6,8 @@ module ABI, representations, and embedding limits.
 This proposal retains default-target criteria, optional target features,
 reclamation choices, and historical selection evidence.
 The numerical prototype record below dates to 2026-08-30;
-[the 2026-09-08 runtime study](../ideas/cbpv-runtime-evaluation.md#webassembly-memory) supplies later
-bounded memory evidence.
+[the 2026-09-08 runtime study](../evaluations/2026-09-08-cbpv-runtime/README.md#webassembly-memory) supplies
+later bounded memory evidence.
 
 ## Prototype Comparison
 
@@ -105,5 +105,5 @@ Make that support decision explicit when introducing `wasm`.
 
 Prioritize a reproducible current baseline and long-running reclamation measurements.
 Account separately for live values, persistent/control storage, cached capacity, and host resources.
-The [runtime evidence](../ideas/cbpv-runtime-evaluation.md#evidence-and-limits) retains the commands,
+The [runtime evidence](../evaluations/2026-09-08-cbpv-runtime/README.md#evidence-and-limits) retains the commands,
 hashes, and limits needed to rerun the earlier experiments; it does not prescribe the answers here.
