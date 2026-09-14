@@ -641,6 +641,8 @@ A compilation unit is an independently selected source term with a complete exte
 Binary and test roles already establish that contract; a compiled library declares its own.
 There is no additional `unit` annotation or package argument.
 Names identify independently reusable artifacts, but naming alone supplies no machine entry point.
+The [compiler reference](compiler.md#compilation-unit-preparation-and-artifacts) explains how the designs
+of compilation units, FFI, and package management evolve together.
 
 A test is itself a package: `test(of(example/math))` optionally identifies its subjects,
 while plain `test` needs no subject.
@@ -837,7 +839,9 @@ distinct valid names remain distinct filenames.
 See the [package workflow](../../CONTRIBUTING.md#use-source-packages) for commands.
 
 Local checkouts and copied sources provide distribution without an additional hosted service.
-Remote fetching, locks, versions, compatibility checking, and programmable relationship handlers remain deferred.
+Remote fetching, source dependency lockfiles, package versions and source compatibility policies,
+and programmable relationship handlers remain deferred.
+Compiled artifacts already have [manifest compatibility checks](compiler.md#compilation-unit-preparation-and-artifacts).
 
 ## 13. Primitive values and capabilities
 
@@ -956,6 +960,9 @@ and larger signatures are outside this subset.
 
 ### Compiled libraries and C exports
 
+A [compiled library package](#source-packages) exposes selected functions through an FFI entry profile. Its evolution
+follows the
+[shared design of compilation units, FFI, and package management](compiler.md#compilation-unit-preparation-and-artifacts).
 A compiled library declares a named source implementation and its complete public C interface:
 
 ```zydeco check

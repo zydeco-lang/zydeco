@@ -4,7 +4,10 @@ Returning C imports and named scalar C export libraries are implemented.
 Their source obligations belong to [L14](../references/language.md#14-foreign-interfaces),
 and their validated call plan and target adapters to [C14](../references/compiler.md#foreign-calls).
 The [xxHash binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow.
-This record owns explicit memory-window transport and the next independently reviewable foreign boundaries.
+This record owns explicit memory-window transport and the next foreign boundaries.
+
+Review extensions here through the
+[shared design of compilation units, FFI, and package management](../references/compiler.md#compilation-unit-preparation-and-artifacts).
 
 ## Examples and observed gaps
 

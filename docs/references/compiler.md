@@ -459,6 +459,8 @@ Several roots can share one file, and merged source inputs and spans deduplicate
 Typed relationships remain separate; test planning combines direct forward
 and reverse associations in the prepared catalog.
 The [source-package section](language.md#source-packages) owns selection, discovery, and operation rules.
+Extensions to package resolution follow the
+[shared design of compilation units, FFI, and package management](#compilation-unit-preparation-and-artifacts).
 
 The CLI's [execution runner](../../cli/src/execution.rs) consumes checked `ExecutableProgram` snapshots,
 sharing their immutable arenas across targets and lowering once for compiled backends.
@@ -1309,6 +1311,23 @@ and experimental comparisons.
 
 ### Compilation-unit preparation and artifacts
 
+Independent emission fixes a contract between a producer and consumers that need not share its source.
+The designs of compilation units, [FFI](language.md#14-foreign-interfaces),
+and [package management](language.md#source-packages) are therefore coupled.
+For compiled libraries, FFI determines which representations, control transfers, and ownership may cross the boundary;
+unit selection checks that the chosen source implements a supported entry profile.
+Package management names and resolves providers.
+Selecting or distributing compiled providers also depends on their interfaces, target and profile compatibility,
+and dependency closure.
+
+Changes to any of these contracts must be reviewed against the other two,
+with affected rules and interfaces updated in the same design change.
+An FFI extension can change unit eligibility, import/export adaptation, runtime entry
+and teardown, generated interfaces, and artifact compatibility.
+Conversely, changes to unit boundaries or package resolution can require new foreign contracts.
+For example, retained callbacks would require a unit lifetime and reentry protocol and compatibility information
+for consumers of its distributed artifacts.
+
 [CompilationUnit](../../cli/src/compile.rs) pairs a selected source identity with a checked `CompilationBoundary`:
 a process program or a collection of C exports.
 The source roles and legality rules belong to [L14](language.md#compiled-libraries-and-c-exports).
@@ -1787,6 +1806,8 @@ static elaboration, interpreter linking, high lowering, and every consuming back
 For an optimization, identify its required input invariant and every representation or root map it changes.
 For a primitive, update the role catalog, checked signature, materializers, interpreter,
 native runtime/emitter, Wasm emitters/host, and conformance cases.
+For foreign interfaces or package resolution,
+follow the [shared compilation-unit design](#compilation-unit-preparation-and-artifacts).
 Prefer existing domain types and shared declarations at each common boundary.
 
 Diagnostic investigation starts from the saved source site and the earliest representation whose invariant fails.
