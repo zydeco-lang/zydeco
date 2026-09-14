@@ -111,6 +111,7 @@ impl StaticShape {
 enum Purpose {
     Inspect,
     Residualize,
+    SelectExports,
 }
 
 type TypeAssignments = Arc<[(AbstId, TypeId)]>;
@@ -143,6 +144,7 @@ struct ValueInfo {
 #[derive(Clone)]
 enum ValueForm {
     Runtime(ValueId),
+    Thunk { body: CompuId, env: Environment },
     Function { binder: ValBinder, body: ValueId, env: Environment },
     Product(Vec<StaticValue>),
     Constructor(CtorName, StaticValue),
@@ -169,7 +171,7 @@ impl StaticValue {
     fn is_runtime(&self) -> bool {
         match &self.0.form {
             | ValueForm::Function { .. } => false,
-            | ValueForm::Runtime(_) => true,
+            | ValueForm::Runtime(_) | ValueForm::Thunk { .. } => true,
             | ValueForm::Product(values) => values.iter().all(Self::is_runtime),
             | ValueForm::Constructor(_, value)
             | ValueForm::Package(ConsN(_, value))
@@ -221,13 +223,30 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
     pub(crate) fn run(
         tycker: &'a mut Tycker<'db>, root: TermAnnId,
     ) -> ResultKont<StaticElaboration> {
+        let purpose = if matches!(root, TermAnnId::Value(..)) {
+            Purpose::SelectExports
+        } else {
+            Purpose::Residualize
+        };
+        Self::run_with_purpose(tycker, root, purpose)
+    }
+
+    pub(crate) fn run_export(
+        tycker: &'a mut Tycker<'db>, root: TermAnnId,
+    ) -> ResultKont<StaticElaboration> {
+        Self::run_with_purpose(tycker, root, Purpose::SelectExports)
+    }
+
+    fn run_with_purpose(
+        tycker: &'a mut Tycker<'db>, root: TermAnnId, purpose: Purpose,
+    ) -> ResultKont<StaticElaboration> {
         let mut evaluator = Self {
             tycker,
             types: HashMap::new(),
             representations: HashMap::new(),
             reduction_depth: 0,
             remaining_reductions: Self::MAX_REDUCTIONS,
-            purpose: Purpose::Residualize,
+            purpose,
             aliases: HashSet::new(),
             application_site: None,
         };
@@ -243,7 +262,7 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
             | TermAnnId::Value(root, _) => {
                 let mut bindings = Vec::new();
                 let value = evaluator.value(root, &env, &mut bindings)?;
-                if value.is_runtime() {
+                if value.is_runtime() && evaluator.runtime_type(value.0.ty) {
                     let value = evaluator.reify(&value)?;
                     let residual = evaluator.value_bindings(bindings, value);
                     Some(TermAnnId::Value(

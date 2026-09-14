@@ -103,15 +103,15 @@ struct LookupWork {
 /// without clearing its whole index or visiting dead blocks. Lookups must stay
 /// within the current allocation cursor; entries beyond it may be stale.
 struct BlockStartIndex<const REGIONS: usize> {
-    regions: [RegionStarts; REGIONS],
+    regions: Box<[RegionStarts]>,
     #[cfg(test)]
     work: std::cell::Cell<LookupWork>,
 }
 
 impl<const REGIONS: usize> BlockStartIndex<REGIONS> {
-    const fn new() -> Self {
+    fn new() -> Self {
         Self {
-            regions: [RegionStarts::EMPTY; REGIONS],
+            regions: vec![RegionStarts::EMPTY; REGIONS].into_boxed_slice(),
             #[cfg(test)]
             work: std::cell::Cell::new(LookupWork { regions: 0, headers: 0 }),
         }
@@ -182,15 +182,15 @@ impl<const REGIONS: usize> BlockStartIndex<REGIONS> {
 
 /// One statically sized and word-aligned semispace.
 #[repr(align(8))]
-struct Space<const BYTES: usize>([u8; BYTES]);
+struct Space<const BYTES: usize>(Box<[Word]>);
 
 impl<const BYTES: usize> Space<BYTES> {
-    const fn new() -> Self {
-        Self([0; BYTES])
+    fn new() -> Self {
+        Self(vec![0; BYTES.div_ceil(WORD_BYTES)].into_boxed_slice())
     }
 
     fn base(&mut self) -> *mut u8 {
-        self.0.as_mut_ptr()
+        self.0.as_mut_ptr().cast()
     }
 }
 
@@ -239,7 +239,7 @@ pub(crate) struct CheneyHeap<const BYTES: usize, const REGIONS: usize> {
 }
 
 impl<const BYTES: usize, const REGIONS: usize> CheneyHeap<BYTES, REGIONS> {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         assert!(REGIONS == BYTES.div_ceil(INDEX_REGION_BYTES), "incorrect block index capacity");
         Self {
             spaces: [Space::new(), Space::new()],

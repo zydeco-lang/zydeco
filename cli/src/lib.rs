@@ -8,6 +8,7 @@ pub mod documentation;
 pub mod execution;
 pub mod format;
 pub mod native;
+pub mod library;
 pub use zydeco_assembly::representation::RepresentationStrategy;
 pub use zydeco_stackir::passes::{HighSpsInspection, HighSpsPass, HighSpsPlan, HighSpsPlanError};
 

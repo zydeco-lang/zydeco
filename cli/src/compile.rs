@@ -11,7 +11,7 @@ use zydeco_session::{
     ProgramAnalysis,
 };
 use zydeco_stackir::{
-    BranchJoinProgram, BuiltinRootLowerError, BuiltinRootLowerer, SpsLowPipeline, SpsLowProgram,
+    BranchJoinProgram, BuiltinRootLowerError, RootLowerer, SpsLowPipeline, SpsLowProgram,
     SpsLowerError,
     passes::{HighSpsFailure, HighSpsInspection, HighSpsObserver, HighSpsPlan},
 };
@@ -38,7 +38,50 @@ pub struct TestInteraction {
     pub code: i32,
 }
 
+/// A selected source identity together with the checked boundary needed to emit it.
+pub struct CompilationUnit {
+    pub source: zydeco_session::source::PackageId,
+    pub boundary: CompilationBoundary,
+}
+
+pub enum CompilationBoundary {
+    Process(ExecutableProgram),
+    CExports {
+        name: zydeco_surface::metadata::PackageName,
+        contract: zydeco_surface::metadata::LibraryContract,
+        program: zydeco_session::LibraryProgram,
+    },
+}
+
 impl CommandCompiler {
+    pub fn compilation_unit(
+        &self, package: &zydeco_session::source::Package, analysis: &ProgramAnalysis,
+        direct_script: bool,
+    ) -> Result<CompilationUnit, CompileError> {
+        use zydeco_surface::metadata::{LibraryRole, PackageRole};
+        let boundary = match &package.role {
+            | PackageRole::Library(LibraryRole::Compiled(contract)) => {
+                CompilationBoundary::CExports {
+                    name: package.name.clone().expect("compiled role requires a name"),
+                    contract: contract.clone(),
+                    program: self.library_program(analysis, contract)?,
+                }
+            }
+            | PackageRole::Library(LibraryRole::Source) if !direct_script => {
+                return Err(CompileError::SourceLibrary);
+            }
+            | _ => {
+                let program = self.executable_program(analysis)?;
+                zydeco_statics::BuiltinPackagePlan::for_executable(
+                    &program.statics,
+                    &program.signature,
+                )
+                .map_err(CompileError::BuiltinLower)?;
+                CompilationBoundary::Process(program)
+            }
+        };
+        Ok(CompilationUnit { source: package.id.clone(), boundary })
+    }
     pub fn with_packages(
         mut self, files: &[std::path::PathBuf],
     ) -> Result<Self, zydeco_session::source::SourceLoadError> {
@@ -164,6 +207,27 @@ impl CommandCompiler {
         self.session.executable_program(analysis).map_err(CompileError::Executable)
     }
 
+    pub fn library_program(
+        &self, analysis: &ProgramAnalysis, contract: &zydeco_surface::metadata::LibraryContract,
+    ) -> Result<zydeco_session::LibraryProgram, CompileError> {
+        self.session.library_program(analysis, contract).map_err(CompileError::Library)
+    }
+
+    pub fn lower_export(
+        &self, program: &zydeco_session::LibraryProgram, export: &zydeco_statics::CheckedExport,
+    ) -> Result<BackendProgram, CompileError> {
+        BackendProgram::lower_boundary(
+            program.spans.clone(),
+            program.scoped.clone(),
+            program.library.statics.clone(),
+            export.root,
+            export.builtin.clone(),
+            &self.sps_passes,
+            self.pass_inspection,
+        )
+        .map(|program| program.with_representation(self.representation))
+    }
+
     pub fn executable(&self, path: &Path) -> Result<ExecutableProgram, CompileError> {
         let analysis = self.analyze(path)?;
         self.executable_program(&analysis)
@@ -177,6 +241,16 @@ impl CommandCompiler {
 
     pub fn interpret_program(
         executable: ExecutableProgram, arguments: &[String], dry: bool,
+    ) -> Result<ProgKont, CompileError> {
+        Self::interpret_with_libraries(executable, arguments, dry, Default::default())
+    }
+
+    pub fn interpret_with_libraries(
+        executable: ExecutableProgram, arguments: &[String], dry: bool,
+        libraries: std::collections::BTreeMap<
+            zydeco_syntax::ForeignLibraryName,
+            std::path::PathBuf,
+        >,
     ) -> Result<ProgKont, CompileError> {
         if dry {
             return Ok(ProgKont::Dry);
@@ -192,7 +266,10 @@ impl CommandCompiler {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         let mut stderr = std::io::stderr();
-        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics).run() {
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics)
+            .with_foreign_libraries(libraries)
+            .run()
+        {
             | ProgKont::Error(error) => Err(CompileError::Runtime(error)),
             | result => Ok(result),
         }
@@ -230,6 +307,16 @@ impl CommandCompiler {
     pub fn test_io_program(
         executable: ExecutableProgram, arguments: &[String], input: &str,
     ) -> Result<TestInteraction, CompileError> {
+        Self::test_io_with_libraries(executable, arguments, input, Default::default())
+    }
+
+    pub fn test_io_with_libraries(
+        executable: ExecutableProgram, arguments: &[String], input: &str,
+        libraries: std::collections::BTreeMap<
+            zydeco_syntax::ForeignLibraryName,
+            std::path::PathBuf,
+        >,
+    ) -> Result<TestInteraction, CompileError> {
         let dynamics = BuiltinRootLinker {
             scoped: executable.scoped,
             statics: executable.statics,
@@ -241,7 +328,10 @@ impl CommandCompiler {
         let mut input = input.as_bytes();
         let mut output = Vec::new();
         let mut stderr = Vec::new();
-        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics).run() {
+        match Runtime::new(&mut input, &mut output, &mut stderr, arguments, dynamics)
+            .with_foreign_libraries(libraries)
+            .run()
+        {
             | ProgKont::ExitCode(code) => Ok(TestInteraction {
                 output: String::from_utf8_lossy(&output).into_owned(),
                 stderr: String::from_utf8_lossy(&stderr).into_owned(),
@@ -307,6 +397,7 @@ impl std::fmt::Debug for SpsLowerFailure {
 pub struct Amd64Artifact {
     pub assembly: String,
     pub foreign_libraries: Vec<zydeco_syntax::ForeignLibraryName>,
+    pub foreign_imports: Vec<zydeco_syntax::ForeignImport>,
 }
 
 enum BackendLowerError {
@@ -324,6 +415,16 @@ impl BackendProgram {
         executable: ExecutableProgram, plan: &HighSpsPlan, inspection: HighSpsInspection,
     ) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
+        let builtin = zydeco_statics::BuiltinPackagePlan::for_executable(&statics, &signature)
+            .map_err(CompileError::BuiltinLower)?;
+        Self::lower_boundary(spans, scoped, statics, root, Some(builtin), plan, inspection)
+    }
+
+    fn lower_boundary(
+        spans: Arc<SpanArena>, scoped: Arc<ScopedArena>, statics: Arc<StaticsArena>,
+        root: zydeco_statics::CompuId, builtin: Option<zydeco_statics::BuiltinPackagePlan>,
+        plan: &HighSpsPlan, inspection: HighSpsInspection,
+    ) -> Result<Self, CompileError> {
         let lower_sps = |program: BranchJoinProgram| {
             let mut pipeline = SpsLowPipeline { scoped: &scoped, statics: &statics };
             if inspection.enabled() {
@@ -345,8 +446,9 @@ impl BackendProgram {
             }
         };
         let lowered = pipeline![
-            BuiltinRootLowerer { spans: &spans, scoped: &scoped, statics: &statics, signature }
-                .map_err(BackendLowerError::Root),
+            |root| RootLowerer { spans: &spans, scoped: &scoped, statics: &statics }
+                .run_with_builtin(root, builtin.clone())
+                .map_err(|errors| BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))),
             lower_sps,
         ]
         .run(root);
@@ -431,6 +533,18 @@ impl BackendProgram {
     }
 
     pub fn emit_amd64(&self, operating_system: TargetOs) -> Amd64Artifact {
+        self.emit_native(operating_system, None)
+    }
+
+    pub fn emit_c_export(
+        &self, operating_system: TargetOs, entry: zydeco_amd64::emit::CExportEntry,
+    ) -> Amd64Artifact {
+        self.emit_native(operating_system, Some(entry))
+    }
+
+    fn emit_native(
+        &self, operating_system: TargetOs, entry: Option<zydeco_amd64::emit::CExportEntry>,
+    ) -> Amd64Artifact {
         let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics)
             .with_representation(self.representation)
             .with_native_frames()
@@ -440,10 +554,10 @@ impl BackendProgram {
             | TargetOs::Linux => zydeco_amd64::TargetFormat::Elf,
             | TargetOs::Macos => zydeco_amd64::TargetFormat::MachO,
         };
-        let assembly =
-            zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, &native, format)
-                .run()
-                .to_string();
+        let emitter =
+            zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, &native, format);
+        let emitter = if let Some(entry) = entry { emitter.with_c_export(entry) } else { emitter };
+        let assembly = emitter.run().to_string();
         let foreign_libraries = native
             .assembly()
             .arena()
@@ -458,7 +572,17 @@ impl BackendProgram {
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
             .collect();
-        Amd64Artifact { assembly, foreign_libraries }
+        let foreign_imports = native
+            .assembly()
+            .arena()
+            .externs
+            .iter()
+            .filter_map(|external| match external {
+                | zydeco_assembly::syntax::Extern::Foreign(import) => Some(import.clone()),
+                | zydeco_assembly::syntax::Extern::Host { .. } => None,
+            })
+            .collect();
+        Amd64Artifact { assembly, foreign_libraries, foreign_imports }
     }
 
     pub fn emit_wasm_am(&self) -> Result<Vec<u8>, CompileError> {
@@ -520,6 +644,12 @@ impl std::fmt::Display for AssemblyOutcome {
 
 #[derive(Debug, Error)]
 pub enum CompileError {
+    #[error(
+        "source libraries have no independent compilation boundary; declare binary, test, or library(c, export(...), ...)"
+    )]
+    SourceLibrary,
+    #[error(transparent)]
+    Library(zydeco_statics::LibraryCheckError),
     #[error("high-SPS pipeline: {0}")]
     HighSpsPass(#[source] HighSpsFailure),
     #[error(transparent)]

@@ -79,6 +79,7 @@ exe\t''
 wasm-am\t''
 wasm-sps\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s r -l runtime-dir -d 'Native runtime sources, used by exe' -r -F
+complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l dry -d 'Dry run (don\'t execute)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s h -l help -d 'Print help'
@@ -92,6 +93,7 @@ wasm-am\t''
 wasm-sps\t''
 all\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s r -l runtime-dir -d 'Native runtime sources, used by exe' -r -F
+complete -c zydeco -n "__fish_zydeco_using_subcommand test" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand repl" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
@@ -104,6 +106,9 @@ aarch64\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target backend' -r -f -a "zir\t''
 zasm\t''
 asm\t''
+object\t''
+staticlib\t''
+sharedlib\t''
 wasm-am\t''
 wasm-sps\t''
 exe\t''"
@@ -114,6 +119,7 @@ shared\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l sps-passes -d 'High-SPS passes: default, none, or a comma-separated list; order and duplicates are preserved' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l trace-passes -d 'Trace each selected high-SPS pass and its execution time on stderr'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l verify-passes -d 'Verify high-SPS invariants before and after each selected pass'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dump-passes -d 'Print high-SPS IR before and after each selected pass on stderr'

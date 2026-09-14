@@ -166,7 +166,8 @@ its standalone analyses still require explicit file imports.
 
 ## Compile Programs
 
-`zydeco build` first checks the same executable source boundary as `run`, then selects a lowering target:
+`zydeco build` checks the selected compilation boundary, then emits the requested artifact.
+Binary and test packages use the executable boundary; compiled libraries use their declared C exports:
 
 | Target | Result |
 | --- | --- |
@@ -175,6 +176,7 @@ its standalone analyses still require explicit file imports.
 | `asm` | Print AMD64 assembly to stdout. |
 | `exe` (default) | Assemble and link an AMD64 executable. |
 | `wasm-am`, `wasm-sps` | Write a WebAssembly module using the selected strategy. |
+| `object`, `staticlib`, `sharedlib` | Emit a declared C library, its interfaces, and its manifest. |
 
 For AMD64 on Linux or macOS, with the corresponding toolchain installed:
 
@@ -199,7 +201,8 @@ Changing the model requires rebuilding the compiler before generating new native
 The [shared model contract](DESIGN.md#shared-rust-runtime-model) explains how native entry symbols reject
 artifacts compiled against different model sources.
 
-The CLI currently invokes Cargo's dev profile for the runtime, independently of the compiler's own profile.
+Executable builds invoke Cargo's dev profile for the runtime, independently of the compiler's own profile.
+Compiled-library support uses release mode with PIC and aborting panics.
 For an optimized-runtime experiment, set `CARGO_PROFILE_DEV_OPT_LEVEL=3` explicitly
 and record the other profile settings; building the compiler with `--release` alone does not optimize the runtime.
 The supplied runtime manifest disables local ThinLTO in dev and release profiles
@@ -238,6 +241,85 @@ See the [WebAssembly ABI and limitations](DESIGN.md#webassembly-backend) before 
 ### Select Compiler Passes
 
 See [pass selection and inspection](docs/references/compiler.md#selecting-and-inspecting-passes).
+
+### Compile and Consume C Libraries
+
+The [compiled-library rules](docs/references/language.md#compiled-libraries-and-c-exports) define the source boundary.
+Build the [arithmetic example](lib/ffi/arithmetic.zy) from the repository root:
+
+```sh
+zydeco check lib/ffi/arithmetic.zy
+zydeco build lib/ffi/arithmetic.zy --target sharedlib --target-arch x86-64 --build-dir build --runtime-dir runtime
+```
+
+The command prints `build/example.arithmetic.sharedlib.library.json`.
+It also publishes `example.arithmetic.h`, `example.arithmetic.imports.zy`,
+and `libexample.arithmetic.so` on Linux or `libexample.arithmetic.dylib` on macOS.
+These are convenience links into an immutable bundle; retain the bundle and its dependencies when copying a build.
+The manifest selects a complete publication and records the target, interface, content hashes, and dependency closure.
+
+A C consumer includes the generated header and links the library:
+
+```c
+#include "example.arithmetic.h"
+#include <assert.h>
+int main(void) {
+    assert(example_add(19, 23) == 42);
+    return 0;
+}
+```
+
+On AMD64 Linux, save this as `consumer.c` and compile it with:
+
+```sh
+cc consumer.c -Ibuild -Lbuild -lexample.arithmetic -Wl,-rpath,"$PWD/build" -o consumer
+./consumer
+```
+
+On macOS use the same command with `cc -arch x86_64`.
+Each exported call uses fresh state, and runtime faults terminate the process;
+see the generated header and the source entry profile before embedding it.
+
+For a Zydeco consumer, save this complete term as `consumer.zy` in the repository root:
+
+```zydeco
+param (/Ret; /Int64; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
+let api = @(import("build/example.arithmetic.imports.zy")) in
+do sum <- ! api/add 19 23;
+! numeric/int64/eq OS sum 42 { ! process/exit 0 } { ! process/exit 1 }
+```
+
+Compile or run it with the manifest explicitly supplied:
+
+```sh
+zydeco build consumer.zy --target exe --target-arch x86-64 --build-dir client-build --link-library build/example.arithmetic.sharedlib.library.json
+zydeco run consumer.zy -t exe --link-library build/example.arithmetic.sharedlib.library.json
+```
+
+Repeat `--link-library` for multiple dependencies; `test` accepts the same option.
+The generated interface and artifacts suffice after removing the producer source.
+`run -t interpreter` also accepts these manifests when they describe shared libraries matching the interpreter host.
+An ARM interpreter cannot load an AMD64 artifact; use the AMD64 executable target there.
+Wasm and IR-only build targets do not consume compiled-library manifests.
+
+Use `--target object` or `--target staticlib` to emit raw unit code plus a matching runtime support archive.
+Pass the resulting `.object.library.json` or `.staticlib.library.json` to a native Zydeco consumer in the same way.
+For a C consumer, link the manifest's unit artifacts and dependencies followed
+by one matching support archive; Linux also requires `-ldl -lpthread -lm`.
+Multiple raw units must agree on their runtime/model identities.
+A shared library includes its raw dependencies and private support; clients do not relink that embedded code.
+The [compiler artifact contract](docs/references/compiler.md#compilation-unit-preparation-and-artifacts)
+details identity checks, dependency visibility, and publication.
+
+The focused native regression suite builds its own libraries and C consumers:
+
+```sh
+cargo test -p zydeco-cli --test library
+cargo test -p zydeco-cli --test library -- --ignored --test-threads=1
+```
+
+The second command requires NASM, `cc`, `ar`, the matching AMD64 Rust target,
+and support for executing AMD64 code on the test host.
 
 ### Representation Experiments
 

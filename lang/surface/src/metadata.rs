@@ -135,6 +135,55 @@ static METADATA_DEFINITIONS: LazyLock<Vec<MetadataDefinition>> = LazyLock::new(|
 pub struct MetadataCatalog;
 
 impl MetadataCatalog {
+    pub fn library_role() -> &'static MetadataDefinition {
+        static DEFINITION: LazyLock<MetadataDefinition> = LazyLock::new(|| {
+            MetadataDefinition::new(
+                "library",
+                "Declare an independently compiled library with explicit C exports.",
+                MetadataArguments::Library,
+            )
+        });
+        &DEFINITION
+    }
+
+    pub fn library_export() -> &'static MetadataDefinition {
+        static DEFINITION: LazyLock<MetadataDefinition> = LazyLock::new(|| {
+            MetadataDefinition::new(
+                "export",
+                "Select a thunk and give it a public C symbol.",
+                MetadataArguments::Export,
+            )
+        });
+        &DEFINITION
+    }
+
+    pub fn export_selectors() -> &'static [MetadataDefinition] {
+        static DEFINITIONS: LazyLock<Vec<MetadataDefinition>> = LazyLock::new(|| {
+            vec![
+                MetadataDefinition::new(
+                    "root",
+                    "Export the prepared root thunk.",
+                    MetadataArguments::None,
+                ),
+                MetadataDefinition::new(
+                    "field",
+                    "Select by ordinary slash-separated field projection.",
+                    MetadataArguments::Positional(vec![MetadataParameter::new(
+                        "path",
+                        MetadataValue::Identifier(vec![]),
+                    )]),
+                ),
+            ]
+        });
+        &DEFINITIONS
+    }
+
+    pub fn export_symbol() -> &'static MetadataDefinition {
+        static DEFINITION: LazyLock<MetadataDefinition> =
+            LazyLock::new(|| FfiComponent::Symbol.definition());
+        &DEFINITION
+    }
+
     pub fn test_role() -> &'static MetadataDefinition {
         static DEFINITION: LazyLock<MetadataDefinition> = LazyLock::new(|| {
             MetadataDefinition::new(
@@ -254,6 +303,15 @@ impl MetadataDefinition {
             | MetadataArguments::Package => PackageAnnotation::decode(arguments)
                 .map(|_| ())
                 .map_err(|(_, error)| MetadataValidationError::Package(error)),
+            | MetadataArguments::Library => LibraryContract::decode(arguments)
+                .map(|_| ())
+                .map_err(MetadataValidationError::Package),
+            | MetadataArguments::Export => LibraryContract::decode(&[
+                Meta::Ident("c".into()),
+                Meta::Apply { callee: "export".into(), args: arguments.to_vec() },
+            ])
+            .map(|_| ())
+            .map_err(MetadataValidationError::Package),
             | MetadataArguments::Options(options) => {
                 let mut seen = HashSet::new();
                 arguments.iter().try_for_each(|argument| {
@@ -315,6 +373,8 @@ pub enum MetadataArguments {
     Options(Vec<MetadataDefinition>),
     /// A role followed by open-ended, typed source relationships.
     Package,
+    Library,
+    Export,
     Discovery,
 }
 

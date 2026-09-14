@@ -92,9 +92,30 @@ macro_rules! resume_bridges {
 }
 
 resume_bridges! {
-    Zero => rust_resume_zydeco_0 [],
-    One => rust_resume_zydeco_1 [First],
-    Two => rust_resume_zydeco_2 [First, Second],
+    Zero => zydeco_resume_0 [],
+    One => zydeco_resume_1 [First],
+    Two => zydeco_resume_2 [First, Second],
+}
+
+// Runtime support owns these bridges once per link image. Unit objects only contain their
+// source code and C adapters, so linking two units never duplicates global helper definitions.
+#[cfg(all(feature = "runtime", target_arch = "x86_64"))]
+mod bridges {
+    #[unsafe(naked)]
+    #[unsafe(export_name = "\x01zydeco_resume_0")]
+    unsafe extern "sysv64" fn zero() {
+        core::arch::naked_asm!("mov rax, [rdi + {closure}]", "mov rsi, [rax + {environment}]", "mov rax, [rax + {code}]", "push rsi", "jmp rax", closure = const super::TransferField::Closure.offset(), environment = const super::ClosureField::Environment.offset(), code = const super::ClosureField::Code.offset());
+    }
+    #[unsafe(naked)]
+    #[unsafe(export_name = "\x01zydeco_resume_1")]
+    unsafe extern "sysv64" fn one() {
+        core::arch::naked_asm!("mov rax, [rdi + {closure}]", "mov rsi, [rax + {environment}]", "mov rax, [rax + {code}]", "push qword ptr [rdi + {first}]", "push rsi", "jmp rax", first = const super::TransferField::First.offset(), closure = const super::TransferField::Closure.offset(), environment = const super::ClosureField::Environment.offset(), code = const super::ClosureField::Code.offset());
+    }
+    #[unsafe(naked)]
+    #[unsafe(export_name = "\x01zydeco_resume_2")]
+    unsafe extern "sysv64" fn two() {
+        core::arch::naked_asm!("mov rax, [rdi + {closure}]", "mov rsi, [rax + {environment}]", "mov rax, [rax + {code}]", "push qword ptr [rdi + {second}]", "push qword ptr [rdi + {first}]", "push rsi", "jmp rax", second = const super::TransferField::Second.offset(), first = const super::TransferField::First.offset(), closure = const super::TransferField::Closure.offset(), environment = const super::ClosureField::Environment.offset(), code = const super::ClosureField::Code.offset());
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

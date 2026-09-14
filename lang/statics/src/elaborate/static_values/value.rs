@@ -85,8 +85,14 @@ impl StaticElaborator<'_, '_> {
                 if self.purpose == Purpose::Inspect {
                     return Ok(StaticValue::with_form(source, ty, ValueForm::Runtime(source)));
                 }
-                let body = self.computation(body, env)?;
-                ValueForm::Runtime(self.alloc_value(source, Value::Thunk(Thunk(body)), ty))
+                // Export selection can discard an entire thunk. Residualize its body only
+                // when this closure is actually needed by the runtime boundary.
+                if self.purpose == Purpose::SelectExports {
+                    ValueForm::Thunk { body, env: env.clone() }
+                } else {
+                    let body = self.computation(body, env)?;
+                    ValueForm::Runtime(self.alloc_value(source, Value::Thunk(Thunk(body)), ty))
+                }
             }
             | Value::VCons(fields) => ValueForm::Product(
                 fields

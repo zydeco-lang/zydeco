@@ -49,13 +49,20 @@ impl ModelSources {
         fs::write(output.join("bundle.rs"), bundle).expect("write model source bundle");
 
         let entry = format!("zydeco_entry_frames_{fingerprint:032x}");
-        let contract = format!(
+        let export_entry = format!("{entry}_library");
+        let mut contract = format!(
             "pub const ENTRY_SYMBOL: &str = {entry:?};\n\
              #[cfg(feature = \"runtime\")]\nunsafe extern \"sysv64\" {{\n\
              #[link_name = {:?}]\n\
              pub fn entry() -> Word;\n}}\n",
             format!("\x01{entry}"),
         );
+        contract.push_str(&format!(
+            "pub const EXPORT_ENTRY_SYMBOL: &str = {export_entry:?};\n\
+             #[macro_export]\nmacro_rules! export_native_entry {{ ($item:item) => {{\n\
+             #[unsafe(export_name = {:?})] $item\n}}; }}\n",
+            format!("\x01{export_entry}"),
+        ));
         fs::write(output.join("contract.rs"), contract).expect("write model contract identity");
     }
 }

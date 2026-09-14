@@ -48,3 +48,8 @@ It is a design draft; the current compiler does not implement these rules.
 resolution, and typed rebuilding onto shared structural operations.
 The compiler reference defines the implemented [scoped visitor](references/compiler.md#scoped-structural-traversal)
 and [surface folder](references/compiler.md#surface-structural-rebuilding).
+
+[Compiled libraries and C exports](references/language.md#compiled-libraries-and-c-exports)
+define independently emitted library boundaries. The compiler reference owns their
+[preparation, linking, and publication](references/compiler.md#compilation-unit-preparation-and-artifacts);
+[CONTRIBUTING](../CONTRIBUTING.md#compile-and-consume-c-libraries) gives complete producer and consumer commands.

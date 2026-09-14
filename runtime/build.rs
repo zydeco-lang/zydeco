@@ -5,7 +5,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=ZYDECO_LIB_DIR");
     println!("cargo:rerun-if-env-changed=ZYDECO_DYNAMIC_LIBS");
 
-    let lib = env::var("ZYDECO_STATIC_LIB").unwrap_or_else(|_| "zyprog".to_string());
+    let Ok(lib) = env::var("ZYDECO_STATIC_LIB") else { return };
 
     if let Ok(dir) = env::var("ZYDECO_LIB_DIR") {
         println!("cargo:rustc-link-search=native={dir}");

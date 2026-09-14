@@ -1,6 +1,6 @@
 # Foreign interfaces: concrete boundaries and next extensions
 
-Returning C imports are implemented.
+Returning C imports and named scalar C export libraries are implemented.
 Their source obligations belong to [L14](../references/language.md#14-foreign-interfaces),
 and their validated call plan and target adapters to [C14](../references/compiler.md#foreign-calls).
 The [xxHash binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow.
@@ -228,11 +228,11 @@ A reusable thunk around a buffer does not itself establish a lexical or affine l
 
 ## Following boundary
 
-A C caller entering Zydeco must establish a runtime and a CBPV return continuation.
-An export returning an ordinary C scalar could initialize that context and resume the caller after `Ret`,
-but the entry's allocation roots, failure behavior, and repeated-call lifetime must be specified first.
-An `OS` export instead needs a root-stack protocol and an explicit answer about process termination.
-Neither follows merely from reversing the current import marshalling.
+The first scalar export boundary is implemented in [L14](../references/language.md#compiled-libraries-and-c-exports),
+with [artifact preparation](../references/compiler.md#compilation-unit-preparation-and-artifacts)
+and [instance ownership](../references/compiler.md#runtime-instances) defined in the compiler reference.
+The next profiles may admit recoverable status returns, retained instances, and incoming ownership-bearing handles.
+An `OS` export additionally needs an explicit process-termination contract.
 
 ### Zydeco's own host interface
 
@@ -248,12 +248,10 @@ over a checked indexed host operation.
 The host now supplies data and resumes supplied continuations without owning a lazy tail.
 This removes bespoke closure lifetime machinery while retaining the unrestricted computation interface.
 
-External entry remains deferred. The current native executable initializes process-global heap,
-frame, and transfer state and enters a root computation that ends through `OS`.
-An embeddable interface needs an explicit runtime instance, a return delimiter, root ownership for retained values,
-and entry/reentry rules before it can expose arbitrary Zydeco computations.
-A computation classifier describes the expected stack protocol; it does not itself provide a foreign runtime instance
-or a releasable handle to captured values.
+Fresh scalar entry now has instance ownership and a return delimiter.
+Arbitrary computation and retained-value interfaces remain deferred:
+a computation classifier describes its stack protocol but does not provide a releasable foreign handle
+to captured values.
 
 The stored-call example already solves sharing an abstract carrier inside one compiled program.
 Extending that example across independently loaded artifacts should begin with an explicit runtime instance
@@ -285,7 +283,8 @@ Each actual callback invocation gets a fresh runtime return context; repeated in
 Before allowing a nested returning C import from the callback, preserve
 and restore the suspended outer transfer state and its roots explicitly.
 The specimen checks repeated invocation and independent captured contexts on the C side;
-Zydeco runtime reentry remains unimplemented.
+Callbacks into an active Zydeco instance remain unimplemented; fresh entry
+into an independent compiled unit is covered by the scalar export profile.
 Retained callbacks, callback release, other threads, and unwinding are subsequent boundaries.
 
 ## Additional ABI shapes
@@ -305,7 +304,7 @@ The remaining shapes are deferred with distinct prerequisites:
 | Aggregates by value | Derive target ABI classes from an explicit storage contract, including register splitting, memory arguments, and hidden result pointers. |
 | Foreign-owned read-only pointers | Establish a trusted owner, extent, permissions, and release contract before creating a grant. Owned readable windows already cross C. |
 | Mutable or retained pointers | Implement the per-call buffer borrow above; retained pointers additionally need an ownership and release protocol. |
-| Callbacks and exports | Establish runtime entry, retained roots, completion, and reentry as described above. |
+| Callbacks and retained exports | Extend fresh scalar entry with retained roots, ownership/release, and a callback reentry protocol. |
 
 The [storage access extension](bytes.md#access-through-existing-representation-contracts) already constructs
 an aligned C record in a caller-provided buffer and passes the frozen result through the existing immutable borrow.

@@ -84,7 +84,7 @@ fn xxhash_binding_reaches_the_native_c_call_boundary() {
 
     assert!(backend.render_sps_low().contains("<extern:XXH64/3>"));
     assert!(backend.render_sps_low().contains("<extern:XXH3_64bits/2>"));
-    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries } =
+    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries, .. } =
         backend.emit_amd64(TargetOs::Linux);
     assert!(assembly.contains("extern XXH64"));
     assert!(assembly.contains("call XXH64"));
@@ -156,7 +156,7 @@ fn rejects_unsupported_classifier_components_with_specific_diagnostics() {
 #[test]
 fn boundary_fixture_lowers_without_xxhash_specific_shapes() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("boundary.zy")).unwrap();
-    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries } =
+    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries, .. } =
         backend.emit_amd64(TargetOs::Linux);
     for name in ["zero", "echo", "bytes", "mixed", "three_bytes", "six"] {
         assert!(assembly.contains(&format!("call zyffi_{name}")));

@@ -209,6 +209,8 @@ impl std::fmt::Display for BuiltinTypeRole {
 
 /// The concrete representation selected for an integer literal or operation.
 #[derive(
+    serde::Serialize,
+    serde::Deserialize,
     Copy,
     Clone,
     Debug,
@@ -221,6 +223,7 @@ impl std::fmt::Display for BuiltinTypeRole {
     strum::VariantArray,
 )]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum IntegerType {
     Int8,
     Int16,
@@ -787,6 +790,8 @@ impl std::fmt::Display for BuiltinRole {
 
 /// Calling convention used by one foreign import.
 #[derive(
+    serde::Serialize,
+    serde::Deserialize,
     Copy,
     Clone,
     Debug,
@@ -800,6 +805,7 @@ impl std::fmt::Display for BuiltinRole {
     strum::VariantArray,
 )]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ForeignAbi {
     C,
 }
@@ -821,7 +827,10 @@ impl std::fmt::Display for ForeignAbi {
 }
 
 /// A platform linker name, as used by `-l<name>`.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord,
+)]
+#[serde(try_from = "String")]
 pub struct ForeignLibraryName(String);
 
 impl ForeignLibraryName {
@@ -848,7 +857,10 @@ impl std::fmt::Display for ForeignLibraryName {
 }
 
 /// An unmangled C external symbol.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord,
+)]
+#[serde(try_from = "String")]
 pub struct ForeignSymbolName(String);
 
 impl ForeignSymbolName {
@@ -872,8 +884,32 @@ impl std::fmt::Display for ForeignSymbolName {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum ForeignNameError {
+    #[error("invalid foreign library name")]
+    Library,
+    #[error("invalid C symbol name")]
+    Symbol,
+}
+
+impl TryFrom<String> for ForeignLibraryName {
+    type Error = ForeignNameError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(value).ok_or(ForeignNameError::Library)
+    }
+}
+
+impl TryFrom<String> for ForeignSymbolName {
+    type Error = ForeignNameError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(value).ok_or(ForeignNameError::Symbol)
+    }
+}
+
 /// Link-time identity of a foreign function, before its Zydeco classifier is interpreted.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ForeignTarget {
     pub abi: ForeignAbi,
     pub library: ForeignLibraryName,
@@ -881,7 +917,7 @@ pub struct ForeignTarget {
 }
 
 /// One source-level parameter whose C representation is known to the compiler.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ForeignParameter {
     /// Borrow a checked `Access * Addr * Int64` window as one `const void *`.
     BorrowedMemory,
@@ -912,7 +948,7 @@ pub struct ForeignArgument {
 }
 
 /// One source-level foreign result whose C representation is known to the compiler.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ForeignResult {
     Integer(IntegerType),
     /// C `void` resumes the Zydeco continuation with the unit value.
@@ -920,10 +956,26 @@ pub enum ForeignResult {
 }
 
 /// The marshalling protocol derived from a checked CBPV classifier.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
+#[serde(try_from = "ForeignSignatureData")]
 pub struct ForeignSignature {
     parameters: Vec<ForeignParameter>,
     result: ForeignResult,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ForeignSignatureData {
+    parameters: Vec<ForeignParameter>,
+    result: ForeignResult,
+}
+
+impl TryFrom<ForeignSignatureData> for ForeignSignature {
+    type Error = ForeignSignatureError;
+
+    fn try_from(data: ForeignSignatureData) -> Result<Self, Self::Error> {
+        Self::new(data.parameters, data.result)
+    }
 }
 
 impl ForeignSignature {
@@ -970,7 +1022,7 @@ pub enum ForeignSignatureError {
 }
 
 /// A validated foreign target paired with its source-to-C marshalling protocol.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ForeignImport {
     pub target: ForeignTarget,
     pub signature: ForeignSignature,

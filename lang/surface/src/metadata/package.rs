@@ -1,36 +1,129 @@
 use std::{collections::BTreeMap, fmt, path::PathBuf, str::FromStr};
 use thiserror::Error;
-use zydeco_syntax::Meta;
+use zydeco_syntax::{ForeignAbi, ForeignSymbolName, Meta};
 
 /// How an annotated package term is intended to be used.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    strum::EnumString,
-    strum::Display,
-    strum::VariantArray,
-    strum::IntoStaticStr,
-)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PackageRole {
-    Library,
+    Library(LibraryRole),
     Binary,
     Test,
 }
 
 impl PackageRole {
     pub fn all() -> impl Iterator<Item = Self> {
-        <Self as strum::VariantArray>::VARIANTS.iter().copied()
+        [Self::Library(LibraryRole::Source), Self::Binary, Self::Test].into_iter()
     }
 
-    pub fn name(self) -> &'static str {
-        self.into()
+    pub fn name(&self) -> &'static str {
+        match self {
+            | Self::Library(_) => "library",
+            | Self::Binary => "binary",
+            | Self::Test => "test",
+        }
+    }
+}
+
+impl FromStr for PackageRole {
+    type Err = PackageAnnotationError;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        Self::all().find(|role| role.name() == name).ok_or(PackageAnnotationError::Role)
+    }
+}
+
+impl fmt::Display for PackageRole {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            | Self::Library(LibraryRole::Compiled(contract)) => {
+                write!(formatter, "library({})", contract.abi)
+            }
+            | _ => formatter.write_str(self.name()),
+        }
+    }
+}
+
+/// Source libraries retain their static interface; compiled libraries declare a C boundary.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LibraryRole {
+    Source,
+    Compiled(LibraryContract),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LibraryContract {
+    pub abi: ForeignAbi,
+    pub exports: Vec<LibraryExport>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LibraryExport {
+    pub selector: ExportSelector,
+    pub symbol: ForeignSymbolName,
+}
+
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportSelector {
+    Root,
+    Field(PackageName),
+}
+
+impl LibraryContract {
+    pub(super) fn decode(args: &[Meta]) -> Result<Self, PackageAnnotationError> {
+        use PackageAnnotationError as Error;
+        let Some(Meta::Ident(abi)) = args.first() else { return Err(Error::LibraryAbi) };
+        let abi = ForeignAbi::from_source_name(abi).ok_or(Error::LibraryAbi)?;
+        if args.len() < 2 {
+            return Err(Error::LibraryExports);
+        }
+        let exports = args[1..]
+            .iter()
+            .map(|argument| {
+                let Meta::Apply { callee, args } = argument else {
+                    return Err(Error::LibraryExport);
+                };
+                if callee != "export" {
+                    return Err(Error::LibraryExport);
+                }
+                let [selector, Meta::Apply { callee, args }] = args.as_slice() else {
+                    return Err(Error::LibraryExport);
+                };
+                if callee != "symbol" {
+                    return Err(Error::LibraryExport);
+                }
+                let [Meta::String(symbol)] = args.as_slice() else {
+                    return Err(Error::LibraryExport);
+                };
+                let symbol = ForeignSymbolName::parse(symbol.clone())
+                    .filter(|symbol| !symbol.as_str().starts_with("zydeco_"))
+                    .ok_or(Error::LibrarySymbol)?;
+                let selector = match selector {
+                    | Meta::Ident(name) if name == "root" => ExportSelector::Root,
+                    | Meta::Apply { callee, args } if callee == "field" => {
+                        let [Meta::Ident(field)] = args.as_slice() else {
+                            return Err(Error::LibraryExport);
+                        };
+                        ExportSelector::Field(field.parse().map_err(Error::Name)?)
+                    }
+                    | _ => return Err(Error::LibraryExport),
+                };
+                Ok(LibraryExport { selector, symbol })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let mut selectors = std::collections::BTreeSet::new();
+        let mut symbols = std::collections::BTreeSet::new();
+        for export in &exports {
+            if !selectors.insert(&export.selector) || !symbols.insert(&export.symbol) {
+                return Err(Error::DuplicateExport);
+            }
+        }
+        if exports.len() != 1 && selectors.contains(&ExportSelector::Root) {
+            return Err(Error::MixedRootExport);
+        }
+        Ok(Self { abi, exports })
     }
 }
 
@@ -212,6 +305,10 @@ impl PackageAnnotation {
                 };
                 (PackageRole::Test, subjects)
             }
+            | Some(Meta::Apply { callee, args }) if callee == "library" => {
+                let contract = LibraryContract::decode(args).map_err(|error| (vec![0], error))?;
+                (PackageRole::Library(LibraryRole::Compiled(contract)), &[][..])
+            }
             | _ => return Err((if arguments.is_empty() { vec![] } else { vec![0] }, Error::Role)),
         };
         let mut name = None;
@@ -255,12 +352,31 @@ impl PackageAnnotation {
             };
             add(kind, reference, path)?;
         }
+        if matches!(role, PackageRole::Library(LibraryRole::Compiled(_))) && name.is_none() {
+            return Err((vec![0], Error::LibraryName));
+        }
         Ok(Self { role, name, relations })
     }
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum PackageAnnotationError {
+    #[error("compiled library requires the C ABI: library(c, export(...), ...)")]
+    LibraryAbi,
+    #[error("compiled library requires at least one explicit export")]
+    LibraryExports,
+    #[error(
+        "export expects export(field(path), symbol(\"name\")) or export(root, symbol(\"name\"))"
+    )]
+    LibraryExport,
+    #[error("export symbol must be a C identifier outside the reserved zydeco_ namespace")]
+    LibrarySymbol,
+    #[error("duplicate compiled-library export selector or symbol")]
+    DuplicateExport,
+    #[error("root export cannot be combined with field exports")]
+    MixedRootExport,
+    #[error("compiled library requires an explicit package name")]
+    LibraryName,
     #[error("package expects library, binary, or test as its first argument")]
     Role,
     #[error("name expects one unquoted package identifier")]

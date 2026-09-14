@@ -602,7 +602,7 @@ Classifier queries couple a signature to the inspected implementation; use an ex
 when its contract should remain stable across implementation changes.
 
 `check` accepts kinds, types, values, and computations.
-`run` and `build` require a computation accepting the host Builtin package and ending in its `OS` protocol:
+`run` and executable builds require a computation accepting the host Builtin package and ending in its `OS` protocol:
 
 ```zydeco check
 param (/stdio; /process) : @(import("../../lib/std/builtin.zy")) in
@@ -628,11 +628,25 @@ A file is already an unnamed library package; a root meta annotation can give it
 (#answer = 42)
 ```
 
-The first argument is `library`, `binary`, or `test`.
+The first argument chooses a role:
+
+| Role | Independently emitted boundary |
+| --- | --- |
+| `library` | Source interface only; its implementation is incorporated into consumers. |
+| `library(c, export(...), ...)` | Explicit [C exports](#compiled-libraries-and-c-exports). |
+| `binary` | Executable Builtin/OS boundary. |
+| `test` or `test(of(...))` | The same executable boundary, with test associations. |
+
+A compilation unit is an independently selected source term with a complete external entry contract.
+Binary and test roles already establish that contract; a compiled library declares its own.
+There is no additional `unit` annotation or package argument.
+Names identify independently reusable artifacts, but naming alone supplies no machine entry point.
+
 A test is itself a package: `test(of(example/math))` optionally identifies its subjects,
 while plain `test` needs no subject.
 Subsequent arguments are an optional `name(id)` and typed relationships, such as `test(example/smoke)`.
-Libraries may expose any source classifier; `check` also validates the executable Builtin/OS contract
+Source libraries may expose any source classifier.
+`check` additionally validates C exports for compiled libraries and the executable Builtin/OS contract
 for binaries and tests.
 
 #### Names and project catalogs
@@ -812,9 +826,12 @@ Tests use empty stdin and arguments.
 and relationships without checking code or loading relationship targets.
 A file without declarations appears as one library.
 `check SOURCE` checks the selected package and its code dependencies, without following test associations;
-binary and test roles also require the executable Builtin/OS contract, for names and file paths alike.
+compiled libraries, binaries, and tests also require their declared boundary, for names and file paths alike.
 `show`, `check`, `test`, `run`, `build`, `doc`, and `repl` use the same automatically prepared project catalog.
-Named `run` and `build` targets require the binary role.
+Named `run` targets require the binary role.
+`build` accepts binaries, tests, and compiled libraries, with a target appropriate to their boundary.
+Direct file execution retains the executable-script convention;
+a named source library alone is not an independent build target.
 Named build artifacts replace namespace separators with dots, so `tools/hello` produces `tools.hello.sps.wasm`;
 distinct valid names remain distinct filenames.
 See the [package workflow](../../CONTRIBUTING.md#use-source-packages) for commands.
@@ -924,16 +941,92 @@ The binding validates any stronger alignment, element format, and relationship b
 a mismatched C length is still an incorrect trusted declaration or adapter.
 The callee must neither modify nor retain the pointer, and must not dereference it for a zero-length window.
 The declaration author is responsible for the actual symbol's signature and these borrowing obligations.
-A returning call must use the C return protocol; unwinding, nonlocal jumps, and reentry into Zydeco are unsupported.
+A returning call must use the C return protocol; unwinding and nonlocal jumps across this boundary are unsupported.
+An import may call another compiled Zydeco library under its [entry discipline](#compiled-libraries-and-c-exports);
+callbacks into an active instance remain unsupported.
 `Ret` does not imply purity or termination.
 
 Checking validates the declared classifier without loading a library or inspecting headers.
 The Unix interpreter loads symbols lazily; native AMD64 links the named library.
 Missing libraries or symbols fail at loading/linking.
 Wasm and the ZASM interpreter reject native imports.
-Callbacks, C-to-Zydeco exports, floating-point or aggregate values, ungranted or mutable pointers,
+Callbacks, floating-point or aggregate values, ungranted or mutable pointers,
 and larger signatures are outside this subset.
 [Concrete boundary examples](../proposals/c-ffi.md#examples-and-observed-gaps) motivate proposed extensions.
+
+### Compiled libraries and C exports
+
+A compiled library declares a named source implementation and its complete public C interface:
+
+```zydeco check
+@[package(
+  library(c,
+    export(field(add), symbol("example_add")),
+    export(field(identity), symbol("example_identity"))),
+  name(example/arithmetic))]
+param val (/Thk; /Ret; /Int64; /numeric) : @(import("../../lib/std/builtin.zy")) in
+(
+  #add = ({ fn x y => ! numeric/int64/add x y } : Thk (Int64 -> Int64 -> Ret Int64)),
+  #identity = ({ fn x => ret x } : Thk (Int64 -> Ret Int64))
+)
+```
+
+`library(c, ...)` marks source intended to produce a compiled C library.
+It requires an explicit package name and at least one `export(selector, symbol("c_name"))`.
+`root` selects the prepared value itself; `field(api/add)` follows ordinary named projections through that value.
+Selectors and symbols must be distinct, and a root export cannot coexist with field exports.
+Each symbol is an unmangled ASCII C identifier; the `zydeco_` prefix is reserved for runtime support.
+Only the selected symbols are public.
+Export a constant through a zero-argument returning thunk; global data exports have no contract in this profile.
+
+Independent selection checks the whole source term under an empty lexical context, including its code imports.
+A declaration cannot capture a binding outside its selected term.
+Preparation accepts a closed value or exactly one leading `param val` over a validated Builtin value contract.
+Aliases and source imports may supply that factory; preparation uses ordinary static application.
+Builtin validation examines its typed roles, independently of the process-only `OS` codomain requirement.
+The provider's runtime values are created at each external entry.
+Supply other static arguments in source before the boundary; an unapplied generic factory is not an export.
+
+Field selection and static specialization precede runtime readiness.
+Unselected static helpers may remain without runtime representations, while each selected thunk,
+its captures, and its reachable body must be complete and representable.
+Missing or ambiguous projections, escaping static values, and reachable executable holes reject the unit.
+Preparing the interface never executes the exported computation.
+
+The export classifier is `Thk (I1 -> ... -> In -> Ret R)`, with zero through six fixed-width integer parameters
+and a fixed-width integer or `Unit` result.
+It shares the import signature's widths and scalar conversions, but reverses the transport direction.
+An incoming pointer cannot establish an `Access` grant, owner, permission, or extent;
+therefore the outgoing readable-window adapter cannot serve as an export parameter.
+Abstract source values, closures, floating-point and aggregate values, `OS` results,
+and extra arguments are rejected at this boundary.
+
+Every call creates a fresh runtime instance and supplies a C return delimiter for `Ret R`.
+Normal return converts the result while the instance is alive, releases its resources, and resumes the C caller.
+Arguments exposed through Builtin are empty.
+Standard streams borrow the process streams; newly opened resources belong to the call.
+There is no cross-call source state or exported runtime handle.
+Runtime faults terminate the process with a diagnostic; this profile neither unwinds
+through C nor fabricates a return value.
+A nonterminating body need not return.
+
+One guard covers all exports of a unit in its link image.
+Concurrent entry or reentry into an active unit is rejected before source initialization.
+Sequential calls and ordinary internal recursion are supported.
+A call from unit A to independent unit B preserves A's complete suspended instance and restores it on return,
+even when the units share runtime support in one native image.
+Calling A again while it is active is rejected. Entry from a signal handler is unsupported.
+Retained callbacks, persistent instances, recoverable errors, and incoming memory ownership remain separate extensions.
+
+`build --target object`, `staticlib`, and `sharedlib` emit AMD64 Linux or macOS libraries.
+The [artifact workflow](../../CONTRIBUTING.md#compile-and-consume-c-libraries) produces a C header,
+a generated Zydeco import interface, and a manifest alongside the native output.
+Ordinary `@(import(...))` still imports source, including a compiled library's original factory;
+it does not choose an artifact or implicitly apply Builtin.
+A consumer imports the generated `.imports.zy` interface and explicitly supplies `--link-library MANIFEST`
+to `build`, `run`, or `test`.
+This supports separate compilation without the producer's implementation source.
+The interpreter accepts only shared libraries matching its own host; Wasm has no adapter for these artifacts.
 
 ## 15. Execution profiles
 
@@ -943,12 +1036,12 @@ The native layout is an implementation ABI, not source-level control over addres
 | Profile | Control and memory | Host boundary |
 | --- | --- | --- |
 | Interpreter | Explicit evaluator state; Rust-owned values and environments | CLI/REPL I/O; returning C imports on Unix |
-| Native AMD64 | Machine control stack; growable retained environments; two fixed 1 MiB copying semispaces | Supplied runtime, Linux/macOS toolchain, returning C imports |
+| Native AMD64 | Machine control stack; growable retained environments; two fixed 1 MiB copying semispaces | Supplied runtime, Linux/macOS toolchain, returning C imports and scalar exports |
 | `wasm-am` | Trampoline over ZASM; fixed 1 MiB operand/control stack; growing non-collecting heap | Imports from a `zydeco` embedding |
 | `wasm-sps` | Block trampoline and persistent stack frames; growing non-collecting heap | The same host operation contract |
 
 Native managed live values must fit in one semispace, including headers.
-Host-owned strings and byte buffers have a separate lifetime from managed products and closures.
+Host-owned strings and byte buffers remain allocated within their runtime instance, independently of managed collection.
 Environment growth and managed-heap capacity are distinct limits.
 Native tail transfers reclaim dead activations, but live continuations and escaping values can retain storage;
 Wasm trampolines avoid growth of the host call stack without guaranteeing constant heap use.
@@ -1001,7 +1094,7 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 | Meta annotation | Meaning and valid use |
 | --- | --- |
 | `import(source)` | Replace a hole with an independently checked source term; select a catalog name, quoted file path, or positive input number (§12) |
-| `package(role, ...)` | Register the annotated term with a role, optional metadata name, and typed relationships (§12) |
+| `package(role, ...)` | Register the annotated term with a role, metadata name, and typed relationships (§12); compiled libraries require a name |
 | `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare ordered file-root discovery rules for an explicit package catalog (§12) |
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed package contract (§13) |

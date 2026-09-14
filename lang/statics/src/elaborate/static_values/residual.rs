@@ -144,6 +144,13 @@ impl StaticElaborator<'_, '_> {
                     ty: value.0.ty,
                 });
             }
+            | ValueForm::Thunk { body, env } => {
+                let purpose = self.purpose;
+                self.purpose = Purpose::Residualize;
+                let body = self.computation(*body, env);
+                self.purpose = purpose;
+                Value::Thunk(Thunk(body?))
+            }
             | ValueForm::Runtime(runtime) => {
                 return Ok(*runtime);
             }
@@ -167,6 +174,7 @@ impl StaticElaborator<'_, '_> {
         &mut self, value: StaticValue, bindings: &mut Vec<Binding>,
     ) -> ResultKont<StaticValue> {
         if self.purpose == Purpose::Inspect
+            || self.purpose == Purpose::SelectExports
             || value.0.shared.is_some()
             || matches!(value.0.form, ValueForm::Function { .. })
         {
@@ -190,7 +198,7 @@ impl StaticElaborator<'_, '_> {
             | ValueForm::Named(name, payload) => {
                 ValueForm::Named(name.clone(), self.share(payload.clone(), bindings)?)
             }
-            | ValueForm::Runtime(_) => value.0.form.clone(),
+            | ValueForm::Runtime(_) | ValueForm::Thunk { .. } => value.0.form.clone(),
             | ValueForm::Function { .. } => unreachable!(),
         };
         let value = StaticValue::with_form(value.0.source, value.0.ty, form);

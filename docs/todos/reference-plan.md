@@ -55,7 +55,7 @@ Keep that editorial work separate from the reference text.
 ## Completed proposal retirements
 
 The language-reference batches and compiler-reference consolidation were requested on 2026-09-08.
-Fifteen standalone proposals have been removed after transferring their durable material and incoming links:
+Sixteen standalone proposals have been removed after transferring their durable material and incoming links:
 
 | Retired proposal | Current homes | Preserved material |
 | --- | --- | --- |
@@ -74,6 +74,12 @@ Fifteen standalone proposals have been removed after transferring their durable 
 | `field-projection.md` | [L9](../references/language.md#9-polymorphism-and-packages), [C5](../references/compiler.md#package-evidence-and-lookup), [package rationale](../proposals/package-modularization.md), [coverage extension](../proposals/exhaustiveness.md#refutable-projection-payloads) | Search namespace and opacity, shared openings, typed routes, and future refutable payloads |
 | `value-pi.md` | [L8](../references/language.md#8-value-functions-and-views), [library recipes](../../lib/std/README.md#package-composition), [deferred designs](deferred-designs.md#value-views) | Value equations and view coherence; package idioms; refutable-view coverage, syntax, evaluation sharing, and residual factoring as todos |
 | `repl.md` | [C15](../references/compiler.md#interactive-engine), [CONTRIBUTING](../../CONTRIBUTING.md#use-the-interactive-repl), [history todos](deferred-designs.md#repl-history-and-replay) | Numbered identity, retry, wrapper behavior, commands, and future persistence/replay |
+
+The approved compilation-unit design was implemented and transferred on 2026-09-13:
+
+| Retired proposal | Current homes | Preserved material |
+| --- | --- | --- |
+| `compilation-units.md` | [C exports](../references/language.md#compiled-libraries-and-c-exports), [artifact preparation](../references/compiler.md#compilation-unit-preparation-and-artifacts), [runtime instances](../references/compiler.md#runtime-instances), [workflow](../../CONTRIBUTING.md#compile-and-consume-c-libraries) | Source versus compiled roles, directional legality, scalar entry/return, per-call ownership, explicit dependencies, and native artifact publication |
 
 These destinations own the transferred material. Discarded layout and implementation claims are recorded
 in the [drift list](reference-drift.md); no compatibility proposal stubs remain.
@@ -95,7 +101,7 @@ Term and package records now retain binding/identity and interface rationale.
 Byte APIs and costs and filesystem operations moved to the library guide,
 with representation and capability lifetime kept as separate designs.
 The memory-backed Writer and byte builder has one home in the filesystem design.
-C FFI now concerns exports, callbacks, ownership, reentry, and ABI extensions.
+C FFI now concerns retained exports, callbacks, ownership, reentry, and ABI extensions.
 Completion, documentation, and formatting retain their recovery, provenance, publication,
 and layout questions; completed roadmaps and parallel implementation accounts were removed.
 

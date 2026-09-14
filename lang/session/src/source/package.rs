@@ -115,7 +115,10 @@ impl Package {
                 name: if term == source.unit.root { None } else { name.cloned() },
             },
             name: site.and_then(|site| site.name.clone()),
-            role: site.map_or(PackageRole::Library, |site| site.role),
+            role: site.map_or(
+                PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
+                |site| site.role.clone(),
+            ),
             origin: SourceDiagnosticSite::new(
                 source.path.clone(),
                 site.map_or_else(
@@ -136,7 +139,7 @@ impl Package {
             Err(PackageError::WrongRole {
                 package: self.id.clone(),
                 expected,
-                found: self.role,
+                found: Box::new(self.role.clone()),
                 site: self.origin.clone(),
             })
         }
@@ -238,7 +241,7 @@ pub enum PackageError {
     WrongRole {
         package: PackageId,
         expected: PackageRole,
-        found: PackageRole,
+        found: Box<PackageRole>,
         site: SourceDiagnosticSite,
     },
     #[error("cannot plan package tests with unsupported relationship kind `{kind}` at {site}")]

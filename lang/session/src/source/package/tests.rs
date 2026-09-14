@@ -191,8 +191,12 @@ fn discovered_file_packages_need_no_role_and_plain_tests_need_no_subject() {
     let catalog = fixture.catalog(&session, &["lib.zy"]);
     let packages = session.package_catalog(&[root]).unwrap().packages;
     assert_eq!(
-        packages.iter().map(|package| package.role).collect::<Vec<_>>(),
-        [PackageRole::Library, PackageRole::Library, PackageRole::Test]
+        packages.iter().map(|package| package.role.clone()).collect::<Vec<_>>(),
+        [
+            PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
+            PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
+            PackageRole::Test
+        ]
     );
     assert!(session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.is_empty());
     assert_eq!(
@@ -293,9 +297,12 @@ fn concluding_files_register_imports_without_loading_implementation_or_relations
     assert_eq!(
         packages
             .iter()
-            .map(|p| (p.id.name.as_ref().unwrap().to_string(), p.role))
+            .map(|p| (p.id.name.as_ref().unwrap().to_string(), p.role.clone()))
             .collect::<Vec<_>>(),
-        [("binary".into(), PackageRole::Binary), ("library".into(), PackageRole::Library)]
+        [
+            ("binary".into(), PackageRole::Binary),
+            ("library".into(), PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source))
+        ]
     );
     let library = &packages[1];
     assert_eq!(packages[0].imports.len(), 1, "each package reports only its own code");
@@ -312,8 +319,11 @@ fn concluding_files_register_imports_without_loading_implementation_or_relations
 fn any_file_is_a_library_and_root_annotations_supply_roles_without_names() {
     let fixture = Fixture::new();
     for (source, role) in [
-        ("42", PackageRole::Library),
-        ("@[package(library)] 42", PackageRole::Library),
+        ("42", PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source)),
+        (
+            "@[package(library)] 42",
+            PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
+        ),
         ("(@[doc] (@[package(test)] 42) : @(intrinsic(i64)))", PackageRole::Test),
     ] {
         let path = fixture.write("single.zy", source);

@@ -33,6 +33,7 @@ pub enum ForeignRuntimeError {
 
 /// Process-local dynamic libraries retained for one interpreter invocation.
 pub(crate) struct ForeignRuntime {
+    paths: std::collections::BTreeMap<ForeignLibraryName, std::path::PathBuf>,
     #[cfg(unix)]
     libraries: HashMap<ForeignLibraryName, DynamicLibrary>,
     #[cfg(unix)]
@@ -42,11 +43,19 @@ pub(crate) struct ForeignRuntime {
 impl ForeignRuntime {
     pub(crate) fn new() -> Self {
         Self {
+            paths: Default::default(),
             #[cfg(unix)]
             libraries: HashMap::new(),
             #[cfg(unix)]
             functions: HashMap::new(),
         }
+    }
+
+    pub(crate) fn with_paths(
+        mut self, paths: std::collections::BTreeMap<ForeignLibraryName, std::path::PathBuf>,
+    ) -> Self {
+        self.paths = paths;
+        self
     }
 
     #[cfg(unix)]
@@ -84,7 +93,18 @@ impl ForeignRuntime {
         if !self.functions.contains_key(import) {
             let target = &import.target;
             if !self.libraries.contains_key(&target.library) {
-                let library = DynamicLibrary::open(&target.library)?;
+                let library = if let Some(path) = self.paths.get(&target.library) {
+                    use std::os::unix::ffi::OsStrExt;
+                    let path = CString::new(path.as_os_str().as_bytes()).map_err(|error| {
+                        ForeignRuntimeError::OpenLibrary {
+                            library: target.library.clone(),
+                            message: error.to_string(),
+                        }
+                    })?;
+                    DynamicLibrary::open_filename(&target.library, &path)?
+                } else {
+                    DynamicLibrary::open(&target.library)?
+                };
                 self.libraries.insert(target.library.clone(), library);
             }
             let library = self.libraries.get(&target.library).expect("library was inserted above");
@@ -141,7 +161,8 @@ impl ForeignFunction {
         let arguments = arguments.scalars.iter().map(ForeignScalar::as_arg).collect::<Vec<_>>();
         // SAFETY: the call interface and scalar storage follow the same checked signature.
         // The declaration author must ensure that the external symbol actually obeys that
-        // signature and neither retains/mutates borrowed memory nor reenters Zydeco.
+        // signature, neither retains nor mutates borrowed memory, and does not call back
+        // into this interpreter invocation. Independent compiled-library instances are permitted.
         unsafe {
             let integer = match self.result {
                 | ForeignResult::Unit => {

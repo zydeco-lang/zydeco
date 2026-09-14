@@ -1,0 +1,11 @@
+@[package(
+  library(c,
+    export(field(add), symbol("example_add")),
+    export(field(identity), symbol("example_identity"))),
+  name(example/arithmetic)
+)]
+param val (/Thk; /Ret; /Int64; /numeric) : @(import("../std/builtin.zy")) in
+(
+  #add = { fn x y => ! numeric/int64/add x y } : Thk (Int64 -> Int64 -> Ret Int64),
+  #identity = { fn x => ret x } : Thk (Int64 -> Ret Int64)
+)

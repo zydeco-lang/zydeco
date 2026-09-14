@@ -982,7 +982,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 | `lang/machine/` | Rust representations and host-resumption descriptions shared by compiler phases and native stubs. |
 | `lib/` | Standard library, reusable examples, and regression projects under `lib/tests/`. |
 | `cli/` | Source checking, shared backend execution, the bundled Node host, formatting, and compilation commands. |
-| `runtime/` | Runtime sources copied into native executable builds. |
+| `runtime/` | Runtime instances and process launcher, packaged with native executables and libraries. |
 | `tui/` | Ratatui REPL using the shared compiler session. |
 | `editor/cajun/` | Language server, included in the Rust workspace. |
 | `editor/tree-sitter-zydeco/` | Editor grammar and its conformance checks. |
@@ -1007,12 +1007,14 @@ and `memory`, but the embedding must supply the imports before invoking either f
   The abstract-machine variant has a fixed one-megabyte operand/control stack;
   the SPS variant allocates persistent stack frames and boxes products without ZASM's local-unboxing analysis.
   CLI Wasm execution uses the bundled Node.js host; standalone WASI execution is not implemented.
-- Native foreign imports support only the returning subset described above;
-  callbacks and C-to-Zydeco exports are not implemented.
+- Native foreign imports and exports use the explicit [C boundary](docs/references/language.md#14-foreign-interfaces);
+  callbacks and retained foreign handles remain deferred.
   Checking a source is not evidence that a foreign library can be loaded or linked.
-- Imports address filesystem paths or numbered interactive inputs.
-  Separate compilation and external package resolution are not implemented,
-  and Zydeco source dependencies have no package lockfile.
+- Source imports address catalog names, filesystem paths, or numbered interactive inputs.
+  [Separate compilation](docs/references/compiler.md#compilation-unit-preparation-and-artifacts)
+  uses explicit C library interfaces and artifact manifests.
+  Automatic artifact substitution for source imports, external package fetching,
+  and source dependency lockfiles remain deferred.
   Absolute source imports are location-dependent and receive no portability warning.
 - `pack` cannot introduce kind witnesses.
   Field-projection payload patterns and general same-bindee aliases are restricted to irrefutable forms,

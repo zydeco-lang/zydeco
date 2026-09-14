@@ -497,9 +497,22 @@ impl CompilerPass<ss::CompuId> for RootLowerer<'_> {
     type Error = Vec<SpsLowerError>;
 
     fn run(&mut self, root: ss::CompuId) -> Result<BranchJoinProgram, Self::Error> {
+        self.run_with_builtin(root, None)
+    }
+}
+
+impl RootLowerer<'_> {
+    /// Lower either a process or a checked export, supplying its validated host package.
+    pub fn run_with_builtin(
+        &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
+    ) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
         let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
         let root = self.statics.execution_compu(root);
-        let stack = Bullet.build(&mut lowerer, None);
+        let mut stack = Bullet.build(&mut lowerer, None);
+        if let Some(plan) = builtin {
+            let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer);
+            stack = Cons(package, stack).build(&mut lowerer, None);
+        }
         let root = root.lower(&mut lowerer, stack);
         lowerer.finish(root)
     }
@@ -510,13 +523,10 @@ impl CompilerPass<ss::CompuId> for BuiltinRootLowerer<'_> {
     type Error = BuiltinRootLowerError;
 
     fn run(&mut self, root: ss::CompuId) -> Result<BranchJoinProgram, Self::Error> {
-        let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
-        let root = self.statics.execution_compu(root);
-        let plan = BuiltinPackagePlan::for_executable(lowerer.statics, &self.signature)?;
-        let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer);
-        let stack = Cons(package, Bullet.build(&mut lowerer, None)).build(&mut lowerer, None);
-        let root = root.lower(&mut lowerer, stack);
-        lowerer.finish(root).map_err(BuiltinRootLowerError::Sps)
+        let plan = BuiltinPackagePlan::for_executable(self.statics, &self.signature)?;
+        RootLowerer { spans: self.spans, scoped: self.scoped, statics: self.statics }
+            .run_with_builtin(root, Some(plan))
+            .map_err(BuiltinRootLowerError::Sps)
     }
 }
 

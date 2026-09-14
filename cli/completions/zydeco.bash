@@ -159,7 +159,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --execute --lint-types --help"
+            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --link-library --execute --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -186,11 +186,11 @@ _zydeco() {
                     return 0
                     ;;
                 --target)
-                    COMPREPLY=($(compgen -W "zir zasm asm wasm-am wasm-sps exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe" -- "${cur}"))
                     return 0
                     ;;
                 -t)
-                    COMPREPLY=($(compgen -W "zir zasm asm wasm-am wasm-sps exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe" -- "${cur}"))
                     return 0
                     ;;
                 --representation)
@@ -214,6 +214,10 @@ _zydeco() {
                     return 0
                     ;;
                 -r)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --link-library)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -695,7 +699,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__run)
-            opts="-p -t -r -h --package --pkg --target --runtime-dir --dry --lint-types --help"
+            opts="-p -t -r -h --package --pkg --target --runtime-dir --link-library --dry --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -726,6 +730,10 @@ _zydeco() {
                     return 0
                     ;;
                 -r)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --link-library)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -763,7 +771,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__test)
-            opts="-p -t -r -h --package --pkg --target --runtime-dir --lint-types --help"
+            opts="-p -t -r -h --package --pkg --target --runtime-dir --link-library --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -794,6 +802,10 @@ _zydeco() {
                     return 0
                     ;;
                 -r)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --link-library)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

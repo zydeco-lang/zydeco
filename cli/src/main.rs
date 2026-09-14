@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
+use zydeco_cli::compile::CompilationBoundary;
+use zydeco_cli::library::{LibraryArtifactKind, LibraryBuilder, LibraryError, LinkedLibraries};
 use zydeco_cli::{
     BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
     DocumentationCommand, Executable, ExecutionError, ExecutionRunner, ExecutionTarget,
@@ -85,7 +87,14 @@ impl Application {
                 let [source] = sources.as_slice() else {
                     return Err(ApplicationError::SingleExecution);
                 };
-                self.run_source(source, target, execution.runtime_dir, dry, &args)
+                self.run_source(
+                    source,
+                    target,
+                    execution.runtime_dir,
+                    dry,
+                    &args,
+                    LinkedLibraries::load(&execution.link_libraries)?,
+                )
             }
             | Commands::Check { selection } => {
                 for source in self.sources(selection)? {
@@ -93,9 +102,12 @@ impl Application {
                 }
                 Ok(0)
             }
-            | Commands::Test { selection, targets, execution } => {
-                self.test_packages(self.sources(selection)?, targets, execution.runtime_dir)
-            }
+            | Commands::Test { selection, targets, execution } => self.test_packages(
+                self.sources(selection)?,
+                targets,
+                execution.runtime_dir,
+                LinkedLibraries::load(&execution.link_libraries)?,
+            ),
             | Commands::Repl => Repl::launch(self.compiler.catalog().bindings.clone())
                 .map_err(ApplicationError::Repl),
             | Commands::Build {
@@ -107,6 +119,7 @@ impl Application {
                 pipeline,
                 build_dir,
                 runtime_dir,
+                link_libraries,
                 execute,
             } => {
                 let plan = pipeline
@@ -115,12 +128,16 @@ impl Application {
                     .map(str::parse::<HighSpsPlan>)
                     .transpose()?
                     .unwrap_or_default();
-                self.compiler =
-                    self.compiler.with_sps_passes(plan).with_pass_inspection(HighSpsInspection {
+                self.compiler = self
+                    .compiler
+                    .with_representation(representation.map(Into::into).unwrap_or_default())
+                    .with_sps_passes(plan)
+                    .with_pass_inspection(HighSpsInspection {
                         trace: pipeline.trace_passes,
                         verify: pipeline.verify_passes,
                         dump: pipeline.dump_passes,
                     });
+                let libraries = LinkedLibraries::load(&link_libraries)?;
                 self.build_sources(
                     self.sources(selection)?,
                     target,
@@ -136,6 +153,7 @@ impl Application {
                     ),
                     execute,
                     representation.map(Into::into),
+                    libraries,
                 )
             }
         }
@@ -208,7 +226,13 @@ impl Application {
         &self, package: &Package,
     ) -> Result<Option<zydeco_session::ExecutableProgram>, ApplicationError> {
         let analysis = self.report_analysis(self.compiler.analyze_package(&package.id)?);
-        if package.role == PackageRole::Library {
+        if package.role == PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source) {
+            return Ok(None);
+        }
+        if let PackageRole::Library(zydeco_surface::metadata::LibraryRole::Compiled(contract)) =
+            &package.role
+        {
+            self.compiler.library_program(&analysis, contract)?;
             return Ok(None);
         }
         let executable = self.compiler.executable_program(&analysis)?;
@@ -222,6 +246,7 @@ impl Application {
 
     fn test_packages(
         &self, sources: Vec<SourceReference>, targets: Vec<TestTarget>, runtime_dir: PathBuf,
+        libraries: LinkedLibraries,
     ) -> Result<i32, ApplicationError> {
         let plans = sources
             .iter()
@@ -250,7 +275,8 @@ impl Application {
             &self.compiler,
             targets.iter().flat_map(TestTarget::expand).copied(),
             runtime_dir,
-        )?;
+        )?
+        .with_libraries(libraries);
         let runs = programs
             .into_iter()
             .map(|(id, executable)| {
@@ -436,24 +462,82 @@ impl Application {
 
     fn run_source(
         &self, path: &SourceReference, target: ExecutionTarget, runtime_dir: PathBuf, dry: bool,
-        arguments: &[String],
+        arguments: &[String], libraries: LinkedLibraries,
     ) -> Result<i32, ApplicationError> {
         let analysis = self.selected_analysis(path)?;
         let executable = self.compiler.executable_program(&analysis)?;
+        if dry && libraries.is_empty() {
+            return Ok(0);
+        }
+        if !libraries.is_empty()
+            && matches!(target, ExecutionTarget::WasmAm | ExecutionTarget::WasmSps)
+        {
+            return Err(LibraryError::Target.into());
+        }
+        let runner =
+            ExecutionRunner::new(&self.compiler, [target], runtime_dir)?.with_libraries(libraries);
+        runner.validate(&executable)?;
         if dry {
             return Ok(0);
         }
-        let run = ExecutionRunner::new(&self.compiler, [target], runtime_dir)?
-            .prepare(executable)?
-            .pop()
-            .expect("run selects one backend");
+        let run = runner.prepare(executable)?.pop().expect("run selects one backend");
         Ok(run.run(arguments)?)
     }
 
     fn build_sources(
         &self, sources: Vec<SourceReference>, target: BuildTarget, options: BuildOptions,
-        execute: bool, representation: Option<RepresentationStrategy>,
+        execute: bool, representation: Option<RepresentationStrategy>, libraries: LinkedLibraries,
     ) -> Result<i32, ApplicationError> {
+        let kind = match target {
+            | BuildTarget::Object => Some(LibraryArtifactKind::Object),
+            | BuildTarget::Staticlib => Some(LibraryArtifactKind::Staticlib),
+            | BuildTarget::Sharedlib => Some(LibraryArtifactKind::Sharedlib),
+            | _ => None,
+        };
+        if let Some(kind) = kind {
+            if execute {
+                return Err(ApplicationError::LibraryExecution);
+            }
+            zydeco_cli::library::LibraryPlatform::for_target(
+                options.architecture,
+                options.operating_system,
+            )?;
+            let programs = sources
+                .iter()
+                .map(|source| {
+                    let package = self.compiler.package(&self.resolve(source)?)?;
+                    if !matches!(
+                        &package.role,
+                        PackageRole::Library(zydeco_surface::metadata::LibraryRole::Compiled(_))
+                    ) {
+                        return Err(ApplicationError::LibraryTarget);
+                    }
+                    let analysis =
+                        self.report_analysis(self.compiler.analyze_package(&package.id)?);
+                    let unit = self.compiler.compilation_unit(&package, &analysis, false)?;
+                    let CompilationBoundary::CExports { name, contract, program } = unit.boundary
+                    else {
+                        unreachable!()
+                    };
+                    Ok((name, contract, analysis, program))
+                })
+                .collect::<Result<Vec<_>, ApplicationError>>()?;
+            for (name, contract, analysis, program) in programs {
+                let builder = LibraryBuilder {
+                    compiler: &self.compiler,
+                    options: &options,
+                    dependencies: &libraries,
+                };
+                println!(
+                    "{}",
+                    builder.build(&name, &contract, &analysis, &program, kind)?.display()
+                );
+            }
+            return Ok(0);
+        }
+        if !libraries.is_empty() && target != BuildTarget::Exe {
+            return Err(ApplicationError::LibraryLinkTarget);
+        }
         if representation.is_some() && matches!(target, BuildTarget::Zir | BuildTarget::WasmSps) {
             return Err(ApplicationError::RepresentationTarget);
         }
@@ -463,8 +547,16 @@ impl Application {
         let backends = sources
             .iter()
             .map(|source| {
-                let analysis = self.selected_analysis(source)?;
-                let executable = self.compiler.executable_program(&analysis)?;
+                let package = self.compiler.package(&self.resolve(source)?)?;
+                let analysis = self.report_analysis(self.compiler.analyze_package(&package.id)?);
+                let unit = self.compiler.compilation_unit(
+                    &package,
+                    &analysis,
+                    matches!(source, SourceReference::Path(_)),
+                )?;
+                let CompilationBoundary::Process(executable) = unit.boundary else {
+                    return Err(ApplicationError::CompiledLibraryTarget);
+                };
                 Ok(self
                     .compiler
                     .lower_executable(executable)?
@@ -473,6 +565,9 @@ impl Application {
             .collect::<Result<Vec<_>, ApplicationError>>()?;
         for (path, backend) in sources.iter().zip(backends) {
             match target {
+                | BuildTarget::Object | BuildTarget::Staticlib | BuildTarget::Sharedlib => {
+                    unreachable!()
+                }
                 | BuildTarget::Zir => println!("{}", backend.render_sps_low()),
                 | BuildTarget::Zasm if execute => println!("{}", backend.execute_assembly()?),
                 | BuildTarget::Zasm => println!("{}", backend.render_assembly()),
@@ -507,10 +602,20 @@ impl Application {
                 | BuildTarget::Exe => {
                     let artifact = Self::artifact_name(path)?;
                     let native = backend.emit_amd64(options.operating_system);
-                    let executable = options.link_amd64(
+                    libraries.validate_imports(
+                        &native.foreign_imports,
+                        zydeco_cli::library::LibraryPlatform::for_target(
+                            options.architecture,
+                            options.operating_system,
+                        )?,
+                        Some(&zydeco_cli::library::LibraryDigest::runtime(&options.runtime_dir)?),
+                        false,
+                    )?;
+                    let executable = options.link_amd64_resolved(
                         &artifact,
                         &native.assembly,
                         &native.foreign_libraries,
+                        &libraries,
                     )?;
                     if execute {
                         return Ok(Executable::exit_code(executable.run(&[])?));
@@ -535,6 +640,20 @@ impl Application {
 
 #[derive(Debug, Error)]
 enum ApplicationError {
+    #[error(transparent)]
+    Library(#[from] LibraryError),
+    #[error(
+        "object, staticlib, and sharedlib require a package declared with library(c, export(...), ...)"
+    )]
+    LibraryTarget,
+    #[error("compiled libraries require --target object, staticlib, or sharedlib")]
+    CompiledLibraryTarget,
+    #[error(
+        "a compiled library is entered through its exports and cannot be executed as a process"
+    )]
+    LibraryExecution,
+    #[error("--link-library requires --target exe, object, staticlib, or sharedlib")]
+    LibraryLinkTarget,
     #[error("run and build --execute require exactly one selected package")]
     SingleExecution,
     #[error("cannot read the working directory: {0}")]
@@ -546,7 +665,7 @@ enum ApplicationError {
     #[error(transparent)]
     PipelinePlan(#[from] HighSpsPlanError),
     #[error(
-        "--representation applies to zasm, asm, exe, and wasm-am; this target does not use assembly representation analysis"
+        "--representation applies to zasm, asm, exe, wasm-am, object, staticlib, and sharedlib; this target does not use assembly representation analysis"
     )]
     RepresentationTarget,
     #[error("documentation worker failed: {0}")]

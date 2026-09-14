@@ -11,6 +11,7 @@ readme = { workspace = true }
 description = "general syntax structures for zydeco"
 
 [dependencies]
+serde = { workspace = true }
 zydeco-machine = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-utils = { workspace = true }

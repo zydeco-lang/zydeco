@@ -450,13 +450,13 @@ impl<'a> BuiltinSignatureValidator<'a> {
     }
 
     pub fn validate(mut self, signature: &ss::PackPi) -> Result<(), BuiltinSignatureError> {
-        self.validate_parts(signature.domain, &signature.witnesses)
+        self.validate_parts(signature.domain, signature.witnesses.iter().copied())
     }
 
     fn validate_parts(
-        &mut self, domain: ss::TypeId, witnesses: &ss::PackTelescope,
+        &mut self, domain: ss::TypeId, witnesses: impl Iterator<Item = ss::AbstId>,
     ) -> Result<(), BuiltinSignatureError> {
-        let types = witnesses.iter().copied().fold(
+        let types = witnesses.fold(
             BTreeMap::<BuiltinTypeRole, Vec<ss::AbstId>>::new(),
             |mut roles, witness| {
                 if let Some(BuiltinRole::Type(role)) = self.statics.builtin_roles.witness(witness) {
@@ -730,6 +730,21 @@ struct BuiltinPackagePlanner<'a> {
 }
 
 impl BuiltinPackagePlan {
+    /// Validate the domain of a library factory independently of process completion.
+    pub fn for_value(
+        statics: &StaticsArena, parameter: &ss::ValueParameter,
+    ) -> Result<Self, BuiltinPackagePlanError> {
+        BuiltinSignatureValidator::new(statics).validate_parts(
+            parameter.domain,
+            parameter
+                .witnesses
+                .as_ref()
+                .into_iter()
+                .flat_map(|witnesses| witnesses.iter().copied()),
+        )?;
+        Ok(Self { value: BuiltinPackagePlanner { statics }.value(parameter.domain)? })
+    }
+
     pub fn for_computation(
         statics: &StaticsArena, signature: &ss::PackPi,
     ) -> Result<Self, BuiltinPackagePlanError> {

@@ -162,7 +162,7 @@ fn concluding_files_register_existing_files_and_named_binaries_build_distinct_ar
         let diagnostic = if arguments.contains(&"broken") {
             "missing.zy"
         } else if arguments.contains(&"lib") {
-            "has role library; expected binary"
+            "source libraries have no independent compilation boundary"
         } else {
             "require exactly one selected package"
         };
@@ -390,8 +390,8 @@ fn nonzero_tests_are_reported_and_the_selected_suite_continues() {
 fn obsolete_forms_duplicate_names_and_implicit_captures_are_rejected() {
     let fixture = Fixture::new();
     for (source, expected) in [
-        (r#"@[package(library("lib", "lib.zy"))] ()"#, "first argument"),
-        (r#"@[package(library("lib"))] ()"#, "first argument"),
+        (r#"@[package(library("lib", "lib.zy"))] ()"#, "requires the C ABI"),
+        (r#"@[package(library("lib"))] ()"#, "requires the C ABI"),
         (
             r#"(#lib = @[package(library, name(lib))] 1, #lib = @[package(test, name(lib))] ())"#,
             "duplicate package name",

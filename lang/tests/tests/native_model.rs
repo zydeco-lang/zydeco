@@ -20,7 +20,7 @@ fn packaged_model_links_and_a_mismatched_model_cannot_publish_an_executable() {
     let backend = CommandCompiler::default()
         .lower(&workspace.join("lib/tests/builtin/host-runtime.zy"))
         .unwrap();
-    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries: libraries } =
+    let zydeco_cli::Amd64Artifact { assembly, foreign_libraries: libraries, .. } =
         backend.emit_amd64(operating_system);
     let executable = options.link_amd64("matching", &assembly, &libraries).unwrap();
     let output = Command::new(executable.path()).stdin(Stdio::null()).output().unwrap();
@@ -98,10 +98,13 @@ fn compact_environments_execute_the_same_generated_actions() {
     }
     let manifest = runtime.join("Cargo.toml");
     let source = std::fs::read_to_string(&manifest).unwrap();
-    assert_eq!(source.matches("[features]").count(), 1);
+    assert_eq!(source.matches("default = [\"process-entry\"]").count(), 1);
     std::fs::write(
         manifest,
-        source.replace("[features]", "[features]\ndefault = [\"compact-environments\"]"),
+        source.replace(
+            "default = [\"process-entry\"]",
+            "default = [\"process-entry\", \"compact-environments\"]",
+        ),
     )
     .unwrap();
     let operating_system = TargetOs::host().unwrap();

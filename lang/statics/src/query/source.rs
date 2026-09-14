@@ -92,6 +92,22 @@ pub fn check_source<'db>(db: &'db dyn TyckDb, data: ScopedData<'db>) -> TyckOutp
     SourceCheckRequest { data, completion: None }.run(db).0
 }
 
+/// Compile an explicit boundary without changing the ordinary source-import query.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
+pub fn check_library<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>, contract: zydeco_surface::metadata::LibraryContract,
+) -> Result<crate::CheckedLibrary, crate::LibraryCheckError> {
+    let mut tycker = Tycker::new(db, data, data.spans(db), data.scoped(db));
+    let root = tycker.run_judgments_k(data.root(db));
+    tycker.finish_judgments();
+    let root = root
+        .and_then(|root| tycker.finish_check_k().map(|()| root))
+        .map_err(|_| crate::LibraryCheckError::Checking(tycker.error_diagnostics()))?;
+    let exports = tycker.prepare_library(root, &contract)?;
+    tycker.strip_checker_state();
+    Ok(crate::CheckedLibrary { statics: std::sync::Arc::new(tycker.statics), exports })
+}
+
 /// Check current recovered syntax and compare names before transient environments are released.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
 pub fn check_completion<'db>(

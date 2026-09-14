@@ -735,6 +735,9 @@ It exposes only caller-visible witnesses and returns opaque evidence when reduct
 an unapplied static library export can be checked without having a runtime representation of its own.
 Reification creates fresh typed residual nodes, preserving runtime sharing and effect order.
 Representability checks cover surviving values, thunk bodies, and computation classifiers after instantiation.
+Export selection defers thunk-body residualization until the selected value is reified.
+This permits private static helpers and unselected holes
+without relaxing representability inside surviving computations.
 
 The source elimination requirements and reducer resource limits are specified
 in [L10](language.md#10-static-elimination).
@@ -1251,7 +1254,7 @@ continuation provenance, packed frame slots, and root/suspension maps.
 Invalid preparation is a `FramePlanError`; emission cannot silently fall back to an unchecked environment layout.
 
 `BackendProgram::emit_amd64` returns an `Amd64Artifact` containing assembly text
-and the foreign libraries collected from that same native program.
+and the foreign imports and libraries collected from that same native program.
 CLI and test builds link this artifact after one lowering pass.
 
 | Entry role | Required transition |
@@ -1304,13 +1307,86 @@ and invokes the target toolchain using [CONTRIBUTING's build contract](../../CON
 [native frame design](../proposals/native-frames.md) retains the detailed lifetime argument
 and experimental comparisons.
 
+### Compilation-unit preparation and artifacts
+
+[CompilationUnit](../../cli/src/compile.rs) pairs a selected source identity with a checked `CompilationBoundary`:
+a process program or a collection of C exports.
+The source roles and legality rules belong to [L14](language.md#compiled-libraries-and-c-exports).
+[Library checking](../../lang/statics/src/check/library.rs) reuses the source judgment query, Builtin domain validator,
+ordinary field resolver, directional foreign classifier, static elaborator, and readiness checker.
+The checked product retains one residual root and scalar signature per export in a shared typed arena.
+`RootLowerer::run_with_builtin` supplies the optional validated provider through the same high-SPS entry path used
+for executables; subsequent SPS, representation, and native-frame passes are shared.
+
+Each `CExportEntry` adds a SysV adapter around its prepared native root.
+It saves the caller's callee-saved registers and raw arguments outside the traced stack range,
+acquires the unit guard, creates the instance, and pushes a typed external return delimiter.
+Arguments are converted in reverse stack order; already encoded arguments remain rooted
+while later wide integers allocate opaque boxes.
+Scalar encoders truncate unspecified upper argument bits to the declared width.
+The residual root receives the ordinary argument stack and `Ret` completion, without an artificial `OS` exit.
+On return, the adapter decodes the result before teardown and restores the C stack and preserved registers.
+
+[LibraryBuilder](../../cli/src/library.rs) validates exports and dependencies before invoking native tools.
+NASM emits one object per export and one shared guard object.
+Private source labels remain local to each object.
+A relocatable link combines them for `object`; `ar` creates `staticlib`.
+`sharedlib` links them with matching runtime support built in release mode with PIC and aborting panics.
+ELF external calls use PLT relocations; source code references are relative
+and jump-table relocations follow the existing ELF/Mach-O emitter conventions.
+An ELF version script or Mach-O export list hides every symbol except the declared C exports, including runtime support.
+Shared runtime references bind within their own image.
+Host resumption bridges belong to the model's runtime support once per image, rather than each compiled unit.
+
+Raw objects and static archives ship a separate matching runtime archive.
+A C link includes that support once after the unit code and its dependencies;
+a Zydeco executable supplies it through its own runtime build.
+Executable packaging first combines raw units with the program object,
+ensuring their helper references are visible when the final linker scans the Rust runtime archives.
+Model and runtime identities must agree across raw units sharing support.
+A shared artifact contains private support and can be consumed across compiler versions compatible
+with its public profile.
+AMD64 target and manifest compatibility are checked before linking or interpreter execution.
+
+The versioned manifest records package identity, target, entry profile, compiler/model/runtime fingerprints,
+artifact and interface content hashes, selected export paths and C signatures, imports, and dependency manifests.
+Logical library names replace package namespace separators with dots.
+The generated header spells fixed-width C types and `void`;
+the generated `.imports.zy` preserves the selected field structure using typed `ffi` declarations
+and canonical type intrinsics.
+It requires neither the producer's source nor its static-only interface.
+
+`LinkedLibraries` resolves explicit manifests and verifies all transitive content, including build provenance.
+Conflicting logical identities, colliding public symbols, incompatible signatures
+or profiles, and stale artifacts fail preparation.
+Signature deserialization reuses the constructor's arity bound.
+Raw dependencies already included in a shared image remain verified provenance rather than duplicate link inputs;
+shared dependencies reachable through them still contribute loader requirements.
+Such embedded raw interfaces are private to the image; consumers needing them directly select their own manifest.
+The Unix interpreter receives exact shared-library paths and still loads symbols lazily.
+Native linking adds exact artifacts and loader paths; manifest-free C imports retain ordinary system-library resolution.
+
+Publication uses a staging directory and an immutable content-addressed bundle.
+After assembly, runtime compilation, linking, and interface generation succeed,
+the builder publishes convenience artifact/header/binding symlinks and finally the public `*.library.json` symlink.
+That manifest is the authoritative commit point and resolves to a complete immutable bundle;
+dependencies record immutable manifest paths rather than mutable convenience names.
+A failed compiler or native tool leaves an earlier publication usable.
+Content hashes identify changes, not the authenticity of an untrusted producer.
+Preserve bundle-relative dependency locations when distributing artifacts.
+
+[Library regressions](../../cli/tests/library.rs) exercise independent selection, erased private helpers,
+rejected signatures, C scalar transport, repeated calls, nested collection through raw and shared dependencies,
+entry guards, source-free consumers, and failed-build preservation.
+Manifest unit tests cover compatibility, corruption, hidden dependencies, and identity collisions without loading code.
+
 ## C12. Shared native model, allocation, and collection
 
 [zydeco-machine](../../lang/machine/src/lib.rs) is a dependency-free `no_std` model shared
 by the compiler and native stub.
 It owns tagged words, closure records, host-transfer records, and frame actions.
 Code generation derives layout from 64-bit carriers; the target runtime checks its `usize` representation against them.
-The bundled model sources determine a fingerprinted entry symbol,
+The bundled model sources determine fingerprinted process and library entry symbols,
 so mismatched compiler/runtime source bundles fail to link.
 This is artifact pairing, not verification of handwritten instruction selection.
 
@@ -1321,6 +1397,23 @@ Products and closures occupy scanned blocks.
 Source numeric domains and immediate ranges are specified in [L13](language.md#13-primitive-values-and-capabilities)
 and [the representation account](../../DESIGN.md#numeric-representations).
 Aligned host-owned objects outside the managed spaces remain unchanged by tracing.
+
+### Runtime instances
+
+[RuntimeInstance](../../runtime/stub.rs) owns the managed heap, frame store, stack root bound,
+host-transfer record, memory grants and buffers, I/O handles, invocation arguments, and host-owned strings.
+A thread-local pointer dispatches helpers to the active instance; it owns no language state itself.
+Entry saves its predecessor and installs a fresh instance, while normal completion restores
+that predecessor and drops the completed instance before releasing its unit guard.
+Nested calls into different units therefore preserve the suspended caller's heap, roots, transfer state, and resources.
+The [source entry profile](language.md#compiled-libraries-and-c-exports) defines concurrency and fault behavior.
+
+The process launcher in [runtime/main.rs](../../runtime/main.rs) uses the same instance API,
+with process arguments and the established executable entry.
+Reusable support disables the `process-entry` feature.
+Semispace words and block indices are boxed allocations, avoiding multi-megabyte stack temporaries on each C entry.
+Host strings retain stable boxed addresses in their instance, and handles/buffers use instance-owned arenas.
+These resources are released at normal teardown; managed GC does not individually reclaim host-owned strings.
 
 ### Environment actions and roots
 
@@ -1514,14 +1607,18 @@ and its explicit void-return operation avoids reading nonexistent result storage
 Marshalling validates every window's live grant, read permission, bounds, and initialization before C entry.
 Invalid memory fails without calling C. The arena retains each borrowed allocation
 across the synchronous call; marshalling helpers do not collect.
-Native linking uses the library's linker name; interpreter loading uses platform shared-library names.
+Explicit compiled-library manifests select exact artifacts
+through the [unit linker](#compilation-unit-preparation-and-artifacts);
+otherwise native linking uses the library's linker name and interpreter loading uses platform shared-library names.
 Native foreign imports are unsupported in Wasm and the ZASM interpreter.
 
 [Foreign signature tests](../../lang/statics/tests/foreign.rs)
 and [FFI integration tests](../../lang/tests/tests/ffi.rs) pair valid shapes with unsupported arities,
 argument sorts, results, loader failures, and borrowing cases.
-[C-to-Zydeco exports and callbacks](../proposals/c-ffi.md#following-boundary) still need their own runtime-entry,
-ownership, and reentry design.
+Scalar exports use the [C entry adapter](#compilation-unit-preparation-and-artifacts) and the same scalar call plan.
+Incoming windows are rejected directionally because raw pointers cannot reconstruct grants.
+[Callbacks and retained values](../proposals/c-ffi.md#closures-callbacks-and-reentry) still require ownership
+and entry protocols beyond fresh scalar calls.
 
 ## C15. Diagnostics, formatting, documentation, and interactive tooling
 

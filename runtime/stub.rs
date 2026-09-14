@@ -3,7 +3,7 @@ mod memory;
 
 use gc::{CheneyHeap, OutOfMemory, RootRange, RootSource, Roots};
 use std::{
-    cell::{RefCell, UnsafeCell},
+    cell::{Cell, RefCell},
     collections::HashMap,
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, Read, Write},
@@ -15,7 +15,7 @@ use zydeco_machine::frames::Frames as NativeFrames;
 use zydeco_machine::frames::fragments::Fragments as NativeFrames;
 use zydeco_machine::frames::{Action, FrameError, storage::Growable};
 use zydeco_machine::native::{
-    AllocationKind, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word, entry,
+    AllocationKind, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word,
 };
 
 /// One full-width scalar payload in an opaque managed block.
@@ -106,26 +106,6 @@ impl RuntimeInteger for u64 {
     }
 }
 
-/// Interior mutability for the runtime's process-wide, single-threaded state.
-///
-/// Generated Zydeco code and all callbacks run on the entry thread. Keeping the
-/// heap buffers here puts both semispaces in the executable's fixed static storage.
-/// The frame model owns a separate fixed word allocation and growable metadata.
-struct RuntimeCell<T>(UnsafeCell<T>);
-
-impl<T> RuntimeCell<T> {
-    const fn new(value: T) -> Self {
-        Self(UnsafeCell::new(value))
-    }
-
-    fn get(&self) -> *mut T {
-        self.0.get()
-    }
-}
-
-// SAFETY: the native runtime is single-threaded; `main` is the only entry point.
-unsafe impl<T> Sync for RuntimeCell<T> {}
-
 /// Publishes a host-control result for immediate consumption by generated code.
 struct HostControl;
 
@@ -143,7 +123,7 @@ impl HostControl {
     }
 
     fn store(closure: Word, arguments: HostArguments<Word>) -> Word {
-        let transfer = CONTROL_TRANSFER.get();
+        let transfer = RuntimeInstance::transfer();
         // The assembly bridge consumes this record before another host call can occur.
         unsafe { transfer.write(HostTransfer::for_closure(closure, arguments)) };
         transfer as Word
@@ -153,8 +133,12 @@ impl HostControl {
 struct HostString;
 
 impl HostString {
-    fn leak(string: String) -> Word {
-        Box::into_raw(Box::new(string)) as Word
+    fn own(string: String) -> Word {
+        let owned = Box::new(string);
+        let word = (&*owned as *const String) as Word;
+        // Boxes keep their addresses when the ownership vector grows.
+        unsafe { (*RuntimeInstance::current()).strings.push(owned) };
+        word
     }
 
     unsafe fn borrow<'a>(raw: Word) -> &'a str {
@@ -337,8 +321,7 @@ struct IoBranch;
 
 impl IoBranch {
     fn memory(bytes: &[u8]) -> io::Result<Word> {
-        HOST_BUFFERS
-            .with(|arena| arena.borrow_mut().import_memory(bytes))
+        RuntimeInstance::with_buffers(|arena| arena.borrow_mut().import_memory(bytes))
             .map(|access| HostHandle::encode(access.raw()))
             .map_err(HostIoError::memory)
     }
@@ -347,7 +330,7 @@ impl IoBranch {
         HostControl::with_two_arguments(
             continuation,
             Immediate::expect_signed(HostIoErrorKind::from_error(&error) as i64),
-            HostString::leak(error.to_string()),
+            HostString::own(error.to_string()),
         )
     }
 
@@ -370,15 +353,14 @@ struct Input;
 
 impl Input {
     fn line() -> String {
-        let mut line = HOST_IO
-            .with(|runtime| {
-                runtime.borrow_mut().read(STDIN_HANDLE, |reader| {
-                    let mut line = String::new();
-                    reader.read_line(&mut line)?;
-                    Ok(line)
-                })
+        let mut line = RuntimeInstance::with_io(|runtime| {
+            runtime.borrow_mut().read(STDIN_HANDLE, |reader| {
+                let mut line = String::new();
+                reader.read_line(&mut line)?;
+                Ok(line)
             })
-            .expect("legacy standard-input read failed");
+        })
+        .expect("legacy standard-input read failed");
         if line.ends_with('\n') {
             line.pop();
             if line.ends_with('\r') {
@@ -389,15 +371,14 @@ impl Input {
     }
 
     fn remaining() -> String {
-        HOST_IO
-            .with(|runtime| {
-                runtime.borrow_mut().read(STDIN_HANDLE, |reader| {
-                    let mut input = String::new();
-                    reader.read_to_string(&mut input)?;
-                    Ok(input)
-                })
+        RuntimeInstance::with_io(|runtime| {
+            runtime.borrow_mut().read(STDIN_HANDLE, |reader| {
+                let mut input = String::new();
+                reader.read_to_string(&mut input)?;
+                Ok(input)
             })
-            .expect("legacy standard-input read failed")
+        })
+        .expect("legacy standard-input read failed")
     }
 }
 
@@ -417,8 +398,8 @@ impl OptionalPairBranch {
             | None => HostControl::without_arguments(when_none),
             | Some((first, second)) => HostControl::with_two_arguments(
                 when_some,
-                HostString::leak(first),
-                HostString::leak(second),
+                HostString::own(first),
+                HostString::own(second),
             ),
         }
     }
@@ -479,7 +460,7 @@ struct GeneratedRoots {
 
 impl RootSource for GeneratedRoots {
     fn with_roots<T>(self, trace: impl FnOnce(Roots<'_>) -> T) -> T {
-        let mut slots = unsafe { self.action.root_slots(&mut *FRAMES.get()) }
+        let mut slots = unsafe { self.action.root_slots(&mut *RuntimeInstance::frames()) }
             .unwrap_or_else(|error| out_of_frames(error));
         trace(Roots { stack: self.stack, slots: &mut slots })
     }
@@ -490,8 +471,8 @@ impl ManagedHeap {
         size_words: usize, tag: AllocationKind, stack_start: *mut Word,
         roots: &'static Action<Word>,
     ) -> *mut u8 {
-        let stack_end = unsafe { *STACK_END.get() };
-        let heap = unsafe { &mut *HEAP.get() };
+        let stack_end = unsafe { *RuntimeInstance::stack_end() };
+        let heap = unsafe { &mut *RuntimeInstance::heap() };
         let roots = GeneratedRoots {
             stack: RootRange { start: stack_start, end: stack_end },
             action: roots,
@@ -520,25 +501,25 @@ extern "sysv64" fn zydeco_alloc_opaque(
 #[unsafe(export_name = "\x01zydeco_frame_step")]
 extern "sysv64" fn zydeco_frame_step(action: &'static Action<Word>, token: Word) -> Word {
     // SAFETY: action and trailing indices are static descriptors from matched codegen.
-    unsafe { action.apply(&mut *FRAMES.get(), token) }.unwrap_or_else(|error| out_of_frames(error))
+    unsafe { action.apply(&mut *RuntimeInstance::frames(), token) }
+        .unwrap_or_else(|error| out_of_frames(error))
 }
 
 #[unsafe(export_name = "\x01zydeco_ffi_borrow_memory")]
 extern "sysv64" fn zydeco_ffi_borrow_memory(window: Word) -> *const u8 {
     // The checked classifier fixes this ordinary product's three word fields.
     let fields = unsafe { std::slice::from_raw_parts(window as *const Word, 3) };
-    HOST_BUFFERS
-        .with(|arena| {
-            arena
-                .borrow()
-                .read_memory(
-                    memory::MemoryBranch::access(fields[0]),
-                    memory::MemoryBranch::address(fields[1]),
-                    <i64 as RuntimeInteger>::decode(fields[2]),
-                )
-                .map(|bytes| bytes.as_ptr())
-        })
-        .unwrap_or_else(|error| RuntimeFailure::ForeignMemory(error).exit())
+    RuntimeInstance::with_buffers(|arena| {
+        arena
+            .borrow()
+            .read_memory(
+                memory::MemoryBranch::access(fields[0]),
+                memory::MemoryBranch::address(fields[1]),
+                <i64 as RuntimeInteger>::decode(fields[2]),
+            )
+            .map(|bytes| bytes.as_ptr())
+    })
+    .unwrap_or_else(|error| RuntimeFailure::ForeignMemory(error).exit())
 }
 
 macro_rules! foreign_integer {
@@ -586,14 +567,14 @@ extern "sysv64" fn zydeco_str_byte_length(string: Word) -> Word {
 extern "sysv64" fn zydeco_string_literal(bytes: *const u8, length: usize) -> Word {
     let bytes = unsafe { std::slice::from_raw_parts(bytes, length) };
     let string = std::str::from_utf8(bytes).expect("invalid UTF-8 string literal");
-    HostString::leak(string.to_string())
+    HostString::own(string.to_string())
 }
 
 #[unsafe(export_name = "\x01zydeco_str_append")]
 extern "sysv64" fn zydeco_str_append(first: Word, second: Word) -> Word {
     let first = unsafe { HostString::borrow(first) };
     let second = unsafe { HostString::borrow(second) };
-    HostString::leak([first, second].concat())
+    HostString::own([first, second].concat())
 }
 
 #[unsafe(export_name = "\x01zydeco_str_get_branch")]
@@ -610,10 +591,6 @@ extern "sysv64" fn zydeco_str_get_branch(
             HostControl::with_one_argument(when_some, Immediate::expect_unsigned(character as Word))
         }
     }
-}
-
-thread_local! {
-    static HOST_BUFFERS: RefCell<BufferArena> = RefCell::new(BufferArena::default());
 }
 
 // Optional normalization may leave arithmetic calls intact. These entries obey
@@ -727,7 +704,7 @@ macro_rules! integer_runtime {
 
         #[unsafe(export_name = $to_string_symbol)]
         extern "sysv64" fn $to_string(value: Word) -> Word {
-            HostString::leak(<$type as RuntimeInteger>::decode(value).to_string())
+            HostString::own(<$type as RuntimeInteger>::decode(value).to_string())
         }
     };
 }
@@ -821,7 +798,7 @@ macro_rules! float_runtime {
         #[unsafe(export_name = $to_string_symbol)]
         extern "sysv64" fn $to_string(value: Word) -> Word {
             let value: $type = $codec::decode(value);
-            HostString::leak(value.to_string())
+            HostString::own(value.to_string())
         }
     };
 }
@@ -845,7 +822,7 @@ float_runtime!(
 extern "sysv64" fn zydeco_char_to_str(character: Word) -> Word {
     let character =
         char::from_u32(Immediate::decode_unsigned(character) as u32).expect("invalid character");
-    HostString::leak(character.to_string())
+    HostString::own(character.to_string())
 }
 
 #[unsafe(export_name = "\x01zydeco_char_codepoint")]
@@ -937,7 +914,7 @@ extern "sysv64" fn zydeco_io_read(
             );
         }
     };
-    let result = HOST_IO.with(|runtime| {
+    let result = RuntimeInstance::with_io(|runtime| {
         runtime.borrow_mut().read(reader, |reader| {
             let mut bytes = Vec::new();
             reader.take(count).read_to_end(&mut bytes)?;
@@ -952,7 +929,7 @@ extern "sysv64" fn zydeco_io_read_line(
     reader: Word, when_error: Word, when_eof: Word, when_line: Word,
 ) -> Word {
     let reader = HostHandle::decode(reader);
-    let result = HOST_IO.with(|runtime| {
+    let result = RuntimeInstance::with_io(|runtime| {
         runtime.borrow_mut().read(reader, |reader| {
             let mut bytes = Vec::new();
             let read = reader.read_until(b'\n', &mut bytes)?;
@@ -975,7 +952,7 @@ extern "sysv64" fn zydeco_io_read_line(
 #[unsafe(export_name = "\x01zydeco_io_read_all")]
 extern "sysv64" fn zydeco_io_read_all(reader: Word, when_error: Word, when_success: Word) -> Word {
     let reader = HostHandle::decode(reader);
-    let result = HOST_IO.with(|runtime| {
+    let result = RuntimeInstance::with_io(|runtime| {
         runtime.borrow_mut().read(reader, |reader| {
             let mut bytes = Vec::new();
             reader.read_to_end(&mut bytes)?;
@@ -990,7 +967,7 @@ extern "sysv64" fn zydeco_io_write_all(
     writer: Word, access: Word, address: Word, length: Word, when_error: Word, when_success: Word,
 ) -> Word {
     let writer = HostHandle::decode(writer);
-    let result = HOST_BUFFERS.with(|arena| {
+    let result = RuntimeInstance::with_buffers(|arena| {
         let arena = arena.borrow();
         let bytes = arena
             .read_memory(
@@ -999,7 +976,9 @@ extern "sysv64" fn zydeco_io_write_all(
                 <i64 as RuntimeInteger>::decode(length),
             )
             .map_err(HostIoError::memory)?;
-        HOST_IO.with(|runtime| runtime.borrow_mut().write(writer, |writer| writer.write_all(bytes)))
+        RuntimeInstance::with_io(|runtime| {
+            runtime.borrow_mut().write(writer, |writer| writer.write_all(bytes))
+        })
     });
     IoBranch::unit(result, when_error, when_success)
 }
@@ -1007,8 +986,9 @@ extern "sysv64" fn zydeco_io_write_all(
 #[unsafe(export_name = "\x01zydeco_io_flush")]
 extern "sysv64" fn zydeco_io_flush(writer: Word, when_error: Word, when_success: Word) -> Word {
     let writer = HostHandle::decode(writer);
-    let result =
-        HOST_IO.with(|runtime| runtime.borrow_mut().write(writer, |writer| writer.flush()));
+    let result = RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().write(writer, |writer| writer.flush())
+    });
     IoBranch::unit(result, when_error, when_success)
 }
 
@@ -1017,7 +997,7 @@ extern "sysv64" fn zydeco_io_close_reader(
     reader: Word, when_error: Word, when_success: Word,
 ) -> Word {
     let reader = HostHandle::decode(reader);
-    let result = HOST_IO.with(|runtime| runtime.borrow_mut().close_reader(reader));
+    let result = RuntimeInstance::with_io(|runtime| runtime.borrow_mut().close_reader(reader));
     IoBranch::unit(result, when_error, when_success)
 }
 
@@ -1026,15 +1006,16 @@ extern "sysv64" fn zydeco_io_close_writer(
     writer: Word, when_error: Word, when_success: Word,
 ) -> Word {
     let writer = HostHandle::decode(writer);
-    let result = HOST_IO.with(|runtime| runtime.borrow_mut().close_writer(writer));
+    let result = RuntimeInstance::with_io(|runtime| runtime.borrow_mut().close_writer(writer));
     IoBranch::unit(result, when_error, when_success)
 }
 
 #[unsafe(export_name = "\x01zydeco_fs_open_reader")]
 extern "sysv64" fn zydeco_fs_open_reader(path: Word, when_error: Word, when_success: Word) -> Word {
-    let result = HOST_IO
-        .with(|runtime| runtime.borrow_mut().open_reader(unsafe { HostString::borrow(path) }))
-        .map(HostHandle::encode);
+    let result = RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().open_reader(unsafe { HostString::borrow(path) })
+    })
+    .map(HostHandle::encode);
     IoBranch::value(result, when_error, when_success)
 }
 
@@ -1042,9 +1023,10 @@ extern "sysv64" fn zydeco_fs_open_reader(path: Word, when_error: Word, when_succ
 extern "sysv64" fn zydeco_fs_create_writer(
     path: Word, when_error: Word, when_success: Word,
 ) -> Word {
-    let result = HOST_IO
-        .with(|runtime| runtime.borrow_mut().create_writer(unsafe { HostString::borrow(path) }))
-        .map(HostHandle::encode);
+    let result = RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().create_writer(unsafe { HostString::borrow(path) })
+    })
+    .map(HostHandle::encode);
     IoBranch::value(result, when_error, when_success)
 }
 
@@ -1052,16 +1034,17 @@ extern "sysv64" fn zydeco_fs_create_writer(
 extern "sysv64" fn zydeco_fs_append_writer(
     path: Word, when_error: Word, when_success: Word,
 ) -> Word {
-    let result = HOST_IO
-        .with(|runtime| runtime.borrow_mut().append_writer(unsafe { HostString::borrow(path) }))
-        .map(HostHandle::encode);
+    let result = RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().append_writer(unsafe { HostString::borrow(path) })
+    })
+    .map(HostHandle::encode);
     IoBranch::value(result, when_error, when_success)
 }
 
 #[unsafe(export_name = "\x01zydeco_read_line")]
 extern "sysv64" fn zydeco_read_line(continuation: Word) -> Word {
     let line = Input::line();
-    HostControl::with_one_argument(continuation, HostString::leak(line))
+    HostControl::with_one_argument(continuation, HostString::own(line))
 }
 
 #[unsafe(export_name = "\x01zydeco_read_line_as_int_branch")]
@@ -1076,54 +1059,52 @@ extern "sysv64" fn zydeco_read_line_as_int_branch(
 
 #[unsafe(export_name = "\x01zydeco_read_till_eof")]
 extern "sysv64" fn zydeco_read_till_eof(continuation: Word) -> Word {
-    HostControl::with_one_argument(continuation, HostString::leak(Input::remaining()))
+    HostControl::with_one_argument(continuation, HostString::own(Input::remaining()))
 }
 
 #[unsafe(export_name = "\x01zydeco_write_str")]
 extern "sysv64" fn zydeco_write_str(string: Word, continuation: Word) -> Word {
-    HOST_IO
-        .with(|runtime| {
-            runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
-                writer.write_all(unsafe { HostString::borrow(string) }.as_bytes())?;
-                writer.flush()
-            })
+    RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
+            writer.write_all(unsafe { HostString::borrow(string) }.as_bytes())?;
+            writer.flush()
         })
-        .expect("legacy standard-output write failed");
+    })
+    .expect("legacy standard-output write failed");
     HostControl::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_write_int")]
 extern "sysv64" fn zydeco_write_int(integer: Word, continuation: Word) -> Word {
     let integer = <i64 as RuntimeInteger>::decode(integer);
-    HOST_IO
-        .with(|runtime| {
-            runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
-                write!(writer, "{integer}")?;
-                writer.flush()
-            })
+    RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
+            write!(writer, "{integer}")?;
+            writer.flush()
         })
-        .expect("legacy standard-output write failed");
+    })
+    .expect("legacy standard-output write failed");
     HostControl::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_write_line")]
 extern "sysv64" fn zydeco_write_line(line: Word, continuation: Word) -> Word {
-    HOST_IO
-        .with(|runtime| {
-            runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
-                writeln!(writer, "{}", unsafe { HostString::borrow(line) })?;
-                writer.flush()
-            })
+    RuntimeInstance::with_io(|runtime| {
+        runtime.borrow_mut().write(STDOUT_HANDLE, |writer| {
+            writeln!(writer, "{}", unsafe { HostString::borrow(line) })?;
+            writer.flush()
         })
-        .expect("legacy standard-output write failed");
+    })
+    .expect("legacy standard-output write failed");
     HostControl::without_arguments(continuation)
 }
 
 #[unsafe(export_name = "\x01zydeco_arg_at")]
 extern "sysv64" fn zydeco_arg_at(index: Word, when_none: Word, when_some: Word) -> Word {
     let index = usize::try_from(<i64 as RuntimeInteger>::decode(index)).ok();
-    let argument =
-        HOST_ARGUMENTS.with(|arguments| index.and_then(|index| arguments.get(index)).copied());
+    let argument = RuntimeInstance::with_arguments(|arguments| {
+        index.and_then(|index| arguments.get(index)).copied()
+    });
     match argument {
         | Some(argument) => HostControl::with_one_argument(when_some, argument),
         | None => HostControl::without_arguments(when_none),
@@ -1157,23 +1138,154 @@ fn out_of_frames(error: FrameError) -> ! {
     std::process::exit(1)
 }
 
-static HEAP: RuntimeCell<CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>> =
-    RuntimeCell::new(CheneyHeap::new());
-static FRAMES: RuntimeCell<NativeFrames<Growable>> = RuntimeCell::new(NativeFrames::EMPTY);
-static STACK_END: RuntimeCell<*mut Word> = RuntimeCell::new(std::ptr::null_mut());
-static CONTROL_TRANSFER: RuntimeCell<HostTransfer<Word>> =
-    RuntimeCell::new(HostTransfer { resume: 0, closure: 0, first: 0, second: 0 });
-
-thread_local! {
-    // Host strings contain no managed references. Lookup returns the same stable snapshot.
-    static HOST_ARGUMENTS: Vec<Word> = std::env::args().skip(1).map(HostString::leak).collect();
-    static HOST_IO: RefCell<HostIoRuntime> = RefCell::new(HostIoRuntime::new());
+/// Each external entry owns all mutable language and host state. The TLS pointer only dispatches
+/// helpers; a suspended caller retains its complete instance while another unit is active.
+struct RuntimeInstance {
+    heap: CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS>,
+    frames: NativeFrames<Growable>,
+    stack_end: *mut Word,
+    transfer: HostTransfer<Word>,
+    buffers: RefCell<BufferArena>,
+    io: RefCell<HostIoRuntime>,
+    arguments: Vec<Word>,
+    // Stable, host-owned strings contain no managed references.
+    #[allow(clippy::vec_box)]
+    strings: Vec<Box<String>>,
+    previous: *mut Self,
+    guard: *const std::sync::atomic::AtomicBool,
 }
 
-fn main() {
+thread_local! {
+    static CURRENT_INSTANCE: Cell<*mut RuntimeInstance> = const { Cell::new(std::ptr::null_mut()) };
+}
+
+impl RuntimeInstance {
+    fn current() -> *mut Self {
+        CURRENT_INSTANCE.with(|current| {
+            let instance = current.get();
+            assert!(!instance.is_null(), "native runtime helper outside an entry");
+            instance
+        })
+    }
+
+    fn heap() -> *mut CheneyHeap<HEAP_SPACE_BYTES, HEAP_INDEX_REGIONS> {
+        unsafe { &raw mut (*Self::current()).heap }
+    }
+
+    fn frames() -> *mut NativeFrames<Growable> {
+        unsafe { &raw mut (*Self::current()).frames }
+    }
+
+    fn stack_end() -> *mut *mut Word {
+        unsafe { &raw mut (*Self::current()).stack_end }
+    }
+
+    fn transfer() -> *mut HostTransfer<Word> {
+        unsafe { &raw mut (*Self::current()).transfer }
+    }
+
+    fn with_buffers<T>(f: impl FnOnce(&RefCell<BufferArena>) -> T) -> T {
+        f(unsafe { &(*Self::current()).buffers })
+    }
+
+    fn with_io<T>(f: impl FnOnce(&RefCell<HostIoRuntime>) -> T) -> T {
+        f(unsafe { &(*Self::current()).io })
+    }
+
+    fn with_arguments<T>(f: impl FnOnce(&[Word]) -> T) -> T {
+        f(unsafe { &(*Self::current()).arguments })
+    }
+}
+
+zydeco_machine::export_native_entry! {
+/// Acquire the unit guard before any source initialization. Raw C arguments and saved ABI
+/// registers are above `stack_end` and never scanned by the collector.
+extern "sysv64" fn entry_begin(stack_end: *mut Word, guard: *const std::sync::atomic::AtomicBool) {
+    use std::sync::atomic::Ordering;
+    if !guard.is_null() && unsafe { &*guard }.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+        eprintln!("Zydeco runtime: concurrent or reentrant entry into an active compiled library");
+        std::process::exit(1);
+    }
+    let previous = CURRENT_INSTANCE.with(Cell::get);
+    let instance = Box::new(RuntimeInstance {
+        heap: CheneyHeap::new(), frames: NativeFrames::EMPTY, stack_end,
+        transfer: HostTransfer { resume: 0, closure: 0, first: 0, second: 0 },
+        buffers: RefCell::new(BufferArena::default()), io: RefCell::new(HostIoRuntime::new()),
+        arguments: Vec::new(), strings: Vec::new(), previous, guard,
+    });
+    CURRENT_INSTANCE.with(|current| current.set(Box::into_raw(instance)));
+}
+}
+
+#[unsafe(export_name = "\x01zydeco_entry_end")]
+extern "sysv64" fn entry_end() {
+    use std::sync::atomic::Ordering;
+    let instance = unsafe { Box::from_raw(RuntimeInstance::current()) };
+    CURRENT_INSTANCE.with(|current| current.set(instance.previous));
+    let guard = instance.guard;
+    drop(instance);
+    if !guard.is_null() {
+        unsafe { &*guard }.store(false, Ordering::Release);
+    }
+}
+
+/// Root already encoded arguments before allocating the next full-width input box.
+#[unsafe(export_name = "\x01zydeco_entry_box")]
+extern "sysv64" fn entry_box(stack_start: *mut Word) -> *mut Word {
+    let end = unsafe { *RuntimeInstance::stack_end() };
+    let roots = Roots { stack: RootRange { start: stack_start, end }, slots: &mut [] };
+    unsafe { (&mut *RuntimeInstance::heap()).allocate(1, AllocationKind::Opaque, roots) }
+        .unwrap_or_else(|error| out_of_memory(error))
+        .cast()
+}
+
+#[cfg(feature = "process-entry")]
+pub fn run_process() {
     let stack_anchor: Word = 0;
+    entry_begin(std::ptr::addr_of!(stack_anchor).cast_mut(), std::ptr::null());
+    let arguments = std::env::args().skip(1).map(HostString::own).collect();
     unsafe {
-        *STACK_END.get() = std::ptr::addr_of!(stack_anchor).add(1).cast_mut();
-        entry();
+        (*RuntimeInstance::current()).arguments = arguments;
+        zydeco_machine::native::entry();
+    }
+    entry_end();
+}
+
+#[cfg(test)]
+mod entry_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn independent_entries_restore_the_caller_and_start_with_fresh_host_state() {
+        let first = AtomicBool::new(false);
+        let second = AtomicBool::new(false);
+        let mut anchor: Word = 0;
+        entry_begin(&mut anchor, &first);
+        let caller = RuntimeInstance::current();
+        let caller_heap = RuntimeInstance::heap();
+        let string = HostString::own("caller state".into());
+        unsafe {
+            (*caller).arguments.push(string);
+        }
+        entry_begin(&mut anchor, &second);
+        assert_ne!(RuntimeInstance::current(), caller);
+        assert_ne!(RuntimeInstance::heap(), caller_heap);
+        RuntimeInstance::with_arguments(|arguments| assert!(arguments.is_empty()));
+        assert!(unsafe { (*RuntimeInstance::current()).strings.is_empty() });
+        HostString::own("callee state".into());
+        entry_end();
+        assert!(!second.load(Ordering::Relaxed));
+        assert!(first.load(Ordering::Relaxed));
+        assert_eq!(RuntimeInstance::current(), caller);
+        RuntimeInstance::with_arguments(|arguments| assert_eq!(arguments, &[string]));
+        assert_eq!(unsafe { HostString::borrow(string) }, "caller state");
+        entry_end();
+        assert!(!first.load(Ordering::Relaxed));
+        assert!(CURRENT_INSTANCE.with(Cell::get).is_null());
+        entry_begin(&mut anchor, &first);
+        assert!(unsafe { (*RuntimeInstance::current()).strings.is_empty() });
+        RuntimeInstance::with_arguments(|arguments| assert!(arguments.is_empty()));
+        entry_end();
     }
 }

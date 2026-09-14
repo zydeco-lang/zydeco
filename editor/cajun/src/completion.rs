@@ -231,7 +231,9 @@ impl CompletionScope<'static> {
             |scope, call| {
                 let definitions = match scope {
                     | Self::Definitions(definitions) => definitions,
-                    | Self::PackageRole => vec![MetadataCatalog::test_role()],
+                    | Self::PackageRole => {
+                        vec![MetadataCatalog::test_role(), MetadataCatalog::library_role()]
+                    }
                     | Self::PackageOptions { .. } => {
                         return (call.callee != "name" && call.argument == 0)
                             .then_some(Self::Source);
@@ -254,6 +256,19 @@ impl CompletionScope<'static> {
                     .collect(),
             )),
             | MetadataArguments::Package if call.argument == 0 => Some(Self::PackageRole),
+            | MetadataArguments::Library if call.argument == 0 => {
+                Some(Self::Identifiers(vec!["c"]))
+            }
+            | MetadataArguments::Library => {
+                Some(Self::Definitions(vec![MetadataCatalog::library_export()]))
+            }
+            | MetadataArguments::Export if call.argument == 0 => {
+                Some(Self::Definitions(MetadataCatalog::export_selectors().iter().collect()))
+            }
+            | MetadataArguments::Export if call.argument == 1 => {
+                Some(Self::Definitions(vec![MetadataCatalog::export_symbol()]))
+            }
+            | MetadataArguments::Export => None,
             | MetadataArguments::Discovery => {
                 Some(Self::Definitions(MetadataCatalog::discovery_rules().iter().collect()))
             }
@@ -298,6 +313,8 @@ impl<'definition> MetadataSignature<'definition> {
             | MetadataArguments::None => return definition.name().to_owned(),
             | MetadataArguments::Arbitrary { label } => format!("{label}, ..."),
             | MetadataArguments::Package => "role, name(id), kind(source), ...".to_owned(),
+            | MetadataArguments::Library => "c, export(selector, symbol(name)), ...".to_owned(),
+            | MetadataArguments::Export => "field(path) or root, symbol(name)".to_owned(),
             | MetadataArguments::Discovery => "include(glob), exclude(glob), ...".to_owned(),
             | MetadataArguments::Variadic(parameter) => format!("{}, ...", parameter.label()),
             | MetadataArguments::Options(_) => "option, ...".to_owned(),
@@ -332,6 +349,14 @@ impl MetadataSnippet {
             | MetadataArguments::None => return definition.name().to_owned(),
             | MetadataArguments::Arbitrary { label } => self.placeholder(label),
             | MetadataArguments::Package => self.placeholder("library"),
+            | MetadataArguments::Library => {
+                format!("c, {}", self.definition(MetadataCatalog::library_export()))
+            }
+            | MetadataArguments::Export => format!(
+                "field({}), symbol(\"{}\")",
+                self.placeholder("path"),
+                self.placeholder("name")
+            ),
             | MetadataArguments::Discovery => self.placeholder("include"),
             | MetadataArguments::Variadic(parameter) => self.parameter(parameter),
             | MetadataArguments::Options(_) => self.placeholder("option"),
@@ -705,6 +730,19 @@ mod tests {
             ["test"]
         );
         assert!(CompletionFixture::new(r#"@(import(pa|))"#).items().is_none());
+    }
+
+    #[test]
+    fn compiled_library_completions_follow_the_export_contract() {
+        for (source, expected) in [
+            ("@[package(library(|))] ()", vec!["c"]),
+            ("@[package(library(c, |))] ()", vec!["export"]),
+            ("@[package(library(c, export(|)))] ()", vec!["root", "field"]),
+            ("@[package(library(c, export(root, |)))] ()", vec!["symbol"]),
+            (r#"@[package(library(c, export(root, symbol("f")), |))] ()"#, vec!["export"]),
+        ] {
+            assert_eq!(CompletionFixture::new(source).labels().unwrap(), expected, "{source}");
+        }
     }
 
     #[test]

@@ -15,6 +15,8 @@ use {
 
 /// Checker lifecycle and source finalization.
 mod driver;
+mod library;
+pub use library::{CheckedExport, CheckedLibrary, LibraryCheckError};
 /// Checked source results and synthesis reuse.
 mod source;
 use source::CheckedTermRepository;

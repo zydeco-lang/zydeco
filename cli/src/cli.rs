@@ -7,6 +7,9 @@ pub enum BuildTarget {
     Zir,
     Zasm,
     Asm,
+    Object,
+    Staticlib,
+    Sharedlib,
     WasmAm,
     WasmSps,
     #[default]
@@ -64,6 +67,9 @@ pub struct ExecutionOptions {
     /// Native runtime sources, used by exe
     #[arg(short = 'r', long, default_value = "runtime")]
     pub runtime_dir: PathBuf,
+    /// Resolve a compiled library through its checked artifact manifest (repeatable)
+    #[arg(long = "link-library", value_name = "MANIFEST")]
+    pub link_libraries: Vec<PathBuf>,
 }
 
 /// Command-line spelling, translated to the compiler's representation policy at entry.
@@ -211,6 +217,9 @@ pub enum Commands {
         /// Runtime directory
         #[arg(short = 'r', long)]
         runtime_dir: Option<PathBuf>,
+        /// Resolve a compiled library through its checked artifact manifest (repeatable)
+        #[arg(long = "link-library", value_name = "MANIFEST")]
+        link_libraries: Vec<PathBuf>,
         /// Run the program after building
         #[arg(short = 'x', long, default_value_t = false)]
         execute: bool,

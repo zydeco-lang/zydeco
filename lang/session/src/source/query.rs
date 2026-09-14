@@ -138,6 +138,14 @@ pub struct ExecutableProgram {
     pub signature: PackPi,
 }
 
+/// The source provenance and checked entries of an independently compiled library.
+#[derive(Clone)]
+pub struct LibraryProgram {
+    pub spans: Arc<SpanArena>,
+    pub scoped: Arc<ScopedArena>,
+    pub library: zydeco_statics::CheckedLibrary,
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum ExecutableError {
     #[error(transparent)]
@@ -471,6 +479,22 @@ impl CompilerSession {
             return Err(ExecutableError::non_builtin(&scoped, &statics, ty));
         };
         Ok(ExecutableProgram { spans, scoped, statics, root, signature: *signature })
+    }
+
+    pub fn library_program(
+        &self, analysis: &ProgramAnalysis, contract: &zydeco_surface::metadata::LibraryContract,
+    ) -> Result<LibraryProgram, zydeco_statics::LibraryCheckError> {
+        let input = self
+            .source_input(analysis.root_path().to_path_buf())
+            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
+        let data = resolved_data(self, input, analysis.package.clone(), analysis.bindings.clone())
+            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
+        let library = zydeco_statics::query::check_library(self, data, contract.clone())?;
+        Ok(LibraryProgram {
+            spans: data.spans(self).clone(),
+            scoped: data.scoped(self).clone(),
+            library,
+        })
     }
 
     /// Check a resolved program constructed outside the source pipeline.

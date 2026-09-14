@@ -26,6 +26,15 @@ pub enum Step<T, Out> {
 
 impl<'rt> Runtime<'rt> {
     /// Construct a new runtime with empty environment and stack.
+    /// Resolve explicit logical library identities to exact, preflighted artifact paths.
+    pub fn with_foreign_libraries(
+        mut self,
+        paths: std::collections::BTreeMap<zydeco_syntax::ForeignLibraryName, std::path::PathBuf>,
+    ) -> Self {
+        self.foreign = self.foreign.with_paths(paths);
+        self
+    }
+
     pub fn new(
         input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, stderr: &'rt mut dyn Write,
         args: &'rt [String], program: DynamicsProgram,

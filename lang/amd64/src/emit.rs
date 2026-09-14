@@ -10,7 +10,7 @@ use zydeco_assembly::{
 };
 use zydeco_machine::frames::{Action, STEP_SYMBOL};
 use zydeco_machine::native::{
-    AllocationKind, ClosureField, ENTRY_SYMBOL, ResumeArity, TransferField, WORD_BYTES,
+    AllocationKind, ENTRY_SYMBOL, EXPORT_ENTRY_SYMBOL, TransferField, WORD_BYTES,
 };
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -22,6 +22,14 @@ pub const ENV_REG: Reg = Reg::Rbp;
 pub enum TargetFormat {
     Elf,
     MachO,
+}
+
+/// A checked scalar C boundary. The shared guard identifies the containing compiled library.
+#[derive(Clone, Debug)]
+pub struct CExportEntry {
+    pub symbol: ForeignSymbolName,
+    pub signature: ForeignSignature,
+    pub guard: ForeignSymbolName,
 }
 
 /// Alignment of `rsp` at the current assembly position.
@@ -76,6 +84,7 @@ pub struct Emitter<'e> {
     stack_parity: StackParity,
     entry_parities: HashMap<ProgId, StackParity>,
     dynamic_entries: HashSet<ProgId>,
+    c_export: Option<CExportEntry>,
 }
 
 impl<'e> Emitter<'e> {
@@ -86,7 +95,8 @@ impl<'e> Emitter<'e> {
         let assembly = native.assembly();
         let arena = assembly.arena();
         let root = assembly.root();
-        let entry_parities = Self::compute_entry_parities(arena, root, native.frames());
+        let entry_parities =
+            Self::compute_entry_parities(arena, root, native.frames(), StackParity::Misaligned);
         let dynamic_entries = Self::compute_dynamic_entries(arena);
         Self {
             spans,
@@ -103,7 +113,20 @@ impl<'e> Emitter<'e> {
             stack_parity: entry_parities.get(&root).copied().unwrap_or(StackParity::Unknown),
             entry_parities,
             dynamic_entries,
+            c_export: None,
         }
+    }
+
+    pub fn with_c_export(mut self, entry: CExportEntry) -> Self {
+        let parity = if entry.signature.parameters().len().is_multiple_of(2) {
+            StackParity::Misaligned
+        } else {
+            StackParity::Aligned
+        };
+        self.entry_parities =
+            Self::compute_entry_parities(self.assembly, self.root, self.frames, parity);
+        self.c_export = Some(entry);
+        self
     }
 
     /// Propagate the known `rsp` parity at function entry through the program graph.
@@ -114,7 +137,7 @@ impl<'e> Emitter<'e> {
     /// that are only reachable through dynamic continuations have no single
     /// statically known entry parity and stay [`StackParity::Unknown`].
     fn compute_entry_parities(
-        assembly: &AssemblyArena, root: ProgId, frames: &FramePlan,
+        assembly: &AssemblyArena, root: ProgId, frames: &FramePlan, initial: StackParity,
     ) -> HashMap<ProgId, StackParity> {
         const ODD: u8 = 0b01;
         const EVEN: u8 = 0b10;
@@ -135,7 +158,14 @@ impl<'e> Emitter<'e> {
 
         let mut parities = HashMap::new();
         let mut queue = VecDeque::new();
-        parities.insert(root, ODD);
+        parities.insert(
+            root,
+            match initial {
+                | StackParity::Aligned => EVEN,
+                | StackParity::Misaligned => ODD,
+                | StackParity::Unknown => ODD | EVEN,
+            },
+        );
         queue.push_back(root);
 
         while let Some(prog_id) = queue.pop_front() {
@@ -245,6 +275,12 @@ impl<'e> Emitter<'e> {
     /// pair fixes it. For dynamic continuations with unknown parity, save the
     /// original `rsp` below the aligned stack, call, and restore it afterwards.
     fn emit_aligned_call(&mut self, target: JmpArgs) {
+        let target = match (self.target_format, target) {
+            | (TargetFormat::Elf, JmpArgs::Label(label)) => {
+                JmpArgs::Label(format!("{label} wrt ..plt"))
+            }
+            | (_, target) => target,
+        };
         match self.stack_parity {
             | StackParity::Aligned => self.asm.text.push(Instr::Call(target)),
             | StackParity::Misaligned => {
@@ -396,7 +432,7 @@ impl<'e> Emitter<'e> {
         )));
 
         // Keep source values above a scratch frame until the C call returns. Marshalling
-        // helpers never allocate, and the foreign contract forbids reentry into Zydeco:
+        // helpers never allocate. A separate C unit may enter its own isolated instance:
         // no collection can observe the raw pointers, lengths, or integers in this frame.
         if scratch_words != 0 {
             self.asm.text.push(Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(scratch_bytes))));
@@ -481,6 +517,99 @@ impl<'e> Emitter<'e> {
 }
 
 impl Emitter<'_> {
+    fn emit_c_adapter(&mut self, entry: &CExportEntry) {
+        let symbol = self.foreign_symbol(&entry.symbol);
+        // Raw arguments and saved registers are outside the traced range. Keep the raw frame
+        // in r13 only during encoding; source code may freely use every working register.
+        self.asm.text.extend([
+            Instr::Extern(entry.guard.to_string()),
+            Instr::Extern(EXPORT_ENTRY_SYMBOL.into()),
+            Instr::Extern("zydeco_entry_box".into()),
+            Instr::Extern("zydeco_entry_end".into()),
+            Instr::Global(symbol.clone()),
+            Instr::Label(symbol),
+        ]);
+        let saved = [Reg::Rbp, Reg::Rbx, Reg::R12, Reg::R13, Reg::R14, Reg::R15];
+        self.asm.text.extend(saved.into_iter().map(|reg| Instr::Push(Arg32::Reg(reg))));
+        self.asm.text.push(Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(56))));
+        for (index, _) in entry.signature.parameters().iter().enumerate() {
+            self.asm.text.push(Instr::Mov(MovArgs::ToMem(
+                MemRef { reg: Reg::Rsp, offset: (index * WORD_BYTES) as i32 },
+                Reg32::Reg(Self::argument_register(index + 1)),
+            )));
+        }
+        self.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::R13, Arg64::Reg(Reg::Rsp))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rsp))),
+            Instr::Lea(
+                Reg::Rsi,
+                LeaArgs::RelLabel(RelLabel { label: entry.guard.to_string(), offset: None }),
+            ),
+        ]);
+        self.stack_parity = StackParity::Aligned;
+        self.emit_aligned_call(JmpArgs::Label(EXPORT_ENTRY_SYMBOL.into()));
+        self.asm.text.extend([
+            Instr::Lea(
+                Reg::Rax,
+                LeaArgs::RelLabel(RelLabel {
+                    label: "zydeco_external_return".into(),
+                    offset: None,
+                }),
+            ),
+            Instr::Push(Arg32::Reg(Reg::Rax)),
+        ]);
+        self.shift_stack_parity(1);
+        for (index, parameter) in entry.signature.parameters().iter().enumerate().rev() {
+            let ForeignParameter::Integer(integer) = parameter else {
+                panic!("checked C export has a non-invertible parameter")
+            };
+            if integer.bits() == 64 {
+                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rsp))));
+                self.emit_aligned_call(JmpArgs::Label("zydeco_entry_box".into()));
+                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))));
+            } else {
+                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Unsigned(0))));
+            }
+            self.asm.text.push(Instr::Mov(MovArgs::ToReg(
+                Reg::Rdi,
+                Arg64::Mem(MemRef { reg: Reg::R13, offset: (index * WORD_BYTES) as i32 }),
+            )));
+            // The shared encoder accepts a raw Word and explicitly truncates it to the
+            // declared width, so unspecified upper argument bits never enter tagged values.
+            self.emit_aligned_call(JmpArgs::Label(format!(
+                "zydeco_ffi_encode_{}",
+                integer.source_name()
+            )));
+            self.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
+            self.shift_stack_parity(1);
+        }
+        self.asm.text.push(Instr::Jmp(JmpArgs::Label("zydeco_export_body".into())));
+        // The checked Ret delimiter delivers exactly one tagged value. Decode while the
+        // instance is alive, then restore the caller's stack and all SysV preserved registers.
+        self.asm.text.extend([
+            Instr::Label("zydeco_external_return".into()),
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+        ]);
+        self.stack_parity = StackParity::Aligned;
+        match entry.signature.result() {
+            | ForeignResult::Integer(integer) => self.emit_aligned_call(JmpArgs::Label(format!(
+                "zydeco_ffi_decode_{}",
+                integer.source_name()
+            ))),
+            | ForeignResult::Unit => {
+                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(0))))
+            }
+        }
+        self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R12, Arg64::Reg(Reg::Rax))));
+        self.emit_aligned_call(JmpArgs::Label("zydeco_entry_end".into()));
+        self.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::R12))),
+            Instr::Add(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(56))),
+        ]);
+        self.asm.text.extend(saved.into_iter().rev().map(|reg| Instr::Pop(Loc::Reg(reg))));
+        self.asm.text.push(Instr::Ret);
+    }
+
     pub fn run(mut self) -> AsmFile {
         self.asm.text.extend([
             Instr::Extern(STEP_SYMBOL.to_string()),
@@ -517,53 +646,23 @@ impl Emitter<'_> {
             })
             .collect::<Vec<_>>();
         externs.sort();
+        if let Some(entry) = &self.c_export {
+            let own_symbol = self.foreign_symbol(&entry.symbol);
+            externs.retain(|symbol| *symbol != own_symbol);
+        }
         self.asm.text.extend(externs.into_iter().map(Instr::Extern));
 
-        // A host call returns a transfer record; the control terminator jumps here.
-        // The shared catalog describes consumption order, so push its arguments in reverse.
-        for &arity in ResumeArity::ALL {
-            self.stack_parity = StackParity::Unknown;
+        if let Some(entry) = self.c_export.clone() {
+            self.emit_c_adapter(&entry);
+            self.asm.text.push(Instr::Label("zydeco_export_body".into()));
+        } else {
             self.asm.text.extend([
-                Instr::Global(arity.symbol().to_string()),
-                Instr::Label(arity.symbol().to_string()),
+                Instr::Global(ENTRY_SYMBOL.to_string()),
+                Instr::Label(ENTRY_SYMBOL.to_string()),
             ]);
-            self.asm.text.extend([
-                Instr::Mov(MovArgs::ToReg(
-                    Reg::Rax,
-                    Arg64::Mem(MemRef {
-                        reg: Reg::Rdi,
-                        offset: TransferField::Closure.offset() as i32,
-                    }),
-                )),
-                Instr::Mov(MovArgs::ToReg(
-                    Reg::Rsi,
-                    Arg64::Mem(MemRef {
-                        reg: Reg::Rax,
-                        offset: ClosureField::Environment.offset() as i32,
-                    }),
-                )),
-                Instr::Mov(MovArgs::ToReg(
-                    Reg::Rax,
-                    Arg64::Mem(MemRef {
-                        reg: Reg::Rax,
-                        offset: ClosureField::Code.offset() as i32,
-                    }),
-                )),
-            ]);
-            self.asm.text.extend(arity.arguments().iter().rev().map(|field| {
-                Instr::Push(Arg32::Mem(MemRef { reg: Reg::Rdi, offset: field.offset() as i32 }))
-            }));
-            self.asm
-                .text
-                .extend([Instr::Push(Arg32::Reg(Reg::Rsi)), Instr::Jmp(JmpArgs::Reg(Reg::Rax))]);
         }
-
         self.stack_parity =
             self.entry_parities.get(&self.root).copied().unwrap_or(StackParity::Unknown);
-        self.asm.text.extend([
-            Instr::Global(ENTRY_SYMBOL.to_string()),
-            Instr::Label(ENTRY_SYMBOL.to_string()),
-        ]);
 
         let root = self.root;
         root.emit((), &mut self);

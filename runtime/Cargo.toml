@@ -7,6 +7,8 @@ build = "build.rs"
 [workspace]
 
 [features]
+default = ["process-entry"]
+process-entry = []
 # Experimental storage engine; generated actions and preservation proofs agree
 # with the default retained-frame engine through the shared Environment contract.
 compact-environments = []
@@ -17,7 +19,12 @@ rand = "0.10"
 
 [[bin]]
 name = "main"
+path = "main.rs"
+required-features = ["process-entry"]
+
+[lib]
 path = "stub.rs"
+crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 zydeco-machine = { workspace = true }

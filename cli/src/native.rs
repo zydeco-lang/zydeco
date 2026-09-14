@@ -31,7 +31,7 @@ impl BuildOptions {
         Ok(Self::new(build_dir, runtime_dir, architecture, operating_system))
     }
 
-    fn prepare(&self) -> Result<(), NativeError> {
+    pub(crate) fn prepare(&self) -> Result<(), NativeError> {
         std::fs::create_dir_all(&self.build_dir).map_err(NativeError::PrepareBuildDirectory)?;
         std::fs::read_dir(&self.runtime_dir)
             .map_err(NativeError::ReadRuntimeDirectory)?
@@ -87,6 +87,19 @@ impl BuildOptions {
         &self, artifact: &str, assembly: &str,
         foreign_libraries: &[zydeco_syntax::ForeignLibraryName],
     ) -> Result<Executable, NativeError> {
+        self.link_amd64_resolved(
+            artifact,
+            assembly,
+            foreign_libraries,
+            &crate::library::LinkedLibraries::default(),
+        )
+    }
+
+    pub fn link_amd64_resolved(
+        &self, artifact: &str, assembly: &str,
+        foreign_libraries: &[zydeco_syntax::ForeignLibraryName],
+        libraries: &crate::library::LinkedLibraries,
+    ) -> Result<Executable, NativeError> {
         if self.architecture != TargetArchitecture::X86_64 {
             return Err(NativeError::UnsupportedAmd64Architecture(self.architecture));
         }
@@ -112,6 +125,7 @@ impl BuildOptions {
                 .arg(&object_path)
                 .arg(&assembly_path),
         )?;
+        libraries.bundle_raw(&object_path, self.operating_system)?;
         NativeTool::Archive
             .run(Command::new("ar").arg("crs").arg(&library_path).arg(&object_path))?;
 
@@ -123,6 +137,7 @@ impl BuildOptions {
                 "ZYDECO_DYNAMIC_LIBS",
                 foreign_libraries
                     .iter()
+                    .filter(|library| !libraries.contains(library))
                     .map(zydeco_syntax::ForeignLibraryName::as_str)
                     .collect::<Vec<_>>()
                     .join(","),
@@ -132,9 +147,9 @@ impl BuildOptions {
             .arg(self.build_dir.join("Cargo.toml"))
             .arg("--target")
             .arg(cargo_target);
-        if self.operating_system == TargetOs::Macos {
-            cargo.env("RUSTFLAGS", "-C panic=abort");
-        }
+        let mut flags = libraries.rust_flags();
+        flags.push("-Cpanic=abort".into());
+        cargo.env("CARGO_ENCODED_RUSTFLAGS", flags.join("\x1f"));
         NativeTool::Cargo.run(&mut cargo)?;
 
         let cargo_executable =
@@ -317,10 +332,11 @@ pub enum NativeTool {
     Nasm,
     Archive,
     Cargo,
+    Linker,
 }
 
 impl NativeTool {
-    fn run(self, command: &mut Command) -> Result<(), NativeError> {
+    pub(crate) fn run(self, command: &mut Command) -> Result<(), NativeError> {
         let output =
             command.output().map_err(|source| NativeError::StartTool { tool: self, source })?;
         if output.status.success() {
@@ -341,6 +357,7 @@ impl Display for NativeTool {
             | Self::Nasm => "nasm",
             | Self::Archive => "ar",
             | Self::Cargo => "cargo",
+            | Self::Linker => "cc",
         })
     }
 }

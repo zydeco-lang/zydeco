@@ -19,9 +19,49 @@ pub struct ExecutionRunner<'a> {
     targets: Vec<ExecutionTarget>,
     runtime_dir: PathBuf,
     node: PathBuf,
+    libraries: crate::library::LinkedLibraries,
 }
 
 impl<'a> ExecutionRunner<'a> {
+    pub fn with_libraries(mut self, libraries: crate::library::LinkedLibraries) -> Self {
+        self.libraries = libraries;
+        self
+    }
+
+    pub fn validate(&self, executable: &ExecutableProgram) -> Result<(), ExecutionError> {
+        if self.libraries.is_empty() {
+            return Ok(());
+        }
+        let imports = executable
+            .statics
+            .foreign_imports
+            .iter()
+            .map(|(_, import)| import.clone())
+            .collect::<Vec<_>>();
+        for target in &self.targets {
+            if matches!(target, ExecutionTarget::WasmAm | ExecutionTarget::WasmSps) {
+                return Err(crate::library::LibraryError::Target.into());
+            }
+            let interpreter = *target == ExecutionTarget::Interpreter;
+            let architecture = if interpreter {
+                TargetArchitecture::host().map_err(NativeError::UnsupportedHostArchitecture)?
+            } else {
+                TargetArchitecture::X86_64
+            };
+            let platform = crate::library::LibraryPlatform::for_target(
+                architecture,
+                TargetOs::host().map_err(NativeError::UnsupportedHostOperatingSystem)?,
+            )?;
+            let runtime = if interpreter {
+                None
+            } else {
+                Some(crate::library::LibraryDigest::runtime(&self.runtime_dir)?)
+            };
+            self.libraries.validate_imports(&imports, platform, runtime.as_deref(), interpreter)?;
+        }
+        Ok(())
+    }
+
     pub fn new(
         compiler: &'a CommandCompiler, targets: impl IntoIterator<Item = ExecutionTarget>,
         runtime_dir: PathBuf,
@@ -49,7 +89,7 @@ impl<'a> ExecutionRunner<'a> {
                 });
             }
         }
-        Ok(Self { compiler, targets: unique, runtime_dir, node })
+        Ok(Self { compiler, targets: unique, runtime_dir, node, libraries: Default::default() })
     }
 
     /// Reuse the checked source and one lowering across all requested backends.
@@ -57,6 +97,7 @@ impl<'a> ExecutionRunner<'a> {
     pub fn prepare(
         &self, executable: ExecutableProgram,
     ) -> Result<Vec<PreparedExecution>, ExecutionError> {
+        self.validate(&executable)?;
         let backend = self
             .targets
             .iter()
@@ -69,7 +110,10 @@ impl<'a> ExecutionRunner<'a> {
                 if target == ExecutionTarget::Interpreter {
                     return Ok(PreparedExecution {
                         target,
-                        program: ExecutionProgram::Interpreter(executable.clone()),
+                        program: ExecutionProgram::Interpreter {
+                            executable: executable.clone(),
+                            libraries: self.libraries.paths(),
+                        },
                     });
                 }
                 let backend = backend.as_ref().expect("compiled target requested lowering");
@@ -86,10 +130,11 @@ impl<'a> ExecutionRunner<'a> {
                             operating_system,
                         );
                         let native = backend.emit_amd64(operating_system);
-                        let executable = options.link_amd64(
+                        let executable = options.link_amd64_resolved(
                             "program",
                             &native.assembly,
                             &native.foreign_libraries,
+                            &self.libraries,
                         )?;
                         Command::new(executable.path())
                     }
@@ -128,16 +173,24 @@ pub struct PreparedExecution {
 }
 
 enum ExecutionProgram {
-    Interpreter(ExecutableProgram),
-    Process { command: Command, _directory: TempDir },
+    Interpreter {
+        executable: ExecutableProgram,
+        libraries: std::collections::BTreeMap<zydeco_syntax::ForeignLibraryName, PathBuf>,
+    },
+    Process {
+        command: Command,
+        _directory: TempDir,
+    },
 }
 
 impl PreparedExecution {
     /// Inherit the caller's terminal streams.
     pub fn run(self, arguments: &[String]) -> Result<i32, ExecutionError> {
         match self.program {
-            | ExecutionProgram::Interpreter(executable) => {
-                match CommandCompiler::interpret_program(executable, arguments, false)? {
+            | ExecutionProgram::Interpreter { executable, libraries } => {
+                match CommandCompiler::interpret_with_libraries(
+                    executable, arguments, false, libraries,
+                )? {
                     | ProgKont::ExitCode(code) => Ok(code),
                     | _ => unreachable!("an executable program exits or reports a runtime error"),
                 }
@@ -156,9 +209,9 @@ impl PreparedExecution {
         self, arguments: &[String], input: &str,
     ) -> Result<TestInteraction, ExecutionError> {
         match self.program {
-            | ExecutionProgram::Interpreter(executable) => {
-                Ok(CommandCompiler::test_io_program(executable, arguments, input)?)
-            }
+            | ExecutionProgram::Interpreter { executable, libraries } => Ok(
+                CommandCompiler::test_io_with_libraries(executable, arguments, input, libraries)?,
+            ),
             | ExecutionProgram::Process { mut command, _directory } => {
                 let stdin = if input.is_empty() {
                     Stdio::null()
@@ -184,6 +237,8 @@ impl PreparedExecution {
 
 #[derive(Debug, Error)]
 pub enum ExecutionError {
+    #[error(transparent)]
+    Library(#[from] crate::library::LibraryError),
     #[error(transparent)]
     Compile(#[from] CompileError),
     #[error(transparent)]

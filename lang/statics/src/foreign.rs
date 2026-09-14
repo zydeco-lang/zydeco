@@ -13,6 +13,10 @@ use zydeco_utils::prelude::ArenaAccess;
 /// A foreign annotation whose classifier is outside the implemented C ABI subset.
 #[derive(Clone, Debug, Error)]
 pub enum ForeignClassifierError {
+    #[error(
+        "C export argument {index} must be a fixed-width integer; incoming memory grants are not supported"
+    )]
+    UnsupportedExportParameter { index: usize, classifier: ss::TypeId },
     #[error("C ffi requires a thunk classified by `Thk (A1 -> ... -> Ret B)`")]
     ExpectedThunk { classifier: ss::TypeId },
     #[error(
@@ -40,6 +44,22 @@ impl<'a> ForeignClassifier<'a> {
     pub fn validate(
         &self, target: ForeignTarget, classifier: ss::TypeId,
     ) -> Result<ForeignImport, ForeignClassifierError> {
+        Ok(ForeignImport {
+            target,
+            signature: self.signature(classifier, ForeignDirection::Import)?,
+        })
+    }
+
+    /// C entry has its own conversion plan: a borrowed outgoing window cannot be reconstructed.
+    pub fn validate_export(
+        &self, classifier: ss::TypeId,
+    ) -> Result<ForeignSignature, ForeignClassifierError> {
+        self.signature(classifier, ForeignDirection::Export)
+    }
+
+    fn signature(
+        &self, classifier: ss::TypeId, direction: ForeignDirection,
+    ) -> Result<ForeignSignature, ForeignClassifierError> {
         let mut body = self
             .unary_application(classifier, ForeignConstructor::Thunk)
             .ok_or(ForeignClassifierError::ExpectedThunk { classifier })?;
@@ -54,7 +74,17 @@ impl<'a> ForeignClassifier<'a> {
             };
             let representation = match self.primitive(parameter) {
                 | Some(PrimitiveType::Integer(integer)) => ForeignParameter::Integer(integer),
-                | _ if self.memory_window(parameter) => ForeignParameter::BorrowedMemory,
+                | _ if matches!(direction, ForeignDirection::Import)
+                    && self.memory_window(parameter) =>
+                {
+                    ForeignParameter::BorrowedMemory
+                }
+                | _ if matches!(direction, ForeignDirection::Export) => {
+                    return Err(ForeignClassifierError::UnsupportedExportParameter {
+                        index: parameters.len() + 1,
+                        classifier: parameter,
+                    });
+                }
                 | _ => {
                     return Err(ForeignClassifierError::UnsupportedParameter {
                         index: parameters.len() + 1,
@@ -75,8 +105,7 @@ impl<'a> ForeignClassifier<'a> {
             | Some(ss::Type::Unit(_)) => ForeignResult::Unit,
             | _ => return Err(ForeignClassifierError::UnsupportedResult { classifier: result }),
         };
-        let signature = ForeignSignature::new(parameters, representation)?;
-        Ok(ForeignImport { target, signature })
+        Ok(ForeignSignature::new(parameters, representation)?)
     }
 
     fn memory_window(&self, ty: ss::TypeId) -> bool {
@@ -124,7 +153,7 @@ impl<'a> ForeignClassifier<'a> {
         ))
     }
 
-    fn type_view(&self, ty: ss::TypeId) -> Option<ss::Type> {
+    pub(crate) fn type_view(&self, ty: ss::TypeId) -> Option<ss::Type> {
         let mut current = ty;
         let mut visited = HashSet::new();
         loop {
@@ -150,4 +179,10 @@ impl<'a> ForeignClassifier<'a> {
 enum ForeignConstructor {
     Thunk,
     Return,
+}
+
+#[derive(Copy, Clone)]
+enum ForeignDirection {
+    Import,
+    Export,
 }

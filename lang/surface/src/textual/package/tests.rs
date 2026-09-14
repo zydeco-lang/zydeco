@@ -156,7 +156,7 @@ fn metadata_names_register_exact_terms_and_roles_are_separate_from_relationships
         ["a", "z"]
     );
     let library = &packages[0];
-    assert_eq!(library.role, PackageRole::Library);
+    assert_eq!(library.role, PackageRole::Library(crate::metadata::LibraryRole::Source));
     let Term::Meta(MetaTerm(_, payload)) = fixture.parser.arena.terms[&library.term] else {
         panic!("exact annotated term")
     };
@@ -196,7 +196,10 @@ fn annotations_require_a_role_and_package_names_are_unique_across_roles() {
     ] {
         assert!(matches!(
             Fixture::parse(source).packages(),
-            Err(PackageDirectiveError::Annotation { source: PackageAnnotationError::Role, .. })
+            Err(PackageDirectiveError::Annotation {
+                source: PackageAnnotationError::Role | PackageAnnotationError::LibraryAbi,
+                ..
+            })
         ));
     }
     assert!(matches!(
