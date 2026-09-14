@@ -48,6 +48,11 @@ pub enum MetadataKind {
 }
 
 impl MetadataKind {
+    /// Identify a catalog entry while leaving arbitrary user annotations open.
+    pub fn of(meta: &Meta) -> Option<Self> {
+        Self::VARIANTS.iter().copied().find(|kind| meta.is(kind.name()))
+    }
+
     pub fn name(self) -> &'static str {
         self.into()
     }

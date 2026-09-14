@@ -167,7 +167,8 @@ as the checker already does for missing solutions caused by a rejected expressio
 
 ## Core interfaces for the three surface migrations
 
-The immediate work covers desugaring rule ownership, shared source-directive analysis, and resolution events.
+Desugaring rule ownership is implemented in the [compiler reference](../references/compiler.md#desugaring-folders).
+The remaining immediate work covers shared source-directive analysis and resolution events.
 These mechanisms operate at different boundaries:
 
 | Boundary | Driver | Local operations or consumers | Published result |
@@ -240,44 +241,6 @@ The tradeoff is deliberate: one universal fold algebra would expose more opportu
 but would also require encoding lexical effects, recovery, constructor changes, and scheduling barriers in its types.
 Small structural interfaces plus explicit semantic folders make the current dependencies reviewable.
 Generate structural declarations only after their shared requirements have been demonstrated by real clients.
-
-## Desugaring decomposition
-
-The implemented [desugaring folder and rule owners](../references/compiler.md#desugaring-folders) centralize
-recursive lowering, source-term memoization, telescope rules, paired binding construction, and diagnostic collection.
-The remaining extraction concerns meta annotation inspection and dispatch.
-
-### Meta annotation actions
-
-Give `MetaRules` one explicit dispatch over the recognized annotation kind.
-Its inspection step validates the arguments and any required raw payload shape,
-retaining both annotation and payload origins for diagnostics.
-It returns a domain action such as:
-
-```rust
-enum MetaAction {
-    Preserve(Meta),
-    Intrinsic(IntrinsicRole),
-    TypeOf,
-    Monadic,
-    Partial(Meta),
-}
-```
-
-These actions describe the current lowering choices, not an extensible sequence of arbitrary plugins.
-`Intrinsic` validates an original hole payload and constructs the intrinsic without lowering that payload.
-`TypeOf` and `Monadic` lower their payload once and construct their specialized nodes.
-`Partial` records the relevant source binders before lowering its payload, then retains the meta annotation.
-Validated FFI and term-level Builtin annotations follow preservation when appropriate;
-invalid placement remains an error at the same source site.
-Existential parameter annotations keep their distinct allowed roles and diagnostic sites.
-
-This source inspection belongs before descent.
-For example, recording partial binders after currying would lose the original binding header boundary,
-and validating an intrinsic after lowering could accept a transformed payload that was not an authored hole.
-A source-term cache hit must not suppress a required action on a newly encountered enclosing annotation.
-Avoid an inherited ambient meta annotation mode: the existing source-ID memoization would then need that mode
-in its key or a proof that lowering is independent of it.
 
 ## Shared source-directive analysis
 
@@ -533,16 +496,14 @@ The same successful input should produce identical reference and dependency fact
 
 Implement these as separate reviewable changes after the design choices are settled:
 
-1. Extract raw meta annotation inspection and typed actions, with one driver-owned memo publication path
-   for successful and rejected terms.
-2. Introduce `SourceScan`, migrate the full loading profile and smaller query callers, and delete repeated scans.
+1. Introduce `SourceScan`, migrate the full loading profile and smaller query callers, and delete repeated scans.
    Collect errors from every independent directive site and return the full collection.
-3. Extract the resolution policy, typed events, and passive observers while preserving the existing semantic schedule.
+2. Extract the resolution policy, typed events, and passive observers while preserving the existing semantic schedule.
    Use its diagnostic collector in strict analysis as well as completion, with explicit recovery boundaries.
-4. Move dependency accumulation behind the explicit block lifecycle and connect ordinary resolution reconstruction
+3. Move dependency accumulation behind the explicit block lifecycle and connect ordinary resolution reconstruction
    to the extended shared folder.
    Remove the superseded recursion and accumulation paths as their callers migrate.
-5. Audit the remaining pass and source-unit boundaries for early exits over independent work.
+4. Audit the remaining pass and source-unit boundaries for early exits over independent work.
    Reuse parser issues and checker diagnostics, collect failures from independently available sources or imports,
    and extend checking and later validators at their own recovery boundaries.
    Dependent lowering stages continue to require a valid preceding product.
@@ -550,7 +511,7 @@ Implement these as separate reviewable changes after the design choices are sett
 Each migration must carry its complete diagnostic collection through session queries and CLI, TUI, and LSP presentation.
 Update the producer and its callers together; a frontend
 that displays only the first entry would leave the work incomplete.
-This reporting direction extends across all passes, while the first four changes complete the three surface tasks.
+This reporting direction extends across all passes, while the first three changes complete the three surface tasks.
 
 Validation must distinguish accepted-program equivalence from recovery behavior:
 

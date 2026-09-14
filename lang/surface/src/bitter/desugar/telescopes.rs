@@ -112,30 +112,7 @@ impl ExistentialParameter {
         let t::ExistentialParameter { annotations, binder: pattern } = parameter;
         let source = pattern.into();
         let form = ExistentialParameterForm::desugar(pattern, desugarer)?;
-        let annotations = annotations
-            .into_iter()
-            .map(|annotation| {
-                let annotation_site = annotation.inner.span(desugarer.spans).clone().make(pattern);
-                let meta = desugarer.textual.semantic_meta(annotation.inner);
-                match meta.specialize::<BuiltinMeta>() {
-                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(_) })) => Ok(meta),
-                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => Err(desugarer
-                        .report(DesugarError::BuiltinValueRoleOnExistentialPattern {
-                            pattern: annotation_site.clone(),
-                            role,
-                        })),
-                    | Ok(None) => Err(desugarer.report(
-                        DesugarError::UnsupportedExistentialPatternMeta(annotation_site.clone()),
-                    )),
-                    | Err(source) => {
-                        Err(desugarer.report(DesugarError::InvalidBuiltinPatternMeta {
-                            pattern: annotation_site.clone(),
-                            source,
-                        }))
-                    }
-                }
-            })
-            .collect_reported()?;
+        let annotations = desugarer.existential_annotations(pattern, annotations)?;
         Ok(Self { annotations, form, source })
     }
 }

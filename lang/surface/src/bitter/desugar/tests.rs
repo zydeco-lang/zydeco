@@ -57,6 +57,56 @@ fn shared_rejected_terms_do_not_replay_diagnostics() {
 }
 
 #[test]
+fn intrinsic_inspection_requires_an_authored_hole_and_skips_rejected_payloads() {
+    Fixture::accepted("@[intrinsic(unit)] _");
+    for source in ["@[intrinsic(unit)] (_)", "@[intrinsic(unit)] @[typeof(extra)] _"] {
+        let errors = Fixture::errors(source);
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(errors.iter().next().unwrap(), DesugarError::IntrinsicPayloadNotHole(_)));
+    }
+    let mut parser = t::Parser::new();
+    let unit = StrictParser::source("@[intrinsic(unit)] _", &mut parser).unwrap();
+    let result =
+        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
+    assert_eq!(result.arena.terms.iter().count(), 1, "the authored hole is not lowered");
+    assert!(matches!(result.arena.terms[&result.root], b::Term::Internal(b::Internal::Unit)));
+}
+
+#[test]
+fn partial_actions_apply_to_cached_payloads_without_marking_nested_headers() {
+    let mut parser = t::Parser::new();
+    let mut unit = StrictParser::source("fn x => fn y => x", &mut parser).unwrap();
+    let span = *unit.root.span(&parser.spans);
+    let metadata = parser.meta(span.make(t::MetaNode::Ident("partial".into())));
+    let annotated = parser.term(span.make(t::MetaTerm(metadata, unit.root).into()));
+    unit.root = parser.term(span.make(t::Paren(vec![unit.root, annotated]).into()));
+    let result =
+        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
+    for (pattern, value) in parser.arena.pats.iter() {
+        let t::Pattern::Var(definition) = value else { continue };
+        let name = &parser.arena.defs[definition].0;
+        assert_eq!(result.arena.partial_binders.contains(pattern), name == "x", "{name}");
+    }
+    let errors = Fixture::errors("@[partial] 1");
+    assert!(matches!(errors.iter().next().unwrap(), DesugarError::PartialPayloadNotBinding(_)));
+}
+
+#[test]
+fn unknown_meta_annotations_keep_their_structure() {
+    let mut parser = t::Parser::new();
+    let unit = StrictParser::source("@[custom(option(\"value\"))] _", &mut parser).unwrap();
+    let result =
+        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
+    let b::Term::Meta(annotation) = &result.arena.terms[&result.root] else { panic!() };
+    let b::MetaT(meta, payload) = annotation.as_ref();
+    assert_eq!(
+        *meta,
+        t::Meta::apply("custom", [t::Meta::apply("option", [t::Meta::string("value")])])
+    );
+    assert!(matches!(result.arena.terms[payload], b::Term::Hole(_)));
+}
+
+#[test]
 fn binding_inputs_collect_independent_failures() {
     let source = "let value : @[typeof(extra)] _ = @[monadic(extra)] _ in value";
     let errors = Fixture::errors(source);

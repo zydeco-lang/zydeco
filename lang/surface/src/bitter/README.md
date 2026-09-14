@@ -20,9 +20,10 @@ textual -> bitter -> scoped -> statics
 | [`desugar`](desugar/mod.rs) | `DesugarFolder`, recursive lowering, memoization, and diagnostic collection. |
 | [`telescopes`](desugar/telescopes.rs), [`bindings`](desugar/bindings.rs) | Telescope rules and paired term/classifier construction. |
 | [`cbpv`](desugar/cbpv.rs) | CBPV introductions and primitive construction through the builder. |
+| [`meta`](desugar/meta.rs) | Read-only annotation inspection and typed lowering actions. |
 | [`freshen`](freshen.rs) | Fresh occurrence copies through the shared [`Folder`](../fold.rs). |
 | [`err`](err.rs), [`fmt`](fmt.rs), [`span`](span.rs) | Diagnostics, debug formatting, and source locations. |
 
 The [folder contract](../../../../docs/references/compiler.md#desugaring-folders) owns the implemented lowering rules.
-The [traversal proposal](../../../../docs/proposals/traversals.md) collects the remaining meta annotation,
-source analysis, and resolution work.
+The [traversal proposal](../../../../docs/proposals/traversals.md) collects the remaining source analysis
+and resolution work.

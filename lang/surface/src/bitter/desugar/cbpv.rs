@@ -8,6 +8,14 @@ pub(super) enum Introduction {
 }
 
 impl BitterBuilder {
+    pub(super) fn monadic(&mut self, body: b::TermId, source: t::EntityId) -> b::TermId {
+        let basis = b::MonadicBasis {
+            monad: Alloc::alloc(self, b::Term::Var(b::VarName("Monad".into())), source),
+            algebra: Alloc::alloc(self, b::Term::Var(b::VarName("Algebra".into())), source),
+        };
+        Alloc::alloc(self, b::MoBlock { body, basis }.into(), source)
+    }
+
     pub(super) fn introduce(
         &mut self, introduction: Introduction, body: b::TermId, source: t::EntityId,
     ) -> b::TermId {

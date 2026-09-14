@@ -2,19 +2,19 @@ use crate::diagnostic::{CollectReported, Diagnostics, ReportedError};
 use crate::{bitter::freshen::FreshenFolder, fold::Folder};
 use crate::{
     bitter::{syntax as b, *},
-    metadata::{BuiltinMeta, FfiMeta, IntrinsicMeta, MonadicMeta, PartialMeta, TypeOfMeta},
     textual::syntax as t,
 };
 use derive_more::{AsMut, AsRef};
 use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, ReportedError>;
-use zydeco_syntax::{BuiltinRole, IntrinsicRole, SpanView};
+use zydeco_syntax::{IntrinsicRole, SpanView};
 use zydeco_utils::prelude::{CompilerPass, FrozenArena};
 
 mod telescopes;
 mod bindings;
 mod cbpv;
+mod meta;
 #[cfg(test)]
 mod tests;
 use bindings::LoweredBinding;
@@ -41,61 +41,6 @@ pub struct SourceUnitDesugarer<'a> {
 }
 
 impl<'a> DesugarFolder<'a> {
-    /// Record source identities before currying and block scheduling change binder nesting.
-    /// Only the annotated header contributes binders; its bodies and tails are untouched.
-    fn allow_partial_binders(&mut self, term: t::TermId) -> bool {
-        match self.lookup_term(term) {
-            | t::Term::Paren(t::Paren(terms)) if terms.len() == 1 => {
-                self.allow_partial_binders(terms[0])
-            }
-            | t::Term::Ann(t::Ann { tm, .. }) | t::Term::Meta(t::MetaTerm(_, tm)) => {
-                self.allow_partial_binders(tm)
-            }
-            | t::Term::Abs(t::Abs(params, _)) | t::Term::ValAbs(t::Abs(params, _)) => {
-                self.allow_partial_parameters(params);
-                true
-            }
-            | t::Term::Let(t::GenLet { binding, .. })
-            | t::Term::ContextBind(t::ContextBind { binding, .. }) => {
-                self.allow_partial_pattern(binding.binder);
-                if let Some(params) = binding.params {
-                    self.allow_partial_parameters(params);
-                }
-                true
-            }
-            | t::Term::Do(t::Bind { binder, .. })
-            | t::Term::Param(t::Param { binder, .. })
-            | t::Term::Fix(t::Fix(binder, _)) => {
-                self.allow_partial_pattern(binder);
-                true
-            }
-            | _ => false,
-        }
-    }
-
-    fn allow_partial_parameters(&mut self, parameters: t::CoPatId) {
-        match self.lookup_copat(parameters) {
-            | t::CoPattern::Pat(pattern) => {
-                self.allow_partial_pattern(pattern);
-            }
-            | t::CoPattern::App(t::Appli(parameters)) => {
-                parameters
-                    .into_iter()
-                    .for_each(|parameter| self.allow_partial_parameters(parameter));
-            }
-            | t::CoPattern::Dtor(_) => {}
-        }
-    }
-
-    fn allow_partial_pattern(&mut self, pattern: t::PatId) {
-        self.builder.arena.partial_binders.insert(pattern);
-        if let t::Pattern::Paren(t::Paren(patterns)) = self.lookup_pat(pattern)
-            && let [inner] = patterns.as_slice()
-        {
-            self.allow_partial_pattern(*inner);
-        }
-    }
-
     fn new(spans: &'a t::SpanArena, textual: &'a t::TextArena) -> Self {
         Self {
             spans,
@@ -249,122 +194,7 @@ impl DesugarFolder<'_> {
         let term = self.lookup_term(id);
         use t::Term as Tm;
         let res = match term {
-            | Tm::Meta(term) => {
-                let t::MetaTerm(metadata, term) = term;
-                let annotation_site = metadata.span(self.spans).clone().make(id);
-                let payload_site = term.span(self.spans).clone().make(id);
-                let meta = self.textual.semantic_meta(metadata);
-                match meta.specialize::<PartialMeta>() {
-                    | Ok(Some(PartialMeta)) => {
-                        if !self.allow_partial_binders(term) {
-                            return Err(
-                                self.report(DesugarError::PartialPayloadNotBinding(payload_site))
-                            );
-                        }
-                    }
-                    | Ok(None) => {}
-                    | Err(source) => {
-                        return Err(self.report(DesugarError::InvalidPartialMeta {
-                            term: annotation_site,
-                            source,
-                        }));
-                    }
-                }
-                match meta.specialize::<TypeOfMeta>() {
-                    | Ok(Some(TypeOfMeta)) => {
-                        let operand = self.term(term)?;
-                        let term =
-                            Alloc::alloc(&mut self.builder, b::TypeOf(operand).into(), id.into());
-                        return Ok(term);
-                    }
-                    | Ok(None) => {}
-                    | Err(source) => {
-                        return Err(self.report(DesugarError::InvalidTypeOfMeta {
-                            term: annotation_site,
-                            source,
-                        }));
-                    }
-                }
-                match meta.specialize::<IntrinsicMeta>() {
-                    | Ok(Some(meta)) => {
-                        if !matches!(self.lookup_term(term), Tm::Hole(_)) {
-                            return Err(
-                                self.report(DesugarError::IntrinsicPayloadNotHole(payload_site))
-                            );
-                        }
-                        let term = self.builder.intrinsic(meta.role, id.into());
-                        return Ok(term);
-                    }
-                    | Ok(None) => {}
-                    | Err(source) => {
-                        return Err(self.report(DesugarError::InvalidIntrinsicMeta {
-                            term: annotation_site,
-                            source,
-                        }));
-                    }
-                }
-                match meta.specialize::<BuiltinMeta>() {
-                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(_) })) | Ok(None) => {}
-                    | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => {
-                        return Err(self.report(DesugarError::BuiltinTypeRoleOnTerm {
-                            term: annotation_site,
-                            role,
-                        }));
-                    }
-                    | Err(source) => {
-                        return Err(self.report(DesugarError::InvalidBuiltinMeta {
-                            term: annotation_site,
-                            source,
-                        }));
-                    }
-                }
-                match meta.specialize::<FfiMeta>() {
-                    | Ok(Some(_)) => {
-                        if !matches!(self.lookup_term(term), Tm::Hole(_)) {
-                            return Err(self.report(DesugarError::FfiPayloadNotHole(payload_site)));
-                        }
-                    }
-                    | Ok(None) => {}
-                    | Err(source) => {
-                        return Err(self.report(DesugarError::InvalidFfiMeta {
-                            term: annotation_site,
-                            source,
-                        }));
-                    }
-                }
-                match meta.specialize::<MonadicMeta>() {
-                    | Ok(Some(MonadicMeta)) => {
-                        let body = self.term(term)?;
-                        let basis = b::MonadicBasis {
-                            monad: Alloc::alloc(
-                                &mut self.builder,
-                                b::Term::Var(b::VarName("Monad".into())),
-                                id.into(),
-                            ),
-                            algebra: Alloc::alloc(
-                                &mut self.builder,
-                                b::Term::Var(b::VarName("Algebra".into())),
-                                id.into(),
-                            ),
-                        };
-                        let term = Alloc::alloc(
-                            &mut self.builder,
-                            b::MoBlock { body, basis }.into(),
-                            id.into(),
-                        );
-                        return Ok(term);
-                    }
-                    | Ok(None) => {}
-                    | Err(source) => {
-                        return Err(self.report(DesugarError::InvalidMonadicMeta {
-                            term: annotation_site,
-                            source,
-                        }));
-                    }
-                }
-                let term = self.term(term)?;
-                Alloc::alloc(&mut self.builder, b::MetaT(meta, term).into(), id.into())
-            }
+            | Tm::Meta(term) => self.meta(id, term)?,
             | Tm::SourceBoundary(term) => {
                 let t::SourceBoundary(term) = term;
                 let term = self.term(term)?;

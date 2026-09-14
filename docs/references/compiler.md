@@ -565,6 +565,16 @@ Rules retain their semantic child schedules: a binding lowers its binder, bindee
 a package lowers its body before processing parameters in reverse, with evidence before the parameter form.
 Meta annotation inspection precedes payload lowering when its rule depends on authored syntax.
 
+[`MetaRules`](../../lang/surface/src/bitter/desugar/meta.rs) inspects read-only textual syntax
+and selects one typed action: preserve an annotation, construct an intrinsic, query a classifier,
+build a monadic block, or record partial binders and preserve the annotation.
+The catalog identifies the recognized kind once; arbitrary annotations retain their structure.
+Intrinsic and FFI payload checks inspect authored syntax before any lowering can erase grouping.
+Intrinsic construction skips its hole payload; classifier queries and monadic actions lower their payload once.
+Partial actions carry the header's textual binder identities and record them before visiting the payload,
+including when that payload has already been memoized.
+Existential parameter annotations use their own allowed-role validation and retain their precise annotation sites.
+
 ### Name resolution
 
 [Resolution](../../lang/surface/src/scoped/README.md) replaces names with `DefId`s and records lexical contexts.
