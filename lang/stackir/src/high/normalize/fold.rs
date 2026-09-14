@@ -1,18 +1,40 @@
 //! Reconstruction frames preserve forward facts and backward consumer demands.
 
 use super::*;
+use std::marker::PhantomData;
+use zydeco_utils::fold::{Folder, Step};
 
-enum Work {
+pub(super) enum Work {
     Value(ValueId, EnvId, Demand),
     FinishValue(ValueId, bool),
+    ValueChildren {
+        source: ValueId,
+        position: usize,
+        env: EnvId,
+        demand: Demand,
+        protocol: bool,
+    },
     Stack(ScopedStack),
     FinishStack(StackId),
+    StackRest {
+        source: StackId,
+        stack: ScopedStack,
+    },
     ContinuationBody {
         source: StackId,
         binder: VPatId,
     },
     Computation(CompuId, Scope),
     FinishComputation(CompuId),
+    ComputationValue {
+        source: CompuId,
+        value: ScopedValue,
+    },
+    CoCaseArms {
+        source: CompuId,
+        position: usize,
+        env: EnvId,
+    },
     FixBody {
         source: CompuId,
         param: DefId,
@@ -35,6 +57,10 @@ enum Work {
         scope: Scope,
         site: Option<ss::TermId>,
     },
+    BindingComponents {
+        remaining: std::vec::IntoIter<(VPatId, ScopedValue)>,
+        site: Option<ss::TermId>,
+    },
     ResidualBinding {
         binder: VPatId,
         bindee: ScopedValue,
@@ -42,6 +68,13 @@ enum Work {
     },
     FinishBinding {
         binder: VPatId,
+        site: Option<ss::TermId>,
+    },
+    BranchArms {
+        source: CompuId,
+        position: usize,
+        known: Rc<KnownValue>,
+        bindee: ScopedStack,
         site: Option<ss::TermId>,
     },
     BranchArm {
@@ -75,6 +108,11 @@ enum Work {
         operands: [ScopedValue; 2],
         site: Option<ss::TermId>,
     },
+    PrimitiveSecond {
+        operation: PrimitiveOp,
+        second: ScopedValue,
+        site: Option<ss::TermId>,
+    },
     FinishPrimitiveValue {
         operation: PrimitiveOp,
         site: Option<ss::TermId>,
@@ -84,6 +122,11 @@ enum Work {
         operation: PrimitiveOp,
         operands: [ScopedValue; 2],
         folded: bool,
+        site: Option<ss::TermId>,
+    },
+    PrimitiveResult {
+        operation: PrimitiveOp,
+        operands: [ScopedValue; 2],
         site: Option<ss::TermId>,
     },
     PrimitiveReturn {
@@ -99,20 +142,20 @@ enum Work {
     },
 }
 
-pub(super) struct NormalizationFolder<'a> {
+pub(super) struct NormalizationFolder<'a, D> {
     norm: &'a mut Normalization,
-    work: Vec<Work>,
+    driver: PhantomData<D>,
     values: Vec<Residual<ValueId>>,
     stacks: Vec<Residual<StackId>>,
     computations: Vec<Residual<CompuId>>,
     arms: Vec<(Matcher<VPatId, CompuId>, Demands, Demand)>,
 }
 
-impl<'a> NormalizationFolder<'a> {
+impl<'a, D: Driver> NormalizationFolder<'a, D> {
     pub(super) fn new(norm: &'a mut Normalization) -> Self {
         Self {
             norm,
-            work: Vec::new(),
+            driver: PhantomData,
             values: Vec::new(),
             stacks: Vec::new(),
             computations: Vec::new(),
@@ -121,10 +164,7 @@ impl<'a> NormalizationFolder<'a> {
     }
 
     pub(super) fn run(mut self, root: CompuId) -> CompuId {
-        self.work.push(Work::Computation(root, Scope { values: EnvId(0), stack: None }));
-        while let Some(work) = self.work.pop() {
-            self.resume(work);
-        }
+        D::run(&mut self, Work::Computation(root, Scope { values: EnvId(0), stack: None }));
         assert!(self.values.is_empty() && self.stacks.is_empty() && self.arms.is_empty());
         let root = self.computation().node;
         assert!(self.computations.is_empty());
@@ -154,12 +194,12 @@ impl<'a> NormalizationFolder<'a> {
         self.computations.push(Residual { node, demands });
     }
 
-    fn visit_value(&mut self, id: ValueId, env: EnvId, demand: Demand) {
+    fn visit_value(&mut self, id: ValueId, env: EnvId, demand: Demand) -> Step<Self> {
         let site = self.norm.source.admin.terms.back(&TermId::Value(id)).copied();
         if demand.is_absent() && self.norm.discardable(id) {
             self.values
                 .push(Residual { node: Triv.build(self.norm, site), demands: Demands::default() });
-            return;
+            return Step::Return(());
         }
         let protocol = matches!(demand, Demand::Used);
         match self.norm.source.inner.values[&id].clone() {
@@ -182,36 +222,41 @@ impl<'a> NormalizationFolder<'a> {
                     && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(Bullet))
                     && matches!(self.norm.source.inner.values[&thunk], Value::Var(_))
                 {
-                    self.work.push(Work::Value(thunk, env, demand));
-                    return;
+                    return Step::TailCall(Work::Value(thunk, env, demand));
                 }
-                self.work.extend([
-                    Work::FinishValue(id, protocol),
-                    Work::Computation(body, Scope { values: env, stack: None }),
-                ]);
+                return Step::Call {
+                    input: Work::Computation(body, Scope { values: env, stack: None }),
+                    frame: Work::FinishValue(id, protocol),
+                };
             }
             | Value::Ctor(Ctor(_, body)) => {
                 let demand = if demand.is_absent() { Demand::Absent } else { Demand::Used };
-                self.work.extend([Work::FinishValue(id, protocol), Work::Value(body, env, demand)]);
+                return Step::Call {
+                    input: Work::Value(body, env, demand),
+                    frame: Work::FinishValue(id, protocol),
+                };
             }
-            | Value::VCons(VCons { items, layout }) => {
+            | Value::VCons(_) => {
                 let demand =
                     if demand.is_absent() { Demand::Fields(Default::default()) } else { demand };
-                let count = items.len();
-                self.work.push(Work::FinishValue(id, protocol));
-                self.work.extend(items.into_iter().enumerate().rev().map(|(position, item)| {
-                    Work::Value(item, env, demand.item(position, count, layout))
-                }));
+                return Step::TailCall(Work::ValueChildren {
+                    source: id,
+                    position: 0,
+                    env,
+                    demand,
+                    protocol,
+                });
             }
             | Value::Primitive(Primitive { operation, operands }) => {
-                self.work.push(Work::PrimitiveValue {
+                return Step::TailCall(Work::PrimitiveValue {
                     operation,
                     operands: operands.map(|node| ScopedValue { node, env }),
                     site,
-                })
+                });
             }
             | value => self.build_value(id, value, Demands::default(), protocol),
         }
+        Step::Return(())
     }
 
     fn build_value(
@@ -225,7 +270,7 @@ impl<'a> NormalizationFolder<'a> {
         self.values.push(Residual { node, demands });
     }
 
-    fn visit_stack(&mut self, stack: ScopedStack) {
+    fn visit_stack(&mut self, stack: ScopedStack) -> Step<Self> {
         let ScopedStack { node: id, scope } = self.norm.resolve_stack(stack);
         match self.norm.source.inner.stacks[&id].clone() {
             | Stack::Var(bullet) => {
@@ -236,15 +281,17 @@ impl<'a> NormalizationFolder<'a> {
                 });
             }
             | Stack::Arg(Cons(value, rest)) => {
-                self.work.extend([
-                    Work::FinishStack(id),
-                    Work::Stack(ScopedStack { node: rest, scope: scope.clone() }),
-                    Work::Value(value, scope.values, Demand::Used),
-                ]);
+                return Step::Call {
+                    input: Work::Value(value, scope.values, Demand::Used),
+                    frame: Work::StackRest { source: id, stack: ScopedStack { node: rest, scope } },
+                };
             }
-            | Stack::Tag(Cons(_, rest)) => self
-                .work
-                .extend([Work::FinishStack(id), Work::Stack(ScopedStack { node: rest, scope })]),
+            | Stack::Tag(Cons(_, rest)) => {
+                return Step::Call {
+                    input: Work::Stack(ScopedStack { node: rest, scope }),
+                    frame: Work::FinishStack(id),
+                };
+            }
             | Stack::Kont(Kont { binder, body }) => {
                 if let ValuePattern::Var(def) = self.norm.source.inner.vpats[&binder]
                     && let Computation::Ret(SReturn { value, stack }) =
@@ -252,47 +299,49 @@ impl<'a> NormalizationFolder<'a> {
                     && matches!(self.norm.source.inner.values[&value], Value::Var(returned) if returned == def)
                     && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(Bullet))
                 {
-                    self.work.push(Work::Stack(ScopedStack { node: stack, scope }));
-                    return;
+                    return Step::TailCall(Work::Stack(ScopedStack { node: stack, scope }));
                 }
                 let values = self.norm.bind(scope.values, binder, Rc::default());
-                self.work.extend([
-                    Work::ContinuationBody { source: id, binder },
-                    Work::Computation(body, Scope { values, ..scope }),
-                ]);
+                return Step::Call {
+                    input: Work::Computation(body, Scope { values, ..scope }),
+                    frame: Work::ContinuationBody { source: id, binder },
+                };
             }
         }
+        Step::Return(())
     }
 
-    fn visit_computation(&mut self, id: CompuId, scope: Scope) {
+    fn visit_computation(&mut self, id: CompuId, scope: Scope) -> Step<Self> {
         let site = self.norm.source.admin.terms.back(&TermId::Compu(id)).copied();
         match self.norm.source.inner.compus[&id].clone() {
-            | Computation::Hole(SHole(stack)) => self.work.extend([
-                Work::FinishComputation(id),
-                Work::Stack(ScopedStack { node: stack, scope }),
-            ]),
+            | Computation::Hole(SHole(stack)) => Step::Call {
+                input: Work::Stack(ScopedStack { node: stack, scope }),
+                frame: Work::FinishComputation(id),
+            },
             | Computation::Force(SForce { thunk, stack }) => {
                 let known = self.norm.known(thunk, scope.values);
                 let stack = ScopedStack { node: stack, scope: scope.clone() };
                 if let KnownValue::External(function) = known.as_ref() {
-                    self.external_call(function.clone(), stack, site);
+                    self.external_call(function.clone(), stack, site)
                 } else if self.norm.movable_stack(stack.node)
                     && let Value::Closure(Closure { body, .. }) =
                         self.norm.source.inner.values[&thunk]
                 {
                     let stack = Some(self.norm.delay_stack(stack));
-                    self.work.push(Work::Computation(body, Scope { values: scope.values, stack }));
+                    Step::TailCall(Work::Computation(body, Scope { values: scope.values, stack }))
                 } else if self.norm.movable_stack(stack.node)
                     && let KnownValue::Closure { body, env } = known.as_ref()
                 {
                     let stack = Some(self.norm.delay_stack(stack));
-                    self.work.push(Work::Computation(*body, Scope { values: *env, stack }));
+                    Step::TailCall(Work::Computation(*body, Scope { values: *env, stack }))
                 } else {
-                    self.work.extend([
-                        Work::FinishComputation(id),
-                        Work::Value(thunk, scope.values, Demand::Used),
-                        Work::Stack(stack),
-                    ]);
+                    Step::Call {
+                        input: Work::Stack(stack),
+                        frame: Work::ComputationValue {
+                            source: id,
+                            value: ScopedValue { node: thunk, env: scope.values },
+                        },
+                    }
                 }
             }
             | Computation::Ret(SReturn { stack, value }) => {
@@ -301,30 +350,30 @@ impl<'a> NormalizationFolder<'a> {
                 if let Stack::Kont(Kont { binder, body }) =
                     self.norm.source.inner.stacks[&stack.node]
                 {
-                    self.work.push(Work::Binding {
+                    Step::TailCall(Work::Binding {
                         binder,
                         bindee: ScopedValue { node: value, env: scope.values },
                         tail: body,
                         scope: stack.scope,
                         site,
-                    });
+                    })
                 } else {
-                    self.work.extend([
-                        Work::FinishComputation(id),
-                        Work::Value(value, scope.values, Demand::Used),
-                        Work::Stack(stack),
-                    ]);
+                    Step::Call {
+                        input: Work::Stack(stack),
+                        frame: Work::ComputationValue {
+                            source: id,
+                            value: ScopedValue { node: value, env: scope.values },
+                        },
+                    }
                 }
             }
-            | Computation::Fix(SFix { param, stack, body }) => {
-                self.work.extend([
-                    Work::FixBody { source: id, param, body, scope: scope.clone() },
-                    Work::Stack(ScopedStack { node: stack, scope }),
-                ]);
-            }
+            | Computation::Fix(SFix { param, stack, body }) => Step::Call {
+                input: Work::Stack(ScopedStack { node: stack, scope: scope.clone() }),
+                frame: Work::FixBody { source: id, param, body, scope },
+            },
             | Computation::ProductMatch(SProductMatch { scrut: bindee, binder, body: tail })
             | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
-                self.work.push(Work::Binding {
+                Step::TailCall(Work::Binding {
                     binder,
                     bindee: ScopedValue { node: bindee, env: scope.values },
                     tail,
@@ -347,19 +396,19 @@ impl<'a> NormalizationFolder<'a> {
                     let value = ScopedValue { node: value, env: stack.scope.values };
                     let rest =
                         Some(self.norm.delay_stack(ScopedStack { node: rest, scope: stack.scope }));
-                    self.work.push(Work::Binding {
+                    Step::TailCall(Work::Binding {
                         binder,
                         bindee: value,
                         tail,
                         scope: Scope { stack: rest, ..scope },
                         site,
-                    });
+                    })
                 } else {
                     let values = self.norm.bind(scope.values, binder, Rc::default());
-                    self.work.extend([
-                        Work::ArgumentBody { source: id, binder, stack },
-                        Work::Computation(tail, Scope { values, stack: None }),
-                    ]);
+                    Step::Call {
+                        input: Work::Computation(tail, Scope { values, stack: None }),
+                        frame: Work::ArgumentBody { source: id, binder, stack },
+                    }
                 }
             }
             | Computation::CoCase(SCoMatch { scrut, arms }) => {
@@ -372,13 +421,12 @@ impl<'a> NormalizationFolder<'a> {
                     let rest = Some(
                         self.norm.delay_stack(ScopedStack { node: *rest, scope: stack.scope }),
                     );
-                    self.work.push(Work::Computation(*tail, Scope { stack: rest, ..scope }));
+                    Step::TailCall(Work::Computation(*tail, Scope { stack: rest, ..scope }))
                 } else {
-                    self.work.push(Work::FinishComputation(id));
-                    self.work.extend(arms.into_iter().rev().map(|arm| {
-                        Work::Computation(arm.tail, Scope { values: scope.values, stack: None })
-                    }));
-                    self.work.push(Work::Stack(stack));
+                    Step::Call {
+                        input: Work::Stack(stack),
+                        frame: Work::CoCaseArms { source: id, position: 0, env: scope.values },
+                    }
                 }
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
@@ -387,7 +435,9 @@ impl<'a> NormalizationFolder<'a> {
         }
     }
 
-    fn branch(&mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<ss::TermId>) {
+    fn branch(
+        &mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<ss::TermId>,
+    ) -> Step<Self> {
         let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
             self.norm.source.inner.compus[&tail].clone()
         else {
@@ -403,38 +453,31 @@ impl<'a> NormalizationFolder<'a> {
                             self.norm
                                 .delay_stack(ScopedStack { node: bindee, scope: scope.clone() }),
                         );
-                        self.work.push(Work::Binding {
+                        return Step::TailCall(Work::Binding {
                             binder: arm.binder,
                             bindee: value,
                             tail: arm.tail,
                             scope: Scope { stack, ..scope },
                             site,
                         });
-                        return;
                     }
                     | Some(false) => {}
                     | None => break,
                 }
             }
         }
-        self.work.push(Work::BranchScrutinee {
-            scrut,
-            count: arms.len(),
-            tail,
-            bindee: ScopedStack { node: bindee, scope: scope.clone() },
+        Step::TailCall(Work::BranchArms {
+            source: tail,
+            position: 0,
+            known,
+            bindee: ScopedStack { node: bindee, scope },
             site,
-        });
-        self.work.extend(arms.into_iter().rev().map(|arm| Work::BranchArm {
-            binder: arm.binder,
-            tail: arm.tail,
-            env: scope.values,
-            known: known.clone(),
-        }));
+        })
     }
 
     fn external_call(
         &mut self, function: ExternalFunction, stack: ScopedStack, site: Option<ss::TermId>,
-    ) {
+    ) -> Step<Self> {
         if let ExternalFunction::Host(role) = &function
             && let Some(operation) = PrimitiveOp::from_builtin(*role)
         {
@@ -447,36 +490,142 @@ impl<'a> NormalizationFolder<'a> {
                         .clone()
                         .map_or_else(Rc::default, |value| Rc::new(KnownValue::Literal(value)));
                     let values = self.norm.bind(rest.scope.values, binder, known);
-                    self.work.extend([
-                        Work::PrimitiveContinuation {
+                    Step::Call {
+                        input: Work::Computation(body, Scope { values, ..rest.scope }),
+                        frame: Work::PrimitiveContinuation {
                             binder,
                             operation,
                             operands,
                             folded: folded.is_some(),
                             site,
                         },
-                        Work::Computation(body, Scope { values, ..rest.scope }),
-                    ]);
+                    }
                 } else {
-                    self.work.extend([
-                        Work::PrimitiveReturn { site },
-                        Work::PrimitiveValue { operation, operands, site },
-                        Work::Stack(rest),
-                    ]);
+                    Step::Call {
+                        input: Work::Stack(rest),
+                        frame: Work::PrimitiveResult { operation, operands, site },
+                    }
                 }
             } else {
-                self.work.extend([Work::PrimitiveStack { operation, site }, Work::Stack(stack)]);
+                Step::Call {
+                    input: Work::Stack(stack),
+                    frame: Work::PrimitiveStack { operation, site },
+                }
             }
         } else {
-            self.work.extend([Work::ExternalStack { function, site }, Work::Stack(stack)]);
+            Step::Call { input: Work::Stack(stack), frame: Work::ExternalStack { function, site } }
         }
     }
+}
 
-    fn resume(&mut self, work: Work) {
+impl<D: Driver> Folder for NormalizationFolder<'_, D> {
+    type Input = Work;
+    type Frame = Work;
+    type Output = ();
+
+    fn resume(&mut self, frame: Work, (): ()) -> Step<Self> {
+        self.enter(frame)
+    }
+
+    fn enter(&mut self, work: Work) -> Step<Self> {
         match work {
-            | Work::Value(id, env, demand) => self.visit_value(id, env, demand),
-            | Work::Stack(stack) => self.visit_stack(stack),
-            | Work::Computation(id, scope) => self.visit_computation(id, scope),
+            | Work::Value(id, env, demand) => return self.visit_value(id, env, demand),
+            | Work::Stack(stack) => return self.visit_stack(stack),
+            | Work::Computation(id, scope) => return self.visit_computation(id, scope),
+            | Work::ValueChildren { source, position, env, demand, protocol } => {
+                let Value::VCons(VCons { items, layout }) = &self.norm.source.inner.values[&source]
+                else {
+                    unreachable!("product children")
+                };
+                if let Some(&child) = items.get(position) {
+                    let child_demand = demand.item(position, items.len(), *layout);
+                    return Step::Call {
+                        input: Work::Value(child, env, child_demand),
+                        frame: Work::ValueChildren {
+                            source,
+                            position: position + 1,
+                            env,
+                            demand,
+                            protocol,
+                        },
+                    };
+                }
+                return Step::TailCall(Work::FinishValue(source, protocol));
+            }
+            | Work::StackRest { source, stack } => {
+                return Step::Call { input: Work::Stack(stack), frame: Work::FinishStack(source) };
+            }
+            | Work::ComputationValue { source, value } => {
+                return Step::Call {
+                    input: Work::Value(value.node, value.env, Demand::Used),
+                    frame: Work::FinishComputation(source),
+                };
+            }
+            | Work::CoCaseArms { source, position, env } => {
+                let Computation::CoCase(SCoMatch { arms, .. }) =
+                    &self.norm.source.inner.compus[&source]
+                else {
+                    unreachable!("comatch arms")
+                };
+                if let Some(arm) = arms.get(position) {
+                    return Step::Call {
+                        input: Work::Computation(arm.tail, Scope { values: env, stack: None }),
+                        frame: Work::CoCaseArms { source, position: position + 1, env },
+                    };
+                }
+                return Step::TailCall(Work::FinishComputation(source));
+            }
+            | Work::BindingComponents { mut remaining, site } => {
+                if let Some((binder, bindee)) = remaining.next_back() {
+                    return Step::Call {
+                        input: Work::ResidualBinding { binder, bindee, site },
+                        frame: Work::BindingComponents { remaining, site },
+                    };
+                }
+            }
+            | Work::BranchArms { source, position, known, bindee, site } => {
+                let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
+                    &self.norm.source.inner.compus[&source]
+                else {
+                    unreachable!("coproduct arms")
+                };
+                if let Some(arm) = arms.get(position) {
+                    return Step::Call {
+                        input: Work::BranchArm {
+                            binder: arm.binder,
+                            tail: arm.tail,
+                            env: bindee.scope.values,
+                            known: known.clone(),
+                        },
+                        frame: Work::BranchArms {
+                            source,
+                            position: position + 1,
+                            known,
+                            bindee,
+                            site,
+                        },
+                    };
+                }
+                return Step::TailCall(Work::BranchScrutinee {
+                    scrut: *scrut,
+                    count: arms.len(),
+                    tail: source,
+                    bindee,
+                    site,
+                });
+            }
+            | Work::PrimitiveSecond { operation, second, site } => {
+                return Step::Call {
+                    input: Work::Value(second.node, second.env, Demand::Used),
+                    frame: Work::FinishPrimitiveValue { operation, site },
+                };
+            }
+            | Work::PrimitiveResult { operation, operands, site } => {
+                return Step::Call {
+                    input: Work::PrimitiveValue { operation, operands, site },
+                    frame: Work::PrimitiveReturn { site },
+                };
+            }
             | Work::FinishValue(id, protocol) => match self.norm.source.inner.values[&id].clone() {
                 | Value::Closure(Closure { stack, .. }) => {
                     let body = self.computation();
@@ -523,7 +672,7 @@ impl<'a> NormalizationFolder<'a> {
                 for def in binder.vars(&self.norm.source) {
                     body.demands.remove(&def);
                 }
-                let binder = self.norm.pattern(binder);
+                let binder = self.norm.pattern::<D>(binder);
                 let site = self.norm.source.admin.terms.back(&TermId::Stack(source)).copied();
                 let node = Kont { binder, body: body.node }.build(self.norm, site);
                 self.stacks.push(Residual { node, demands: body.demands });
@@ -554,7 +703,7 @@ impl<'a> NormalizationFolder<'a> {
                 | Computation::LetArg(Let { binder: Cons(binder, Bullet), .. }) => {
                     let tail = self.computation();
                     let bindee = self.stack();
-                    let binder = Cons(self.norm.pattern(binder), Bullet);
+                    let binder = Cons(self.norm.pattern::<D>(binder), Bullet);
                     self.finish_computation(
                         id,
                         Let { binder, bindee: bindee.node, tail: tail.node },
@@ -581,10 +730,10 @@ impl<'a> NormalizationFolder<'a> {
             },
             | Work::FixBody { source, param, body, scope } => {
                 let values = self.norm.extend(scope.values, [(param, Rc::default())]);
-                self.work.extend([
-                    Work::FinishFix { source, param },
-                    Work::Computation(body, Scope { values, stack: None }),
-                ]);
+                return Step::Call {
+                    input: Work::Computation(body, Scope { values, stack: None }),
+                    frame: Work::FinishFix { source, param },
+                };
             }
             | Work::FinishFix { source, param } => {
                 let mut body = self.computation();
@@ -601,15 +750,18 @@ impl<'a> NormalizationFolder<'a> {
                 for def in binder.vars(&self.norm.source) {
                     tail.demands.remove(&def);
                 }
-                self.work.extend([Work::FinishComputation(source), Work::Stack(stack)]);
+                return Step::Call {
+                    input: Work::Stack(stack),
+                    frame: Work::FinishComputation(source),
+                };
             }
             | Work::Binding { binder, bindee, tail, scope, site } => {
                 let values =
                     self.norm.extend(scope.values, self.norm.binding_facts(binder, bindee));
-                self.work.extend([
-                    Work::ResidualBinding { binder, bindee, site },
-                    Work::Computation(tail, Scope { values, ..scope }),
-                ]);
+                return Step::Call {
+                    input: Work::Computation(tail, Scope { values, ..scope }),
+                    frame: Work::ResidualBinding { binder, bindee, site },
+                };
             }
             | Work::ResidualBinding { binder, bindee, site } => {
                 let bound = binder.vars(&self.norm.source);
@@ -618,34 +770,30 @@ impl<'a> NormalizationFolder<'a> {
                     && self.norm.discardable(bindee.node)
                 {
                     self.computations.push(tail);
-                    return;
+                    return Step::Return(());
                 }
                 if let Some(components) = self.norm.components(binder, bindee) {
                     self.computations.push(tail);
                     // Last component consumes tail demands first; emitted bindings
                     // still execute from the first component to the last.
-                    self.work.extend(
-                        components.into_iter().map(|(binder, bindee)| Work::ResidualBinding {
-                            binder,
-                            bindee,
-                            site,
-                        }),
-                    );
-                    return;
+                    return Step::TailCall(Work::BindingComponents {
+                        remaining: components.into_iter(),
+                        site,
+                    });
                 }
                 let demand = tail.demands.pattern(&self.norm.source, binder);
                 for def in bound {
                     tail.demands.remove(&def);
                 }
                 self.computations.push(tail);
-                self.work.extend([
-                    Work::FinishBinding { binder, site },
-                    Work::Value(bindee.node, bindee.env, demand),
-                ]);
+                return Step::Call {
+                    input: Work::Value(bindee.node, bindee.env, demand),
+                    frame: Work::FinishBinding { binder, site },
+                };
             }
             | Work::FinishBinding { binder, site } => {
                 let bindee = self.value();
-                let binder = self.norm.pattern(binder);
+                let binder = self.norm.pattern::<D>(binder);
                 let tail = self.computation();
                 let node =
                     Let { binder, bindee: bindee.node, tail: tail.node }.build(self.norm, site);
@@ -654,10 +802,10 @@ impl<'a> NormalizationFolder<'a> {
             }
             | Work::BranchArm { binder, tail, env, known } => {
                 let values = self.norm.bind(env, binder, known);
-                self.work.extend([
-                    Work::FinishBranchArm(binder),
-                    Work::Computation(tail, Scope { values, stack: None }),
-                ]);
+                return Step::Call {
+                    input: Work::Computation(tail, Scope { values, stack: None }),
+                    frame: Work::FinishBranchArm(binder),
+                };
             }
             | Work::FinishBranchArm(binder) => {
                 let mut tail = self.computation();
@@ -665,7 +813,7 @@ impl<'a> NormalizationFolder<'a> {
                 for def in binder.vars(&self.norm.source) {
                     tail.demands.remove(&def);
                 }
-                let binder = self.norm.pattern(binder);
+                let binder = self.norm.pattern::<D>(binder);
                 self.arms.push((Matcher { binder, tail: tail.node }, tail.demands, demand));
             }
             | Work::BranchScrutinee { scrut, count, tail, bindee, site } => {
@@ -678,10 +826,10 @@ impl<'a> NormalizationFolder<'a> {
                 );
                 let demand = if demand.is_absent() { Demand::Used } else { demand };
                 let env = bindee.scope.values;
-                self.work.extend([
-                    Work::BranchTail { count, tail, bindee, demands, site },
-                    Work::Value(scrut, env, demand),
-                ]);
+                return Step::Call {
+                    input: Work::Value(scrut, env, demand),
+                    frame: Work::BranchTail { count, tail, bindee, demands, site },
+                };
             }
             | Work::BranchTail { count, tail, bindee, demands, site } => {
                 let scrut = self.value();
@@ -693,10 +841,10 @@ impl<'a> NormalizationFolder<'a> {
                     .collect();
                 let branch_site = self.norm.source.admin.terms.back(&TermId::Compu(tail)).copied();
                 let tail = SCoprodMatch { scrut: scrut.node, arms }.build(self.norm, branch_site);
-                self.work.extend([
-                    Work::BranchStack { tail, demands: demands.join(scrut.demands), site },
-                    Work::Stack(bindee),
-                ]);
+                return Step::Call {
+                    input: Work::Stack(bindee),
+                    frame: Work::BranchStack { tail, demands: demands.join(scrut.demands), site },
+                };
             }
             | Work::BranchStack { tail, demands, site } => {
                 let stack = self.stack();
@@ -710,13 +858,11 @@ impl<'a> NormalizationFolder<'a> {
                         demands: Demands::default(),
                     });
                 } else {
-                    self.work.push(Work::FinishPrimitiveValue { operation, site });
-                    self.work.extend(
-                        operands
-                            .into_iter()
-                            .rev()
-                            .map(|value| Work::Value(value.node, value.env, Demand::Used)),
-                    );
+                    let [first, second] = operands;
+                    return Step::Call {
+                        input: Work::Value(first.node, first.env, Demand::Used),
+                        frame: Work::PrimitiveSecond { operation, second, site },
+                    };
                 }
             }
             | Work::FinishPrimitiveValue { operation, site } => {
@@ -734,16 +880,16 @@ impl<'a> NormalizationFolder<'a> {
                         && operands.iter().all(|value| self.norm.discardable(value.node)));
                 if discardable && !bound.iter().any(|def| tail.demands.contains(def)) {
                     self.computations.push(tail);
-                    return;
+                    return Step::Return(());
                 }
                 for def in bound {
                     tail.demands.remove(&def);
                 }
                 self.computations.push(tail);
-                self.work.extend([
-                    Work::FinishBinding { binder, site },
-                    Work::PrimitiveValue { operation, operands, site },
-                ]);
+                return Step::Call {
+                    input: Work::PrimitiveValue { operation, operands, site },
+                    frame: Work::FinishBinding { binder, site },
+                };
             }
             | Work::PrimitiveReturn { site } => {
                 let value = self.value();
@@ -778,5 +924,6 @@ impl<'a> NormalizationFolder<'a> {
                 self.computations.push(Residual { node, demands: stack.demands });
             }
         }
+        Step::Return(())
     }
 }

@@ -46,7 +46,7 @@ or the phase's acceptance boundary.
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution)
 provides statically selected native and explicit-stack drivers for residual lowering,
-Builtin package materialization, and high SPS pattern reconstruction.
+Builtin package materialization, and high SPS normalization, including its pattern reconstruction.
 Their equivalence and depth checks support using the interface for those boundaries.
 Classifier scope handling remains deferred while other suitable folders are evaluated.
 
@@ -90,13 +90,6 @@ an explicit structural subwalk alone does not bound recursive normalization or s
 Replace the affected callback interfaces and their callers together once the ownership choice is settled.
 
 ### Remaining execution adapters
-
-The consumer-demand normalization machine still uses its existing domain worklist.
-The implemented [residual lowering folder](../references/compiler.md#residual-lowering-folder) provides a
-candidate adapter: keep typed result stacks for completed syntax and move suspended calls to the driver.
-Evaluate this arrangement against normalization's heterogeneous values, stacks, and computations.
-Preserve the established interleaving of allocations and child visits and compare error multiplicity,
-source evidence, and output ownership under both drivers.
 
 Surface rebuilding, desugaring, resolution, and assembly lowering retain their current execution mechanisms.
 The existing analysis visitors already use explicit traversal stacks;

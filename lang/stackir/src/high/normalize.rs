@@ -21,6 +21,9 @@ use zydeco_utils::{
 mod fold;
 mod pattern;
 
+#[cfg(test)]
+mod driver_tests;
+
 use fold::NormalizationFolder;
 
 /// Normalize high SPS using fresh construction state for each input program.
@@ -31,7 +34,16 @@ impl CompilerPass<BranchJoinProgram> for Normalizer {
     type Error = Infallible;
 
     fn run(&mut self, program: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
-        Ok(Normalization::new(program).run())
+        self.run_with_driver::<Explicit>(program)
+    }
+}
+
+impl Normalizer {
+    /// Select continuation storage for reconstruction and its pattern subwalks.
+    pub fn run_with_driver<D: Driver>(
+        &mut self, program: BranchJoinProgram,
+    ) -> Result<BranchJoinProgram, Infallible> {
+        Ok(Normalization::new(program).run::<D>())
     }
 }
 
@@ -115,9 +127,9 @@ impl Normalization {
         Self { source, arena, root, envs, delayed_stacks: Vec::new(), occurrences }
     }
 
-    fn run(mut self) -> BranchJoinProgram {
+    fn run<D: Driver>(mut self) -> BranchJoinProgram {
         let source_root = self.root;
-        let root = NormalizationFolder::new(&mut self).run(source_root);
+        let root = NormalizationFolder::<D>::new(&mut self).run(source_root);
         BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
             .expect("normalization preserves lexical ownership and branch joins")
     }
@@ -338,8 +350,8 @@ impl Normalization {
         }
     }
 
-    fn pattern(&mut self, id: VPatId) -> VPatId {
-        Explicit::run(&mut pattern::PatternFolder { norm: self }, id)
+    fn pattern<D: Driver>(&mut self, id: VPatId) -> VPatId {
+        D::run(&mut pattern::PatternFolder { norm: self }, id)
     }
 
     fn delay_stack(&mut self, stack: ScopedStack) -> ScopedStackId {
@@ -516,9 +528,7 @@ mod tests {
         }
 
         fn normalize(self, root: CompuId) -> StackirProgram {
-            let program =
-                BranchJoinProgram::try_new(StackirProgram::new(self.arena, root)).unwrap();
-            let normalized = Normalizer.run_infallible(program).into_program();
+            let normalized = driver_tests::Drivers::normalize(&self.arena, root);
             assert!(normalized.root().free_vars(normalized.arena()).is_empty());
             normalized
         }

@@ -394,7 +394,7 @@ they cannot borrow the mutable folder itself.
 `Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
 `Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
 Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
-Production residual lowering, Builtin package materialization, and high SPS pattern reconstruction use `Explicit`;
+Production residual lowering, Builtin package materialization, and high SPS normalization use `Explicit`;
 `Recursive` supports bounded comparisons and consumes native stack proportional to pending calls.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
 Frame payloads and outputs may allocate according to the folder's representation.
@@ -1382,11 +1382,16 @@ count entries and exits on shared syntax, and cover binders and cycles with inde
 ### Normalization reconstruction
 
 After residual lowering, the unoptimized lexical tree can still contain long binding and closure chains.
-The [normalization folder](../../lang/stackir/src/high/normalize/fold.rs) reconstructs values,
-computations, and stacks through one explicit work loop.
-Frames retain unfinished consumers and their producer environments.
-Pattern reconstruction uses the shared [resumable folder driver](#resumable-folder-execution),
-and pattern-fact distribution uses an explicit stack; discardability and movable-stack checks iterate
+The [normalization folder](../../lang/stackir/src/high/normalize/fold.rs) reconstructs values, computations,
+and stacks through the shared [resumable folder driver](#resumable-folder-execution).
+`Normalizer::run_with_driver::<D>` selects continuation storage for this reconstruction
+and its pattern subwalks; production normalization selects `Explicit`.
+Frames retain unfinished consumers and their producer environments,
+while typed result stacks retain completed syntax and its consumer demands.
+Product and branch cursors request one child at a time; split-binding iterators resume their components
+in the order required by demand propagation.
+Tail calls transfer reductions to surviving bodies without retaining the eliminated wrapper.
+Pattern-fact distribution uses an explicit stack; discardability and movable-stack checks iterate
 through their relevant children.
 
 The folder preserves the [consumer-demand schedule](#consumer-demands).
@@ -1405,6 +1410,10 @@ in forwarding and exclusive body movement.
 Reconstruction preserves definition identities, source sites, applicable protocol evidence,
 and the lexical ownership and branch-join validation boundary.
 
+The bounded normalization behavior fixtures run through both drivers and compare generated syntax,
+raw allocation slots, arena counts, source provenance, and protocol evidence.
+They cover sharing, branch demands, primitive folding, and preservation of potentially trapping operations.
+Additional comparisons cover empty and wide product, match, and comatch child sequences.
 [Depth tests](../../lang/stackir/src/high/normalize/depth_tests.rs) use a 512 KiB stack for discarded
 and retained bindings, suspended bodies, ambient substitutions, argument stacks, alias parameters, and unknown branches.
 The [CLI regression](../../cli/tests/source_build.rs) builds the factorial source through both Wasm backends
