@@ -65,3 +65,32 @@ fn parse_failures_render_source_snippets_for_check_run_build_and_format() {
         assert!(output.stderr.is_empty());
     }
 }
+
+#[test]
+fn source_scanning_reports_multiple_directive_categories() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("directives.zy");
+    fs::write(&path, "(@(import), @(import(0)), @[literal(extra)] _)").unwrap();
+    for command in ["check", "run", "build"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .current_dir(directory.path())
+            .arg(command)
+            .arg(&path)
+            .output()
+            .unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(error.contains("expects one source argument"), "{error}");
+        assert!(error.contains("must be positive"), "{error}");
+        assert!(error.contains("invalid literal directive"), "{error}");
+        assert!(!error.contains("panicked"), "{error}");
+    }
+    fs::write(&path, "(1, 2, 3)").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+        .current_dir(directory.path())
+        .arg("check")
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}

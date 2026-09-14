@@ -15,14 +15,17 @@ impl Fixture {
     }
 
     fn packages(&self) -> Result<Vec<PackageSite>, PackageDirectiveError> {
-        self.unit.packages(&self.parser.arena, &self.parser.spans)
+        self.unit
+            .packages(&self.parser.arena, &self.parser.spans)
+            .map_err(super::super::tests::only_error)
     }
 
     fn import(source: &str) -> Result<ImportTarget, ImportDirectiveError> {
         let fixture = Self::parse(source);
         Ok(fixture
             .unit
-            .imports(&fixture.parser.arena, &fixture.parser.spans)?
+            .imports(&fixture.parser.arena, &fixture.parser.spans)
+            .map_err(super::super::tests::only_error)?
             .remove(0)
             .directive
             .target)
@@ -108,7 +111,11 @@ fn discovery_is_file_level_ordered_and_validates_each_glob() {
     use crate::textual::DiscoveryDirectiveError;
     let source = r#"(@[discover(include("tests/*.zy", "examples/*.zy"), exclude("tests/broken.zy"), include("tests/broken.zy"))] @[package(library)] ())"#;
     let fixture = Fixture::parse(source);
-    let rules = fixture.unit.discovery(&fixture.parser.arena, &fixture.parser.spans).unwrap();
+    let rules = fixture
+        .unit
+        .discovery(&fixture.parser.arena, &fixture.parser.spans)
+        .map_err(super::super::tests::only_error)
+        .unwrap();
     assert_eq!(
         rules
             .iter()
@@ -132,8 +139,11 @@ fn discovery_is_file_level_ordered_and_validates_each_glob() {
         (r#"@[discover(include("tests/../*.zy"))] ()"#, "relative glob"),
     ] {
         let fixture = Fixture::parse(source);
-        let error =
-            fixture.unit.discovery(&fixture.parser.arena, &fixture.parser.spans).unwrap_err();
+        let error = fixture
+            .unit
+            .discovery(&fixture.parser.arena, &fixture.parser.spans)
+            .map_err(super::super::tests::only_error)
+            .unwrap_err();
         assert!(error.to_string().contains(expected), "{error}");
         if let DiscoveryDirectiveError::Invalid {
             source: crate::metadata::DiscoveryAnnotationError::Pattern { .. },

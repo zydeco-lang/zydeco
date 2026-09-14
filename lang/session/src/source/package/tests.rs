@@ -737,10 +737,10 @@ fn duplicate_names_old_annotations_and_missing_names_have_specific_errors() {
         "(#main = @[package(library, name(main))] 1, #main = @[package(test, name(main))] 2)",
     );
     assert!(matches!(CompilerSession::default().package_catalog(&[duplicate]),
-        Err(SourceLoadError::Parse(SourceParseError::PackageDirective { error, .. })) if matches!(*error, PackageDirectiveError::DuplicateName { .. })));
+        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && errors.iter().any(|error| matches!(error, SourceParseError::PackageDirective { error, .. } if matches!(**error, PackageDirectiveError::DuplicateName { .. })))));
     let old = fixture.write("old.zy", r#"@[package(library("main"))] ()"#);
     assert!(matches!(CompilerSession::default().package_catalog(&[old]),
-        Err(SourceLoadError::Parse(SourceParseError::PackageDirective { error, .. })) if matches!(*error, PackageDirectiveError::Annotation { .. })));
+        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && errors.iter().any(|error| matches!(error, SourceParseError::PackageDirective { error, .. } if matches!(**error, PackageDirectiveError::Annotation { .. })))));
     fixture.write("plain.zy", "()");
     assert!(matches!(CompilerSession::default().package(&fixture.named("plain.zy", "missing")),
         Err(SourceLoadError::Package(error)) if matches!(*error, PackageError::Missing { .. })));
@@ -757,7 +757,7 @@ fn invalid_source_paths_and_syntax_are_reported_without_panicking() {
     fixture.write("broken.zy", "@[package(library)] let x = in x");
     assert!(matches!(
         session.package_catalog(&[fixture.path("broken.zy")]),
-        Err(SourceLoadError::Parse(SourceParseError::Parse { .. }))
+        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. }))
     ));
 }
 

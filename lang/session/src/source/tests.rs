@@ -329,6 +329,12 @@ impl RepositorySourceFiles {
 }
 
 impl SourceFixture {
+    fn parse_error(error: SourceLoadError) -> SourceParseError {
+        let SourceLoadError::Parse(errors) = error else { panic!("expected source parse errors") };
+        assert_eq!(errors.len(), 1);
+        errors.into_iter().next().unwrap()
+    }
+
     fn new() -> Self {
         Self { directory: tempfile::tempdir().unwrap() }
     }
@@ -732,7 +738,7 @@ fn source_graph_rejects_a_legacy_declaration_sequence() {
 
     assert!(matches!(
         SourceGraph::load(root),
-        Err(SourceLoadError::Parse(SourceParseError::Parse { .. }))
+        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. }))
     ));
 }
 
@@ -746,7 +752,7 @@ fn source_graph_rejects_sources_that_only_parse_with_recovery() {
             assert!(
                 matches!(
                     SourceGraph::load(root),
-                    Err(SourceLoadError::Parse(SourceParseError::Parse { .. }))
+                    Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. }))
                 ),
                 "source: {source:?}"
             );
@@ -765,7 +771,7 @@ fn parser_failures_retain_the_rejected_overlay_snapshot() {
     session.set_overlay(&root, "ret 0".to_owned()).unwrap();
     assert!(session.analyze(&root).is_ok());
     let AnalysisError::Source { error } = error else { panic!("expected a source error") };
-    let SourceLoadError::Parse(SourceParseError::Parse { error }) = error.as_ref() else {
+    let SourceParseError::Parse { error } = SourceFixture::parse_error((*error).clone()) else {
         panic!("expected a parse error")
     };
     assert_eq!(error.file_map.source(), rejected);
@@ -791,8 +797,8 @@ fn source_graph_rejects_an_unknown_builtin_role() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@(builtin(number))");
 
-    let SourceLoadError::Parse(SourceParseError::BuiltinDirective { error, .. }) =
-        SourceGraph::load(root).unwrap_err()
+    let SourceParseError::BuiltinDirective { error, .. } =
+        SourceFixture::parse_error(SourceGraph::load(root).unwrap_err())
     else {
         panic!("expected an invalid Builtin directive")
     };
@@ -807,8 +813,8 @@ fn source_graph_rejects_a_roleless_intrinsic_splice() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@(intrinsic)");
 
-    let SourceLoadError::Parse(SourceParseError::IntrinsicDirective { error, .. }) =
-        SourceGraph::load(root).unwrap_err()
+    let SourceParseError::IntrinsicDirective { error, .. } =
+        SourceFixture::parse_error(SourceGraph::load(root).unwrap_err())
     else {
         panic!("expected an invalid intrinsic directive")
     };
@@ -1157,7 +1163,7 @@ fn a_literal_splice_without_an_attached_text_block_is_rejected() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "@(literal)");
     let error = SourceGraph::load(root).unwrap_err();
-    let SourceLoadError::Parse(SourceParseError::LiteralDirective { error, .. }) = error else {
+    let SourceParseError::LiteralDirective { error, .. } = SourceFixture::parse_error(error) else {
         panic!("expected an invalid literal splice")
     };
     assert!(matches!(&*error, zydeco_surface::textual::LiteralDirectiveError::MissingText { .. }));
@@ -1168,7 +1174,7 @@ fn a_literal_splice_on_a_non_hole_term_is_rejected() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "--| Text\n@[literal] 1");
     let error = SourceGraph::load(root).unwrap_err();
-    let SourceLoadError::Parse(SourceParseError::LiteralDirective { error, .. }) = error else {
+    let SourceParseError::LiteralDirective { error, .. } = SourceFixture::parse_error(error) else {
         panic!("expected an invalid literal splice")
     };
     assert!(matches!(
@@ -2738,4 +2744,42 @@ fn checked_computation_roots_lower_directly_to_stack_ir() {
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
     zydeco_stackir::high::check::check(stackir, &scoped, &statics);
+}
+
+#[test]
+fn shared_source_scan_reports_every_category_without_publishing_partial_templates() {
+    let fixture = SourceFixture::new();
+    let source = "(@(import), @(import(0)), @[builtin] _, @(intrinsic), @[literal(extra)] _, @[package(wrong)] _, @[discover(include(1))] _)";
+    let root = fixture.write("directives.zy", source);
+    let mut session = CompilerSession::default();
+    let error = session.analyze(&root).unwrap_err();
+    let diagnostics = error.diagnostics();
+    assert_eq!(diagnostics.len(), 8, "seven malformed directives plus discovery placement");
+    let mut highlights = diagnostics
+        .iter()
+        .map(|diagnostic| {
+            let site = diagnostic.site.as_ref().unwrap();
+            assert_eq!(site.path(), root.canonicalize().unwrap());
+            source[site.range().clone()].to_owned()
+        })
+        .collect::<Vec<_>>();
+    highlights.sort();
+    let mut expected = [
+        "import",
+        "0",
+        "builtin",
+        "intrinsic",
+        "literal(extra)",
+        "wrong",
+        "include(1)",
+        "discover(include(1))",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    expected.sort();
+    assert_eq!(highlights, expected);
+    session.set_overlay(&root, "(1, 2, 3)".into()).unwrap();
+    assert!(session.analyze(&root).unwrap().outcome().root().is_some());
+    session.set_overlay(&root, source.into()).unwrap();
+    assert_eq!(session.analyze(&root).unwrap_err().diagnostics().len(), 8);
 }

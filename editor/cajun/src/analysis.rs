@@ -86,12 +86,14 @@ pub(crate) struct ProjectFailure {
 }
 
 impl ProjectFailure {
-    fn compiler(message: impl Into<String>, site: Option<SourceDiagnosticSite>) -> Self {
-        Self { diagnostics: vec![ProjectDiagnostic::compiler(message, site)] }
-    }
-
     fn from_source_error(error: &SourceLoadError) -> Self {
-        Self::compiler(error.to_string(), error.diagnostic_site())
+        Self {
+            diagnostics: error
+                .diagnostics()
+                .into_iter()
+                .map(|diagnostic| ProjectDiagnostic::compiler(diagnostic.message, diagnostic.site))
+                .collect(),
+        }
     }
 
     fn from_analysis_error(error: &AnalysisError) -> Self {
@@ -783,7 +785,7 @@ impl ProjectState {
 
 #[cfg(test)]
 mod tests {
-    use super::{ProjectFailure, ProjectState};
+    use super::{ProjectDiagnostic, ProjectFailure, ProjectState};
     use crate::{
         hover::{HoverLineWidth, HoverOptions},
         progress::{AnalysisProgress, SourceDiscovery},
@@ -821,12 +823,32 @@ mod tests {
     }
 
     #[test]
+    fn source_directive_failures_publish_all_editor_locations() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("directives.zy");
+        let source = "(\n  @(import),\n  @(import(0)),\n  @[literal(extra)] _\n)";
+        std::fs::write(&path, source).unwrap();
+        let error = zydeco_session::CompilerSession::default().graph(&path).unwrap_err();
+        let failure = ProjectFailure::from_source_error(&error);
+        let diagnostics = failure.diagnostics(Some(&path), Some(source));
+        assert_eq!(diagnostics.len(), 3);
+        let mut lines =
+            diagnostics.iter().map(|diagnostic| diagnostic.range.start.line).collect::<Vec<_>>();
+        lines.sort();
+        assert_eq!(lines, [1, 2, 3]);
+        std::fs::write(&path, "(1, 2, \"text\")").unwrap();
+        assert!(zydeco_session::CompilerSession::default().graph(&path).is_ok());
+    }
+
+    #[test]
     fn failed_analysis_ranges_are_measured_in_utf16() {
         let path = Path::new("unicode-error.zy");
-        let failure = ProjectFailure::compiler(
-            "parse error",
-            Some(SourceDiagnosticSite::new(path.to_path_buf(), 5..6)),
-        );
+        let failure = ProjectFailure {
+            diagnostics: vec![ProjectDiagnostic::compiler(
+                "parse error",
+                Some(SourceDiagnosticSite::new(path.to_path_buf(), 5..6)),
+            )],
+        };
 
         let diagnostics = failure.diagnostics(Some(path), Some("😀 ?"));
         let [diagnostic] = diagnostics.as_slice() else { panic!("one diagnostic") };

@@ -1,9 +1,13 @@
 use super::syntax::*;
+mod analyzers;
+pub use analyzers::*;
+mod scan;
 use crate::metadata::{
     BuiltinMeta, BuiltinMetaError, DocMeta, IntrinsicMeta, IntrinsicMetaError, LiteralMeta,
     LiteralMetaError, MetadataKind,
 };
 pub use crate::metadata::{SourceReference, SourceReferenceError};
+pub use scan::*;
 use std::{
     collections::HashSet,
     num::NonZeroU64,
@@ -243,188 +247,56 @@ impl LiteralDirectiveError {
 }
 
 impl SourceUnit {
-    /// Reachable annotations of one kind and their terms, in source order.
-    pub(super) fn annotations(
-        &self, kind: MetadataKind, arena: &TextArena, spans: &SpanArena,
-    ) -> Vec<(MetaId, TermId)> {
-        let reachable = arena.reachable_from(self.root.into());
-        let mut annotations = arena
-            .terms
-            .iter()
-            .filter(|(term, _)| reachable.contains(&(**term).into()))
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaTerm(meta, _)) if arena.metas[meta].is(kind.name()) => {
-                    Some((*meta, *term))
-                }
-                | _ => None,
-            })
-            .collect::<Vec<_>>();
-        annotations.sort_by_key(|(meta, _)| spans[&EntityId::Meta(*meta)].lo());
-        annotations
-    }
-
-    /// Collect every explicitly documented term in this source unit.
-    ///
-    /// Text blocks remain parser trivia. The `@[doc]` annotation
-    /// provides the durable attachment point, and only an uninterrupted block
-    /// of `--|` lines immediately above that annotation becomes its text.
+    /// Collect reachable documentation through the shared source scan.
     pub fn documentation(&self, arena: &TextArena, spans: &SpanArena) -> Vec<DocumentationSite> {
-        let reachable = arena.reachable_from(self.root.into());
-        let mut sites = arena
-            .terms
-            .iter()
-            .filter(|(term, _)| reachable.contains(&(**term).into()))
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaTerm(meta, payload)) => {
-                    DocumentationSite::decode(*term, *meta, *payload, arena, spans)
-                }
-                | _ => None,
-            })
-            .collect::<Vec<_>>();
-        sites.sort_by_key(|site| site.directive.span.lo());
-        sites
+        SourceScan::run(SourceView { unit: self, arena, spans }, DocumentationAnalyzer::default())
     }
 
-    /// Whether this metadata annotation consumes an attached `--|` text block.
-    fn consumes_attached_text(meta: MetaId, arena: &TextArena) -> bool {
-        let meta = arena.semantic_meta(meta);
-        meta.specialize::<DocMeta>().is_ok_and(|option| option.is_some())
-            || meta.specialize::<LiteralMeta>().is_ok_and(|option| option.is_some())
-    }
-
-    /// Find text blocks that have no semantic attachment.
-    pub fn unattached_text(&self, arena: &TextArena) -> Vec<UnattachedTextWarning> {
-        let _root = &arena.terms[&self.root];
-        let attached = arena
-            .terms
-            .iter()
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaTerm(meta, _)) if Self::consumes_attached_text(*meta, arena) => {
-                    arena.trivia.attached_text((*term).into()).map(|text| text.range.clone())
-                }
-                | _ => None,
-            })
-            .collect::<HashSet<_>>();
-        let mut warnings = arena
-            .trivia
-            .text_blocks()
-            .filter(|text| !attached.contains(&text.range))
-            .map(|text| UnattachedTextWarning { range: text.range.clone() })
-            .collect::<Vec<_>>();
-        warnings.sort_by_key(|warning| (warning.range.start, warning.range.end));
-        warnings
-    }
-
-    /// Decode and validate all `@[literal]` term splices in this source unit.
-    ///
-    /// A literal splice requires a hole payload and an attached `--|` text
-    /// block, which becomes the string value of the hole.
-    pub fn literals(
+    /// Find text blocks without a semantic attachment, including parser-retained terms.
+    pub fn unattached_text(
         &self, arena: &TextArena, spans: &SpanArena,
-    ) -> Result<Vec<LiteralSite>, LiteralDirectiveError> {
-        let _root = &arena.terms[&self.root];
-        let mut literals = arena
-            .terms
-            .iter()
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaTerm(meta, payload)) => {
-                    LiteralSite::decode(*term, *meta, *payload, arena, spans)
-                }
-                | _ => None,
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        literals.sort_by_key(|site| site.directive.span.lo());
-        Ok(literals)
+    ) -> Vec<UnattachedTextWarning> {
+        SourceScan::run(SourceView { unit: self, arena, spans }, UnattachedTextAnalyzer::default())
     }
 
-    /// Decode all import metadata parsed into this source unit.
-    ///
-    /// The textual arena must belong exclusively to this unit. A parser used
-    /// for source loading is therefore finished after parsing one source file.
+    /// Validate every imports site, collecting independent failures.
     pub fn imports(
         &self, arena: &TextArena, spans: &SpanArena,
-    ) -> Result<Vec<ImportSite>, ImportDirectiveError> {
-        let _root = &arena.terms[&self.root];
-        let mut imports = arena
-            .terms
-            .iter()
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaTerm(meta, payload)) => {
-                    ImportSite::decode(*term, *meta, *payload, arena, spans)
-                }
-                | _ => None,
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        imports.sort_by_key(|site| site.directive.span.lo());
-        Ok(imports)
+    ) -> Result<Vec<ImportSite>, crate::diagnostic::Diagnostics<ImportDirectiveError>> {
+        SourceScan::run(SourceView { unit: self, arena, spans }, ImportAnalyzer::default())
+            .into_result()
     }
 
-    /// Decode and validate all Builtin role annotations in this source unit.
+    /// Validate every literals site, collecting independent failures.
+    pub fn literals(
+        &self, arena: &TextArena, spans: &SpanArena,
+    ) -> Result<Vec<LiteralSite>, crate::diagnostic::Diagnostics<LiteralDirectiveError>> {
+        SourceScan::run(SourceView { unit: self, arena, spans }, LiteralAnalyzer::default())
+            .into_result()
+    }
+
+    /// Validate every builtins site, collecting independent failures.
     pub fn builtins(
         &self, arena: &TextArena, spans: &SpanArena,
-    ) -> Result<Vec<BuiltinSite>, BuiltinDirectiveError> {
-        let _root = &arena.terms[&self.root];
-        let term_sites = arena
-            .terms
-            .iter()
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaTerm(meta, payload)) => {
-                    BuiltinSite::decode_term(*term, *meta, *payload, arena, spans)
-                }
-                | _ => None,
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let parameter_sites = arena
-            .terms
-            .iter()
-            .flat_map(|(_, syntax)| match syntax {
-                | Term::Exists(Exists { parameters, .. }) => parameters
-                    .iter()
-                    .flat_map(|parameter| {
-                        parameter.annotations.iter().map(|annotation| {
-                            BuiltinSite::decode_existential_pattern(
-                                parameter.binder(),
-                                annotation,
-                                arena,
-                                spans,
-                            )
-                        })
-                    })
-                    .collect::<Vec<_>>(),
-                | _ => Vec::new(),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut builtins = term_sites.into_iter().chain(parameter_sites).collect::<Vec<_>>();
-        builtins.sort_by_key(|site| site.directive.span.lo());
-        Ok(builtins)
+    ) -> Result<Vec<BuiltinSite>, crate::diagnostic::Diagnostics<BuiltinDirectiveError>> {
+        SourceScan::run(SourceView { unit: self, arena, spans }, BuiltinAnalyzer::default())
+            .into_result()
     }
 
-    /// Decode and validate intrinsic CBPV term splices in this source unit.
+    /// Validate every intrinsics site, collecting independent failures.
     pub fn intrinsics(
         &self, arena: &TextArena, spans: &SpanArena,
-    ) -> Result<Vec<IntrinsicSite>, IntrinsicDirectiveError> {
-        let _root = &arena.terms[&self.root];
-        let mut intrinsics = arena
-            .terms
-            .iter()
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Meta(MetaTerm(meta, payload)) => {
-                    IntrinsicSite::decode(*term, *meta, *payload, arena, spans)
-                }
-                | _ => None,
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        intrinsics.sort_by_key(|site| site.directive.span.lo());
-        Ok(intrinsics)
+    ) -> Result<Vec<IntrinsicSite>, crate::diagnostic::Diagnostics<IntrinsicDirectiveError>> {
+        SourceScan::run(SourceView { unit: self, arena, spans }, IntrinsicAnalyzer::default())
+            .into_result()
     }
 }
 
 impl DocumentationSite {
     fn decode(
-        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, payload: TermId, semantic: &Meta, arena: &TextArena, spans: &SpanArena,
     ) -> Option<Self> {
-        let meta = arena.semantic_meta(meta);
-        let meta = meta
+        let meta = semantic
             .specialize::<DocMeta>()
             .expect("documentation metadata specialization is infallible")?;
         let span = spans[&EntityId::Term(term)];
@@ -435,9 +307,9 @@ impl DocumentationSite {
 
 impl LiteralSite {
     fn decode(
-        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, semantic: &Meta, arena: &TextArena,
+        spans: &SpanArena,
     ) -> Option<Result<Self, LiteralDirectiveError>> {
-        let semantic = arena.semantic_meta(meta);
         match semantic.specialize::<LiteralMeta>() {
             | Ok(Some(_)) => {
                 let span = spans[&EntityId::Term(term)];
@@ -464,7 +336,8 @@ impl LiteralSite {
 
 impl ImportSite {
     fn decode(
-        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, semantic: &Meta, arena: &TextArena,
+        spans: &SpanArena,
     ) -> Option<Result<Self, ImportDirectiveError>> {
         let metadata = &arena.metas[&meta];
         metadata.is(MetadataKind::Import.name()).then(|| {
@@ -478,9 +351,9 @@ impl ImportSite {
                 });
             };
             let span = spans[&EntityId::Meta(*argument)];
-            let target = match arena.semantic_meta(*argument) {
+            let target = match &semantic.arguments()[0] {
                 | zydeco_syntax::Meta::Integer(number) => {
-                    let input = u64::try_from(number)
+                    let input = u64::try_from(*number)
                         .ok()
                         .and_then(SourceNumber::new)
                         .ok_or(ImportDirectiveError::NonPositiveInput { term, span })?;
@@ -490,7 +363,7 @@ impl ImportSite {
                     return Err(ImportDirectiveError::EmptyPath { term, span });
                 }
                 | meta => {
-                    ImportTarget::Source(SourceReference::decode(&meta).map_err(|source| {
+                    ImportTarget::Source(SourceReference::decode(meta).map_err(|source| {
                         ImportDirectiveError::InvalidSource { term, span, source }
                     })?)
                 }
@@ -506,10 +379,9 @@ impl ImportSite {
 
 impl BuiltinSite {
     fn decode_term(
-        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, semantic: &Meta, spans: &SpanArena,
     ) -> Option<Result<Self, BuiltinDirectiveError>> {
         let location = BuiltinLocation::Term { annotation: term, payload };
-        let semantic = arena.semantic_meta(meta);
         match semantic.specialize::<BuiltinMeta>() {
             | Ok(Some(BuiltinMeta { role: BuiltinRole::Value(role) })) => {
                 let span = spans[&EntityId::Term(term)];
@@ -535,10 +407,9 @@ impl BuiltinSite {
     }
 
     fn decode_existential_pattern(
-        pattern: PatId, annotation: &Sp<MetaId>, arena: &TextArena, spans: &SpanArena,
+        pattern: PatId, annotation: &Sp<MetaId>, semantic: &Meta, spans: &SpanArena,
     ) -> Result<Self, BuiltinDirectiveError> {
         let location = BuiltinLocation::ExistentialPattern { pattern };
-        let semantic = arena.semantic_meta(annotation.inner);
         match semantic.specialize::<BuiltinMeta>() {
             | Ok(Some(BuiltinMeta { role: BuiltinRole::Type(role) })) => Ok(Self {
                 location,
@@ -569,9 +440,9 @@ impl BuiltinSite {
 
 impl IntrinsicSite {
     fn decode(
-        term: TermId, meta: MetaId, payload: TermId, arena: &TextArena, spans: &SpanArena,
+        term: TermId, meta: MetaId, payload: TermId, semantic: &Meta, arena: &TextArena,
+        spans: &SpanArena,
     ) -> Option<Result<Self, IntrinsicDirectiveError>> {
-        let semantic = arena.semantic_meta(meta);
         match semantic.specialize::<IntrinsicMeta>() {
             | Ok(Some(meta)) => {
                 let span = spans[&EntityId::Term(term)];
@@ -594,3 +465,6 @@ impl IntrinsicSite {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -46,7 +46,14 @@ impl DiagnosticRenderer {
 
     pub fn source_error(error: &SourceLoadError) {
         match error {
-            | SourceLoadError::Parse(SourceParseError::Parse { error }) => Self::parse(error),
+            | SourceLoadError::Parse(errors) => {
+                for error in errors.iter() {
+                    match error {
+                        | SourceParseError::Parse { error } => Self::parse(error),
+                        | _ => eprintln!("{error}"),
+                    }
+                }
+            }
             | _ => eprintln!("{error}"),
         }
     }

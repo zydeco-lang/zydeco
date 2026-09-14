@@ -54,7 +54,9 @@ impl Display for SourceDiagnosticSite {
     }
 }
 
-/// A deterministic source-template error suitable for memoized parsing.
+pub type SourceParseErrors = zydeco_surface::diagnostic::Diagnostics<SourceParseError>;
+
+/// One deterministic source-template error suitable for memoized parsing.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceParseError {
     #[error("invalid discovery declaration in `{}`: {error}", path.display())]
@@ -163,12 +165,37 @@ pub enum SourceLoadError {
         source: Arc<io::Error>,
     },
     #[error(transparent)]
-    Parse(#[from] SourceParseError),
+    Parse(#[from] SourceParseErrors),
     #[error(transparent)]
     Cycle(#[from] SourceCycle),
 }
 
 impl SourceLoadError {
+    pub fn diagnostics(&self) -> Vec<SourceDiagnostic> {
+        match self {
+            | Self::Parse(errors) => errors
+                .iter()
+                .map(|error| SourceDiagnostic {
+                    message: error.to_string(),
+                    site: error.diagnostic_site(),
+                })
+                .collect(),
+            | Self::PackageImport { importer, span, error } => error
+                .diagnostics()
+                .into_iter()
+                .map(|mut diagnostic| {
+                    diagnostic.site = diagnostic.site.or_else(|| {
+                        Some(SourceDiagnosticSite::new(importer.clone(), span.range()))
+                    });
+                    diagnostic
+                })
+                .collect(),
+            | _ => {
+                vec![SourceDiagnostic { message: self.to_string(), site: self.diagnostic_site() }]
+            }
+        }
+    }
+
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         match self {
             | Self::Package(error) => error.diagnostic_site(),
@@ -180,7 +207,7 @@ impl SourceLoadError {
             | Self::ImportInput { importer, span, .. } => {
                 Some(SourceDiagnosticSite::new(importer.clone(), span.range()))
             }
-            | Self::Parse(error) => error.diagnostic_site(),
+            | Self::Parse(errors) => errors.iter().find_map(SourceParseError::diagnostic_site),
             | Self::Cycle(cycle) => cycle.steps.first().map(|step| {
                 let path = match step.kind {
                     | SourceDependencyKind::Import(_) => &step.dependent,

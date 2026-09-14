@@ -474,6 +474,41 @@ The coarse [check_source query](../../lang/statics/src/query/source.rs) runs the
 coverage, and static elaboration together, then publishes an `Arc<StaticsArena>` and a checked or rejected outcome.
 Splitting those phases into separately copied arenas would multiply the dominant materialization cost.
 
+### Shared source analysis
+
+A parsed file answers several questions before assembly: which sources it imports,
+where documentation attaches, which Builtin roles and intrinsic or literal splices need validation,
+and which packages and discovery rules it declares.
+The [source scan](../../lang/surface/src/textual/source/scan.rs) computes requested reachability once,
+sweeps allocated terms once, and then visits file text blocks when requested.
+Each term or existential parameter annotation event borrows one decoded semantic meta tree,
+retaining textual identities for exact argument spans.
+
+`SourceAnalyzer` separates these questions into independent consumers with typed results.
+Pairs of analyzers compose statically: their `SourceInterest` values are unioned before scanning,
+and both consumers observe the same immutable events.
+Import-only queries omit reachability and unrelated decoding; documentation-only queries do not validate imports.
+The full `SourceInventory` composes documentation, unattached-text warnings, imports,
+Builtin roles, intrinsics, literals, packages, and discovery.
+Query entry points use the same analyzers.
+
+Domains preserve the distinction between the returned tree and allocations retained by parsing.
+Documentation, packages, and discovery use reachable terms.
+Import, intrinsic, and literal validation use every allocated term;
+Builtin validation additionally visits existential parameter annotations.
+Unattached-text warnings use relevant attachments throughout the arena and file trivia.
+Package selection remains downstream of this complete-file inventory.
+
+`SourceAnalysis` retains valid facts and diagnostics from independent sites.
+Malformed arguments block only checks that require their decoded values; other sites still run.
+Package duplicate checks retain the first valid declaration in source order.
+Discovery validates each site's arguments and checks duplicates over the complete annotation set;
+placement is checked when there is one unambiguous declaration.
+Successful query ordering remains source order, with packages ordered by name.
+The loader concatenates typed diagnostic collections and publishes a `SourceTemplate` only after every analyzer accepts.
+Diagnostic order is a presentation choice, not an API guarantee; strict query facades return the full collection.
+Individual malformed directives may stop at their first local error until a further recovery point is justified.
+
 ### Query and checker ownership
 
 Allocation-producing syntax judgments are producer queries: they return node identities

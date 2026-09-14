@@ -203,6 +203,7 @@ impl AnalysisError {
     /// Every independently reported phase failure with its own source location.
     pub fn diagnostics(&self) -> Vec<super::SourceDiagnostic> {
         match self {
+            | Self::Source { error } => error.diagnostics(),
             | Self::Desugar { error, spans } => error
                 .iter()
                 .map(|error| super::SourceDiagnostic {

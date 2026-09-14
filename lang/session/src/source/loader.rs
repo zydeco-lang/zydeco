@@ -1,13 +1,20 @@
 use crate::source::{
     SourceFile, SourceGraph, SourceGraphScope, SourceId, SourceImport, SourceImportId, SourceKind,
-    SourceLoadError, SourceParseError, SourcePath, SourceTemplate, SourceWarning,
+    SourceLoadError, SourceParseError, SourceParseErrors, SourcePath, SourceTemplate,
+    SourceWarning,
 };
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
-use zydeco_surface::textual::{ImportSite, ImportTarget, ParseError, StrictParser, syntax as t};
+use zydeco_surface::{
+    diagnostic::Diagnostics,
+    textual::{
+        ImportSite, ImportTarget, ParseError, SourceInventory, SourceView, StrictParser,
+        syntax as t,
+    },
+};
 use zydeco_utils::{
     prelude::{ArenaDense, FrozenArena},
     span::FileMap,
@@ -31,7 +38,7 @@ pub(crate) struct SourceGraphLoader<Provider> {
 }
 
 impl SourceTemplate {
-    pub(crate) fn parse(path: PathBuf, source: String) -> Result<Self, SourceParseError> {
+    pub(crate) fn parse(path: PathBuf, source: String) -> Result<Self, SourceParseErrors> {
         let file = FileMap::local(source.as_str(), Some(Arc::new(path.clone())));
         let mut parser = t::Parser::new();
         let unit = StrictParser::source(&source, &mut parser).map_err(|error| {
@@ -45,28 +52,49 @@ impl SourceTemplate {
     /// Validate source directives identically for strict and completion parses.
     pub(super) fn with_syntax(
         path: PathBuf, source: String, file: FileMap, parser: t::Parser, unit: t::SourceUnit,
-    ) -> Result<Self, SourceParseError> {
-        let documentation = unit.documentation(&parser.arena, &parser.spans);
-        let warnings =
-            unit.unattached_text(&parser.arena).into_iter().map(SourceWarning::from).collect();
-        let import_sites = unit.imports(&parser.arena, &parser.spans).map_err(|error| {
-            SourceParseError::Directive { path: path.clone(), error: Box::new(error) }
-        })?;
-        unit.builtins(&parser.arena, &parser.spans).map_err(|error| {
-            SourceParseError::BuiltinDirective { path: path.clone(), error: Box::new(error) }
-        })?;
-        unit.intrinsics(&parser.arena, &parser.spans).map_err(|error| {
-            SourceParseError::IntrinsicDirective { path: path.clone(), error: Box::new(error) }
-        })?;
-        let literals = unit.literals(&parser.arena, &parser.spans).map_err(|error| {
-            SourceParseError::LiteralDirective { path: path.clone(), error: Box::new(error) }
-        })?;
-        let package_sites = unit.packages(&parser.arena, &parser.spans).map_err(|error| {
-            SourceParseError::PackageDirective { path: path.clone(), error: Box::new(error) }
-        })?;
-        let discovery = unit.discovery(&parser.arena, &parser.spans).map_err(|error| {
-            SourceParseError::DiscoveryDirective { path: path.clone(), error: Box::new(error) }
-        })?;
+    ) -> Result<Self, SourceParseErrors> {
+        let SourceInventory {
+            documentation,
+            warnings,
+            imports,
+            literals,
+            builtins,
+            intrinsics,
+            packages,
+            discovery,
+        } = SourceInventory::scan(SourceView {
+            unit: &unit,
+            arena: &parser.arena,
+            spans: &parser.spans,
+        });
+        let warnings = warnings.into_iter().map(SourceWarning::from).collect();
+        let diagnostics = imports
+            .diagnostics
+            .into_iter()
+            .map(|error| SourceParseError::Directive { path: path.clone(), error: Box::new(error) })
+            .chain(builtins.diagnostics.into_iter().map(|error| {
+                SourceParseError::BuiltinDirective { path: path.clone(), error: Box::new(error) }
+            }))
+            .chain(intrinsics.diagnostics.into_iter().map(|error| {
+                SourceParseError::IntrinsicDirective { path: path.clone(), error: Box::new(error) }
+            }))
+            .chain(literals.diagnostics.into_iter().map(|error| {
+                SourceParseError::LiteralDirective { path: path.clone(), error: Box::new(error) }
+            }))
+            .chain(packages.diagnostics.into_iter().map(|error| {
+                SourceParseError::PackageDirective { path: path.clone(), error: Box::new(error) }
+            }))
+            .chain(discovery.diagnostics.into_iter().map(|error| {
+                SourceParseError::DiscoveryDirective { path: path.clone(), error: Box::new(error) }
+            }))
+            .collect();
+        if let Some(errors) = Diagnostics::with_errors(diagnostics) {
+            return Err(errors);
+        }
+        let import_sites = imports.facts;
+        let literals = literals.facts;
+        let package_sites = packages.facts;
+        let discovery = discovery.facts;
         let (spans, arena) = parser.finish();
         Ok(Self {
             path,

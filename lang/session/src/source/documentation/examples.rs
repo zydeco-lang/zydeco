@@ -61,7 +61,10 @@ pub enum DocumentationScratchError {
     #[error(transparent)]
     Parse(#[from] zydeco_surface::textual::ParseFailure),
     #[error(transparent)]
-    Import(#[from] zydeco_surface::textual::ImportDirectiveError),
+    Import(
+        #[from]
+        zydeco_surface::diagnostic::Diagnostics<zydeco_surface::textual::ImportDirectiveError>,
+    ),
     #[error("scratch examples cannot retain numbered interactive imports")]
     NumberedImport,
     #[error("import has no path token")]

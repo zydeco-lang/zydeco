@@ -168,7 +168,8 @@ as the checker already does for missing solutions caused by a rejected expressio
 ## Core interfaces for the three surface migrations
 
 Desugaring rule ownership is implemented in the [compiler reference](../references/compiler.md#desugaring-folders).
-The remaining immediate work covers shared source-directive analysis and resolution events.
+Shared source analysis is implemented in the [compiler reference](../references/compiler.md#shared-source-analysis).
+The remaining immediate work covers resolution events.
 These mechanisms operate at different boundaries:
 
 | Boundary | Driver | Local operations or consumers | Published result |
@@ -241,102 +242,6 @@ The tradeoff is deliberate: one universal fold algebra would expose more opportu
 but would also require encoding lexical effects, recovery, constructor changes, and scheduling barriers in its types.
 Small structural interfaces plus explicit semantic folders make the current dependencies reviewable.
 Generate structural declarations only after their shared requirements have been demonstrated by real clients.
-
-## Shared source-directive analysis
-
-### One inventory scan with explicit reachability
-
-The [current loader](../../lang/session/src/source/loader.rs) invokes documentation, unattached-text,
-import, Builtin, intrinsic, literal, package, and discovery queries separately.
-The [surface queries](../../lang/surface/src/textual/source.rs) have different domains:
-
-| Analysis | Current input domain |
-| --- | --- |
-| Documentation, package annotations, discovery annotations | Nodes reachable from the returned source root |
-| Imports, literal splices, intrinsic validation | All allocated terms in the file's textual arena |
-| Builtin validation | All allocated term annotations and existential parameter annotations |
-| Unattached-text warnings | All relevant annotation attachments and file trivia |
-
-The distinction matters for recovery: allocations can remain after their parser stack entries are discarded.
-A scan restricted to the returned tree would change some current validation behavior.
-The initial implementation should compute reachability once through `TextArena::children`,
-then scan the arena's terms once, emitting events with a reachable/unreachable classification.
-Finish with the trivia scan needed for unattached-text warnings.
-This is one shared reachability walk plus one shared arena sweep, rather than one root traversal per analysis.
-
-Each analyzer selects its existing domain.
-A future change to make every analysis use only reachable nodes would simplify the scan,
-but needs an explicit decision about malformed or abandoned source material.
-Do not silently introduce it during traversal extraction.
-Package selection remains downstream: a file inventory does not erase the distinction between the complete file
-and the selected nested package root.
-
-### Event protocol and composition
-
-Use a borrowed `SourceView` for syntax, spans, trivia, and root information, and typed events for:
-
-- A term meta annotation, with its term, meta, payload, and reachability.
-- An existential parameter annotation, with its owner, parameter position, binder, meta, and reachability.
-- An attached text block or file text block, where warning analysis needs it.
-
-Decode the semantic meta tree once for an annotation event requested by the active analyzers.
-Retain its textual IDs alongside the decoded value so argument errors still identify exact source ranges.
-An unknown annotation does not require running every known decoder.
-
-```rust
-trait SourceAnalyzer {
-    type Output;
-    fn interests(&self) -> SourceInterest;
-    fn observe(&mut self, event: &SourceEvent<'_>, source: &SourceView<'_>);
-    fn finish(self) -> Self::Output;
-}
-```
-
-`Together<A, B>` forwards an immutable event to both analyzers and returns their paired outputs.
-Use static composition for the file-loading profile and smaller profiles for import-only or documentation-only callers.
-Implement each decoder and accumulator once; query-style entry points route through those profiles.
-A request for documentation alone must not begin rejecting unrelated import annotations.
-Each analyzer also declares a typed `SourceInterest` describing its event kinds
-and whether it needs reachability or trivia.
-Composition unions those interests before scanning.
-This lets the scanner avoid unrelated decoding and lets an import-only profile omit reachability computation.
-
-Analyzer output can be `Analysis<Vec<ImportSite>, ImportDirectiveError>`, a documentation vector,
-or a diagnostic collection for validation that does not need to retain sites.
-An analyzer continues after a rejected site, retaining valid facts and errors from its later events.
-The dispatcher continues delivering each event to all interested analyzers.
-This collects multiple failures within one category as well as across categories.
-Query callers consume these complete results; remove adapters that return only the first directive failure.
-Successful outputs retain their current ordering, including package results ordered by name.
-The loading profile maps and concatenates the diagnostic vectors at its boundary.
-It constructs a valid `SourceTemplate` only when no error rejects that template;
-partial inventory facts may be retained separately for diagnostics or supported tooling queries.
-Keep the temporary scan state local to parsing.
-
-### Independent checks and validation prerequisites
-
-Both annotations in the following source should contribute diagnostics:
-
-```zydeco
-(@[literal(extra)] _, @[import] _)
-```
-
-Report the literal's unsupported argument and the import's missing target.
-Two malformed imports must likewise produce two diagnostics.
-The [initial presentation policy](#initial-presentation-order) determines how the collected errors are displayed.
-
-Keep the prerequisites of each validation rule explicit.
-A malformed argument can prevent extracting the name needed for a package duplicate check.
-Skip checks that need that unavailable name, while validating other package sites.
-Retain successfully decoded names and source sites for aggregate checks at `finish`.
-Discovery duplicates and placement checks inspect the complete annotation set;
-argument validation on independent sites still runs when another site has failed.
-Builtin term and existential-parameter annotations both contribute diagnostics.
-
-Existing individual decoders can initially retain a local `Result` for a malformed directive.
-The analyzer catches each rejected site and resumes with the next site.
-Additional errors inside one directive can be collected as its decoder gains justified recovery points.
-This avoids requiring a universal recovery grammar before reporting independent file errors.
 
 ## Resolution decomposition
 
@@ -496,14 +401,12 @@ The same successful input should produce identical reference and dependency fact
 
 Implement these as separate reviewable changes after the design choices are settled:
 
-1. Introduce `SourceScan`, migrate the full loading profile and smaller query callers, and delete repeated scans.
-   Collect errors from every independent directive site and return the full collection.
-2. Extract the resolution policy, typed events, and passive observers while preserving the existing semantic schedule.
+1. Extract the resolution policy, typed events, and passive observers while preserving the existing semantic schedule.
    Use its diagnostic collector in strict analysis as well as completion, with explicit recovery boundaries.
-3. Move dependency accumulation behind the explicit block lifecycle and connect ordinary resolution reconstruction
+2. Move dependency accumulation behind the explicit block lifecycle and connect ordinary resolution reconstruction
    to the extended shared folder.
    Remove the superseded recursion and accumulation paths as their callers migrate.
-4. Audit the remaining pass and source-unit boundaries for early exits over independent work.
+3. Audit the remaining pass and source-unit boundaries for early exits over independent work.
    Reuse parser issues and checker diagnostics, collect failures from independently available sources or imports,
    and extend checking and later validators at their own recovery boundaries.
    Dependent lowering stages continue to require a valid preceding product.

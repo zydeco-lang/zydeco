@@ -489,7 +489,7 @@ fn warns_for_every_text_block_without_an_effective_attachment() {
     let unit = StrictParser::source(source, &mut parser).unwrap();
 
     let comments = unit
-        .unattached_text(&parser.arena)
+        .unattached_text(&parser.arena, &parser.spans)
         .iter()
         .map(|warning| source[warning.range.clone()].trim_end().to_owned())
         .collect::<Vec<_>>();
@@ -528,7 +528,7 @@ fn source_unit_decodes_literal_splices_with_attached_text() {
     assert_eq!(site.directive.text.text.as_ref(), "First line\nSecond line");
     assert!(matches!(parser.arena.terms[&site.payload], Term::Hole(Hole)));
     assert!(
-        unit.unattached_text(&parser.arena).is_empty(),
+        unit.unattached_text(&parser.arena, &parser.spans).is_empty(),
         "a text block attached to `@[literal]` must not warn"
     );
 }
@@ -540,7 +540,7 @@ fn source_unit_rejects_literal_splices_without_an_attached_text_block() {
     let unit = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(matches!(
-        unit.literals(&parser.arena, &parser.spans),
+        unit.literals(&parser.arena, &parser.spans).map_err(only_error),
         Err(LiteralDirectiveError::MissingText { .. })
     ));
 }
@@ -552,7 +552,7 @@ fn source_unit_rejects_literal_on_a_non_hole_term() {
     let unit = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(matches!(
-        unit.literals(&parser.arena, &parser.spans),
+        unit.literals(&parser.arena, &parser.spans).map_err(only_error),
         Err(LiteralDirectiveError::PayloadNotHole { .. })
     ));
 }
@@ -564,7 +564,7 @@ fn source_unit_rejects_literal_metadata_arguments() {
     let unit = StrictParser::source(source, &mut parser).unwrap();
 
     assert!(matches!(
-        unit.literals(&parser.arena, &parser.spans),
+        unit.literals(&parser.arena, &parser.spans).map_err(only_error),
         Err(LiteralDirectiveError::Invalid { .. })
     ));
 }
@@ -631,7 +631,7 @@ fn source_unit_rejects_import_without_one_supported_target() {
     cases.into_iter().for_each(|(source, expected, highlighted)| {
         let mut parser = Parser::new();
         let unit = StrictParser::source(source, &mut parser).unwrap();
-        let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
+        let error = unit.imports(&parser.arena, &parser.spans).map_err(only_error).unwrap_err();
 
         assert_eq!(&source[error.span().range()], highlighted);
         match (error, expected) {
@@ -656,7 +656,7 @@ fn source_unit_rejects_import_on_a_non_hole_term() {
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
 
-    let error = unit.imports(&parser.arena, &parser.spans).unwrap_err();
+    let error = unit.imports(&parser.arena, &parser.spans).map_err(only_error).unwrap_err();
     assert!(matches!(&error, ImportDirectiveError::PayloadNotHole { .. }));
     assert_eq!(&source[error.span().range()], "value");
 }
@@ -745,7 +745,7 @@ fn source_unit_rejects_ambiguous_or_malformed_intrinsic_splices() {
     cases.into_iter().for_each(|(source, expected)| {
         let mut parser = Parser::new();
         let unit = StrictParser::source(source, &mut parser).unwrap();
-        let error = unit.intrinsics(&parser.arena, &parser.spans).unwrap_err();
+        let error = unit.intrinsics(&parser.arena, &parser.spans).map_err(only_error).unwrap_err();
 
         match (error, expected) {
             | (
@@ -798,7 +798,7 @@ fn source_unit_rejects_malformed_builtin_roles() {
     cases.into_iter().for_each(|(source, expected)| {
         let mut parser = Parser::new();
         let unit = StrictParser::source(source, &mut parser).unwrap();
-        let error = unit.builtins(&parser.arena, &parser.spans).unwrap_err();
+        let error = unit.builtins(&parser.arena, &parser.spans).map_err(only_error).unwrap_err();
 
         let BuiltinDirectiveError::Invalid { source, .. } = error else {
             panic!("expected an invalid Builtin role")
@@ -1859,4 +1859,9 @@ fn parses_chained_dot_elimination() {
 
     assert_eq!(top_left.plain(), "top_left");
     assert_eq!(x.plain(), "x");
+}
+
+pub(super) fn only_error<E>(errors: crate::diagnostic::Diagnostics<E>) -> E {
+    assert_eq!(errors.len(), 1);
+    errors.into_iter().next().unwrap()
 }
