@@ -46,7 +46,8 @@ or the phase's acceptance boundary.
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution) provides
 statically selected native and explicit-stack drivers for residual lowering, Builtin package materialization,
-high SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, and local unboxing.
+high SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
+and [CPS assembly lowering](../references/compiler.md#cps-assembly-lowering).
 Their equivalence and depth checks support using the interface for those boundaries.
 The following sections record boundaries skipped after evaluation because their ownership
 or consumer interfaces need a further design choice.
@@ -212,37 +213,6 @@ Keep a lazy adapter requirement separate from reconstruction driver selection.
 Desugaring retains its current execution mechanisms.
 Do not expand the common folder protocol merely to accommodate all these mechanisms at once.
 Each subsequent migration should demonstrate a simpler client under both drivers and retain its depth fixture.
-
-### Assembly continuations and publication
-
-[Assembly lowering](../../lang/assembly/src/lower.rs) is a medium–high difficulty case,
-now being migrated after evaluating its syntax and instruction execution separately.
-`Stack::Arg`, `Stack::Tag`, and continuation packages descend into the rest of the stack directly,
-retaining boxed consumers for values and tags.
-The existing `pending` loop therefore bounds deferred instruction work, not all syntax descent.
-Product and alias handlers also build nested consumers, and branch handlers lower child programs
-while constructing their jump tables.
-
-Typed pending instructions and context updates now preserve the
-[existing reservation and publication schedule](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices).
-The remaining `Kont` consumers are boxed functions. Native continuation lowering additionally creates capture bindings,
-a resume entry, a symbol, and frame metadata around that schedule. Wrapping the pending loop in the common driver would
-retain the direct recursion and nested function ownership.
-
-The approved next step replaces these consumers with typed records in a flat continuation arena.
-An internal continuation ID links each record to its successor; consuming a record takes its slot once.
-A value hole can abandon the remaining chain, so unused records remain valid until bulk teardown.
-Sequence cursors retain the remaining fields or aliases without nested closure ownership.
-The existing folder protocol can then drive syntax descent, child entry construction, and instruction completion.
-Return frames retain the state needed after obtaining a child entry ID; they do not wait for its publication.
-The common driver needs no expanded protocol.
-
-Acceptance must compare allocation slots, definition associations, contexts, successor links,
-branch order, and native frame-entry metadata under both drivers.
-Include deep argument/tag stacks, nested patterns, wide products, branch tables,
-portable continuation packages, and native resume entries.
-Check final assembly validation and emitted Wasm as well as lowering alone;
-teardown must also avoid recursively dropping nested continuation payloads.
 
 ## Additional graph views and adapters
 

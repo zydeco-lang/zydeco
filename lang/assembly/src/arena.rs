@@ -169,41 +169,6 @@ where
     }
 }
 
-pub type Kont<'a, Arena> = Box<dyn for<'b> FnOnce(&'b mut Arena, Context) -> ProgId + 'a>;
-
-/// The context passed to an instruction's successor; publication retains the original context.
-pub enum ContextUpdate {
-    Keep,
-    Bind(VarId),
-    Clear,
-}
-
-impl ContextUpdate {
-    pub fn apply(self, context: &Context) -> Context {
-        match self {
-            | Self::Keep => context.clone(),
-            | Self::Bind(variable) => context.clone() + [variable],
-            | Self::Clear => Context::new(),
-        }
-    }
-}
-
-pub struct CxKont<'a, Arena> {
-    pub update: ContextUpdate,
-    pub kont: Kont<'a, Arena>,
-}
-
-impl<'a, Arena> CxKont<'a, Arena> {
-    /// Retain the current context.
-    pub fn same(kont: Kont<'a, Arena>) -> Self {
-        Self { update: ContextUpdate::Keep, kont }
-    }
-    /// Start with a clean slate.
-    pub fn clean(kont: Kont<'a, Arena>) -> Self {
-        Self { update: ContextUpdate::Clear, kont }
-    }
-}
-
 /// Allocate a program that is anonymous, i.e. has no meaningful label.
 impl<'a, U, Arena> Construct<'a, Program, ProgId, Arena> for U
 where

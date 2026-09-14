@@ -397,7 +397,7 @@ they cannot borrow the mutable folder itself.
 `Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
 Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
 Production residual lowering, Builtin package materialization, high SPS normalization,
-and closure conversion use `Explicit`; `Recursive` supports bounded comparisons
+closure conversion, and CPS assembly lowering use `Explicit`; `Recursive` supports bounded comparisons
 and consumes native stack proportional to pending calls.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
 Frame payloads and outputs may allocate according to the folder's representation.
@@ -1871,13 +1871,64 @@ with explicit operand and control stacks, environment variables, labels, and ins
 The portable result is an `AssemblyProgram` for the [ZASM interpreter](../../lang/assembly/src/interp.rs) or AM Wasm.
 Native lowering selects a distinct frame-aware path before preparation.
 
+### CPS assembly lowering
+
+Assembly lowering uses continuation-passing style (CPS): a value or pattern receives a consumer describing what
+to compile after its stack operations, under the resulting context.
+Some handlers also need a child's entry ID before they can finish their own construction.
+The [assembly folder](../../lang/assembly/src/lower/folder.rs) represents these two kinds of unfinished work separately.
+A typed `Continuation` is a compilation consumer; a `Frame` resumes a caller after a child returns its entry ID.
+This separation preserves instruction scheduling while allowing every syntax descent
+to use the [shared folder driver](#resumable-folder-execution).
+
+Consumers are defunctionalized: records for subsequent values, patterns, instructions, computation bodies,
+terminators, sequences, and branch tables replace captured Rust functions.
+Internal `ContId` links refer to a flat per-run vector, independent of the assembly allocator.
+Applying a consumer takes its slot once and moves its payload into the next operation.
+Links are affine, meaning they can be used at most once: a value hole emits `Abort`
+and can abandon an entire consumer chain, including an unfinished field sequence.
+Unused records drop with the run without recursively following their links.
+Slots are not reused during a run; their storage grows with the number of saved consumers,
+while consumed payloads are released or transferred immediately.
+This assembly-local storage policy does not change the generic driver.
+
 Instruction construction reserves a `ProgId` and queues a typed pending instruction.
 Completion pops this queue in LIFO order, applies `ContextUpdate::{Keep, Bind, Clear}`,
-and invokes the instruction's consumer to obtain its successor ID.
+and calls the instruction's consumer through `Step::Call` to obtain its successor ID.
 It then publishes the instruction with the original context, before completing any new jobs queued by that consumer.
 Obtaining an entry ID therefore does not imply that its body is published.
-The [lowering regression](../../lang/assembly/src/lower/tests.rs) records allocation slots, publication order,
-definition associations, contexts, branch links, and native entry metadata.
+One driver run includes initial syntax lowering, root-entry marking, and draining the pending queue.
+Tail transfers use `Step::TailCall`; blocks, native resume entries, branch arms,
+and publication jobs retain explicit return frames only when they need a child's ID.
+
+Sequence cursors preserve the stack machine's ordering: value fields and primitive operands are pushed right to left,
+patterns and alias members are consumed left to right, and a residual stack precedes its argument or tag.
+Closure words come from the shared machine model, and block parameters follow `EntryParameters::words()`.
+Branch entries and their symbols are reserved in source order, while deferred arm bodies may finish in reverse order.
+Extern discovery therefore remains attached to visiting the computation that requests it.
+An ordinary block reserves its recursive symbol before lowering entry parameters;
+its return frame fills that symbol and records the label after receiving the entry ID.
+Native resume lowering allocates capture bindings before its child call, then creates the resume symbol,
+records frame-entry metadata, and emits `RetainFrame` followed by the code address.
+
+`LoweringPipeline` selects `Explicit` by default.
+`with_driver::<D>()` statically changes CPS execution for both portable lowering and `with_native_frames()`;
+representation analysis, stack analysis, and checked native preparation keep their own phase boundaries.
+The [lowering tests](../../lang/assembly/src/lower/tests.rs) compare both drivers across all representation policies,
+recursive symbols, context resets, literals, primitives, external discovery, alias and branch order,
+abandoned consumers, and rejected multiple irrefutable arms.
+A saved trace from before defunctionalization additionally fixes allocation slots, publication order,
+definition associations, contexts, successor links, and native entry metadata, erasing only per-run key spaces.
+Pipeline comparisons include the finished native activation layouts, owners, slots, and liveness maps.
+
+The [depth regression](../../lang/assembly/src/lower/tests/depth.rs) lowers and drops 16,384-level argument/tag stacks,
+constructors, unboxed patterns, nested branch tables, and portable/native continuation entries on a 256 KiB stack.
+It also abandons and destroys a deep consumer chain at a value hole.
+These direct fixtures isolate folder execution from semantic validation and stack analysis.
+The guarantee covers lowering's control flow and flat continuation teardown; context cloning,
+retained assembly contexts, and the separate validators and analyzers still determine other costs.
+
+### Product layout and local unboxing
 
 [ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes logical arity from the physically stored fields.
 Tuple tails and projections must respect that distinction; a suffix pointer refers into an existing payload.
