@@ -387,7 +387,7 @@ enum ComputationEvaluationPlan {
 #[derive(Debug, Error)]
 enum ReplLinkError {
     #[error(transparent)]
-    Hole(#[from] zydeco_statics::validate::ExecutableHole),
+    Hole(#[from] zydeco_statics::validate::ExecutableHoles),
     #[error(transparent)]
     Builtin(#[from] BuiltinPackageError),
     #[error("checked computation root has no runtime entry contract")]

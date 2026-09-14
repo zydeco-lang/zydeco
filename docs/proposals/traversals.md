@@ -125,8 +125,8 @@ Typed substitution, hole resolution,
 and filled normalization now use the [classifier folder](../references/compiler.md#classifier-folders).
 The unused `LocalFoldStatics` interface is removed.
 The raw inferred graph, normalized classifier views, and residual runtime graph remain distinct.
-The next runtime traversal migration should make the residual view explicit
-while preserving the [execution readiness boundary](../../lang/statics/src/validate/executable.rs).
+The [runtime graph iterator](../references/compiler.md#residual-runtime-traversal) now exposes the residual view
+and supports complete execution-hole collection.
 
 Context-sensitive analyses need more than a node-ID cache.
 [Type support collection](../../lang/statics/src/normalize/scope.rs) intersects the admissible scope
@@ -146,8 +146,7 @@ deduplicating visits must never hide that rejection.
 The remaining work fits one migration sequence:
 
 1. Extend diagnostic collection at the [remaining producer boundaries](#diagnostic-collection-and-recovery).
-2. Make the residual runtime graph view explicit.
-3. Apply the established interfaces to SPS analyses where they simplify concrete callers.
+2. Apply the established interfaces to SPS analyses where they simplify concrete callers.
 
 For each migration, compare separate and composed results and retain visit-count regressions on shared graphs.
 Measure allocations and representative compilation time before making broader performance claims.

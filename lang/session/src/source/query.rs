@@ -149,7 +149,7 @@ pub struct LibraryProgram {
 #[derive(Clone, Debug, Error)]
 pub enum ExecutableError {
     #[error(transparent)]
-    Hole(#[from] zydeco_statics::validate::ExecutableHole),
+    Hole(#[from] zydeco_statics::validate::ExecutableHoles),
     #[error("cannot execute a program rejected during type checking")]
     Rejected,
     #[error("the analysis could not be re-materialized")]

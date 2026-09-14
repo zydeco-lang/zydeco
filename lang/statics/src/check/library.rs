@@ -32,7 +32,7 @@ pub enum LibraryCheckError {
     #[error("export `{symbol}`: {error}")]
     Classifier { symbol: ForeignSymbolName, error: ForeignClassifierError },
     #[error(transparent)]
-    Hole(#[from] crate::validate::ExecutableHole),
+    Hole(#[from] crate::validate::ExecutableHoles),
 }
 
 impl Tycker<'_> {

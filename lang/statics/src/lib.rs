@@ -42,6 +42,9 @@ pub mod destruct;
 pub mod check;
 pub use check::*;
 
+/// Explicit traversal view of residual runtime syntax.
+pub mod traverse;
+
 /// Shared rebuilding for the raw typed classifier graph.
 pub mod fold;
 

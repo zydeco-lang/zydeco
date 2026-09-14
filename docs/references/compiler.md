@@ -917,6 +917,24 @@ typed holes may still be inspected during ordinary checking.
 [Static-elimination regressions](../../lang/tests/tests/static_elimination.rs) distinguish erased library structure,
 runtime payloads, shared runtime data, and failed evidence recovery.
 
+### Residual runtime traversal
+
+Execution readiness asks which remaining values and computations can reach execution.
+The [runtime graph view](../../lang/statics/src/traverse.rs) starts from the shared residual root selected
+by `StaticsArena::execution_value` or `execution_compu`, then follows runtime children in the typed arena.
+It excludes classifiers, static witnesses, and pattern annotations.
+A checked foreign implementation is an opaque leaf whose authored hole payload is supplied externally.
+Static source nodes remain available to tooling.
+
+`RuntimeGraph::nodes` yields borrowed nodes and visits each runtime identity once per invocation.
+The iterator owns its pending stack and visited set, making sharing and cycle termination explicit
+without retaining a cache across arena changes.
+Clients can combine independent observations over this same stream.
+`ExecutionReadiness` collects every distinct reachable value or computation hole into `ExecutableHoles`;
+execution, library export checking, and the REPL reject the complete collection before lowering or running.
+[Runtime traversal tests](../../lang/statics/tests/runtime_traversal.rs) pair shared reachable holes
+with the accepted residual root that erases them; foreign-interface tests cover supplied implementations.
+
 ### Typed-arena lint
 
 [LintChecker](../../lang/statics/src/validate/lint.rs) is an optional independent verifier over a complete arena.
