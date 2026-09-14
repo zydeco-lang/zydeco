@@ -15,6 +15,10 @@ use std::{collections::HashMap, convert::Infallible, rc::Rc};
 use zydeco_statics::syntax as ss;
 use zydeco_utils::pass::CompilerPass;
 
+mod fold;
+
+use fold::NormalizationFolder;
+
 /// Normalize high SPS using fresh construction state for each input program.
 pub struct Normalizer;
 
@@ -51,6 +55,9 @@ struct Environment {
     bindings: HashMap<DefId, Rc<KnownValue>>,
 }
 
+#[derive(Clone, Copy)]
+struct ScopedStackId(usize);
+
 /// A delayed stack retains the value and ambient-stack scopes of its producer.
 #[derive(Clone)]
 struct ScopedStack {
@@ -61,7 +68,7 @@ struct ScopedStack {
 #[derive(Clone)]
 struct Scope {
     values: EnvId,
-    stack: Option<Rc<ScopedStack>>,
+    stack: Option<ScopedStackId>,
 }
 
 #[derive(Clone, Copy)]
@@ -85,6 +92,7 @@ struct Normalization {
     arena: StackirArena,
     root: CompuId,
     envs: Vec<Environment>,
+    delayed_stacks: Vec<ScopedStack>,
     /// Conservative syntactic occurrence counts, including currently dead uses.
     occurrences: HashMap<DefId, usize>,
 }
@@ -100,11 +108,12 @@ impl Normalization {
                 counts
             });
         let envs = vec![Environment { parent: None, bindings: HashMap::new() }];
-        Self { source, arena, root, envs, occurrences }
+        Self { source, arena, root, envs, delayed_stacks: Vec::new(), occurrences }
     }
 
     fn run(mut self) -> BranchJoinProgram {
-        let root = self.compu(self.root, Scope { values: EnvId(0), stack: None }).node;
+        let source_root = self.root;
+        let root = NormalizationFolder::new(&mut self).run(source_root);
         BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
             .expect("normalization preserves lexical ownership and branch joins")
     }
@@ -136,38 +145,40 @@ impl Normalization {
     }
 
     fn pattern_facts(&self, id: VPatId, value: Rc<KnownValue>) -> Vec<(DefId, Rc<KnownValue>)> {
-        match &self.source.inner.vpats[&id] {
-            | ValuePattern::Var(def) => vec![(*def, value)],
-            | ValuePattern::Hole(_) | ValuePattern::Triv(_) => Vec::new(),
-            | ValuePattern::Alias(Alias(patterns)) => patterns
-                .iter()
-                .flat_map(|pattern| self.pattern_facts(*pattern, value.clone()))
-                .collect(),
-            | ValuePattern::Ctor(Ctor(ctor, body)) => {
-                let value = match value.as_ref() {
-                    | KnownValue::Constructor(tag, body) if tag == ctor => body.clone(),
-                    | _ => Rc::default(),
-                };
-                self.pattern_facts(*body, value)
-            }
-            | ValuePattern::VCons(VCons { items, layout }) => items
-                .iter()
-                .enumerate()
-                .flat_map(|(position, pattern)| {
-                    let field = match value.as_ref() {
-                        | KnownValue::Product(fields) if fields.len() == layout.arity => {
-                            if position + 1 == items.len() && items.len() < layout.arity {
-                                Rc::new(KnownValue::Product(fields[position..].to_vec()))
-                            } else {
-                                fields[position].clone()
-                            }
-                        }
+        let mut pending = vec![(id, value)];
+        let mut facts = Vec::new();
+        while let Some((id, value)) = pending.pop() {
+            match &self.source.inner.vpats[&id] {
+                | ValuePattern::Var(def) => facts.push((*def, value)),
+                | ValuePattern::Hole(_) | ValuePattern::Triv(_) => {}
+                | ValuePattern::Alias(Alias(patterns)) => {
+                    pending.extend(patterns.iter().rev().map(|pattern| (*pattern, value.clone())));
+                }
+                | ValuePattern::Ctor(Ctor(ctor, body)) => {
+                    let value = match value.as_ref() {
+                        | KnownValue::Constructor(tag, body) if tag == ctor => body.clone(),
                         | _ => Rc::default(),
                     };
-                    self.pattern_facts(*pattern, field)
-                })
-                .collect(),
+                    pending.push((*body, value));
+                }
+                | ValuePattern::VCons(VCons { items, layout }) => {
+                    pending.extend(items.iter().enumerate().rev().map(|(position, pattern)| {
+                        let field = match value.as_ref() {
+                            | KnownValue::Product(fields) if fields.len() == layout.arity => {
+                                if position + 1 == items.len() && items.len() < layout.arity {
+                                    Rc::new(KnownValue::Product(fields[position..].to_vec()))
+                                } else {
+                                    fields[position].clone()
+                                }
+                            }
+                            | _ => Rc::default(),
+                        };
+                        (*pattern, field)
+                    }));
+                }
+            }
         }
+        facts
     }
 
     /// Products and aliases of patterns can share a closure among several names.
@@ -274,211 +285,121 @@ impl Normalization {
     }
 
     fn binding_facts(&self, binder: VPatId, value: ScopedValue) -> Vec<(DefId, Rc<KnownValue>)> {
-        match self.components(binder, value) {
-            | Some(components) => components
-                .into_iter()
-                .flat_map(|(binder, value)| self.binding_facts(binder, value))
-                .collect(),
-            | None => self.pattern_facts(binder, self.binding_fact(binder, value)),
+        let mut pending = vec![(binder, value)];
+        let mut facts = Vec::new();
+        while let Some((binder, value)) = pending.pop() {
+            if let Some(components) = self.components(binder, value) {
+                pending.extend(components.into_iter().rev());
+            } else {
+                facts.extend(self.pattern_facts(binder, self.binding_fact(binder, value)));
+            }
         }
+        facts
     }
 
     fn discardable(&self, id: ValueId) -> bool {
-        match &self.source.inner.values[&id] {
-            | Value::Var(_) | Value::Triv(_) | Value::Literal(_) | Value::Closure(_) => true,
-            | Value::Ctor(Ctor(_, body)) => self.discardable(*body),
-            | Value::VCons(VCons { items, .. }) => items.iter().all(|item| self.discardable(*item)),
-            | Value::Primitive(Primitive { operation, operands }) => {
-                !operation.may_trap() && operands.iter().all(|operand| self.discardable(*operand))
+        let mut pending = vec![id];
+        while let Some(id) = pending.pop() {
+            match &self.source.inner.values[&id] {
+                | Value::Var(_) | Value::Triv(_) | Value::Literal(_) | Value::Closure(_) => {}
+                | Value::Ctor(Ctor(_, body)) => pending.push(*body),
+                | Value::VCons(VCons { items, .. }) => pending.extend(items.iter().rev().copied()),
+                | Value::Primitive(Primitive { operation, operands }) => {
+                    if operation.may_trap() {
+                        return false;
+                    }
+                    pending.extend(operands.iter().rev().copied());
+                }
+                | Value::Hole(_) => return false,
             }
-            | Value::Hole(_) => false,
         }
+        true
     }
 
     /// Substitution may delay constructing frames until their consumer runs.
     /// Only total value construction can move across an intervening computation.
-    /// Continuation bodies are suspended; ambient substitutions satisfy this same
-    /// invariant at every point where a delayed stack enters the scope.
-    fn movable_stack(&self, id: StackId) -> bool {
-        match &self.source.inner.stacks[&id] {
-            | Stack::Var(_) | Stack::Kont(_) => true,
-            | Stack::Arg(Cons(value, rest)) => {
-                self.discardable(*value) && self.movable_stack(*rest)
+    /// Continuation bodies stay suspended at this boundary.
+    fn movable_stack(&self, mut id: StackId) -> bool {
+        loop {
+            match &self.source.inner.stacks[&id] {
+                | Stack::Var(_) | Stack::Kont(_) => return true,
+                | Stack::Arg(Cons(value, rest)) => {
+                    if !self.discardable(*value) {
+                        return false;
+                    }
+                    id = *rest;
+                }
+                | Stack::Tag(Cons(_, rest)) => id = *rest,
             }
-            | Stack::Tag(Cons(_, rest)) => self.movable_stack(*rest),
         }
     }
 
     fn pattern(&mut self, id: VPatId) -> VPatId {
-        let site = self.source.admin.pats.back(&id).copied();
-        let pattern: ValuePattern = match self.source.inner.vpats[&id].clone() {
-            | ValuePattern::Ctor(Ctor(ctor, body)) => Ctor(ctor, self.pattern(body)).into(),
-            | ValuePattern::Alias(Alias(patterns)) => Alias(
-                ConsN::from_vec(
-                    patterns.into_iter().map(|pattern| self.pattern(pattern)).collect(),
-                )
-                .expect("an alias pattern is nonempty"),
-            )
-            .into(),
-            | ValuePattern::VCons(VCons { items, layout }) => {
-                VCons::new(items.into_iter().map(|item| self.pattern(item)).collect(), layout)
-                    .into()
-            }
-            | pattern => pattern,
-        };
-        let node = pattern.build(self, site);
-        if let Some(protocol) = self.source.inner.pattern_protocols.get(&id) {
-            self.arena.inner.pattern_protocols.insert_new(node, protocol.clone());
+        enum Work {
+            Visit(VPatId),
+            Finish(VPatId),
         }
-        node
+        let mut work = vec![Work::Visit(id)];
+        let mut results = Vec::new();
+        while let Some(next) = work.pop() {
+            match next {
+                | Work::Visit(id) => {
+                    work.push(Work::Finish(id));
+                    match &self.source.inner.vpats[&id] {
+                        | ValuePattern::Ctor(Ctor(_, child)) => work.push(Work::Visit(*child)),
+                        | ValuePattern::Alias(Alias(children)) => {
+                            work.extend(children.iter().rev().copied().map(Work::Visit))
+                        }
+                        | ValuePattern::VCons(VCons { items, .. }) => {
+                            work.extend(items.iter().rev().copied().map(Work::Visit))
+                        }
+                        | ValuePattern::Hole(_) | ValuePattern::Var(_) | ValuePattern::Triv(_) => {}
+                    }
+                }
+                | Work::Finish(id) => {
+                    let pattern: ValuePattern = match self.source.inner.vpats[&id].clone() {
+                        | ValuePattern::Ctor(Ctor(tag, _)) => {
+                            Ctor(tag, results.pop().expect("constructor pattern child")).into()
+                        }
+                        | ValuePattern::Alias(Alias(patterns)) => {
+                            let children = results.split_off(results.len() - patterns.len());
+                            Alias(ConsN::from_vec(children).expect("an alias pattern is nonempty"))
+                                .into()
+                        }
+                        | ValuePattern::VCons(VCons { items, layout }) => {
+                            let children = results.split_off(results.len() - items.len());
+                            VCons::new(children, layout).into()
+                        }
+                        | pattern => pattern,
+                    };
+                    let site = self.source.admin.pats.back(&id).copied();
+                    let node = pattern.build(self, site);
+                    if let Some(protocol) = self.source.inner.pattern_protocols.get(&id) {
+                        self.arena.inner.pattern_protocols.insert_new(node, protocol.clone());
+                    }
+                    results.push(node);
+                }
+            }
+        }
+        let pattern = results.pop().expect("completed pattern");
+        assert!(results.is_empty());
+        pattern
     }
 
-    fn value(&mut self, id: ValueId, env: EnvId, demand: Demand) -> Residual<ValueId> {
-        let site = self.source.admin.terms.back(&TermId::Value(id)).copied();
-        let protocol = matches!(demand, Demand::Used)
-            .then(|| self.source.inner.value_protocols.get(&id).cloned())
-            .flatten();
-        if demand.is_absent() && self.discardable(id) {
-            return Residual { node: Triv.build(self, site), demands: Demands::default() };
-        }
-        let (value, demands): (Value, _) = match self.source.inner.values[&id].clone() {
-            | Value::Var(def) => match self.lookup(env, def).as_ref() {
-                | KnownValue::Alias(alias) => ((*alias).into(), Demands::singleton(*alias, demand)),
-                | KnownValue::Triv => (Triv.into(), Demands::default()),
-                | KnownValue::Literal(literal) if self.occurrences.get(&def) == Some(&1) => {
-                    (literal.clone().into(), Demands::default())
-                }
-                | _ => (def.into(), Demands::singleton(def, demand)),
-            },
-            | Value::Closure(Closure { stack, body }) => {
-                if let Computation::Force(SForce { thunk, stack }) = self.source.inner.compus[&body]
-                    && matches!(self.source.inner.stacks[&stack], Stack::Var(Bullet))
-                    && matches!(self.source.inner.values[&thunk], Value::Var(_))
-                {
-                    return self.value(thunk, env, demand);
-                }
-                let body = self.compu(body, Scope { values: env, stack: None });
-                (Closure { stack, body: body.node }.into(), body.demands)
-            }
-            | Value::Ctor(Ctor(ctor, body)) => {
-                let body = self.value(
-                    body,
-                    env,
-                    if demand.is_absent() { Demand::Absent } else { Demand::Used },
-                );
-                (Ctor(ctor, body.node).into(), body.demands)
-            }
-            | Value::VCons(VCons { items, layout }) => {
-                // A retained suffix spread still reads a product even when only
-                // a trapping field keeps this otherwise dead construction alive.
-                let demand =
-                    if demand.is_absent() { Demand::Fields(Default::default()) } else { demand };
-                let count = items.len();
-                let (items, demands): (Vec<_>, Vec<_>) = items
-                    .into_iter()
-                    .enumerate()
-                    .map(|(position, item)| {
-                        let value = self.value(item, env, demand.item(position, count, layout));
-                        (value.node, value.demands)
-                    })
-                    .unzip();
-                (
-                    VCons::new(items, layout).into(),
-                    demands.into_iter().fold(Demands::default(), Demands::join),
-                )
-            }
-            | Value::Primitive(Primitive { operation, operands }) => {
-                return self.primitive_value(
-                    operation,
-                    operands.map(|node| ScopedValue { node, env }),
-                    site,
-                );
-            }
-            | value => (value, Demands::default()),
-        };
-        let node = value.build(self, site);
-        if let Some(protocol) = protocol {
-            self.arena.inner.value_protocols.insert_new(node, protocol);
-        }
-        Residual { node, demands }
+    fn delay_stack(&mut self, stack: ScopedStack) -> ScopedStackId {
+        let id = ScopedStackId(self.delayed_stacks.len());
+        self.delayed_stacks.push(stack);
+        id
     }
 
     fn resolve_stack(&self, mut stack: ScopedStack) -> ScopedStack {
         while matches!(self.source.inner.stacks[&stack.node], Stack::Var(Bullet)) {
             match stack.scope.stack {
-                | Some(ambient) => stack = (*ambient).clone(),
+                | Some(ambient) => stack = self.delayed_stacks[ambient.0].clone(),
                 | None => break,
             }
         }
         stack
-    }
-
-    fn stack(&mut self, stack: ScopedStack) -> Residual<StackId> {
-        let ScopedStack { node: id, scope } = self.resolve_stack(stack);
-        let site = self.source.admin.terms.back(&TermId::Stack(id)).copied();
-        let (stack, demands): (Stack, _) = match self.source.inner.stacks[&id].clone() {
-            | Stack::Var(bullet) => (bullet.into(), Demands::default()),
-            | Stack::Arg(Cons(value, stack)) => {
-                let value = self.value(value, scope.values, Demand::Used);
-                let stack = self.stack(ScopedStack { node: stack, scope });
-                (Cons(value.node, stack.node).into(), value.demands.join(stack.demands))
-            }
-            | Stack::Tag(Cons(tag, stack)) => {
-                let stack = self.stack(ScopedStack { node: stack, scope });
-                (Cons(tag, stack.node).into(), stack.demands)
-            }
-            | Stack::Kont(Kont { binder, body }) => {
-                if let ValuePattern::Var(def) = self.source.inner.vpats[&binder]
-                    && let Computation::Ret(SReturn { value, stack }) =
-                        self.source.inner.compus[&body]
-                    && matches!(self.source.inner.values[&value], Value::Var(returned) if returned == def)
-                    && matches!(self.source.inner.stacks[&stack], Stack::Var(Bullet))
-                {
-                    return self.stack(ScopedStack { node: stack, scope });
-                }
-                let values = self.bind(scope.values, binder, Rc::default());
-                let mut body = self.compu(body, Scope { values, ..scope });
-                for def in binder.vars(&self.source) {
-                    body.demands.remove(&def);
-                }
-                let binder = self.pattern(binder);
-                (Kont { binder, body: body.node }.into(), body.demands)
-            }
-        };
-        Residual { node: stack.build(self, site), demands }
-    }
-
-    fn binding(
-        &mut self, binder: VPatId, bindee: ScopedValue, tail: CompuId, scope: Scope,
-        site: Option<ss::TermId>,
-    ) -> Residual<CompuId> {
-        let values = self.extend(scope.values, self.binding_facts(binder, bindee));
-        let tail = self.compu(tail, Scope { values, ..scope });
-        self.residual_binding(binder, bindee, tail, site)
-    }
-
-    fn residual_binding(
-        &mut self, binder: VPatId, bindee: ScopedValue, mut tail: Residual<CompuId>,
-        site: Option<ss::TermId>,
-    ) -> Residual<CompuId> {
-        let bound = binder.vars(&self.source);
-        if !bound.iter().any(|def| tail.demands.contains(def)) && self.discardable(bindee.node) {
-            return tail;
-        }
-        if let Some(components) = self.components(binder, bindee) {
-            return components.into_iter().rev().fold(tail, |tail, (binder, value)| {
-                self.residual_binding(binder, value, tail, site)
-            });
-        }
-        let demand = tail.demands.pattern(&self.source, binder);
-        for def in bound {
-            tail.demands.remove(&def);
-        }
-        let bindee = self.value(bindee.node, bindee.env, demand);
-        let binder = self.pattern(binder);
-        let demands = tail.demands.join(bindee.demands);
-        let node = Let { binder, bindee: bindee.node, tail: tail.node }.build(self, site);
-        Residual { node, demands }
     }
 
     /// A decision is useful only when no earlier arm could match instead.
@@ -516,62 +437,6 @@ impl Normalization {
         }
     }
 
-    fn branch(
-        &mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<ss::TermId>,
-    ) -> Residual<CompuId> {
-        let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
-            self.source.inner.compus[&tail].clone()
-        else {
-            unreachable!("branch-join input guards exactly a coproduct match")
-        };
-        let known = self.shared(scrut, scope.values);
-        if self.movable_stack(bindee) {
-            for arm in &arms {
-                match self.matches(arm.binder, &known) {
-                    | Some(true) => {
-                        let value = ScopedValue { node: scrut, env: scope.values };
-                        let stack =
-                            Some(Rc::new(ScopedStack { node: bindee, scope: scope.clone() }));
-                        return self.binding(
-                            arm.binder,
-                            value,
-                            arm.tail,
-                            Scope { stack, ..scope },
-                            site,
-                        );
-                    }
-                    | Some(false) => {}
-                    | None => break,
-                }
-            }
-        }
-        let (arms, demands): (Vec<_>, Vec<_>) = arms
-            .into_iter()
-            .map(|Matcher { binder, tail }| {
-                let values = self.bind(scope.values, binder, known.clone());
-                let mut tail = self.compu(tail, Scope { values, stack: None });
-                let demand = tail.demands.pattern(&self.source, binder);
-                for def in binder.vars(&self.source) {
-                    tail.demands.remove(&def);
-                }
-                let binder = self.pattern(binder);
-                (Matcher { binder, tail: tail.node }, (tail.demands, demand))
-            })
-            .unzip();
-        let (demands, demand) = demands
-            .into_iter()
-            .fold((Demands::default(), Demand::Absent), |(demands, demand), (more, scrut)| {
-                (demands.join(more), demand.join(scrut))
-            });
-        let scrut =
-            self.value(scrut, scope.values, if demand.is_absent() { Demand::Used } else { demand });
-        let branch_site = self.source.admin.terms.back(&TermId::Compu(tail)).copied();
-        let tail = SCoprodMatch { scrut: scrut.node, arms }.build(self, branch_site);
-        let stack = self.stack(ScopedStack { node: bindee, scope });
-        let node = Let { binder: Bullet, bindee: stack.node, tail }.build(self, site);
-        Residual { node, demands: demands.join(scrut.demands).join(stack.demands) }
-    }
-
     fn fold_primitive(
         &self, operation: PrimitiveOp, operands: [ScopedValue; 2],
     ) -> Option<Literal> {
@@ -582,17 +447,6 @@ impl Normalization {
             return None;
         };
         operation.evaluate(&[first.clone(), second.clone()]).ok()
-    }
-
-    fn primitive_value(
-        &mut self, operation: PrimitiveOp, operands: [ScopedValue; 2], site: Option<ss::TermId>,
-    ) -> Residual<ValueId> {
-        if let Some(literal) = self.fold_primitive(operation, operands) {
-            return Residual { node: literal.build(self, site), demands: Demands::default() };
-        }
-        let [first, second] = operands.map(|value| self.value(value.node, value.env, Demand::Used));
-        let node = Primitive { operation, operands: [first.node, second.node] }.build(self, site);
-        Residual { node, demands: first.demands.join(second.demands) }
     }
 
     /// Read arguments through ambient-stack substitutions without moving any trapping frames.
@@ -612,210 +466,10 @@ impl Normalization {
             self.resolve_stack(ScopedStack { node: rest, scope: second.scope }),
         ))
     }
-
-    fn primitive_call(
-        &mut self, operation: PrimitiveOp, stack: ScopedStack, site: Option<ss::TermId>,
-    ) -> Residual<CompuId> {
-        if let Some((operands, rest)) = self.primitive_arguments(stack.clone()) {
-            if let Stack::Kont(Kont { binder, body }) = self.source.inner.stacks[&rest.node] {
-                let folded = self.fold_primitive(operation, operands);
-                let known = folded
-                    .clone()
-                    .map_or_else(Rc::default, |value| Rc::new(KnownValue::Literal(value)));
-                let values = self.bind(rest.scope.values, binder, known);
-                let mut tail = self.compu(body, Scope { values, ..rest.scope });
-                let bound = binder.vars(&self.source);
-                let discardable = folded.is_some()
-                    || (!operation.may_trap()
-                        && operands.iter().all(|value| self.discardable(value.node)));
-                if discardable && !bound.iter().any(|def| tail.demands.contains(def)) {
-                    return tail;
-                }
-                for def in bound {
-                    tail.demands.remove(&def);
-                }
-                let value = self.primitive_value(operation, operands, site);
-                let binder = self.pattern(binder);
-                let node = Let { binder, bindee: value.node, tail: tail.node }.build(self, site);
-                return Residual { node, demands: value.demands.join(tail.demands) };
-            }
-            let rest = self.stack(rest);
-            let value = self.primitive_value(operation, operands, site);
-            let node = SReturn { stack: rest.node, value: value.node }.build(self, site);
-            return Residual { node, demands: rest.demands.join(value.demands) };
-        }
-
-        // An escaping primitive or an unknown argument stack still executes inline.
-        // Construct the supplied stack first, then pop its arguments in source order.
-        let stack = self.stack(stack);
-        let defs = ["__primitive_first__", "__primitive_second__"].map(|name| {
-            let def = self.arena.admin.fresh();
-            self.arena.admin.insert_def(def, VarName(name.into()));
-            def
-        });
-        let operands = defs.map(|def| def.build(self, site));
-        let value = Primitive { operation, operands }.build(self, site);
-        let ambient = Bullet.build(self, site);
-        let tail = SReturn { stack: ambient, value }.build(self, site);
-        let second = defs[1].build(self, None);
-        let ambient = Bullet.build(self, site);
-        let tail = Let { binder: Cons(second, Bullet), bindee: ambient, tail }.build(self, site);
-        let first = defs[0].build(self, None);
-        let node = Let { binder: Cons(first, Bullet), bindee: stack.node, tail }.build(self, site);
-        Residual { node, demands: stack.demands }
-    }
-
-    fn external_call(
-        &mut self, function: ExternalFunction, stack: ScopedStack, site: Option<ss::TermId>,
-    ) -> Residual<CompuId> {
-        if let ExternalFunction::Host(role) = &function
-            && let Some(operation) = PrimitiveOp::from_builtin(*role)
-        {
-            return self.primitive_call(operation, stack, site);
-        }
-        let stack = self.stack(stack);
-        let node = ExternCall { function, stack: stack.node }.build(self, site);
-        Residual { node, demands: stack.demands }
-    }
-
-    fn compu(&mut self, id: CompuId, scope: Scope) -> Residual<CompuId> {
-        let site = self.source.admin.terms.back(&TermId::Compu(id)).copied();
-        let (compu, demands): (Computation<LetJoin>, _) = match self.source.inner.compus[&id]
-            .clone()
-        {
-            | Computation::Hole(SHole(stack)) => {
-                let stack = self.stack(ScopedStack { node: stack, scope });
-                (SHole(stack.node).into(), stack.demands)
-            }
-            | Computation::Force(SForce { thunk, stack }) => {
-                let known = self.known(thunk, scope.values);
-                let stack = ScopedStack { node: stack, scope: scope.clone() };
-                if let KnownValue::External(function) = known.as_ref() {
-                    return self.external_call(function.clone(), stack, site);
-                } else if self.movable_stack(stack.node)
-                    && let Value::Closure(Closure { body, .. }) = self.source.inner.values[&thunk]
-                {
-                    return self
-                        .compu(body, Scope { values: scope.values, stack: Some(Rc::new(stack)) });
-                } else if self.movable_stack(stack.node)
-                    && let KnownValue::Closure { body, env } = known.as_ref()
-                {
-                    return self.compu(*body, Scope { values: *env, stack: Some(Rc::new(stack)) });
-                } else {
-                    let stack = self.stack(stack);
-                    let thunk = self.value(thunk, scope.values, Demand::Used);
-                    (
-                        SForce { thunk: thunk.node, stack: stack.node }.into(),
-                        thunk.demands.join(stack.demands),
-                    )
-                }
-            }
-            | Computation::Ret(SReturn { stack, value }) => {
-                let stack = self.resolve_stack(ScopedStack { node: stack, scope: scope.clone() });
-                if let Stack::Kont(Kont { binder, body }) = self.source.inner.stacks[&stack.node] {
-                    return self.binding(
-                        binder,
-                        ScopedValue { node: value, env: scope.values },
-                        body,
-                        stack.scope,
-                        site,
-                    );
-                }
-                let stack = self.stack(stack);
-                let value = self.value(value, scope.values, Demand::Used);
-                (
-                    SReturn { stack: stack.node, value: value.node }.into(),
-                    stack.demands.join(value.demands),
-                )
-            }
-            | Computation::Fix(SFix { param, stack, body }) => {
-                let stack = self.stack(ScopedStack { node: stack, scope: scope.clone() });
-                let values = self.extend(scope.values, [(param, Rc::default())]);
-                let mut body = self.compu(body, Scope { values, stack: None });
-                body.demands.remove(&param);
-                (
-                    SFix { param, stack: stack.node, body: body.node }.into(),
-                    stack.demands.join(body.demands),
-                )
-            }
-            | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
-                return self.binding(
-                    binder,
-                    ScopedValue { node: scrut, env: scope.values },
-                    body,
-                    scope,
-                    site,
-                );
-            }
-            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
-                return self.binding(
-                    binder,
-                    ScopedValue { node: bindee, env: scope.values },
-                    tail,
-                    scope,
-                    site,
-                );
-            }
-            | Computation::Join(LetJoin::Stack(Let { binder: Bullet, bindee, tail })) => {
-                return self.branch(bindee, tail, scope, site);
-            }
-            | Computation::CoprodMatch(_) => {
-                unreachable!("coproduct matches are handled with their stack join")
-            }
-            | Computation::LetArg(Let { binder: Cons(binder, Bullet), bindee, tail }) => {
-                let stack = self.resolve_stack(ScopedStack { node: bindee, scope: scope.clone() });
-                if let Stack::Arg(Cons(value, rest)) = self.source.inner.stacks[&stack.node]
-                    && self.movable_stack(rest)
-                {
-                    let value = ScopedValue { node: value, env: stack.scope.values };
-                    let rest = Some(Rc::new(ScopedStack { node: rest, scope: stack.scope }));
-                    return self.binding(binder, value, tail, Scope { stack: rest, ..scope }, site);
-                }
-                let values = self.bind(scope.values, binder, Rc::default());
-                let mut tail = self.compu(tail, Scope { values, stack: None });
-                for def in binder.vars(&self.source) {
-                    tail.demands.remove(&def);
-                }
-                let bindee = self.stack(stack);
-                let binder = Cons(self.pattern(binder), Bullet);
-                (
-                    Let { binder, bindee: bindee.node, tail: tail.node }.into(),
-                    bindee.demands.join(tail.demands),
-                )
-            }
-            | Computation::CoCase(SCoMatch { scrut, arms }) => {
-                let stack = self.resolve_stack(ScopedStack { node: scrut, scope: scope.clone() });
-                if let Stack::Tag(Cons(tag, rest)) = &self.source.inner.stacks[&stack.node]
-                    && self.movable_stack(*rest)
-                    && let Some(CoMatcher { tail, .. }) = arms.iter().find(|arm| arm.dtor.0 == *tag)
-                {
-                    let rest = Some(Rc::new(ScopedStack { node: *rest, scope: stack.scope }));
-                    return self.compu(*tail, Scope { stack: rest, ..scope });
-                }
-                let scrut = self.stack(stack);
-                let (arms, demands): (Vec<_>, Vec<_>) = arms
-                    .into_iter()
-                    .map(|CoMatcher { dtor, tail }| {
-                        let tail = self.compu(tail, Scope { values: scope.values, stack: None });
-                        (CoMatcher { dtor, tail: tail.node }, tail.demands)
-                    })
-                    .unzip();
-                (
-                    SCoMatch { scrut: scrut.node, arms }.into(),
-                    demands.into_iter().fold(scrut.demands, Demands::join),
-                )
-            }
-            | Computation::ExternCall(ExternCall { function, stack }) => {
-                return self.external_call(function, ScopedStack { node: stack, scope }, site);
-            }
-        };
-        let node = compu.build(self, site);
-        if let Some(protocol) = self.source.inner.compu_protocols.get(&id) {
-            self.arena.inner.compu_protocols.insert_new(node, protocol.clone());
-        }
-        Residual { node, demands }
-    }
 }
+
+#[cfg(test)]
+mod depth_tests;
 
 #[cfg(test)]
 mod tests {

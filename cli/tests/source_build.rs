@@ -185,6 +185,8 @@ fn the_wasm_targets_write_distinct_valid_core_modules() {
     let build = tempfile::tempdir().unwrap();
     let build_target = |target: &str, filename: &str| {
         let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            // Exercise the CLI on its normal main-thread stack, including outside Cargo.
+            .env_remove("RUST_MIN_STACK")
             .arg("build")
             .arg(&root)
             .args(["--target", target, "--build-dir"])

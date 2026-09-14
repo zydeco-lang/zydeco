@@ -74,9 +74,10 @@ Wasm uses the bundled Node.js host; `NODE` can name an alternative Node executab
 `exe` uses the existing AMD64 linker and needs NASM, an archiver, Cargo, and support for executing AMD64 code.
 Its runtime source directory defaults to `runtime/`; use `-r PATH` (`--runtime-dir`) outside the checkout.
 Compiled execution uses temporary directories, removed after execution.
-Large native or Wasm compilations can exceed macOS's default main-thread stack;
-run `ulimit -s 16384` in the invoking shell for a 16 MiB process stack.
-The workspace's `RUST_MIN_STACK` setting applies to Rust worker threads, not the CLI's main thread.
+The CLI uses the normal process stack.
+Residual lowering and high SPS reconstruction use explicit work stacks; remaining depth work is tracked
+in the [traversal proposal](docs/proposals/traversals.md#additional-graph-views-and-adapters).
+The workspace's `RUST_MIN_STACK` setting applies to Rust test threads and does not affect the CLI's main thread.
 Use `--lint-types` with a checking command to run the compiler's additional typed-arena invariant checks:
 
 ```sh

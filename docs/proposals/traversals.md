@@ -57,6 +57,15 @@ a replacement needs a context-sensitive traversal or a justified memo key under 
 The raw classifier folder and residual runtime iterator provide distinct starting points. Further SPS
 rebuilding must preserve the established [consumer-demand schedule](../references/compiler.md#consumer-demands).
 
+Residual lowering and high SPS normalization now use explicit reconstruction frames,
+as recorded in [C8](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand).
+Further depth work should distinguish those completed migrations from recursive semantic helpers:
+normalization's known-value construction and pattern decisions, structured demand and protocol operations,
+and later closure conversion still have recursive paths.
+Use direct phase fixtures to establish each remaining limit before choosing its work frames or fact representation;
+include destruction of nested retained facts in that audit.
+The compiler has no end-to-end arbitrary-depth guarantee.
+
 ## Pruning and synthesized results
 
 The existing `Together` visitors compose independent observations under one traversal policy.

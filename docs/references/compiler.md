@@ -342,7 +342,8 @@ The implemented interfaces serve different questions and therefore expose differ
 | Raw inferred classifiers | [Classifier folders](#classifier-folders) | Owned child reconstruction; preserve unchanged IDs; clients select substitution environments and reductions |
 | Executable typed terms | [Residual runtime traversal](#residual-runtime-traversal) | Borrowed runtime nodes from the residual root; visit each identity once and exclude static evidence |
 | Typed terms to lexical high SPS | [Residual lowering folder](#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh output syntax for every input occurrence |
-| Lexical high SPS | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
+| Lexical high SPS analysis | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
+| Lexical high SPS normalization | [Normalization reconstruction](#normalization-reconstruction) | Explicit frames retain forward producer scopes and resume rebuilding with backward consumer demands |
 
 Before reusing a traversal, establish its input view, child environments, occurrence policy, and output identity policy.
 A raw classifier, its normalized view, and a residual executable are different inputs even
@@ -1282,8 +1283,8 @@ Successful reconstruction validates lexical ownership and branch joins before re
 on a 512 KiB worker stack, covering mixed computation and thunk nesting, value lets,
 structural aliases, literal fallthrough, and Builtin products.
 Separate assertions cover fresh ownership, provenance, protocols, and independent rejected values.
-This guarantee concerns residual reconstruction; classifier protocol extraction and subsequent normalization
-and conversion have their own traversal contracts.
+This guarantee concerns residual reconstruction; classifier protocol extraction, normalization analyses,
+and subsequent conversion have their own traversal contracts.
 
 ### High SPS analysis traversal
 
@@ -1314,6 +1315,38 @@ and retains both invariant failures when the graph is acyclic.
 The normalizer still owns forward producer propagation and backward consumer demands.
 [Traversal regressions](../../lang/stackir/src/high/traverse/tests.rs) compare separate and composed results,
 count entries and exits on shared syntax, and cover binders and cycles with independent ownership failures.
+
+### Normalization reconstruction
+
+After residual lowering, the unoptimized lexical tree can still contain long binding and closure chains.
+The [normalization folder](../../lang/stackir/src/high/normalize/fold.rs) reconstructs values,
+computations, and stacks through one explicit work loop.
+Frames retain unfinished consumers and their producer environments.
+Pattern reconstruction and pattern-fact distribution also use explicit stacks;
+discardability and movable-stack checks iterate through their relevant children.
+
+The folder preserves the [consumer-demand schedule](#consumer-demands).
+A binding installs producer facts before visiting its tail, then resumes with the tail's demands
+to discard, split, or rebuild the producer.
+Split components consume those demands from last to first, so reconstructed bindings execute in their original order.
+Unknown branches retain separate scopes and contribute completed demands before their shared scrutinee is rebuilt.
+Primitive continuations follow the same schedule, retaining potentially trapping operations even without a value demand.
+Suspended bodies return capture demands without executing their code.
+
+Delayed ambient stacks are stored in a flat table whose IDs refer to both the stack node and its original scope.
+This preserves substitutions across nested closure and argument reductions while allowing long substitution chains
+to be resolved and destroyed without recursive Rust calls.
+The existing environment table and occurrence counts retain their distinct roles
+in forwarding and exclusive body movement.
+Reconstruction preserves definition identities, source sites, applicable protocol evidence,
+and the lexical ownership and branch-join validation boundary.
+
+[Depth tests](../../lang/stackir/src/high/normalize/depth_tests.rs) use a 512 KiB stack for discarded
+and retained bindings, suspended bodies, ambient substitutions, argument stacks, alias parameters, and unknown branches.
+The [CLI regression](../../cli/tests/source_build.rs) builds the factorial source through both Wasm backends
+without a compiler worker or Cargo's `RUST_MIN_STACK` environment setting.
+These tests cover reconstruction depth; recursively structured semantic facts, demands, and protocol evidence,
+as well as later compiler passes, remain separate concerns.
 
 ### Local reductions
 
