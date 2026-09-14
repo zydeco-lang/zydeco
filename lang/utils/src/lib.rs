@@ -7,6 +7,7 @@ pub mod context;
 pub mod graph;
 pub mod err;
 pub mod pass;
+pub mod fold;
 pub mod with;
 
 pub mod prelude {

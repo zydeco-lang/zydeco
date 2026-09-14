@@ -374,6 +374,44 @@ Visit and allocation counts establish the work removed by a migration; compilati
 or memory claims additionally require measurements that include callback work and retained summaries.
 [Further extensions](../proposals/traversals.md) remain proposals until a concrete client justifies them.
 
+### Resumable folder execution
+
+A folder that rebuilds a parent after visiting its children must retain the unfinished parent.
+The shared [folder execution interface](../../lang/utils/src/fold.rs) separates
+that continuation from the choice of where to store it.
+It supports mutable compiler state without retaining a mutable borrow of the folder across child execution.
+
+`Folder` defines `Input`, `Output`, and an owned `Frame` for the unfinished parent.
+`enter(input)` begins an operation; `resume(frame, child)` continues it with a completed child result.
+Both return `Step::Call { input, frame }` or `Step::Return(output)`.
+A leaf returns directly without constructing a continuation frame.
+A parent may select its next child using an earlier child's result and the current compiler state.
+Frames contain owned local state, arena IDs, or references to stable external inputs;
+they cannot borrow the mutable folder itself.
+
+`Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
+`Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
+Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
+Production Builtin package materialization uses `Explicit`; `Recursive` supports bounded comparisons
+and consumes native stack proportional to pending calls.
+The driver introduces no boxed callbacks or individual heap allocation for each continuation.
+Frame payloads and outputs may allocate according to the folder's representation.
+
+The folder owns child order, scope transitions, allocation, provenance, sharing, caching, and recovery.
+An error-valued output returns to its parent through the same protocol as a successful result;
+the parent decides whether independent siblings remain visitable.
+Drivers neither short-circuit errors nor implicitly deduplicate shared inputs.
+An explicit driver bounds only its own call depth: recursive semantic helpers and destruction
+of nested frame payloads retain their separate stack requirements.
+
+Driver regressions compare dependent child selection, repeated occurrences, event order, and independent rejection.
+A 100,000-level fixture executes on a 128 KiB stack.
+The [Builtin package folder](../../lang/stackir/src/high/lower/builtin.rs) is a production client:
+its product frame accumulates fields in input order and transfers the completed vector into the output node.
+Its tests compare both drivers' materialized syntax and arena counts, retain the empty-product rejection,
+and construct and destroy 16,384 nested products on a 512 KiB stack through `Explicit`.
+These checks establish behavior and depth robustness, without claiming a compilation-time speedup.
+
 ### Surface structural rebuilding
 
 Bitter and scoped syntax share `Pattern` and `Term<Ref>`, with source names
@@ -1258,7 +1296,7 @@ in a vector, so residual term depth does not consume the Rust call stack.
 Its work loop covers patterns, values, computations, and ordered match decisions together;
 thunk bodies and branch tails resume through the same loop.
 `Lowerer` retains allocation, provenance, product layout, protocol extraction, and diagnostic state.
-Builtin package materialization also uses an explicit work stack.
+Builtin package materialization uses the shared [resumable folder driver](#resumable-folder-execution).
 
 Computation visits inherit the high SPS stack that consumes their result.
 Reconstruction preserves the semantic child schedule: application arguments precede their function body;

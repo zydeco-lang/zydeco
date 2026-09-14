@@ -209,12 +209,82 @@ fn deeply_nested_builtin_products_lower_on_a_small_stack() {
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut lowerer = Lowerer::new(&spans, &scoped, &statics);
-        let value = BuiltinPackageLowering::lower(value, &mut lowerer);
+        let value = Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, value);
         let stack = Bullet.build(&mut lowerer, None);
         let root = SReturn { stack, value }.build(&mut lowerer, None);
         let program = lowerer.finish(root).unwrap();
         assert_eq!(program.as_program().arena().inner.values.len(), 16385);
     });
+}
+
+#[test]
+fn builtin_folder_drivers_preserve_product_order_and_materialization() {
+    fn materialize<D: Driver>() -> (String, [usize; 4]) {
+        use zydeco_syntax::{BuiltinValueRole, IntegerOperation, IntegerType};
+        let spans = SpanArena::default();
+        let scoped = ScopedArena::default();
+        let statics = StaticsArena::default();
+        let mut lowerer = Lowerer::new(&spans, &scoped, &statics);
+        let input = BuiltinPackageValue::Product(vec![
+            BuiltinPackageValue::Unit,
+            BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
+                IntegerType::Int64,
+                IntegerOperation::Eq,
+            )),
+            BuiltinPackageValue::Product(vec![
+                BuiltinPackageValue::Unit,
+                BuiltinPackageValue::Unit,
+            ]),
+        ]);
+        let value = D::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, input);
+        let arena = &lowerer.arena;
+        let Value::VCons(VCons { items, layout }) = &arena.inner.values[&value] else {
+            panic!("package product")
+        };
+        assert_eq!(layout.arity, 3);
+        assert!(matches!(&arena.inner.values[&items[0]], Value::Triv(_)));
+        assert!(matches!(&arena.inner.values[&items[1]], Value::Closure(_)));
+        assert!(
+            matches!(&arena.inner.values[&items[2]], Value::VCons(VCons { items, .. }) if items.len() == 2 && items[0] != items[1])
+        );
+        let formatter =
+            super::super::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &statics);
+        (
+            value.ugly(&formatter),
+            [
+                arena.inner.vpats.len(),
+                arena.inner.values.len(),
+                arena.inner.stacks.len(),
+                arena.inner.compus.len(),
+            ],
+        )
+    }
+    assert_eq!(materialize::<Explicit>(), materialize::<zydeco_utils::fold::Recursive>());
+}
+
+#[test]
+fn builtin_folder_drivers_reject_empty_product_plans() {
+    fn reject<D: Driver>() {
+        let spans = SpanArena::default();
+        let scoped = ScopedArena::default();
+        let statics = StaticsArena::default();
+        let mut lowerer = Lowerer::new(&spans, &scoped, &statics);
+        D::run(
+            &mut BuiltinPackageFolder { lowerer: &mut lowerer },
+            BuiltinPackageValue::Product(vec![]),
+        );
+    }
+    for rejected in [
+        std::panic::catch_unwind(reject::<Explicit>),
+        std::panic::catch_unwind(reject::<zydeco_utils::fold::Recursive>),
+    ] {
+        let error = rejected.expect_err("an empty product plan violates the IR invariant");
+        let message = error
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| error.downcast_ref::<&str>().copied());
+        assert_eq!(message, Some("assertion failed: layout.arity > 0"));
+    }
 }
 
 #[test]

@@ -10,6 +10,7 @@ use zydeco_statics::{
 };
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::{
+    fold::{Driver, Explicit},
     pass::CompilerPass,
     prelude::ArenaAccess,
     span::{PathDisplay, Span, internal_ariadne_span},
@@ -73,8 +74,10 @@ pub enum BuiltinRootLowerError {
     Sps(Vec<SpsLowerError>),
 }
 
+mod builtin;
 mod fold;
 
+use builtin::BuiltinPackageFolder;
 use fold::LoweringFolder;
 
 #[derive(Clone)]
@@ -155,9 +158,6 @@ pub struct BuiltinRootLowerer<'a> {
     pub statics: &'a StaticsArena,
     pub signature: ss::PackPi,
 }
-
-/// Materializes backend-independent Builtin package plans as Stack IR values.
-struct BuiltinPackageLowering;
 
 impl<'a> Lowerer<'a> {
     /// Create a structural lowerer with fresh stack arenas.
@@ -276,36 +276,6 @@ impl<'a> Lowerer<'a> {
     }
 }
 
-impl BuiltinPackageLowering {
-    fn lower(value: BuiltinPackageValue, lowerer: &mut Lowerer<'_>) -> ValueId {
-        enum Work {
-            Value(BuiltinPackageValue),
-            Product(usize),
-        }
-        let mut work = vec![Work::Value(value)];
-        let mut values = Vec::new();
-        while let Some(next) = work.pop() {
-            match next {
-                | Work::Value(BuiltinPackageValue::Unit) => values.push(Triv.build(lowerer, None)),
-                | Work::Value(BuiltinPackageValue::Operation(role)) => {
-                    values.push(ExternalFunction::Host(role).make_function(lowerer));
-                }
-                | Work::Value(BuiltinPackageValue::Product(product)) => {
-                    work.push(Work::Product(product.len()));
-                    work.extend(product.into_iter().rev().map(Work::Value));
-                }
-                | Work::Product(arity) => {
-                    let fields = values.split_off(values.len() - arity);
-                    values.push(VCons::new(fields, ProductLayout { arity }).build(lowerer, None));
-                }
-            }
-        }
-        let value = values.pop().expect("completed Builtin package");
-        assert!(values.is_empty());
-        value
-    }
-}
-
 impl CompilerPass<ss::CompuId> for RootLowerer<'_> {
     type Output = BranchJoinProgram;
     type Error = Vec<SpsLowerError>;
@@ -324,7 +294,8 @@ impl RootLowerer<'_> {
         let root = self.statics.execution_compu(root);
         let mut stack = Bullet.build(&mut lowerer, None);
         if let Some(plan) = builtin {
-            let package = BuiltinPackageLowering::lower(plan.value, &mut lowerer);
+            let package =
+                Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
             stack = Cons(package, stack).build(&mut lowerer, None);
         }
         let root = LoweringFolder::new(&mut lowerer).lower(root, stack);
