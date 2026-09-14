@@ -13,9 +13,13 @@ use super::{
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible, rc::Rc};
 use zydeco_statics::syntax as ss;
-use zydeco_utils::pass::CompilerPass;
+use zydeco_utils::{
+    fold::{Driver, Explicit},
+    pass::CompilerPass,
+};
 
 mod fold;
+mod pattern;
 
 use fold::NormalizationFolder;
 
@@ -335,55 +339,7 @@ impl Normalization {
     }
 
     fn pattern(&mut self, id: VPatId) -> VPatId {
-        enum Work {
-            Visit(VPatId),
-            Finish(VPatId),
-        }
-        let mut work = vec![Work::Visit(id)];
-        let mut results = Vec::new();
-        while let Some(next) = work.pop() {
-            match next {
-                | Work::Visit(id) => {
-                    work.push(Work::Finish(id));
-                    match &self.source.inner.vpats[&id] {
-                        | ValuePattern::Ctor(Ctor(_, child)) => work.push(Work::Visit(*child)),
-                        | ValuePattern::Alias(Alias(children)) => {
-                            work.extend(children.iter().rev().copied().map(Work::Visit))
-                        }
-                        | ValuePattern::VCons(VCons { items, .. }) => {
-                            work.extend(items.iter().rev().copied().map(Work::Visit))
-                        }
-                        | ValuePattern::Hole(_) | ValuePattern::Var(_) | ValuePattern::Triv(_) => {}
-                    }
-                }
-                | Work::Finish(id) => {
-                    let pattern: ValuePattern = match self.source.inner.vpats[&id].clone() {
-                        | ValuePattern::Ctor(Ctor(tag, _)) => {
-                            Ctor(tag, results.pop().expect("constructor pattern child")).into()
-                        }
-                        | ValuePattern::Alias(Alias(patterns)) => {
-                            let children = results.split_off(results.len() - patterns.len());
-                            Alias(ConsN::from_vec(children).expect("an alias pattern is nonempty"))
-                                .into()
-                        }
-                        | ValuePattern::VCons(VCons { items, layout }) => {
-                            let children = results.split_off(results.len() - items.len());
-                            VCons::new(children, layout).into()
-                        }
-                        | pattern => pattern,
-                    };
-                    let site = self.source.admin.pats.back(&id).copied();
-                    let node = pattern.build(self, site);
-                    if let Some(protocol) = self.source.inner.pattern_protocols.get(&id) {
-                        self.arena.inner.pattern_protocols.insert_new(node, protocol.clone());
-                    }
-                    results.push(node);
-                }
-            }
-        }
-        let pattern = results.pop().expect("completed pattern");
-        assert!(results.is_empty());
-        pattern
+        Explicit::run(&mut pattern::PatternFolder { norm: self }, id)
     }
 
     fn delay_stack(&mut self, stack: ScopedStack) -> ScopedStackId {

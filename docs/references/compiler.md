@@ -392,8 +392,8 @@ they cannot borrow the mutable folder itself.
 `Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
 `Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
 Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
-Production Builtin package materialization uses `Explicit`; `Recursive` supports bounded comparisons
-and consumes native stack proportional to pending calls.
+Production Builtin package materialization and high SPS pattern reconstruction use `Explicit`;
+`Recursive` supports bounded comparisons and consumes native stack proportional to pending calls.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
 Frame payloads and outputs may allocate according to the folder's representation.
 
@@ -411,6 +411,16 @@ its product frame accumulates fields in input order and transfers the completed 
 Its tests compare both drivers' materialized syntax and arena counts, retain the empty-product rejection,
 and construct and destroy 16,384 nested products on a 512 KiB stack through `Explicit`.
 These checks establish behavior and depth robustness, without claiming a compilation-time speedup.
+
+The [high SPS pattern folder](../../lang/stackir/src/high/normalize/pattern.rs) copies one owned pattern layer
+and replaces each child slot as its result returns.
+Constructor payloads, alias components, and product fields retain their structural order.
+The completed layer moves into the target arena with its original definition IDs,
+source site, product layout, and protocol evidence.
+This avoids a separate result stack and transfers child vectors directly into rebuilt nodes.
+Pattern depth uses the selected driver independently of the normalizer's consumer schedule.
+Driver comparisons cover these invariants and empty field vectors with nonzero physical arity;
+the normalization depth regression retains 8,192 nested alias patterns on a 512 KiB stack.
 
 ### Surface structural rebuilding
 
@@ -1360,8 +1370,9 @@ After residual lowering, the unoptimized lexical tree can still contain long bin
 The [normalization folder](../../lang/stackir/src/high/normalize/fold.rs) reconstructs values,
 computations, and stacks through one explicit work loop.
 Frames retain unfinished consumers and their producer environments.
-Pattern reconstruction and pattern-fact distribution also use explicit stacks;
-discardability and movable-stack checks iterate through their relevant children.
+Pattern reconstruction uses the shared [resumable folder driver](#resumable-folder-execution),
+and pattern-fact distribution uses an explicit stack; discardability and movable-stack checks iterate
+through their relevant children.
 
 The folder preserves the [consumer-demand schedule](#consumer-demands).
 A binding installs producer facts before visiting its tail, then resumes with the tail's demands
