@@ -78,7 +78,7 @@ The main precedence levels, from tightest to loosest, are:
 | --- | --- |
 | Parentheses, braces, delimited terms | Explicit |
 | `v/field` | Left |
-| `!v`, `ret v`, `+C v` | Prefix |
+| `! v`, `ret v`, `+C v` | Prefix |
 | Application and `M .d` | Left |
 | `A * B * C` | One flat product; explicit nesting is retained |
 | `A -> B -> C` | Right |
@@ -254,7 +254,7 @@ The basic computation forms are:
 | Form | Typing and behavior |
 | --- | --- |
 | `{ M }` | A value of `Thk B` when `M : B`; captures lexical bindings |
-| `!v` | Runs `v : Thk B` against the current `B` stack |
+| `! v` | Runs `v : Thk B` against the current `B` stack |
 | `ret v` | A computation of `Ret A`; delivers `v : A` to the return continuation |
 | `do p <- M; N` | Runs `M : Ret A`, binds its return with `p`, then runs `N` |
 | `fn p => M` | Consumes an argument, binds it with `p`, and continues with `M` |
@@ -278,11 +278,11 @@ def Probe = codata | .read : Ret Int64 end in
 For irrefutable `p`, the basic reductions are:
 
 ```text
-!{M}                         → M
-(fn p => M) v                → M with p bound to v
-do p <- ret v; M             → M with p bound to v
+! {M}                         → M
+(fn p => M) v                 → M with p bound to v
+do p <- ret v; M              → M with p bound to v
 (comatch | .d => M ... end).d → M
-fix f => M                   → M with f bound to {fix f => M}
+fix f => M                    → M with f bound to {fix f => M}
 ```
 
 Value formation does not execute suspended bodies.
@@ -431,12 +431,12 @@ Views associate to the right: `f ~> g ~> p` transforms with `f`, then `g`, befor
 For complete, well-typed total values, the usual capture-avoiding equations explain application and binding:
 
 ```text
-V |> (val p => W)                 = let p = V in W
-let x = V in x                   = V
-let x = V in W                   = W                     (x not free in W)
-let y = (let x = V in W) in U     = let x = V in let y = W in U
-val x => f x                     = f                     (x not free in f)
-let f ~> p = V in W               = let p = (V |> f) in W
+V |> (val p => W)               = let p = V in W
+let x = V in x                  = V
+let x = V in W                  = W                     (x not free in W)
+let y = (let x = V in W) in U   = let x = V in let y = W in U
+val x => f x                    = f                     (x not free in f)
+let f ~> p = V in W             = let p = (V |> f) in W
 ```
 
 The reassociation requires `x` fresh for `U`; binders may be renamed to satisfy it.
