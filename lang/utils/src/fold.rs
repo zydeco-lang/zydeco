@@ -5,7 +5,12 @@
 
 /// The next child call and its unfinished parent, or a completed result.
 pub enum Step<F: Folder> {
-    Call { input: F::Input, frame: F::Frame },
+    Call {
+        input: F::Input,
+        frame: F::Frame,
+    },
+    /// Transfer to another operation whose result is this operation's result.
+    TailCall(F::Input),
     Return(F::Output),
 }
 
@@ -13,7 +18,8 @@ pub enum Step<F: Folder> {
 ///
 /// Frames own the state needed after a child returns. They may contain arena IDs
 /// or references to stable external storage, but cannot borrow the mutable folder.
-/// Every depth-dependent child call must return `Step::Call` to use the driver.
+/// Every depth-dependent child call must return `Step::Call` or `Step::TailCall`
+/// to use the driver.
 pub trait Folder: Sized {
     type Input;
     type Output;
@@ -38,6 +44,7 @@ impl Driver for Explicit {
         let mut step = folder.enter(input);
         loop {
             step = match step {
+                | Step::TailCall(input) => folder.enter(input),
                 | Step::Call { input, frame } => {
                     frames.push(frame);
                     folder.enter(input)
@@ -62,6 +69,7 @@ impl Driver for Recursive {
         let mut step = folder.enter(input);
         loop {
             step = match step {
+                | Step::TailCall(input) => folder.enter(input),
                 | Step::Call { input, frame } => {
                     let child = Self::run(folder, input);
                     folder.resume(frame, child)

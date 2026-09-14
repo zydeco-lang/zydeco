@@ -150,3 +150,47 @@ fn explicit_driver_handles_deep_calls_on_a_small_native_stack() {
         .join()
         .unwrap();
 }
+
+enum TailInput {
+    Root(usize),
+    Countdown(usize),
+}
+
+struct TailCalls(usize);
+
+impl Folder for TailCalls {
+    type Input = TailInput;
+    type Frame = usize;
+    type Output = usize;
+
+    fn enter(&mut self, input: TailInput) -> Step<Self> {
+        match input {
+            | TailInput::Root(depth) => {
+                Step::Call { input: TailInput::Countdown(depth), frame: depth }
+            }
+            | TailInput::Countdown(0) => Step::Return(self.0),
+            | TailInput::Countdown(remaining) => {
+                self.0 += 1;
+                Step::TailCall(TailInput::Countdown(remaining - 1))
+            }
+        }
+    }
+
+    fn resume(&mut self, frame: usize, child: usize) -> Step<Self> {
+        assert_eq!(frame, child, "tail calls return to the original parent");
+        Step::Return(child + 1)
+    }
+}
+
+#[test]
+fn tail_calls_preserve_the_parent_without_growing_either_driver_stack() {
+    std::thread::Builder::new()
+        .stack_size(128 * 1024)
+        .spawn(|| {
+            assert_eq!(Explicit::run(&mut TailCalls(0), TailInput::Root(100_000)), 100_001);
+            assert_eq!(Recursive::run(&mut TailCalls(0), TailInput::Root(100_000)), 100_001);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}

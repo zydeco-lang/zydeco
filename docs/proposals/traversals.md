@@ -45,10 +45,10 @@ or the phase's acceptance boundary.
 ## Further resumable folder migrations
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution)
-provides statically selected native and explicit-stack drivers, with Builtin package materialization
-and high SPS pattern reconstruction as its first clients.
+provides statically selected native and explicit-stack drivers for residual lowering,
+Builtin package materialization, and high SPS pattern reconstruction.
 Their equivalence and depth checks support using the interface for those boundaries.
-The next evaluation reached classifier scope handling, where migration requires an environment design decision.
+Classifier scope handling remains deferred while other suitable folders are evaluated.
 
 ### Classifier environments and suspension
 
@@ -61,8 +61,8 @@ into a local vector and lends that vector to a temporary child folder.
 These references remain valid while the original Rust calls are active.
 A resumable request must retain the necessary state after those calls have returned.
 
-This is the first difficult migration boundary: a generic driver alone cannot choose the ownership
-of child environments, the representation of updated binders, or the lifetime of filtered assignment sequences.
+A generic driver alone cannot choose the ownership of child environments,
+the representation of updated binders, or the lifetime of filtered assignment sequences.
 Wrapping each existing callback in a fresh `Explicit::run` would retain the recursive callers around those runs.
 The recursive call cycle must instead cross the shared suspension protocol.
 
@@ -91,9 +91,10 @@ Replace the affected callback interfaces and their callers together once the own
 
 ### Remaining execution adapters
 
-The complete residual lowering and consumer-demand normalization machines still use their existing domain worklists.
-Migrating them requires expressing their heterogeneous pattern, value, computation, and stack results
-through domain request/result types or a separately justified adapter for the existing typed result stacks.
+The consumer-demand normalization machine still uses its existing domain worklist.
+The implemented [residual lowering folder](../references/compiler.md#residual-lowering-folder) provides a
+candidate adapter: keep typed result stacks for completed syntax and move suspended calls to the driver.
+Evaluate this arrangement against normalization's heterogeneous values, stacks, and computations.
 Preserve the established interleaving of allocations and child visits and compare error multiplicity,
 source evidence, and output ownership under both drivers.
 

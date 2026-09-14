@@ -1,5 +1,6 @@
 use super::*;
 use zydeco_statics::arena::StaticsScope;
+use zydeco_utils::fold::Recursive;
 use zydeco_utils::prelude::IdAllocator;
 
 struct Fixture {
@@ -43,11 +44,98 @@ impl Fixture {
         RootLowerer { spans: &spans, scoped: &scoped, statics: &self.statics }.run(root).unwrap()
     }
 
+    fn snapshot<D: Driver>(&self, root: ss::CompuId) -> Snapshot {
+        let spans = SpanArena::default();
+        let scoped = ScopedArena::default();
+        let program = RootLowerer { spans: &spans, scoped: &scoped, statics: &self.statics }
+            .run_with_driver::<D>(root, None)
+            .unwrap()
+            .into_program();
+        let arena = program.arena();
+        let formatter =
+            super::super::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &self.statics);
+        // Independent output arenas have distinct identity domains. Retain raw slots so
+        // a changed allocation schedule still fails the comparison.
+        let rendered = program
+            .root()
+            .ugly(&formatter)
+            .replace(&format!("[{:?}#", program.root().key_space()), "[output#");
+        let mut terms = arena
+            .inner
+            .values
+            .iter()
+            .map(|(id, _)| TermId::Value(*id))
+            .chain(arena.inner.compus.iter().map(|(id, _)| TermId::Compu(*id)))
+            .chain(arena.inner.stacks.iter().map(|(id, _)| TermId::Stack(*id)))
+            .map(|id| {
+                let slot = match id {
+                    | TermId::Value(id) => id.raw().into_u32(),
+                    | TermId::Compu(id) => id.raw().into_u32(),
+                    | TermId::Stack(id) => id.raw().into_u32(),
+                };
+                (slot, arena.admin.terms.back(&id).copied())
+            })
+            .collect::<Vec<_>>();
+        terms.sort_by_key(|(slot, _)| *slot);
+        let mut patterns = arena
+            .inner
+            .vpats
+            .iter()
+            .map(|(id, _)| (id.raw().into_u32(), arena.admin.pats.back(id).copied()))
+            .collect::<Vec<_>>();
+        patterns.sort_by_key(|(slot, _)| *slot);
+        Snapshot {
+            rendered,
+            counts: [
+                arena.inner.vpats.len(),
+                arena.inner.values.len(),
+                arena.inner.stacks.len(),
+                arena.inner.compus.len(),
+            ],
+            terms,
+            patterns,
+        }
+    }
+
     // Construct and destroy the fixtures on the same small stack. This isolates
     // residual lowering from parsing, checking, and later optimization passes.
     fn small_stack(test: impl FnOnce() + Send + 'static) {
         std::thread::Builder::new().stack_size(512 * 1024).spawn(test).unwrap().join().unwrap();
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Snapshot {
+    rendered: String,
+    counts: [usize; 4],
+    terms: Vec<(u32, Option<ss::TermId>)>,
+    patterns: Vec<(u32, Option<ss::PatId>)>,
+}
+
+#[test]
+fn residual_drivers_preserve_mixed_reconstruction_and_ordered_match_plans() {
+    let mut fixture = Fixture::new();
+    let unit = fixture.value(Triv);
+    let hole = fixture.pattern(Hole);
+    let bindee = fixture.value(Let { binder: hole, bindee: unit, tail: unit });
+    let returned = fixture.computation(Return(unit));
+    let scrut = fixture.value(ss::Literal::Integer(IntegerLiteral::Int64(0)));
+    let mut root = returned;
+    for index in 0..12 {
+        root = fixture.computation(Let { binder: hole, bindee, tail: root });
+        root = fixture.computation(Bind { binder: hole, bindee: returned, tail: root });
+        root = fixture.computation(Abs(hole, root));
+        root = fixture.computation(App(root, unit));
+        let thunk = fixture.value(Thunk(root));
+        root = fixture.computation(Force(thunk));
+        let literal = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int64(index)));
+        let binder = fixture.pattern(Alias(ConsN::from_vec(vec![literal, hole]).unwrap()));
+        root = fixture.computation(Match {
+            scrut,
+            arms: vec![Matcher { binder, tail: root }, Matcher { binder: hole, tail: returned }],
+        });
+    }
+    assert_eq!(fixture.snapshot::<Explicit>(root), fixture.snapshot::<Recursive>(root));
 }
 
 #[test]
@@ -192,12 +280,20 @@ fn independent_invalid_values_are_collected_without_publishing_a_program() {
     let errors = RootLowerer { spans: &spans, scoped: &scoped, statics: &fixture.statics }
         .run(root)
         .unwrap_err();
+    let recursive = RootLowerer { spans: &spans, scoped: &scoped, statics: &fixture.statics }
+        .run_with_driver::<Recursive>(root, None)
+        .unwrap_err();
+    assert_eq!(
+        errors.iter().map(SpsLowerError::value).collect::<Vec<_>>(),
+        recursive.iter().map(SpsLowerError::value).collect::<Vec<_>>()
+    );
     assert!(
         matches!(errors.as_slice(), [SpsLowerError::ResidualStaticValue { value: a }, SpsLowerError::ResidualStaticValue { value: b }] if *a == first && *b == second)
     );
     fixture.statics.values[&first] = ss::Value::Triv(Triv);
     fixture.statics.values[&second] = ss::Value::Triv(Triv);
     fixture.lower(root);
+    assert_eq!(fixture.snapshot::<Explicit>(root), fixture.snapshot::<Recursive>(root));
 }
 
 #[test]

@@ -290,15 +290,21 @@ impl RootLowerer<'_> {
     pub fn run_with_builtin(
         &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
     ) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
+        self.run_with_driver::<Explicit>(root, builtin)
+    }
+
+    /// Select continuation storage for both package materialization and residual reconstruction.
+    pub fn run_with_driver<D: Driver>(
+        &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
+    ) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
         let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
         let root = self.statics.execution_compu(root);
         let mut stack = Bullet.build(&mut lowerer, None);
         if let Some(plan) = builtin {
-            let package =
-                Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
+            let package = D::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
             stack = Cons(package, stack).build(&mut lowerer, None);
         }
-        let root = LoweringFolder::new(&mut lowerer).lower(root, stack);
+        let root = LoweringFolder::new(&mut lowerer).lower::<D>(root, stack);
         lowerer.finish(root)
     }
 }

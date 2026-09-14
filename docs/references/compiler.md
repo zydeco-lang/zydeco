@@ -383,8 +383,10 @@ It supports mutable compiler state without retaining a mutable borrow of the fol
 
 `Folder` defines `Input`, `Output`, and an owned `Frame` for the unfinished parent.
 `enter(input)` begins an operation; `resume(frame, child)` continues it with a completed child result.
-Both return `Step::Call { input, frame }` or `Step::Return(output)`.
+Both return `Step::Call { input, frame }`, `Step::TailCall(input)`, or `Step::Return(output)`.
 A leaf returns directly without constructing a continuation frame.
+A tail call transfers to another operation without retaining the current one;
+both drivers execute these transfers in a loop while preserving the caller's unfinished parent.
 A parent may select its next child using an earlier child's result and the current compiler state.
 Frames contain owned local state, arena IDs, or references to stable external inputs;
 they cannot borrow the mutable folder itself.
@@ -392,7 +394,7 @@ they cannot borrow the mutable folder itself.
 `Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
 `Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
 Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
-Production Builtin package materialization and high SPS pattern reconstruction use `Explicit`;
+Production residual lowering, Builtin package materialization, and high SPS pattern reconstruction use `Explicit`;
 `Recursive` supports bounded comparisons and consumes native stack proportional to pending calls.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
 Frame payloads and outputs may allocate according to the folder's representation.
@@ -401,11 +403,16 @@ The folder owns child order, scope transitions, allocation, provenance, sharing,
 An error-valued output returns to its parent through the same protocol as a successful result;
 the parent decides whether independent siblings remain visitable.
 Drivers neither short-circuit errors nor implicitly deduplicate shared inputs.
+A folder may retain separate typed result stacks when its domain operations produce different categories of syntax.
+Its `Output = ()` then signals completion, and each reconstruction frame consumes exactly its own completed children.
+The driver still owns the suspended calls; these result stacks retain domain data rather than pending work.
 An explicit driver bounds only its own call depth: recursive semantic helpers and destruction
 of nested frame payloads retain their separate stack requirements.
 
 Driver regressions compare dependent child selection, repeated occurrences, event order, and independent rejection.
-A 100,000-level fixture executes on a 128 KiB stack.
+A 100,000-level non-tail fixture executes on a 128 KiB stack through `Explicit`.
+A separate 100,000-step tail-call fixture uses the same small stack through both drivers
+and checks that the original parent resumes.
 The [Builtin package folder](../../lang/stackir/src/high/lower/builtin.rs) is a production client:
 its product frame accumulates fields in input order and transfers the completed vector into the output node.
 Its tests compare both drivers' materialized syntax and arena counts, retain the empty-product rejection,
@@ -1301,12 +1308,18 @@ The normalizer preserves definition identities while allocating fresh syntax for
 ### Residual lowering folder
 
 Static composition can produce thousands of nested bindings from a small authored program.
-The [lowering folder](../../lang/stackir/src/high/lower/fold.rs) stores visits and unfinished reconstruction frames
-in a vector, so residual term depth does not consume the Rust call stack.
-Its work loop covers patterns, values, computations, and ordered match decisions together;
-thunk bodies and branch tails resume through the same loop.
+The [lowering folder](../../lang/stackir/src/high/lower/fold.rs) uses the shared
+[resumable folder driver](#resumable-folder-execution) for patterns, values, computations,
+and ordered match decisions together; thunk bodies and branch tails resume through the same driver.
+`RootLowerer::run_with_driver::<D>` selects continuation storage for this folder and Builtin package materialization.
+Production lowering selects `Explicit`, so residual reconstruction depth does not consume the Rust call stack.
 `Lowerer` retains allocation, provenance, product layout, protocol extraction, and diagnostic state.
-Builtin package materialization uses the shared [resumable folder driver](#resumable-folder-execution).
+
+Domain frames retain the next reconstruction operation, while typed result stacks hold completed patterns,
+value-binding plans, and computations.
+Product cursors and branch iterators request one child at a time.
+This retains structural order without constructing a separate list of pending child calls.
+Tail calls cover erased wrappers and intermediate transitions that need no additional unfinished parent.
 
 Computation visits inherit the high SPS stack that consumes their result.
 Reconstruction preserves the semantic child schedule: application arguments precede their function body;
@@ -1330,7 +1343,9 @@ Successful reconstruction validates lexical ownership and branch joins before re
 [Depth regressions](../../lang/stackir/src/high/lower/tests.rs) construct and drop residual fixtures
 on a 512 KiB worker stack, covering mixed computation and thunk nesting, value lets,
 structural aliases, literal fallthrough, and Builtin products.
-Separate assertions cover fresh ownership, provenance, protocols, and independent rejected values.
+Driver comparisons cover mixed reconstruction and ordered literal fallthrough,
+including generated syntax, raw allocation slots, arena counts, and source provenance.
+Separate assertions cover fresh ownership and protocols; independent rejected values accumulate under both drivers.
 This guarantee concerns residual reconstruction; classifier protocol extraction, normalization analyses,
 and subsequent conversion have their own traversal contracts.
 
