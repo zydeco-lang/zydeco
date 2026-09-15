@@ -1,0 +1,113 @@
+{
+  "host": "Darwin arm64",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "compiler_build": "cargo build --offline --bin zydeco (dev profile)",
+  "target": "AMD64; default high-SPS normalization",
+  "source_sha256": {
+    "docs/evaluations/2026-09-15-memory-kernels/raw-int64.zy": "c93d3c9d56c5e727cd4212bd2c7fdcdb602e8ca5bdf9371b24d73a62259baef7",
+    "lib/tests/std/typed-memory-kernel.zy": "3c3f75b0c90f9d9977b7678e27ed788ce421c738dd19508a27160e53baa9f0f3",
+    "docs/evaluations/2026-09-15-typed-memory/header-raw.zy": "1bf4c4c89ef647fe105b37beefafe7d871583857e37545bd798df326b07a0eea",
+    "docs/evaluations/2026-09-15-typed-memory/header-typed.zy": "90ccb1557ff29bbe54e710d4e986e2510438a6725063d35a1ab5ede7bde6979c",
+    "lib/tests/std/header-array.zy": "d3f5407d6e70a0e7649ba48154e29bb0acd1e8cfa1d66eac7ff58c49546dc2b6",
+    "lib/tests/std/storage-arrays.zy": "f3fbec1de2b5eeb2d41dd6b4b9653b38dbb32d0963782de2e7bdcded9a4f1ec1",
+    "docs/evaluations/2026-09-15-typed-memory/header-driver.zy": "d88ffc63065e243c3143b5cfc42c9db098c2ea49f703fb5745b4d9c2d1c4a525"
+  },
+  "static_amd64_sites": {
+    "raw_scalar": {
+      "boxed": {
+        "scanned_allocation_sites": 10,
+        "opaque_allocation_sites": 8,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      },
+      "local": {
+        "scanned_allocation_sites": 10,
+        "opaque_allocation_sites": 4,
+        "kernels": 1,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      }
+    },
+    "typed_field_view": {
+      "boxed": {
+        "scanned_allocation_sites": 30,
+        "opaque_allocation_sites": 10,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      },
+      "local": {
+        "scanned_allocation_sites": 30,
+        "opaque_allocation_sites": 7,
+        "kernels": 1,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      }
+    },
+    "raw_header_update": {
+      "boxed": {
+        "scanned_allocation_sites": 55,
+        "opaque_allocation_sites": 6,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      },
+      "local": {
+        "scanned_allocation_sites": 55,
+        "opaque_allocation_sites": 3,
+        "kernels": 1,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      }
+    },
+    "typed_header_update": {
+      "boxed": {
+        "scanned_allocation_sites": 76,
+        "opaque_allocation_sites": 6,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      },
+      "local": {
+        "scanned_allocation_sites": 76,
+        "opaque_allocation_sites": 3,
+        "kernels": 1,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      }
+    },
+    "std_header_array": {
+      "boxed": {
+        "scanned_allocation_sites": 114,
+        "opaque_allocation_sites": 0,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      },
+      "local": {
+        "scanned_allocation_sites": 114,
+        "opaque_allocation_sites": 0,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      }
+    },
+    "storage_only_array": {
+      "boxed": {
+        "scanned_allocation_sites": 90,
+        "opaque_allocation_sites": 0,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      },
+      "local": {
+        "scanned_allocation_sites": 90,
+        "opaque_allocation_sites": 0,
+        "kernels": 0,
+        "kernel_calls": 0,
+        "kernel_allocation_sites": 0
+      }
+    }
+  }
+}

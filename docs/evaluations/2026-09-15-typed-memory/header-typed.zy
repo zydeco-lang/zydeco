@@ -1,0 +1,59 @@
+param (/VType; /CType; /Addr; /Int; /Int64; /OS; /Thk; /Ret; /numeric; /process; builtin) :
+@(import("../../../lib/std/builtin.zy")) in
+let (/Ptr; /Init; /fixed; /arrays; /records; /headers; /views; /codecs) =
+  builtin |> (@(import("../../../lib/std/memory/package.zy")))
+in
+let (= Plan, = Layout, layout) = fixed in
+let Fault = @(import("../../../lib/std/memory/fault.zy")) in
+let Update = Thk (Addr -> Int -> Thk (Fault -> OS) -> Thk OS -> OS) in
+let fail : Update = { fn _ _ _ _ => ! process/exit 41 } in
+let update =
+  match layout/int
+  | +Err(_) => fail
+  | +Ok(plan) =>
+    let (#L = Length, length) = layout/realize Int plan in
+    match layout/int64
+    | +Err(_) => fail
+    | +Ok(plan) =>
+      let (#L = Element, element) = layout/realize Int64 plan in
+      match arrays/make Element element/storage 4 16
+      | +Err(_) => fail
+      | +Ok(array) =>
+        let (/L = Array; /storage; /elements) = array in
+        match records/product Length Array length/storage storage
+        | +Err(_) => fail
+        | +Ok(record) =>
+          let (/L; /left; /right) = record in
+          let forms = headers/from_fields L Length Array Int length/codec left/path right/path in
+          let (/H; /unsafe = inline) = forms/inline in
+          let opening = views/compose_cps (H Init) (Ptr Array Init * Int) (Ptr Element Init * Int)
+            (inline/open Init)
+            (
+              val (payload, count) =>
+                {
+                  fn R yes =>
+                    do first <- ! elements/base Init payload;
+                    ! yes (first, count)
+                }
+            ) in
+          let at = views/counted_checked Element Init (H Init) element/storage
+            (
+              views/bounded Element Init (H Init) 4 opening
+            ) in
+          let fix update (base : Addr) (index : Int) (no : Thk (Fault -> OS)) (done : Thk OS) : OS =
+            ! (at (inline/from_address Init base, index)) OS no {
+              fn slot =>
+                ! (codecs/unsafe/take Element Int64 element/codec slot) OS {
+                  fn vacant value =>
+                    do updated <- ! numeric/int64/add value (1 : Int64);
+                    ! (element/codec/init vacant updated) OS { fn _ => ! done }
+                }
+            }
+          in
+          update
+        end
+      end
+    end
+  end
+in
+! ((builtin |> (@(import("header-driver.zy")))) update)

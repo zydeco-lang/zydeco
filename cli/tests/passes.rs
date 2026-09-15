@@ -7,13 +7,17 @@ use zydeco_cli::{CommandCompiler, HighSpsPlan};
 struct Fixture {
     directory: tempfile::TempDir,
     workspace: PathBuf,
+    source: PathBuf,
 }
 
 impl Fixture {
     fn new(body: &str) -> Self {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("program.zy");
         let fixture = Self {
-            directory: tempfile::tempdir().unwrap(),
+            directory,
             workspace: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+            source,
         };
         std::fs::write(fixture.source(), format!(
             "param (/system; /process; /numeric; /OS; /Ret; /Thk; /Addr; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
@@ -23,7 +27,16 @@ impl Fixture {
     }
 
     fn source(&self) -> PathBuf {
-        self.directory.path().join("program.zy")
+        self.source.clone()
+    }
+
+    fn with_source(relative: &str) -> Self {
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        Self {
+            directory: tempfile::tempdir().unwrap(),
+            source: workspace.join(relative),
+            workspace,
+        }
     }
     fn build_dir(&self) -> PathBuf {
         self.directory.path().join("build")
@@ -31,6 +44,7 @@ impl Fixture {
 
     fn build(&self, selection: &str, target: &str, extra: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .current_dir(&self.workspace)
             .arg("build")
             .arg(self.source())
             .args([
@@ -64,7 +78,10 @@ impl Fixture {
         let extension = if target == "wasm-am" { "am" } else { "sps" };
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
             .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
-            .arg(self.build_dir().join(format!("program.{extension}.wasm")))
+            .arg(self.build_dir().join(format!(
+                "{}.{extension}.wasm",
+                self.source.file_stem().unwrap().to_string_lossy()
+            )))
             .output()
             .unwrap()
     }
@@ -990,5 +1007,114 @@ let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
         for target in ["exe", "wasm-am", "wasm-sps"] {
             Fixture::assert_success(&fixture.execute("default", target));
         }
+    }
+}
+
+#[test]
+fn scalar_memory_kernel_moves_only_total_independent_address_bindings() {
+    use zydeco_assembly::syntax::{Instruction, Program};
+    for (displacement, expected_kernels, fails) in
+        [("8", 1, false), ("calculated", 0, false), ("calculated", 0, true)]
+    {
+        let calculate = if displacement == "calculated" {
+            "do calculated <- ! numeric/int/div 8 divisor;"
+        } else {
+            ""
+        };
+        let arithmetic = if fails { "mod value (0 : Int64)" } else { "add value (1 : Int64)" };
+        let divisor = if fails { 0 } else { 1 };
+        let fixture = Fixture::new(&format!(
+            r#"
+let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
+let fix run (divisor : Int) : OS =
+! system/memory/allocate OS 16 8 fail {{ fn address =>
+  ! numeric/int64/store_le OS address (7 : Int64) {{
+    ! numeric/int64/load_le OS address {{ fn value =>
+      do updated <- ! numeric/int64/{arithmetic};
+      {calculate}
+      do destination <- ! system/memory/offset address {displacement};
+      ! numeric/int64/store_le OS destination updated {{
+        ! numeric/int64/load_le OS destination {{ fn observed =>
+          ! numeric/int64/eq OS observed (8 : Int64) {{
+            ! system/memory/free OS address 16 8 fail {{ ! process/exit 0 }}
+          }} {{ ! process/exit 42 }}
+        }}
+      }}
+    }}
+  }}
+}}
+in ! run {divisor}
+"#
+        ));
+        let backend = CommandCompiler::default().lower(&fixture.source()).unwrap();
+        assert_eq!(
+            backend
+                .assembly()
+                .arena()
+                .programs
+                .iter()
+                .filter(|(_, program)| matches!(
+                    program,
+                    Program::Instruction(Instruction::MemoryKernel(_), _)
+                ))
+                .count(),
+            expected_kernels
+        );
+        for policy in ["boxed", "local"] {
+            for target in ["exe", "wasm-am", "wasm-sps"] {
+                let output =
+                    fixture.execute_options("default", target, &["--representation", policy]);
+                if fails {
+                    assert_eq!(output.status.code(), Some(1));
+                    let error = String::from_utf8_lossy(&output.stderr);
+                    assert!(
+                        error.contains("integer remainder by zero"),
+                        "{policy}/{target}: {error}"
+                    );
+                    assert!(!error.contains("panicked"));
+                } else {
+                    Fixture::assert_success(&output);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn typed_memory_kernels_preserve_checked_header_updates() {
+    for source in [
+        "docs/evaluations/2026-09-15-typed-memory/header-raw.zy",
+        "docs/evaluations/2026-09-15-typed-memory/header-typed.zy",
+        "lib/tests/std/typed-memory-kernel.zy",
+    ] {
+        let fixture = Fixture::with_source(source);
+        let mut opaque_sites = Vec::new();
+        for (policy, expected_kernels) in [("boxed", 0), ("local", 1)] {
+            let assembly = fixture.build("default", "asm", &["--representation", policy]);
+            Fixture::assert_success(&assembly);
+            let assembly = String::from_utf8(assembly.stdout).unwrap();
+            opaque_sites
+                .push(assembly.matches("allocate opaque block in the copying heap").count());
+            let kernels = assembly.split("raw memory kernel: begin").skip(1).collect::<Vec<_>>();
+            assert_eq!(kernels.len(), expected_kernels, "{source}/{policy}");
+            for kernel in kernels {
+                let kernel = kernel.split("raw memory kernel: end").next().unwrap();
+                assert!(!kernel.contains("call"), "{source}: {kernel}");
+                assert!(!kernel.contains("alloc"), "{source}: {kernel}");
+                assert_eq!(kernel.matches("mov QWORD [rcx], rax").count(), 1);
+            }
+            for target in ["exe", "wasm-am", "wasm-sps"] {
+                Fixture::assert_success(&fixture.execute_options(
+                    "default",
+                    target,
+                    &["--representation", policy],
+                ));
+            }
+        }
+        assert_eq!(
+            opaque_sites[0] - opaque_sites[1],
+            3,
+            "load, literal, and arithmetic result: {source}"
+        );
     }
 }

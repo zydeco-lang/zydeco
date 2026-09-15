@@ -1032,6 +1032,10 @@ impl<'a> CaseEncoder<'a> {
         &mut self, call: &zydeco_stackir::low::scalar::MemoryCall,
     ) -> Result<(), EmitError> {
         let scalar = call.kernel.scalar();
+        for binding in &call.address_bindings {
+            self.emit_value(binding.value)?;
+            self.emit_pattern(binding.binder)?;
+        }
         for &input in call.inputs.iter().rev() {
             self.emit_value(input)?;
             self.function.instruction(&WasmInstruction::Drop);

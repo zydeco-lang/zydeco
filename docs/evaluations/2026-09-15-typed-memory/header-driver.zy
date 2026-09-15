@@ -1,0 +1,59 @@
+-- Shared allocation, observations, and rejected updates for both implementations.
+begin
+  param val (/Addr; /Int; /Int64; /OS; /Thk; /numeric; /system; /process; builtin) : @(import(
+    "../../../lib/std/builtin.zy"
+  )) in
+  let Fault = @(import("../../../lib/std/memory/fault.zy")) in
+  val (update : Thk (Addr -> Int -> Thk (Fault -> OS) -> Thk OS -> OS)) =>
+    {
+      let fail = { ! process/exit 41 } in
+      let no = { fn (_ : Fault) => ! fail } in
+      let allocation_failed = { fn (_ : Int) => ! fail } in
+      ! system/memory/allocate OS 48 16 allocation_failed {
+        fn base =>
+          do slot <- ! system/memory/offset base 32;
+          let finish = {
+            do padding <- ! system/memory/offset base 8;
+            ! numeric/uint8/load_le OS padding {
+              fn byte =>
+                ! numeric/uint8/eq OS byte 99 {
+                  ! system/memory/free OS base 48 16 allocation_failed { ! process/exit 0 }
+                } fail
+            }
+          } in
+          let reject : Thk (Int -> Thk OS -> OS) = {
+            fn index done =>
+              ! update base index {
+                fn fault =>
+                  match fault
+                  | +Bounds() =>
+                    ! numeric/int64/load_le OS slot {
+                      fn observed =>
+                        ! numeric/int64/eq OS observed (-9223372036854775808 : Int64) done fail
+                    }
+                  | _ => ! fail
+                  end
+              } fail
+          } in
+          ! system/memory/fill OS base 48 99 {
+            ! numeric/int/store_le OS base 3 {
+              ! numeric/int64/store_le OS slot (9223372036854775807 : Int64) {
+                ! update base 2 no {
+                  ! reject 3 {
+                    ! reject -1 {
+                      ! reject 4611686018427387903 {
+                        ! numeric/int/store_le OS base 5 {
+                          ! reject 0 {
+                            ! numeric/int/store_le OS base -1 { ! reject 0 finish }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+      }
+    }
+end

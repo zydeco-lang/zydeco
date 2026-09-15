@@ -2442,10 +2442,13 @@ A [memory kernel](../../lang/syntax/src/scalar/kernel.rs) encloses raw scalar ar
 The shared [low-SPS planner](../../lang/stackir/src/low/scalar/memory.rs) recognizes `Int64`, `UInt64`,
 and `Float64` loads followed by a primitive tree or adjacent single-use scalar bindings
 and a store of the same scalar type, with at most 32 arithmetic operations and 32 intervening bindings.
-Every eliminated binding must be consumed inside the kernel.
-Calls, branches, shared or escaping results, other effects, and incompatible scalar types end eligibility.
-An independent destination variable or bounded total wrapping address calculation may move to the entry;
-an intervening address binding or possibly trapping displacement retains ordinary lowering.
+Every eliminated scalar binding must be consumed inside the kernel.
+Calls, branches, shared or escaping scalar results, other effects, and incompatible scalar types end eligibility.
+An independent destination variable or bounded total wrapping address calculation may move to the entry.
+Intervening `AddrOffset` bindings may also move there when their bases and displacements are independent
+of the loaded value and scalar intermediates; their original order and bindings remain available to later uses.
+These address bindings count toward the same 32-binding limit and may be shared because they are retained.
+A possibly trapping displacement calculation retains ordinary lowering in its original order.
 The boxed policy disables kernel formation; other scalar-eliminating policies enable it.
 
 The immutable `ScalarKernel` has an explicit memory boundary: input zero is the loaded scalar,
@@ -2467,11 +2470,15 @@ the host's address lookup cost remains.
 
 The [regressions](../../cli/tests/passes.rs) pair optimized kernels with ordinary and unknown-callback paths,
 check full-width wrapping and runtime operands across all backends, preserve error order,
-and exercise the size limit and overlapping unaligned addresses.
+and exercise the size limit, overlapping unaligned addresses, and retained pure address bindings.
+The [typed field update](../../lib/tests/std/typed-memory-kernel.zy) composes record state transitions,
+field projection, and a fixed view with these same scalar operations.
 The [assembly interpreter check](../../lang/assembly/src/interp.rs) pairs a successful write
 with arithmetic failure and verifies unchanged destination bytes on failure.
 The [dated probe](../evaluations/2026-09-15-memory-kernels/README.md) records whole-program allocation sites separately
 from the allocation-free kernel.
+The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) exercises this boundary
+through std recipes and records residual allocation outside it.
 Calls, joins, managed components, and broader contification remain
 in [memory compilation](../proposals/memory-compilation.md#44-carry-raw-components-only-across-agreeing-entries).
 

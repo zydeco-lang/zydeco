@@ -3,8 +3,17 @@
 use super::*;
 use zydeco_syntax::scalar::{KernelRegion, KernelStep, ScalarKernel};
 
+/// A total address calculation moved before the raw load. Its binding remains
+/// available to the kernel and successor with the original address protocol.
+#[derive(Clone, Debug)]
+pub struct AddressBinding {
+    pub binder: VPatId,
+    pub value: ValueId,
+}
+
 #[derive(Clone, Debug)]
 pub struct MemoryCall {
+    pub address_bindings: Vec<AddressBinding>,
     pub load_address: ValueId,
     pub store_address: ValueId,
     pub inputs: Vec<ValueId>,
@@ -34,9 +43,10 @@ impl MemoryCall {
         let mut expressions =
             Expressions { nodes: vec![Expression::Loaded], ..Expressions::default() };
         let mut bindings = HashMap::from([(loaded, 0)]);
+        let mut address_bindings = Vec::new();
         let mut cursor = next;
         loop {
-            if bindings.len() > MAX_OPERATIONS + 1 {
+            if bindings.len() + address_bindings.len() > MAX_OPERATIONS + 1 {
                 return None;
             }
             match &arena.compus[&cursor] {
@@ -44,6 +54,14 @@ impl MemoryCall {
                     let ValuePattern::Var(def) = arena.vpats[&binding.binder] else {
                         return None;
                     };
+                    if matches!(arena.values[&binding.bindee], Value::AddrOffset(_))
+                        && Self::independent_address(arena, binding.bindee, &bindings)
+                    {
+                        address_bindings
+                            .push(AddressBinding { binder: binding.binder, value: binding.bindee });
+                        cursor = binding.tail;
+                        continue;
+                    }
                     if uses.get(&def) != Some(&1) {
                         return None;
                     }
@@ -67,6 +85,7 @@ impl MemoryCall {
                     }
                     let (inputs, kernel) = expressions.finish_kernel(arena, ty, result)?;
                     return Some(Self {
+                        address_bindings,
                         load_address: address,
                         store_address: *destination,
                         inputs,

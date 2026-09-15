@@ -17,10 +17,11 @@ and the geometry-only record/array factories are implemented. Their contracts no
 [Pure address calculations](../references/compiler.md#address-calculations) and
 [ordered scalar accesses](../references/compiler.md#ordered-scalar-memory-accesses) are implemented.
 [Bounded raw memory kernels](../references/compiler.md#raw-memory-kernels) connect wide scalar accesses to arithmetic;
-raw component transport across calls remains proposed compiler work. The
-[interface example](../examples/memory-compilation/interfaces.zy) imports the implemented sealed std interfaces and
-demonstrates geometry queries and explicit codec materialization. No source lifetimes, linearity rules, or new universe
-of layout types is required.
+the [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) verifies that local boundary while
+exposing remaining allocation sites around checked views. Raw component transport across calls remains proposed compiler
+work. The [interface example](../examples/memory-compilation/interfaces.zy) imports the implemented sealed std
+interfaces and demonstrates geometry queries and explicit codec materialization. No source lifetimes, linearity rules,
+or new universe of layout types is required.
 
 ## 1. Start with the bytes
 
@@ -272,8 +273,9 @@ The compiler implements [pure address calculations](../references/compiler.md#ad
 and [ordered scalar memory accesses](../references/compiler.md#ordered-scalar-memory-accesses).
 Those references own builtin recognition, effect order, scalar-domain validation, exact carrier widths,
 unaligned access, native instructions, and interpreter/Wasm adapters.
-The earlier header-view probe predates these operations; its remaining dictionary, callback,
-and scalar-boundary costs still need end-to-end measurement.
+The [current typed probe](../evaluations/2026-09-15-typed-memory/README.md) measures fields
+and checked header-array updates after this change.
+It removes local wide-scalar boxes while retaining measurable surrounding costs.
 
 Extend the access domain to overlap-safe `Copy` and byte-pattern `Fill` computations;
 these currently retain their existing host calls.
@@ -433,13 +435,18 @@ Do not infer a universal optimal-code guarantee from a few examples or from stat
 
 ### First acceptance target and order
 
-Start with a typed indexed update using a known layout and callback.
-Against a direct implementation with identical checks, it should perform the necessary bounds checks,
-address calculation, one scalar load, and one scalar store, with no additional managed allocation,
-operation dispatch, or callback packaging.
+The source split and bounded raw kernels are implemented and measured through typed fields and checked header views.
+The [current comparison](../evaluations/2026-09-15-typed-memory/README.md) gives the raw
+and typed header update the same checks and one allocation-free load/add/store kernel;
+the complete typed program retains 21 extra scanned allocation sites.
+That whole-path gap is the next acceptance target.
+
+The complete typed update should match a direct implementation with identical checks:
+the necessary bounds checks, address calculation, one scalar load, and one scalar store,
+with no additional managed allocation, operation dispatch, or callback packaging.
 Also record avoidable costs shared by both paths so the raw baseline does not become the final ceiling.
 
-1. Retain paired fixtures and establish code-generation and executed-cost baselines.
+1. Retain the paired code-generation fixtures and establish executed-cost baselines.
    Cover fixed and runtime layouts, zero-sized elements, overflow and out-of-bounds rejection,
    unchanged storage on rejected operations, and effect order.
    Pair removable private accesses with address-observing consumers and allocators whose effects/failures must survive.
@@ -460,7 +467,7 @@ Treat each successful target as a scoped guarantee before expanding its domain.
 | --- | --- | --- |
 | Source interfaces (implemented) | [L13](../references/language.md#independent-storage-and-codecs), std factories and callers | Shared witnesses; storage-only array composition; explicit logical conversion; fixed/runtime carrier rejection |
 | Static target facts | Layout factory inputs and compiler target/profile identity | Pointer width/alignment and geometry bounds known before static layout reduction; runtime inputs rejected on the fixed path |
-| Memory operations | `lang/stackir/src/high/lower/builtin.rs`, high/low syntax and conversion, assembly, AMD64, interpreter/Wasm adapters | Source-domain validation and exact access width/endian/alignment; wrapping addresses; ordered effects; no zero-offset host call |
+| Memory operations (address/scalar access and bounded kernels implemented) | [C8](../references/compiler.md#ordered-scalar-memory-accesses), [C12](../references/compiler.md#raw-memory-kernels); copy/fill and stronger access evidence remain | Source-domain validation and exact access width/endian/alignment; wrapping addresses; ordered effects; no zero-offset host call |
 | Known workers and contification | High SPS use analysis and normalization before closure conversion | Shared/recursive calls, stack compatibility, unknown/escaping/repeated callbacks |
 | Raw component transport | Representation analysis, low entry contracts, native preparation, root maps, emitters | Matching entries and adapters; wide scalar extremes; mixed references surviving collection |
 | Cost regression and diagnostics | Paired code-generation fixtures and execution counters | Allocations, copies, retained frames, code size, compilation cost, and scoped strict-contract failures |

@@ -1,0 +1,29 @@
+param (/Addr; /Int; /Int64; /OS; /Thk; /numeric; /system; /process; builtin) : @(import(
+  "../../../lib/std/builtin.zy"
+)) in
+let Fault = @(import("../../../lib/std/memory/fault.zy")) in
+let fix update (base : Addr) (index : Int) (no : Thk (Fault -> OS)) (done : Thk OS) : OS =
+  ! numeric/int/load_le OS base {
+    fn count =>
+      do payload <- ! system/memory/offset base 16;
+      ! numeric/int/lt OS count 0 { ! no +Bounds() } {
+        ! numeric/int/gt OS count 4 { ! no +Bounds() } {
+          ! numeric/int/lt OS index 0 { ! no +Bounds() } {
+            ! numeric/int/lt OS index count {
+              do maximum <- ! numeric/int/div 4611686018427387903 8;
+              ! numeric/int/gt OS index maximum { ! no +Overflow() } {
+                do displacement <- ! numeric/int/mul index 8;
+                do slot <- ! system/memory/offset payload displacement;
+                ! numeric/int64/load_le OS slot {
+                  fn value =>
+                    do updated <- ! numeric/int64/add value (1 : Int64);
+                    ! numeric/int64/store_le OS slot updated done
+                }
+              }
+            } { ! no +Bounds() }
+          }
+        }
+      }
+  }
+in
+! ((builtin |> (@(import("header-driver.zy")))) update)

@@ -298,6 +298,10 @@ impl Lowering<'_, '_> {
                 .inputs
                 .into_iter()
                 .fold(next, |next, value| self.then(Action::Value(value), next));
+            let next = call.address_bindings.into_iter().rev().fold(next, |next, binding| {
+                let next = self.then(Action::Pattern(binding.binder), next);
+                self.then(Action::Value(binding.value), next)
+            });
             return Step::TailCall(Work::Apply(next, context));
         }
         if self.lo.scalars.elided(id) {
