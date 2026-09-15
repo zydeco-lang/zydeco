@@ -46,6 +46,10 @@ pub struct CompilationUnit {
 
 pub enum CompilationBoundary {
     Process(ExecutableProgram),
+    ZydecoUnit {
+        name: zydeco_surface::metadata::PackageName,
+        program: zydeco_session::UnitProgram,
+    },
     CExports {
         name: zydeco_surface::metadata::PackageName,
         contract: zydeco_surface::metadata::LibraryContract,
@@ -60,10 +64,14 @@ impl CommandCompiler {
     ) -> Result<CompilationUnit, CompileError> {
         use zydeco_surface::metadata::{LibraryRole, PackageRole};
         let boundary = match &package.role {
+            | PackageRole::Library(LibraryRole::Zydeco) => CompilationBoundary::ZydecoUnit {
+                name: package.name.clone().expect("compiled role requires a name"),
+                program: self.unit_program(analysis)?,
+            },
             | PackageRole::Library(LibraryRole::Compiled(contract)) => {
                 CompilationBoundary::CExports {
                     name: package.name.clone().expect("compiled role requires a name"),
-                    contract: contract.clone(),
+                    contract: contract.as_ref().clone(),
                     program: self.library_program(analysis, contract)?,
                 }
             }
@@ -222,6 +230,27 @@ impl CommandCompiler {
             program.library.statics.clone(),
             export.root,
             export.builtin.clone(),
+            &self.sps_passes,
+            self.pass_inspection,
+        )
+        .map(|program| program.with_representation(self.representation))
+    }
+
+    pub fn unit_program(
+        &self, analysis: &ProgramAnalysis,
+    ) -> Result<zydeco_session::UnitProgram, CompileError> {
+        self.session.unit_program(analysis).map_err(CompileError::Library)
+    }
+
+    pub fn lower_unit(
+        &self, program: &zydeco_session::UnitProgram,
+    ) -> Result<BackendProgram, CompileError> {
+        BackendProgram::lower_boundary(
+            program.spans.clone(),
+            program.scoped.clone(),
+            program.unit.statics.clone(),
+            program.unit.initializer.root,
+            program.unit.initializer.builtin.clone(),
             &self.sps_passes,
             self.pass_inspection,
         )
@@ -398,6 +427,7 @@ pub struct Amd64Artifact {
     pub assembly: String,
     pub foreign_libraries: Vec<zydeco_syntax::ForeignLibraryName>,
     pub foreign_imports: Vec<zydeco_syntax::ForeignImport>,
+    pub unit_imports: Vec<zydeco_syntax::UnitImport>,
 }
 
 enum BackendLowerError {
@@ -533,17 +563,23 @@ impl BackendProgram {
     }
 
     pub fn emit_amd64(&self, operating_system: TargetOs) -> Amd64Artifact {
-        self.emit_native(operating_system, None)
+        self.emit_native(operating_system, zydeco_amd64::emit::NativeEntry::Process)
     }
 
     pub fn emit_c_export(
         &self, operating_system: TargetOs, entry: zydeco_amd64::emit::CExportEntry,
     ) -> Amd64Artifact {
-        self.emit_native(operating_system, Some(entry))
+        self.emit_native(operating_system, zydeco_amd64::emit::NativeEntry::C(entry))
+    }
+
+    pub fn emit_unit(
+        &self, operating_system: TargetOs, symbol: zydeco_syntax::ForeignSymbolName,
+    ) -> Amd64Artifact {
+        self.emit_native(operating_system, zydeco_amd64::emit::NativeEntry::Unit(symbol))
     }
 
     fn emit_native(
-        &self, operating_system: TargetOs, entry: Option<zydeco_amd64::emit::CExportEntry>,
+        &self, operating_system: TargetOs, entry: zydeco_amd64::emit::NativeEntry,
     ) -> Amd64Artifact {
         let native = LoweringPipeline::new(&self.spans, &self.scoped, &self.statics)
             .with_representation(self.representation)
@@ -556,7 +592,7 @@ impl BackendProgram {
         };
         let emitter =
             zydeco_amd64::Emitter::new(&self.spans, &self.scoped, &self.statics, &native, format);
-        let emitter = if let Some(entry) = entry { emitter.with_c_export(entry) } else { emitter };
+        let emitter = emitter.with_entry(entry);
         let assembly = emitter.run().to_string();
         let foreign_libraries = native
             .assembly()
@@ -567,7 +603,8 @@ impl BackendProgram {
                 | zydeco_assembly::syntax::Extern::Foreign(import) => {
                     Some(import.target.library.clone())
                 }
-                | zydeco_assembly::syntax::Extern::Host { .. } => None,
+                | zydeco_assembly::syntax::Extern::Host { .. }
+                | zydeco_assembly::syntax::Extern::Unit(_) => None,
             })
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()
@@ -579,10 +616,25 @@ impl BackendProgram {
             .iter()
             .filter_map(|external| match external {
                 | zydeco_assembly::syntax::Extern::Foreign(import) => Some(import.clone()),
-                | zydeco_assembly::syntax::Extern::Host { .. } => None,
+                | zydeco_assembly::syntax::Extern::Host { .. }
+                | zydeco_assembly::syntax::Extern::Unit(_) => None,
             })
             .collect();
-        Amd64Artifact { assembly, foreign_libraries, foreign_imports }
+        let mut unit_imports: Vec<_> = native
+            .assembly()
+            .arena()
+            .externs
+            .iter()
+            .filter_map(|external| match external {
+                | zydeco_assembly::syntax::Extern::Unit(import) => Some(import.clone()),
+                | _ => None,
+            })
+            .collect();
+        unit_imports.sort_by(|left, right| {
+            (&left.target.library, &left.target.symbol)
+                .cmp(&(&right.target.library, &right.target.symbol))
+        });
+        Amd64Artifact { assembly, foreign_libraries, foreign_imports, unit_imports }
     }
 
     pub fn emit_wasm_am(&self) -> Result<Vec<u8>, CompileError> {
@@ -617,6 +669,9 @@ impl BackendProgram {
             .iter()
             .find_map(|external| match external {
                 | zydeco_assembly::syntax::Extern::Foreign(import) => {
+                    Some(import.target.symbol.clone())
+                }
+                | zydeco_assembly::syntax::Extern::Unit(import) => {
                     Some(import.target.symbol.clone())
                 }
                 | zydeco_assembly::syntax::Extern::Host { .. } => None,

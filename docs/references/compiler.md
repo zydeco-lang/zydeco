@@ -2163,7 +2163,7 @@ For example, retained callbacks would require a unit lifetime and reentry protoc
 for consumers of its distributed artifacts.
 
 [CompilationUnit](../../cli/src/compile.rs) pairs a selected source identity with a checked `CompilationBoundary`:
-a process program or a collection of C exports.
+a process program, a collection of C exports, or a [native unit initializer](#native-unit-artifacts).
 The source roles and legality rules belong to [L14](language.md#compiled-libraries-and-c-exports).
 [Library checking](../../lang/statics/src/check/library.rs) reuses the source judgment query, Builtin domain validator,
 ordinary field resolver, directional foreign classifier, static elaborator, and readiness checker.
@@ -2232,6 +2232,61 @@ Preserve bundle-relative dependency locations when distributing artifacts.
 rejected signatures, C scalar transport, repeated calls, nested collection through raw and shared dependencies,
 entry guards, source-free consumers, and failed-build preservation.
 Manifest unit tests cover compatibility, corruption, hidden dependencies, and identity collisions without loading code.
+
+#### Native unit artifacts
+
+[Native Zydeco units](language.md#native-zydeco-units) use the same checking, static specialization,
+readiness, SPS, and native-frame machinery as other boundaries.
+`CheckedUnit` retains one `UnitInitializer`, its exported classifier, optional Builtin plan, and residual return root.
+Preparing that return together preserves sharing between the exported values.
+The closed structural classifier is retained before erasure
+as [`UnitValueType` and `UnitStackType`](../../lang/syntax/src/unit.rs), independently of SPS partial protocols.
+Unsupported source types reject through the [unit classifier](../../lang/statics/src/unit.rs).
+Generated source reconstructs the complete supported classifier without producer-local arena identities.
+
+A native initializer receives the caller's ordinary `Ret Exports` stack
+and enters a fresh native activation within the active runtime.
+It has no extra closure-environment argument.
+`NativeEntry::Unit` publishes this root under its generated linker symbol; the root's stack parity is unknown,
+so native helper calls use the existing dynamic alignment path where necessary.
+An imported initializer lowers to an ordinary thunk whose body tail-jumps to that symbol
+after consuming its own closure environment.
+It forwards the continuation stack unchanged, including retained-frame tokens and residual data.
+Calls through the returned exports use ordinary closure conversion and word entries.
+The process supplies the runtime instance and its root-stack extent for all participating units.
+Values retained across initialization or calls remain in traced source slots, stacks, or closure environments;
+there is no untraced global export table or external handle registry.
+
+[`UnitBuilder`](../../cli/src/unit.rs) emits one relocatable object with reachable private code,
+a self-contained `.imports.zy`, and a versioned `*.unit.json` manifest.
+The `word-initializer-v1` profile records the package, target, compiler executable hash,
+runtime model identity, runtime source hash, initializer symbol, complete export type,
+imported initializer signatures, artifact/interface hashes, and dependency manifests.
+The symbol identity includes source dependencies and the prepared interface;
+it is an implementation identity rather than a cross-version ABI promise.
+No runtime archive is bundled with a native unit: the consuming executable supplies matching support once.
+
+`--link-library` accepts both manifest kinds.
+`LinkedUnits` validates native manifests and their transitive closure, including content hashes, profiles,
+exact compatibility, symbol/type agreement, duplicate provider conflicts, and cycles.
+Each unit may import only providers in its declared dependency closure.
+Repeated references to one artifact share one linked object; this does not cache source initialization.
+Raw native objects join the process object before the runtime archive is linked.
+Validation fails before executing initialization or publishing a consumer executable.
+Compiler-generated objects are trusted to implement their manifests; hashes do not verify machine code or authenticity.
+
+Publication uses the shared staging and atomic symlink mechanism above.
+The immutable native bundle contains its object, generated binding, and manifest;
+the public `.unit.json` link is published last and selects the complete bundle.
+Dependencies refer to immutable manifests with bundle-relative paths.
+Library artifacts currently keep native-unit and C dependency boundaries separate.
+The language reference owns initialization multiplicity, source-visible eligibility, and supported execution targets.
+
+[Native unit regressions](../../cli/tests/unit.rs) remove producer source before dependent compilation,
+pass captured boxed values through multiple objects, exercise both stack parities and collection
+in callers/callees, and reject incompatible imports before publication.
+[Manifest tests](../../cli/tests/unit_manifest.rs) cover malformed interfaces, corrupted contents,
+compatibility mismatches, shared dependencies, and undeclared or conflicting providers without executing code.
 
 ## C12. Shared native model, allocation, and collection
 

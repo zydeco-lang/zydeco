@@ -38,16 +38,28 @@ impl fmt::Display for PackageRole {
             | Self::Library(LibraryRole::Compiled(contract)) => {
                 write!(formatter, "library({})", contract.abi)
             }
+            | Self::Library(LibraryRole::Zydeco) => formatter.write_str("library(zydeco)"),
             | _ => formatter.write_str(self.name()),
         }
     }
 }
 
-/// Source libraries retain their static interface; compiled libraries declare a C boundary.
+/// Source libraries retain their implementation; compiled libraries declare an entry boundary.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LibraryRole {
     Source,
-    Compiled(LibraryContract),
+    Compiled(Box<LibraryContract>),
+    Zydeco,
+}
+
+impl LibraryRole {
+    pub(super) fn decode(args: &[Meta]) -> Result<Self, PackageAnnotationError> {
+        if matches!(args, [Meta::Ident(abi)] if abi == "zydeco") {
+            Ok(Self::Zydeco)
+        } else {
+            LibraryContract::decode(args).map(Box::new).map(Self::Compiled)
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -75,7 +87,9 @@ impl LibraryContract {
     pub(super) fn decode(args: &[Meta]) -> Result<Self, PackageAnnotationError> {
         use PackageAnnotationError as Error;
         let Some(Meta::Ident(abi)) = args.first() else { return Err(Error::LibraryAbi) };
-        let abi = ForeignAbi::from_source_name(abi).ok_or(Error::LibraryAbi)?;
+        let abi = ForeignAbi::from_source_name(abi)
+            .filter(|abi| *abi == ForeignAbi::C)
+            .ok_or(Error::LibraryAbi)?;
         if args.len() < 2 {
             return Err(Error::LibraryExports);
         }
@@ -306,8 +320,8 @@ impl PackageAnnotation {
                 (PackageRole::Test, subjects)
             }
             | Some(Meta::Apply { callee, args }) if callee == "library" => {
-                let contract = LibraryContract::decode(args).map_err(|error| (vec![0], error))?;
-                (PackageRole::Library(LibraryRole::Compiled(contract)), &[][..])
+                let role = LibraryRole::decode(args).map_err(|error| (vec![0], error))?;
+                (PackageRole::Library(role), &[][..])
             }
             | _ => return Err((if arguments.is_empty() { vec![] } else { vec![0] }, Error::Role)),
         };
@@ -352,7 +366,9 @@ impl PackageAnnotation {
             };
             add(kind, reference, path)?;
         }
-        if matches!(role, PackageRole::Library(LibraryRole::Compiled(_))) && name.is_none() {
+        if matches!(role, PackageRole::Library(LibraryRole::Compiled(_) | LibraryRole::Zydeco))
+            && name.is_none()
+        {
             return Err((vec![0], Error::LibraryName));
         }
         Ok(Self { role, name, relations })
@@ -361,7 +377,7 @@ impl PackageAnnotation {
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum PackageAnnotationError {
-    #[error("compiled library requires the C ABI: library(c, export(...), ...)")]
+    #[error("compiled library requires library(c, export(...), ...) or library(zydeco)")]
     LibraryAbi,
     #[error("compiled library requires at least one explicit export")]
     LibraryExports,

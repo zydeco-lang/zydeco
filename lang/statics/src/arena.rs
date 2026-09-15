@@ -633,7 +633,7 @@ pub struct StaticsIndexes {
     /// Builtin roles attached to existential witnesses and named value entries.
     pub builtin_roles: BuiltinRoles,
     /// Foreign implementations whose classifiers have a supported marshalling protocol.
-    pub foreign_imports: ArenaAssoc<ValueId, zydeco_syntax::ForeignImport>,
+    pub foreign_imports: ArenaAssoc<ValueId, zydeco_syntax::CheckedImport>,
     /// arena for context-constrained flexible metavariables and their source sites;
     /// only types and kinds are now fillable hole-filling sites, allocated with
     /// derived identifiers so fill states can be query keys

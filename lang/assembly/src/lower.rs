@@ -345,6 +345,7 @@ impl Lowering<'_, '_> {
                         mode: sk::HostCallMode::for_role(role).into(),
                     },
                     | sk::ExternalFunction::Foreign(import) => Extern::Foreign(import),
+                    | sk::ExternalFunction::Unit(import) => Extern::Unit(import),
                 };
                 if !self.lo.arena.externs.contains(&external) {
                     self.lo.arena.externs.push(external.clone());

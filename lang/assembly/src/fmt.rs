@@ -328,6 +328,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Extern {
                 import.target.symbol,
                 import.signature.parameters().len()
             )),
+            | Self::Unit(import) => RcDoc::text(format!("<unit:{}>", import.target.symbol)),
         }
     }
 }

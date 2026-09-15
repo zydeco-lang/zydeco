@@ -75,7 +75,7 @@ impl MetadataKind {
             | Self::Literal => "Splice an attached text block as a string literal.",
             | Self::Intrinsic => "Splice a compiler-defined CBPV intrinsic.",
             | Self::Builtin => "Assign a compiler-defined Builtin package role.",
-            | Self::Ffi => "Declare a native foreign-function target.",
+            | Self::Ffi => "Declare a C function or native Zydeco unit initializer.",
             | Self::Monadic => "Translate an expression using the lexical monadic basis.",
             | Self::TypeOf => "Extract an expression's type or kind without running it.",
             | Self::Partial => "Allow the annotated computation's own binding patterns to fail.",
@@ -308,9 +308,9 @@ impl MetadataDefinition {
             | MetadataArguments::Package => PackageAnnotation::decode(arguments)
                 .map(|_| ())
                 .map_err(|(_, error)| MetadataValidationError::Package(error)),
-            | MetadataArguments::Library => LibraryContract::decode(arguments)
-                .map(|_| ())
-                .map_err(MetadataValidationError::Package),
+            | MetadataArguments::Library => {
+                LibraryRole::decode(arguments).map(|_| ()).map_err(MetadataValidationError::Package)
+            }
             | MetadataArguments::Export => LibraryContract::decode(&[
                 Meta::Ident("c".into()),
                 Meta::Apply { callee: "export".into(), args: arguments.to_vec() },

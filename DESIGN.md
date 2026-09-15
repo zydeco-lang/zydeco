@@ -1000,12 +1000,15 @@ and `memory`, but the embedding must supply the imports before invoking either f
   The abstract-machine variant has a fixed one-megabyte operand/control stack;
   the SPS variant allocates persistent stack frames and boxes products without ZASM's local-unboxing analysis.
   CLI Wasm execution uses the bundled Node.js host; standalone WASI execution is not implemented.
-- Native foreign imports and exports use the explicit [C boundary](docs/references/language.md#14-foreign-interfaces);
+- Native interoperability includes the explicit [C boundary](docs/references/language.md#14-foreign-interfaces)
+  and [Zydeco unit initializers](docs/references/language.md#native-zydeco-units);
   callbacks and retained foreign handles remain deferred.
   Checking a source is not evidence that a foreign library can be loaded or linked.
 - Source imports address catalog names, filesystem paths, or numbered interactive inputs.
-  [Separate compilation](docs/references/compiler.md#compilation-unit-preparation-and-artifacts)
-  uses explicit C library interfaces and artifact manifests.
+  [Separate compilation](docs/references/compiler.md#compilation-unit-preparation-and-artifacts) uses explicit C library
+  or native Zydeco interfaces and artifact manifests.
+  Native units currently publish closed structural value types and use explicit initialization;
+  nominal/dependent interfaces and automatic initialization remain deferred.
   Automatic artifact substitution for source imports, external package fetching,
   and source dependency lockfiles remain deferred.
   Absolute source imports are location-dependent and receive no portability warning.

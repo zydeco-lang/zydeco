@@ -111,7 +111,9 @@ impl AssemblyArena {
             | Program::Terminator(terminator) => match terminator {
                 | Terminator::Jump(Jump(target)) => self.deps.add(id, [target]),
                 | Terminator::PopJump(PopJump)
-                | Terminator::Extern(Extern::Host { .. } | Extern::Foreign(_))
+                | Terminator::Extern(
+                    Extern::Host { .. } | Extern::Foreign(_) | Extern::Unit(_),
+                )
                 | Terminator::Abort(Abort) => {}
                 | Terminator::PopBranch(PopBranch(branches)) => {
                     self.deps.add(id, branches.into_iter().map(|(_, target)| target));

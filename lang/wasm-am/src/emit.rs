@@ -201,6 +201,7 @@ impl ModulePlan {
 
         if let Some(symbol) = assembly.externs.iter().find_map(|external| match external {
             | zasm::Extern::Foreign(import) => Some(import.target.symbol.to_string()),
+            | zasm::Extern::Unit(import) => Some(import.target.symbol.to_string()),
             | zasm::Extern::Host { .. } => None,
         }) {
             return Err(EmitError::UnsupportedForeignImport(symbol));
@@ -687,8 +688,12 @@ impl<'a> CaseEncoder<'a> {
 
     fn emit_extern(&mut self, external: &zasm::Extern) -> Result<(), EmitError> {
         let zasm::Extern::Host { role, name, arity, mode } = external else {
-            let zasm::Extern::Foreign(import) = external else { unreachable!() };
-            return Err(EmitError::UnsupportedForeignImport(import.target.symbol.to_string()));
+            let symbol = match external {
+                | zasm::Extern::Foreign(import) => &import.target.symbol,
+                | zasm::Extern::Unit(import) => &import.target.symbol,
+                | zasm::Extern::Host { .. } => unreachable!(),
+            };
+            return Err(EmitError::UnsupportedForeignImport(symbol.to_string()));
         };
         let function = self.plan.host_function(name)?;
         for index in 0..*arity {

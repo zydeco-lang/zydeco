@@ -9,9 +9,13 @@ use zydeco_syntax::{
 };
 use zydeco_utils::prelude::ArenaAccess;
 
-/// A foreign annotation whose classifier is outside the implemented C ABI subset.
+/// A foreign annotation whose classifier is outside its implemented entry profile.
 #[derive(Clone, Debug, Error)]
 pub enum ForeignClassifierError {
+    #[error("C marshalling requires the C ABI")]
+    Abi,
+    #[error(transparent)]
+    Unit(#[from] crate::UnitClassifierError),
     #[error(
         "C export argument {index} must be a fixed-width integer; incoming pointers are not supported"
     )]
@@ -41,6 +45,9 @@ impl<'a> ForeignClassifier<'a> {
     pub fn validate(
         &self, target: ForeignTarget, classifier: ss::TypeId,
     ) -> Result<ForeignImport, ForeignClassifierError> {
+        if target.abi != zydeco_syntax::ForeignAbi::C {
+            return Err(ForeignClassifierError::Abi);
+        }
         Ok(ForeignImport {
             target,
             signature: self.signature(classifier, ForeignDirection::Import)?,

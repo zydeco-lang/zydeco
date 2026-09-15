@@ -108,6 +108,22 @@ pub fn check_library<'db>(
     Ok(crate::CheckedLibrary { statics: std::sync::Arc::new(tycker.statics), exports })
 }
 
+/// Prepare one native initializer without replacing ordinary source import semantics.
+#[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
+pub fn check_unit<'db>(
+    db: &'db dyn TyckDb, data: ScopedData<'db>,
+) -> Result<crate::CheckedUnit, crate::LibraryCheckError> {
+    let mut tycker = Tycker::new(db, data, data.spans(db), data.scoped(db));
+    let root = tycker.run_judgments_k(data.root(db));
+    tycker.finish_judgments();
+    let root = root
+        .and_then(|root| tycker.finish_check_k().map(|()| root))
+        .map_err(|_| crate::LibraryCheckError::Checking(tycker.error_diagnostics()))?;
+    let initializer = tycker.prepare_unit(root)?;
+    tycker.strip_checker_state();
+    Ok(crate::CheckedUnit { statics: std::sync::Arc::new(tycker.statics), initializer })
+}
+
 /// Check current recovered syntax and compare names before transient environments are released.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
 pub fn check_completion<'db>(

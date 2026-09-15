@@ -338,6 +338,11 @@ impl<'rt> Eval<'rt> for Computation {
                 }
             }
             | Computation::Foreign(ForeignPrim { import }) => {
+                let CheckedImport::C(import) = import else {
+                    return Step::Done(ProgKont::Error(
+                        crate::foreign::ForeignRuntimeError::NativeUnit.into(),
+                    ));
+                };
                 let arguments = (0..import.signature.parameters().len())
                     .map(|_| match runtime.pop_stack() {
                         | Some(SemCompu::App(argument)) => argument,

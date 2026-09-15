@@ -32,6 +32,15 @@ pub struct CExportEntry {
     pub guard: ForeignSymbolName,
 }
 
+#[derive(Clone, Debug, Default)]
+pub enum NativeEntry {
+    #[default]
+    Process,
+    C(CExportEntry),
+    /// Enter with the caller's Ret stack and runtime instance; no platform-call adapter.
+    Unit(ForeignSymbolName),
+}
+
 /// Alignment of `rsp` at the current assembly position.
 ///
 /// The SysV amd64 ABI requires `rsp % 16 == 0` immediately before a `call`.
@@ -84,7 +93,7 @@ pub struct Emitter<'e> {
     stack_parity: StackParity,
     entry_parities: HashMap<ProgId, StackParity>,
     dynamic_entries: HashSet<ProgId>,
-    c_export: Option<CExportEntry>,
+    entry: NativeEntry,
 }
 
 impl<'e> Emitter<'e> {
@@ -113,19 +122,21 @@ impl<'e> Emitter<'e> {
             stack_parity: entry_parities.get(&root).copied().unwrap_or(StackParity::Unknown),
             entry_parities,
             dynamic_entries,
-            c_export: None,
+            entry: NativeEntry::Process,
         }
     }
 
-    pub fn with_c_export(mut self, entry: CExportEntry) -> Self {
-        let parity = if entry.signature.parameters().len().is_multiple_of(2) {
-            StackParity::Misaligned
-        } else {
-            StackParity::Aligned
+    pub fn with_entry(mut self, entry: NativeEntry) -> Self {
+        let parity = match &entry {
+            | NativeEntry::C(entry) if !entry.signature.parameters().len().is_multiple_of(2) => {
+                StackParity::Aligned
+            }
+            | NativeEntry::C(_) | NativeEntry::Process => StackParity::Misaligned,
+            | NativeEntry::Unit(_) => StackParity::Unknown,
         };
         self.entry_parities =
             Self::compute_entry_parities(self.assembly, self.root, self.frames, parity);
-        self.c_export = Some(entry);
+        self.entry = entry;
         self
     }
 
@@ -646,23 +657,33 @@ impl Emitter<'_> {
             .map(|external| match external {
                 | sa::Extern::Host { name, .. } => format!("zydeco_{name}"),
                 | sa::Extern::Foreign(import) => self.foreign_symbol(&import.target.symbol),
+                | sa::Extern::Unit(import) => self.foreign_symbol(&import.target.symbol),
             })
             .collect::<Vec<_>>();
         externs.sort();
-        if let Some(entry) = &self.c_export {
-            let own_symbol = self.foreign_symbol(&entry.symbol);
+        let own_symbol = match &self.entry {
+            | NativeEntry::C(entry) => Some(self.foreign_symbol(&entry.symbol)),
+            | NativeEntry::Unit(symbol) => Some(self.foreign_symbol(symbol)),
+            | NativeEntry::Process => None,
+        };
+        if let Some(own_symbol) = own_symbol {
             externs.retain(|symbol| *symbol != own_symbol);
         }
         self.asm.text.extend(externs.into_iter().map(Instr::Extern));
 
-        if let Some(entry) = self.c_export.clone() {
-            self.emit_c_adapter(&entry);
-            self.asm.text.push(Instr::Label("zydeco_export_body".into()));
-        } else {
-            self.asm.text.extend([
-                Instr::Global(ENTRY_SYMBOL.to_string()),
-                Instr::Label(ENTRY_SYMBOL.to_string()),
-            ]);
+        match self.entry.clone() {
+            | NativeEntry::C(entry) => {
+                self.emit_c_adapter(&entry);
+                self.asm.text.push(Instr::Label("zydeco_export_body".into()));
+            }
+            | entry => {
+                let symbol = match entry {
+                    | NativeEntry::Process => ENTRY_SYMBOL.to_string(),
+                    | NativeEntry::Unit(symbol) => self.foreign_symbol(&symbol),
+                    | NativeEntry::C(_) => unreachable!(),
+                };
+                self.asm.text.extend([Instr::Global(symbol.clone()), Instr::Label(symbol)]);
+            }
         }
         self.stack_parity =
             self.entry_parities.get(&self.root).copied().unwrap_or(StackParity::Unknown);
@@ -949,6 +970,11 @@ impl<'a> Emit<'a> for Terminator {
             }
             | Terminator::Extern(sa::Extern::Foreign(import)) => {
                 em.emit_foreign_call(id, import);
+            }
+            | Terminator::Extern(sa::Extern::Unit(import)) => {
+                em.asm
+                    .text
+                    .push(Instr::Jmp(JmpArgs::Label(em.foreign_symbol(&import.target.symbol))));
             }
             | Terminator::Abort(sa::Abort) => {
                 em.asm.text.push(Instr::Comment("abort".to_string()));

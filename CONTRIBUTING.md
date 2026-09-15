@@ -168,7 +168,7 @@ its standalone analyses still require explicit file imports.
 ## Compile Programs
 
 `zydeco build` checks the selected compilation boundary, then emits the requested artifact.
-Binary and test packages use the executable boundary; compiled libraries use their declared C exports:
+Binary and test packages use the executable boundary; compiled libraries use their declared entry profile:
 
 | Target | Result |
 | --- | --- |
@@ -177,7 +177,8 @@ Binary and test packages use the executable boundary; compiled libraries use the
 | `asm` | Print AMD64 assembly to stdout. |
 | `exe` (default) | Assemble and link an AMD64 executable. |
 | `wasm-am`, `wasm-sps` | Write a WebAssembly module using the selected strategy. |
-| `object`, `staticlib`, `sharedlib` | Emit a declared C library, its interfaces, and its manifest. |
+| `object` | Emit a declared native Zydeco unit or C library, its interfaces, and its manifest. |
+| `staticlib`, `sharedlib` | Emit a declared C library, its interfaces, and its manifest. |
 
 For AMD64 on Linux or macOS, with the corresponding toolchain installed:
 
@@ -321,6 +322,62 @@ cargo test -p zydeco-cli --test library -- --ignored --test-threads=1
 
 The second command requires NASM, `cc`, `ar`, the matching AMD64 Rust target,
 and support for executing AMD64 code on the test host.
+
+### Compile and Consume Native Zydeco Units
+
+Native units share the consumer's runtime and can return ordinary values and capturing thunks.
+Save this producer as `math.zy` in the repository root:
+
+```zydeco
+@[package(library(zydeco), name(example/math))]
+param val (/Thk; /Ret; /Int64; /numeric) : @(import("lib/std/builtin.zy")) in
+(#make_adder = ({ fn (delta : Int64) =>
+  ret { fn (value : Int64) => ! numeric/int64/add delta value }
+} : Thk (Int64 -> Ret (Thk (Int64 -> Ret Int64)))))
+```
+
+Build the initializer object and interface:
+
+```sh
+zydeco check math.zy
+zydeco build math.zy --target object --target-arch x86-64 --build-dir unit-build --runtime-dir runtime
+```
+
+The command publishes `unit-build/example.math.unit.json`, `example.math.unit.o`,
+and `example.math.imports.zy` as links into an immutable bundle.
+Keep that bundle and its dependency bundles when distributing the unit.
+Save this consumer as `client.zy` in the repository root:
+
+```zydeco
+param (/Ret; /Int64; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
+let initialize = @(import("unit-build/example.math.imports.zy")) in
+do math <- ! initialize;
+do add_seven <- ! math/make_adder 7;
+do result <- ! add_seven 35;
+! numeric/int64/eq OS result 42 { ! process/exit 0 } { ! process/exit 1 }
+```
+
+Build or run the consumer with its exact manifest.
+The producer's implementation source is no longer needed:
+
+```sh
+zydeco build client.zy --target exe --target-arch x86-64 --build-dir client-build --runtime-dir runtime --link-library unit-build/example.math.unit.json
+zydeco run client.zy -t exe --runtime-dir runtime --link-library unit-build/example.math.unit.json
+```
+
+Repeat `--link-library` for multiple providers.
+Building another native unit can use the same option; its manifest records the dependency closure for later consumers.
+The [native unit contract](docs/references/language.md#native-zydeco-units) specifies the initial type subset,
+explicit initialization, compatible builds, and target restrictions.
+
+Run the focused checks and the native regression with:
+
+```sh
+cargo test -p zydeco-cli --test unit --test unit_manifest
+cargo test -p zydeco-cli --test unit -- --ignored
+```
+
+The native regression requires NASM, the matching AMD64 Rust target, and a host capable of executing AMD64 code.
 
 ### Representation Experiments
 

@@ -72,7 +72,7 @@ pub struct Prim {
 /// A checked foreign import together with its source-level argument count.
 #[derive(Clone, Debug)]
 pub struct ForeignPrim {
-    pub import: ForeignImport,
+    pub import: CheckedImport,
 }
 
 /// Computations in the dynamic language.

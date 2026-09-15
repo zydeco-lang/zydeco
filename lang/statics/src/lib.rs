@@ -29,6 +29,10 @@ pub use builtin::*;
 pub mod foreign;
 pub use foreign::*;
 
+/// Closed type interfaces for native compilation units.
+pub mod unit;
+pub use unit::*;
+
 /// Typed arena allocation helpers.
 pub mod alloc;
 pub use alloc::*;

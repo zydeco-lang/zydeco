@@ -13,6 +13,9 @@ pub use word::*;
 pub mod primitive;
 pub use primitive::*;
 
+pub mod unit;
+pub use unit::*;
+
 mod impls;
 use derive_more::From;
 use strum::{IntoEnumIterator, VariantArray as _};
@@ -285,6 +288,8 @@ impl std::fmt::Display for IntegerType {
     strum::VariantArray,
 )]
 #[strum(serialize_all = "lowercase")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum FloatType {
     Float32,
     #[default]
@@ -795,6 +800,7 @@ impl std::fmt::Display for BuiltinRole {
 #[serde(rename_all = "lowercase")]
 pub enum ForeignAbi {
     C,
+    Zydeco,
 }
 
 impl ForeignAbi {

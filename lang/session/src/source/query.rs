@@ -146,6 +146,13 @@ pub struct LibraryProgram {
     pub library: zydeco_statics::CheckedLibrary,
 }
 
+#[derive(Clone)]
+pub struct UnitProgram {
+    pub spans: Arc<SpanArena>,
+    pub scoped: Arc<ScopedArena>,
+    pub unit: zydeco_statics::CheckedUnit,
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum ExecutableError {
     #[error(transparent)]
@@ -522,6 +529,18 @@ impl CompilerSession {
             scoped: data.scoped(self).clone(),
             library,
         })
+    }
+
+    pub fn unit_program(
+        &self, analysis: &ProgramAnalysis,
+    ) -> Result<UnitProgram, zydeco_statics::LibraryCheckError> {
+        let input = self
+            .source_input(analysis.root_path().to_path_buf())
+            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
+        let data = resolved_data(self, input, analysis.package.clone(), analysis.bindings.clone())
+            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
+        let unit = zydeco_statics::query::check_unit(self, data)?;
+        Ok(UnitProgram { spans: data.spans(self).clone(), scoped: data.scoped(self).clone(), unit })
     }
 
     /// Check a resolved program constructed outside the source pipeline.

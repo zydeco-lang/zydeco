@@ -111,4 +111,5 @@ pub struct ExternCall<S> {
 pub enum ExternalFunction {
     Host(BuiltinValueRole),
     Foreign(ForeignImport),
+    Unit(UnitImport),
 }

@@ -171,6 +171,7 @@ pub enum Imm {
 pub enum Extern {
     Host { role: BuiltinValueRole, name: String, arity: usize, mode: ExternMode },
     Foreign(ForeignImport),
+    Unit(UnitImport),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

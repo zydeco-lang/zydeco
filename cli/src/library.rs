@@ -100,12 +100,14 @@ pub struct LibraryFile {
 }
 
 impl LibraryFile {
-    fn in_directory(directory: &Path, name: impl Into<PathBuf>) -> Result<Self, LibraryError> {
+    pub(crate) fn in_directory(
+        directory: &Path, name: impl Into<PathBuf>,
+    ) -> Result<Self, LibraryError> {
         let path = name.into();
         Ok(Self { sha3: LibraryDigest::file(&directory.join(&path))?, path })
     }
 
-    fn resolve(&self, base: &Path) -> Result<PathBuf, LibraryError> {
+    pub(crate) fn resolve(&self, base: &Path) -> Result<PathBuf, LibraryError> {
         let path = base.join(&self.path).canonicalize()?;
         if LibraryDigest::file(&path)? != self.sha3 {
             return Err(LibraryError::Hash(path));
@@ -151,7 +153,11 @@ impl LibraryManifest {
     }
 
     fn validate(&self) -> Result<(), LibraryError> {
-        if self.schema != 1 || self.exports.is_empty() {
+        if self.schema != 1
+            || self.abi != ForeignAbi::C
+            || self.exports.is_empty()
+            || self.imports.iter().any(|import| import.target.abi != ForeignAbi::C)
+        {
             return Err(LibraryError::Schema);
         }
         let mut symbols = BTreeSet::new();
@@ -239,6 +245,9 @@ impl LibraryBuilder<'_> {
         &self, name: &PackageName, contract: &LibraryContract, analysis: &ProgramAnalysis,
         program: &LibraryProgram, kind: LibraryArtifactKind,
     ) -> Result<PathBuf, LibraryError> {
+        if !self.dependencies.units.is_empty() {
+            return Err(LibraryError::UnitCDependency);
+        }
         let platform =
             LibraryPlatform::for_target(self.options.architecture, self.options.operating_system)?;
         let stem = name.to_string().replace('/', ".");
@@ -299,6 +308,9 @@ impl LibraryBuilder<'_> {
             .collect::<Result<Vec<_>, CompileError>>()?;
         let imports =
             code.iter().flat_map(|entry| entry.foreign_imports.clone()).collect::<Vec<_>>();
+        if code.iter().any(|entry| !entry.unit_imports.is_empty()) {
+            return Err(LibraryError::UnitCDependency);
+        }
         self.dependencies.validate_imports(&imports, platform, Some(&runtime), false)?;
         for import in imports.iter().filter(|import| import.target.library.as_str() == stem) {
             if !exports.iter().any(|export| {
@@ -476,7 +488,9 @@ impl LibraryBuilder<'_> {
         Ok(manifest_path)
     }
 
-    fn publish_link(directory: &Path, filename: &str, target: &Path) -> Result<(), LibraryError> {
+    pub(crate) fn publish_link(
+        directory: &Path, filename: &str, target: &Path,
+    ) -> Result<(), LibraryError> {
         let staging = tempfile::Builder::new().prefix(".publish-").tempdir_in(directory)?;
         let link = staging.path().join("link");
         #[cfg(unix)]
@@ -665,6 +679,7 @@ impl LibraryInterface {
 
 #[derive(Clone, Debug, Default)]
 pub struct LinkedLibraries {
+    pub(crate) units: crate::unit::LinkedUnits,
     // The catalog includes build provenance; only `active` enters the consuming image.
     entries: BTreeMap<ForeignLibraryName, LinkedLibrary>,
     roots: BTreeSet<ForeignLibraryName>,
@@ -681,7 +696,7 @@ struct LinkedLibrary {
 
 impl LinkedLibraries {
     pub fn is_empty(&self) -> bool {
-        self.roots.is_empty()
+        self.roots.is_empty() && self.units.is_empty()
     }
 
     fn linked(&self) -> impl Iterator<Item = &LinkedLibrary> {
@@ -722,7 +737,7 @@ impl LinkedLibraries {
             .linked()
             .filter(|entry| entry.manifest.kind != LibraryArtifactKind::Sharedlib)
             .collect::<Vec<_>>();
-        if raw.is_empty() {
+        if raw.is_empty() && self.units.is_empty() {
             return Ok(());
         }
         let platform = match os {
@@ -732,6 +747,7 @@ impl LinkedLibraries {
         let combined = object.with_extension("units.o");
         let mut command = platform.cc();
         command.args(["-nostdlib", "-Wl,-r"]).arg(object);
+        command.args(self.units.objects());
         for library in raw {
             match (platform, library.manifest.kind) {
                 | (_, LibraryArtifactKind::Object) => {
@@ -783,7 +799,26 @@ impl LinkedLibraries {
     }
     pub fn load(paths: &[PathBuf]) -> Result<Self, LibraryError> {
         let mut libraries = Self::default();
-        let roots = paths.iter().map(|path| path.canonicalize()).collect::<Result<Vec<_>, _>>()?;
+        #[derive(Deserialize)]
+        struct Header {
+            abi: ForeignAbi,
+        }
+        let (units, c_libraries): (Vec<_>, Vec<_>) = paths
+            .iter()
+            .map(|path| {
+                let header: Header = serde_json::from_slice(&std::fs::read(path)?)?;
+                Ok((path.clone(), header.abi))
+            })
+            .collect::<Result<Vec<_>, LibraryError>>()?
+            .into_iter()
+            .partition(|(_, abi)| *abi == ForeignAbi::Zydeco);
+        libraries.units = crate::unit::LinkedUnits::load(
+            &units.into_iter().map(|(path, _)| path).collect::<Vec<_>>(),
+        )?;
+        let roots = c_libraries
+            .iter()
+            .map(|(path, _)| path.canonicalize())
+            .collect::<Result<Vec<_>, _>>()?;
         let mut pending = roots.clone();
         let mut visited = BTreeMap::new();
         let mut dependencies = BTreeMap::new();
@@ -830,7 +865,17 @@ impl LinkedLibraries {
         }
         libraries.roots = roots.iter().map(|path| visited[path].clone()).collect();
         libraries.active = libraries.closure(libraries.roots.iter().cloned());
+        if let Some(name) = libraries.entries.keys().find(|name| libraries.units.contains(name)) {
+            return Err(LibraryError::Conflict(name.clone()));
+        }
         Ok(libraries)
+    }
+
+    pub fn validate_units(
+        &self, imports: &[zydeco_syntax::UnitImport], platform: LibraryPlatform,
+        runtime: Option<&str>, native: bool,
+    ) -> Result<(), LibraryError> {
+        self.units.validate(imports, platform, runtime, native)
     }
 
     pub fn validate_imports(
@@ -965,7 +1010,7 @@ impl LinkedLibraries {
     }
 }
 
-struct LibraryPaths;
+pub(crate) struct LibraryPaths;
 
 impl LibraryPaths {
     fn absolute(path: &Path) -> Result<PathBuf, std::io::Error> {
@@ -981,7 +1026,7 @@ impl LibraryPaths {
         }
     }
 
-    fn relative(base: &Path, target: &Path) -> Result<PathBuf, std::io::Error> {
+    pub(crate) fn relative(base: &Path, target: &Path) -> Result<PathBuf, std::io::Error> {
         // Normalize existing ancestors, including macOS /var -> /private/var. The
         // final immutable bundle need not exist yet when its manifest is assembled.
         let base = Self::absolute(base)?;
@@ -998,6 +1043,24 @@ impl LibraryPaths {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LibraryError {
+    #[error(
+        "native Zydeco units require --target object for publication and the AMD64 exe backend for execution"
+    )]
+    UnitTarget,
+    #[error(
+        "native unit and C library dependency boundaries cannot be combined inside a library artifact yet"
+    )]
+    UnitCDependency,
+    #[error("native unit `{0}` requires a different compiler build")]
+    UnitCompiler(PackageName),
+    #[error(
+        "native unit initializer `{0}` is absent or has a different exported type; supply its matching --link-library manifest"
+    )]
+    UnitSignature(ForeignSymbolName),
+    #[error("cyclic native unit dependency at `{0}`")]
+    UnitCycle(ForeignLibraryName),
+    #[error(transparent)]
+    UnitInterface(#[from] zydeco_syntax::UnitInterfaceError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

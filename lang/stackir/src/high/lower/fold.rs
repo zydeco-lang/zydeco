@@ -350,8 +350,11 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         let site = Some(ss::TermId::Value(source));
         if let Some(import) = self.lo.statics.foreign_imports.get(&source).cloned() {
             let stack = Bullet.build(self.lo, site);
-            let body = ExternCall { function: ExternalFunction::Foreign(import), stack }
-                .build(self.lo, site);
+            let function = match import {
+                | CheckedImport::C(import) => ExternalFunction::Foreign(import),
+                | CheckedImport::Zydeco(import) => ExternalFunction::Unit(import),
+            };
+            let body = ExternCall { function, stack }.build(self.lo, site);
             let value = Closure { stack: Bullet, body }.build(self.lo, site);
             let protocol = self.lo.protocols.value(self.lo.statics.annotations_value[&source]);
             self.lo.arena.inner.value_protocols.insert_new(value, protocol);

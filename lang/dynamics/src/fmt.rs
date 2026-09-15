@@ -181,7 +181,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
             }
             | Compu::Prim(Prim { role }) => RcDoc::text(format!("prim({})[{role}]", role.arity())),
             | Compu::Foreign(ForeignPrim { import }) => {
-                RcDoc::text(format!("ffi[{}]", import.target.symbol))
+                RcDoc::text(format!("ffi[{}]", import.target().symbol))
             }
         }
     }

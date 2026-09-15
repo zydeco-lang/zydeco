@@ -643,6 +643,11 @@ impl<'a> CaseEncoder<'a> {
                                 import.target.symbol.to_string(),
                             ));
                         }
+                        | sps::ExternalFunction::Unit(import) => {
+                            return Err(EmitError::UnsupportedForeignImport(
+                                import.target.symbol.to_string(),
+                            ));
+                        }
                     }
                     break;
                 }

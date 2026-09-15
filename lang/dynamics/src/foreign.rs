@@ -18,6 +18,8 @@ use {
 /// An environment or invocation failure at a checked foreign boundary.
 #[derive(Clone, Debug, Error)]
 pub enum ForeignRuntimeError {
+    #[error("native Zydeco units require the AMD64 backend")]
+    NativeUnit,
     #[error("dynamic foreign libraries are unsupported on this platform")]
     UnsupportedPlatform,
     #[error("cannot load foreign library `{library}`: {message}")]
@@ -59,6 +61,9 @@ impl ForeignRuntime {
     pub(crate) fn invoke(
         &mut self, import: &ForeignImport, arguments: Vec<ds::SemValue>,
     ) -> Result<ds::Computation, ForeignRuntimeError> {
+        if import.target.abi != ForeignAbi::C {
+            return Err(ForeignRuntimeError::NativeUnit);
+        }
         // Validate before loading: malformed runtime values must never reach foreign code.
         let arguments = ForeignArguments::new(&import.signature, &arguments)
             .map_err(|_| ForeignRuntimeError::InvalidArguments(import.target.symbol.clone()))?;
@@ -126,9 +131,7 @@ impl ForeignFunction {
             | ForeignResult::Integer(integer) => Self::integer_type(integer),
             | ForeignResult::Unit => Type::void(),
         };
-        let interface = match import.target.abi {
-            | ForeignAbi::C => Cif::new(arguments, result_type),
-        };
+        let interface = Cif::new(arguments, result_type);
         Self { code, interface, result }
     }
 

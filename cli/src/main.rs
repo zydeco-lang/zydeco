@@ -229,6 +229,10 @@ impl Application {
         if package.role == PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source) {
             return Ok(None);
         }
+        if package.role == PackageRole::Library(zydeco_surface::metadata::LibraryRole::Zydeco) {
+            self.compiler.unit_program(&analysis)?;
+            return Ok(None);
+        }
         if let PackageRole::Library(zydeco_surface::metadata::LibraryRole::Compiled(contract)) =
             &package.role
         {
@@ -508,30 +512,43 @@ impl Application {
                     let package = self.compiler.package(&self.resolve(source)?)?;
                     if !matches!(
                         &package.role,
-                        PackageRole::Library(zydeco_surface::metadata::LibraryRole::Compiled(_))
+                        PackageRole::Library(
+                            zydeco_surface::metadata::LibraryRole::Compiled(_)
+                                | zydeco_surface::metadata::LibraryRole::Zydeco
+                        )
                     ) {
                         return Err(ApplicationError::LibraryTarget);
                     }
                     let analysis =
                         self.report_analysis(self.compiler.analyze_package(&package.id)?);
                     let unit = self.compiler.compilation_unit(&package, &analysis, false)?;
-                    let CompilationBoundary::CExports { name, contract, program } = unit.boundary
-                    else {
-                        unreachable!()
-                    };
-                    Ok((name, contract, analysis, program))
+                    if matches!(&unit.boundary, CompilationBoundary::ZydecoUnit { .. })
+                        && kind != LibraryArtifactKind::Object
+                    {
+                        return Err(LibraryError::UnitTarget.into());
+                    }
+                    Ok((unit.boundary, analysis))
                 })
                 .collect::<Result<Vec<_>, ApplicationError>>()?;
-            for (name, contract, analysis, program) in programs {
-                let builder = LibraryBuilder {
-                    compiler: &self.compiler,
-                    options: &options,
-                    dependencies: &libraries,
+            for (boundary, analysis) in programs {
+                let manifest = match boundary {
+                    | CompilationBoundary::CExports { name, contract, program } => LibraryBuilder {
+                        compiler: &self.compiler,
+                        options: &options,
+                        dependencies: &libraries,
+                    }
+                    .build(&name, &contract, &analysis, &program, kind)?,
+                    | CompilationBoundary::ZydecoUnit { name, program } => {
+                        zydeco_cli::unit::UnitBuilder {
+                            compiler: &self.compiler,
+                            options: &options,
+                            dependencies: &libraries,
+                        }
+                        .build(&name, &analysis, &program)?
+                    }
+                    | CompilationBoundary::Process(_) => unreachable!(),
                 };
-                println!(
-                    "{}",
-                    builder.build(&name, &contract, &analysis, &program, kind)?.display()
-                );
+                println!("{}", manifest.display());
             }
             return Ok(0);
         }
@@ -611,6 +628,15 @@ impl Application {
                         Some(&zydeco_cli::library::LibraryDigest::runtime(&options.runtime_dir)?),
                         false,
                     )?;
+                    libraries.validate_units(
+                        &native.unit_imports,
+                        zydeco_cli::library::LibraryPlatform::for_target(
+                            options.architecture,
+                            options.operating_system,
+                        )?,
+                        Some(&zydeco_cli::library::LibraryDigest::runtime(&options.runtime_dir)?),
+                        true,
+                    )?;
                     let executable = options.link_amd64_resolved(
                         &artifact,
                         &native.assembly,
@@ -643,7 +669,7 @@ enum ApplicationError {
     #[error(transparent)]
     Library(#[from] LibraryError),
     #[error(
-        "object, staticlib, and sharedlib require a package declared with library(c, export(...), ...)"
+        "library artifacts require library(c, export(...), ...), or library(zydeco) with --target object"
     )]
     LibraryTarget,
     #[error("compiled libraries require --target object, staticlib, or sharedlib")]

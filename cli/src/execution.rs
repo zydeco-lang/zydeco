@@ -29,16 +29,33 @@ impl<'a> ExecutionRunner<'a> {
     }
 
     pub fn validate(&self, executable: &ExecutableProgram) -> Result<(), ExecutionError> {
-        if self.libraries.is_empty() {
-            return Ok(());
-        }
         let imports = executable
             .statics
             .foreign_imports
             .iter()
-            .map(|(_, import)| import.clone())
+            .filter_map(|(_, import)| match import {
+                | zydeco_syntax::CheckedImport::C(import) => Some(import.clone()),
+                | _ => None,
+            })
             .collect::<Vec<_>>();
+        let units = executable
+            .statics
+            .foreign_imports
+            .iter()
+            .filter_map(|(_, import)| match import {
+                | zydeco_syntax::CheckedImport::Zydeco(import) => Some(import.clone()),
+                | _ => None,
+            })
+            .collect::<Vec<_>>();
+        if self.libraries.is_empty() && units.is_empty() {
+            return Ok(());
+        }
         for target in &self.targets {
+            if (!units.is_empty() || !self.libraries.units.is_empty())
+                && *target != ExecutionTarget::Exe
+            {
+                return Err(crate::library::LibraryError::UnitTarget.into());
+            }
             if matches!(target, ExecutionTarget::WasmAm | ExecutionTarget::WasmSps) {
                 return Err(crate::library::LibraryError::Target.into());
             }
@@ -58,6 +75,7 @@ impl<'a> ExecutionRunner<'a> {
                 Some(crate::library::LibraryDigest::runtime(&self.runtime_dir)?)
             };
             self.libraries.validate_imports(&imports, platform, runtime.as_deref(), interpreter)?;
+            self.libraries.validate_units(&units, platform, runtime.as_deref(), !interpreter)?;
         }
         Ok(())
     }

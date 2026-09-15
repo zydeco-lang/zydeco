@@ -431,7 +431,16 @@ impl Tycker<'_> {
     pub(super) fn validate_foreign_imports(&mut self) {
         let pending = std::mem::take(&mut self.pending_foreign_imports);
         for PendingForeignImport { value, classifier, target, blame, stack } in pending {
-            match ForeignClassifier::new(&self.statics).validate(target, classifier) {
+            let import = match target.abi {
+                | ss::ForeignAbi::C => ForeignClassifier::new(&self.statics)
+                    .validate(target, classifier)
+                    .map(ss::CheckedImport::C),
+                | ss::ForeignAbi::Zydeco => crate::UnitClassifier { statics: &self.statics }
+                    .import(target, classifier)
+                    .map(ss::CheckedImport::Zydeco)
+                    .map_err(ForeignClassifierError::from),
+            };
+            match import {
                 | Ok(import) => {
                     if let Some(existing) =
                         self.statics.foreign_imports.insert_or_get(value, import.clone())
@@ -439,8 +448,8 @@ impl Tycker<'_> {
                     {
                         self.errors.push(TyckErrorEntry {
                             error: TyckError::ConflictingForeignImport {
-                                existing: existing.target,
-                                found: import.target,
+                                existing: existing.target().clone(),
+                                found: import.target().clone(),
                             },
                             blame,
                             stack,

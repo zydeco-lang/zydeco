@@ -46,7 +46,7 @@ fn compiled_role_requires_an_explicit_complete_contract() {
     let fixture = Fixture::new();
     for (role, error) in [
         ("library(c)", "at least one explicit export"),
-        ("library(rust, export(root, symbol(\"f\")))", "requires the C ABI"),
+        ("library(rust, export(root, symbol(\"f\")))", "requires library(c"),
         ("library(c, export(root, symbol(\"zydeco_private\")))", "reserved zydeco_"),
         (
             "library(c, export(root, symbol(\"f\")), export(field(x), symbol(\"g\")))",

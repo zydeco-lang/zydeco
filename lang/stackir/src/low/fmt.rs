@@ -288,6 +288,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     | ExternalFunction::Foreign(import) => {
                         (import.target.symbol.to_string(), import.signature.parameters().len())
                     }
+                    | ExternalFunction::Unit(import) => (import.target.symbol.to_string(), 0),
                 };
                 RcDoc::concat([RcDoc::text(format!("<extern:{name}/{arity}> ")), stack.pretty(f)])
             }
