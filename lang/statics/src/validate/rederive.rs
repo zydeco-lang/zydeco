@@ -115,6 +115,14 @@ struct Scope {
 
 /* --------------------------------- Checker --------------------------------- */
 
+/// Structural comparisons depend on the current correspondence between bound witnesses.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct TypeAgreement {
+    left: TypeId,
+    right: TypeId,
+    renamings: Vec<(AbstId, AbstId)>,
+}
+
 /// Re-derivation validator over one finished arena.
 pub struct RederiveChecker<'a> {
     statics: &'a StaticsArena,
@@ -136,8 +144,9 @@ pub struct RederiveChecker<'a> {
     /// Every definition bound anywhere below the root; definition bodies
     /// re-derived as their own roots may mention any of them.
     traversed_defs: HashSet<DefId>,
-    /// Cache for structural type agreement, keyed by identifier pairs.
-    agreeing_types: HashSet<(TypeId, TypeId)>,
+    /// Scope-sensitive cache for structural type agreement.
+    agreeing_types: HashSet<TypeAgreement>,
+    type_renamings: Vec<(AbstId, AbstId)>,
 }
 
 impl<'a> RederiveChecker<'a> {
@@ -166,6 +175,7 @@ impl<'a> RederiveChecker<'a> {
             root_spine_witnesses: HashSet::new(),
             traversed_defs: HashSet::new(),
             agreeing_types: HashSet::new(),
+            type_renamings: Vec::new(),
         }
     }
 
@@ -266,10 +276,11 @@ impl<'a> RederiveChecker<'a> {
     /// forms. Identifiers are not canonicalized, so equality of constructor
     /// shapes is decided recursively rather than by derived equality.
     pub(super) fn type_ids_agree(&mut self, left: TypeId, right: TypeId) -> bool {
-        if left == right {
+        if left == right && self.type_renamings.is_empty() {
             return true;
         }
-        if !self.agreeing_types.insert((left, right)) {
+        let key = TypeAgreement { left, right, renamings: self.type_renamings.clone() };
+        if !self.agreeing_types.insert(key.clone()) {
             return true;
         }
         let agrees = match (self.filled_type(left).cloned(), self.filled_type(right).cloned()) {
@@ -277,7 +288,7 @@ impl<'a> RederiveChecker<'a> {
             | _ => false,
         };
         if !agrees {
-            self.agreeing_types.remove(&(left, right));
+            self.agreeing_types.remove(&key);
         }
         agrees
     }
@@ -286,10 +297,22 @@ impl<'a> RederiveChecker<'a> {
         use Type as T;
         match (left, right) {
             | (T::Var(left), T::Var(right)) => left == right,
-            | (T::Abst(left), T::Abst(right)) => left == right,
+            | (T::Abst(left), T::Abst(right)) => {
+                let left_bound = self.type_renamings.iter().rposition(|(bound, _)| bound == left);
+                let right_bound = self.type_renamings.iter().rposition(|(_, bound)| bound == right);
+                match (left_bound, right_bound) {
+                    | (Some(left), Some(right)) => left == right,
+                    | (None, None) => left == right,
+                    | _ => false,
+                }
+            }
             | (T::Abs(left), T::Abs(right)) => {
-                left.binder.pattern == right.binder.pattern
-                    && self.type_ids_agree(left.body, right.body)
+                self.type_binders_agree(&left.binder, &right.binder)
+                    && self.type_bodies_agree(
+                        [(left.binder.witness, right.binder.witness)],
+                        left.body,
+                        right.body,
+                    )
             }
             | (T::App(App(lf, la)), T::App(App(rf, ra))) => {
                 self.type_ids_agree(*lf, *rf) && self.type_ids_agree(*la, *ra)
@@ -309,29 +332,35 @@ impl<'a> RederiveChecker<'a> {
             | (T::Opaque(_), T::Opaque(_))
             | (T::OS(_), T::OS(_)) => true,
             | (T::Primitive(left), T::Primitive(right)) => left.0 == right.0,
-            | (T::ValPi(left), T::ValPi(right)) => {
-                self.valpi_binders_agree(left, right)
-                    && self.type_ids_agree(left.codomain, right.codomain)
-            }
+            | (T::ValPi(left), T::ValPi(right)) => self.valpis_agree(left, right),
             | (T::Arrow(Arrow(la, lb)), T::Arrow(Arrow(ra, rb))) => {
                 self.type_ids_agree(*la, *ra) && self.type_ids_agree(*lb, *rb)
             }
             | (T::Forall(Forall(lb, lbody)), T::Forall(Forall(rb, rbody))) => {
-                lb.pattern == rb.pattern && self.type_ids_agree(*lbody, *rbody)
+                self.type_binders_agree(lb, rb)
+                    && self.type_bodies_agree([(lb.witness, rb.witness)], *lbody, *rbody)
             }
             | (T::PackPi(left), T::PackPi(right)) => {
                 self.type_ids_agree(left.domain, right.domain)
                     && left.witnesses.len() == right.witnesses.len()
-                    && self.type_ids_agree(left.codomain, right.codomain)
+                    && self.type_bodies_agree(
+                        left.witnesses.iter().copied().zip(right.witnesses.iter().copied()),
+                        left.codomain,
+                        right.codomain,
+                    )
             }
             | (T::Prod(left), T::Prod(right)) => {
                 left.0.len() == right.0.len()
                     && left.0.iter().zip(right.0.iter()).all(|(l, r)| self.type_ids_agree(*l, *r))
             }
             | (T::Exists(left), T::Exists(right)) => {
-                left.binder.pattern == right.binder.pattern
+                self.type_binders_agree(&left.binder, &right.binder)
                     && self.exists_modes_agree(left, right)
-                    && self.type_ids_agree(left.body, right.body)
+                    && self.type_bodies_agree(
+                        [(left.binder.witness, right.binder.witness)],
+                        left.body,
+                        right.body,
+                    )
             }
             | (T::ManifestKind(left), T::ManifestKind(right)) => {
                 left.binder == right.binder
@@ -358,17 +387,70 @@ impl<'a> RederiveChecker<'a> {
         }
     }
 
-    fn valpi_binders_agree(&mut self, left: &ValPi, right: &ValPi) -> bool {
+    fn type_binders_agree(&mut self, left: &TypeBinder, right: &TypeBinder) -> bool {
+        self.type_patterns_agree(left.pattern, right.pattern)
+    }
+
+    fn type_patterns_agree(&self, left: TPatId, right: TPatId) -> bool {
+        self.kinds_agree(
+            self.statics.annotations_tpat[&left],
+            self.statics.annotations_tpat[&right],
+        ) && match (&self.statics.tpats[&left], &self.statics.tpats[&right]) {
+            | (TypePattern::Named(Named(lf, lp)), TypePattern::Named(Named(rf, rp))) => {
+                lf == rf && self.type_patterns_agree(*lp, *rp)
+            }
+            | (
+                TypePattern::Var(_) | TypePattern::Hole(_),
+                TypePattern::Var(_) | TypePattern::Hole(_),
+            ) => true,
+            | _ => false,
+        }
+    }
+
+    fn type_bodies_agree(
+        &mut self, renamings: impl IntoIterator<Item = (AbstId, AbstId)>, left: TypeId,
+        right: TypeId,
+    ) -> bool {
+        let outer = self.type_renamings.len();
+        for (left, right) in renamings {
+            let left_bound = self.type_renamings.iter().rposition(|(bound, _)| *bound == left);
+            let right_bound = self.type_renamings.iter().rposition(|(_, bound)| *bound == right);
+            // Recursive type structure can revisit the same binder pair. Its
+            // correspondence is already in scope, so keep the cache key stable.
+            if left_bound.is_none() || left_bound != right_bound {
+                self.type_renamings.push((left, right));
+            }
+        }
+        let agrees = self.type_ids_agree(left, right);
+        self.type_renamings.truncate(outer);
+        agrees
+    }
+
+    fn valpis_agree(&mut self, left: &ValPi, right: &ValPi) -> bool {
         match (&left.binder, &right.binder) {
-            | (ValPiBinder::Type(left), ValPiBinder::Type(right)) => left.pattern == right.pattern,
-            | (ValPiBinder::Value(left), ValPiBinder::Value(right)) => {
-                let domains = self.type_ids_agree(left.domain, right.domain);
-                let witness_counts = match (&left.witnesses, &right.witnesses) {
-                    | (Some(left), Some(right)) => left.len() == right.len(),
-                    | (None, None) => true,
+            | (ValPiBinder::Type(lb), ValPiBinder::Type(rb)) => {
+                self.type_binders_agree(lb, rb)
+                    && self.type_bodies_agree(
+                        [(lb.witness, rb.witness)],
+                        left.codomain,
+                        right.codomain,
+                    )
+            }
+            | (ValPiBinder::Value(lb), ValPiBinder::Value(rb)) => {
+                if !self.type_ids_agree(lb.domain, rb.domain)
+                    || lb.witness_projection != rb.witness_projection
+                {
+                    return false;
+                }
+                match (&lb.witnesses, &rb.witnesses) {
+                    | (Some(lb), Some(rb)) if lb.len() == rb.len() => self.type_bodies_agree(
+                        lb.iter().copied().zip(rb.iter().copied()),
+                        left.codomain,
+                        right.codomain,
+                    ),
+                    | (None, None) => self.type_ids_agree(left.codomain, right.codomain),
                     | _ => false,
-                };
-                domains && witness_counts
+                }
             }
             | _ => false,
         }
@@ -1391,4 +1473,67 @@ fn literal_primitive(literal: &Literal) -> Option<PrimitiveType> {
         | Literal::String(_) => PrimitiveType::String,
         | Literal::Char(_) => PrimitiveType::Char,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::arena::{IdAllocator, StaticsScope};
+
+    struct Types {
+        statics: StaticsArena,
+        ids: IdAllocator<StaticsScope>,
+    }
+
+    impl Types {
+        fn kind(&mut self, kind: Kind) -> KindId {
+            let id = self.ids.alloc();
+            self.statics.kinds_pre.insert_new(id, Fillable::Done(kind));
+            id
+        }
+        fn binder(&mut self, kind: KindId) -> TypeBinder {
+            let pattern = self.ids.alloc();
+            let witness = self.ids.alloc();
+            self.statics.tpats.insert_new(pattern, TypePattern::Hole(Hole));
+            self.statics.annotations_tpat.insert_new(pattern, kind);
+            self.statics.absts.insert_new(witness, ());
+            self.statics.annotations_abst.insert_new(witness, kind);
+            TypeBinder { pattern, witness }
+        }
+        fn ty(&mut self, ty: Type, kind: KindId) -> TypeId {
+            let id = self.ids.alloc();
+            self.statics.types_pre.insert_new(id, Fillable::Done(ty), kind);
+            id
+        }
+    }
+
+    #[test]
+    fn bound_type_agreement_is_alpha_equivalent_and_scope_sensitive() {
+        let mut types = Types { statics: StaticsArena::default(), ids: IdAllocator::new() };
+        let vtype = types.kind(Kind::VType(VType));
+        let ctype = types.kind(Kind::CType(CType));
+        let left = types.binder(vtype);
+        let right = types.binder(vtype);
+        let foreign = types.binder(vtype);
+        let a = types.ty(Type::Abst(left.witness), vtype);
+        let b = types.ty(Type::Abst(right.witness), vtype);
+        let c = types.ty(Type::Abst(foreign.witness), vtype);
+        let fa = types.ty(Type::Forall(Forall(left.clone(), a)), ctype);
+        let fb = types.ty(Type::Forall(Forall(right.clone(), b)), ctype);
+        let free = types.ty(Type::Forall(Forall(right.clone(), a)), ctype);
+        let wrong = types.ty(Type::Forall(Forall(right.clone(), c)), ctype);
+        let different_kind = types.binder(ctype);
+        let different_kind = types.ty(Type::Forall(Forall(different_kind, b)), ctype);
+        let mut checker = RederiveChecker::new(&types.statics);
+        assert!(checker.type_ids_agree(fa, fb));
+        assert!(!checker.type_ids_agree(a, b), "a bound comparison cannot leak into free scope");
+        assert!(
+            !checker.type_ids_agree(fa, free),
+            "a shared body ID may be bound on only one side"
+        );
+        assert!(!checker.type_ids_agree(fa, wrong), "unrelated free witnesses remain rigid");
+        assert!(!checker.type_ids_agree(fa, different_kind));
+        assert!(checker.type_ids_agree(a, a));
+        assert!(checker.type_ids_agree(fb, fa));
+    }
 }

@@ -448,3 +448,19 @@ fn self_application_reports_a_static_reduction_limit() {
     let source = format!("{definition} let result = loop loop in ! exit 0 end");
     SourceCase::assert_rejected(SourceCase::check(&source), TyckDiagnosticCode::StaticElimination);
 }
+
+#[test]
+fn reified_polymorphic_members_of_opaque_type_families_lint_cleanly() {
+    let source = r#"
+let val make (u : Unit) =
+  let D (L : VType) = Int in
+  let f = { fn (L : VType) (x : D L) => ret x } in
+  ((= D, #create = f) :
+    exists (= D : VType -> VType) .
+      (#create :: Thk (forall (L : VType) . D L -> Ret (D L))))
+in
+let module = make () in
+! exit 0
+"#;
+    SourceCase::assert_accepted(SourceCase::check_linted(source));
+}

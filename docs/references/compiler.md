@@ -1227,6 +1227,11 @@ and existence of referenced nodes and definitions.
 Kind comparisons resolve normalized structure; raw kind-ID equality is insufficient after reconciliation.
 Paired value and computation annotations likewise compare normalized type structure,
 including the payloads of copied data/codata arms; different arena IDs alone do not establish disagreement.
+Bound type witnesses compare by alpha-equivalence (consistent renaming of a binder and its uses),
+with matching kinds and named-pattern structure.
+Free witnesses retain their distinct identities.
+Structural-comparison memoization includes the binder correspondence, so agreement
+under a universal cannot equate unrelated witnesses outside it.
 The well-formedness sweep includes orphaned allocations left by retries.
 Abstract-witness kinds can come from their annotation, a denoting type node, or an enclosing binder;
 requiring an `annotations_abst` row for every witness would reject legitimate artifacts.
