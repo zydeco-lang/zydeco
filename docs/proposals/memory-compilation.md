@@ -15,7 +15,8 @@ The implemented foundation remains [L13](../references/language.md#manual-memory
 `Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc` below are proposed std interfaces.
 [Pure address calculations](../references/compiler.md#address-calculations)
 and [ordered scalar accesses](../references/compiler.md#ordered-scalar-memory-accesses) are implemented.
-Raw component transport between memory and arithmetic and across calls remains proposed compiler work.
+[Bounded raw memory kernels](../references/compiler.md#raw-memory-kernels) connect wide scalar accesses
+to arithmetic; raw component transport across calls remains proposed compiler work.
 The [interface sketch](../examples/memory-compilation/interfaces.zy) checks with the current kinds and value functions.
 It checks the shapes only: its aliases expose candidate representations and supply no validated constructors,
 new std implementation, or code-generation guarantee.
@@ -314,8 +315,8 @@ Expose known arithmetic and redundant checks while preserving required validatio
 Deleting or moving an access needs semantic evidence; neither an unsafe API nor `Ret` supplies it.
 Keep effects outside pure arithmetic evaluation and value commoning.
 Allocator calls remain provider calls; direct scalar access does not require replacing the allocator.
-The next boundary is the ordinary scalar encoding between a memory result and its known consumer,
-as described in section 4.4.
+Bounded local kernels now remove eligible scalar encoding between an access and its arithmetic consumer.
+Section 4.4 covers the remaining transport boundaries.
 Measure target and embedding costs separately, including Wasm virtual-memory lookup.
 
 ### 4.3 Make eligible continuations into blocks
@@ -339,6 +340,14 @@ Repeated invocation is preserved; CPS is not assumed affine.
 Contification alone supplies neither a stack-allocation lifetime nor permission to reclaim a retained activation.
 
 ### 4.4 Carry raw components only across agreeing entries
+
+The implemented [raw memory kernels](../references/compiler.md#raw-memory-kernels) handle
+bounded load–arithmetic–store chains of wide scalars with no implicit allocation inside the kernel.
+Their [code-generation probe](../evaluations/2026-09-15-memory-kernels/README.md) separately counts
+ordinary boundary costs; raw stack homes and Wasm virtual-memory imports remain.
+This is a local computation contract.
+Unknown callbacks, shared results, and other control edges still use the existing source calling convention,
+so the broader worker and component transport below remains proposed.
 
 Once a codec supplies an ordinary value, scalar representation and ABI design determine its transport.
 The [scalar representation contract](../references/compiler.md#scalar-value-boundaries) owns the current implementation;

@@ -275,6 +275,32 @@ impl Eval for Instruction {
                 }
                 Ok(())
             }
+            | Instruction::MemoryKernel(kernel) => {
+                let mut address =
+                    || match interp.runtime.stack.pop().ok_or(Error::StackUnderflow)? {
+                        | Value::Address(address) => Ok(address),
+                        | _ => Err(Error::TypeError("memory kernel expects Addr".into())),
+                    };
+                let source = address()?;
+                let destination = address()?;
+                // SAFETY: the source contract supplies valid initialized scalar storage.
+                let bits = u64::from_le_bytes(
+                    unsafe { source.bytes(8) }.try_into().expect("carrier width"),
+                );
+                let mut inputs = vec![kernel.scalar().literal(bits).expect("full-width carrier")];
+                for _ in 1..kernel.region().inputs.len() {
+                    inputs.push(match interp.runtime.stack.pop().ok_or(Error::StackUnderflow)? {
+                        | Value::Atom(Atom::Imm(Imm::Integer(value))) => Literal::Integer(value),
+                        | Value::Atom(Atom::Imm(Imm::Float(value))) => Literal::Float(value),
+                        | _ => return Err(Error::Primitive(PrimitiveError::OperandType)),
+                    });
+                }
+                let result = kernel.evaluate(&inputs)?;
+                let bits = kernel.scalar().bits(&result).expect("checked kernel result");
+                // The store occurs only after every arithmetic operation succeeds.
+                unsafe { destination.write(&bits.to_le_bytes()) };
+                Ok(())
+            }
             | Instruction::Scalar(region) => {
                 let mut operand =
                     || match interp.runtime.stack.pop().ok_or(Error::StackUnderflow)? {
@@ -304,6 +330,64 @@ impl Eval for Instruction {
             }
             | Instruction::RetainFrame(_) => {
                 unreachable!("native frames require the AMD64 backend")
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zydeco_syntax::scalar::{KernelRegion, KernelStep, ScalarId, ScalarType};
+
+    #[test]
+    fn memory_kernel_writes_only_after_arithmetic_succeeds() {
+        for divisor in [2, 0] {
+            let mut bytes = [0xa5; 24];
+            bytes[1..9].copy_from_slice(&42_i64.to_le_bytes());
+            let before = bytes;
+            let address = zydeco_machine::memory::Address::from_pointer(bytes.as_mut_ptr());
+            let ty = ScalarType::Integer(IntegerType::Int64);
+            let kernel = KernelRegion {
+                inputs: vec![ty],
+                output: ty,
+                steps: vec![
+                    KernelStep::Literal(Literal::Integer(IntegerLiteral::Int64(divisor))),
+                    KernelStep::Arithmetic {
+                        operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Div),
+                        operands: [ScalarId(0), ScalarId(1)],
+                    },
+                ],
+                result: ScalarId(2),
+            }
+            .verify()
+            .unwrap();
+            let mut arena = AssemblyArena::default();
+            let root = IdAllocator::<AssemblyScope>::new().alloc();
+            arena.programs.insert_new(root, Program::Terminator(Terminator::Abort(Abort)));
+            let mut interpreter = Interpreter {
+                arena,
+                root,
+                runtime: Runtime {
+                    stack: vec![
+                        Value::Address(address.offset(11)),
+                        Value::Address(address.offset(1)),
+                    ],
+                    ..Runtime::default()
+                },
+            };
+            let result = Instruction::MemoryKernel(kernel).eval(&mut interpreter);
+            if divisor == 0 {
+                assert!(matches!(result, Err(Error::Primitive(PrimitiveError::DivisionByZero))));
+                assert_eq!(
+                    bytes, before,
+                    "a rejected kernel leaves the complete storage unchanged"
+                );
+            } else {
+                result.unwrap();
+                assert_eq!(&bytes[11..19], &21_i64.to_le_bytes());
+                assert_eq!(&bytes[..11], &before[..11]);
+                assert_eq!(&bytes[19..], &before[19..]);
             }
         }
     }

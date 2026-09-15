@@ -527,6 +527,7 @@ do keep <- ! numeric/int64/from_int 4096;
     ! churn address keep 200000
   }
 }
+
 "#,
     );
     for representation in ["boxed", "local"] {
@@ -737,6 +738,226 @@ do result <- ! churn 100000 ({initial} : {ty});
             let error = String::from_utf8_lossy(&output.stderr);
             assert!(error.contains("integer remainder by zero"), "{policy}/{target}: {error}");
             assert!(!error.contains("panicked"));
+        }
+    }
+}
+
+#[test]
+fn scalar_memory_kernels_keep_values_raw_and_preserve_ordinary_fallbacks() {
+    use zydeco_assembly::syntax::{Instruction, Program};
+    use zydeco_cli::RepresentationStrategy;
+    for (ty, group, initial, amount, expected) in [
+        ("Int64", "int64", "9223372036854775807", "1", "-9223372036854775808"),
+        ("UInt64", "uint64", "18446744073709551615", "1", "0"),
+        ("Float64", "float64", "1.25", "0.5", "1.75"),
+    ] {
+        let one = if ty == "Float64" { "1.0" } else { "1" };
+        let fixture = Fixture::new(&format!(
+            r#"
+let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
+let fix update (source : Addr) (destination : Addr) (amount : {ty}) : OS =
+  ! numeric/{group}/load_le OS source {{ fn value =>
+    do first <- ! numeric/{group}/add value amount;
+    do result <- ! numeric/{group}/mul first ({one} : {ty});
+    ! numeric/{group}/store_le OS destination result {{
+      ! numeric/{group}/load_le OS destination {{ fn observed =>
+        ! system/memory/free OS source 16 8 fail {{
+          ! numeric/{group}/eq OS observed ({expected} : {ty}) {{ ! process/exit 0 }} {{ ! process/exit 42 }}
+        }}
+      }}
+    }}
+  }}
+in
+! system/memory/allocate OS 16 8 fail {{ fn source =>
+  do destination <- ! system/memory/offset source 8;
+  ! numeric/{group}/store_le OS source ({initial} : {ty}) {{
+    ! update source destination ({amount} : {ty})
+  }}
+}}
+"#
+        ));
+        for (policy, expected_kernels) in
+            [(RepresentationStrategy::Boxed, 0), (RepresentationStrategy::Local, 1)]
+        {
+            let backend = CommandCompiler::default()
+                .with_representation(policy)
+                .lower(&fixture.source())
+                .unwrap();
+            let kernels = backend
+                .assembly()
+                .arena()
+                .programs
+                .iter()
+                .filter_map(|(_, program)| match program {
+                    | Program::Instruction(Instruction::MemoryKernel(kernel), _) => Some(kernel),
+                    | _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(kernels.len(), expected_kernels, "{group}");
+            if let Some(kernel) = kernels.first() {
+                assert_eq!(kernel.region().inputs.len(), 2, "load plus the runtime amount");
+            }
+        }
+        let assembly = fixture.build("default", "asm", &["--representation", "local"]);
+        Fixture::assert_success(&assembly);
+        let text = String::from_utf8(assembly.stdout).unwrap();
+        let kernel = text
+            .split("raw memory kernel: begin")
+            .nth(1)
+            .unwrap()
+            .split("raw memory kernel: end")
+            .next()
+            .unwrap();
+        assert!(!kernel.contains("call"), "successful arithmetic has no calls: {kernel}");
+        assert!(!kernel.contains("alloc"));
+        assert!(kernel.contains("mov QWORD [rcx], rax"), "one final exact-width store: {kernel}");
+        for policy in ["boxed", "local"] {
+            for target in ["exe", "wasm-am", "wasm-sps"] {
+                Fixture::assert_success(&fixture.execute_options(
+                    "default",
+                    target,
+                    &["--representation", policy],
+                ));
+            }
+        }
+    }
+}
+
+#[test]
+fn scalar_memory_kernel_failure_precedes_the_store_and_later_arithmetic() {
+    use zydeco_assembly::syntax::{Instruction, Program};
+    let fixture = Fixture::new(
+        r#"
+let fail = { fn (_ : Int) => ! process/exit 41 } in
+let fix update (address : Addr) (zero : Int64) : OS =
+  ! system/stdio/write_line "before" {
+    ! numeric/int64/load_le OS address { fn value =>
+      do quotient <- ! numeric/int64/div value zero;
+      do remainder <- ! numeric/int64/mod quotient zero;
+      ! numeric/int64/store_le OS address remainder {
+        ! system/stdio/write_line "after" { ! process/exit 42 }
+      }
+    }
+  }
+in
+! system/memory/allocate OS 8 8 fail { fn address =>
+  ! numeric/int64/store_le OS address (7 : Int64) {
+    ! update address (0 : Int64)
+  }
+}
+"#,
+    );
+    let backend = CommandCompiler::default().lower(&fixture.source()).unwrap();
+    assert_eq!(
+        backend
+            .assembly()
+            .arena()
+            .programs
+            .iter()
+            .filter(|(_, program)| matches!(
+                program,
+                Program::Instruction(Instruction::MemoryKernel(_), _)
+            ))
+            .count(),
+        1
+    );
+    for policy in ["boxed", "local"] {
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            let output = fixture.execute_options("default", target, &["--representation", policy]);
+            assert_eq!(output.status.code(), Some(1));
+            assert_eq!(output.stdout, b"before\n");
+            let message = String::from_utf8_lossy(&output.stderr);
+            assert!(message.contains("integer division by zero"), "{message}");
+            assert!(!message.contains("remainder by zero"));
+        }
+    }
+}
+
+#[test]
+fn scalar_memory_kernel_stops_at_shared_values_and_unknown_callbacks() {
+    use zydeco_assembly::syntax::{Instruction, Program};
+    for (reader, continuation) in [
+        (
+            "numeric/int64/load_le OS",
+            "! numeric/int64/eq OS result (8 : Int64) { ! process/exit 0 } { ! process/exit 42 }",
+        ),
+        ("read", "! process/exit 0"),
+    ] {
+        let fixture = Fixture::new(&format!(
+            r#"
+let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
+let fix read (address : Addr) (next : Thk (Int64 -> OS)) : OS =
+  ! numeric/int64/load_le OS address next
+in
+! system/memory/allocate OS 8 8 fail {{ fn address =>
+  ! numeric/int64/store_le OS address (7 : Int64) {{
+    ! {reader} address {{ fn value =>
+      do result <- ! numeric/int64/add value (1 : Int64);
+      ! numeric/int64/store_le OS address result {{
+        ! system/memory/free OS address 8 8 fail {{ {continuation} }}
+      }}
+    }}
+  }}
+}}
+"#
+        ));
+        let backend = CommandCompiler::default().lower(&fixture.source()).unwrap();
+        assert!(!backend.assembly().arena().programs.iter().any(|(_, program)| matches!(
+            program,
+            Program::Instruction(Instruction::MemoryKernel(_), _)
+        )));
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            Fixture::assert_success(&fixture.execute("default", target));
+        }
+    }
+}
+
+#[test]
+fn scalar_memory_kernel_bounds_preserve_fallback_and_aliasing() {
+    use zydeco_assembly::syntax::{Instruction, Program};
+    for (operations, expected_kernels) in [(32, 1), (33, 0)] {
+        let arithmetic = (0..operations)
+            .map(|index| {
+                format!("do v{} <- ! numeric/int64/add v{} (1 : Int64);\n", index + 1, index)
+            })
+            .collect::<String>();
+        let fixture = Fixture::new(&format!(
+            r#"
+let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
+! system/memory/allocate OS 16 8 fail {{ fn address =>
+  ! numeric/int64/store_le OS address (7 : Int64) {{
+    do destination <- ! system/memory/offset address 1;
+    ! numeric/int64/load_le OS address {{ fn v0 =>
+      {arithmetic}
+      ! numeric/int64/store_le OS destination v{operations} {{
+        ! numeric/int64/load_le OS destination {{ fn result =>
+          ! system/memory/free OS address 16 8 fail {{
+            ! numeric/int64/eq OS result ({expected} : Int64) {{ ! process/exit 0 }} {{ ! process/exit 42 }}
+          }}
+        }}
+      }}
+    }}
+  }}
+}}
+"#,
+            expected = 7 + operations
+        ));
+        let backend = CommandCompiler::default().lower(&fixture.source()).unwrap();
+        assert_eq!(
+            backend
+                .assembly()
+                .arena()
+                .programs
+                .iter()
+                .filter(|(_, program)| matches!(
+                    program,
+                    Program::Instruction(Instruction::MemoryKernel(_), _)
+                ))
+                .count(),
+            expected_kernels
+        );
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            Fixture::assert_success(&fixture.execute("default", target));
         }
     }
 }

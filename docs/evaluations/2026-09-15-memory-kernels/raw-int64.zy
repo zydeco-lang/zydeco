@@ -1,0 +1,27 @@
+param (/Addr; /Int; /Int64; /OS; /system; /numeric; /process) : @(import(
+  "../../../lib/std/builtin.zy"
+)) in
+let fail = { fn (_ : Int) => ! process/exit 41 } in
+let fix update (address : Addr) (amount : Int64) : OS =
+  ! numeric/int64/load_le OS address {
+    fn value =>
+      do first <- ! numeric/int64/add value amount;
+      do result <- ! numeric/int64/mul first (1 : Int64);
+      ! numeric/int64/store_le OS address result {
+        ! numeric/int64/load_le OS address {
+          fn observed =>
+            ! system/memory/free OS address 8 8 fail {
+              ! numeric/int64/eq OS observed (-9223372036854775808 : Int64)
+                { ! process/exit 0 } { ! process/exit 42 }
+            }
+        }
+      }
+  }
+in
+! system/memory/allocate OS 8 8 fail {
+  fn address =>
+    ! numeric/int64/store_le OS address (9223372036854775807 : Int64) {
+      do amount <- ! numeric/int64/from_int 1;
+      ! update address amount
+    }
+}

@@ -258,6 +258,30 @@ impl<'f> WordEmitter<'f> {
             .instruction(&WasmInstruction::LocalGet(base + program.region().result.0 as u32));
     }
 
+    /// Inputs are raw locals. No value memory, allocation, or source callback is used.
+    pub fn scalar_kernel(&mut self, kernel: &zydeco_syntax::scalar::ScalarKernel, base: u32) {
+        use zydeco_syntax::{memory::MemoryScalar, scalar::KernelStep};
+        let region = kernel.region();
+        for (index, step) in region.steps.iter().enumerate() {
+            let target = base + (region.inputs.len() + index) as u32;
+            match step {
+                | KernelStep::Literal(literal) => {
+                    let ty = ScalarType::of_literal(literal).expect("verified scalar");
+                    let bits = MemoryScalar::from(ty).bits(literal).expect("typed scalar bits");
+                    self.function.instruction(&WasmInstruction::I64Const(bits as i64));
+                    self.function.instruction(&WasmInstruction::LocalSet(target));
+                }
+                | KernelStep::Arithmetic { operation, operands } => self.raw_arithmetic(
+                    *operation,
+                    base + operands[0].0 as u32,
+                    base + operands[1].0 as u32,
+                    target,
+                ),
+            }
+        }
+        self.function.instruction(&WasmInstruction::LocalGet(base + region.result.0 as u32));
+    }
+
     fn raw_arithmetic(&mut self, operation: PrimitiveOp, first: u32, second: u32, result: u32) {
         match operation {
             | PrimitiveOp::Integer(ty, operation) => {

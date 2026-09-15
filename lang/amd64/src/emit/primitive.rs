@@ -106,7 +106,7 @@ impl Emitter<'_> {
         )));
     }
 
-    fn raw_arithmetic(&mut self, operation: PrimitiveOp, id: ProgId, index: usize) {
+    pub(super) fn raw_arithmetic(&mut self, operation: PrimitiveOp, id: ProgId, index: usize) {
         self.asm.text.push(Instr::Comment(format!("primitive: {operation}")));
         match operation {
             | PrimitiveOp::Integer(ty, operation) => {

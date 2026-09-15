@@ -562,6 +562,12 @@ impl<'a> CaseEncoder<'a> {
 
     fn emit_compu(&mut self, mut id: CompuId) -> Result<(), EmitError> {
         loop {
+            if let Some(call) = self.plan.scalars.memory(id).cloned() {
+                self.emit_memory_kernel(&call)?;
+                id = call.next;
+                continue;
+            }
+
             match self.arena.inner.compus[&id].clone() {
                 | Computation::Memory(sps::MemoryStep::Load { scalar, address, result, next }) => {
                     let function = self.plan.memory_functions
@@ -1020,6 +1026,38 @@ impl<'a> CaseEncoder<'a> {
         self.load_local_word(self.plan.locals.scratch_word, 1);
         self.set_program_counter_from_code();
         self.function.instruction(&WasmInstruction::Return);
+    }
+
+    fn emit_memory_kernel(
+        &mut self, call: &zydeco_stackir::low::scalar::MemoryCall,
+    ) -> Result<(), EmitError> {
+        let scalar = call.kernel.scalar();
+        for &input in call.inputs.iter().rev() {
+            self.emit_value(input)?;
+            self.function.instruction(&WasmInstruction::Drop);
+        }
+        self.emit_value(call.store_address)?;
+        self.function.instruction(&WasmInstruction::Drop);
+        self.emit_value(call.load_address)?;
+        self.function.instruction(&WasmInstruction::Call(
+            self.plan.memory_functions[&MemoryAccess { scalar, kind: AccessKind::Load }],
+        ));
+        self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.scalar_base));
+        for (index, &input) in call.inputs.iter().enumerate() {
+            let local = self.plan.locals.scalar_base + index as u32 + 1;
+            self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.value(input)?));
+            self.function.instruction(&WasmInstruction::LocalSet(local));
+            WordEmitter::new(&mut self.function, self.plan.alloc_function())
+                .memory_decode(call.kernel.region().inputs[index + 1].into(), local);
+        }
+        self.function
+            .instruction(&WasmInstruction::LocalGet(self.plan.locals.value(call.store_address)?));
+        WordEmitter::new(&mut self.function, self.plan.alloc_function())
+            .scalar_kernel(&call.kernel, self.plan.locals.scalar_base);
+        self.function.instruction(&WasmInstruction::Call(
+            self.plan.memory_functions[&MemoryAccess { scalar, kind: AccessKind::Store }],
+        ));
+        Ok(())
     }
 
     fn emit_scalar(&mut self, id: ValueId) -> Result<(), EmitError> {

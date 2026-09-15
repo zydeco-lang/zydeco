@@ -11,6 +11,9 @@ use zydeco_syntax::scalar::{
 };
 use zydeco_syntax::word::ScalarRepresentation;
 
+mod memory;
+pub use memory::MemoryCall;
+
 const MAX_OPERATIONS: usize = 32;
 
 #[derive(Clone, Debug)]
@@ -23,6 +26,7 @@ pub struct ScalarCall {
 pub struct ScalarPlans {
     calls: HashMap<ValueId, ScalarCall>,
     elided: HashSet<CompuId>,
+    memories: HashMap<CompuId, MemoryCall>,
 }
 
 impl ScalarPlans {
@@ -42,7 +46,7 @@ impl ScalarPlans {
                 | _ => None,
             })
             .collect();
-        Self { calls, elided: HashSet::new() }
+        Self { calls, ..Self::default() }
     }
 
     pub fn new(program: &SpsLowProgram, boxing: ScalarBoxing) -> Self {
@@ -73,6 +77,11 @@ impl ScalarPlans {
                 *uses.entry(capture.binding).or_default() += 1;
             }
         }
+        plans.memories = arena
+            .compus
+            .iter()
+            .filter_map(|(&id, _)| memory::MemoryCall::at(arena, id, &uses).map(|call| (id, call)))
+            .collect();
         let tails = arena
             .compus
             .iter()
@@ -129,16 +138,25 @@ impl ScalarPlans {
     pub fn call(&self, value: ValueId) -> &ScalarCall {
         &self.calls[&value]
     }
+    pub fn memory(&self, compu: CompuId) -> Option<&MemoryCall> {
+        self.memories.get(&compu)
+    }
     pub fn elided(&self, compu: CompuId) -> bool {
         self.elided.contains(&compu)
     }
     pub fn max_definitions(&self) -> usize {
-        self.calls.values().map(|call| call.program.representations().len()).max().unwrap_or(0)
+        self.calls
+            .values()
+            .map(|call| call.program.representations().len())
+            .chain(self.memories.values().map(|call| call.kernel.definitions()))
+            .max()
+            .unwrap_or(0)
     }
 }
 
 #[derive(Clone)]
 enum Expression {
+    Loaded,
     Input(ValueId, ScalarType),
     Arithmetic(PrimitiveOp, [usize; 2]),
 }
@@ -210,6 +228,9 @@ impl Expressions {
         let mut definitions = Vec::<ScalarId>::new();
         for node in self.nodes {
             let definition = match node {
+                | Expression::Loaded => {
+                    unreachable!("ordinary scalar regions have no memory input")
+                }
                 | Expression::Input(_, _) => {
                     next_input -= 1;
                     ScalarId(next_input)

@@ -1590,9 +1590,8 @@ The caller remains responsible for allocation validity, initialization, and acce
 
 Wide loads allocate an opaque scalar box when producing an ordinary value.
 Their raw bits remain outside the GC root range across that allocation; existing live values remain roots.
-Stores decode their ordinary input before writing. These conversions are currently separate
-from [scalar regions](#scalar-value-boundaries), so load–arithmetic–store box elimination
-remains [proposed work](../proposals/memory-compilation.md#44-carry-raw-components-only-across-agreeing-entries).
+Stores decode their ordinary input before writing.
+[Raw memory kernels](#raw-memory-kernels) remove these conversions when a bounded local chain closes at a store.
 
 Both Wasm backends call `raw_*` memory imports with virtual 64-bit addresses and raw bits:
 loads return one `i64`, and stores return nothing.
@@ -2429,6 +2428,45 @@ and numeric payloads equal to heap addresses.
 These checks cover the implemented lowering; machine instruction selection remains trusted and tested.
 [Further scalar unboxing](../proposals/escape-unboxing.md#further-scalar-unboxing) needs explicit evidence at joins,
 source calls, captures, and mixed raw/reference layouts.
+
+### Raw memory kernels
+
+A [memory kernel](../../lang/syntax/src/scalar/kernel.rs) encloses raw scalar arithmetic between one load and one store.
+The shared [low-SPS planner](../../lang/stackir/src/low/scalar/memory.rs) recognizes `Int64`, `UInt64`,
+and `Float64` loads followed by a primitive tree or adjacent single-use scalar bindings
+and a store of the same scalar type, with at most 32 arithmetic operations and 32 intervening bindings.
+Every eliminated binding must be consumed inside the kernel.
+Calls, branches, shared or escaping results, other effects, and incompatible scalar types end eligibility.
+An independent destination variable or bounded total wrapping address calculation may move to the entry;
+an intervening address binding or possibly trapping displacement retains ordinary lowering.
+The boxed policy disables kernel formation; other scalar-eliminating policies enable it.
+
+The immutable `ScalarKernel` has an explicit memory boundary: input zero is the loaded scalar,
+other inputs are decoded ordinary scalar variables, constants become raw literals, and the raw result feeds the store.
+Its verifier reuses the scalar arithmetic representation checker, requires matching load/store types,
+and rejects unavailable or mismatched operands.
+Its instruction set contains no source calls, managed values, scanned fields, or representation-changing steps.
+Ordinary `ScalarProgram` inputs and results continue to require the value ABI.
+No raw entry convention is inferred for a source function or unknown callback.
+
+ZASM keeps the complete kernel in one instruction, consuming two addresses and its ordinary scalar arguments.
+Native lowering loads once, executes the checked arithmetic sequence, and stores once;
+literal and intermediate scalars introduce no boxes, callback objects, or successful-path calls inside the kernel.
+Raw definitions have distinct temporary stack homes, with no collection inside that area.
+Fatal arithmetic helpers do not return; required failures precede the store and later arithmetic.
+This removes allocation sites without claiming register allocation or minimal spill traffic.
+Wasm uses raw locals and the existing virtual-memory imports for the load and store;
+the host's address lookup cost remains.
+
+The [regressions](../../cli/tests/passes.rs) pair optimized kernels with ordinary and unknown-callback paths,
+check full-width wrapping and runtime operands across all backends, preserve error order,
+and exercise the size limit and overlapping unaligned addresses.
+The [assembly interpreter check](../../lang/assembly/src/interp.rs) pairs a successful write
+with arithmetic failure and verifies unchanged destination bytes on failure.
+The [dated probe](../evaluations/2026-09-15-memory-kernels/README.md) records whole-program allocation sites separately
+from the allocation-free kernel.
+Calls, joins, managed components, and broader contification remain
+in [memory compilation](../proposals/memory-compilation.md#44-carry-raw-components-only-across-agreeing-entries).
 
 ### Runtime instances
 

@@ -71,8 +71,9 @@ The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduct
 
 ## Further scalar unboxing
 
-Verified scalar regions and straight-line box elimination are implemented;
-[scalar value boundaries](../references/compiler.md#scalar-value-boundaries) own their rules and validation.
+Verified scalar regions, straight-line box elimination, and bounded load–arithmetic–store kernels are implemented;
+[scalar value boundaries](../references/compiler.md#scalar-value-boundaries)
+and [raw memory kernels](../references/compiler.md#raw-memory-kernels) own their rules and validation.
 Local storage currently gives each definition a distinct home.
 Reusing homes or selecting registers needs liveness checks and measurements of spills and runtime cost.
 Extensions beyond a local arithmetic region require additional evidence:

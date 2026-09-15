@@ -1,0 +1,19 @@
+{
+  "source_sha256": "c93d3c9d56c5e727cd4212bd2c7fdcdb602e8ca5bdf9371b24d73a62259baef7",
+  "static_amd64_sites": {
+    "boxed": {
+      "scanned_allocation_sites": 10,
+      "opaque_allocation_sites": 8,
+      "kernels": 0,
+      "kernel_calls": 0,
+      "kernel_allocation_sites": 0
+    },
+    "local": {
+      "scanned_allocation_sites": 10,
+      "opaque_allocation_sites": 4,
+      "kernels": 1,
+      "kernel_calls": 0,
+      "kernel_allocation_sites": 0
+    }
+  }
+}

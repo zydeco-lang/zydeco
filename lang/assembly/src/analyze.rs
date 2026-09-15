@@ -208,6 +208,11 @@ impl<'a> StackMeasure<'a> for ProgId {
                             si.push_control(&mut layout, Slot::Unknown);
                         }
                     }
+                    | Instruction::MemoryKernel(kernel) => {
+                        (0..kernel.stack_inputs()).for_each(|_| {
+                            si.pop_control(&mut layout);
+                        });
+                    }
                     | Instruction::AddrOffset => {
                         si.pop_control(&mut layout);
                         si.pop_control(&mut layout);
@@ -273,6 +278,7 @@ impl<'a> StackInline<'a> for ProgId {
                     | Instruction::Scalar(_)
                     | Instruction::AddrOffset
                     | Instruction::Memory(_)
+                    | Instruction::MemoryKernel(_)
                     | Instruction::Clear(_)
                     | Instruction::RetainFrame(_),
                     _,

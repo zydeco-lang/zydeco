@@ -67,6 +67,7 @@ pub enum Instruction {
     PushTag(Push<Tag>),
     /// Verified scalar operations with ordinary value inputs and one ordinary result.
     Scalar(zydeco_syntax::scalar::ScalarProgram),
+    MemoryKernel(zydeco_syntax::scalar::ScalarKernel),
     /// Pop an unmanaged address and a tagged `Int` byte displacement; push the
     /// wrapping address result without dereferencing or allocating.
     AddrOffset,

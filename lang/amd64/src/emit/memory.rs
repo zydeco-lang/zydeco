@@ -1,10 +1,87 @@
 //! Ordered, exact-width accesses to unmanaged storage.
 
 use super::*;
+use zydeco_syntax::scalar::{KernelStep, ScalarKernel};
 use zydeco_syntax::{
     memory::{AccessKind, MemoryAccess, MemoryScalar},
     word::ScalarRepresentation,
 };
+
+impl<'a> Emit<'a> for ScalarKernel {
+    type Env = ProgId;
+
+    fn emit(&self, id: ProgId, em: &mut Emitter) {
+        let region = self.region();
+        let words = self.definitions() + 1;
+        let home = |index| MemRef { reg: Reg::Rsp, offset: (index * 8) as i32 };
+        em.asm.text.extend([
+            Instr::Comment("raw memory kernel: begin".into()),
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Pop(Loc::Reg(Reg::Rcx)),
+            Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed((words * 8) as i32))),
+            Instr::Mov(MovArgs::ToMem(home(self.definitions()), Reg32::Reg(Reg::Rcx))),
+            Instr::LoadMemory(ScalarMemoryMove {
+                width: self.scalar().width(),
+                address: MemRef { reg: Reg::Rax, offset: 0 },
+            }),
+            Instr::Mov(MovArgs::ToMem(home(0), Reg32::Reg(Reg::Rax))),
+        ]);
+        em.shift_stack_parity(words as i64 - 2);
+        // No allocation or source call occurs inside this raw area. Fatal arithmetic
+        // helpers cannot return; all ordinary live values remain outside the area.
+        for (index, &ty) in region.inputs.iter().enumerate().skip(1) {
+            em.asm
+                .text
+                .push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(home(words + index - 1)))));
+            match ty {
+                | zydeco_syntax::scalar::ScalarType::Integer(ty) => em.decode_integer(Reg::Rax, ty),
+                | zydeco_syntax::scalar::ScalarType::Float(FloatType::Float32) => {
+                    em.asm.text.push(Instr::Shr(ShArgs { reg: Reg::Rax, by: 1 }))
+                }
+                | zydeco_syntax::scalar::ScalarType::Float(FloatType::Float64) => {
+                    em.asm.text.push(Instr::Mov(MovArgs::ToReg(
+                        Reg::Rax,
+                        Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }),
+                    )))
+                }
+            }
+            em.asm.text.push(Instr::Mov(MovArgs::ToMem(home(index), Reg32::Reg(Reg::Rax))));
+        }
+        for (index, step) in region.steps.iter().enumerate() {
+            match step {
+                | KernelStep::Literal(literal) => {
+                    let ty = zydeco_syntax::scalar::ScalarType::of_literal(literal)
+                        .expect("verified scalar");
+                    let bits = MemoryScalar::from(ty).bits(literal).expect("typed scalar bits");
+                    em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Unsigned(bits))));
+                }
+                | KernelStep::Arithmetic { operation, operands } => {
+                    em.asm.text.extend([
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(home(operands[0].0)))),
+                        Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Mem(home(operands[1].0)))),
+                    ]);
+                    em.raw_arithmetic(*operation, id, index);
+                }
+            }
+            em.asm.text.push(Instr::Mov(MovArgs::ToMem(
+                home(region.inputs.len() + index),
+                Reg32::Reg(Reg::Rax),
+            )));
+        }
+        let consumed = words + region.inputs.len() - 1;
+        em.asm.text.extend([
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Mem(home(region.result.0)))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Mem(home(self.definitions())))),
+            Instr::StoreMemory(ScalarMemoryStore {
+                width: self.scalar().width(),
+                address: MemRef { reg: Reg::Rcx, offset: 0 },
+            }),
+            Instr::Add(BinArgs::ToReg(Reg::Rsp, Arg32::Signed((consumed * 8) as i32))),
+            Instr::Comment("raw memory kernel: end".into()),
+        ]);
+        em.shift_stack_parity(-(consumed as i64));
+    }
+}
 
 impl<'a> Emit<'a> for MemoryAccess {
     type Env = ProgId;

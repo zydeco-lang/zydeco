@@ -3,6 +3,9 @@
 //! Inputs and the result use the ordinary value ABI. Raw values are local to the
 //! region; its instruction set cannot call source code or construct scanned fields.
 
+mod kernel;
+pub use kernel::{KernelRegion, KernelStep, ScalarKernel};
+
 use crate::word::ScalarRepresentation;
 use crate::{FloatType, IntegerType, Literal, PrimitiveError, PrimitiveOp};
 
@@ -56,6 +59,37 @@ pub enum ScalarStep {
 }
 
 impl ScalarStep {
+    fn verify(self, representations: &mut Vec<ScalarRepr>) -> Result<(), ScalarError> {
+        let at = ScalarId(representations.len());
+        let check = |value: ScalarId, expected| {
+            let found =
+                *representations.get(value.0).ok_or(ScalarError::Unavailable { at, value })?;
+            if found != expected {
+                return Err(ScalarError::Representation { at, value, expected, found });
+            }
+            Ok(())
+        };
+        let representation = match self {
+            | ScalarStep::Decode { ty, value } => {
+                check(value, ScalarRepr::Value(ty))?;
+                ScalarRepr::Raw(ty)
+            }
+            | ScalarStep::Encode { ty, raw } => {
+                check(raw, ScalarRepr::Raw(ty))?;
+                ScalarRepr::Value(ty)
+            }
+            | ScalarStep::Arithmetic { operation, operands } => {
+                let representation = ScalarRepr::Raw(operation.scalar_type());
+                for operand in operands {
+                    check(operand, representation)?;
+                }
+                representation
+            }
+        };
+        representations.push(representation);
+        Ok(())
+    }
+
     fn map(self, mut f: impl FnMut(ScalarId) -> ScalarId) -> Self {
         match self {
             | Self::Decode { ty, value } => Self::Decode { ty, value: f(value) },
@@ -92,6 +126,12 @@ pub struct ScalarRegion {
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ScalarError {
+    #[error("memory kernel requires a full-width scalar carrier, found {ty:?}")]
+    MemoryCarrier { ty: ScalarType },
+    #[error("memory kernel requires its first input to have the stored scalar type")]
+    MemoryInput,
+    #[error("memory kernel constant is not a typed scalar")]
+    NonScalarLiteral,
     #[error("scalar definition {value:?} is unavailable at definition {at:?}")]
     Unavailable { at: ScalarId, value: ScalarId },
     #[error("scalar definition {at:?} expects {expected:?} from {value:?}, found {found:?}")]
@@ -122,33 +162,7 @@ impl ScalarRegion {
         let mut representations =
             self.inputs.iter().copied().map(ScalarRepr::Value).collect::<Vec<_>>();
         for step in &self.steps {
-            let at = ScalarId(representations.len());
-            let check = |value: ScalarId, expected| {
-                let found =
-                    *representations.get(value.0).ok_or(ScalarError::Unavailable { at, value })?;
-                if found != expected {
-                    return Err(ScalarError::Representation { at, value, expected, found });
-                }
-                Ok(())
-            };
-            let representation = match *step {
-                | ScalarStep::Decode { ty, value } => {
-                    check(value, ScalarRepr::Value(ty))?;
-                    ScalarRepr::Raw(ty)
-                }
-                | ScalarStep::Encode { ty, raw } => {
-                    check(raw, ScalarRepr::Raw(ty))?;
-                    ScalarRepr::Value(ty)
-                }
-                | ScalarStep::Arithmetic { operation, operands } => {
-                    let representation = ScalarRepr::Raw(operation.scalar_type());
-                    for operand in operands {
-                        check(operand, representation)?;
-                    }
-                    representation
-                }
-            };
-            representations.push(representation);
+            step.verify(&mut representations)?;
         }
         let found = *representations.get(self.result.0).ok_or(ScalarError::Unavailable {
             at: ScalarId(representations.len()),

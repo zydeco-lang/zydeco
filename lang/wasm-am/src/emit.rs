@@ -37,6 +37,7 @@ const POINTER_LOCAL: u32 = 0;
 const WORD_LOCAL: u32 = 2;
 const TAG_LOCAL: u32 = WORD_LOCAL;
 const FIRST_ARGUMENT_LOCAL: u32 = 3;
+const KERNEL_DESTINATION_LOCAL: u32 = 4;
 const RESULT_LOCAL: u32 = 7;
 const TRANSFER_COUNT_LOCAL: u32 = 8;
 const TRANSFER_CLOSURE_LOCAL: u32 = 9;
@@ -254,9 +255,14 @@ impl ModulePlan {
         HostImport::append_memory(
             &mut host_imports,
             first_host_function,
-            assembly.programs.iter().filter_map(|(_, program)| match program {
-                | Program::Instruction(Instruction::Memory(access), _) => Some(*access),
-                | _ => None,
+            assembly.programs.iter().flat_map(|(_, program)| match program {
+                | Program::Instruction(Instruction::Memory(access), _) => vec![*access],
+                | Program::Instruction(Instruction::MemoryKernel(kernel), _) => {
+                    [AccessKind::Load, AccessKind::Store]
+                        .map(|kind| MemoryAccess { scalar: kernel.scalar(), kind })
+                        .to_vec()
+                }
+                | _ => Vec::new(),
             }),
         )?;
         let host_functions =
@@ -496,6 +502,7 @@ impl<'a> ModuleEncoder<'a> {
                 | Instruction::PopArg(_) => "pop",
                 | Instruction::PushTag(_) => "tag",
                 | Instruction::Scalar(_) => "scalar",
+                | Instruction::MemoryKernel(_) => "memory_kernel",
                 | Instruction::AddrOffset => "address_offset",
                 | Instruction::Memory(_) => "memory_access",
                 | Instruction::Clear(_) => "clear",
@@ -526,6 +533,9 @@ impl<'a> CaseEncoder<'a> {
 
     fn encode(mut self, body: &Program) -> Result<Function, EmitError> {
         let scalar_locals = match body {
+            | Program::Instruction(Instruction::MemoryKernel(kernel), _) => {
+                Limits::u32(kernel.definitions(), "scalar kernel local count")?
+            }
             | Program::Instruction(Instruction::Scalar(region), _) => {
                 Limits::u32(region.representations().len(), "scalar local count")?
             }
@@ -562,6 +572,7 @@ impl<'a> CaseEncoder<'a> {
                 self.push_constant(RuntimeWord::index(tag.idx)? as i64);
             }
             | Instruction::Scalar(region) => self.emit_scalar(region),
+            | Instruction::MemoryKernel(kernel) => self.emit_memory_kernel(kernel)?,
             | Instruction::Memory(access) => self.emit_memory(*access)?,
             | Instruction::AddrOffset => {
                 self.pop_to(WORD_LOCAL);
@@ -809,6 +820,35 @@ impl<'a> CaseEncoder<'a> {
                 self.function.instruction(&WasmInstruction::Call(function));
             }
         }
+        Ok(())
+    }
+
+    fn emit_memory_kernel(
+        &mut self, kernel: &zydeco_syntax::scalar::ScalarKernel,
+    ) -> Result<(), EmitError> {
+        let function = |kind| {
+            self.plan.host_function(&HostImport::memory_name(MemoryAccess {
+                scalar: kernel.scalar(),
+                kind,
+            }))
+        };
+        let load = function(AccessKind::Load)?;
+        let store = function(AccessKind::Store)?;
+        self.pop_to(FIRST_ARGUMENT_LOCAL);
+        self.pop_to(KERNEL_DESTINATION_LOCAL);
+        self.function.instruction(&WasmInstruction::LocalGet(FIRST_ARGUMENT_LOCAL));
+        self.function.instruction(&WasmInstruction::Call(load));
+        self.function.instruction(&WasmInstruction::LocalSet(SCALAR_BASE_LOCAL));
+        for (index, &ty) in kernel.region().inputs.iter().enumerate().skip(1) {
+            let local = SCALAR_BASE_LOCAL + index as u32;
+            self.pop_to(local);
+            WordEmitter::new(&mut self.function, self.plan.alloc_function())
+                .memory_decode(ty.into(), local);
+        }
+        self.function.instruction(&WasmInstruction::LocalGet(KERNEL_DESTINATION_LOCAL));
+        WordEmitter::new(&mut self.function, self.plan.alloc_function())
+            .scalar_kernel(kernel, SCALAR_BASE_LOCAL);
+        self.function.instruction(&WasmInstruction::Call(store));
         Ok(())
     }
 

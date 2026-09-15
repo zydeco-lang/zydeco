@@ -289,6 +289,17 @@ impl Lowering<'_, '_> {
 
     fn compu(&mut self, id: sk::CompuId, context: Context) -> Step<Self> {
         use sk::Computation as Compu;
+        if let Some(call) = self.lo.scalars.memory(id).cloned() {
+            let next = self.save(Continuation::Body(call.next));
+            let next = self.instruction(call.kernel, next);
+            let next = self.then(Action::Value(call.load_address), next);
+            let next = self.then(Action::Value(call.store_address), next);
+            let next = call
+                .inputs
+                .into_iter()
+                .fold(next, |next, value| self.then(Action::Value(value), next));
+            return Step::TailCall(Work::Apply(next, context));
+        }
         if self.lo.scalars.elided(id) {
             let Compu::LetValue(binding) = &self.lo.sps_low.inner.compus[&id] else {
                 unreachable!()

@@ -9,6 +9,15 @@ pub enum MemoryScalar {
     Address,
 }
 
+impl From<crate::scalar::ScalarType> for MemoryScalar {
+    fn from(ty: crate::scalar::ScalarType) -> Self {
+        match ty {
+            | crate::scalar::ScalarType::Integer(ty) => Self::Integer(ty),
+            | crate::scalar::ScalarType::Float(ty) => Self::Float(ty),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ByteOrder {
     Little,

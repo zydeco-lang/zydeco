@@ -17,3 +17,4 @@ Temporary investigation notes remain in [logs](../logs).
 | 2026-09-08 | [CBPV runtime evaluation](2026-09-08-cbpv-runtime/README.md) | Environment storage, capture copying, root discovery, native runtime comparisons, and Wasm memory. |
 | 2026-09-14 | [Isolated assembly lowering evaluation](2026-09-14-assembly-lowering/README.md) | Boxed CPS and folder comparisons, isolated pass timing and allocation costs, consumer-slot reuse, reduced dispatch, and rejected optimization experiments. |
 | 2026-09-14 | [Memory abstraction comparison](2026-09-14-memory-abstractions/README.md) | Raw, fixed-view, and header-view code sites, interpreter checks, and reproducible limits of erasure. |
+| 2026-09-15 | [Bounded raw memory kernels](2026-09-15-memory-kernels/README.md) | Raw wide-scalar load–arithmetic–store kernels, allocation sites, ordinary fallbacks, and execution checks. |

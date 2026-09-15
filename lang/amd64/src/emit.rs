@@ -234,6 +234,7 @@ impl<'e> Emitter<'e> {
             | Instruction::AddrOffset
             | Instruction::RetainFrame(_) => true,
             | Instruction::Scalar(region) => region.region().inputs.len() % 2 == 0,
+            | Instruction::MemoryKernel(kernel) => kernel.stack_inputs() % 2 != 0,
             | Instruction::AllocContext(_) | Instruction::Clear(_) | Instruction::Memory(_) => {
                 false
             }
@@ -1151,6 +1152,7 @@ impl<'a> Emit<'a> for Instruction {
                 region.emit(id, em);
             }
             | Instruction::Memory(access) => access.emit(id, em),
+            | Instruction::MemoryKernel(kernel) => kernel.emit(id, em),
             | Instruction::Clear(_) => {
                 // Slot maps exclude dead bindings from collection. A pending continuation
                 // may still retain the same physical slot, so do not overwrite it here.

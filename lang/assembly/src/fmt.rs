@@ -175,6 +175,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::PopArg(pop) => pop.pretty(f),
             | Instruction::PushTag(push) => push.pretty(f),
             | Instruction::Scalar(region) => RcDoc::text(format!("scalar {:?}", region.region())),
+            | Instruction::MemoryKernel(kernel) => {
+                RcDoc::text(format!("memory_kernel {:?}", kernel.region()))
+            }
             | Instruction::AddrOffset => RcDoc::text("addr.offset"),
             | Instruction::Memory(access) => {
                 RcDoc::text(format!("memory {:?} {:?}", access.kind, access.scalar))
