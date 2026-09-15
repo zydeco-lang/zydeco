@@ -1,0 +1,42 @@
+-- Proposed interface shapes, checked with today's kinds. No new std implementation is supplied.
+begin
+  param val (/VType; /CType; /Thk; /Unit; /Addr; /Int; builtin) : @(import(
+    "../../../lib/std/builtin.zy"
+  )) in
+  param val (/Uninit; /Init; /Ptr) : (@(import("../../../lib/std/memory/types.type.zy"))) Addr in
+  let Cps (A : VType) = forall (R : CType) . Thk (A -> R) -> R in
+  let Checked (E : VType) (A : VType) = forall (R : CType) . Thk (E -> R) -> Thk (A -> R) -> R in
+  let View (P : VType -> CType) (H : VType) (A : VType) = val pi (handle : H) . Thk (P A) in
+  let Fault = @(import("../../../lib/std/memory/fault.zy")) in
+  let SizeAlign = (#size :: Int) * (#alignment :: Int) in
+  let Storage (L : VType) = val pi (_ : Unit) . SizeAlign in
+  let DynamicStorage (L : VType) = SizeAlign in
+  let Codec (L : VType) (A : VType) =
+      (#init :: val pi (pointer : Ptr L Uninit) (value : A) . Thk (Cps (Ptr L Init)))
+    * (#read :: View Cps (Ptr L Init) A)
+  in
+  let DynamicCodec (L : VType) (A : VType) =
+      (#init :: Thk (Ptr L Uninit -> A -> Cps (Ptr L Init)))
+    * (#read :: Thk (Ptr L Init -> Cps A))
+  in
+  let StaticAlloc (Context : VType) =
+      (
+        #allocate :: val pi (context : Context) (size : Int) (alignment : Int) .
+          Thk (Checked Fault Addr)
+      )
+    * (
+        #free :: val pi (context : Context) (base : Addr) (size : Int) (alignment : Int) .
+          Thk (forall (R : CType) . Thk (Fault -> R) -> Thk R -> R)
+      )
+  in
+  pack
+      (= SizeAlign as SizeAlign : VType)
+      (= Storage as Storage : VType -> VType)
+      (= DynamicStorage as DynamicStorage : VType -> VType)
+      (= Codec as Codec : VType -> VType -> VType)
+      (= DynamicCodec as DynamicCodec : VType -> VType -> VType)
+      (= StaticAlloc as StaticAlloc : VType -> VType)
+  where
+    ()
+  end
+end

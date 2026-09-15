@@ -1,11 +1,261 @@
 # Compiling memory abstractions
 
-The memory redesign gives the programmer control over payload layout, allocation, initialization, and release.
-The remaining question is whether composing those operations adds machine work that a direct implementation can avoid.
-This document records the gaps identified on 2026-09-14 and acceptance criteria for closing them.
-It indexes unfinished work; the linked references continue to define current guarantees.
+A systems program should be able to describe a byte layout, allocate it with a chosen allocator,
+initialize selected fields, and update an element without manufacturing a logical copy of the object.
 
-## Cost criterion and current boundary
+**Ordinary values** leave their physical representation to the compiler.
+**Explicit memory interfaces** establish programmer-selected storage contracts; optimization must preserve them. This
+applies the existing [storage and representation boundary](../references/compiler.md#storage-evidence-and-machine-calls)
+to the proposed interfaces and lowering.
+
+The worked example follows a header-array update from source types to machine code.
+The proposal retains the gaps identified on 2026-09-14 and gives them concrete interfaces and implementation boundaries.
+
+The implemented foundation remains [L13](../references/language.md#manual-memory).
+`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc` below are proposed std interfaces;
+the memory IR and raw component transport across calls remain proposed compiler work.
+The [interface sketch](../examples/memory-compilation/interfaces.zy) checks with the current kinds and value functions.
+It checks the shapes only: its aliases expose candidate representations and supply no validated constructors,
+new std implementation, or code-generation guarantee.
+No source lifetimes, linearity rules, or new universe of layout types is required.
+
+## 1. Start with the bytes
+
+Consider the [existing header-array example](../../lib/tests/std/header-array.zy):
+an `Int` length followed by four `UInt32` elements, with the payload aligned to 16 bytes.
+The length is mutable runtime metadata; capacity four and element stride four are fixed choices.
+
+| Byte offsets | Meaning | Size | Required allocation alignment |
+| --- | --- | ---: | ---: |
+| 0–7 | Little-endian `Int` length | 8 | 8 |
+| 8–15 | Padding before the payload | 8 | No value to initialize |
+| 16–31 | Four little-endian `UInt32` elements | 16 | Payload boundary raised to 16 |
+| Whole object | Original allocation base | 32 | 16 |
+
+These offsets describe the addressed object.
+An ordinary record containing the same logical values leaves its physical representation to the compiler;
+selecting this storage layout fixes the bytes visible through its address.
+The compiler can still optimize temporary values used to initialize or read those bytes.
+
+The payload handle can be just `base + 16`; its type carries no length or alignment integer.
+An inline-header view starts at `base`, reads the length there, and yields the payload pointer and that observation.
+A prefix view starts at the payload pointer and reads the length at displacement `-16`.
+A fat view instead receives a pointer and an explicit length from its caller.
+These choices determine whether opening performs a load, arithmetic, or neither.
+Reopening a header performs a fresh observation; a saved length does not track later mutation.
+
+Nothing initializes padding implicitly. Whole-array initialization writes the four elements directly.
+Initializing a partial prefix preserves its count in a builder;
+spare capacity is not initialized by changing the header.
+The allocation is freed using `base`, size 32, alignment 16, and the original allocator,
+even if the logical length has since become zero.
+
+For runtime capacity `n`, the same format has extent `round_up(16 + 4*n, 16)`.
+Validate nonnegative capacity, multiplication, addition, and rounding overflow before allocation.
+Retain `n` and the resulting geometry where allocation, indexing, and release need them;
+they need not become fields of every pointer or fields of the stored header.
+A zero-capacity payload has no dereferenceable element even though the header still occupies storage.
+
+## 2. Give each source type one job
+
+Storage describes a region of bytes; a codec relates that region to a logical value.
+Here, *codec* means the encoding/decoding recipes: initialize storage from a value, or read a value from storage.
+For the example, record construction needs the geometry of an element array, but never needs a `List UInt32`.
+A field path answers where a child lies, while a view answers how a chosen handle reaches it.
+
+| Type | Status and purpose | Runtime data |
+| --- | --- | --- |
+| `Addr` and scalar types, including `Int` and `Int64` | Existing compiler primitives | Address bits or the compiler's scalar representation |
+| `Ptr L S` | Existing std pointer interpretation | One `Addr`; `L` and `S` erase |
+| `Uninit`, `Init`, `Fields S T` | Existing std initialization states | None |
+| `Storage L` | Proposed fixed allocation geometry, independent of a logical value type | Static recipe; querying it can materialize constants |
+| `DynamicStorage L` | Proposed validated runtime geometry | Size and alignment, held separately from the pointer |
+| `Codec L A` | Proposed statically selected initialization/read recipes | Recipes erase; any runtime operands or captured context remain subject to lowering |
+| `DynamicCodec L A` | Proposed explicit materialization for runtime codec selection | Ordinary thunks and their necessary context |
+| `Field Parent Child`, `DynamicField Parent Child` | Existing fixed/runtime displacement witnesses | No carried displacement for fixed fields; an integer for dynamic fields |
+| `View P H A`, `DynamicView P H A` | Existing fixed/runtime handle interpretation | Chosen handle data; a materialized dynamic view additionally has an ordinary thunk |
+| `StaticAlloc Context`, existing `Alloc` | Proposed fixed allocator code with explicit context; existing runtime operation interface | Context where needed; ordinary operation thunks for `Alloc` |
+
+All the proposed interface types are source-defined.
+The compiler work is recognizing primitive effects, supplying target facts,
+specializing known code, and selecting valid runtime representations.
+There is no proposed builtin `Cell`, `Storage`, `Codec`, or `View`.
+
+Using the existing `Cps A = forall R. Thk (A -> R) -> R`, the central shapes are:
+
+```text
+SizeAlign = (#size :: Int) * (#alignment :: Int)
+Storage L = val pi (_ : Unit). SizeAlign
+DynamicStorage L = SizeAlign                         -- private backing representation
+
+Codec L A =
+    (#init :: val pi (p : Ptr L Uninit) (a : A). Thk (Cps (Ptr L Init)))
+  * (#read :: View Cps (Ptr L Init) A)
+
+DynamicCodec L A =
+    (#init :: Thk (Ptr L Uninit -> A -> Cps (Ptr L Init)))
+  * (#read :: Thk (Ptr L Init -> Cps A))
+```
+
+### Cross between ordinary values and explicit storage
+
+For an eight-byte little-endian layout, `Codec L Int64` stores all 64 payload bits through `init`.
+Its `read` supplies an ordinary `Int64` to the successor; that value can use a register,
+spill, or box according to the compiler and the agreed entry contract.
+The stored bytes do not change when this temporary representation changes.
+The same boundary applies to other logical types and codecs.
+`Codec L A` assumes an existing `A`; defining its codec does not redefine its ordinary value representation.
+
+The interfaces each constrain their documented boundary.
+`Storage` supplies geometry, `Codec` supplies interpretation, `Ptr L S` supplies the address
+and layout/state relationship, and the allocator supplies reservation/release behavior.
+`Field` and `View` select access paths and observations.
+Together they express explicit storage choices; they do not prescribe the native packing
+of a handle product or change a function's calling convention.
+Lifetime, alias, and synchronization obligations remain those of the selected operations.
+
+### Keep geometry static until runtime data is requested
+
+The implementation should seal geometry behind validated constructors.
+A fixed constructor forces its size/alignment through the existing total static arithmetic;
+a runtime-dependent argument cannot silently turn it into a runtime descriptor.
+Its dynamic counterpart performs the same validation through a computation and exposes `DynamicStorage L` on success.
+`materialize_storage` and `materialize_codec` explicitly select runtime carriers when needed.
+A value-function type alone does not prove that all captured integers are static: the constructor establishes that fact.
+
+Geometry and indexing use the current `Int` domain and checked arithmetic;
+static results erase until explicitly queried.
+The [integer and storage contracts](../references/language.md#storage-and-foreign-transport) distinguish its range
+from that of `Int64`, even though both currently use eight-byte storage.
+Choose a numeric type for its required domain, independently of temporary boxing costs.
+The current size interface is bounded by nonnegative `Int`; a full pointer-width size/offset interface remains part
+of the [target and pointer work](memory.md#additional-control-and-storage-boundaries).
+
+A constructor introduces `L` through a package, as current representations do.
+The witness connects a pointer, geometry, paths, and optional codecs; it does not identify a particular allocation.
+Equal logical types or equal sizes do not equate independently opened layout witnesses.
+For dynamic instances, the caller must retain the matching geometry through release;
+`Ptr L S` cannot recover an allocation's extent from its type.
+
+### Compose storage before selecting a logical codec
+
+Proposed constructor contracts, with schematic package notation:
+
+```text
+records.product : Storage Left -> Storage Right
+  -> Result (exists Parent. Storage Parent * Field Parent Left * Field Parent Right * state_operations) Error
+arrays.fixed : Storage Element -> capacity:Int -> boundary:Int
+  -> Result (exists Array. Storage Array * element_operations * builder_operations) Error
+codecs.product : Field Parent Left -> Field Parent Right -> Codec Left A -> Codec Right B
+  -> Codec Parent (A * B)
+```
+
+The first two are value functions: placement inputs must be static and validated.
+For the example they compute offsets 0 and 16, extent 32, and alignment 16 before execution.
+Array construction no longer takes a logical element type or requires an array `Values` codec.
+Scalar factories can still supply both `Storage L` and `Codec L A` under the same `L`.
+Runtime record/array factories must expose matching dynamic geometry and paths
+after validating their inputs; checked dynamic field-path construction remains part
+of the [memory extension](memory.md#additional-control-and-storage-boundaries).
+
+The present `Plan A`/`Representation A` convenience factories can be rebuilt over this split.
+Implement the replacement together with their callers in `record.zy`, `array.zy`, `header.zy`,
+and `view.zy`; remove the coupled `Operations L A` implementation in that migration.
+This proposal does not introduce a permanent compatibility interface.
+
+### Optional whole-value operations
+
+The current `Operations L A` couples storage geometry and allocation with whole-value codecs.
+Array `Values` uses a managed list, so whole-array reads/takes construct that logical representation;
+direct element access and `init_each` already avoid it.
+A requested list is useful work, but embedding array storage in a record should not require selecting list conversion.
+
+The [memory interface obligations](memory.md#independently-selectable-storage-operations)
+govern storage-only composition, optional codecs, typed checked/unchecked indexing, and no-read state discard.
+These choices must expose distinct obligations and behavior.
+Omitting required checks from only one side of a benchmark does not establish zero-cost abstraction.
+
+## 3. Allocate and change state explicitly
+
+The library adapter `allocate(storage, allocator, context)` obtains geometry,
+asks the selected allocator for bytes, and passes `Ptr L Uninit` to its success continuation.
+Initialization invokes the chosen codec at that address.
+The codec interface does not require an allocator; the standard scalar/product codecs write
+into the supplied destination.
+A custom codec can capture an allocator or allocate logical resources, so its own contract and cost still matter.
+A requested list or a runtime-selected codec environment can likewise have additional costs.
+
+`StaticAlloc Context` separates known code from runtime allocator state:
+
+```text
+allocate : val pi (ctx : Context) (size : Int) (alignment : Int).
+             Thk (Checked Fault Addr)
+free     : val pi (ctx : Context) (base : Addr) (size : Int) (alignment : Int).
+             Thk (forall R. Thk (Fault -> R) -> Thk R -> R)
+```
+
+A fixed heap adapter can use `Context = Unit`; an arena adapter can use an address of its mutable state.
+Selecting that code statically permits a direct call or inlining, while the state is still explicit runtime data.
+`materialize_alloc : StaticAlloc Context -> Context -> Alloc` is a value-function adapter
+to the existing dynamic interface.
+Passing `Alloc` from an unknown caller keeps its operation dispatch; it adds no allocator field to `Ptr`.
+An allocation may be supplied by a heap, caller-owned buffer, or arena when
+that provider's release convention is defined.
+Stack/static placement and bulk arena retirement still need the lifetime boundaries described below.
+
+The example's initialization path is:
+
+```text
+Ptr Object Uninit
+  -> Ptr Object (Fields Uninit Uninit)       -- interpret empty record
+  -> Ptr Object (Fields Init Uninit)         -- initialize the length
+  -> Build Payload                          -- initialize elements, retaining prefix count
+  -> Ptr Object (Fields Init Init)           -- complete payload, replace that child state
+  -> Ptr Object Init                        -- finish the record
+```
+
+`Build Payload` here denotes the array package's abstract `Build`, not a new public type constructor.
+Keep the enclosing record handle alongside that builder until `replace` supplies the updated parent state.
+Its address and prefix count are ordinary values; type erasure does not yet prove their pair will be unboxed.
+On element failure, the callback settles the current slot and returns it as `Uninit`;
+the existing failure protocol exposes the completed prefix for cleanup or resumption.
+Abandoning a callback runs no cleanup.
+Copied pointers/builders can remain stale after a transition.
+
+The additional access operations have these schematic shapes, with `L`, `S`, and `A` shared from their packages:
+
+```text
+at_checked   : Ptr Array S -> Int -> Checked Fault (Ptr Element S)
+at_unchecked : Ptr Array S -> Int -> Ret (Ptr Element S)
+forget       : val pi (p : Ptr L Init). Ptr L Uninit
+read         : Ptr L Init -> Cps A
+take         : Ptr L Init -> forall R. Thk (Ptr L Uninit -> A -> R) -> R
+```
+
+Fixed element operations are recipes returning these computations; dynamic selection materializes ordinary thunks.
+`at_checked` retains capacity and displacement checks; `at_unchecked` transfers bounds
+and arithmetic validity obligations to its caller.
+The current `elements/unsafe/at` is still checked.
+`forget` is an unsafe reinterpretation with no load, store, byte clearing, or destructor;
+owned contents and aliases must first be settled.
+`take` instead reads the logical value and then changes interpretation.
+`free` requires `Uninit` and the original allocation geometry and allocator.
+Pure address/state calculations use value functions or `Ret`; memory observations and writes use CPS.
+
+To increment an initialized `UInt32`, obtain its pointer, read the old value, compute wrapping addition,
+forget that slot's old interpretation, and initialize it with the new value.
+For this scalar there are no owned subresources to destroy; the update requires a valid exclusive mutation discipline
+from the caller, without introducing a language-level uniqueness proof.
+The same sequence for a resource-bearing codec must settle its old resources first.
+
+## 4. Compile the operation, preserving its contract
+
+The explicit storage contract constrains optimization without prescribing every machine instruction.
+Redundant accesses or temporary storage may disappear only when the selected contract and observable behavior survive:
+chosen layout and encoding, access semantics, observable address identity, allocator effects, and failure behavior.
+In particular, a nonescaping pointer alone does not justify deleting a user-selected allocator call.
+Volatile/atomic access and guaranteed storage placement need their own contracts
+in [the memory extension](memory.md#additional-control-and-storage-boundaries).
 
 Compare an abstraction with a direct implementation of the same observable behavior on the same target:
 the same bounds and failure behavior, alias obligations, representation, and explicitly selected runtime dispatch.
@@ -21,7 +271,7 @@ The [small View comparison](../evaluations/2026-09-14-memory-abstractions/README
 matching its raw baseline, while a library header view retains extra generated work.
 Its counts are static code sites, not executed allocations or timings.
 
-## 1. Specialize known operations across calls
+### 4.1 Specialize known operations
 
 Fixed layout construction can still produce ordinary operation packages containing integers and thunks.
 Erasing the static recipe does not prove that all of those residual values disappear.
@@ -35,35 +285,14 @@ Preserve explicit runtime selection at unknown boundaries, and bound specializat
 The [escape and representation proposal](escape-unboxing.md) owns the supporting analysis;
 a specialized entry must also respect its [machine-call boundary](escape-unboxing.md#remaining-machine-call-boundary).
 
-## 2. Compile eligible CPS callbacks as local control flow
+The intended staging boundary is concrete: fixed geometry and paths reduce to integer constants;
+applying `Codec/read`, `Codec/init`, or a fixed `View` exposes its computation before closure conversion.
+A runtime address, index, length, or allocator context remains a runtime operand.
+A computed dynamic descriptor remains data until ordinary analysis proves its contents known.
+Specialize a shared worker by known recipe identity and entry contract, reusing that worker at matching calls;
+recursive specialization needs a finite cache and a conservative fallback, not unrestricted unfolding.
 
-Residual success and failure thunks can require closure environments and retained activation storage.
-The proposed [contification analysis](escape-unboxing.md#local-cps-continuations-proposed) would turn eligible known,
-fully applied, nonescaping uses into blocks and jumps.
-Compatibility of ambient stacks and entry contracts must survive lowering.
-Host operations need explicit retention and invocation contracts before their callbacks qualify.
-
-Preserve invocation multiplicity, effects, and escaping or unknown uses.
-The [Ret/CPS convention](../references/language.md#ret-and-explicit-cps) does not prove purity to the optimizer,
-single use, nonescape, cleanup, or bounded stack extent.
-Frame reclamation belongs to the [native environment proposal](native-frames.md#remaining-decisions).
-
-## 3. Remove unnecessary scalar and aggregate boxing
-
-[Local unboxing](../references/compiler.md#product-layout-and-local-unboxing) removes some product cells
-while retaining the tagged-word field convention.
-Wide scalars can still box; pairs, fat handles, array builders, and closure environments can still allocate,
-especially when passed or captured.
-Selecting the layout of manually allocated payloads does not select the representation of these ordinary values.
-
-Extend representation evidence across producers, consumers, calls, returns, recursion, and captures.
-Support raw scalar registers and aggregate components where valid, with matching caller/callee contracts,
-explicit conversion boundaries, and exact live-reference maps.
-Source layout plans alone do not establish a machine ABI or reference-scanning contract.
-The [machine-call proposal](escape-unboxing.md#remaining-machine-call-boundary) owns these prerequisites;
-interprocedural escape and demand evidence must justify stack storage or cell elimination.
-
-## 4. Lower memory primitives directly
+### 4.2 Represent memory effects in the IR
 
 Current native address arithmetic and scalar loads/stores use runtime calls.
 For example, [offset](../../runtime/memory.rs) decodes a tagged integer, and wide scalar loads receive a spare box
@@ -77,19 +306,165 @@ Deleting or moving an access needs semantic evidence; neither an unsafe API nor 
 This extends the existing [primitive-call boundary](../references/compiler.md#primitive-calls).
 Memory target and embedding costs must be assessed separately, including the current Wasm virtual-address host.
 
-## 5. Make optional library work independently selectable
+The current [high SPS computation](../../lang/stackir/src/high/syntax.rs) has `ExternCall`,
+while scalar arithmetic lives in value-level `Primitive` nodes.
+Add a pure `AddrOffset` value operation and an ordered `MemoryStep` computation,
+recognized by builtin role in [builtin lowering](../../lang/stackir/src/high/lower/builtin.rs).
+A proposed internal domain is:
 
-The current `Operations L A` couples storage geometry and allocation with whole-value codecs.
-Array `Values` uses a managed list, so whole-array reads/takes construct that logical representation;
-direct element access and `init_each` already avoid it.
-A requested list is useful work, but embedding array storage in a record should not require selecting list conversion.
+```text
+AddrOffset { base, signed_byte_displacement }                    -- wrapping address calculation
+MemoryOp = Load { scalar, address, access_alignment, byte_order }
+         | Store { scalar, address, value, access_alignment, byte_order }
+         | Copy { source, destination, byte_count, overlap: MayOverlap }
+         | Fill { destination, byte_count, octet }
+MemoryStep { operation: MemoryOp, result_binder?, successor }
+```
 
-The [memory interface proposal](memory.md#independently-selectable-storage-operations) owns storage-only composition,
-optional codecs, typed checked/unchecked indexing, and no-read state discard.
-These choices must expose distinct obligations and behavior.
-Omitting required checks from only one side of a benchmark does not establish zero-cost abstraction.
+`scalar` identifies a primitive integer, float, or unmanaged address role, including `Int` and `UInt`.
+It keeps the source numeric domain distinct from the access width and from the result's temporary representation,
+following the [scalar contract](../references/compiler.md#scalar-value-boundaries).
+An `Int` load must preserve carrier-range rejection before publishing its result;
+an `Int64` load accepts every eight-byte pattern.
+Ordinary `Int` arithmetic still wraps at its payload width when its operands occupy wider registers.
+These obligations belong to primitive lowering, not codec-name recognition.
+Numeric codecs use little-endian accesses; unmanaged pointer slots use the execution profile's address representation.
+Effects are sequenced by computation successors.
+A load with an unknown callback can still become a memory step followed by ordinary callback invocation;
+recognizing the primitive does not require contification.
+Copy retains overlap-safe behavior, and fill remains the only explicit byte-pattern initialization operation.
 
-## 6. Verify and expose costs
+Start with access alignment one unless validated allocation/projection evidence proves a stronger alignment.
+An erased layout witness or an asserted raw address alone does not authorize an aligned machine access,
+`noalias`, or an in-bounds pointer promise.
+In particular, wrapping `offset` must not acquire stronger overflow semantics.
+Keep memory effects out of the current pure arithmetic evaluator and value commoning rules.
+Allocator calls remain provider calls; direct scalar access does not require replacing the allocator.
+
+Propagate these nodes through high normalization, closure conversion, low SPS, and assembly lowering.
+AMD64 emits address arithmetic and scalar instructions; a non-little-endian target needs conversion
+for `load_le`/`store_le`.
+Interpreter and Wasm adapters retain their own memory implementations while consuming the same operation semantics.
+Volatile and atomic accesses need additional operation forms and ordering rules before this domain can represent them.
+
+### 4.3 Make eligible continuations into blocks
+
+Residual success and failure thunks can require closure environments and retained activation storage.
+The proposed [contification analysis](escape-unboxing.md#local-cps-continuations-proposed) would turn eligible known,
+fully applied, nonescaping uses into blocks and jumps.
+Compatibility of ambient stacks and entry contracts must survive lowering.
+Host operations need explicit retention and invocation contracts before their callbacks qualify.
+
+Preserve invocation multiplicity, effects, and escaping or unknown uses.
+The [Ret/CPS convention](../references/language.md#ret-and-explicit-cps) does not prove purity to the optimizer,
+single use, nonescape, cleanup, or bounded stack extent.
+Frame reclamation belongs to the [native environment proposal](native-frames.md#remaining-decisions).
+
+For the local update, successful indexing, load completion, and store completion become block edges.
+This removes the need to manufacture a callback closure at each step.
+A callback saved in an object, passed to an unknown function, or entered
+under an incompatible residual stack keeps the existing first-class representation.
+Repeated invocation is preserved; CPS is not assumed affine.
+Contification alone supplies neither a stack-allocation lifetime nor permission to reclaim a retained activation.
+
+### 4.4 Carry raw components only across agreeing entries
+
+Once a codec supplies an ordinary value, scalar representation and ABI design determine its transport.
+The [scalar representation contract](../references/compiler.md#scalar-value-boundaries) owns the current implementation;
+the [escape and unboxing proposal](escape-unboxing.md) owns its remaining extensions.
+The [machine-call proposal](escape-unboxing.md#remaining-machine-call-boundary) owns entry and tracing prerequisites.
+This memory proposal requires compatible lowering across those boundaries, without fixing the unfinished `Int64` ABI.
+Both `Ret Int64` and a CPS successor accepting `Int64` can use raw transport when their entry contracts support it.
+Their control protocols do not themselves select boxing.
+
+[Local unboxing](../references/compiler.md#product-layout-and-local-unboxing) removes some product cells
+while retaining the tagged-word field convention.
+Wide scalars can still box; pairs, fat handles, array builders, and closure environments can still allocate,
+especially when passed or captured.
+Selecting the layout of manually allocated payloads does not select the representation of these ordinary values.
+
+Extend representation evidence across producers, consumers, calls, returns, recursion, and captures.
+Support raw scalar registers and aggregate components where valid, with matching caller/callee contracts,
+explicit conversion boundaries, and exact live-reference maps.
+Source layout plans alone do not establish a machine ABI or reference-scanning contract.
+Interprocedural escape and demand evidence must justify stack storage or cell elimination.
+
+The following separates proposed raw workers from the currently documented general word interface;
+the latter is a boundary convention, not a permanent boxing requirement for the source type:
+
+| Value | Local specialized worker (proposed) | General word interface (current boundary) |
+| --- | --- | --- |
+| `Ptr L S` | Raw address register/slot | One unmanaged address word |
+| `UInt32` element | Raw 32-bit integer operand | Tagged immediate word |
+| `Int` index or loaded length | Raw 64-bit carrier for a 63-bit payload | Tagged immediate |
+| `Int64` or `UInt64` in a full-width variant | Raw 64-bit payload | Pointer to an opaque scalar box |
+| `(payload, length)` or `Build` | Separate components when uses and entries agree | Ordinary product unless current local analysis eliminates it |
+| Static recipe/layout/state witness | No transported component | Static forms must already have erased |
+| Escaping callback/environment | Proven local components only where possible | Existing closure and lifetime convention |
+
+The representation analysis must record component identities on both caller and callee entries.
+Insert encode/box or decode/unbox adapters where producer and consumer representations differ;
+changing one side's packing is invalid.
+The current general word entry can require boxing; a future typed raw entry can accept raw components even
+when the callee's body is unknown.
+Raw scalar spills are not GC roots. Managed components retain precise root locations across collection,
+and mixed raw/reference aggregates require the corresponding tracing contract.
+An unknown callback using the word convention may therefore retain wide-scalar boxing even
+after the load itself becomes a native instruction.
+
+C already transports `Int64` as raw `int64_t`
+under the [foreign contract](../references/language.md#storage-and-foreign-transport).
+Eliminating intermediate boxes around a C call remains a representation optimization; all surviving adapters count.
+Declaring stored bytes never supplies a C aggregate classifier or changes the ordinary Zydeco call contract.
+
+The thin-payload update should reach this illustrative control-flow IR:
+
+```text
+update(payload: addr, index: i64, delta: u32):
+  if index < 0 or index >= 4: jump bounds
+  slot = addr.offset(payload, index * 4)
+  old = load.le.u32(slot, alignment=1)
+  new = add.wrap.u32(old, delta)
+  store.le.u32(slot, new, alignment=1)
+  jump done
+```
+
+With raw components already in registers and local `bounds`/`done` targets, the intended AMD64 hot path can be
+as small as this schematic sequence:
+
+```asm
+; rdi = payload, rsi = index, edx = delta; this is not a published calling convention
+ test rsi, rsi
+ js bounds
+ cmp rsi, 4
+ jae bounds
+ mov eax, [rdi + rsi*4]
+ add eax, edx
+ mov [rdi + rsi*4], eax
+ jmp done
+```
+
+The failure target and any interface adapters must be counted too; this is a compilation target, not current output.
+For fixed index three, even the index checks and multiplication disappear after proof of bounds.
+For the inline-header version, add one fresh 64-bit length load with `Int` carrier validation,
+then checks for `0 <= length <= 4` and `index < length`; address the element at `base + 16 + 4*index`.
+Remove or combine checks only with evidence preserving their rejection behavior and effect order.
+That version has two necessary loads: header metadata and the element.
+The thin version needs only the element load.
+Neither version reads padding, copies the array, performs a whole-value `take`, or needs runtime layout dispatch.
+Unknown dynamic bounds retain their checks and unknown operation selection retains dispatch.
+
+## 5. Extend control without conflating the boundaries
+
+The [memory proposal](memory.md#additional-control-and-storage-boundaries) also records missing capabilities:
+packed and overlapping typed layouts, checked dynamic field paths, target facts, stack/static/arena storage conventions,
+managed-reference storage, pointer operations, atomics, volatile access, and memory ordering.
+These extend what programmers can express; they are distinct from overhead in operations already expressible.
+That proposal links byte ownership/reuse, growable storage, foreign ABI work, and backend-specific costs.
+The approved retained-`Bytes` policy remains deliberate.
+Early specialization and lowering work requires no new source lifetimes or linearity rules.
+
+## 6. Establish costs and implement in slices
 
 Functional tests do not establish allocation, copying, dispatch, or space bounds.
 The [representation comparison](../../cli/examples/representations.rs) counts portable product/closure
@@ -105,17 +480,7 @@ An explicit strict requirement must reject a path the compiler cannot establish;
 ordinary compilation retains a correct fallback.
 Do not infer a universal optimal-code guarantee from a few examples or from static erasure.
 
-## Further control boundaries
-
-The [memory proposal](memory.md#additional-control-and-storage-boundaries) also records missing capabilities:
-packed and overlapping typed layouts, checked dynamic field paths, target facts, stack/static/arena storage conventions,
-managed-reference storage, pointer operations, atomics, volatile access, and memory ordering.
-These extend what programmers can express; they are distinct from overhead in operations already expressible.
-That proposal links byte ownership/reuse, growable storage, foreign ABI work, and backend-specific costs.
-The approved retained-`Bytes` policy remains deliberate.
-Early specialization and lowering work requires no new source lifetimes or linearity rules.
-
-## First acceptance target and order
+### First acceptance target and order
 
 Start with a typed indexed update using a known layout and callback.
 Against a direct implementation with identical checks, it should perform the necessary bounds checks,
@@ -126,11 +491,65 @@ Also record avoidable costs shared by both paths so the raw baseline does not be
 1. Retain paired fixtures and establish code-generation and executed-cost baselines.
    Cover fixed and runtime layouts, zero-sized elements, overflow and out-of-bounds rejection,
    unchanged storage on rejected operations, and effect order.
+   Pair removable private accesses with address-observing consumers and allocators whose effects/failures must survive.
 2. Close the residual primitive, known-call, CPS, and local-representation gaps exposed by that case.
    Pair optimizable callbacks with unknown, retained, and repeatedly invoked counterparts;
    preserve aliases and general control behavior when optimization is unavailable.
 3. Extend the same checks to loops, builders, modular calls, recursion, and mixed raw/reference values.
-   Introduce component transport and stronger cost contracts only with the corresponding entry, lifetime,
-   and collection evidence.
+   Introduce component transport and stronger cost contracts only with the corresponding entry,
+   lifetime, and collection evidence.
+   Include full-width `Int64`/`UInt64` arithmetic and C transport, plus `Int` payload boundaries and invalid carriers;
+   compare raw and word entries with every required conversion counted.
 
 Treat each successful target as a scoped guarantee before expanding its domain.
+
+### Concrete implementation boundaries
+
+| Slice | Files/boundary to change | Required evidence |
+| --- | --- | --- |
+| Source interface split | `lib/std/memory/{operations.type,codec,record,array,header,view}.zy` and their callers | Shared witnesses; storage-only array composition; optional logical conversion |
+| Static target facts | Layout factory inputs and compiler target/profile identity | Pointer width/alignment and geometry bounds known before static layout reduction; runtime inputs rejected on the fixed path |
+| Memory operations | `lang/stackir/src/high/lower/builtin.rs`, high/low syntax and conversion, assembly, AMD64, interpreter/Wasm adapters | Source-domain validation and exact access width/endian/alignment; wrapping addresses; ordered effects; no zero-offset host call |
+| Known workers and contification | High SPS use analysis and normalization before closure conversion | Shared/recursive calls, stack compatibility, unknown/escaping/repeated callbacks |
+| Raw component transport | Representation analysis, low entry contracts, native preparation, root maps, emitters | Matching entries and adapters; wide scalar extremes; mixed references surviving collection |
+| Cost regression and diagnostics | Paired code-generation fixtures and execution counters | Allocations, copies, retained frames, code size, compilation cost, and scoped strict-contract failures |
+
+The existing [memory-control boundaries](memory.md) keep packed/overlapping layout, dynamic field validation,
+additional allocators, managed references, pointer operations, and synchronization on the agenda.
+Functional byte reuse and FIP-style resource guarantees keep their separate ownership evidence;
+no memory-state alias becomes a uniqueness proof through this proposal.
+
+## 7. What existing practice supports
+
+The following are design precedents, not evidence that Zydeco already generates the proposed code.
+Zig links are pinned to 0.15.2 so the interface being discussed is reproducible.
+
+| Precedent | Mechanism to learn from | Application here |
+| --- | --- | --- |
+| [Zig memory management](https://ziglang.org/documentation/0.15.2/#Memory) | Allocating APIs conventionally receive an allocator; lifetimes remain programmer responsibilities | Keep allocation and release explicit |
+| [Zig comptime](https://ziglang.org/documentation/0.15.2/#Compile-Time-Parameters) | Static parameters specialize code; required compile-time evaluation rejects runtime dependence | Fixed storage/recipe factories need a checked staging boundary |
+| [Zig alignment](https://ziglang.org/documentation/0.15.2/#Alignment) and [slices](https://ziglang.org/documentation/0.15.2/#Slices) | Pointer alignment is typed; array length is static, slice length is runtime | Separate geometric facts from carried counts; retain evidence for stronger accesses |
+| [Zig result locations](https://ziglang.org/documentation/0.15.2/#Result-Locations) | Supported initializers propagate destinations into fields | Initialize directly into projected destinations |
+| [Zig extern structs](https://ziglang.org/documentation/0.15.2/#extern-struct) and [packed structs](https://ziglang.org/documentation/0.15.2/#packed-struct) | C layout and packed bit layout are distinct choices | Specify packing and foreign ABI independently |
+| [Zig Allocator source](https://github.com/ziglang/zig/blob/0.15.2/lib/std/mem/Allocator.zig) | Context pointer plus vtable; size/alignment pass to raw allocation/free | Static allocator code and explicitly materialized dispatch are separate choices |
+| [Zig fixed-buffer allocator](https://github.com/ziglang/zig/blob/0.15.2/lib/std/heap/FixedBufferAllocator.zig) and [arena](https://github.com/ziglang/zig/blob/0.15.2/lib/std/heap/arena_allocator.zig) | Caller-owned buffer/cursor; arena chunks released through a backing allocator | Storage policy and retirement belong to the provider, with explicit state |
+| [Zig AIR](https://github.com/ziglang/zig/blob/0.15.2/src/Air.zig) | Explicit pointer arithmetic, field/element addressing, loads, stores, and allocation instructions | Give memory operations typed IR forms before target emission |
+
+Zig's `comptime` guarantees staging; its allocator interface still exposes runtime dispatch.
+Its lexical `defer` and ordinary function extents do not justify cleanup or stack retirement for arbitrary Zydeco CPS.
+The transferable ideas are explicit representation and allocation boundaries,
+not an assertion of identical control semantics.
+
+[LLVM's memory instructions](https://llvm.org/docs/LangRef.html#memory-access-and-addressing-operations)
+separate address computation, access alignment, volatile behavior, and atomic ordering.
+That is a useful contract checklist for our IR; this proposal does not require adopting LLVM as a backend.
+
+Andrew Kennedy's
+[*Compiling with Continuations, Continued*, Section 5](https://www.microsoft.com/en-us/research/wp-content/uploads/2007/10/compilingwithcontinuationscontinued.pdf)
+explains contification from functions to local continuations. Maurer, Downen, Ariola, and Peyton Jones's
+[*Compiling without Continuations*](https://pauldownen.com/publications/pldi17.pdf) provides GHC join points as an
+implementation precedent for preserving local control-flow identity.
+
+The [escape/reuse proposal](escape-unboxing.md#related-work) retains the CPS, Perceus, and FP² references
+and their distinct guarantees; the [byte proposal](bytes.md#related-work) retains destination-passing
+and bufferization references.

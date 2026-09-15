@@ -29,7 +29,7 @@ as current behavior.
 | [Traversals](traversals.md) | Resumable classifier environments and surface rebuilding, owned semantic facts, remaining execution adapters, diagnostic recovery, performance validation, synthesized results, and independent pruning | [Traversal selection and composition](../references/compiler.md#choosing-and-composing-traversals), [resumable execution](../references/compiler.md#resumable-folder-execution), and [diagnostic collection](../references/compiler.md#diagnostic-collection) |
 | [Typed-arena verification](tyck-lint.md) | Use-site evidence, finer witness provenance, and stronger checks | [Current lint](../references/compiler.md#typed-arena-lint) |
 | [WebAssembly](wasm-backends.md) | Default-target selection, reclamation, optional features, and host ABI evolution | [Both current backends](../references/compiler.md#c13-webassembly-backends-and-embedding) |
-| [Compiling memory abstractions](memory-compilation.md) | Specialization, CPS lowering, representation, memory primitives, optional library costs, and cost verification | [Static erasure](../references/language.md#10-static-elimination) and [local representation](../references/compiler.md#policy-selection) |
+| [Compiling memory abstractions](memory-compilation.md) | Storage/codec interfaces, explicit allocators, worked layouts, typed memory IR, CPS/component lowering, and cost verification | [Static erasure](../references/language.md#10-static-elimination) and [local representation](../references/compiler.md#policy-selection) |
 
 Historical measurements retained by proposals are evidence for their open comparisons, with their original limits.
 Their presence does not establish current performance or select a new default.
