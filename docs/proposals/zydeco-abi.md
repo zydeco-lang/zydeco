@@ -8,6 +8,8 @@ The ABI is the binary agreement about values, entry points, control, and runtime
 an FFI binding exposes that agreement in a particular host language.
 Zydeco owns the interface being implemented here.
 Importing functions with a foreign calling convention remains the separate [C FFI proposal](c-ffi.md).
+The [CBPV interoperability research proposal](../ideas/cbpv-universal-ffi.md) places this native ABI
+within the broader ambition of describing and composing multiple foreign conventions in Zydeco.
 
 The proposed ABI builds on the current type system and compilation strategy:
 **one value word per source value at general calls, and a typed continuation stack for computations**.
@@ -401,6 +403,50 @@ For codata, a binding builds observation/argument recipes ending in an appropria
 For explicit CPS, it supplies source-compatible successor thunks and the residual protocol.
 A convenience `call` operation is available when the completed protocol reaches a host-owned `Ret A`;
 it is not the primitive meaning of every `CType`.
+
+### Foreign-language hosts through a Rust adapter
+
+[UniFFI](https://github.com/mozilla/uniffi-rs) is a candidate for generating bindings when a Swift,
+Kotlin, or Python application calls a Rust component.
+**Rust is the callee at the UniFFI boundary.** That component can then invoke Zydeco
+through one of the [Rust adapters](rust-host.md).
+The application host remains the foreign language:
+
+```mermaid
+flowchart LR
+    Host["Swift / Kotlin / Python host"] -->|UniFFI bindings| Rust["Rust component"]
+    Rust -->|C export ABI or native Zydeco ABI| Zydeco["Zydeco code and runtime"]
+```
+
+This proposed integration would reuse a Rust adapter to serve additional host languages.
+UniFFI would generate the bindings for the outer boundary; our adapter would implement the inner Zydeco boundary.
+A scalar API could wrap the existing C exports.
+An object retaining a Zydeco thunk would need the persistent native binding described above.
+For example, a Rust `Adder` object could expose a `call` method that invokes its retained source closure,
+while UniFFI supplies the corresponding object API in the application language.
+
+UniFFI has its own [transport model](https://mozilla.github.io/uniffi-rs/latest/internals/lifting_and_lowering.html):
+C-compatible entry functions and primitive carriers, with serialized buffers for many compound values.
+The Rust adapter must still perform Zydeco value conversions and construct its invocation stacks.
+General computation protocols and abstract type relationships require explicit wrapper designs.
+UniFFI's foreign trait implementations also need a Zydeco thunk bridge before source code can invoke them.
+
+Its [object model](https://mozilla.github.io/uniffi-rs/latest/types/interfaces.html) uses `Arc`
+and requires exported interfaces to be `Send + Sync`.
+A runtime confined to one owner thread would therefore need a suitable proxy,
+such as an object dispatching requests to that thread.
+The proxy's ownership must preserve the corresponding Zydeco roots;
+`Arc` alone does not register them with the collector.
+Thread dispatch, object release, and callback behavior remain integration decisions.
+The underlying Zydeco target support and fault profile still apply.
+
+Evaluate UniFFI after the chosen Rust adapter works.
+A first experiment should expose the retained-adder example to one foreign-language host,
+exercise collection between calls, and validate wrapper release and rejected access
+under the chosen ownership/thread policy.
+This can reduce the work of adding host languages; it leaves the core Rust–Zydeco bridge
+and runtime obligations in place.
+UniFFI adoption remains optional and unimplemented.
 
 ## 7. Implementing a Zydeco thunk in another language
 

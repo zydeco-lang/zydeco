@@ -12,6 +12,7 @@ Dated experimental reports and their evidence live in [evaluations](../evaluatio
 
 | Idea | Question |
 | --- | --- |
+| [CBPV as a universal FFI](cbpv-universal-ffi.md) | Can typed CBPV adapters compose foreign data and control protocols in either direction? |
 | [Refutable view coverage](view-coverage.md) | When can several view arms establish coverage together? |
 | [Shared view evaluation](shared-view-evaluation.md) | Should grouped arms evaluate their view once? |
 | [Broader view heads](broader-view-heads.md) | Which value terms should be admitted as view heads? |

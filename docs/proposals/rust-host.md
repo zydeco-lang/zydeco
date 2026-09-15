@@ -21,6 +21,9 @@ for [C exports](../references/language.md#compiled-libraries-and-c-exports)
 and [native units](../references/language.md#native-zydeco-units).
 The broader [Zydeco ABI proposal](zydeco-abi.md) owns host ownership, general protocols, and richer type interfaces.
 This document owns the comparison and staging of the Rust bindings.
+For foreign-language applications calling a Rust component through UniFFI,
+see [foreign-language hosts through a Rust adapter](zydeco-abi.md#foreign-language-hosts-through-a-rust-adapter).
+Rust is the callee at that outer FFI boundary.
 
 ## Rust consuming Zydeco's C export ABI
 

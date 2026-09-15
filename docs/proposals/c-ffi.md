@@ -10,6 +10,8 @@ This proposal contains the next foreign boundaries.
 
 The [Rust host survey](rust-host.md) compares Rust consuming the existing C export ABI with bindings
 for Zydeco's native ABI, including their minimum integration work and validation.
+The [CBPV interoperability research proposal](../ideas/cbpv-universal-ffi.md) investigates how these
+boundaries could participate in a language for composing adapters across multiple ABI profiles.
 
 Review extensions here through the
 [shared design of compilation units, FFI, and package management](../references/compiler.md#compilation-unit-preparation-and-artifacts).
