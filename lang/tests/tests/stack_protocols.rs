@@ -454,12 +454,23 @@ fn codata_cases_retain_branch_protocols_and_complete_observations() {
 #[test]
 fn low_publication_rejects_a_missing_protocol_graph() {
     let (mut arena, root) = Fixture::program().into_parts();
-    let stream = Fixture::stream(&arena.inner);
-    arena.inner.protocols = Default::default();
-    assert_eq!(
-        SpsLowProgram::try_new(arena, root).unwrap_err(),
-        SpsLowError::Protocol(ProtocolError::Graph(ProtocolGraphError::MissingDefinition(stream)))
-    );
+    let graph = std::mem::take(&mut arena.inner.protocols);
+    // Removing the graph leaves both codata and parameter references dangling;
+    // either kind can be visited first during validation.
+    match SpsLowProgram::try_new(arena, root).unwrap_err() {
+        | SpsLowError::Protocol(ProtocolError::Graph(ProtocolGraphError::MissingDefinition(
+            id,
+        ))) => {
+            assert!(graph.get(id).is_some(), "the missing codata belonged to the removed graph");
+        }
+        | SpsLowError::Protocol(ProtocolError::Graph(ProtocolGraphError::MissingParameter(id))) => {
+            assert!(
+                graph.parameter_kind(id).is_some(),
+                "the missing parameter belonged to the removed graph"
+            );
+        }
+        | error => panic!("expected a reference to the removed protocol graph, found {error:?}"),
+    }
 }
 
 #[test]

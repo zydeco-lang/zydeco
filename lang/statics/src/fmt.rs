@@ -1185,7 +1185,7 @@ mod tests {
         let product = fixture.product(vec![chain, int]);
 
         assert_eq!(
-            fixture.render(product, 21),
+            fixture.render(product, 15),
             "(\n    Int\n    -> String\n    -> Int\n  )\n* Int"
         );
     }

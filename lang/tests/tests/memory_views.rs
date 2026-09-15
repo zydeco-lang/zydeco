@@ -10,7 +10,7 @@ impl SliceCase {
         memory::source(&format!(
             "match memory/int | +Err(_) => ! fail | +Ok(plan) => \
              let (= L, repr) = memory/realize Int plan in \
-             let access = slices/for_layout L Int repr in {body} end"
+             let access = slices/for_layout L repr/storage in {body} end"
         ))
     }
 }
@@ -54,7 +54,7 @@ let p = pointer/unsafe/from_address L Uninit address in
 "#,
         r#"
 let (#L = Other, other) = memory/realize Int plan in
-let wrong = slices/for_layout Other Int other in
+let wrong = slices/for_layout Other other/storage in
 do address <- ! raw/unsafe/null;
 ! slices/unsafe/from_parts L Uninit OS (pointer/unsafe/from_address L Uninit address) 0 no { fn slice =>
   ! wrong/unsafe/at Uninit OS slice 0 no { fn _ => ! exit 0 }

@@ -65,7 +65,7 @@ let failures = 0;
 for (const line of fs.readFileSync(process.argv[1], 'utf8').trim().split('\n')) {
   const [widthText, bits, expected] = line.split('\t');
   const width = Number(widthText);
-  scratch.setBigUint(0, BigInt(`0x${bits}`), true);
+  scratch.setBigUint64(0, BigInt(`0x${bits}`), true);
   const value = width === 32 ? scratch.getFloat32(0, true) : scratch.getFloat64(0, true);
   const actual = FloatText.render(value, width);
   if (actual !== expected) {

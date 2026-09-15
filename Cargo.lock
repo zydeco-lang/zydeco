@@ -2793,6 +2793,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "walkdir",
+ "zydeco-assembly",
  "zydeco-cli",
  "zydeco-machine",
  "zydeco-session",

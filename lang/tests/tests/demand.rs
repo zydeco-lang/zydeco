@@ -1,4 +1,8 @@
 use std::path::PathBuf;
+use zydeco_assembly::syntax::{
+    BuiltinValueRole, Extern, Instruction, IntegerArithmetic, IntegerType, PrimitiveOp, Program,
+    Terminator, scalar::ScalarStep,
+};
 use zydeco_cli::CommandCompiler;
 use zydeco_tests::utils::{ExecutionTarget, SourceCase, SourceProgram};
 
@@ -25,35 +29,45 @@ fn fixture(relative: &str) -> PathBuf {
         .unwrap()
 }
 
-fn rendered_assembly(relative: &str) -> String {
-    CommandCompiler::default()
-        .lower(&fixture(relative))
-        .expect("demand fixture must lower")
-        .render_assembly()
-}
-
 /// Dead top-level definitions, dead recursive definitions, and undemanded host
 /// operations are absent from the emitted assembly, while the operations the
-/// program calls survive as primitive instructions or external calls.
+/// program calls survive as scalar arithmetic or external calls.
 #[test]
 fn dead_definitions_and_undemanded_operations_are_not_emitted() {
-    let assembly = rendered_assembly("tests/demand/prune.zy");
-    assert!(
-        assembly.lines().any(|line| line.trim() == "int_add;"),
-        "the called operation must survive elimination:\n{assembly}"
+    let backend = CommandCompiler::default()
+        .lower(&fixture("tests/demand/prune.zy"))
+        .expect("demand fixture must lower");
+    let programs = &backend.assembly().arena().programs;
+    let arithmetic = programs
+        .iter()
+        .filter_map(|(_, program)| match program {
+            | Program::Instruction(Instruction::Scalar(scalar), _) => Some(scalar.region()),
+            | _ => None,
+        })
+        .flat_map(|region| &region.steps)
+        .filter_map(|step| match step {
+            | ScalarStep::Arithmetic { operation, .. } => Some(*operation),
+            | _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        arithmetic,
+        [PrimitiveOp::Integer(IntegerType::Int, IntegerArithmetic::Add)],
+        "only the called addition must survive as inline arithmetic:\n{}",
+        backend.render_assembly()
     );
-    assert!(!assembly.contains("extern:int_add"), "arithmetic must be inline:\n{assembly}");
-    assert!(
-        assembly.contains("extern:exit"),
-        "the exit operation must survive elimination:\n{assembly}"
-    );
-    assert!(
-        !assembly.contains("extern:int_mul"),
-        "an operation referenced only by a dead definition must be pruned:\n{assembly}"
-    );
-    assert!(
-        !assembly.contains("extern:write_line"),
-        "an operation the program never references must be pruned:\n{assembly}"
+    let host_calls = programs
+        .iter()
+        .filter_map(|(_, program)| match program {
+            | Program::Terminator(Terminator::Extern(Extern::Host { role, .. })) => Some(*role),
+            | _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        host_calls,
+        [BuiltinValueRole::Exit],
+        "only the called exit must survive as a host operation:\n{}",
+        backend.render_assembly()
     );
 }
 

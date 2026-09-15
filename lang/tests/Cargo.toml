@@ -18,6 +18,7 @@ workspace = true
 
 [dev-dependencies]
 libtest-mimic = { workspace = true }
+zydeco-assembly = { workspace = true }
 
 [[test]]
 name = "cases"

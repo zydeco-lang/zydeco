@@ -1856,13 +1856,13 @@ fn checked_arenas_drop_the_checkers_typing_environments() {
 #[test]
 fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
     use zydeco_statics::syntax::{ExistsMode, Fillable, Kind, ManifestKind, TermAnnId, Type};
-    use zydeco_syntax::{BuiltinRole, BuiltinTypeRole};
+    use zydeco_syntax::{BuiltinRole, BuiltinTypeRole, IntrinsicRole, PrimitiveType};
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     enum ExpectedField {
         VType,
         CType,
-        ManifestType,
+        ManifestType(IntrinsicRole),
         Abstract(BuiltinTypeRole),
     }
 
@@ -1877,27 +1877,22 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
     let fields = [
         ExpectedField::VType,
         ExpectedField::CType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
-        ExpectedField::ManifestType,
+        ExpectedField::ManifestType(IntrinsicRole::Thk),
+        ExpectedField::ManifestType(IntrinsicRole::Ret),
+        ExpectedField::ManifestType(IntrinsicRole::Unit),
+    ]
+    .into_iter()
+    .chain(
+        PrimitiveType::all()
+            .map(|primitive| ExpectedField::ManifestType(IntrinsicRole::Primitive(primitive))),
+    )
+    .chain([
         ExpectedField::Abstract(BuiltinTypeRole::Addr),
         ExpectedField::Abstract(BuiltinTypeRole::Reader),
         ExpectedField::Abstract(BuiltinTypeRole::Writer),
         ExpectedField::Abstract(BuiltinTypeRole::OS),
-    ];
-    let (tail, abstract_witnesses) = fields.into_iter().fold(
+    ]);
+    let (tail, abstract_witnesses) = fields.fold(
         (signature.domain, Vec::new()),
         |(field_type, abstract_witnesses), expected| match (
             expected,
@@ -1923,12 +1918,24 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
                 ));
                 (body, abstract_witnesses)
             }
-            | (ExpectedField::ManifestType, Fillable::Done(Type::Exists(exists))) => {
-                assert!(matches!(exists.mode, ExistsMode::Manifest(_)));
+            | (ExpectedField::ManifestType(expected), Fillable::Done(Type::Exists(exists))) => {
+                let ExistsMode::Manifest(definition) = exists.mode else {
+                    panic!("canonical type {expected} must be manifest")
+                };
+                let actual = match &checked.statics.types_pre[&definition] {
+                    | Fillable::Done(Type::Thk(_)) => IntrinsicRole::Thk,
+                    | Fillable::Done(Type::Ret(_)) => IntrinsicRole::Ret,
+                    | Fillable::Done(Type::Unit(_)) => IntrinsicRole::Unit,
+                    | Fillable::Done(Type::Primitive(primitive)) => {
+                        IntrinsicRole::Primitive(primitive.0)
+                    }
+                    | actual => panic!("expected canonical type {expected}, received {actual:?}"),
+                };
+                assert_eq!(actual, expected);
                 (exists.body, abstract_witnesses)
             }
             | (ExpectedField::Abstract(role), Fillable::Done(Type::Exists(exists))) => {
-                assert!(matches!(exists.mode, ExistsMode::Abstract));
+                assert!(matches!(exists.mode, ExistsMode::Abstract), "{role:?} must be abstract");
                 assert_eq!(
                     checked.statics.builtin_roles.witness(exists.binder.witness),
                     Some(BuiltinRole::Type(role))
@@ -1938,7 +1945,9 @@ fn canonical_builtin_signature_keeps_only_system_capabilities_abstract() {
                     abstract_witnesses.into_iter().chain([exists.binder.witness]).collect(),
                 )
             }
-            | _ => panic!("unexpected canonical Builtin field"),
+            | (expected, actual) => {
+                panic!("expected canonical Builtin field {expected:?}, received {actual:?}")
+            }
         },
     );
 
