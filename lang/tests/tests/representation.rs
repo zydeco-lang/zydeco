@@ -8,6 +8,7 @@ e2e_sources!({
     scalar_bytes => "tests/std/scalar-bytes.zy",
     representation => "tests/std/representation.zy",
     representation_invalid => "tests/std/representation-invalid.zy",
+    storage_codecs => "tests/std/storage-codecs.zy",
 });
 
 fn source(body: &str) -> String {

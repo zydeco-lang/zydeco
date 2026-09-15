@@ -1,0 +1,63 @@
+@[package(test(of(std)))]
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Int64; /OS; /numeric; /process; builtin) :
+  @(import(std/builtin)) that
+  let (/Storage; /DynamicStorage; /Uninit; /Init; /Ptr; /storage; /codecs; /allocation) =
+    builtin |> (@(import(std/memory)))
+  in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  let ! dynamic (count : Int) (boundary : Int) : OS =
+    do checked <- ! storage/runtime/create count boundary;
+    match checked
+    | +Err(_) => ! fail
+    | +Ok(= L, geometry) =>
+      let value = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in
+      let codec = codecs/materialize L Int64 value in
+      ! allocation/dynamic_reserve L OS allocation/heap geometry no {
+        fn vacant =>
+          ! codec/init vacant (42 : Int64) OS {
+            fn initialized =>
+              ! codecs/unsafe/dynamic_take L Int64 codec initialized OS {
+                fn vacant observed =>
+                  ! allocation/unsafe/dynamic_release L OS allocation/heap geometry vacant no {
+                    ! numeric/int64/eq OS observed (42 : Int64) { ! process/exit 0 } fail
+                  }
+              }
+          }
+      }
+    end
+  in
+  match storage/constant/create 8 8
+  | +Err(_) => ! fail
+  | +Ok(= L, geometry) =>
+    let codec = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in
+    let carried : DynamicStorage L = storage/constant/materialize L geometry in
+    let facts = storage/runtime/query L carried in
+    ! numeric/int/eq OS facts/size 8 {
+      ! (allocation/reserve L Unit allocation/static_heap () geometry) OS no {
+        fn vacant =>
+          ! (codec/init vacant (7 : Int64)) OS {
+            fn initialized =>
+              ! (codecs/unsafe/take L Int64 codec initialized) OS {
+                fn vacant value =>
+                  do next <- ! numeric/int64/add value (1 : Int64);
+                  ! (codec/init vacant next) OS {
+                    fn initialized =>
+                      ! (codecs/unsafe/take L Int64 codec initialized) OS {
+                        fn vacant observed =>
+                          ! (
+                            allocation/unsafe/release L Unit allocation/static_heap () geometry
+                              vacant
+                          ) OS no {
+                            ! numeric/int64/eq OS observed (8 : Int64) { ! dynamic 8 64 } fail
+                          }
+                      }
+                  }
+              }
+          }
+      }
+    } fail
+  end
+end

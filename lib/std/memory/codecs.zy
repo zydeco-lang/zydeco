@@ -1,0 +1,44 @@
+-- Logical conversion is independent of allocation geometry and provider selection.
+begin
+  param val (/VType; /CType; /Thk; /Addr; builtin) : @(import("../builtin.zy")) that
+  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
+  let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
+  let val scalar (L : VType) (A : VType)
+    (write : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
+    (read : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
+  : Codec L A = (
+      #init = val pointer value =>
+        {
+          fn R yes =>
+            let address = unsafe/address L Uninit pointer in
+            ! write R address value { ! yes (unsafe/from_address L Init address) }
+        },
+      #read = val pointer => { fn R yes => ! read R (unsafe/address L Init pointer) yes }
+    )
+  in
+  let val materialize (L : VType) (A : VType) (codec : Codec L A) : DynamicCodec L A = (
+    #init = { fn pointer value R yes => ! (codec/init pointer value) R yes },
+    #read = { fn pointer R yes => ! (codec/read pointer) R yes }
+  ) in
+  let val take (L : VType) (A : VType) (codec : Codec L A) (pointer : Ptr L Init) : Thk (
+    forall (R : CType) . Thk (Ptr L Uninit -> A -> R) -> R
+  ) = {
+    fn R yes =>
+      ! (codec/read pointer) R {
+        fn value => ! yes (unsafe/from_address L Uninit (unsafe/address L Init pointer)) value
+      }
+  } in
+  let ! dynamic_take (L : VType) (A : VType) (codec : DynamicCodec L A) (pointer : Ptr L Init)
+    (R : CType) (yes : Thk (Ptr L Uninit -> A -> R))
+  : R =
+      ! codec/read pointer R {
+        fn value => ! yes (unsafe/from_address L Uninit (unsafe/address L Init pointer)) value
+      }
+  in
+  pack (= Codec as Codec : VType -> VType -> VType)
+      (= DynamicCodec as DynamicCodec : VType -> VType -> VType)
+  where
+    (= materialize, #unsafe = (= scalar, = take, = dynamic_take))
+  end
+end

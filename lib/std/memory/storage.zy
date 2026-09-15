@@ -1,0 +1,60 @@
+-- Geometry is sealed after validation. A layout witness never identifies an allocation instance.
+begin
+  param val (/VType; /Ret; /Unit; /Int; builtin) : @(import("../builtin.zy")) in
+  let Result = @(import("../data/result.zy")) in
+  let Error = @(import("layout-error.zy")) in
+  let size = @(import("size.zy")) in
+  let dynamic = builtin |> (@(import("dynamic-size.zy"))) in
+  let SizeAlign = (#size :: Int) * (#alignment :: Int) in
+  let Storage (L : VType) = val pi (_ : Unit) . SizeAlign in
+  let DynamicStorage (L : VType) = SizeAlign in
+  let val for_layout (L : VType) (count : Int) (boundary : Int) : Result (Storage L) Error =
+    let count = (@(intrinsic(int_add))) count 0 in
+    let boundary = (@(intrinsic(int_add))) boundary 0 in
+    size/bind Int (Storage L) (size/size count) (
+      val count =>
+        size/bind Int (Storage L) (size/alignment boundary) (
+          val boundary =>
+            +Ok(val () => (#size = count, #alignment = boundary))
+        )
+    )
+  in
+  let val create (count : Int) (boundary : Int) : Result (exists (= L : VType) . Storage L) Error =
+    size/bind (Storage Unit) (exists (= L : VType) . Storage L) (for_layout Unit count boundary)
+      (val storage => +Ok((#L = Unit, storage) : exists (= L : VType) . Storage L))
+  in
+  let val query (L : VType) (storage : Storage L) : SizeAlign = storage () in
+  let ! dynamic_for_layout (L : VType) (count : Int) (boundary : Int) : Ret (
+    Result (DynamicStorage L) Error
+  ) =
+    do count <- ! dynamic/size count;
+    do boundary <- ! dynamic/alignment boundary;
+    match (count, boundary)
+    | (+Err(error), _) => ret +Err(error)
+    | (_, +Err(error)) => ret +Err(error)
+    | (+Ok(count), +Ok(boundary)) => ret +Ok(#size = count, #alignment = boundary)
+    end
+  in
+  let ! dynamic_create (count : Int) (boundary : Int) : Ret (
+    Result (exists (= L : VType) . DynamicStorage L) Error
+  ) =
+    do storage <- ! dynamic_for_layout Unit count boundary;
+    match storage
+    | +Err(error) => ret +Err(error)
+    | +Ok(storage) => ret +Ok((#L = Unit, storage) : exists (= L : VType) . DynamicStorage L)
+    end
+  in
+  (
+    (
+      = Storage,
+      = DynamicStorage,
+      = SizeAlign,
+      #constant = (= create, = query,
+        #materialize = val L storage => query L storage,
+        #unsafe = = for_layout),
+      #runtime = (#create = dynamic_create,
+        #query = val L storage => storage,
+        #unsafe = #for_layout = dynamic_for_layout)
+    ) : @(import("storage.type.zy"))
+  )
+end

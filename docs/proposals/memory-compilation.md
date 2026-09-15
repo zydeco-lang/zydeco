@@ -12,15 +12,16 @@ The worked example follows a header-array update from source types to machine co
 The proposal retains the gaps identified on 2026-09-14 and gives them concrete interfaces and implementation boundaries.
 
 The implemented foundation remains [L13](../references/language.md#manual-memory).
-`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc` below are proposed std interfaces.
-[Pure address calculations](../references/compiler.md#address-calculations)
-and [ordered scalar accesses](../references/compiler.md#ordered-scalar-memory-accesses) are implemented.
-[Bounded raw memory kernels](../references/compiler.md#raw-memory-kernels) connect wide scalar accesses
-to arithmetic; raw component transport across calls remains proposed compiler work.
-The [interface sketch](../examples/memory-compilation/interfaces.zy) checks with the current kinds and value functions.
-It checks the shapes only: its aliases expose candidate representations and supply no validated constructors,
-new std implementation, or code-generation guarantee.
-No source lifetimes, linearity rules, or new universe of layout types is required.
+[`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc`](../references/language.md#independent-storage-and-codecs)
+are implemented; migration of the convenience factories to these interfaces is next.
+[Pure address calculations](../references/compiler.md#address-calculations) and
+[ordered scalar accesses](../references/compiler.md#ordered-scalar-memory-accesses) are implemented.
+[Bounded raw memory kernels](../references/compiler.md#raw-memory-kernels) connect wide scalar accesses to arithmetic;
+raw component transport across calls remains proposed compiler work. The
+[interface sketch](../examples/memory-compilation/interfaces.zy) checks with the current kinds and value functions. It
+checks the shapes only: its aliases expose candidate representations and supply no validated constructors, new std
+implementation, or code-generation guarantee. No source lifetimes, linearity rules, or new universe of layout types is
+required.
 
 ## 1. Start with the bytes
 
@@ -71,17 +72,16 @@ A field path answers where a child lies, while a view answers how a chosen handl
 | `Addr` and scalar types, including `Int` and `Int64` | Existing compiler primitives | Address bits or the compiler's scalar representation |
 | `Ptr L S` | Existing std pointer interpretation | One `Addr`; `L` and `S` erase |
 | `Uninit`, `Init`, `Fields S T` | Existing std initialization states | None |
-| `Storage L` | Proposed fixed allocation geometry, independent of a logical value type | Static recipe; querying it can materialize constants |
-| `DynamicStorage L` | Proposed validated runtime geometry | Size and alignment, held separately from the pointer |
-| `Codec L A` | Proposed statically selected initialization/read recipes | Recipes erase; any runtime operands or captured context remain subject to lowering |
-| `DynamicCodec L A` | Proposed explicit materialization for runtime codec selection | Ordinary thunks and their necessary context |
+| `Storage L` | Implemented fixed allocation geometry, independent of a logical value type | Static recipe; querying it can materialize constants |
+| `DynamicStorage L` | Implemented validated runtime geometry | Size and alignment, held separately from the pointer |
+| `Codec L A` | Implemented statically selected initialization/read recipes | Recipes erase; any runtime operands or captured context remain subject to lowering |
+| `DynamicCodec L A` | Implemented explicit materialization for runtime codec selection | Ordinary thunks and their necessary context |
 | `Field Parent Child`, `DynamicField Parent Child` | Existing fixed/runtime displacement witnesses | No carried displacement for fixed fields; an integer for dynamic fields |
 | `View P H A`, `DynamicView P H A` | Existing fixed/runtime handle interpretation | Chosen handle data; a materialized dynamic view additionally has an ordinary thunk |
-| `StaticAlloc Context`, existing `Alloc` | Proposed fixed allocator code with explicit context; existing runtime operation interface | Context where needed; ordinary operation thunks for `Alloc` |
+| `StaticAlloc Context`, existing `Alloc` | Implemented fixed allocator code with explicit context; existing runtime operation interface | Context where needed; ordinary operation thunks for `Alloc` |
 
-All the proposed interface types are source-defined.
-The compiler work is recognizing primitive effects, supplying target facts,
-specializing known code, and selecting valid runtime representations.
+These interface types are source-defined. The compiler work is recognizing primitive effects,
+supplying target facts, specializing known code, and selecting valid runtime representations.
 There is no proposed builtin `Cell`, `Storage`, `Codec`, or `View`.
 
 Using the existing `Cps A = forall R. Thk (A -> R) -> R`, the central shapes are:
@@ -119,7 +119,8 @@ Lifetime, alias, and synchronization obligations remain those of the selected op
 
 ### Keep geometry static until runtime data is requested
 
-The implementation should seal geometry behind validated constructors.
+The implemented constructors seal geometry as specified
+by the [storage contract](../references/language.md#independent-storage-and-codecs).
 A fixed constructor forces its size/alignment through the existing total static arithmetic;
 a runtime-dependent argument cannot silently turn it into a runtime descriptor.
 Its dynamic counterpart performs the same validation through a computation and exposes `DynamicStorage L` on success.

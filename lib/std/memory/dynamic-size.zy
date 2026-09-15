@@ -1,0 +1,71 @@
+-- Pure checked arithmetic for runtime geometry; every public operand is validated.
+begin
+  param val (/VType; /Ret; /Int; /numeric; builtin) : @(import("../builtin.zy")) in
+  let Result = @(import("../data/result.zy")) in
+  let Error = @(import("layout-error.zy")) in
+  let Checked = Result Int Error in
+  let int = numeric/int in
+  let ! size (value : Int) : Ret Checked =
+    ! int/lt (Ret Checked) value 0 { ret +Err(+NegativeSize()) } { ret +Ok(value) }
+  in
+  let fix power_of_two (value : Int) : Ret Checked =
+    ! int/lt (Ret Checked) value 1 { ret +Err(+InvalidAlignment()) } {
+      ! int/eq (Ret Checked) value 1 { ret +Ok(value) } {
+        do remainder <- ! int/mod value 2;
+        ! int/eq (Ret Checked) remainder 0 {
+          do half <- ! int/div value 2;
+          do checked <- ! power_of_two half;
+          match checked
+          | +Err(error) => ret +Err(error)
+          | +Ok(_) => ret +Ok(value)
+          end
+        } { ret +Err(+InvalidAlignment()) }
+      }
+    }
+  in
+  let ! add (left : Int) (right : Int) : Ret Checked =
+    do left <- ! size left;
+    do right <- ! size right;
+    match (left, right)
+    | (+Err(error), _) => ret +Err(error)
+    | (_, +Err(error)) => ret +Err(error)
+    | (+Ok(left), +Ok(right)) =>
+      do limit <- ! int/sub 4611686018427387903 right;
+      ! int/gt (Ret Checked) left limit { ret +Err(+SizeOverflow()) } {
+        do value <- ! int/add left right;
+        ret +Ok(value)
+      }
+    end
+  in
+  let ! multiply (left : Int) (right : Int) : Ret Checked =
+    do left <- ! size left;
+    do right <- ! size right;
+    match (left, right)
+    | (+Err(error), _) => ret +Err(error)
+    | (_, +Err(error)) => ret +Err(error)
+    | (+Ok(left), +Ok(right)) =>
+      ! int/eq (Ret Checked) right 0 { ret +Ok(0) } {
+        do limit <- ! int/div 4611686018427387903 right;
+        ! int/gt (Ret Checked) left limit { ret +Err(+SizeOverflow()) } {
+          do value <- ! int/mul left right;
+          ret +Ok(value)
+        }
+      }
+    end
+  in
+  let ! round_up (count : Int) (boundary : Int) : Ret Checked =
+    do count <- ! size count;
+    do boundary <- ! power_of_two boundary;
+    match (count, boundary)
+    | (+Err(error), _) => ret +Err(error)
+    | (_, +Err(error)) => ret +Err(error)
+    | (+Ok(count), +Ok(boundary)) =>
+      do remainder <- ! int/mod count boundary;
+      ! int/eq (Ret Checked) remainder 0 { ret +Ok(count) } {
+        do extra <- ! int/sub boundary remainder;
+        ! add count extra
+      }
+    end
+  in
+  (= size, #alignment = power_of_two, = add, = multiply, = round_up)
+end

@@ -1,0 +1,12 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  param Uninit : VType in
+  param Init : VType in
+  param Ptr : VType -> VType -> VType in
+  let Cps (A : VType) = forall (R : CType) . Thk (A -> R) -> R in
+  fn (L : VType) (A : VType) =>
+      (#init :: val pi (pointer : Ptr L Uninit) (value : A) . Thk (Cps (Ptr L Init)))
+    * (#read :: val pi (pointer : Ptr L Init) . Thk (Cps A))
+end

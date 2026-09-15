@@ -1023,7 +1023,9 @@ The library supplies the other types:
 | `fixed/Layout A` | A static `Result (Plan A) LayoutError` | Construction evidence eliminates before fixed realization |
 | `Representation A` | An existential layout witness with its allocation and typed access operations | Selected operations; dynamic layouts also capture placement |
 | `dynamic/Layout A` | Runtime layout computation | Captured dynamic inputs and operations |
-| `Alloc` | Allocation and release service | Ordinary source operations and any selected allocator context |
+| `Storage L`, `DynamicStorage L` | Validated geometry independent of logical values | Fixed recipe erases; dynamic geometry carries size/alignment |
+| `Codec L A`, `DynamicCodec L A` | Initialization and observation recipes | Fixed recipes erase; dynamic codecs carry ordinary thunks/context |
+| `StaticAlloc Context`, `Alloc` | Fixed and runtime allocation services | Explicit context; runtime interface carries ordinary operations |
 | `Buffer` | Incremental byte construction | Address, capacity, initialized-prefix length |
 
 The table describes payload requirements. Products, closures, and runtime-selected dictionaries still use
@@ -1048,6 +1050,43 @@ A caller that abandons cleanup leaks its manually allocated storage.
 There are no implicit destructors.
 Raw storage must not contain movable managed references without a separate rooting protocol;
 the supplied layouts cover scalars and unmanaged addresses.
+
+### Independent storage and codecs
+
+[Storage](../../lib/std/memory/storage.zy) validates geometry without selecting a logical value type or allocator.
+`storage/constant/create size alignment` returns `Result (exists L. Storage L) LayoutError`;
+its runtime counterpart returns `Ret (Result (exists L. DynamicStorage L) LayoutError)`.
+Both reject negative sizes and nonpositive or non-power-of-two alignments.
+The fixed constructor requires static operands. Both representations are sealed against unchecked construction;
+`unsafe/for_layout L` validates the same geometry but lets the caller associate it with an existing witness.
+`query L` exposes `SizeAlign = (#size :: Int) * (#alignment :: Int)`.
+`constant/materialize L` explicitly obtains dynamic geometry from fixed storage.
+
+A witness relates geometry, pointers, and codecs, not an allocation instance.
+Independently opened witnesses remain distinct even with equal geometry.
+For dynamic instances, the caller retains the matching geometry until release.
+Size and indexing remain bounded by nonnegative `Int`; full pointer-width sizes remain proposed work.
+
+[Codec](../../lib/std/memory/codec.type.zy) supplies value functions `init pointer value : Thk (Cps (Ptr L Init))`
+and `read pointer : Thk (Cps A)`.
+The [dynamic form](../../lib/std/memory/dynamic-codec.type.zy) carries ordinary thunks:
+`init : Thk (Ptr L Uninit -> A -> Cps (Ptr L Init))` and `read : Thk (Ptr L Init -> Cps A)`.
+`codecs/materialize L A` selects that form explicitly.
+`codecs/unsafe/scalar L A write read` associates scalar accesses with a caller-established layout.
+`codecs/unsafe/take` reads through a fixed codec before yielding an uninitialized pointer
+and the value; `dynamic_take` does the same through a dynamic codec.
+Neither clears bytes nor invalidates aliases. A codec carries no implicit allocator.
+Its stored format is independent of the compiler's representation of `A`.
+
+[StaticAlloc](../../lib/std/memory/static-allocator.type.zy) selects allocator code using value functions,
+with explicit `Context`, byte size, and alignment; its `free` also takes the original base.
+`allocation/static_heap` uses `Unit` context, and `materialize Context allocator context` produces `Alloc`.
+`reserve L Context allocator context storage` produces a CPS allocation recipe yielding `Ptr L Uninit`;
+`unsafe/release` requires matching geometry, provider/context, and an uninitialized pointer.
+`dynamic_reserve` and `unsafe/dynamic_release` use `Alloc` and `DynamicStorage` at runtime.
+The [executable example](../../lib/tests/std/storage-codecs.zy) covers both forms and state transitions.
+The [factory migration](../proposals/memory-compilation.md#compose-storage-before-selecting-a-logical-codec) is still
+in progress; the existing convenience factories below retain their current interfaces until migrated.
 
 ### Allocation and release
 

@@ -128,6 +128,8 @@ text/package.zy            text conveniences and byte collection operations
 
 memory/package.zy          manual-memory package and shared pointer/state witnesses
 memory/types.zy            erased Ptr<L,S> abstraction and state markers
+memory/storage.zy          sealed fixed/runtime geometry
+memory/codecs.zy           independent fixed/runtime scalar codecs
 memory/layout.zy           static layout plans and typed destination operations
 memory/dynamic-layout.zy   explicitly dynamic placement and realization
 memory/size.zy             checked static size and alignment calculations

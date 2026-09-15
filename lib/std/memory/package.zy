@@ -2,6 +2,20 @@
 begin
   param val (/VType; /Addr; builtin) : @(import("../builtin.zy")) that
   let (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) = (@(import("types.zy"))) Addr in
+  let (
+    /Storage;
+    /DynamicStorage;
+    /SizeAlign;
+    /constant = storage_constant;
+    /runtime = storage_runtime;
+    storage
+  )
+  =
+    builtin |> (@(import("storage.zy")))
+  in
+  let (/Codec; /DynamicCodec; /materialize = materialize_codec; /unsafe = codec_unsafe) = (
+    builtin |> (@(import("codecs.zy")))
+  ) types in
   let (= Field, = DynamicField, field_ops) = (builtin |> (@(import("field.zy")))) types in
   let fields = field_ops/constant in
   let runtime_fields = field_ops/runtime in
@@ -11,7 +25,7 @@ begin
   let views = (builtin |> (@(import("view.zy")))) types in
   let fixed = (builtin |> (@(import("layout.zy")))) types in
   let dynamic = (builtin |> (@(import("dynamic-layout.zy")))) types in
-  let allocation = builtin |> (@(import("allocation.zy"))) in
+  let allocation = (builtin |> (@(import("allocation.zy")))) types storage in
   let (= Slice, slices) = (builtin |> (@(import("slice.zy")))) types in
   let raw = builtin |> (@(import("native.zy"))) in
   pack
@@ -22,9 +36,16 @@ begin
       (= Fields : VType -> VType -> VType) is Fields
       (= Ptr : VType -> VType -> VType) is Ptr
       (= Slice : VType -> VType -> VType) is Slice
+      (= Storage : VType -> VType) is Storage
+      (= DynamicStorage : VType -> VType) is DynamicStorage
+      (= SizeAlign as SizeAlign : VType)
+      (= Codec as Codec : VType -> VType -> VType)
+      (= DynamicCodec as DynamicCodec : VType -> VType -> VType)
   where
     (
       = slices,
+      #storage = (#constant = storage_constant, #runtime = storage_runtime),
+      #codecs = (#materialize = materialize_codec, #unsafe = codec_unsafe),
       = fields,
       = runtime_fields,
       = records,

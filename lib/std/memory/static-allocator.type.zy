@@ -1,0 +1,17 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Int = @(intrinsic(int)) in
+  let Fault = @(import("fault.zy")) in
+  param Addr : VType in
+  fn (Context : VType) =>
+      (
+        #allocate :: val pi (context : Context) (size : Int) (alignment : Int) .
+          Thk (forall (R : CType) . Thk (Fault -> R) -> Thk (Addr -> R) -> R)
+      )
+    * (
+        #free :: val pi (context : Context) (base : Addr) (size : Int) (alignment : Int) .
+          Thk (forall (R : CType) . Thk (Fault -> R) -> Thk R -> R)
+      )
+end

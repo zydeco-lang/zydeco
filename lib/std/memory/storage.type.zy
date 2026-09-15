@@ -1,0 +1,39 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Ret = @(intrinsic(ret)) in
+  let Thk = @(intrinsic(thk)) in
+  let Int = @(intrinsic(int)) in
+  let Result = @(import("../data/result.zy")) in
+  let Error = @(import("layout-error.zy")) in
+  let SizeAlign = (#size :: Int) * (#alignment :: Int) in
+  exists (= Storage : VType -> VType) (= DynamicStorage : VType -> VType)
+    (= SizeAlign as SizeAlign : VType)
+  .
+      (
+        #constant ::
+          (
+            #create :: val pi (count : Int) (boundary : Int) .
+              Result (exists (= L : VType) . Storage L) Error
+          )
+        * (#query :: val pi (L : VType) (storage : Storage L) . SizeAlign)
+        * (#materialize :: val pi (L : VType) (storage : Storage L) . DynamicStorage L)
+        * (
+            #unsafe :: #for_layout :: val pi (L : VType) (count : Int) (boundary : Int) .
+              Result (Storage L) Error
+          )
+      )
+    * (
+        #runtime ::
+          (
+            #create :: Thk (
+              Int -> Int -> Ret (Result (exists (= L : VType) . DynamicStorage L) Error)
+            )
+          )
+        * (#query :: val pi (L : VType) (storage : DynamicStorage L) . SizeAlign)
+        * (
+            #unsafe :: #for_layout :: Thk (
+              forall (L : VType) . Int -> Int -> Ret (Result (DynamicStorage L) Error)
+            )
+          )
+      )
+end
