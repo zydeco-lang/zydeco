@@ -25,8 +25,10 @@ and [native activation rules](../references/compiler.md#activation-lifetime) sup
 Compiled libraries also support a separate
 [scalar C entry profile](../references/language.md#compiled-libraries-and-c-exports).
 Persistent host instances, external root handles, and the binding APIs below require implementation.
-The [compilation-unit extensions](#9-compilation-unit-extensions) can precede host binding work;
-the [workload assessment](#10-workload-and-pitfalls) distinguishes their remaining costs.
+The [Rust host survey](rust-host.md) compares consuming C exports with binding the native Zydeco ABI.
+Structural host bindings and the [compilation-unit extensions](#9-compilation-unit-extensions) can
+proceed independently; richer interfaces are required when a binding exposes their additional types.
+The [workload assessment](#10-workload-and-pitfalls) distinguishes their remaining costs.
 
 ## 1. The agreement a foreign implementation needs
 
@@ -647,6 +649,9 @@ Follow-on work has different costs:
 | Synchronous host embedding and one basic binding | 15–25 | Persistent instances, external roots, value construction/access, returning and returned thunks, close semantics, one host language |
 | General protocol bindings and host-implemented thunks | 10–20 | Checked stack plans, recursive codata, generic/witness relationships in host wrappers, transfer driver, cross-runtime context rooting |
 
+The [Rust host survey](rust-host.md#workload-and-validation) scopes a smaller first binding
+to current structural units and separates runtime ownership/root implementation from the remaining Rust adapter work.
+
 Together these suggest roughly **3–5 engineering months**
 for an initial synchronous native interlanguage platform covering the proposed type interfaces.
 This is an order-of-magnitude estimate with lower confidence than the unit extensions.
@@ -694,24 +699,28 @@ or a stable cross-version public ABI.
 
 ## 11. Implementation order and validation
 
-Extend the implemented minimum in this order:
+Structural host bindings and richer unit interfaces are independent tracks:
 
-1. The richer unit interfaces in section 9, including nominal identities, recursive definitions, and binders;
-   introduce a dependency-environment profile if shared automatic initialization is needed.
-2. Complete abstract/dependent interface import, then persistent host instances with registered roots
-   and immutable scalar/product/data access.
-3. Host returning-thunk invocation, including a returned capturing thunk and state surviving host calls.
-4. Argument/observation stack plans, generic forwarding, and transfer-driven host thunk implementations.
-5. Abstract packages and dependent witness relationships in generated bindings,
+- Start host binding work with the existing structural schema, persistent instances,
+  registered roots, and returning-thunk invocation.
+  The [Rust host survey](rust-host.md) defines a first consumer and its tests.
+- Extend unit interfaces with nominal identities, recursive definitions, and binders as described in section 9.
+  Introduce a dependency-environment profile if shared automatic initialization is needed.
+
+Once returning host calls work, extend bindings in this order:
+
+1. Host-implemented returning thunks through the transfer driver in section 7.
+2. Argument/observation stack plans and generic forwarding, after the relevant public type schema is available.
+3. Abstract packages and dependent witness relationships in generated bindings,
    with explicit diagnostics for interface forms that a binding generator cannot yet represent.
-6. Additional runtime profiles for nested entry, recoverable faults, or asynchronous work only after their lifetime
+4. Additional runtime profiles for nested entry, recoverable faults, or asynchronous work only after their lifetime
    and control rules are implemented.
 
 Native word transport already supports more source forms than a first binding generator will expose.
 Staging the generator does not turn those forms into C signatures or change their source semantics.
 Direct compiler integrations can use the checked native profile where they implement its full obligations.
 
-The richer compilation-unit profile has its own acceptance gate before host binding work.
+The richer compilation-unit profile has its own acceptance gate before bindings expose its additional types.
 Current structural-unit coverage belongs to the [implemented contract](../references/compiler.md#native-unit-artifacts):
 
 | Accepted case | Rejected counterpart | Required evidence |
