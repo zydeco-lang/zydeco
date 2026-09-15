@@ -1118,8 +1118,8 @@ mod tests {
             r#"let Builtin = @(import("{builtin}")) in
 param (
   /VType; /CType; /Thk; /Ret; /Unit;
-  /Int8; /Int16; /Int32; /Int;
-  /UInt8; /UInt16; /UInt32; /UInt;
+  /Int8; /Int16; /Int32; /Int64; /Int;
+  /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
   /Float32; /Float64; /Char; /String; /Addr;
   /Reader; /Writer; /OS; /numeric; /process; builtin
 ) : Builtin in

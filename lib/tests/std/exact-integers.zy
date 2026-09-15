@@ -1,0 +1,92 @@
+@[package(test(of(std)))]
+begin
+  param (/Thk; /Ret; /Int; /UInt; /Int64; /UInt64; /OS; /numeric; /process; builtin) : @(import(
+    std/builtin
+  )) that
+  let (/int64; /uint64; /bytes) = builtin |> (@(import(std))) in
+  let fail = { ! process/exit 1 } in
+  let ! check_int64_bytes (value : Int64) (next : Thk OS) : OS =
+    do encoded <- ! int64/to_le_bytes value;
+    ! int64/from_le_bytes OS encoded fail {
+      fn actual =>
+        ! numeric/int64/eq OS actual value next fail
+    }
+  in
+  let ! check_int64_conversion (value : Int) (next : Thk OS) : OS =
+    do wide <- ! int64/from_int value;
+    ! int64/to_int OS wide fail {
+      fn actual =>
+        ! numeric/int/eq OS actual value next fail
+    }
+  in
+  let ! reject_int64_conversion (value : Int64) (next : Thk OS) : OS =
+    ! int64/to_int OS value next { fn _ => ! fail }
+  in
+  let ! check_uint64_bytes (value : UInt64) (next : Thk OS) : OS =
+    do encoded <- ! uint64/to_le_bytes value;
+    ! uint64/from_le_bytes OS encoded fail {
+      fn actual =>
+        ! numeric/uint64/eq OS actual value next fail
+    }
+  in
+  let ! check_uint64_conversion (value : UInt) (next : Thk OS) : OS =
+    do wide <- ! uint64/from_uint value;
+    ! uint64/to_uint OS wide fail {
+      fn actual =>
+        ! numeric/uint/eq OS actual value next fail
+    }
+  in
+  let ! reject_uint64_conversion (value : UInt64) (next : Thk OS) : OS =
+    ! uint64/to_uint OS value next { fn _ => ! fail }
+  in
+  let rejected = {
+    ! reject_int64_conversion -4611686018427387905 {
+      ! reject_int64_conversion 4611686018427387904 {
+        ! reject_int64_conversion -9223372036854775808 {
+          ! reject_int64_conversion 9223372036854775807 {
+            ! reject_uint64_conversion 9223372036854775808 {
+              ! reject_uint64_conversion 18446744073709551615 {
+                ! process/exit 0
+              }
+            }
+          }
+        }
+      }
+    }
+  } in
+  let converted = {
+    ! check_int64_conversion -4611686018427387904 {
+      ! check_int64_conversion 0 {
+        ! check_int64_conversion 4611686018427387903 {
+          ! check_uint64_conversion 0 {
+            ! check_uint64_conversion 9223372036854775807 {
+              ! rejected
+            }
+          }
+        }
+      }
+    }
+  } in
+  do short <- ! bytes/singleton 0;
+  ! int64/from_le_bytes OS short {
+    ! uint64/from_le_bytes OS short {
+      ! check_int64_bytes -9223372036854775808 {
+        ! check_int64_bytes 9223372036854775807 {
+          ! check_int64_bytes 0 {
+            ! check_int64_bytes 4096 {
+              ! check_uint64_bytes 18446744073709551615 {
+                ! check_uint64_bytes 9223372036854775808 {
+                  ! check_uint64_bytes 0 {
+                    ! check_uint64_bytes 4096 {
+                      ! converted
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } { fn _ => ! fail }
+  } { fn _ => ! fail }
+end

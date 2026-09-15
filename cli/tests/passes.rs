@@ -16,7 +16,7 @@ impl Fixture {
             workspace: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         };
         std::fs::write(fixture.source(), format!(
-            "param (/system; /process; /numeric; /OS; /Ret; /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
+            "param (/system; /process; /numeric; /OS; /Ret; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
             fixture.workspace.join("lib/std/builtin.zy").display(),
         )).unwrap();
         fixture
@@ -234,7 +234,9 @@ let fix divide (x : Int) (y : Int) : Ret Int = ! numeric/int/div x y in
 #[test]
 fn unoptimized_numeric_imports_match_primitive_execution() {
     let mut cases = Vec::new();
-    for ty in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
+    for ty in
+        ["Int8", "Int16", "Int32", "Int64", "Int", "UInt8", "UInt16", "UInt32", "UInt64", "UInt"]
+    {
         for operation in ["add", "sub", "mul", "div", "mod"] {
             cases.push((ty, operation, "20", "3"));
         }
@@ -245,6 +247,12 @@ fn unoptimized_numeric_imports_match_primitive_execution() {
         }
     }
     cases.extend([
+        ("Int64", "add", "9223372036854775807", "1"),
+        ("Int64", "div", "-9223372036854775808", "-1"),
+        ("Int64", "mod", "-9223372036854775808", "-1"),
+        ("UInt64", "sub", "0", "1"),
+        ("UInt64", "add", "18446744073709551615", "1"),
+        ("UInt64", "div", "18446744073709551615", "2"),
         ("Int8", "add", "127", "1"),
         ("Int16", "sub", "-32768", "1"),
         ("Int32", "mul", "1073741824", "4"),
@@ -266,30 +274,43 @@ fn unoptimized_numeric_imports_match_primitive_execution() {
         ("Float32", "div", "1.0", "0.0"),
         ("Float64", "div", "0.0", "0.0"),
     ]);
-    let body = cases.into_iter().rev().fold("! process/exit 0".to_owned(), |tail, (ty, operation, first, second)| {
-        let group = ty.to_lowercase();
-        format!("do value <- ! numeric/{group}/{operation} ({first} : {ty}) ({second} : {ty}); do text <- ! numeric/{group}/to_string value; ! system/stdio/write_line text {{ {tail} }}")
-    });
-    let fixture = Fixture::new(&body);
-    let reference = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-        .arg("run")
-        .arg(fixture.source())
-        .output()
-        .unwrap();
-    Fixture::assert_success(&reference);
+    for cases in cases.chunks(24) {
+        let body = cases.iter().rev().fold(
+            "! process/exit 0".to_owned(),
+            |tail, (ty, operation, first, second)| {
+                let group = ty.to_lowercase();
+                format!("do value <- ! numeric/{group}/{operation} ({first} : {ty}) ({second} : {ty}); do text <- ! numeric/{group}/to_string value; ! system/stdio/write_line text {{ {tail} }}")
+            },
+        );
+        let fixture = Fixture::new(&body);
+        let reference = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .arg("run")
+            .arg(fixture.source())
+            .output()
+            .unwrap();
+        Fixture::assert_success(&reference);
+        for target in ["wasm-am", "wasm-sps", "exe"] {
+            if target == "exe" && !cfg!(any(target_os = "linux", target_os = "macos")) {
+                continue;
+            }
+            for plan in ["default", "none"] {
+                let output = fixture.execute(plan, target);
+                Fixture::assert_success(&output);
+                assert_eq!(output.stdout, reference.stdout, "{plan}/{target}");
+            }
+        }
+    }
+}
+
+#[test]
+fn unoptimized_integer_zero_divisors_fail_before_the_continuation() {
     for target in ["wasm-am", "wasm-sps", "exe"] {
         if target == "exe" && !cfg!(any(target_os = "linux", target_os = "macos")) {
             continue;
         }
-        for plan in ["default", "none"] {
-            let output = fixture.execute(plan, target);
-            Fixture::assert_success(&output);
-            assert_eq!(output.stdout, reference.stdout, "{plan}/{target}");
-        }
-        if target == "exe" {
-            continue;
-        }
-        for ty in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
+        for ty in [
+            "Int8", "Int16", "Int32", "Int64", "Int", "UInt8", "UInt16", "UInt32", "UInt64", "UInt",
+        ] {
             for (operation, diagnostic) in
                 [("div", "integer division by zero"), ("mod", "integer remainder by zero")]
             {

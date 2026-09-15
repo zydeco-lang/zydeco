@@ -63,7 +63,7 @@ end
 fn checksum_has_a_direct_foreign_classifier() {
     SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
         "sample_checksum",
-        "Thk (Addr -> Int -> UInt -> Ret UInt)",
+        "Thk (Addr -> Int -> UInt64 -> Ret UInt64)",
     )));
 }
 

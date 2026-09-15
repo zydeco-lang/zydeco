@@ -203,3 +203,17 @@ scalar_memory!(
     |word| OpaqueScalar::load(word) as u64,
     |bits: u64, spare| OpaqueScalar::store(spare, bits as Word), [, spare: *mut Word], [, spare]
 );
+
+scalar_memory!(
+    i64,
+    zydeco_int64_store_le_branch => "\x01zydeco_int64_store_le_branch",
+    zydeco_int64_load_le_branch => "\x01zydeco_int64_load_le_branch",
+    HostInt64::decode, HostInt64::encode, [, spare: *mut Word], [, spare]
+);
+
+scalar_memory!(
+    u64,
+    zydeco_uint64_store_le_branch => "\x01zydeco_uint64_store_le_branch",
+    zydeco_uint64_load_le_branch => "\x01zydeco_uint64_load_le_branch",
+    HostUInt64::decode, HostUInt64::encode, [, spare: *mut Word], [, spare]
+);

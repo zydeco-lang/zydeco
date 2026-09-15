@@ -3,8 +3,8 @@ begin
   param val (
     (
       /VType; /CType; /Thk; /Ret; /Unit; /String;
-      /Int8; /Int16; /Int32; /Int;
-      /UInt8; /UInt16; /UInt32; /UInt;
+      /Int8; /Int16; /Int32; /Int64; /Int;
+      /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
       /Float32; /Float64;
       /numeric;
       builtin
@@ -16,10 +16,12 @@ begin
   let int8 = numeric/int8 in
   let int16 = numeric/int16 in
   let int32 = numeric/int32 in
+  let int64 = numeric/int64 in
   let int = numeric/int in
   let uint8 = numeric/uint8 in
   let uint16 = numeric/uint16 in
   let uint32 = numeric/uint32 in
+  let uint64 = numeric/uint64 in
   let uint = numeric/uint in
   let float32 = numeric/float32 in
   let float64 = numeric/float64 in
@@ -79,6 +81,25 @@ begin
       0,
       1
     ) |> make_integer Bool Int32 String
+  in
+  let (/operations = int64_module; /dictionary = int64_dictionary) =
+    (
+      builtin,
+      bool,
+      (
+        #add = int64/add,
+        #sub = int64/sub,
+        #mul = int64/mul,
+        #div = int64/div,
+        #mod = int64/mod,
+        #eq = int64/eq,
+        #lt = int64/lt,
+        #gt = int64/gt,
+        #to_string = int64/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool Int64 String
   in
   let (/operations = int_module; /dictionary = int_dictionary) =
     (
@@ -156,6 +177,25 @@ begin
       1
     ) |> make_integer Bool UInt32 String
   in
+  let (/operations = uint64_module; /dictionary = uint64_dictionary) =
+    (
+      builtin,
+      bool,
+      (
+        #add = uint64/add,
+        #sub = uint64/sub,
+        #mul = uint64/mul,
+        #div = uint64/div,
+        #mod = uint64/mod,
+        #eq = uint64/eq,
+        #lt = uint64/lt,
+        #gt = uint64/gt,
+        #to_string = uint64/to_string
+      ),
+      0,
+      1
+    ) |> make_integer Bool UInt64 String
+  in
   let (/operations = uint_module; /dictionary = uint_dictionary) =
     (
       builtin,
@@ -215,10 +255,12 @@ begin
     #int8 = int8_module,
     #int16 = int16_module,
     #int32 = int32_module,
+    #int64 = (int64_module, #from_int = int64/from_int, #to_int = int64/to_int),
     #int = int_module,
     #uint8 = uint8_module,
     #uint16 = uint16_module,
     #uint32 = uint32_module,
+    #uint64 = (uint64_module, #from_uint = uint64/from_uint, #to_uint = uint64/to_uint),
     #uint = uint_module,
     #float32 = float32_module,
     #float64 = float64_module,
@@ -226,10 +268,12 @@ begin
       = int8_dictionary,
       = int16_dictionary,
       = int32_dictionary,
+      = int64_dictionary,
       = int_dictionary,
       = uint8_dictionary,
       = uint16_dictionary,
       = uint32_dictionary,
+      = uint64_dictionary,
       = uint_dictionary,
       = float32_dictionary,
       = float64_dictionary

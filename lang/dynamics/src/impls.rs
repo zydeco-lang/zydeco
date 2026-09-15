@@ -94,6 +94,11 @@ pub fn integer_branch(
             ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(second))),
         ) => integer_comparison(first, second, operation),
         | (
+            IntegerType::Int64,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
             IntegerType::Int,
             ZValue::Literal(Literal::Integer(IntegerLiteral::Int(first))),
             ZValue::Literal(Literal::Integer(IntegerLiteral::Int(second))),
@@ -112,6 +117,11 @@ pub fn integer_branch(
             IntegerType::UInt32,
             ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(first))),
             ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(second))),
+        ) => integer_comparison(first, second, operation),
+        | (
+            IntegerType::UInt64,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(second))),
         ) => integer_comparison(first, second, operation),
         | (
             IntegerType::UInt,
@@ -815,6 +825,30 @@ pub fn exit(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int(a)))] => Err(*a as i32),
         | _ => unreachable!(""),
+    }
+}
+
+/// Explicit conversion between machine integers and their exact-width counterparts.
+pub(crate) struct IntegerConversion;
+
+impl IntegerConversion {
+    pub(crate) fn widen(target: IntegerType, args: Vec<ZValue>) -> Result<ZCompute, i32> {
+        let [ZValue::Literal(Literal::Integer(value))] = args.as_slice() else {
+            unreachable!("checked integer widening receives one integer")
+        };
+        ret(Literal::Integer(value.with_type(target).expect("widening preserves the value")).into())
+    }
+
+    pub(crate) fn narrow(target: IntegerType, args: Vec<ZValue>) -> Result<ZCompute, i32> {
+        let [ZValue::Literal(Literal::Integer(value)), when_none, when_some] = args.as_slice()
+        else {
+            unreachable!("checked integer narrowing receives an integer and two continuations")
+        };
+        OptionalValueBranch::select(
+            value.with_type(target).map(|value| Literal::Integer(value).into()),
+            when_none,
+            when_some,
+        )
     }
 }
 

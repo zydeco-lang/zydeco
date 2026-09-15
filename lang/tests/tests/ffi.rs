@@ -123,7 +123,9 @@ fn accepts_compositional_classifiers_without_loading_a_library() {
     ] {
         SourceCase::check(&FfiCase::declaration(classifier)).unwrap();
     }
-    for integer in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
+    for integer in
+        ["Int8", "Int16", "Int32", "Int64", "Int", "UInt8", "UInt16", "UInt32", "UInt64", "UInt"]
+    {
         SourceCase::check(&FfiCase::declaration(&format!("Thk ({integer} -> Ret {integer})")))
             .unwrap();
     }

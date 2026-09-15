@@ -1,7 +1,7 @@
 -- Sequence codecs compose scalar memory leaves with immutable source bytes.
 begin
   param val (/VType; /CType; /Thk; /Ret; /Int; /Addr;
-    /Int8; /Int16; /Int32; /UInt8; /UInt16; /UInt32; /UInt; /Float32; /Float64;
+    /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64;
     /numeric; builtin) : @(import("../builtin.zy")) that
   param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr that
   let int = numeric/int in
@@ -55,10 +55,12 @@ begin
     #int8 = scalar Int8 1 numeric/int8/store_le numeric/int8/load_le any_bytes,
     #int16 = scalar Int16 2 numeric/int16/store_le numeric/int16/load_le any_bytes,
     #int32 = scalar Int32 4 numeric/int32/store_le numeric/int32/load_le any_bytes,
+    #int64 = scalar Int64 8 numeric/int64/store_le numeric/int64/load_le any_bytes,
     #int = scalar Int 8 numeric/int/store_le numeric/int/load_le int_bytes,
     #uint8 = scalar UInt8 1 numeric/uint8/store_le numeric/uint8/load_le any_bytes,
     #uint16 = scalar UInt16 2 numeric/uint16/store_le numeric/uint16/load_le any_bytes,
     #uint32 = scalar UInt32 4 numeric/uint32/store_le numeric/uint32/load_le any_bytes,
+    #uint64 = scalar UInt64 8 numeric/uint64/store_le numeric/uint64/load_le any_bytes,
     #uint = scalar UInt 8 numeric/uint/store_le numeric/uint/load_le uint_bytes,
     #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le any_bytes,
     #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le any_bytes

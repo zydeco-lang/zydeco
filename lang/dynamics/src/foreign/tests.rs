@@ -106,6 +106,7 @@ fn preserves_every_integer_width_and_signedness() {
         (IntegerType::Int8, i8::MIN as i128, i8::MAX as i128),
         (IntegerType::Int16, i16::MIN as i128, i16::MAX as i128),
         (IntegerType::Int32, i32::MIN as i128, i32::MAX as i128),
+        (IntegerType::Int64, i64::MIN as i128, i64::MAX as i128),
         (
             IntegerType::Int,
             zydeco_syntax::word::RuntimeWord::SIGNED_MIN as i128,
@@ -114,6 +115,7 @@ fn preserves_every_integer_width_and_signedness() {
         (IntegerType::UInt8, 0, u8::MAX as i128),
         (IntegerType::UInt16, 0, u16::MAX as i128),
         (IntegerType::UInt32, 0, u32::MAX as i128),
+        (IntegerType::UInt64, 0, u64::MAX as i128),
         (IntegerType::UInt, 0, zydeco_syntax::word::RuntimeWord::UNSIGNED_MAX as i128),
     ] {
         for value in [minimum, maximum] {

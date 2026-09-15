@@ -33,6 +33,8 @@ impl HostCallMode {
             | BuiltinValueRole::StrGet
             | BuiltinValueRole::CharFromCodepoint
             | BuiltinValueRole::StrParseInt
+            | BuiltinValueRole::Int64ToInt
+            | BuiltinValueRole::UInt64ToUInt
             | BuiltinValueRole::MemoryFree
             | BuiltinValueRole::MemoryRetain
             | BuiltinValueRole::MemoryFromString
@@ -61,7 +63,18 @@ impl HostCallMode {
             | BuiltinValueRole::ArgAt
             | BuiltinValueRole::RandomInt
             | BuiltinValueRole::Exit => Control,
-            | _ => Returning,
+            | BuiltinValueRole::Int64FromInt
+            | BuiltinValueRole::UInt64FromUInt
+            | BuiltinValueRole::StrScalarLength
+            | BuiltinValueRole::StrByteLength
+            | BuiltinValueRole::StrAppend
+            | BuiltinValueRole::CharToStr
+            | BuiltinValueRole::CharCodepoint
+            | BuiltinValueRole::MemoryNull
+            | BuiltinValueRole::MemoryOffset
+            | BuiltinValueRole::Stdin
+            | BuiltinValueRole::Stdout
+            | BuiltinValueRole::Stderr => Returning,
         }
     }
 }

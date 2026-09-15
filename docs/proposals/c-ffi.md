@@ -3,7 +3,7 @@
 Returning C imports and named scalar C export libraries are implemented.
 Their source obligations belong to [L14](../references/language.md#14-foreign-interfaces),
 and their validated call plan and target adapters to [C14](../references/compiler.md#foreign-calls).
-The [XXH32 binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow.
+The [xxHash binding](../../lib/ffi/xxhash.zy) demonstrates the current pointer-and-length borrow.
 The implemented [storage and transport boundary](../references/language.md#storage-and-foreign-transport)
 also owns raw pointer obligations and foreign field decoding.
 This proposal contains the next foreign boundaries.
@@ -22,18 +22,11 @@ Executing a C caller is evidence about the specimen, not evidence that Zydeco ca
 
 | Example | Current result | Missing capability or next decision |
 | --- | --- | --- |
-| A checksum taking `const void *`, `size_t`, and `uint64_t` | `Thk (Addr -> Int -> UInt -> Ret UInt)` supplies a pointer, length, and seed within the tagged ranges; out-of-range results fail. The XXH32 wrapper accepts `Bytes`. | Full-width seeds and results await exact-width integers; the synchronous borrow is already supported. |
+| A checksum taking `const void *`, `size_t`, and `uint64_t` | `Thk (Addr -> Int -> UInt64 -> Ret UInt64)` supplies a pointer, length, and full-width seed/result. The xxHash wrappers accept `Bytes`. | Implemented scalar transport and synchronous borrow; aggregate and callback boundaries remain independent. |
 | An inspector taking a `sample_record`, by pointer or by value | A typed layout constructs the record, and explicit address exposure supplies one pointer. A logical product is rejected for the by-value form. | Pointer transport is implemented. Passing an aggregate by value still needs target ABI classification. |
 | A writer taking `void *`, capacity, and scalar fields | A raw `Addr` supplies a manually managed writable destination. A CPS binding interprets C status before asserting initialized fields. | Pointer transport is implemented; each binding supplies its extent, alias, and partial-write contract. |
 | A visitor taking an array, a function pointer, and `void *context` | A capturing `Thk (Int -> Ret Int)` is rejected as a foreign parameter. The C visitor invokes a context-bearing callback repeatedly. | A rooted callback environment and a runtime entry that returns to each C invocation. |
 | A Zydeco service passing an abstract stored record to another module | The [stored-call example](../../lib/tests/std/represented-call/main.zy) shares typed pointer operations; compiled libraries currently export scalars. | Passing that typed pointer across artifacts needs an agreed ABI and caller-owned lifetime contract beyond scalar entry. |
-
-## Deferred exact-width integers
-
-Full-width checksums and C values need distinct `Int64` and `UInt64` types.
-Their future ordinary value representation should be boxed like `Float64`, with explicit conversions
-to the [tagged machine integers](../references/language.md#13-primitive-values-and-capabilities).
-The current xxHash example exposes `XXH32`; `XXH64` and `XXH3_64bits` await those exact-width types.
 
 ## External handle conventions
 

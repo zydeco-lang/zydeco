@@ -24,10 +24,12 @@ begin
     /int8;
     /int16;
     /int32;
+    /int64;
     /int;
     /uint8;
     /uint16;
     /uint32;
+    /uint64;
     /uint;
     /float32;
     /float64;
@@ -62,10 +64,12 @@ begin
       #int8 = (int8, codecs/int8),
       #int16 = (int16, codecs/int16),
       #int32 = (int32, codecs/int32),
+      #int64 = (int64, codecs/int64),
       #int = (int, codecs/int),
       #uint8 = (uint8, codecs/uint8),
       #uint16 = (uint16, codecs/uint16),
       #uint32 = (uint32, codecs/uint32),
+      #uint64 = (uint64, codecs/uint64),
       #uint = (uint, codecs/uint),
       #float32 = (float32, codecs/float32),
       #float64 = (float64, codecs/float64)

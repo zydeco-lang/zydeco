@@ -729,7 +729,7 @@ There are no implicit conversions between numeric types for existing values.
 
 The [runtime-word reference](docs/references/compiler.md#c12-shared-native-model-allocation-and-collection)
 owns tagged encodings and tracing.
-All supported integers fit immediate words; `Float64` uses an opaque box. Storage
+`Int`/`UInt` and narrower integers fit immediate words; `Int64`, `UInt64`, and `Float64` use opaque boxes. Storage
 and C transport follow their [separate carrier contract](docs/references/language.md#storage-and-foreign-transport).
 
 ### Shared Rust Runtime Model

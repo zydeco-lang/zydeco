@@ -1,5 +1,13 @@
 //! One-bit tagged, 64-bit words used by the current native and WebAssembly backends.
 
+/// The representation of a scalar at ordinary value and compilation-unit boundaries.
+/// Raw payloads may be used locally, but must be encoded before entering a traced slot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScalarRepresentation {
+    Immediate,
+    OpaqueBox,
+}
+
 /// A scalar as either an immediate word or the payload of a one-word opaque box.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EncodedScalar {

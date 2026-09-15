@@ -2298,13 +2298,50 @@ so mismatched compiler/runtime source bundles fail to link.
 This is artifact pairing, not verification of handwritten instruction selection.
 
 Odd words are immediate. Even words are pointer-shaped.
-All supported integers, `Float32`, characters, and tags fit in an immediate word.
-`Float64` payloads use opaque scalar boxes. Integer arithmetic narrows to the source payload width before tagging,
-including operations left as builtin calls after optional normalization.
+`Int`/`UInt`, narrower integers, `Float32`, characters, and tags fit in an immediate word.
+`Int64`, `UInt64`, and `Float64` payloads use opaque scalar boxes.
+Integer arithmetic wraps at the source payload width, including operations left
+as builtin calls after optional normalization.
 Products and closures occupy scanned blocks.
 Source numeric domains and immediate ranges are specified in [L13](language.md#13-primitive-values-and-capabilities);
 storage and C carriers are specified in [L14](language.md#storage-and-foreign-transport).
 Aligned host-owned objects outside the managed spaces remain unchanged by tracing.
+
+### Scalar value boundaries
+
+A primitive's numeric domain, ordinary value representation, and storage/C carrier answer different questions.
+[`IntegerType`](../../lang/syntax/src/lib.rs) keeps those facts separate as `bits`,
+`representation`, and `storage_bits`.
+An eight-byte carrier therefore does not imply either a full-width source domain or an unboxed value word.
+
+Every `Int64`, `UInt64`, or `Float64` at a general value boundary is a pointer to a one-word opaque box,
+even when its bits could fit in an immediate.
+This includes arguments, returns, products, captures, existential/polymorphic values, and native unit interfaces.
+The payload contains raw bits and the collector never traces it; only the enclosing pointer is a root.
+These compiler-owned primitive representations require no source meta annotation.
+
+The [AMD64 primitive emitter](../../lang/amd64/src/emit/primitive.rs)
+and [shared Wasm emitter](../../lang/wasm-common/src/word.rs) decode operands to raw registers/locals,
+perform machine arithmetic, and encode the result at the next ordinary value boundary.
+Signed `Int64` minimum divided by `-1` is handled before a target instruction that would trap on overflow.
+When native result boxing allocates, raw bits survive in an untraced callee-saved register.
+They must never be pushed among tagged control-stack roots or stored in scanned object fields.
+Host builtins receive any needed spare box before their arguments are decoded,
+so their conversion helpers do not collect.
+Widening conversions use this spare-box path; checked narrowing returns a tagged value
+through its selected continuation.
+
+This implements local raw arithmetic and the [C adapter](#foreign-calls), while retaining the general word ABI.
+It does not eliminate intermediate scalar boxes across separate operations,
+specialize indirect call signatures, or add raw fields to scanned products. Those optimizations need the
+[representation evidence described in the proposal](../proposals/escape-unboxing.md#scalar-box-elimination-proposed).
+
+The regression boundary includes arithmetic with and without normalization on all four backends,
+full-width C import/export round trips, checked conversion failures,
+and source-free transitive unit calls with captured scalars across collection.
+Native entry tests additionally keep numeric payloads equal to heap addresses alive through collection,
+asserting that payload bits do not move with pointers.
+These checks validate the implemented paths; they are not a proof of future box-elimination passes.
 
 ### Runtime instances
 
@@ -2473,8 +2510,8 @@ Array whole-value reads explicitly build managed logical contents; direct initia
 
 Scalar `store_le` takes an address, value, and completion; `load_le` takes an address and result successor.
 Native loads and stores use byte copies or unaligned pointer-slot accesses without runtime access validation.
-Integer loads have no spare-box argument and reject carrier bits outside the source range.
-`Float64` loads receive an allocated spare box; `Float32` receives an unused zero spare.
+Immediate integer loads have no spare-box argument and reject carrier bits outside the source range.
+`Int64`, `UInt64`, and `Float64` loads receive an allocated spare box; `Float32` receives an unused zero spare.
 Float adapters preserve raw payload bits, including NaNs, on every backend.
 The [source codecs](../../lib/std/memory/codec.zy) write products directly into destination fields.
 Padding contributes no load or store. Fixed realization requires statically evaluable size and alignment;
@@ -2529,7 +2566,12 @@ Integer components retain their source type and signedness through the call plan
 Native encoders truncate C return registers to the carrier width before checking the source range;
 the [SysV ABI clarification](https://gitlab.com/x86-psABIs/x86-64-ABI/-/merge_requests/61)
 leaves excess integer register bits unspecified.
-Integer results and unit fit immediate words and require no spare box.
+`Int64` and `UInt64` results are boxed after the raw scratch frame has been discarded;
+the raw result remains in an untraced callee-saved register during allocation.
+Other integer results and unit fit immediate words.
+For C exports, raw input registers are saved above the instance's traced stack bound.
+Each incoming full-width integer receives a box, and the entry allocator roots previously encoded arguments.
+Result decoding happens before the instance is destroyed, returning all payload bits in the C result register.
 The libffi adapter uses exact scalar storage and return types for integers,
 and its explicit void-return operation avoids reading nonexistent result storage.
 Native address marshalling moves the pointer word directly, with no host conversion call.

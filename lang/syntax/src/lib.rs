@@ -227,10 +227,12 @@ pub enum IntegerType {
     Int8,
     Int16,
     Int32,
+    Int64,
     Int,
     UInt8,
     UInt16,
     UInt32,
+    UInt64,
     UInt,
 }
 
@@ -244,16 +246,18 @@ impl IntegerType {
             | Self::Int8 => "Int8",
             | Self::Int16 => "Int16",
             | Self::Int32 => "Int32",
+            | Self::Int64 => "Int64",
             | Self::Int => "Int",
             | Self::UInt8 => "UInt8",
             | Self::UInt16 => "UInt16",
             | Self::UInt32 => "UInt32",
+            | Self::UInt64 => "UInt64",
             | Self::UInt => "UInt",
         }
     }
 
     pub fn is_signed(self) -> bool {
-        matches!(self, Self::Int8 | Self::Int16 | Self::Int32 | Self::Int)
+        matches!(self, Self::Int8 | Self::Int16 | Self::Int32 | Self::Int64 | Self::Int)
     }
 
     pub fn bits(self) -> u8 {
@@ -261,7 +265,24 @@ impl IntegerType {
             | Self::Int8 | Self::UInt8 => 8,
             | Self::Int16 | Self::UInt16 => 16,
             | Self::Int32 | Self::UInt32 => 32,
+            | Self::Int64 | Self::UInt64 => 64,
             | Self::Int | Self::UInt => zydeco_machine::word::RuntimeWord::INTEGER_BITS,
+        }
+    }
+
+    /// The general value ABI follows the type, independent of the payload's value.
+    pub fn representation(self) -> zydeco_machine::word::ScalarRepresentation {
+        use zydeco_machine::word::ScalarRepresentation;
+        match self {
+            | Self::Int64 | Self::UInt64 => ScalarRepresentation::OpaqueBox,
+            | Self::Int8
+            | Self::Int16
+            | Self::Int32
+            | Self::Int
+            | Self::UInt8
+            | Self::UInt16
+            | Self::UInt32
+            | Self::UInt => ScalarRepresentation::Immediate,
         }
     }
 
@@ -303,6 +324,14 @@ pub enum FloatType {
 }
 
 impl FloatType {
+    pub fn representation(self) -> zydeco_machine::word::ScalarRepresentation {
+        use zydeco_machine::word::ScalarRepresentation;
+        match self {
+            | Self::Float32 => ScalarRepresentation::Immediate,
+            | Self::Float64 => ScalarRepresentation::OpaqueBox,
+        }
+    }
+
     pub fn source_name(self) -> &'static str {
         self.into()
     }
@@ -370,10 +399,12 @@ impl PrimitiveType {
             | Self::Integer(IntegerType::Int8) => "i8",
             | Self::Integer(IntegerType::Int16) => "i16",
             | Self::Integer(IntegerType::Int32) => "i32",
+            | Self::Integer(IntegerType::Int64) => "i64",
             | Self::Integer(IntegerType::Int) => "int",
             | Self::Integer(IntegerType::UInt8) => "u8",
             | Self::Integer(IntegerType::UInt16) => "u16",
             | Self::Integer(IntegerType::UInt32) => "u32",
+            | Self::Integer(IntegerType::UInt64) => "u64",
             | Self::Integer(IntegerType::UInt) => "uint",
             | Self::Float(FloatType::Float32) => "f32",
             | Self::Float(FloatType::Float64) => "f64",
@@ -522,6 +553,12 @@ pub enum BuiltinValueRole {
     Integer(IntegerType, IntegerOperation),
     #[strum(disabled)]
     Float(FloatType, FloatOperation),
+    Int64FromInt,
+    Int64ToInt,
+    #[strum_discriminants(strum(serialize = "uint64_from_uint"))]
+    UInt64FromUInt,
+    #[strum_discriminants(strum(serialize = "uint64_to_uint"))]
+    UInt64ToUInt,
     StrScalarLength,
     StrByteLength,
     StrAppend,
@@ -645,6 +682,8 @@ impl BuiltinValueRole {
             | Self::StrGet => "str_get_branch".to_owned(),
             | Self::CharFromCodepoint => "char_from_codepoint_branch".to_owned(),
             | Self::StrParseInt => "str_parse_int_branch".to_owned(),
+            | Self::Int64ToInt => "int64_to_int_branch".to_owned(),
+            | Self::UInt64ToUInt => "uint64_to_uint_branch".to_owned(),
             | Self::ReadLineAsInt => "read_line_as_int_branch".to_owned(),
             | role => role.source_name(),
         }
@@ -655,6 +694,8 @@ impl BuiltinValueRole {
             | Self::Integer(_, operation) => operation.arity(),
             | Self::Float(_, operation) => operation.arity(),
             | Self::Stdin | Self::Stdout | Self::Stderr | Self::MemoryNull => 0,
+            | Self::Int64FromInt
+            | Self::UInt64FromUInt
             | Self::StrScalarLength
             | Self::StrByteLength
             | Self::CharToStr
@@ -670,6 +711,8 @@ impl BuiltinValueRole {
             | Self::ReadLineAsInt
             | Self::MemoryOffset
             | Self::MemoryLoadAddr => 2,
+            | Self::Int64ToInt
+            | Self::UInt64ToUInt
             | Self::ArgAt
             | Self::CharFromCodepoint
             | Self::StrParseInt
@@ -698,10 +741,24 @@ impl BuiltinValueRole {
 
     /// The hidden spare-box argument this builtin receives after its source arguments.
     ///
-    /// Double-float results need a box, whose spare pointer is passed to the builtin.
-    /// Integer results are always immediate. `None` means the builtin takes no spare.
+    /// Full-width scalar results receive an opaque box allocated before the host call.
+    /// `None` means the builtin takes no spare.
     pub fn spare_box(self) -> Option<SpareBox> {
         match self {
+            | Self::Int64FromInt | Self::UInt64FromUInt => Some(SpareBox::Opaque),
+            | Self::Integer(
+                integer,
+                IntegerOperation::Add
+                | IntegerOperation::Sub
+                | IntegerOperation::Mul
+                | IntegerOperation::Div
+                | IntegerOperation::Mod
+                | IntegerOperation::LoadLe,
+            ) if integer.representation()
+                == zydeco_machine::word::ScalarRepresentation::OpaqueBox =>
+            {
+                Some(SpareBox::Opaque)
+            }
             | Self::Float(
                 float,
                 FloatOperation::Add
@@ -709,9 +766,13 @@ impl BuiltinValueRole {
                 | FloatOperation::Mul
                 | FloatOperation::Div
                 | FloatOperation::LoadLe,
-            ) => {
-                Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
-            }
+            ) => Some(
+                if float.representation() == zydeco_machine::word::ScalarRepresentation::OpaqueBox {
+                    SpareBox::Opaque
+                } else {
+                    SpareBox::Unused
+                },
+            ),
             | _ => None,
         }
     }
@@ -1205,10 +1266,12 @@ pub enum IntegerLiteral {
     Int8(i8),
     Int16(i16),
     Int32(i32),
+    Int64(i64),
     Int(i64),
     UInt8(u8),
     UInt16(u16),
     UInt32(u32),
+    UInt64(u64),
     UInt(u64),
     Unresolved(i128),
 }
@@ -1224,6 +1287,7 @@ impl IntegerLiteral {
             | IntegerType::Int8 => Self::Int8(value.try_into().ok()?),
             | IntegerType::Int16 => Self::Int16(value.try_into().ok()?),
             | IntegerType::Int32 => Self::Int32(value.try_into().ok()?),
+            | IntegerType::Int64 => Self::Int64(value.try_into().ok()?),
             | IntegerType::Int => {
                 let value = value.try_into().ok()?;
                 zydeco_machine::word::RuntimeWord::signed(value)?;
@@ -1232,6 +1296,7 @@ impl IntegerLiteral {
             | IntegerType::UInt8 => Self::UInt8(value.try_into().ok()?),
             | IntegerType::UInt16 => Self::UInt16(value.try_into().ok()?),
             | IntegerType::UInt32 => Self::UInt32(value.try_into().ok()?),
+            | IntegerType::UInt64 => Self::UInt64(value.try_into().ok()?),
             | IntegerType::UInt => {
                 let value = value.try_into().ok()?;
                 zydeco_machine::word::RuntimeWord::unsigned(value)?;
@@ -1251,10 +1316,12 @@ impl IntegerLiteral {
             | Self::Int8(value) => value.into(),
             | Self::Int16(value) => value.into(),
             | Self::Int32(value) => value.into(),
+            | Self::Int64(value) => value.into(),
             | Self::Int(value) => value.into(),
             | Self::UInt8(value) => value.into(),
             | Self::UInt16(value) => value.into(),
             | Self::UInt32(value) => value.into(),
+            | Self::UInt64(value) => value.into(),
             | Self::UInt(value) => value.into(),
             | Self::Unresolved(value) => value,
         }
@@ -1265,10 +1332,12 @@ impl IntegerLiteral {
             | Self::Int8(_) => IntegerType::Int8,
             | Self::Int16(_) => IntegerType::Int16,
             | Self::Int32(_) => IntegerType::Int32,
+            | Self::Int64(_) => IntegerType::Int64,
             | Self::Int(_) => IntegerType::Int,
             | Self::UInt8(_) => IntegerType::UInt8,
             | Self::UInt16(_) => IntegerType::UInt16,
             | Self::UInt32(_) => IntegerType::UInt32,
+            | Self::UInt64(_) => IntegerType::UInt64,
             | Self::UInt(_) => IntegerType::UInt,
             | Self::Unresolved(_) => return None,
         })
@@ -1279,10 +1348,12 @@ impl IntegerLiteral {
             | Self::Int8(value) => value as u8 as u64,
             | Self::Int16(value) => value as u16 as u64,
             | Self::Int32(value) => value as u32 as u64,
+            | Self::Int64(value) => value as u64,
             | Self::Int(value) => value as u64,
             | Self::UInt8(value) => value.into(),
             | Self::UInt16(value) => value.into(),
             | Self::UInt32(value) => value.into(),
+            | Self::UInt64(value) => value,
             | Self::UInt(value) => value,
             | Self::Unresolved(_) => panic!("unresolved integer literal reached lowering"),
         }
@@ -1389,7 +1460,7 @@ mod numeric_tests {
     use super::*;
 
     #[test]
-    fn machine_integer_intrinsics_replace_the_old_exact_width_names() {
+    fn machine_and_exact_width_integers_have_distinct_representations() {
         for (name, integer) in [("int", IntegerType::Int), ("uint", IntegerType::UInt)] {
             assert_eq!(
                 PrimitiveType::from_intrinsic_name(name),
@@ -1401,8 +1472,25 @@ mod numeric_tests {
                 assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), None);
             }
         }
-        for old in ["i64", "u64"] {
-            assert_eq!(PrimitiveType::from_intrinsic_name(old), None);
+        for (name, integer) in [("i64", IntegerType::Int64), ("u64", IntegerType::UInt64)] {
+            assert_eq!(
+                PrimitiveType::from_intrinsic_name(name),
+                Some(PrimitiveType::Integer(integer))
+            );
+            assert_eq!(integer.bits(), 64);
+            assert_eq!(integer.storage_bits(), 64);
+            for &operation in IntegerOperation::VARIANTS {
+                let expected = match operation {
+                    | IntegerOperation::Add
+                    | IntegerOperation::Sub
+                    | IntegerOperation::Mul
+                    | IntegerOperation::Div
+                    | IntegerOperation::Mod
+                    | IntegerOperation::LoadLe => Some(SpareBox::Opaque),
+                    | _ => None,
+                };
+                assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), expected);
+            }
         }
         assert_eq!(
             BuiltinValueRole::Float(FloatType::Float64, FloatOperation::Add).spare_box(),
@@ -1447,7 +1535,7 @@ mod numeric_tests {
         .for_each(|name| {
             assert_eq!(BuiltinTypeRole::from_source_name(name), None);
         });
-        ["add", "int64_eq", "uint64_add", "float_add"].into_iter().for_each(|name| {
+        ["add", "int128_eq", "uint128_add", "float_add"].into_iter().for_each(|name| {
             assert_eq!(BuiltinValueRole::from_source_name(name), None);
         });
     }

@@ -69,6 +69,31 @@ Frame-resident products, mixed raw/reference fields, and layout-directed machine
 they need lifetime or entry evidence that the current policy cannot supply.
 The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduction and validation commands.
 
+## Scalar box elimination (proposed)
+
+The implemented [scalar value boundary](../references/compiler.md#scalar-value-boundaries) already
+permits raw arithmetic and C transport without changing the ordinary word ABI.
+The next useful optimization is a chain such as `int64/add` followed by `int64/mul`:
+keep the intermediate result in a raw register and box only where a consumer requires a value word.
+
+A valid pass needs explicit evidence for each rewritten edge:
+
+1. The producer and every consumer agree on raw width and signedness.
+2. Raw temporaries have untraced storage through every allocation or call that can collect.
+3. Every general argument, return, capture, or product field receives its canonical encoded value.
+4. Joins agree on representation, or insert a conversion on each differing predecessor.
+5. Changes to a callable entry have matching caller and callee contracts; an unknown
+   or exported call preserves the word ABI.
+
+Represent this evidence in compiler IR and verify it before instruction selection.
+A source `unboxed` preference alone cannot establish any of these facts.
+Start with straight-line primitive chains whose operands and uses are known, then measure removed allocations.
+Compare optimized and ordinary execution on boundary arithmetic, pointer-shaped payloads,
+control-flow joins, GC safepoints, and calls through separately compiled units.
+Add negative verifier cases for raw bits in traced slots and for incompatible caller/callee representations
+before extending the optimization to captures or indirect calls.
+Mixed raw/reference layouts and a published raw-call ABI remain separate extensions.
+
 ## Local CPS continuations (proposed)
 
 The [destination codecs](bytes.md#cps-destination-construction) expose completion as a source thunk.

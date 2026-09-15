@@ -138,7 +138,8 @@ fn named_entries_are_closed_and_c_exports_reject_incoming_addresses() {
 #[ignore = "requires NASM, AMD64 native tools, and builds the matching Rust runtime"]
 fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_exports() {
     let fixture = Fixture::new();
-    let integers = ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"];
+    let integers =
+        ["Int8", "Int16", "Int32", "Int64", "Int", "UInt8", "UInt16", "UInt32", "UInt64", "UInt"];
     let mut contracts = integers
         .iter()
         .map(|integer| format!("export(field({integer}), symbol(\"id_{integer}\"))"))
@@ -146,6 +147,7 @@ fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_e
     contracts.extend([
         "export(field(zero), symbol(\"zero\"))".into(),
         "export(field(six), symbol(\"six\"))".into(),
+        "export(field(wide), symbol(\"wide\"))".into(),
     ]);
     let mut fields = integers
         .iter()
@@ -154,7 +156,24 @@ fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_e
         })
         .collect::<Vec<_>>();
     fields.extend(["#zero = ({ ret () } : Thk (Ret Unit))".into(), "#six = ({ fn a b c d e f => ret f } : Thk (Int -> Int -> Int -> Int -> Int -> Int -> Ret Int))".into()]);
-    fixture.write("library.zy", &format!("@[package(library(c, {}), name(example/math))]\nparam val (/Thk; /Ret; /Unit; {}) : @(import({:?})) in ({})", contracts.join(", "), integers.iter().map(|integer| format!("/{integer}")).collect::<Vec<_>>().join("; "), Fixture::builtin(), fields.join(", ")));
+    fields.push(
+        r#"
+#wide = ({ fn a b c d e f =>
+  let fix churn (n : Int) : Ret Unit =
+    ! numeric/int/eq (Ret Unit) n 0 { ret () }
+      { do next <- ! numeric/int/sub n 1; ! churn next }
+  in
+  do () <- ! churn 50000;
+  do ab <- ! numeric/uint64/add a b;
+  do abc <- ! numeric/uint64/add ab c;
+  do abcd <- ! numeric/uint64/add abc d;
+  do abcde <- ! numeric/uint64/add abcd e;
+  ! numeric/uint64/add abcde f
+} : Thk (UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64))
+"#
+        .into(),
+    );
+    fixture.write("library.zy", &format!("@[package(library(c, {}), name(example/math))]\nparam val (/Thk; /Ret; /Unit; /numeric; {}) : @(import({:?})) in ({})", contracts.join(", "), integers.iter().map(|integer| format!("/{integer}")).collect::<Vec<_>>().join("; "), Fixture::builtin(), fields.join(", ")));
     let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime").canonicalize().unwrap();
     let output = fixture.command(&[
         "build",
@@ -204,7 +223,7 @@ fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_e
         };
         format!("assert(id_{integer}({minimum}) == {minimum}); assert(id_{integer}({maximum}) == {maximum});")
     }).collect::<String>();
-    let source = fixture.write("harness.c", &format!("#include {:?}\n#include <assert.h>\nint main(void) {{ for (int i = 0; i < 100; ++i) {{ {checks} assert(six(1,2,3,4,5,(INT64_MIN / 2)) == (INT64_MIN / 2)); zero(); }} return 0; }}\n", header.to_str().unwrap()));
+    let source = fixture.write("harness.c", &format!("#include {:?}\n#include <assert.h>\nint main(void) {{ for (int i = 0; i < 100; ++i) {{ {checks} assert(six(1,2,3,4,5,(INT64_MIN / 2)) == (INT64_MIN / 2)); zero(); }} assert(wide(UINT64_MAX,1,2,3,4,5) == 14); return 0; }}\n", header.to_str().unwrap()));
     let exe = fixture.directory.path().join("harness");
     let mut cc = Command::new("cc");
     if cfg!(target_os = "macos") {

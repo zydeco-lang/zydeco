@@ -1,6 +1,7 @@
 begin
-  param (/Thk; /Ret; /Unit; /OS; /Int8; /Int16; /Int32; /Int;
-    /UInt8; /UInt16; /UInt32; /UInt; /numeric; /process) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /Ret; /Unit; /OS; /Int8; /Int16; /Int32; /Int64; /Int;
+    /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /numeric; /process) :
+  @(import("../../std/builtin.zy")) that
   let fail = { ! process/exit 1 } in
   let echo_int8 = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int8"))) : Thk (Int8 -> Ret Int8)
@@ -39,6 +40,17 @@ begin
     fn next =>
       do value <- ! dirty_int16;
       ! numeric/int16/eq OS value -32640 next fail
+  } in
+  let echo_int64 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int64"))) : Thk (Int64 -> Ret Int64)
+  ) in
+  let check_int64 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_int64 -9223372036854775808;
+      do high <- ! echo_int64 9223372036854775807;
+      ! numeric/int64/eq OS low -9223372036854775808 {
+        ! numeric/int64/eq OS high 9223372036854775807 next fail
+      } fail
   } in
   let echo_int32 = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int32"))) : Thk (Int32 -> Ret Int32)
@@ -108,6 +120,25 @@ begin
       do value <- ! dirty_uint16;
       ! numeric/uint16/eq OS value 32896 next fail
   } in
+  let echo_uint64 = (
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_uint64"))) : Thk (UInt64 -> Ret UInt64)
+  ) in
+  let fix cycle_uint64 (n : Int) (live : UInt64) : Ret UInt64 =
+    ! numeric/int/eq (Ret UInt64) n 0 { ret live } {
+      do moved <- ! echo_uint64 live;
+      do next <- ! numeric/int/sub n 1;
+      ! cycle_uint64 next moved
+    }
+  in
+  let check_uint64 : Thk (Thk OS -> OS) = {
+    fn next =>
+      do low <- ! echo_uint64 0;
+      do high <- ! echo_uint64 18446744073709551615;
+      do high <- ! cycle_uint64 100000 high;
+      ! numeric/uint64/eq OS low 0 {
+        ! numeric/uint64/eq OS high 18446744073709551615 next fail
+      } fail
+  } in
   let echo_uint32 = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_uint32"))) : Thk (UInt32 -> Ret UInt32)
   ) in
@@ -159,10 +190,14 @@ begin
       } fail
   } in
   let signed : Thk (Thk OS -> OS) = {
-    fn next => ! check_int8 { ! check_int16 { ! check_int32 { ! check_int { ! next } } } }
+    fn next =>
+      ! check_int8 { ! check_int16 { ! check_int64 { ! check_int32 { ! check_int { ! next } } } } }
   } in
   let unsigned : Thk (Thk OS -> OS) = {
-    fn next => ! check_uint8 { ! check_uint16 { ! check_uint32 { ! check_uint { ! next } } } }
+    fn next =>
+      ! check_uint8 {
+        ! check_uint16 { ! check_uint64 { ! check_uint32 { ! check_uint { ! next } } } }
+      }
   } in
   let dirty_signed : Thk (Thk OS -> OS) = {
     fn next => ! check_dirty_int8 { ! check_dirty_int16 { ! check_dirty_int32 { ! next } } }

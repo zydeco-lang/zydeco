@@ -1,22 +1,46 @@
 begin
-  param val (/Thk; /Ret; /UInt32; /Int; /Addr; builtin) : @(import("../std/builtin.zy")) that
+  param val (/Thk; /Ret; /UInt32; /UInt64; /Int; /Addr; builtin) : @(import("../std/builtin.zy")) that
   param val (/Bytes; /bytes) : (@(import("../std/text/bytes.type.zy"))) Addr in
   let Window = Addr in
   let hash32 : Thk (Window -> Int -> UInt32 -> Ret UInt32) =
     @(ffi(c, library("xxhash"), symbol("XXH32")))
   in
+  let hash64 : Thk (Window -> Int -> UInt64 -> Ret UInt64) =
+    @(ffi(c, library("xxhash"), symbol("XXH64")))
+  in
+  let hash3 : Thk (Window -> Int -> Ret UInt64) =
+    @(ffi(c, library("xxhash"), symbol("XXH3_64bits")))
+  in
   let Fault = @(import("../std/memory/fault.zy")) in
-  let fail : Thk (Fault -> Ret UInt32) = {
+  let fail32 : Thk (Fault -> Ret UInt32) = {
     fn _ =>
       @[partial]
       let 0 = 1 in
       ret (0 : UInt32)
   } in
+  let fail64 : Thk (Fault -> Ret UInt64) = {
+    fn _ =>
+      @[partial]
+      let 0 = 1 in
+      ret (0 : UInt64)
+  } in
   (
     #xxh32 = {
       fn (value : Bytes) (seed : UInt32) =>
-        ! bytes/unsafe/with_window (Ret UInt32) value fail {
+        ! bytes/unsafe/with_window (Ret UInt32) value fail32 {
           fn address length => ! hash32 address length seed
+        }
+    },
+    #xxh64 = {
+      fn (value : Bytes) (seed : UInt64) =>
+        ! bytes/unsafe/with_window (Ret UInt64) value fail64 {
+          fn address length => ! hash64 address length seed
+        }
+    },
+    #xxh3_64bits = {
+      fn (value : Bytes) =>
+        ! bytes/unsafe/with_window (Ret UInt64) value fail64 {
+          fn address length => ! hash3 address length
         }
     }
   )

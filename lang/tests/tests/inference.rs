@@ -332,8 +332,12 @@ fn rejects_finite_literals_that_overflow_float32() {
 }
 
 #[test]
-fn machine_integer_literals_enforce_the_tagged_payload_range() {
+fn integer_literals_enforce_the_selected_payload_range() {
     for (ty, accepted, rejected) in [
+        ("Int64", "-9223372036854775808", "-9223372036854775809"),
+        ("Int64", "9223372036854775807", "9223372036854775808"),
+        ("UInt64", "0", "-1"),
+        ("UInt64", "18446744073709551615", "18446744073709551616"),
         ("Int", "-4611686018427387904", "-4611686018427387905"),
         ("Int", "4611686018427387903", "4611686018427387904"),
         ("UInt", "0", "-1"),
@@ -352,4 +356,16 @@ fn machine_integer_literals_enforce_the_tagged_payload_range() {
         SourceCase::check("ret 4611686018427387904"),
         TyckDiagnosticCode::IntegerLiteralOutOfRange,
     );
+}
+
+#[test]
+fn machine_and_exact_width_integers_require_explicit_conversion() {
+    for (source, target) in
+        [("Int", "Int64"), ("Int64", "Int"), ("UInt", "UInt64"), ("UInt64", "UInt")]
+    {
+        SourceCase::assert_accepted(SourceCase::check(&format!("let x : {source} = 0 in ret x")));
+        let result =
+            SourceCase::check(&format!("let x : {source} = 0 in let y : {target} = x in ret y"));
+        SourceCase::assert_rejected(result, TyckDiagnosticCode::TypeMismatch);
+    }
 }

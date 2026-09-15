@@ -87,7 +87,7 @@ The low bit distinguishes an immediate from a pointer-shaped word, not `Int` fro
 | `Int` | Signed tagged machine integer | Check the [source range](../references/language.md#13-primitive-values-and-capabilities) before constructing an immediate |
 | `UInt` | Unsigned tagged machine integer | Check the source range before constructing an immediate |
 | `Float32` | Its 32 payload bits encoded as an immediate | Bit-preserving float constructor/accessor, including signed zero and NaN payloads |
-| `Float64` | Pointer to an opaque scalar box holding its 64 payload bits | Runtime allocation plus bit-preserving conversion |
+| `Int64`, `UInt64`, `Float64` | Pointer to an opaque scalar box holding its 64 payload bits | Runtime allocation plus bit-preserving conversion |
 | `Char` | Unicode scalar value encoded as an immediate | Validate Unicode scalar range, including exclusion of surrogates |
 | `String` | Stable address of an instance-owned host string object | Construct from valid UTF-8 and expose copying/window operations; no foreign access to the Rust object layout |
 | `Addr` | Raw unmanaged data address word | An explicitly unsafe address carrier whose extent, alignment, permission, and lifetime belong to its owner |
@@ -96,8 +96,8 @@ The low bit distinguishes an immediate from a pointer-shaped word, not `Int` fro
 The [word model](../../lang/machine/src/word.rs), [native scalar helpers](../../runtime/stub.rs),
 and [literal emission](../../lang/amd64/src/emit.rs) implement these encodings today.
 Scalar boxes are opaque to tracing; their bits must never be scanned as managed references.
-A future exact-width `Int64` or `UInt64` should follow `Float64` with a distinct boxed representation.
-Those types and their operations are deferred to a later change.
+The [scalar value boundary](../references/compiler.md#scalar-value-boundaries) owns exact-width boxing
+and local raw transport.
 
 ### Products, sums, and closures
 

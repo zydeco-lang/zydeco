@@ -930,7 +930,7 @@ The memory interfaces build on those capabilities using ordinary packages and co
 | Family | Source behavior |
 | --- | --- |
 | `Int`, `UInt` | Tagged machine integers; arithmetic wraps within the payload |
-| `Int8/16/32`, `UInt8/16/32` | Exact signed/unsigned widths; arithmetic wraps at the chosen width |
+| `Int8/16/32/64`, `UInt8/16/32/64` | Exact signed/unsigned widths; arithmetic wraps at the chosen width |
 | `Float32`, `Float64` | IEEE 754 arithmetic at the chosen width |
 | `Char` | One Unicode scalar, excluding surrogates |
 | `String` | Immutable valid UTF-8; indexed operations count Unicode scalars |
@@ -939,13 +939,19 @@ The memory interfaces build on those capabilities using ordinary packages and co
 The current interpreter, AMD64, and Wasm profiles have 64-bit words and 63-bit integer payloads:
 `Int` ranges from `-2^62` through `2^62 - 1`, and `UInt` from zero through `2^63 - 1`.
 Their arithmetic wraps modulo `2^63`; a signed result uses two's-complement interpretation.
-All values of these types are immediate. `Float64` retains its boxed, exact-width representation.
-Exact-width `Int64` and `UInt64` are deferred; they have no source type or compatibility alias today.
+`Int64` ranges from `-2^63` through `2^63 - 1`, and `UInt64` from zero through `2^64 - 1`.
+Their arithmetic wraps modulo `2^64`.
+The [scalar value boundary](compiler.md#scalar-value-boundaries) specifies their boxed runtime representation.
 
 Integer and float literals default to `Int` and `Float64`.
 An expected primitive type selects another width; integers must fit and floats round to that width.
 Finite-range overflow is rejected, while float underflow may round to zero.
 Existing numeric values have no implicit cross-width conversion.
+`int64/from_int : Thk (Int -> Ret Int64)` and `uint64/from_uint : Thk (UInt -> Ret UInt64)` preserve the value.
+The reverse operations `int64/to_int` and `uint64/to_uint` accept a result protocol,
+a value, a failure thunk, and a success thunk receiving the machine integer.
+They select success exactly when the mathematical value fits the destination range; they never truncate.
+These operations are available in both the Builtin numeric modules and std.
 Integer division or remainder by zero terminates unsuccessfully; signed minimum divided
 by `-1` wraps, with remainder zero.
 Integer parsing rejects values outside the `Int` range through its failure continuation;
@@ -1401,11 +1407,11 @@ A foreign implementation is an annotated hole:
 
 ```zydeco check
 param val (/Thk; /Ret; /Addr; /Int; /UInt32) : @(import("../../lib/std/builtin.zy")) in
-(@(ffi(c, library("xxhash"), symbol("XXH32"))) : Thk (Addr -> Int -> UInt32 -> Ret UInt32))
+(@(ffi(c, library("xxhash"), symbol("XXH64"))) : Thk (Addr -> Int -> UInt64 -> Ret UInt64))
 ```
 
 For `ffi(c, ...)`, the supported classifier is `Thk (A1 -> ... -> An -> Ret B)`, including zero arguments.
-`Int8/16/32` and `UInt8/16/32` contribute their matching C `intN_t` or `uintN_t`.
+`Int8/16/32/64` and `UInt8/16/32/64` contribute their matching C `intN_t` or `uintN_t`.
 `Int` and `UInt` use `int64_t` and `uint64_t` carriers in the current profiles;
 their source ranges remain those in [L13](#13-primitive-values-and-capabilities).
 Values entering Zydeco, whether a C import result or an export argument, are range-checked.
@@ -1446,7 +1452,9 @@ The `zydeco` convention instead names a [native unit initializer](#native-zydeco
 
 `Int` and `UInt` use eight-byte little-endian storage in the current profiles.
 Signed storage sign-extends the 63-bit value; unsigned storage leaves its top bit zero.
-Raw integer loads reject out-of-range carrier bits.
+`Int64` and `UInt64` use eight bytes with every bit available to the payload; every eight-byte pattern is valid.
+Their C carriers are `int64_t` and `uint64_t`, respectively, regardless of the ordinary value representation.
+Raw `Int`/`UInt` loads reject out-of-range carrier bits.
 The safe numeric `from_le_bytes` codecs check both length and payload range
 and select their failure continuation on invalid input.
 The raw memory operations still require a valid address and initialized readable extent.

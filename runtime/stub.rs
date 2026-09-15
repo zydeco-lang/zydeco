@@ -36,9 +36,14 @@ impl OpaqueScalar {
     }
 }
 
+/// Immediate source integers; i64/u64 are the carriers of Int/UInt here.
 trait RuntimeInteger: Copy {
     fn decode(value: Word) -> Self;
     fn encode(self) -> Word;
+
+    fn encode_wrapping(value: Self, _spare: *mut Word) -> Word {
+        value.wrap().encode()
+    }
 
     fn wrap(self) -> Self {
         self
@@ -118,6 +123,31 @@ impl RuntimeInteger for u64 {
         RuntimeWord::wrap_unsigned(self)
     }
 }
+
+// A source representation is distinct from its Rust arithmetic carrier. These markers
+// keep exact-width integers separate from the immediate Int/UInt i64/u64 implementations.
+macro_rules! boxed_integer {
+    ($host:ident, $raw:ty) => {
+        struct $host;
+
+        impl $host {
+            fn decode(value: Word) -> $raw {
+                OpaqueScalar::load(value) as $raw
+            }
+
+            fn encode(value: $raw, spare: *mut Word) -> Word {
+                OpaqueScalar::store(spare, value as Word)
+            }
+
+            fn encode_wrapping(value: $raw, spare: *mut Word) -> Word {
+                Self::encode(value, spare)
+            }
+        }
+    };
+}
+
+boxed_integer!(HostInt64, i64);
+boxed_integer!(HostUInt64, u64);
 
 /// Publishes a host-control result for immediate consumption by generated code.
 struct HostControl;
@@ -544,6 +574,22 @@ foreign_integer!(u16, zydeco_ffi_decode_uint16, zydeco_ffi_encode_uint16);
 foreign_integer!(u32, zydeco_ffi_decode_uint32, zydeco_ffi_encode_uint32);
 foreign_integer!(u64, zydeco_ffi_decode_uint, zydeco_ffi_encode_uint);
 
+macro_rules! foreign_boxed_integer {
+    ($host:ty, $decode:ident, $encode:ident) => {
+        #[unsafe(export_name = concat!("\x01", stringify!($decode)))]
+        extern "sysv64" fn $decode(value: Word) -> Word {
+            <$host>::decode(value) as Word
+        }
+
+        #[unsafe(export_name = concat!("\x01", stringify!($encode)))]
+        extern "sysv64" fn $encode(value: Word, spare: *mut Word) -> Word {
+            <$host>::encode(value as _, spare)
+        }
+    };
+}
+foreign_boxed_integer!(HostInt64, zydeco_ffi_decode_int64, zydeco_ffi_encode_int64);
+foreign_boxed_integer!(HostUInt64, zydeco_ffi_decode_uint64, zydeco_ffi_encode_uint64);
+
 #[unsafe(export_name = "\x01zydeco_exit")]
 extern "sysv64" fn zydeco_exit(code: Word) -> ! {
     std::process::exit(<i64 as RuntimeInteger>::decode(code) as i32);
@@ -594,58 +640,58 @@ extern "sysv64" fn zydeco_str_get_branch(
 // Optional normalization may leave arithmetic calls intact. These entries obey
 // the same wrapping/trapping contracts as emitted primitives.
 macro_rules! integer_arithmetic {
-    ($type:ty;
+    ($type:ty, [$($extra:tt)*], $spare:expr;
         $add:ident, $sub:ident, $mul:ident, $div:ident, $rem:ident) => {
         #[unsafe(export_name = concat!("\x01", stringify!($add)))]
-        extern "sysv64" fn $add(first: Word, second: Word) -> Word {
-            <$type as RuntimeInteger>::decode(first)
-                .wrapping_add(<$type as RuntimeInteger>::decode(second))
-                .wrap()
-                .encode()
+        extern "sysv64" fn $add(first: Word, second: Word $($extra)*) -> Word {
+            <$type>::encode_wrapping(
+                <$type>::decode(first).wrapping_add(<$type>::decode(second)), $spare,
+            )
         }
         #[unsafe(export_name = concat!("\x01", stringify!($sub)))]
-        extern "sysv64" fn $sub(first: Word, second: Word) -> Word {
-            <$type as RuntimeInteger>::decode(first)
-                .wrapping_sub(<$type as RuntimeInteger>::decode(second))
-                .wrap()
-                .encode()
+        extern "sysv64" fn $sub(first: Word, second: Word $($extra)*) -> Word {
+            <$type>::encode_wrapping(
+                <$type>::decode(first).wrapping_sub(<$type>::decode(second)), $spare,
+            )
         }
         #[unsafe(export_name = concat!("\x01", stringify!($mul)))]
-        extern "sysv64" fn $mul(first: Word, second: Word) -> Word {
-            <$type as RuntimeInteger>::decode(first)
-                .wrapping_mul(<$type as RuntimeInteger>::decode(second))
-                .wrap()
-                .encode()
+        extern "sysv64" fn $mul(first: Word, second: Word $($extra)*) -> Word {
+            <$type>::encode_wrapping(
+                <$type>::decode(first).wrapping_mul(<$type>::decode(second)), $spare,
+            )
         }
         #[unsafe(export_name = concat!("\x01", stringify!($div)))]
-        extern "sysv64" fn $div(first: Word, second: Word) -> Word {
-            let first = <$type as RuntimeInteger>::decode(first);
-            let second = <$type as RuntimeInteger>::decode(second);
+        extern "sysv64" fn $div(first: Word, second: Word $($extra)*) -> Word {
+            let first = <$type>::decode(first);
+            let second = <$type>::decode(second);
             if second == 0 {
                 zydeco_integer_division_by_zero();
             }
-            first.wrapping_div(second).wrap().encode()
+            <$type>::encode_wrapping(first.wrapping_div(second), $spare)
         }
         #[unsafe(export_name = concat!("\x01", stringify!($rem)))]
-        extern "sysv64" fn $rem(first: Word, second: Word) -> Word {
-            let first = <$type as RuntimeInteger>::decode(first);
-            let second = <$type as RuntimeInteger>::decode(second);
+        extern "sysv64" fn $rem(first: Word, second: Word $($extra)*) -> Word {
+            let first = <$type>::decode(first);
+            let second = <$type>::decode(second);
             if second == 0 {
                 zydeco_integer_remainder_by_zero();
             }
-            first.wrapping_rem(second).wrap().encode()
+            <$type>::encode_wrapping(first.wrapping_rem(second), $spare)
         }
     };
 }
 
-integer_arithmetic!(i8; zydeco_int8_add, zydeco_int8_sub, zydeco_int8_mul, zydeco_int8_div, zydeco_int8_mod);
-integer_arithmetic!(i16; zydeco_int16_add, zydeco_int16_sub, zydeco_int16_mul, zydeco_int16_div, zydeco_int16_mod);
-integer_arithmetic!(i32; zydeco_int32_add, zydeco_int32_sub, zydeco_int32_mul, zydeco_int32_div, zydeco_int32_mod);
-integer_arithmetic!(i64; zydeco_int_add, zydeco_int_sub, zydeco_int_mul, zydeco_int_div, zydeco_int_mod);
-integer_arithmetic!(u8; zydeco_uint8_add, zydeco_uint8_sub, zydeco_uint8_mul, zydeco_uint8_div, zydeco_uint8_mod);
-integer_arithmetic!(u16; zydeco_uint16_add, zydeco_uint16_sub, zydeco_uint16_mul, zydeco_uint16_div, zydeco_uint16_mod);
-integer_arithmetic!(u32; zydeco_uint32_add, zydeco_uint32_sub, zydeco_uint32_mul, zydeco_uint32_div, zydeco_uint32_mod);
-integer_arithmetic!(u64; zydeco_uint_add, zydeco_uint_sub, zydeco_uint_mul, zydeco_uint_div, zydeco_uint_mod);
+integer_arithmetic!(i8, [], std::ptr::null_mut(); zydeco_int8_add, zydeco_int8_sub, zydeco_int8_mul, zydeco_int8_div, zydeco_int8_mod);
+integer_arithmetic!(i16, [], std::ptr::null_mut(); zydeco_int16_add, zydeco_int16_sub, zydeco_int16_mul, zydeco_int16_div, zydeco_int16_mod);
+integer_arithmetic!(i32, [], std::ptr::null_mut(); zydeco_int32_add, zydeco_int32_sub, zydeco_int32_mul, zydeco_int32_div, zydeco_int32_mod);
+integer_arithmetic!(i64, [], std::ptr::null_mut(); zydeco_int_add, zydeco_int_sub, zydeco_int_mul, zydeco_int_div, zydeco_int_mod);
+integer_arithmetic!(u8, [], std::ptr::null_mut(); zydeco_uint8_add, zydeco_uint8_sub, zydeco_uint8_mul, zydeco_uint8_div, zydeco_uint8_mod);
+integer_arithmetic!(u16, [], std::ptr::null_mut(); zydeco_uint16_add, zydeco_uint16_sub, zydeco_uint16_mul, zydeco_uint16_div, zydeco_uint16_mod);
+integer_arithmetic!(u32, [], std::ptr::null_mut(); zydeco_uint32_add, zydeco_uint32_sub, zydeco_uint32_mul, zydeco_uint32_div, zydeco_uint32_mod);
+integer_arithmetic!(u64, [], std::ptr::null_mut(); zydeco_uint_add, zydeco_uint_sub, zydeco_uint_mul, zydeco_uint_div, zydeco_uint_mod);
+
+integer_arithmetic!(HostInt64, [, spare: *mut Word], spare; zydeco_int64_add, zydeco_int64_sub, zydeco_int64_mul, zydeco_int64_div, zydeco_int64_mod);
+integer_arithmetic!(HostUInt64, [, spare: *mut Word], spare; zydeco_uint64_add, zydeco_uint64_sub, zydeco_uint64_mul, zydeco_uint64_div, zydeco_uint64_mod);
 
 macro_rules! float_arithmetic {
     ($host:ty, $extra:tt, $spare:expr; $( $name:ident => $operation:tt ),+ $(,)?) => {
@@ -678,41 +724,26 @@ macro_rules! integer_runtime {
         extern "sysv64" fn $eq(
             first: Word, second: Word, when_true: Word, when_false: Word,
         ) -> Word {
-            Branch::select(
-                <$type as RuntimeInteger>::decode(first)
-                    == <$type as RuntimeInteger>::decode(second),
-                when_true,
-                when_false,
-            )
+            Branch::select(<$type>::decode(first) == <$type>::decode(second), when_true, when_false)
         }
 
         #[unsafe(export_name = $lt_symbol)]
         extern "sysv64" fn $lt(
             first: Word, second: Word, when_true: Word, when_false: Word,
         ) -> Word {
-            Branch::select(
-                <$type as RuntimeInteger>::decode(first)
-                    < <$type as RuntimeInteger>::decode(second),
-                when_true,
-                when_false,
-            )
+            Branch::select(<$type>::decode(first) < <$type>::decode(second), when_true, when_false)
         }
 
         #[unsafe(export_name = $gt_symbol)]
         extern "sysv64" fn $gt(
             first: Word, second: Word, when_true: Word, when_false: Word,
         ) -> Word {
-            Branch::select(
-                <$type as RuntimeInteger>::decode(first)
-                    > <$type as RuntimeInteger>::decode(second),
-                when_true,
-                when_false,
-            )
+            Branch::select(<$type>::decode(first) > <$type>::decode(second), when_true, when_false)
         }
 
         #[unsafe(export_name = $to_string_symbol)]
         extern "sysv64" fn $to_string(value: Word) -> Word {
-            HostString::own(<$type as RuntimeInteger>::decode(value).to_string())
+            HostString::own(<$type>::decode(value).to_string())
         }
     };
 }
@@ -737,6 +768,13 @@ integer_runtime!(
     zydeco_int32_lt_branch => "\x01zydeco_int32_lt_branch",
     zydeco_int32_gt_branch => "\x01zydeco_int32_gt_branch",
     zydeco_int32_to_string => "\x01zydeco_int32_to_string"
+);
+integer_runtime!(
+    HostInt64,
+    zydeco_int64_eq_branch => "\x01zydeco_int64_eq_branch",
+    zydeco_int64_lt_branch => "\x01zydeco_int64_lt_branch",
+    zydeco_int64_gt_branch => "\x01zydeco_int64_gt_branch",
+    zydeco_int64_to_string => "\x01zydeco_int64_to_string"
 );
 integer_runtime!(
     i64,
@@ -765,6 +803,13 @@ integer_runtime!(
     zydeco_uint32_lt_branch => "\x01zydeco_uint32_lt_branch",
     zydeco_uint32_gt_branch => "\x01zydeco_uint32_gt_branch",
     zydeco_uint32_to_string => "\x01zydeco_uint32_to_string"
+);
+integer_runtime!(
+    HostUInt64,
+    zydeco_uint64_eq_branch => "\x01zydeco_uint64_eq_branch",
+    zydeco_uint64_lt_branch => "\x01zydeco_uint64_lt_branch",
+    zydeco_uint64_gt_branch => "\x01zydeco_uint64_gt_branch",
+    zydeco_uint64_to_string => "\x01zydeco_uint64_to_string"
 );
 integer_runtime!(
     u64,
@@ -1229,6 +1274,16 @@ extern "sysv64" fn entry_end() {
     }
 }
 
+/// Root already encoded arguments before allocating the next full-width input box.
+#[unsafe(export_name = "\x01zydeco_entry_box")]
+extern "sysv64" fn entry_box(stack_start: *mut Word) -> *mut Word {
+    let end = unsafe { *RuntimeInstance::stack_end() };
+    let roots = Roots { stack: RootRange { start: stack_start, end }, slots: &mut [] };
+    unsafe { (&mut *RuntimeInstance::heap()).allocate(1, AllocationKind::Opaque, roots) }
+        .unwrap_or_else(|error| out_of_memory(error))
+        .cast()
+}
+
 #[cfg(feature = "process-entry")]
 pub fn run_process() {
     let stack_anchor: Word = 0;
@@ -1241,10 +1296,62 @@ pub fn run_process() {
     entry_end();
 }
 
+#[unsafe(export_name = "\x01zydeco_int64_from_int")]
+extern "sysv64" fn int64_from_int(value: Word, spare: *mut Word) -> Word {
+    HostInt64::encode(<i64 as RuntimeInteger>::decode(value), spare)
+}
+
+#[unsafe(export_name = "\x01zydeco_uint64_from_uint")]
+extern "sysv64" fn uint64_from_uint(value: Word, spare: *mut Word) -> Word {
+    HostUInt64::encode(<u64 as RuntimeInteger>::decode(value), spare)
+}
+
+#[unsafe(export_name = "\x01zydeco_int64_to_int_branch")]
+extern "sysv64" fn int64_to_int(value: Word, when_none: Word, when_some: Word) -> Word {
+    match Immediate::signed(HostInt64::decode(value)) {
+        | Some(value) => HostControl::with_one_argument(when_some, value),
+        | None => HostControl::without_arguments(when_none),
+    }
+}
+
+#[unsafe(export_name = "\x01zydeco_uint64_to_uint_branch")]
+extern "sysv64" fn uint64_to_uint(value: Word, when_none: Word, when_some: Word) -> Word {
+    match Immediate::unsigned(HostUInt64::decode(value) as Word) {
+        | Some(value) => HostControl::with_one_argument(when_some, value),
+        | None => HostControl::without_arguments(when_none),
+    }
+}
+
 #[cfg(test)]
 mod entry_tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn entry_marshalling_roots_boxes_without_tracing_their_payloads() {
+        let mut values = [1; 6];
+        let start = values.as_mut_ptr();
+        entry_begin(unsafe { start.add(values.len()) }, std::ptr::null());
+        let mut bits = [0, 1, i64::MIN as Word, Word::MAX, 0, 0];
+        for index in 0..values.len() {
+            // These numeric payloads deliberately coincide with managed pointers.
+            if index >= 4 {
+                bits[index] = values[0] + (index - 4) * 8;
+            }
+            let spare = entry_box(start);
+            values[index] = HostUInt64::encode(bits[index] as u64, spare);
+        }
+        // More than one semispace of garbage forces collection during marshalling.
+        for _ in 0..HEAP_SPACE_BYTES / 8 {
+            let spare = entry_box(start);
+            HostUInt64::encode(0, spare);
+        }
+        for (value, expected) in values.into_iter().zip(bits) {
+            assert_eq!(HostUInt64::decode(value), expected as u64);
+            assert_eq!(HostInt64::decode(value), expected as i64);
+        }
+        entry_end();
+    }
 
     #[test]
     fn independent_entries_restore_the_caller_and_start_with_fresh_host_state() {

@@ -144,10 +144,12 @@ impl ForeignFunction {
             | IntegerType::Int8 => Type::i8(),
             | IntegerType::Int16 => Type::i16(),
             | IntegerType::Int32 => Type::i32(),
+            | IntegerType::Int64 => Type::i64(),
             | IntegerType::Int => Type::i64(),
             | IntegerType::UInt8 => Type::u8(),
             | IntegerType::UInt16 => Type::u16(),
             | IntegerType::UInt32 => Type::u32(),
+            | IntegerType::UInt64 => Type::u64(),
             | IntegerType::UInt => Type::u64(),
         }
     }
@@ -175,6 +177,9 @@ impl ForeignFunction {
                     | IntegerType::Int32 => {
                         IntegerLiteral::Int32(self.interface.call(self.code, &arguments))
                     }
+                    | IntegerType::Int64 => {
+                        IntegerLiteral::Int64(self.interface.call(self.code, &arguments))
+                    }
                     | IntegerType::Int => {
                         IntegerLiteral::Int(self.interface.call(self.code, &arguments))
                     }
@@ -186,6 +191,9 @@ impl ForeignFunction {
                     }
                     | IntegerType::UInt32 => {
                         IntegerLiteral::UInt32(self.interface.call(self.code, &arguments))
+                    }
+                    | IntegerType::UInt64 => {
+                        IntegerLiteral::UInt64(self.interface.call(self.code, &arguments))
                     }
                     | IntegerType::UInt => {
                         IntegerLiteral::UInt(self.interface.call(self.code, &arguments))
@@ -259,10 +267,12 @@ impl ForeignScalar {
                 | IntegerLiteral::Int8(value) => arg(value),
                 | IntegerLiteral::Int16(value) => arg(value),
                 | IntegerLiteral::Int32(value) => arg(value),
+                | IntegerLiteral::Int64(value) => arg(value),
                 | IntegerLiteral::Int(value) => arg(value),
                 | IntegerLiteral::UInt8(value) => arg(value),
                 | IntegerLiteral::UInt16(value) => arg(value),
                 | IntegerLiteral::UInt32(value) => arg(value),
+                | IntegerLiteral::UInt64(value) => arg(value),
                 | IntegerLiteral::UInt(value) => arg(value),
                 | IntegerLiteral::Unresolved(_) => unreachable!("arguments were validated above"),
             },

@@ -68,10 +68,12 @@ uint64_t zyffi_record(const void *data, size_t length) {
 ZYFFI_ECHO(int8_t, int8)
 ZYFFI_ECHO(int16_t, int16)
 ZYFFI_ECHO(int32_t, int32)
+ZYFFI_ECHO(int64_t, int64)
 ZYFFI_ECHO(int64_t, int)
 ZYFFI_ECHO(uint8_t, uint8)
 ZYFFI_ECHO(uint16_t, uint16)
 ZYFFI_ECHO(uint32_t, uint32)
+ZYFFI_ECHO(uint64_t, uint64)
 ZYFFI_ECHO(uint64_t, uint)
 
 /* The ABI defines only the low bits of a narrow integer return register. */

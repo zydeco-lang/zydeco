@@ -4,8 +4,8 @@ use crate::{
 };
 use std::io::{BufRead, Write};
 use zydeco_syntax::{
-    BuiltinValueRole, FloatOperation, IntegerOperation, PrimitiveError, PrimitiveOp, PrimitiveType,
-    Return,
+    BuiltinValueRole, FloatOperation, IntegerOperation, IntegerType, PrimitiveError, PrimitiveOp,
+    PrimitiveType, Return,
 };
 
 /// Typed access to host operations used to construct the Builtin package.
@@ -71,6 +71,10 @@ impl BuiltinRuntime {
                         .map_err(BuiltinFailure::Runtime);
                 }
             },
+            | Role::Int64FromInt => IntegerConversion::widen(IntegerType::Int64, args),
+            | Role::UInt64FromUInt => IntegerConversion::widen(IntegerType::UInt64, args),
+            | Role::Int64ToInt => IntegerConversion::narrow(IntegerType::Int, args),
+            | Role::UInt64ToUInt => IntegerConversion::narrow(IntegerType::UInt, args),
             | Role::StrScalarLength => str_scalar_length(args),
             | Role::StrByteLength => str_byte_length(args),
             | Role::StrAppend => str_append(args),
@@ -147,10 +151,12 @@ mod tests {
             IntegerType::Int8,
             IntegerType::Int16,
             IntegerType::Int32,
+            IntegerType::Int64,
             IntegerType::Int,
             IntegerType::UInt8,
             IntegerType::UInt16,
             IntegerType::UInt32,
+            IntegerType::UInt64,
             IntegerType::UInt,
         ] {
             for operation in [IntegerOperation::Div, IntegerOperation::Mod] {

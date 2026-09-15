@@ -24,8 +24,8 @@ The available surface names are:
 | Family | Names |
 | --- | --- |
 | CBPV | `VType`, `CType`, `Thk`, `Ret`, `Unit` |
-| Signed integers | `Int8`, `Int16`, `Int32`, `Int` |
-| Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt` |
+| Signed integers | `Int8`, `Int16`, `Int32`, `Int64`, `Int` |
+| Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt64`, `UInt` |
 | Floating point | `Float32`, `Float64` |
 | Text | `Char`, `String` |
 | Capabilities | `Addr`, `Reader`, `Writer`, `OS` |
@@ -119,7 +119,7 @@ data/package.type.zy       DataPackage existential wrapper with the module teles
 data/bool.type.zy          BoolModule telescope shared with the numeric builders
 
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
-numeric/package.zy         the ten numeric modules and their capability dictionaries
+numeric/package.zy         the twelve numeric modules and their capability dictionaries
 numeric/codecs.zy          source byte codecs over scalar memory leaves
 
 text/bytes.zy              abstract immutable byte sequences over retained raw allocations
@@ -158,8 +158,8 @@ Its complete leading telescope carries every public static name as a manifest fi
 constructors, and fixed-representation types — followed by generative host capabilities,
 and its body groups the runtime operations:
 
-- Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the ten numeric types, `Char`, `String`, then abstract `Addr`,
-  `Reader`, `Writer`, and `OS`.
+- Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the twelve numeric types, `Char`,
+  `String`, then abstract `Addr`, `Reader`, `Writer`, and `OS`.
 - `numeric`: typed arithmetic, branch comparisons, rendering, and checked scalar loads/stores.
 - `text`: operations crossing `Char`, `String`, and `Int`.
 - `system`: the re-exposed capabilities plus checked memory, I/O, filesystem, standard stream, argument,
@@ -452,9 +452,12 @@ The Builtin forms implement these results as computation-polymorphic branches.
 The public library reifies a successful branch with `option/some` and a failed branch with `option/none`.
 Neither backend has a hidden sentinel, and malformed input does not panic the host runtime.
 
-The integer types are `Int8`, `Int16`, `Int32`, `Int`, `UInt8`, `UInt16`, `UInt32`, and `UInt`.
+The integer types are `Int8`, `Int16`, `Int32`, `Int64`, `Int`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, and `UInt`.
 Their domains and arithmetic follow [L13](../../docs/references/language.md#13-primitive-values-and-capabilities).
 `Int` and `UInt` are tagged machine integers; the numbered integer types have exact widths.
+`int64/from_int` and `uint64/from_uint` widen machine integers without loss.
+`int64/to_int` and `uint64/to_uint` select failure or success continuations according to the destination range;
+see the [conversion contract](../../docs/references/language.md#13-primitive-values-and-capabilities).
 Integer division and remainder are not yet wrapped in checked operations.
 The generic numeric capability layer deliberately excludes them;
 a future checked-arithmetic capability should make their failure behavior explicit.

@@ -170,10 +170,12 @@ impl PrimitiveOp {
                     | IntegerType::Int8 => integer!(i8),
                     | IntegerType::Int16 => integer!(i16),
                     | IntegerType::Int32 => integer!(i32),
+                    | IntegerType::Int64 => integer!(i64),
                     | IntegerType::Int => integer!(i64),
                     | IntegerType::UInt8 => integer!(u8),
                     | IntegerType::UInt16 => integer!(u16),
                     | IntegerType::UInt32 => integer!(u32),
+                    | IntegerType::UInt64 => integer!(u64),
                     | IntegerType::UInt => integer!(u64),
                 }))
             }

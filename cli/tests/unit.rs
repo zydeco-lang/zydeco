@@ -191,71 +191,76 @@ do result <- ! init;
 #[test]
 #[ignore = "requires NASM, AMD64 native tools, and builds a matching Rust runtime"]
 fn source_free_units_share_captures_and_continuations_across_collection() {
-    let fixture = Fixture::new();
-    let producer = fixture.write(
-        "producer.zy",
-        &format!(
-            r#"
+    for (ty, group, delta, argument, expected) in [
+        ("Float64", "float64", "-1.5", "0.5", "-1.0"),
+        ("Int64", "int64", "9223372036854775807", "1", "-9223372036854775808"),
+        ("UInt64", "uint64", "18446744073709551615", "1", "0"),
+    ] {
+        let fixture = Fixture::new();
+        let producer = fixture.write(
+            "producer.zy",
+            &format!(
+                r#"
 @[package(library(zydeco), name(example/producer))]
-param val (/Thk; /Ret; /Unit; /Int; /Float64; /numeric) : @(import({:?})) in
+param val (/Thk; /Ret; /Unit; /Int; /{ty}; /numeric) : @(import({:?})) in
 (
-  #make_adder = ({{ fn (delta : Float64) =>
-    ret {{ fn (value : Float64) =>
+  #make_adder = ({{ fn (delta : {ty}) =>
+    ret {{ fn (value : {ty}) =>
       let fix churn (n : Int) : Ret Unit =
         ! numeric/int/eq (Ret Unit) n 0 {{ ret () }}
           {{ do next <- ! numeric/int/sub n 1; ! churn next }}
       in
       do () <- ! churn 100000;
-      ! numeric/float64/add delta value
+      ! numeric/{group}/add delta value
     }}
-  }} : Thk (Float64 -> Ret (Thk (Float64 -> Ret Float64)))),
-  #pair = ((-1.5, 0.5), "native unit")
+  }} : Thk ({ty} -> Ret (Thk ({ty} -> Ret {ty})))),
+  #pair = ((({delta} : {ty}), ({argument} : {ty})), "native unit")
 )
 "#,
-            Fixture::builtin()
-        ),
-    );
-    Fixture::success(&fixture.build(&producer, "object", "producer", &[]));
-    let (producer_base, producer_manifest, producer_interface) =
-        fixture.manifest("producer", "example.producer");
-    let producer_binding = producer_base.join(&producer_interface.bindings.path);
-    Fixture::success(&fixture.command(&["check", producer_binding.to_str().unwrap()]));
-    std::fs::remove_file(producer).unwrap();
+                Fixture::builtin()
+            ),
+        );
+        Fixture::success(&fixture.build(&producer, "object", "producer", &[]));
+        let (producer_base, producer_manifest, producer_interface) =
+            fixture.manifest("producer", "example.producer");
+        let producer_binding = producer_base.join(&producer_interface.bindings.path);
+        Fixture::success(&fixture.command(&["check", producer_binding.to_str().unwrap()]));
+        std::fs::remove_file(producer).unwrap();
 
-    let middle = fixture.write(
-        "middle.zy",
-        &format!(
-            r#"
+        let middle = fixture.write(
+            "middle.zy",
+            &format!(
+                r#"
 @[package(library(zydeco), name(example/middle))]
-param val (/Thk; /Ret; /Float64) : @(import({:?})) in
+param val (/Thk; /Ret; /{ty}) : @(import({:?})) in
 let init = @(import({:?})) in
 ({{ do api <- ! init;
     let ((delta, _), _) = api/pair in
     ! api/make_adder delta
-}} : Thk (Ret (Thk (Float64 -> Ret Float64))))
+}} : Thk (Ret (Thk ({ty} -> Ret {ty}))))
 "#,
-            Fixture::builtin(),
-            producer_binding
-        ),
-    );
-    Fixture::success(&fixture.build(&middle, "object", "middle", &[producer_manifest]));
-    let (middle_base, middle_manifest, middle_interface) =
-        fixture.manifest("middle", "example.middle");
-    let middle_binding = middle_base.join(&middle_interface.bindings.path);
-    std::fs::remove_file(middle).unwrap();
+                Fixture::builtin(),
+                producer_binding
+            ),
+        );
+        Fixture::success(&fixture.build(&middle, "object", "middle", &[producer_manifest]));
+        let (middle_base, middle_manifest, middle_interface) =
+            fixture.manifest("middle", "example.middle");
+        let middle_binding = middle_base.join(&middle_interface.bindings.path);
+        std::fs::remove_file(middle).unwrap();
 
-    let client = fixture.write(
-        "client.zy",
-        &format!(
-            r#"
-param (/Unit; /Ret; /Int; /Float64; /OS; /numeric; /process) : @(import({:?})) in
+        let client = fixture.write(
+            "client.zy",
+            &format!(
+                r#"
+param (/Unit; /Ret; /Int; /{ty}; /OS; /numeric; /process) : @(import({:?})) in
 let init = @(import({:?})) in
 let shifted = {{
     do make <- ! init;
     do add <- ! make;
     fn (_ : Int) =>
-    do value <- ! add 0.5;
-    ! numeric/float64/eq OS value -1.0 {{ ! process/exit 0 }} {{ ! process/exit 3 }}
+    do value <- ! add {argument};
+    ! numeric/{group}/eq OS value {expected} {{ ! process/exit 0 }} {{ ! process/exit 3 }}
 }} in
 do make <- ! init;
 do add <- ! make;
@@ -264,43 +269,45 @@ let fix churn (n : Int) : Ret Unit =
         {{ do next <- ! numeric/int/sub n 1; ! churn next }}
 in
 do () <- ! churn 100000;
-do first <- ! add 0.5;
+do first <- ! add {argument};
 do () <- ! churn 100000;
-do second <- ! add 0.5;
-! numeric/float64/eq OS first -1.0
-    {{ ! numeric/float64/eq OS second -1.0 {{ ! shifted 0 }} {{ ! process/exit 2 }} }}
+do second <- ! add {argument};
+! numeric/{group}/eq OS first {expected}
+    {{ ! numeric/{group}/eq OS second {expected} {{ ! shifted 0 }} {{ ! process/exit 2 }} }}
     {{ ! process/exit 1 }}
 "#,
-            Fixture::builtin(),
-            middle_binding
-        ),
-    );
-    Fixture::success(&fixture.build(
-        &client,
-        "exe",
-        "client",
-        std::slice::from_ref(&middle_manifest),
-    ));
-    let output = Command::new(fixture.directory.path().join("client/client.exe")).output().unwrap();
-    Fixture::success(&output);
+                Fixture::builtin(),
+                middle_binding
+            ),
+        );
+        Fixture::success(&fixture.build(
+            &client,
+            "exe",
+            "client",
+            std::slice::from_ref(&middle_manifest),
+        ));
+        let output =
+            Command::new(fixture.directory.path().join("client/client.exe")).output().unwrap();
+        Fixture::success(&output);
 
-    // A differently typed import must reject before another executable can be published.
-    let wrong = fixture.write(
-        "wrong.zy",
-        &format!(
-            r#"
+        // A differently typed import must reject before another executable can be published.
+        let wrong = fixture.write(
+            "wrong.zy",
+            &format!(
+                r#"
 param (/Thk; /Unit; /Ret; /process) : @(import({:?})) in
 do value <- ! (@(ffi(zydeco, library("example.middle"), symbol({:?})))
     : Thk (Ret Unit));
 ! process/exit 0
 "#,
-            Fixture::builtin(),
-            middle_interface.symbol.as_str()
-        ),
-    );
-    Fixture::reject(
-        &fixture.build(&wrong, "exe", "wrong", &[middle_manifest]),
-        "different exported type",
-    );
-    assert!(!fixture.directory.path().join("wrong/wrong.exe").exists());
+                Fixture::builtin(),
+                middle_interface.symbol.as_str()
+            ),
+        );
+        Fixture::reject(
+            &fixture.build(&wrong, "exe", "wrong", &[middle_manifest]),
+            "different exported type",
+        );
+        assert!(!fixture.directory.path().join("wrong/wrong.exe").exists());
+    }
 }

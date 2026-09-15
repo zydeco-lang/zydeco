@@ -1,6 +1,7 @@
 //! Inline scalar arithmetic, with boxing only on the result's representation boundary.
 
 use super::*;
+use zydeco_syntax::word::ScalarRepresentation;
 
 impl<'a> Emit<'a> for PrimitiveOp {
     type Env = ProgId;
@@ -26,7 +27,10 @@ impl<'a> Emit<'a> for PrimitiveOp {
                     }
                 }
                 em.narrow_integer(ty);
-                em.tag_integer();
+                match ty.representation() {
+                    | ScalarRepresentation::Immediate => em.tag_integer(),
+                    | ScalarRepresentation::OpaqueBox => em.box_scalar(id),
+                }
             }
             | PrimitiveOp::Float(ty, operation) => {
                 for reg in [Reg::Rax, Reg::Rcx] {
@@ -70,7 +74,9 @@ impl Emitter<'_> {
     }
 
     fn decode_integer(&mut self, reg: Reg, ty: IntegerType) {
-        self.asm.text.push(if ty.is_signed() {
+        self.asm.text.push(if ty.representation() == ScalarRepresentation::OpaqueBox {
+            Instr::Mov(MovArgs::ToReg(reg, Arg64::Mem(MemRef { reg, offset: 0 })))
+        } else if ty.is_signed() {
             Instr::Sar(ShArgs { reg, by: 1 })
         } else {
             Instr::Shr(ShArgs { reg, by: 1 })
@@ -79,6 +85,8 @@ impl Emitter<'_> {
 
     fn integer_division(&mut self, ty: IntegerType, remainder: bool, id: ProgId) {
         let nonzero = Self::primitive_label(id, "nonzero");
+        let divide = Self::primitive_label(id, "divide");
+        let done = Self::primitive_label(id, "divided");
         self.asm.text.extend([
             Instr::Test(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rcx))),
             Instr::JCC(ConditionCode::NZ, JmpArgs::Label(nonzero.clone())),
@@ -92,6 +100,19 @@ impl Emitter<'_> {
             .into(),
         ));
         self.asm.text.extend([Instr::Ud2, Instr::Label(nonzero)]);
+        if ty == IntegerType::Int64 {
+            self.asm.text.extend([
+                Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(-1))),
+                Instr::JCC(ConditionCode::NE, JmpArgs::Label(divide.clone())),
+                Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Signed(i64::MIN))),
+                Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
+                Instr::JCC(ConditionCode::NE, JmpArgs::Label(divide.clone())),
+            ]);
+            if remainder {
+                self.asm.text.push(Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rax))));
+            }
+            self.asm.text.extend([Instr::Jmp(JmpArgs::Label(done.clone())), Instr::Label(divide)]);
+        }
         if ty.is_signed() {
             self.asm.text.extend([Instr::Cqo, Instr::IDiv(Reg::Rcx)]);
         } else {
@@ -102,6 +123,9 @@ impl Emitter<'_> {
         }
         if remainder {
             self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdx))));
+        }
+        if ty == IntegerType::Int64 {
+            self.asm.text.push(Instr::Label(done));
         }
     }
 

@@ -1,6 +1,6 @@
 begin
   param val (/Addr; /VType; /CType; /Thk; /Ret; /Unit;
-    /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt;
+    /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
     /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) that
   param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr that
   let int = numeric/int in
@@ -102,10 +102,12 @@ begin
         #int8 = scalar Int8 1 numeric/int8/store_le numeric/int8/load_le,
         #int16 = scalar Int16 2 numeric/int16/store_le numeric/int16/load_le,
         #int32 = scalar Int32 4 numeric/int32/store_le numeric/int32/load_le,
+        #int64 = scalar Int64 8 numeric/int64/store_le numeric/int64/load_le,
         #int = scalar Int 8 numeric/int/store_le numeric/int/load_le,
         #uint8 = scalar UInt8 1 numeric/uint8/store_le numeric/uint8/load_le,
         #uint16 = scalar UInt16 2 numeric/uint16/store_le numeric/uint16/load_le,
         #uint32 = scalar UInt32 4 numeric/uint32/store_le numeric/uint32/load_le,
+        #uint64 = scalar UInt64 8 numeric/uint64/store_le numeric/uint64/load_le,
         #uint = scalar UInt 8 numeric/uint/store_le numeric/uint/load_le,
         #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le,
         #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le,

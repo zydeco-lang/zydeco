@@ -645,10 +645,12 @@ impl LibraryInterface {
             IntegerType::Int8,
             IntegerType::Int16,
             IntegerType::Int32,
+            IntegerType::Int64,
             IntegerType::Int,
             IntegerType::UInt8,
             IntegerType::UInt16,
             IntegerType::UInt32,
+            IntegerType::UInt64,
             IntegerType::UInt,
         ] {
             let intrinsic = zydeco_syntax::PrimitiveType::Integer(integer).intrinsic_name();

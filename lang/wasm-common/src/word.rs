@@ -11,7 +11,7 @@ use zydeco_syntax::{
     FloatArithmetic, FloatType, IntegerArithmetic, IntegerType, PrimitiveOp, SpareBox,
 };
 
-pub use zydeco_syntax::word::{EncodedScalar, RuntimeWord, WordError};
+pub use zydeco_syntax::word::{EncodedScalar, RuntimeWord, ScalarRepresentation, WordError};
 
 use crate::{Limits, WORD_BYTES, WORD_MEMORY, WasmEmitError};
 
@@ -84,7 +84,9 @@ impl<'f> WordEmitter<'f> {
 
     /// Compute a signed division or remainder of the decoded locals into `result`,
     /// trapping on a zero divisor. The caller wraps the result to the source width.
-    fn signed_division(&mut self, first: u32, second: u32, result: u32, remainder: bool) {
+    fn signed_division(
+        &mut self, ty: IntegerType, first: u32, second: u32, result: u32, remainder: bool,
+    ) {
         self.function.instruction(&WasmInstruction::LocalGet(second));
         self.function.instruction(&WasmInstruction::I64Eqz);
         self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Empty));
@@ -94,6 +96,24 @@ impl<'f> WordEmitter<'f> {
             crate::RuntimeFailure::IntegerDivisionByZero.emit(self.function);
         }
         self.function.instruction(&WasmInstruction::End);
+        if ty == IntegerType::Int64 {
+            self.function.instruction(&WasmInstruction::LocalGet(first));
+            self.function.instruction(&WasmInstruction::I64Const(i64::MIN));
+            self.function.instruction(&WasmInstruction::I64Eq);
+            self.function.instruction(&WasmInstruction::LocalGet(second));
+            self.function.instruction(&WasmInstruction::I64Const(-1));
+            self.function.instruction(&WasmInstruction::I64Eq);
+            self.function.instruction(&WasmInstruction::I32And);
+            self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Result(
+                wasm_encoder::ValType::I64,
+            )));
+            self.function.instruction(&WasmInstruction::I64Const(if remainder {
+                0
+            } else {
+                i64::MIN
+            }));
+            self.function.instruction(&WasmInstruction::Else);
+        }
         self.function.instruction(&WasmInstruction::LocalGet(first));
         self.function.instruction(&WasmInstruction::LocalGet(second));
         self.function.instruction(&if remainder {
@@ -101,6 +121,9 @@ impl<'f> WordEmitter<'f> {
         } else {
             WasmInstruction::I64DivS
         });
+        if ty == IntegerType::Int64 {
+            self.function.instruction(&WasmInstruction::End);
+        }
         self.function.instruction(&WasmInstruction::LocalSet(result));
     }
 
@@ -133,6 +156,7 @@ impl<'f> WordEmitter<'f> {
                 match operation {
                     | IntegerArithmetic::Div | IntegerArithmetic::Mod if ty.is_signed() => {
                         self.signed_division(
+                            ty,
                             first,
                             second,
                             result,
@@ -182,7 +206,10 @@ impl<'f> WordEmitter<'f> {
                     WasmInstruction::I64ShrU
                 });
                 self.function.instruction(&WasmInstruction::LocalSet(result));
-                self.tag_local(result);
+                match ty.representation() {
+                    | ScalarRepresentation::Immediate => self.tag_local(result),
+                    | ScalarRepresentation::OpaqueBox => self.box_local(result, pointer),
+                }
             }
             | PrimitiveOp::Float(ty, operation) => {
                 for local in [first, second] {
@@ -231,12 +258,20 @@ impl<'f> WordEmitter<'f> {
 
     fn decode_integer(&mut self, local: u32, ty: IntegerType) {
         self.function.instruction(&WasmInstruction::LocalGet(local));
-        self.function.instruction(&WasmInstruction::I64Const(1));
-        self.function.instruction(&if ty.is_signed() {
-            WasmInstruction::I64ShrS
-        } else {
-            WasmInstruction::I64ShrU
-        });
+        match ty.representation() {
+            | ScalarRepresentation::OpaqueBox => {
+                self.function.instruction(&WasmInstruction::I32WrapI64);
+                self.function.instruction(&WasmInstruction::I64Load(WORD_MEMORY));
+            }
+            | ScalarRepresentation::Immediate => {
+                self.function.instruction(&WasmInstruction::I64Const(1));
+                self.function.instruction(&if ty.is_signed() {
+                    WasmInstruction::I64ShrS
+                } else {
+                    WasmInstruction::I64ShrU
+                });
+            }
+        }
         self.function.instruction(&WasmInstruction::LocalSet(local));
     }
 

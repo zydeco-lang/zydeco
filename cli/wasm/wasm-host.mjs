@@ -85,19 +85,21 @@ class RuntimeWords {
   }
 
   decodeSigned(word, width) {
-    return BigInt.asIntN(width, RuntimeWords.decodeImmediateSigned(word));
+    return BigInt.asIntN(width, width === 64 ? this.loadBits(word) : RuntimeWords.decodeImmediateSigned(word));
   }
 
   decodeUnsigned(word, width) {
-    return BigInt.asUintN(width, RuntimeWords.decodeImmediateUnsigned(word));
+    return BigInt.asUintN(width, width === 64 ? this.loadBits(word) : RuntimeWords.decodeImmediateUnsigned(word));
   }
 
-  encodeSigned(value, width) {
-    return RuntimeWords.immediateSigned(BigInt.asIntN(width, value));
+  encodeSigned(value, width, spare) {
+    const bits = BigInt.asIntN(width, value);
+    return width === 64 ? this.storeBits(spare, bits) : RuntimeWords.immediateSigned(bits);
   }
 
-  encodeUnsigned(value, width) {
-    return RuntimeWords.immediateUnsigned(BigInt.asUintN(width, value));
+  encodeUnsigned(value, width, spare) {
+    const bits = BigInt.asUintN(width, value);
+    return width === 64 ? this.storeBits(spare, bits) : RuntimeWords.immediateUnsigned(bits);
   }
 
 }
@@ -394,18 +396,20 @@ class ZydecoHost {
       ["int8", 8, true],
       ["int16", 16, true],
       ["int32", 32, true],
+      ["int64", 64, true],
       ["int", 63, true],
       ["uint8", 8, false],
       ["uint16", 16, false],
       ["uint32", 32, false],
+      ["uint64", 64, false],
       ["uint", 63, false],
     ];
     for (const [name, width, signed] of integerTypes) {
       const decode = (word) =>
         signed ? this.words.decodeSigned(word, width) : this.words.decodeUnsigned(word, width);
-      const encode = (value) => signed
-        ? this.words.encodeSigned(value, width)
-        : this.words.encodeUnsigned(value, width);
+      const encode = (value, spare) => signed
+        ? this.words.encodeSigned(value, width, spare)
+        : this.words.encodeUnsigned(value, width, spare);
       const arithmetic = {
         add: (left, right) => left + right,
         sub: (left, right) => left - right,
@@ -420,8 +424,8 @@ class ZydecoHost {
         },
       };
       for (const [operation, evaluate] of Object.entries(arithmetic)) {
-        functions.set(`${name}_${operation}`, (first, second) =>
-          encode(evaluate(decode(first), decode(second))),
+        functions.set(`${name}_${operation}`, (first, second, spare) =>
+          encode(evaluate(decode(first), decode(second)), spare),
         );
       }
       const comparisons = {
@@ -436,16 +440,28 @@ class ZydecoHost {
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(decode(word).toString()));
       const storageWidth = width === 63 ? 64 : width;
-      const load = (bits) => {
+      const load = (bits, spare) => {
         const value = signed ? BigInt.asIntN(storageWidth, bits) : bits;
         if (width === 63 && (signed
           ? value < IMMEDIATE_SIGNED_MIN || value > IMMEDIATE_SIGNED_MAX
           : value > IMMEDIATE_UNSIGNED_MAX)) {
           ZydecoHost.fail("integer exceeds the tagged payload range");
         }
-        return encode(value);
+        return encode(value, spare);
       };
       this.installScalarMemory(functions, name, storageWidth, decode, load);
+    }
+
+    for (const [name, machine, signed] of [["int64", "int", true], ["uint64", "uint", false]]) {
+      functions.set(`${name}_from_${machine}`, (value, spare) => this.words.storeBits(spare,
+        signed ? this.words.decodeSigned(value, 63) : this.words.decodeUnsigned(value, 63)));
+      functions.set(`${name}_to_${machine}_branch`, (value, whenNone, whenSome) => {
+        const raw = signed ? this.words.decodeSigned(value, 64) : this.words.decodeUnsigned(value, 64);
+        const fits = signed ? raw >= IMMEDIATE_SIGNED_MIN && raw <= IMMEDIATE_SIGNED_MAX : raw <= IMMEDIATE_UNSIGNED_MAX;
+        return fits ? Transfers.withOneArgument(whenSome,
+          signed ? RuntimeWords.immediateSigned(raw) : RuntimeWords.immediateUnsigned(raw))
+          : Transfers.withoutArguments(whenNone);
+      });
     }
 
     const floats = [

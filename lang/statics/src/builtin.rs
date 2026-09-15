@@ -139,6 +139,15 @@ impl BuiltinOperationAbi {
                     | FloatOperation::LoadLe => Self::memory_success([Atom::Addr], Some(atom)),
                 }
             }
+            | Role::Int64FromInt => Self::pure([int], Atom::Integer(IntegerType::Int64)),
+            | Role::UInt64FromUInt => {
+                Self::pure([Atom::Integer(IntegerType::UInt)], Atom::Integer(IntegerType::UInt64))
+            }
+            | Role::Int64ToInt => Self::optional([Atom::Integer(IntegerType::Int64)], int),
+            | Role::UInt64ToUInt => Self::optional(
+                [Atom::Integer(IntegerType::UInt64)],
+                Atom::Integer(IntegerType::UInt),
+            ),
             | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], int),
             | Role::StrAppend => Self::pure([Atom::String, Atom::String], Atom::String),
             | Role::StrSplitOnce => Self::optional_pair([Atom::String, Atom::Char]),

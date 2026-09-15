@@ -21,7 +21,7 @@ impl RuntimeFixture {
         std::fs::write(
             &source,
             format!(
-            "param (/OS; /Ret; /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt; /Float32; /Float64; /String; /numeric; /process; /system; /text; builtin) : @(import(\"{}\")) in {body}\n",
+            "param (/OS; /Ret; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64; /String; /numeric; /process; /system; /text; builtin) : @(import(\"{}\")) in {body}\n",
                 self.workspace.join("lib/std/builtin.zy").display(),
             ),
         )
@@ -78,7 +78,9 @@ impl RuntimeFixture {
 fn inline_arithmetic_executes_at_every_numeric_width() {
     let fixture = RuntimeFixture::new();
     let mut cases = Vec::new();
-    for ty in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
+    for ty in
+        ["Int8", "Int16", "Int32", "Int64", "Int", "UInt8", "UInt16", "UInt32", "UInt64", "UInt"]
+    {
         for (operation, expected) in
             [("add", "23"), ("sub", "17"), ("mul", "60"), ("div", "6"), ("mod", "2")]
         {
@@ -97,6 +99,12 @@ fn inline_arithmetic_executes_at_every_numeric_width() {
         }
     }
     cases.extend([
+        ("Int64", "add", "9223372036854775807", "1", "-9223372036854775808"),
+        ("Int64", "div", "-9223372036854775808", "-1", "-9223372036854775808"),
+        ("Int64", "mod", "-9223372036854775808", "-1", "0"),
+        ("UInt64", "sub", "0", "1", "18446744073709551615"),
+        ("UInt64", "add", "18446744073709551615", "1", "0"),
+        ("UInt64", "div", "18446744073709551615", "2", "9223372036854775807"),
         ("Int8", "add", "127", "1", "-128"),
         ("Int16", "add", "32767", "1", "-32768"),
         ("Int32", "mul", "1073741824", "4", "0"),
@@ -123,18 +131,30 @@ fn inline_arithmetic_executes_at_every_numeric_width() {
         ("Float32", "div", "1.0", "0.0", "inf"),
         ("Float64", "div", "0.0", "0.0", "NaN"),
     ]);
-    let body = cases.iter().rev().fold(
-        "! process/exit 0".to_owned(),
-        |tail, (ty, operation, first, second, _)| {
-            RuntimeFixture::arithmetic_case(ty, operation, first, second, &tail)
-        },
-    );
-    let expected = cases.iter().map(|(_, _, _, _, text)| format!("{text}\n")).collect::<String>();
-    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
-        let output = fixture.run(&body, backend);
-        assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
-        assert_eq!(String::from_utf8_lossy(&output.stdout), expected, "{backend}");
-        assert!(output.stderr.is_empty(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
+    // Bound source nesting so this matrix tests arithmetic, rather than frontend stack depth.
+    for cases in cases.chunks(24) {
+        let body = cases.iter().rev().fold(
+            "! process/exit 0".to_owned(),
+            |tail, (ty, operation, first, second, _)| {
+                RuntimeFixture::arithmetic_case(ty, operation, first, second, &tail)
+            },
+        );
+        let expected =
+            cases.iter().map(|(_, _, _, _, text)| format!("{text}\n")).collect::<String>();
+        for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+            let output = fixture.run(&body, backend);
+            assert!(
+                output.status.success(),
+                "{backend}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(String::from_utf8_lossy(&output.stdout), expected, "{backend}");
+            assert!(
+                output.stderr.is_empty(),
+                "{backend}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
     }
 }
 
@@ -294,7 +314,9 @@ fn wasm_machine_stack_overflow_has_a_runtime_diagnostic() {
 #[test]
 fn integer_zero_divisors_are_runtime_errors_at_every_width() {
     let fixture = RuntimeFixture::new();
-    for integer in ["int8", "int16", "int32", "int", "uint8", "uint16", "uint32", "uint"] {
+    for integer in
+        ["int8", "int16", "int32", "int64", "int", "uint8", "uint16", "uint32", "uint64", "uint"]
+    {
         for (operation, message) in
             [("div", "integer division by zero"), ("mod", "integer remainder by zero")]
         {
