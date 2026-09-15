@@ -442,6 +442,13 @@ Recorded submissions are immutable source history; import them explicitly to reu
 Imports may execute effects again. Clearing the transcript preserves its numbered sources;
 it does not start a fresh lexical environment or discard importable history.
 
+## Write Compiler Passes
+
+Follow [traversal selection](docs/references/compiler.md#choosing-and-composing-traversals)
+and [resumable execution](docs/references/compiler.md#resumable-folder-execution) when adding or restructuring passes.
+Reuse shared traversals, compose independent analyzers, and prefer `Explicit` folders for suitable reconstruction.
+Explain alternatives when those interfaces do not fit.
+
 ## Format and Lint
 
 ```sh
