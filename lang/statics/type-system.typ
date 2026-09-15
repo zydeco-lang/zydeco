@@ -56,7 +56,7 @@ The metavariable $N$ ranges over unsorted terms.
   [Type pattern], [$Q$], [$::=$], [$#text("_") | X | (ell = Q)$],
   [Static pattern], [$U$], [$::=$], [$R | Q$],
   [Value pattern], [$P$], [$::=$], [$#text("_") | x | (ell = P) | c space P | ()
-    | (P_1, dots.h.c, P_n) | (U, P) | V space "~>" space P$],
+    | (P_1, dots.h.c, P_n) | (U, P) | V arrow.r.squiggly P$],
   [Static witness], [$W$], [$::=$], [$K | S$],
 
   [Value], [$V$], [$::=$], [$x | (ell = V) | {M} | c space V | () | (V_1, dots.h.c, V_n)
@@ -507,7 +507,7 @@ $
           tack.r P arrow.l.double B[overline(beta slash alpha)]
           tack.l Gamma_1 \; Delta union overline(beta) union Omega$,
     )),
-    Gamma \; Delta tack.r V space "~>" space P arrow.l.double A
+    Gamma \; Delta tack.r V arrow.r.squiggly P arrow.l.double A
       tack.l Gamma_1 \; Delta union overline(beta) union Omega,
   )
   quad #text(size: 6.5pt)[P-VIEW]
