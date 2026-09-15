@@ -1528,7 +1528,8 @@ and spare-box contracts as their corresponding primitive instructions.
 
 Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
 An unknown callee remains indirect.
-Address calculation has the intrinsic body described below; other known Builtin operations remain external calls.
+Address calculation and scalar memory accesses have the intrinsic bodies described below;
+other known Builtin operations remain external calls.
 The typed primitive survives SPSLow;
 [scalar region lowering](#scalar-value-boundaries) then makes representation conversions explicit for ZASM
 and direct Wasm instruction selection.
@@ -1560,11 +1561,50 @@ The operation itself allocates nothing and makes no host call.
 Its operands evaluate displacement first, then base, matching argument-stack construction.
 This does not remove ordinary call or continuation costs at unknown boundaries.
 
-The [address-offset regressions](../../cli/tests/passes.rs) check zero-offset elimination,
-signed offsets, wrapping without invalid dereferences, and execution with normalization enabled
-and disabled in native code and both Wasm backends.
-Scalar memory accesses still use the host-call boundary; their proposed direct lowering belongs
-to [memory compilation](../proposals/memory-compilation.md#42-represent-memory-effects-in-the-ir).
+The [address-offset regressions](../../cli/tests/passes.rs) check zero-offset elimination, signed offsets,
+wrapping without invalid dereferences, and execution with normalization enabled and disabled in native code
+and both Wasm backends.
+
+### Ordered scalar memory accesses
+
+Builtin lowering materializes integer and float `load_le`/`store_le` and unmanaged address-slot operations
+as ordered `MemoryStep` computations, including when optional normalization is disabled.
+A load binds one result before its successor; a store has only a successor.
+The shared [access domain](../../lang/syntax/src/memory.rs) identifies the scalar role and load/store direction.
+It determines the exact carrier width, numeric little-endian or native address interpretation, and access alignment one.
+Stronger alignment, volatile accesses, and atomics require additional contracts.
+The low-SPS checker validates known address, result, and stored-value protocols.
+
+High normalization exposes the fixed builtin body through known aliases and package projections.
+It preserves every access, including a load whose result is unused, and sequences the successor after it.
+Memory effects do not enter pure value commoning or arithmetic evaluation.
+An unknown callback remains an ordinary thunk invocation after the access;
+primitive recognition alone asserts no callback lifetime, uniqueness, or contification guarantee.
+
+Closure conversion and ZASM preserve the ordered operation.
+AMD64 emits one unaligned, exact-width load or store, with scalar decoding and encoding at the ordinary value boundary.
+`Int` and `UInt` use eight-byte carriers but reject out-of-domain bits before publishing a loaded result.
+Signed narrow loads extend their sign, and float loads/stores preserve IEEE bits, including NaN payloads.
+Unmanaged address slots retain address semantics rather than becoming scalar integer conversions.
+The caller remains responsible for allocation validity, initialization, and access permission.
+
+Wide loads allocate an opaque scalar box when producing an ordinary value.
+Their raw bits remain outside the GC root range across that allocation; existing live values remain roots.
+Stores decode their ordinary input before writing. These conversions are currently separate
+from [scalar regions](#scalar-value-boundaries), so load–arithmetic–store box elimination
+remains [proposed work](../proposals/memory-compilation.md#44-carry-raw-components-only-across-agreeing-entries).
+
+Both Wasm backends call `raw_*` memory imports with virtual 64-bit addresses and raw bits:
+loads return one `i64`, and stores return nothing.
+No source callback or spare box crosses these imports.
+Generated code performs the ordinary value conversions and carrier validation.
+The Node host retains its virtual-memory lookup cost; these operations do not address managed Wasm linear memory.
+Interpreter adapters implement the same carrier and effect contract with their own memory representation.
+
+The [scalar-memory regressions](../../cli/tests/passes.rs) cover unaligned integer extremes,
+little-endian bytes and adjacent sentinels, invalid carriers before callbacks and later effects,
+float bit preservation through unknown callbacks, and live native roots during collection.
+Both normalization modes and all three compiled targets are exercised.
 
 ### Pattern decisions and validation
 
@@ -2556,10 +2596,9 @@ C6 eliminates fixed view functions and field recipes; runtime-selected views and
 Array whole-value reads explicitly build managed logical contents; direct initialization and indexing do not.
 
 Scalar `store_le` takes an address, value, and completion; `load_le` takes an address and result successor.
-Native loads and stores use byte copies or unaligned pointer-slot accesses without runtime access validation.
-Immediate integer loads have no spare-box argument and reject carrier bits outside the source range.
-`Int64`, `UInt64`, and `Float64` loads receive an allocated spare box; `Float32` receives an unused zero spare.
-Float adapters preserve raw payload bits, including NaNs, on every backend.
+These roles use [ordered scalar memory accesses](#ordered-scalar-memory-accesses),
+which own their instruction selection, representation adapters, and carrier validation.
+They have no CPS host-call or hidden spare-box ABI.
 The [source codecs](../../lib/std/memory/codec.zy) write products directly into destination fields.
 Padding contributes no load or store. Fixed realization requires statically evaluable size and alignment;
 dynamic realization captures the required placement in its source operations.

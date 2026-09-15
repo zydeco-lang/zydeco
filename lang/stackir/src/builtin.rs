@@ -88,9 +88,69 @@ impl ExternalFunction {
         if matches!(self, ExternalFunction::Host(BuiltinValueRole::MemoryOffset)) {
             return AddrOffset::make_function(arena);
         }
+        if let ExternalFunction::Host(role) = self
+            && let Some(access) = memory::MemoryAccess::from_builtin(role)
+        {
+            return MemoryStep::make_function(arena, access);
+        }
         let stack = Bullet.build(arena, None);
         let body = ExternCall { function: self, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)
+    }
+}
+
+impl MemoryStep {
+    fn make_function<Arena: AsMut<StackirArena>>(
+        arena: &mut Arena, access: memory::MemoryAccess,
+    ) -> ValueId {
+        use crate::protocol::ValueProtocol;
+        use memory::AccessKind;
+        let protocol = ValueProtocol::from(access.scalar);
+        let [address, value, success] =
+            ["__memory_address__", "__memory_value__", "__memory_success__"].map(|name| {
+                let admin = &mut arena.as_mut().admin;
+                let def = admin.fresh();
+                admin.insert_def(def, VarName(name.into()));
+                def
+            });
+        let thunk = success.build(arena, None);
+        let stack = Bullet.build(arena, None);
+        let stack = if access.kind == AccessKind::Load {
+            let value: ValueId = value.build(arena, None);
+            Cons(value, stack).build(arena, None)
+        } else {
+            stack
+        };
+        let next = SForce { thunk, stack }.build(arena, None);
+        let address_value = address.build(arena, None);
+        let body = match access.kind {
+            | AccessKind::Load => {
+                let result = value.build(arena, None);
+                arena.as_mut().inner.pattern_protocols.insert_new(result, protocol.clone());
+                MemoryStep::Load { scalar: access.scalar, address: address_value, result, next }
+            }
+            | AccessKind::Store => MemoryStep::Store {
+                scalar: access.scalar,
+                address: address_value,
+                value: value.build(arena, None),
+                next,
+            },
+        }
+        .build(arena, None);
+        let operands = [
+            Some((address, ValueProtocol::Address)),
+            (access.kind == AccessKind::Store).then_some((value, protocol)),
+            Some((success, ValueProtocol::Unknown)),
+        ];
+        let body = operands.into_iter().flatten().rev().fold(body, |tail, (def, protocol)| {
+            let binder = def.build(arena, None);
+            arena.as_mut().inner.pattern_protocols.insert_new(binder, protocol);
+            let bindee = Bullet.build(arena, None);
+            Let { binder: Cons(binder, Bullet), bindee, tail }.build(arena, None)
+        });
+        let function = Closure { stack: Bullet, body }.build(arena, None);
+        arena.as_mut().inner.builtin_functions.insert_new(function, access.builtin());
+        function
     }
 }
 

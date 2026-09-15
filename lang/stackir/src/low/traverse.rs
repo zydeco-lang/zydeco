@@ -90,6 +90,12 @@ impl Node<'_> {
                 }
             },
             | Self::Computation(id, computation) => match computation {
+                | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
+                    [(*address).into(), (*result).into(), (*next).into()].get(position).copied()
+                }
+                | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
+                    [(*address).into(), (*value).into(), (*next).into()].get(position).copied()
+                }
                 | Computation::Hole(SHole(stack))
                 | Computation::ExternCall(ExternCall { stack, .. }) => {
                     [(*stack).into()].get(position).copied()

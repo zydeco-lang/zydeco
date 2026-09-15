@@ -13,6 +13,7 @@ pub use word::*;
 pub mod primitive;
 pub use primitive::*;
 pub mod scalar;
+pub mod memory;
 
 pub mod unit;
 pub use unit::*;
@@ -753,8 +754,7 @@ impl BuiltinValueRole {
                 | IntegerOperation::Sub
                 | IntegerOperation::Mul
                 | IntegerOperation::Div
-                | IntegerOperation::Mod
-                | IntegerOperation::LoadLe,
+                | IntegerOperation::Mod,
             ) if integer.representation()
                 == zydeco_machine::word::ScalarRepresentation::OpaqueBox =>
             {
@@ -765,8 +765,7 @@ impl BuiltinValueRole {
                 FloatOperation::Add
                 | FloatOperation::Sub
                 | FloatOperation::Mul
-                | FloatOperation::Div
-                | FloatOperation::LoadLe,
+                | FloatOperation::Div,
             ) => Some(
                 if float.representation() == zydeco_machine::word::ScalarRepresentation::OpaqueBox {
                     SpareBox::Opaque
@@ -1486,8 +1485,7 @@ mod numeric_tests {
                     | IntegerOperation::Sub
                     | IntegerOperation::Mul
                     | IntegerOperation::Div
-                    | IntegerOperation::Mod
-                    | IntegerOperation::LoadLe => Some(SpareBox::Opaque),
+                    | IntegerOperation::Mod => Some(SpareBox::Opaque),
                     | _ => None,
                 };
                 assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), expected);

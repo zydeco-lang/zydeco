@@ -361,6 +361,21 @@ impl<'a> ProtocolValidator<'a> {
     fn compu(&self, mut id: CompuId, mut context: Context) -> Result<(), ProtocolError> {
         loop {
             match &self.arena.compus[&id] {
+                | Computation::Memory(MemoryStep::Load { scalar, address, result, next }) => {
+                    let address_fact = self.value(*address, &context)?;
+                    self.check_value(*address, &ValueProtocol::Address, &address_fact.protocol)?;
+                    let protocol = ValueProtocol::from(*scalar);
+                    self.parameter(*result, &protocol)?;
+                    self.bind(*result, ValueFact::with_protocol(protocol), &mut context);
+                    id = *next;
+                }
+                | Computation::Memory(MemoryStep::Store { scalar, address, value, next }) => {
+                    let address_fact = self.value(*address, &context)?;
+                    self.check_value(*address, &ValueProtocol::Address, &address_fact.protocol)?;
+                    let value_fact = self.value(*value, &context)?;
+                    self.check_value(*value, &ValueProtocol::from(*scalar), &value_fact.protocol)?;
+                    id = *next;
+                }
                 | Computation::Hole(SHole(stack))
                 | Computation::ExternCall(ExternCall { stack, .. }) => {
                     self.stack(*stack, &context)?;
@@ -459,6 +474,48 @@ impl<'a> ProtocolValidator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_steps_check_load_results_and_store_operands() {
+        use memory::MemoryScalar;
+        for store_type in [IntegerType::Int64, IntegerType::UInt64] {
+            let mut arena = SpsLowArena::default();
+            let base = arena.admin.fresh_def();
+            let loaded = arena.admin.fresh_def();
+            let address = base.build(&mut arena, None);
+            let store_address = base.build(&mut arena, None);
+            let value = loaded.build(&mut arena, None);
+            let result = loaded.build(&mut arena, None);
+            let stack = Bullet.build(&mut arena, None);
+            let next = SHole(stack).build(&mut arena, None);
+            let next = MemoryStep::Store {
+                scalar: MemoryScalar::Integer(store_type),
+                address: store_address,
+                value,
+                next,
+            }
+            .build(&mut arena, None);
+            let root = MemoryStep::Load {
+                scalar: MemoryScalar::Integer(IntegerType::Int64),
+                address,
+                result,
+                next,
+            }
+            .build(&mut arena, None);
+            let context = Context {
+                values: HashMap::from([(base, ValueFact::with_protocol(ValueProtocol::Address))]),
+                ..Context::default()
+            };
+            let checked = ProtocolValidator { arena: &arena.inner }.compu(root, context);
+            if store_type == IntegerType::Int64 {
+                checked.unwrap();
+            } else {
+                assert!(
+                    matches!(checked, Err(ProtocolError::Value { value: found, .. }) if found == value)
+                );
+            }
+        }
+    }
 
     #[test]
     fn address_offsets_check_operands_and_preserve_address_results() {

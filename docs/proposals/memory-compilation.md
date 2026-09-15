@@ -13,8 +13,9 @@ The proposal retains the gaps identified on 2026-09-14 and gives them concrete i
 
 The implemented foundation remains [L13](../references/language.md#manual-memory).
 `Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc` below are proposed std interfaces.
-[Pure address calculations](../references/compiler.md#address-calculations) are implemented;
-ordered memory-access IR and raw component transport across calls remain proposed compiler work.
+[Pure address calculations](../references/compiler.md#address-calculations)
+and [ordered scalar accesses](../references/compiler.md#ordered-scalar-memory-accesses) are implemented.
+Raw component transport between memory and arithmetic and across calls remains proposed compiler work.
 The [interface sketch](../examples/memory-compilation/interfaces.zy) checks with the current kinds and value functions.
 It checks the shapes only: its aliases expose candidate representations and supply no validated constructors,
 new std implementation, or code-generation guarantee.
@@ -295,59 +296,27 @@ recursive specialization needs a finite cache and a conservative fallback, not u
 
 ### 4.2 Represent memory effects in the IR
 
-The compiler now lowers [pure address calculations](../references/compiler.md#address-calculations) directly
-and can eliminate an exposed zero displacement.
-Scalar loads/stores still use runtime calls, and wide scalar loads receive a spare box
-under the [builtin contract](../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls).
-The earlier header-view probe's zero-offset host call predates this address lowering; its remaining dictionary,
-callback, and scalar-boundary costs still need end-to-end measurement.
+The compiler implements [pure address calculations](../references/compiler.md#address-calculations)
+and [ordered scalar memory accesses](../references/compiler.md#ordered-scalar-memory-accesses).
+Those references own builtin recognition, effect order, scalar-domain validation, exact carrier widths,
+unaligned access, native instructions, and interpreter/Wasm adapters.
+The earlier header-view probe predates these operations; its remaining dictionary, callback,
+and scalar-boundary costs still need end-to-end measurement.
 
-Extend typed IR and target lowering from address calculations to scalar accesses.
-Expose known arithmetic and redundant checks to simplification while preserving required runtime validation.
-Preserve byte width, little-endian interpretation, unaligned access, effects, aliases, and failure order.
-Deleting or moving an access needs semantic evidence; neither an unsafe API nor `Ret` supplies it.
-This extends the existing [primitive-call boundary](../references/compiler.md#primitive-calls).
-Memory target and embedding costs must be assessed separately, including the current Wasm virtual-address host.
-
-The current [high SPS computation](../../lang/stackir/src/high/syntax.rs) has `ExternCall`,
-while scalar arithmetic lives in value-level `Primitive` nodes.
-Extend the implemented pure `AddrOffset` value operation with an ordered `MemoryStep` computation,
-recognized by builtin role in [builtin lowering](../../lang/stackir/src/high/lower/builtin.rs).
-A proposed internal domain is:
-
-```text
-MemoryOp = Load { scalar, address, access_alignment, byte_order }
-         | Store { scalar, address, value, access_alignment, byte_order }
-         | Copy { source, destination, byte_count, overlap: MayOverlap }
-         | Fill { destination, byte_count, octet }
-MemoryStep { operation: MemoryOp, result_binder?, successor }
-```
-
-`scalar` identifies a primitive integer, float, or unmanaged address role, including `Int` and `UInt`.
-It keeps the source numeric domain distinct from the access width and from the result's temporary representation,
-following the [scalar contract](../references/compiler.md#scalar-value-boundaries).
-An `Int` load must preserve carrier-range rejection before publishing its result;
-an `Int64` load accepts every eight-byte pattern.
-Ordinary `Int` arithmetic still wraps at its payload width when its operands occupy wider registers.
-These obligations belong to primitive lowering, not codec-name recognition.
-Numeric codecs use little-endian accesses; unmanaged pointer slots use the execution profile's address representation.
-Effects are sequenced by computation successors.
-A load with an unknown callback can still become a memory step followed by ordinary callback invocation;
-recognizing the primitive does not require contification.
-Copy retains overlap-safe behavior, and fill remains the only explicit byte-pattern initialization operation.
-
-Start with access alignment one unless validated allocation/projection evidence proves a stronger alignment.
-An erased layout witness or an asserted raw address alone does not authorize an aligned machine access,
+Extend the access domain to overlap-safe `Copy` and byte-pattern `Fill` computations;
+these currently retain their existing host calls.
+Propagate stronger alignment only from validated allocation/projection evidence.
+An erased witness or asserted raw address alone does not authorize an aligned machine access,
 `noalias`, or an in-bounds pointer promise.
-In particular, wrapping `offset` must not acquire stronger overflow semantics.
-Keep memory effects out of the current pure arithmetic evaluator and value commoning rules.
-Allocator calls remain provider calls; direct scalar access does not require replacing the allocator.
+Volatile and atomic operations need their own ordering contracts.
 
-Propagate these nodes through high normalization, closure conversion, low SPS, and assembly lowering.
-AMD64 emits address arithmetic and scalar instructions; a non-little-endian target needs conversion
-for `load_le`/`store_le`.
-Interpreter and Wasm adapters retain their own memory implementations while consuming the same operation semantics.
-Volatile and atomic accesses need additional operation forms and ordering rules before this domain can represent them.
+Expose known arithmetic and redundant checks while preserving required validation and effect order.
+Deleting or moving an access needs semantic evidence; neither an unsafe API nor `Ret` supplies it.
+Keep effects outside pure arithmetic evaluation and value commoning.
+Allocator calls remain provider calls; direct scalar access does not require replacing the allocator.
+The next boundary is the ordinary scalar encoding between a memory result and its known consumer,
+as described in section 4.4.
+Measure target and embedding costs separately, including Wasm virtual-memory lookup.
 
 ### 4.3 Make eligible continuations into blocks
 

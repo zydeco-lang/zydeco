@@ -30,6 +30,9 @@ pub(super) enum Work {
         binder: VPatId,
     },
     Computation(CompuId, Scope),
+    MemoryAddress(CompuId, EnvId),
+    MemoryValue(CompuId, EnvId),
+    FinishMemory(CompuId),
     FinishComputation(CompuId),
     ComputationValue {
         source: CompuId,
@@ -332,6 +335,19 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     fn visit_computation(&mut self, id: CompuId, scope: Scope) -> Step<Self> {
         let site = self.norm.source.admin.terms.back(&TermId::Compu(id)).copied();
         match self.norm.source.inner.compus[&id].clone() {
+            | Computation::Memory(step) => {
+                let env = scope.values;
+                let (next, values) = match step {
+                    | MemoryStep::Load { result, next, .. } => {
+                        (next, self.norm.bind(env, result, Rc::default()))
+                    }
+                    | MemoryStep::Store { next, .. } => (next, env),
+                };
+                Step::Call {
+                    input: Work::Computation(next, Scope { values, ..scope }),
+                    frame: Work::MemoryAddress(id, env),
+                }
+            }
             | Computation::Hole(SHole(stack)) => Step::Call {
                 input: Work::Stack(ScopedStack { node: stack, scope }),
                 frame: Work::FinishComputation(id),
@@ -555,6 +571,62 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             | Work::Value(id, env, demand) => return self.visit_value(id, env, demand),
             | Work::Stack(stack) => return self.visit_stack(stack),
             | Work::Computation(id, scope) => return self.visit_computation(id, scope),
+            | Work::MemoryAddress(source, env) => {
+                let Computation::Memory(step) = self.norm.source.inner.compus[&source].clone()
+                else {
+                    unreachable!()
+                };
+                let address = match step {
+                    | MemoryStep::Load { address, .. } | MemoryStep::Store { address, .. } => {
+                        address
+                    }
+                };
+                return Step::Call {
+                    input: Work::Value(address, env, Demand::Used),
+                    frame: Work::MemoryValue(source, env),
+                };
+            }
+            | Work::MemoryValue(source, env) => {
+                if let Computation::Memory(MemoryStep::Store { value, .. }) =
+                    self.norm.source.inner.compus[&source]
+                {
+                    return Step::Call {
+                        input: Work::Value(value, env, Demand::Used),
+                        frame: Work::FinishMemory(source),
+                    };
+                }
+                return Step::TailCall(Work::FinishMemory(source));
+            }
+            | Work::FinishMemory(source) => {
+                let mut next = self.computation();
+                let Computation::Memory(original) = self.norm.source.inner.compus[&source].clone()
+                else {
+                    unreachable!()
+                };
+                let step = match original {
+                    | MemoryStep::Load { scalar, result, .. } => {
+                        let address = self.value();
+                        for def in result.vars(&self.norm.source) {
+                            next.demands.remove(&def);
+                        }
+                        next.demands = next.demands.join(address.demands);
+                        let result = self.norm.pattern::<D>(result);
+                        MemoryStep::Load { scalar, address: address.node, result, next: next.node }
+                    }
+                    | MemoryStep::Store { scalar, .. } => {
+                        let value = self.value();
+                        let address = self.value();
+                        next.demands = next.demands.join(address.demands).join(value.demands);
+                        MemoryStep::Store {
+                            scalar,
+                            address: address.node,
+                            value: value.node,
+                            next: next.node,
+                        }
+                    }
+                };
+                self.finish_computation(source, step, next.demands);
+            }
             | Work::ValueChildren { source, position, env, demand, protocol } => {
                 let Value::VCons(VCons { items, layout }) = &self.norm.source.inner.values[&source]
                 else {

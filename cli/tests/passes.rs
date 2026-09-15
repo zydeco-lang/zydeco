@@ -16,7 +16,7 @@ impl Fixture {
             workspace: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         };
         std::fs::write(fixture.source(), format!(
-            "param (/system; /process; /numeric; /OS; /Ret; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
+            "param (/system; /process; /numeric; /OS; /Ret; /Thk; /Addr; /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
             fixture.workspace.join("lib/std/builtin.zy").display(),
         )).unwrap();
         fixture
@@ -418,6 +418,208 @@ let fail = { fn (_ : Int) => ! process/exit 41 } in
             Program::Instruction(Instruction::AddrOffset, _)
         ))
     );
+}
+
+#[test]
+fn scalar_memory_accesses_preserve_width_endianness_and_unaligned_extremes() {
+    use zydeco_assembly::syntax::{Extern, Program, Terminator};
+    use zydeco_syntax::memory::{MemoryAccess, MemoryScalar};
+    use zydeco_syntax::{IntegerLiteral, Literal};
+    let values = [
+        IntegerLiteral::Int8(i8::MIN),
+        IntegerLiteral::Int8(i8::MAX),
+        IntegerLiteral::Int16(i16::MIN),
+        IntegerLiteral::Int16(i16::MAX),
+        IntegerLiteral::Int32(i32::MIN),
+        IntegerLiteral::Int32(i32::MAX),
+        IntegerLiteral::Int64(i64::MIN),
+        IntegerLiteral::Int64(i64::MAX),
+        IntegerLiteral::Int(-(1 << 62)),
+        IntegerLiteral::Int((1 << 62) - 1),
+        IntegerLiteral::UInt8(u8::MAX),
+        IntegerLiteral::UInt16(u16::MAX),
+        IntegerLiteral::UInt32(u32::MAX),
+        IntegerLiteral::UInt64(u64::MAX),
+        IntegerLiteral::UInt((1 << 63) - 1),
+    ];
+    for value in values {
+        let next = "! system/memory/free OS base 16 8 fail { ! process/exit 0 }".to_owned();
+        let ty = value.integer_type().unwrap();
+        let group = format!("{ty}").to_lowercase();
+        let scalar = MemoryScalar::Integer(ty);
+        let bytes = scalar.bits(&Literal::Integer(value)).unwrap().to_le_bytes();
+        let checked = bytes[..scalar.bytes() as usize].iter().enumerate().rev().fold(next, |next, (index, byte)| format!(
+            "do byte_address <- ! system/memory/offset slot {index}; ! numeric/uint8/load_le OS byte_address {{ fn byte => ! numeric/uint8/eq OS byte {byte} {{ {next} }} bad }}"
+        ));
+        let after = scalar.bytes() + 1;
+        let body = format!(
+            r#"
+! system/memory/fill OS base 16 (165 : UInt8) {{
+  ! numeric/{group}/store_le OS slot ({number} : {ty}) {{
+    ! numeric/{group}/load_le OS slot {{ fn loaded =>
+      ! numeric/{group}/eq OS loaded ({number} : {ty}) {{
+        ! numeric/uint8/load_le OS base {{ fn before =>
+          ! numeric/uint8/eq OS before (165 : UInt8) {{
+            do after <- ! system/memory/offset base {after};
+            ! numeric/uint8/load_le OS after {{ fn after =>
+              ! numeric/uint8/eq OS after (165 : UInt8) {{ {checked} }} bad
+            }}
+          }} bad
+        }}
+      }} bad
+    }}
+  }}
+}}
+"#,
+            number = value.value()
+        );
+        let fixture = Fixture::new(&format!(
+            r#"
+let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
+let bad = {{ ! process/exit 42 }} in
+! system/memory/allocate OS 16 8 fail {{ fn base =>
+  do slot <- ! system/memory/offset base 1;
+  {body}
+}}
+"#
+        ));
+        let backend = CommandCompiler::default().lower(&fixture.source()).unwrap();
+        assert!(!backend.assembly().arena().programs.iter().any(|(_, program)| matches!(program,
+        Program::Terminator(Terminator::Extern(Extern::Host { role, .. })) if MemoryAccess::from_builtin(*role).is_some())));
+        Fixture::assert_success(
+            &Command::new(env!("CARGO_BIN_EXE_zydeco"))
+                .arg("run")
+                .arg(fixture.source())
+                .output()
+                .unwrap(),
+        );
+        for selection in ["none", "default"] {
+            for target in ["exe", "wasm-am", "wasm-sps"] {
+                Fixture::assert_success(&fixture.execute(selection, target));
+            }
+        }
+    }
+}
+
+#[test]
+fn scalar_memory_load_boxing_preserves_live_roots_during_collection() {
+    let fixture = Fixture::new(
+        r#"
+let fail = { fn (_ : Int) => ! process/exit 41 } in
+let fix churn (address : Addr) (keep : Int64) (count : Int) : OS =
+  ! numeric/int/eq OS count 0 {
+    ! system/memory/free OS address 8 8 fail {
+      ! numeric/int64/eq OS keep (4096 : Int64) { ! process/exit 0 } { ! process/exit 42 }
+    }
+  } {
+    ! numeric/uint64/load_le OS address { fn value =>
+      do copied <- ! numeric/uint64/add value (0 : UInt64);
+      ! numeric/uint64/store_le OS address copied {
+        do next <- ! numeric/int/sub count 1;
+        ! churn address keep next
+      }
+    }
+  }
+in
+do keep <- ! numeric/int64/from_int 4096;
+! system/memory/allocate OS 8 8 fail { fn address =>
+  ! numeric/uint64/store_le OS address (18446744073709551615 : UInt64) {
+    ! churn address keep 200000
+  }
+}
+"#,
+    );
+    for representation in ["boxed", "local"] {
+        Fixture::assert_success(&fixture.execute_options(
+            "default",
+            "exe",
+            &["--representation", representation],
+        ));
+    }
+}
+
+#[test]
+fn scalar_memory_keeps_float_bits_through_unknown_callbacks() {
+    for (float, integer, bits) in [
+        ("Float32", "UInt32", 0x8000_0000_u64),
+        ("Float32", "UInt32", 0x7fc1_2345),
+        ("Float64", "UInt64", 0x8000_0000_0000_0000),
+        ("Float64", "UInt64", 0x7ff8_1234_5678_9abc),
+    ] {
+        let floats = float.to_lowercase();
+        let integers = integer.to_lowercase();
+        let fixture = Fixture::new(&format!(
+            r#"
+let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
+let fix read (address : Addr) (next : Thk ({float} -> OS)) : OS =
+  ! numeric/{floats}/load_le OS address next
+in
+! system/memory/allocate OS 24 8 fail {{ fn base =>
+  do source <- ! system/memory/offset base 1;
+  do destination <- ! system/memory/offset base 11;
+  ! numeric/{integers}/store_le OS source ({bits} : {integer}) {{
+    ! read source {{ fn value =>
+      ! numeric/{floats}/store_le OS destination value {{
+        ! numeric/{integers}/load_le OS destination {{ fn result =>
+          ! system/memory/free OS base 24 8 fail {{
+            ! numeric/{integers}/eq OS result ({bits} : {integer})
+              {{ ! process/exit 0 }} {{ ! process/exit 42 }}
+          }}
+        }}
+      }}
+    }}
+  }}
+}}
+"#
+        ));
+        Fixture::assert_success(
+            &Command::new(env!("CARGO_BIN_EXE_zydeco"))
+                .arg("run")
+                .arg(fixture.source())
+                .output()
+                .unwrap(),
+        );
+        for selection in ["none", "default"] {
+            for target in ["exe", "wasm-am", "wasm-sps"] {
+                Fixture::assert_success(&fixture.execute(selection, target));
+            }
+        }
+    }
+}
+
+#[test]
+fn scalar_memory_checks_invalid_carriers_before_resuming_or_later_effects() {
+    for (group, bits) in [("int", 1_u64 << 62), ("int", (3_u64 << 62) - 1), ("uint", 1_u64 << 63)] {
+        let fixture = Fixture::new(&format!(
+            r#"
+let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
+! system/memory/allocate OS 8 8 fail {{ fn address =>
+  ! numeric/uint64/store_le OS address ({bits} : UInt64) {{
+    ! system/stdio/write_line "before" {{
+      ! numeric/{group}/load_le OS address {{ fn _ =>
+        ! numeric/uint64/store_le OS address (0 : UInt64) {{
+          ! system/stdio/write_line "after" {{ ! process/exit 0 }}
+        }}
+      }}
+    }}
+  }}
+}}
+"#
+        ));
+        for selection in ["none", "default"] {
+            for target in ["exe", "wasm-am", "wasm-sps"] {
+                let output = fixture.execute(selection, target);
+                assert_eq!(output.status.code(), Some(1));
+                assert_eq!(output.stdout, b"before\n");
+                let error = String::from_utf8_lossy(&output.stderr);
+                assert!(
+                    error.contains("integer exceeds the tagged payload range"),
+                    "{selection}/{target}: {error}"
+                );
+                assert!(!error.contains("panicked"));
+            }
+        }
+    }
 }
 
 #[test]

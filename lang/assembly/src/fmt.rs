@@ -176,6 +176,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::PushTag(push) => push.pretty(f),
             | Instruction::Scalar(region) => RcDoc::text(format!("scalar {:?}", region.region())),
             | Instruction::AddrOffset => RcDoc::text("addr.offset"),
+            | Instruction::Memory(access) => {
+                RcDoc::text(format!("memory {:?} {:?}", access.kind, access.scalar))
+            }
             | Instruction::Clear(context) => context.pretty(f),
             | Instruction::RetainFrame(retain) => {
                 RcDoc::text(format!("retain-frame {:?}", retain.captures))

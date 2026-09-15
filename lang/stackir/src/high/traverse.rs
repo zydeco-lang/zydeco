@@ -70,6 +70,16 @@ impl Node<'_> {
                 | Stack::Tag(Cons(_, stack)) => ordinary((*stack).into()),
             },
             | Self::Computation(id, computation) => match computation {
+                | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
+                    ordinary((*address).into());
+                    ordinary((*result).into());
+                    ordinary((*next).into());
+                }
+                | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
+                    ordinary((*address).into());
+                    ordinary((*value).into());
+                    ordinary((*next).into());
+                }
                 | Computation::Hole(SHole(stack))
                 | Computation::ExternCall(ExternCall { stack, .. }) => ordinary((*stack).into()),
                 | Computation::Force(SForce { thunk, stack }) => {

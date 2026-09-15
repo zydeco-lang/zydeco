@@ -115,6 +115,12 @@ impl Variables {
                         .fold(CoContext::new(), |acc, x| acc + x)
             }
             | Compu::ExternCall(ExternCall { function: _, stack }) => stack.summary(self),
+            | Compu::Memory(MemoryStep::Load { address, result, next, .. }) => {
+                address.summary(self) + (next.summary(self) - result.summary(self))
+            }
+            | Compu::Memory(MemoryStep::Store { address, value, next, .. }) => {
+                address.summary(self) + value.summary(self) + next.summary(self)
+            }
         }
     }
 }

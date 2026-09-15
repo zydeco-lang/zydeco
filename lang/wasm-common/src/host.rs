@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use wasm_encoder::{
     EntityType, Function, ImportSection, Instruction, NameMap, TypeSection, ValType,
 };
+use zydeco_syntax::memory::{AccessKind, MemoryAccess};
 use zydeco_syntax::{SpareBox, Utf8String};
 
 use crate::{HOST_MODULE, Limits, WORD_BYTES, WasmEmitError};
@@ -19,6 +20,7 @@ pub enum RuntimeFailure {
     StackUnderflow = 3,
     IntegerDivisionByZero = 4,
     IntegerRemainderByZero = 5,
+    IntegerRange = 6,
 }
 
 impl RuntimeFailure {
@@ -41,6 +43,8 @@ pub enum HostCallKind {
     Returning,
     /// The call returns a transfer: count, closure, and up to two arguments.
     Control,
+    /// Raw bits cross the virtual-memory boundary; no source continuation is transported.
+    Memory(AccessKind),
 }
 
 /// One planned host import.
@@ -51,6 +55,40 @@ pub struct HostImport {
     pub arity: usize,
     pub mode: HostCallKind,
     pub spare: Option<SpareBox>,
+}
+
+impl HostImport {
+    pub fn memory_name(access: MemoryAccess) -> String {
+        format!("raw_{}", access.builtin().host_name().trim_end_matches("_branch"))
+    }
+
+    pub fn append_memory(
+        imports: &mut Vec<Self>, first_function: u32,
+        accesses: impl IntoIterator<Item = MemoryAccess>,
+    ) -> Result<HashMap<MemoryAccess, u32>, WasmEmitError> {
+        let mut accesses = accesses.into_iter().collect::<Vec<_>>();
+        accesses.sort_by_key(|access| access.builtin());
+        accesses.dedup();
+        accesses
+            .into_iter()
+            .map(|access| {
+                let function = first_function
+                    .checked_add(Limits::u32(imports.len(), "host import count")?)
+                    .ok_or(WasmEmitError::Limit {
+                        what: "host import count",
+                        value: imports.len(),
+                    })?;
+                imports.push(Self {
+                    function,
+                    name: Self::memory_name(access),
+                    arity: access.inputs(),
+                    mode: HostCallKind::Memory(access.kind),
+                    spare: None,
+                });
+                Ok((access, function))
+            })
+            .collect()
+    }
 }
 
 /// The static-data placement of one string.
@@ -114,6 +152,8 @@ impl HostSections {
             let results = match import.mode {
                 | HostCallKind::Returning => vec![ValType::I64],
                 | HostCallKind::Control => vec![ValType::I64; 4],
+                | HostCallKind::Memory(AccessKind::Load) => vec![ValType::I64],
+                | HostCallKind::Memory(AccessKind::Store) => Vec::new(),
             };
             types.ty().function(parameters, results);
             imports.import(HOST_MODULE, &import.name, EntityType::Function(next_type));

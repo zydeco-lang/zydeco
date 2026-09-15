@@ -289,6 +289,28 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
                 ])
             }
+            | Computation::Memory(MemoryStep::Load { scalar, address, result, next }) => {
+                RcDoc::concat([
+                    RcDoc::text(format!("load {scalar:?} ")),
+                    address.pretty(f),
+                    RcDoc::text(" as "),
+                    result.pretty(f),
+                    RcDoc::text(";"),
+                    RcDoc::line(),
+                    next.pretty(f),
+                ])
+            }
+            | Computation::Memory(MemoryStep::Store { scalar, address, value, next }) => {
+                RcDoc::concat([
+                    RcDoc::text(format!("store {scalar:?} ")),
+                    address.pretty(f),
+                    RcDoc::text(", "),
+                    value.pretty(f),
+                    RcDoc::text(";"),
+                    RcDoc::line(),
+                    next.pretty(f),
+                ])
+            }
             | Computation::ExternCall(ExternCall { function, stack }) => {
                 let (name, arity) = match function {
                     | ExternalFunction::Host(function) => (function.host_name(), function.arity()),

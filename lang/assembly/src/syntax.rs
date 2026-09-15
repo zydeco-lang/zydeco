@@ -70,6 +70,8 @@ pub enum Instruction {
     /// Pop an unmanaged address and a tagged `Int` byte displacement; push the
     /// wrapping address result without dereferencing or allocating.
     AddrOffset,
+    /// Ordered scalar access; loads push an ordinary value and stores push nothing.
+    Memory(memory::MemoryAccess),
     /// Clear specified variables from the current context.
     Clear(Context),
     /// Retain the active activation for a checked native continuation entry.

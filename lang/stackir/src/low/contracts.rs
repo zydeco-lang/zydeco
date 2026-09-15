@@ -263,6 +263,16 @@ impl<'a> EntryValidator<'a> {
     fn compu(&self, mut id: CompuId, mut context: Context) -> Result<(), EntryContractError> {
         loop {
             match &self.arena.compus[&id] {
+                | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
+                    self.value(*address, &context)?;
+                    self.bind(*result, ValueEvidence::Unknown, &mut context);
+                    id = *next;
+                }
+                | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
+                    self.value(*address, &context)?;
+                    self.value(*value, &context)?;
+                    id = *next;
+                }
                 | Computation::Hole(SHole(stack))
                 | Computation::ExternCall(ExternCall { stack, .. }) => {
                     self.stack(*stack, &context)?;

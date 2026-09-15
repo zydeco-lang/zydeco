@@ -72,6 +72,70 @@ impl<'f> WordEmitter<'f> {
         Self { function, alloc_function }
     }
 
+    /// Decode an ordinary store operand into raw bits in its occurrence-local home.
+    pub fn memory_decode(&mut self, scalar: zydeco_syntax::memory::MemoryScalar, local: u32) {
+        use zydeco_syntax::memory::MemoryScalar;
+        match scalar {
+            | MemoryScalar::Integer(ty) => self.decode_integer(local, ty),
+            | MemoryScalar::Float(ty) => {
+                self.function.instruction(&WasmInstruction::LocalGet(local));
+                match ty {
+                    | FloatType::Float32 => {
+                        self.function.instruction(&WasmInstruction::I64Const(1));
+                        self.function.instruction(&WasmInstruction::I64ShrU);
+                    }
+                    | FloatType::Float64 => {
+                        self.function.instruction(&WasmInstruction::I32WrapI64);
+                        self.function.instruction(&WasmInstruction::I64Load(WORD_MEMORY));
+                    }
+                }
+                self.function.instruction(&WasmInstruction::LocalSet(local));
+            }
+            | MemoryScalar::Address => {}
+        }
+    }
+
+    /// Validate a loaded carrier, then leave its ordinary value on the operand stack.
+    pub fn memory_encode(
+        &mut self, scalar: zydeco_syntax::memory::MemoryScalar, local: u32, pointer: PointerLocal,
+    ) {
+        use zydeco_syntax::memory::MemoryScalar;
+        if let MemoryScalar::Integer(ty) = scalar {
+            if matches!(ty, IntegerType::Int | IntegerType::UInt) {
+                self.function.instruction(&WasmInstruction::LocalGet(local));
+                self.function.instruction(&WasmInstruction::LocalGet(local));
+                self.function.instruction(&WasmInstruction::I64Const(1));
+                self.function.instruction(&WasmInstruction::I64Shl);
+                self.function.instruction(&WasmInstruction::I64Const(1));
+                self.function.instruction(&if ty.is_signed() {
+                    WasmInstruction::I64ShrS
+                } else {
+                    WasmInstruction::I64ShrU
+                });
+                self.function.instruction(&WasmInstruction::I64Ne);
+                self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Empty));
+                crate::RuntimeFailure::IntegerRange.emit(self.function);
+                self.function.instruction(&WasmInstruction::End);
+            }
+            if ty.is_signed() && ty.storage_bits() < 64 {
+                let shift = (64 - ty.storage_bits()) as i64;
+                self.function.instruction(&WasmInstruction::LocalGet(local));
+                self.function.instruction(&WasmInstruction::I64Const(shift));
+                self.function.instruction(&WasmInstruction::I64Shl);
+                self.function.instruction(&WasmInstruction::I64Const(shift));
+                self.function.instruction(&WasmInstruction::I64ShrS);
+                self.function.instruction(&WasmInstruction::LocalSet(local));
+            }
+        }
+        match scalar.value_type().map(|ty| ty.representation()) {
+            | Some(ScalarRepresentation::Immediate) => self.tag_local(local),
+            | Some(ScalarRepresentation::OpaqueBox) => self.box_local(local, pointer),
+            | None => {
+                self.function.instruction(&WasmInstruction::LocalGet(local));
+            }
+        }
+    }
+
     /// Store `bits` in a fresh one-word box and leave the tagged pointer word on the
     /// operand stack.
     pub fn boxed(&mut self, bits: u64, pointer: PointerLocal) {

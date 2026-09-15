@@ -1,5 +1,6 @@
 use derive_more::Display;
 use std::fmt;
+use zydeco_syntax::memory::AccessWidth;
 
 /// Unadorned reg is a 64-bit reg
 #[derive(Copy, Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -171,6 +172,10 @@ pub enum Loc {
 
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Instr {
+    #[display("        {_0}")]
+    LoadMemory(ScalarMemoryMove),
+    #[display("        {_0}")]
+    StoreMemory(ScalarMemoryStore),
     #[display("        mov {_0}")]
     Mov(MovArgs),
     #[display("        lea {_0}, {_1}")]
@@ -251,6 +256,44 @@ pub enum Instr {
     Dq(String),
     #[display("        db {_0}")]
     Db(ByteSequence),
+}
+
+/// Width-specific scalar transport. A load zero-extends; signed source values
+/// are extended by the scalar representation adapter after loading.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ScalarMemoryMove {
+    pub width: AccessWidth,
+    pub address: MemRef,
+}
+
+impl fmt::Display for ScalarMemoryMove {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (opcode, register, width) = match self.width {
+            | AccessWidth::Bits8 => ("movzx", "rax", "BYTE"),
+            | AccessWidth::Bits16 => ("movzx", "rax", "WORD"),
+            | AccessWidth::Bits32 => ("mov", "eax", "DWORD"),
+            | AccessWidth::Bits64 => ("mov", "rax", "QWORD"),
+        };
+        write!(f, "{opcode} {register}, {width} {}", self.address)
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ScalarMemoryStore {
+    pub width: AccessWidth,
+    pub address: MemRef,
+}
+
+impl fmt::Display for ScalarMemoryStore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (register, width) = match self.width {
+            | AccessWidth::Bits8 => ("al", "BYTE"),
+            | AccessWidth::Bits16 => ("ax", "WORD"),
+            | AccessWidth::Bits32 => ("eax", "DWORD"),
+            | AccessWidth::Bits64 => ("rax", "QWORD"),
+        };
+        write!(f, "mov {width} {}, {register}", self.address)
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]

@@ -1,4 +1,5 @@
 mod primitive;
+mod memory;
 
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
@@ -233,7 +234,9 @@ impl<'e> Emitter<'e> {
             | Instruction::AddrOffset
             | Instruction::RetainFrame(_) => true,
             | Instruction::Scalar(region) => region.region().inputs.len() % 2 == 0,
-            | Instruction::AllocContext(_) | Instruction::Clear(_) => false,
+            | Instruction::AllocContext(_) | Instruction::Clear(_) | Instruction::Memory(_) => {
+                false
+            }
         }
     }
 
@@ -641,6 +644,7 @@ impl Emitter<'_> {
             Instr::Extern(AllocationKind::Opaque.symbol().to_string()),
             Instr::Extern("zydeco_integer_division_by_zero".to_string()),
             Instr::Extern("zydeco_integer_remainder_by_zero".to_string()),
+            Instr::Extern("zydeco_integer_out_of_range".to_string()),
             // construct an owned host string from static UTF-8 bytes
             Instr::Extern("zydeco_string_literal".to_string()),
             // source-to-C marshalling helpers
@@ -1146,6 +1150,7 @@ impl<'a> Emit<'a> for Instruction {
             | Instruction::Scalar(region) => {
                 region.emit(id, em);
             }
+            | Instruction::Memory(access) => access.emit(id, em),
             | Instruction::Clear(_) => {
                 // Slot maps exclude dead bindings from collection. A pending continuation
                 // may still retain the same physical slot, so do not overwrite it here.

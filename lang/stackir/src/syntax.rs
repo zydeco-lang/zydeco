@@ -76,6 +76,14 @@ pub struct AddrOffset<V> {
     pub displacement: V,
 }
 
+/// Ordered memory effects. A load binds an ordinary value only after validation;
+/// a store completes before entering its successor. Neither is a pure value.
+#[derive(Clone, Debug)]
+pub enum MemoryStep<V, Pat, C> {
+    Load { scalar: memory::MemoryScalar, address: V, result: Pat, next: C },
+    Store { scalar: memory::MemoryScalar, address: V, value: V, next: C },
+}
+
 /* ---------------------------------- Stack --------------------------------- */
 
 /// The one and only stack variable.

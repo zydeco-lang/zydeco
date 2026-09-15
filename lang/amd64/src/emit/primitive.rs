@@ -146,7 +146,7 @@ impl Emitter<'_> {
         format!("primitive_{}_{}", id.concise_inner().replace('#', "_"), suffix)
     }
 
-    fn decode_integer(&mut self, reg: Reg, ty: IntegerType) {
+    pub(super) fn decode_integer(&mut self, reg: Reg, ty: IntegerType) {
         self.asm.text.push(if ty.representation() == ScalarRepresentation::OpaqueBox {
             Instr::Mov(MovArgs::ToReg(reg, Arg64::Mem(MemRef { reg, offset: 0 })))
         } else if ty.is_signed() {
@@ -202,7 +202,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn narrow_integer(&mut self, ty: IntegerType) {
+    pub(super) fn narrow_integer(&mut self, ty: IntegerType) {
         let by = 64 - ty.bits();
         if by != 0 {
             self.asm.text.push(Instr::Shl(ShArgs { reg: Reg::Rax, by }));
@@ -214,7 +214,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn tag_integer(&mut self) {
+    pub(super) fn tag_integer(&mut self) {
         self.asm.text.push(Instr::Lea(
             Reg::Rax,
             LeaArgs::Displace {

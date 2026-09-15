@@ -13,6 +13,7 @@ use zydeco_stackir::{
         VPatId, ValueId, ValuePattern,
     },
 };
+use zydeco_syntax::memory::{AccessKind, MemoryAccess};
 use zydeco_syntax::scalar::ScalarBoxing;
 use zydeco_syntax::{BuiltinValueRole, Literal};
 use zydeco_wasm_common::{
@@ -232,6 +233,7 @@ struct ModulePlan {
     string_literal_function: Option<u32>,
     host_imports: Vec<HostImport>,
     host_functions: HashMap<BuiltinValueRole, usize>,
+    memory_functions: HashMap<MemoryAccess, u32>,
     import_count: u32,
     layout: MemoryLayout,
     locals: LocalPlan,
@@ -299,7 +301,7 @@ impl ModulePlan {
                 | _ => None,
             })
             .collect::<std::collections::BTreeSet<_>>();
-        let host_imports = builtins
+        let mut host_imports = builtins
             .iter()
             .copied()
             .enumerate()
@@ -319,6 +321,19 @@ impl ModulePlan {
             .collect::<Result<Vec<_>, EmitError>>()?;
         let host_functions =
             builtins.into_iter().enumerate().map(|(index, role)| (role, index)).collect();
+        let memory_functions = HostImport::append_memory(
+            &mut host_imports,
+            first_host_function,
+            arena.inner.compus.iter().filter_map(|(_, compu)| match compu {
+                | Computation::Memory(sps::MemoryStep::Load { scalar, .. }) => {
+                    Some(MemoryAccess { scalar: *scalar, kind: AccessKind::Load })
+                }
+                | Computation::Memory(sps::MemoryStep::Store { scalar, .. }) => {
+                    Some(MemoryAccess { scalar: *scalar, kind: AccessKind::Store })
+                }
+                | _ => None,
+            }),
+        )?;
         let import_count = first_host_function
             .checked_add(Limits::u32(host_imports.len(), "host import count")?)
             .ok_or(WasmEmitError::Limit { what: "host import count", value: host_imports.len() })?;
@@ -333,6 +348,7 @@ impl ModulePlan {
             string_literal_function,
             host_imports,
             host_functions,
+            memory_functions,
             import_count,
             layout,
             locals,
@@ -547,6 +563,33 @@ impl<'a> CaseEncoder<'a> {
     fn emit_compu(&mut self, mut id: CompuId) -> Result<(), EmitError> {
         loop {
             match self.arena.inner.compus[&id].clone() {
+                | Computation::Memory(sps::MemoryStep::Load { scalar, address, result, next }) => {
+                    let function = self.plan.memory_functions
+                        [&MemoryAccess { scalar, kind: AccessKind::Load }];
+                    self.emit_value(address)?;
+                    self.function.instruction(&WasmInstruction::Call(function));
+                    self.function.instruction(&WasmInstruction::LocalSet(self.plan.locals.result));
+                    WordEmitter::new(&mut self.function, self.plan.alloc_function()).memory_encode(
+                        scalar,
+                        self.plan.locals.result,
+                        self.plan.locals.pointer(),
+                    );
+                    self.emit_pattern(result)?;
+                    id = next;
+                }
+                | Computation::Memory(sps::MemoryStep::Store { scalar, address, value, next }) => {
+                    let function = self.plan.memory_functions
+                        [&MemoryAccess { scalar, kind: AccessKind::Store }];
+                    self.emit_value(value)?;
+                    self.function.instruction(&WasmInstruction::Drop);
+                    self.emit_value(address)?;
+                    let local = self.plan.locals.value(value)?;
+                    WordEmitter::new(&mut self.function, self.plan.alloc_function())
+                        .memory_decode(scalar, local);
+                    self.function.instruction(&WasmInstruction::LocalGet(local));
+                    self.function.instruction(&WasmInstruction::Call(function));
+                    id = next;
+                }
                 | Computation::Hole(sps::SHole(stack)) => {
                     self.emit_stack(stack)?;
                     self.function.instruction(&WasmInstruction::Drop);
@@ -919,6 +962,7 @@ impl<'a> CaseEncoder<'a> {
         match import.mode {
             | HostCallKind::Returning => self.resume_returning_call(),
             | HostCallKind::Control => self.resume_control_call(),
+            | HostCallKind::Memory(_) => unreachable!("raw memory imports use ordered operations"),
         }
         Ok(())
     }

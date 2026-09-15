@@ -24,6 +24,7 @@ pub enum TermId {
 pub type ValuePattern = common::ValuePattern<VPatId>;
 pub type Primitive = common::Primitive<ValueId>;
 pub type AddrOffset = common::AddrOffset<ValueId>;
+pub type MemoryStep = common::MemoryStep<ValueId, VPatId, CompuId>;
 pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
 pub type SCoprodMatch = common::SCoprodMatch<ValueId, VPatId, CompuId>;
 pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, Bullet>, CompuId>;
@@ -108,6 +109,7 @@ pub enum Computation<Join> {
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
     CoCase(SCoMatch),
     ExternCall(ExternCall),
+    Memory(MemoryStep),
 }
 
 impl<T> From<T> for Computation<LetJoin>

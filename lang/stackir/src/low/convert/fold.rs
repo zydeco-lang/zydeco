@@ -31,6 +31,8 @@ pub(super) enum Work {
         captures: Captures,
     },
     Computation(high::CompuId, RenameEnvId),
+    StoreAddress(high::CompuId, RenameEnvId),
+    StoreBody(high::CompuId, RenameEnvId),
     AfterValue(high::CompuId, RenameEnvId),
     AfterStack(high::CompuId, RenameEnvId),
     FinishComputation(high::CompuId),
@@ -188,6 +190,14 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
 
     fn visit_computation(&mut self, source: high::CompuId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.compus[&source].clone() {
+            | high::Computation::Memory(high::MemoryStep::Load { address, .. }) => Step::Call {
+                input: Work::Value(address, env),
+                frame: Work::AfterValue(source, env),
+            },
+            | high::Computation::Memory(high::MemoryStep::Store { value, .. }) => Step::Call {
+                input: Work::Value(value, env),
+                frame: Work::StoreAddress(source, env),
+            },
             | high::Computation::Hole(high::SHole(stack))
             | high::Computation::ExternCall(high::ExternCall { stack, .. }) => Step::Call {
                 input: Work::Stack(stack, env),
@@ -242,6 +252,28 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
             | Work::Value(source, env) => return self.visit_value(source, env),
             | Work::Stack(source, env) => return self.visit_stack(source, env),
             | Work::Computation(source, env) => return self.visit_computation(source, env),
+            | Work::StoreAddress(source, env) => {
+                let high::Computation::Memory(high::MemoryStep::Store { address, .. }) =
+                    self.conversion.source.inner.compus[&source]
+                else {
+                    unreachable!()
+                };
+                return Step::Call {
+                    input: Work::Value(address, env),
+                    frame: Work::StoreBody(source, env),
+                };
+            }
+            | Work::StoreBody(source, env) => {
+                let high::Computation::Memory(high::MemoryStep::Store { next, .. }) =
+                    self.conversion.source.inner.compus[&source]
+                else {
+                    unreachable!()
+                };
+                return Step::Call {
+                    input: Work::Computation(next, env),
+                    frame: Work::FinishComputation(source),
+                };
+            }
             | Work::ValueChildren(source, env, position) => {
                 let child = match &self.conversion.source.inner.values[&source] {
                     | high::Value::VCons(high::VCons { items, .. }) => items.get(position),
@@ -382,7 +414,12 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                         binder,
                         tail: body,
                         ..
-                    })) => self.binding_body(source, binder, body, env),
+                    }))
+                    | high::Computation::Memory(high::MemoryStep::Load {
+                        result: binder,
+                        next: body,
+                        ..
+                    }) => self.binding_body(source, binder, body, env),
                     | high::Computation::CoprodMatch(_) => Step::TailCall(Work::MatchArms {
                         source,
                         env,
@@ -431,6 +468,15 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
             | Work::FinishBinding { source, binder } => {
                 let body = self.computation();
                 let compu: low::Computation = match self.conversion.source.inner.compus[&source] {
+                    | high::Computation::Memory(high::MemoryStep::Load { scalar, .. }) => {
+                        low::MemoryStep::Load {
+                            scalar,
+                            address: self.value(),
+                            result: binder,
+                            next: body,
+                        }
+                        .into()
+                    }
                     | high::Computation::ProductMatch(_) => {
                         low::SProductMatch { scrut: self.value(), binder, body }.into()
                     }
@@ -530,6 +576,12 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                 let compu: low::Computation = match self.conversion.source.inner.compus[&source]
                     .clone()
                 {
+                    | high::Computation::Memory(high::MemoryStep::Store { scalar, .. }) => {
+                        let address = self.value();
+                        let value = self.value();
+                        low::MemoryStep::Store { scalar, address, value, next: self.computation() }
+                            .into()
+                    }
                     | high::Computation::Hole(_) => low::SHole(self.stack()).into(),
                     | high::Computation::ExternCall(high::ExternCall { function, .. }) => {
                         low::ExternCall { function, stack: self.stack() }.into()

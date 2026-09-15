@@ -200,6 +200,14 @@ impl<'a> StackMeasure<'a> for ProgId {
                     | Instruction::RetainFrame(_) => {
                         si.push_control(&mut layout, Slot::Unknown);
                     }
+                    | Instruction::Memory(access) => {
+                        (0..access.inputs()).for_each(|_| {
+                            si.pop_control(&mut layout);
+                        });
+                        if access.kind == memory::AccessKind::Load {
+                            si.push_control(&mut layout, Slot::Unknown);
+                        }
+                    }
                     | Instruction::AddrOffset => {
                         si.pop_control(&mut layout);
                         si.pop_control(&mut layout);
@@ -264,6 +272,7 @@ impl<'a> StackInline<'a> for ProgId {
                     | Instruction::PushTag(_)
                     | Instruction::Scalar(_)
                     | Instruction::AddrOffset
+                    | Instruction::Memory(_)
                     | Instruction::Clear(_)
                     | Instruction::RetainFrame(_),
                     _,

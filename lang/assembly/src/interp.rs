@@ -207,6 +207,74 @@ impl Eval for Instruction {
                 interp.runtime.stack.push(Value::Address(base.offset(displacement.value() as i64)));
                 Ok(())
             }
+            | Instruction::Memory(access) => {
+                use memory::{AccessKind, MemoryScalar};
+                let address = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
+                let Value::Address(address) = address else {
+                    return Err(Error::TypeError("memory access expects Addr".into()));
+                };
+                // SAFETY: raw memory source operations require caller-established validity.
+                match access.kind {
+                    | AccessKind::Load => {
+                        let value = if access.scalar == MemoryScalar::Address {
+                            Value::Address(unsafe { address.load_address() })
+                        } else {
+                            let mut carrier = [0; 8];
+                            let bytes = access.scalar.bytes() as usize;
+                            carrier[..bytes].copy_from_slice(unsafe { address.bytes(bytes) });
+                            match access.scalar.literal(u64::from_le_bytes(carrier)).ok_or_else(
+                                || {
+                                    Error::TypeError(
+                                        "integer exceeds the tagged payload range".into(),
+                                    )
+                                },
+                            )? {
+                                | Literal::Integer(value) => {
+                                    Value::Atom(Atom::Imm(Imm::Integer(value)))
+                                }
+                                | Literal::Float(value) => {
+                                    Value::Atom(Atom::Imm(Imm::Float(value)))
+                                }
+                                | _ => unreachable!(),
+                            }
+                        };
+                        interp.runtime.stack.push(value);
+                    }
+                    | AccessKind::Store => {
+                        let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
+                        match value {
+                            | Value::Address(value) if access.scalar == MemoryScalar::Address => unsafe {
+                                address.store_address(value)
+                            },
+                            | Value::Atom(Atom::Imm(value)) => {
+                                let literal = match value {
+                                    | Imm::Integer(value) => Literal::Integer(value),
+                                    | Imm::Float(value) => Literal::Float(value),
+                                    | _ => {
+                                        return Err(Error::TypeError(
+                                            "memory store expects a scalar".into(),
+                                        ));
+                                    }
+                                };
+                                let bits = access.scalar.bits(&literal).ok_or_else(|| {
+                                    Error::TypeError("memory store scalar mismatch".into())
+                                })?;
+                                unsafe {
+                                    address.write(
+                                        &bits.to_le_bytes()[..access.scalar.bytes() as usize],
+                                    )
+                                };
+                            }
+                            | _ => {
+                                return Err(Error::TypeError(
+                                    "memory store scalar mismatch".into(),
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            }
             | Instruction::Scalar(region) => {
                 let mut operand =
                     || match interp.runtime.stack.pop().ok_or(Error::StackUnderflow)? {

@@ -38,6 +38,17 @@ pub enum ValueProtocol {
     Thunk(Box<StackProtocol>),
 }
 
+impl From<zydeco_syntax::memory::MemoryScalar> for ValueProtocol {
+    fn from(scalar: zydeco_syntax::memory::MemoryScalar) -> Self {
+        use zydeco_syntax::memory::MemoryScalar;
+        match scalar {
+            | MemoryScalar::Integer(ty) => Self::Primitive(PrimitiveType::Integer(ty)),
+            | MemoryScalar::Float(ty) => Self::Primitive(PrimitiveType::Float(ty)),
+            | MemoryScalar::Address => Self::Address,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum StackProtocol {
     #[default]

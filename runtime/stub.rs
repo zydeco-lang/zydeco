@@ -58,6 +58,11 @@ trait RuntimeInteger: Copy {
     }
 }
 
+#[unsafe(export_name = "\x01zydeco_integer_out_of_range")]
+extern "sysv64" fn integer_out_of_range() -> ! {
+    <i64 as RuntimeInteger>::out_of_range()
+}
+
 macro_rules! immediate_signed_integer {
     ($($type:ty),+ $(,)?) => {
         $(

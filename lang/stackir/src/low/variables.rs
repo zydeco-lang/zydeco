@@ -129,6 +129,12 @@ impl Variables {
                 package.summary(self) + (body.summary(self) - code.summary(self))
             }
             | Computation::ExternCall(ExternCall { function: _, stack }) => stack.summary(self),
+            | Computation::Memory(MemoryStep::Load { address, result, next, .. }) => {
+                address.summary(self) + (next.summary(self) - result.summary(self))
+            }
+            | Computation::Memory(MemoryStep::Store { address, value, next, .. }) => {
+                address.summary(self) + value.summary(self) + next.summary(self)
+            }
         }
     }
 }

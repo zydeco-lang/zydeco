@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use zydeco_syntax::memory::{AccessKind, MemoryAccess};
 
 use thiserror::Error;
 use wasm_encoder::{
@@ -230,7 +231,7 @@ impl ModulePlan {
         let string_literal_function = (!strings.is_empty()).then_some(RuntimeFailure::IMPORT_COUNT);
         let first_host_function =
             RuntimeFailure::IMPORT_COUNT + u32::from(string_literal_function.is_some());
-        let host_imports = externs
+        let mut host_imports = externs
             .into_iter()
             .enumerate()
             .map(|(index, external)| {
@@ -250,6 +251,14 @@ impl ModulePlan {
                 })
             })
             .collect::<Result<Vec<_>, EmitError>>()?;
+        HostImport::append_memory(
+            &mut host_imports,
+            first_host_function,
+            assembly.programs.iter().filter_map(|(_, program)| match program {
+                | Program::Instruction(Instruction::Memory(access), _) => Some(*access),
+                | _ => None,
+            }),
+        )?;
         let host_functions =
             host_imports.iter().map(|import| (import.name.clone(), import.function)).collect();
         let import_count = first_host_function
@@ -488,6 +497,7 @@ impl<'a> ModuleEncoder<'a> {
                 | Instruction::PushTag(_) => "tag",
                 | Instruction::Scalar(_) => "scalar",
                 | Instruction::AddrOffset => "address_offset",
+                | Instruction::Memory(_) => "memory_access",
                 | Instruction::Clear(_) => "clear",
                 | Instruction::RetainFrame(_) => "retain_frame",
             },
@@ -552,6 +562,7 @@ impl<'a> CaseEncoder<'a> {
                 self.push_constant(RuntimeWord::index(tag.idx)? as i64);
             }
             | Instruction::Scalar(region) => self.emit_scalar(region),
+            | Instruction::Memory(access) => self.emit_memory(*access)?,
             | Instruction::AddrOffset => {
                 self.pop_to(WORD_LOCAL);
                 self.function.instruction(&WasmInstruction::LocalGet(WORD_LOCAL));
@@ -772,6 +783,33 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::I64Load(ProductFields::word_at_const(1)));
         self.function.instruction(&WasmInstruction::I32WrapI64);
         self.function.instruction(&WasmInstruction::GlobalSet(PROGRAM_COUNTER_GLOBAL));
+    }
+
+    fn emit_memory(&mut self, access: MemoryAccess) -> Result<(), EmitError> {
+        let function = self.plan.host_function(&HostImport::memory_name(access))?;
+        self.pop_to(FIRST_ARGUMENT_LOCAL);
+        match access.kind {
+            | AccessKind::Load => {
+                self.function.instruction(&WasmInstruction::LocalGet(FIRST_ARGUMENT_LOCAL));
+                self.function.instruction(&WasmInstruction::Call(function));
+                self.function.instruction(&WasmInstruction::LocalSet(RESULT_LOCAL));
+                WordEmitter::new(&mut self.function, self.plan.alloc_function()).memory_encode(
+                    access.scalar,
+                    RESULT_LOCAL,
+                    POINTER,
+                );
+                self.function.instruction(&WasmInstruction::Call(self.plan.push_function()));
+            }
+            | AccessKind::Store => {
+                self.pop_to(WORD_LOCAL);
+                WordEmitter::new(&mut self.function, self.plan.alloc_function())
+                    .memory_decode(access.scalar, WORD_LOCAL);
+                self.function.instruction(&WasmInstruction::LocalGet(FIRST_ARGUMENT_LOCAL));
+                self.function.instruction(&WasmInstruction::LocalGet(WORD_LOCAL));
+                self.function.instruction(&WasmInstruction::Call(function));
+            }
+        }
+        Ok(())
     }
 
     fn emit_scalar(&mut self, region: &zydeco_syntax::scalar::ScalarProgram) {

@@ -296,6 +296,24 @@ impl Lowering<'_, '_> {
             return Step::TailCall(Work::Compu(binding.tail, context));
         }
         match self.lo.sps_low.inner.compus[&id].clone() {
+            | Compu::Memory(sk::MemoryStep::Load { scalar, address, result, next }) => {
+                let next = self.save(Continuation::Body(next));
+                let next = self.then(Action::Pattern(result), next);
+                let next = self.instruction(
+                    memory::MemoryAccess { scalar, kind: memory::AccessKind::Load },
+                    next,
+                );
+                Step::TailCall(Work::Value(address, context, next))
+            }
+            | Compu::Memory(sk::MemoryStep::Store { scalar, address, value, next }) => {
+                let next = self.save(Continuation::Body(next));
+                let next = self.instruction(
+                    memory::MemoryAccess { scalar, kind: memory::AccessKind::Store },
+                    next,
+                );
+                let next = self.then(Action::Value(address), next);
+                Step::TailCall(Work::Value(value, context, next))
+            }
             | Compu::Hole(sk::SHole(stack)) => {
                 let next = self.save(Continuation::End(Abort.into()));
                 Step::TailCall(Work::Stack(stack, context, next))

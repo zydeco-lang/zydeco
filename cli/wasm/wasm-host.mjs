@@ -353,6 +353,7 @@ class ZydecoHost {
         3: "operand/control stack underflow",
         4: "integer division by zero",
         5: "integer remainder by zero",
+        6: "integer exceeds the tagged payload range",
       };
       const message = messages[code] ?? `unknown runtime error ${code}`;
       ZydecoHost.fail(message);
@@ -440,16 +441,7 @@ class ZydecoHost {
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(decode(word).toString()));
       const storageWidth = width === 63 ? 64 : width;
-      const load = (bits, spare) => {
-        const value = signed ? BigInt.asIntN(storageWidth, bits) : bits;
-        if (width === 63 && (signed
-          ? value < IMMEDIATE_SIGNED_MIN || value > IMMEDIATE_SIGNED_MAX
-          : value > IMMEDIATE_UNSIGNED_MAX)) {
-          ZydecoHost.fail("integer exceeds the tagged payload range");
-        }
-        return encode(value, spare);
-      };
-      this.installScalarMemory(functions, name, storageWidth, decode, load);
+      this.installScalarMemory(functions, name, storageWidth);
     }
 
     for (const [name, machine, signed] of [["int64", "int", true], ["uint64", "uint", false]]) {
@@ -493,25 +485,23 @@ class ZydecoHost {
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(FloatText.render(decode(word), width)));
       // Preserve the IEEE payload, including NaNs, without converting through a JS Number.
-      this.installScalarMemory(functions, name, width,
-        (word) => width === 32 ? RuntimeWords.decodeImmediateUnsigned(word) : this.words.loadBits(word),
-        (bits, spare) => width === 32 ? RuntimeWords.immediateUnsigned(bits) : this.words.storeBits(spare, bits),
-      );
+      this.installScalarMemory(functions, name, width);
     }
   }
 
-  installScalarMemory(functions, name, width, decode, encode) {
-    functions.set(`${name}_store_le_branch`, (pointer, word, success) => {
-      const bits = BigInt.asUintN(width, decode(word));
+  installScalarMemory(functions, name, width) {
+    const store = (pointer, value) => {
+      const bits = BigInt.asUintN(width, value);
       const bytes = Array.from({ length: width / 8 }, (_, index) => Number((bits >> BigInt(index * 8)) & 255n));
       this.manualMemory.write(pointer, bytes);
-      return Transfers.withoutArguments(success);
-    });
-    functions.set(`${name}_load_le_branch`, (pointer, success, spare) => {
+    };
+    const load = (pointer) => {
       const bytes = this.manualMemory.bytes(pointer, BigInt(width / 8));
-      const bits = bytes.reduce((value, byte, index) => value | (BigInt(byte) << BigInt(index * 8)), 0n);
-      return Transfers.withOneArgument(success, encode(bits, spare));
-    });
+      return bytes.reduce((value, byte, index) => value | (BigInt(byte) << BigInt(index * 8)), 0n);
+    };
+    functions.set(`raw_${name}_store_le`, store);
+    functions.set(`raw_${name}_load_le`, load);
+
   }
 
   decodeFloat(word, width) {
@@ -625,7 +615,6 @@ class ZydecoHost {
       }
     };
     functions.set("memory_null", () => 0n);
-    functions.set("memory_offset", (pointer, displacement) => BigInt.asUintN(64, pointer + integer(displacement)));
     functions.set("memory_allocate", (size, alignment, error, success) => guard(error, () =>
       Transfers.withOneArgument(success, this.manualMemory.allocate(integer(size), integer(alignment)))));
     for (const operation of ["free", "retain"]) {
@@ -641,10 +630,9 @@ class ZydecoHost {
       this.manualMemory.fill(pointer, integer(count), Number(RuntimeWords.decodeImmediateUnsigned(value)));
       return Transfers.withoutArguments(success);
     });
-    functions.set("memory_load_addr", (pointer, success) => Transfers.withOneArgument(success, this.manualMemory.loadAddress(pointer)));
-    functions.set("memory_store_addr", (pointer, value, success) => {
-      this.manualMemory.storeAddress(pointer, value); return Transfers.withoutArguments(success);
-    });
+    functions.set("raw_memory_load_addr", (pointer) => this.manualMemory.loadAddress(pointer));
+    functions.set("raw_memory_store_addr", (pointer, value) => this.manualMemory.storeAddress(pointer, value));
+
     functions.set("memory_from_string", (string, error, success) => guard(error, () => {
       const bytes = this.utf8.encode(this.values.getString(string));
       return Transfers.withTwoArguments(success, this.manualMemory.import(bytes), RuntimeWords.immediateSigned(BigInt(bytes.length)));
