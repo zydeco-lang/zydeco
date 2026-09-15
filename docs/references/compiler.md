@@ -1527,10 +1527,44 @@ The native runtime and WebAssembly host implement those calls with the same nume
 and spare-box contracts as their corresponding primitive instructions.
 
 Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
-An unknown callee remains indirect; other known Builtin operations remain external calls.
+An unknown callee remains indirect.
+Address calculation has the intrinsic body described below; other known Builtin operations remain external calls.
 The typed primitive survives SPSLow;
 [scalar region lowering](#scalar-value-boundaries) then makes representation conversions explicit for ZASM
 and direct Wasm instruction selection.
+
+### Address calculations
+
+Byte displacement is a pure calculation on an unmanaged address.
+Builtin lowering materializes `memory_offset` as a closed function returning `AddrOffset { base, displacement }`,
+even with optional normalization disabled.
+Compiler provenance identifies this fixed builtin body, so normalization can expose it
+through aliases and package projections at several call sites.
+General source closures retain their existing sharing restrictions.
+An escaping or unknown function keeps the ordinary thunk calling convention.
+
+`AddrOffset` takes an `Addr` and a signed `Int` byte displacement and produces an `Addr`.
+The low-SPS protocol checker distinguishes address evidence from numeric evidence and rejects known operand mismatches.
+Partial protocol compatibility does not establish allocation validity or access permission.
+The calculation wraps at the execution profile's address width, without dereferencing,
+checking a range, or asserting an in-bounds pointer.
+It preserves the base pointer's provenance in the interpreter.
+Normalization removes a known zero displacement only when evaluating that displacement is total;
+trapping operand evaluation remains at its original position.
+
+Closure conversion preserves the operation.
+Its ZASM instruction consumes the address and tagged displacement and produces one address word.
+AMD64 decodes the signed `Int` and adds it directly to the address bits;
+both Wasm backends use wrapping 64-bit arithmetic on their virtual addresses.
+The operation itself allocates nothing and makes no host call.
+Its operands evaluate displacement first, then base, matching argument-stack construction.
+This does not remove ordinary call or continuation costs at unknown boundaries.
+
+The [address-offset regressions](../../cli/tests/passes.rs) check zero-offset elimination,
+signed offsets, wrapping without invalid dereferences, and execution with normalization enabled
+and disabled in native code and both Wasm backends.
+Scalar memory accesses still use the host-call boundary; their proposed direct lowering belongs
+to [memory compilation](../proposals/memory-compilation.md#42-represent-memory-effects-in-the-ir).
 
 ### Pattern decisions and validation
 

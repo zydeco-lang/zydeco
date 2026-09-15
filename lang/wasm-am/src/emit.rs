@@ -487,6 +487,7 @@ impl<'a> ModuleEncoder<'a> {
                 | Instruction::PopArg(_) => "pop",
                 | Instruction::PushTag(_) => "tag",
                 | Instruction::Scalar(_) => "scalar",
+                | Instruction::AddrOffset => "address_offset",
                 | Instruction::Clear(_) => "clear",
                 | Instruction::RetainFrame(_) => "retain_frame",
             },
@@ -551,6 +552,15 @@ impl<'a> CaseEncoder<'a> {
                 self.push_constant(RuntimeWord::index(tag.idx)? as i64);
             }
             | Instruction::Scalar(region) => self.emit_scalar(region),
+            | Instruction::AddrOffset => {
+                self.pop_to(WORD_LOCAL);
+                self.function.instruction(&WasmInstruction::LocalGet(WORD_LOCAL));
+                self.function.instruction(&WasmInstruction::Call(self.plan.pop_function()));
+                self.function.instruction(&WasmInstruction::I64Const(1));
+                self.function.instruction(&WasmInstruction::I64ShrS);
+                self.function.instruction(&WasmInstruction::I64Add);
+                self.function.instruction(&WasmInstruction::Call(self.plan.push_function()));
+            }
             | Instruction::Clear(context) => {
                 for variable in context {
                     let address = self.plan.variable_address(*variable)?;

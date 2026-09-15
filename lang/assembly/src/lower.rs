@@ -214,6 +214,13 @@ impl Lowering<'_, '_> {
                 };
                 self.emit(Push(atom), context, ContextUpdate::Keep, next)
             }
+            | Value::AddrOffset(sk::AddrOffset { base, displacement }) => {
+                let next = self.instruction(Instruction::AddrOffset, next);
+                let next = [base, displacement]
+                    .into_iter()
+                    .fold(next, |next, value| self.then(Action::Value(value), next));
+                Step::TailCall(Work::Apply(next, context))
+            }
             | Value::Primitive(_) => {
                 let call = self.lo.scalars.call(id).clone();
                 let next = self.instruction(call.program, next);

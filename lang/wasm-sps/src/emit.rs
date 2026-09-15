@@ -746,6 +746,13 @@ impl<'a> CaseEncoder<'a> {
                 self.emit_product(target, items, layout)?;
             }
             | sps::Value::Literal(literal) => self.emit_literal(id, literal)?,
+            | sps::Value::AddrOffset(sps::AddrOffset { base, displacement }) => {
+                self.emit_value(displacement)?;
+                self.function.instruction(&WasmInstruction::I64Const(1));
+                self.function.instruction(&WasmInstruction::I64ShrS);
+                self.emit_value(base)?;
+                self.function.instruction(&WasmInstruction::I64Add);
+            }
             | sps::Value::Primitive(_) => {
                 self.emit_scalar(id)?;
             }

@@ -12,6 +12,22 @@ struct Fixture {
     ret: ss::TypeId,
 }
 
+#[test]
+fn address_protocol_requires_the_builtin_capability() {
+    let mut fixture = Fixture::new();
+    let (witness, address) = fixture.witness();
+    let (_, unrelated) = fixture.witness();
+    fixture
+        .statics
+        .builtin_roles
+        .attach_type(witness, zydeco_syntax::BuiltinTypeRole::Addr)
+        .unwrap();
+    let mut source = SourceProtocols::new(&fixture.statics);
+    assert_eq!(source.value(address), ValueProtocol::Address);
+    assert!(matches!(source.value(unrelated), ValueProtocol::Parameter(_)));
+    assert!(!source.graph.values_agree(&ValueProtocol::Address, &Fixture::integer()));
+}
+
 impl Fixture {
     fn new() -> Self {
         let mut allocator = IdAllocator::new();

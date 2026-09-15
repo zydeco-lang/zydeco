@@ -56,6 +56,7 @@ enum KnownValue {
     Literal(Literal),
     Triv,
     External(ExternalFunction),
+    BuiltinBody(CompuId),
     Closure {
         body: CompuId,
         env: EnvId,
@@ -215,6 +216,11 @@ impl Normalization {
                     known
                 }
             }
+            | Value::Closure(Closure { body, .. })
+                if self.source.inner.builtin_functions.get(&id).is_some() =>
+            {
+                Rc::new(KnownValue::BuiltinBody(*body))
+            }
             | Value::Closure(Closure { body, .. }) => match &self.source.inner.compus[body] {
                 | Computation::ExternCall(ExternCall { function, stack })
                     if matches!(self.source.inner.stacks[stack], Stack::Var(Bullet)) =>
@@ -254,6 +260,13 @@ impl Normalization {
                 .fold_primitive(*operation, operands.map(|node| ScopedValue { node, env }))
                 .map_or_else(Rc::default, |literal| Rc::new(KnownValue::Literal(literal))),
             | Value::Hole(_) => Rc::default(),
+            | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                if self.zero_displacement(ScopedValue { node: *displacement, env }) {
+                    self.shared(*base, env)
+                } else {
+                    Rc::default()
+                }
+            }
         }
     }
 
@@ -328,6 +341,9 @@ impl Normalization {
                     pending.extend(operands.iter().rev().copied());
                 }
                 | Value::Hole(_) => return false,
+                | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                    pending.extend([*base, *displacement]);
+                }
             }
         }
         true
@@ -377,6 +393,13 @@ impl Normalization {
             &mut decision::DecisionFolder { source: &self.source.inner },
             (binder, decision::KnownView::Value(known)),
         )
+    }
+
+    fn zero_displacement(&self, value: ScopedValue) -> bool {
+        self.discardable(value.node)
+            && matches!(self.known(value.node, value.env).as_ref(),
+                KnownValue::Literal(Literal::Integer(value))
+                    if value.integer_type() == Some(IntegerType::Int) && value.value() == 0)
     }
 
     fn fold_primitive(
@@ -504,6 +527,42 @@ mod tests {
             let normalized = driver_tests::Drivers::normalize(&self.arena, root);
             assert!(normalized.root().free_vars(normalized.arena()).is_empty());
             normalized
+        }
+    }
+
+    #[test]
+    fn address_offsets_eliminate_only_total_zero_displacements() {
+        for displacement in [None, Some(0), Some(-7)] {
+            let mut fixture = Fixture::default();
+            let base = fixture.def("address");
+            let address = fixture.build(base);
+            let delta = match displacement {
+                | Some(value) => fixture.build(Literal::Integer(IntegerLiteral::Int(value))),
+                | None => fixture.trap("offset"),
+            };
+            let offset = fixture.build(AddrOffset { base: address, displacement: delta });
+            let tail = fixture.ret(offset);
+            let binder = fixture.build(base);
+            let bindee = fixture.build(Bullet);
+            let root = fixture.build(Let { binder: Cons(binder, Bullet), bindee, tail });
+            let program = fixture.normalize(root);
+            let retained = program
+                .arena()
+                .inner
+                .values
+                .iter()
+                .any(|(_, value)| matches!(value, Value::AddrOffset(_)));
+            assert_eq!(retained, displacement != Some(0));
+            if displacement.is_none() {
+                assert!(
+                    program
+                        .arena()
+                        .inner
+                        .values
+                        .iter()
+                        .any(|(_, value)| matches!(value, Value::Primitive(_)))
+                );
+            }
         }
     }
 

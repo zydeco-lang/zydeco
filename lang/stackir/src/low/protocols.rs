@@ -242,6 +242,19 @@ impl<'a> ProtocolValidator<'a> {
                 | Literal::String(_) => ValueProtocol::Primitive(PrimitiveType::String),
                 | Literal::Char(_) => ValueProtocol::Primitive(PrimitiveType::Char),
             }),
+            | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                for (value, expected) in [
+                    (*base, ValueProtocol::Address),
+                    (
+                        *displacement,
+                        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int)),
+                    ),
+                ] {
+                    let fact = self.value(value, context)?;
+                    self.check_value(value, &expected, &fact.protocol)?;
+                }
+                ValueFact::with_protocol(ValueProtocol::Address)
+            }
             | Value::Primitive(Primitive { operation, operands }) => {
                 for value in operands {
                     self.value(*value, context)?;
@@ -438,6 +451,47 @@ impl<'a> ProtocolValidator<'a> {
                     context.stack = StackProtocol::Unknown;
                     id = *body;
                 }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn address_offsets_check_operands_and_preserve_address_results() {
+        for (base_protocol, displacement, valid) in [
+            (ValueProtocol::Address, IntegerLiteral::Int(-7), true),
+            (
+                ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::UInt64)),
+                IntegerLiteral::Int(0),
+                false,
+            ),
+            (ValueProtocol::Address, IntegerLiteral::Int64(0), false),
+        ] {
+            let mut arena = SpsLowArena::default();
+            let definition = arena.admin.fresh_def();
+            let base = definition.build(&mut arena, None);
+            let delta = Literal::Integer(displacement).build(&mut arena, None);
+            let value = AddrOffset { base, displacement: delta }.build(&mut arena, None);
+            let context = Context {
+                values: HashMap::from([(definition, ValueFact::with_protocol(base_protocol))]),
+                ..Context::default()
+            };
+            let result = ProtocolValidator { arena: &arena.inner }.value(value, &context);
+            if valid {
+                assert_eq!(result.unwrap().protocol, ValueProtocol::Address);
+            } else {
+                let expected_value = if displacement.integer_type() == Some(IntegerType::Int) {
+                    base
+                } else {
+                    delta
+                };
+                assert!(
+                    matches!(result, Err(ProtocolError::Value { value, .. }) if value == expected_value)
+                );
             }
         }
     }

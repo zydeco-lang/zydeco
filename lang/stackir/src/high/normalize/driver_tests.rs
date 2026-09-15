@@ -17,6 +17,7 @@ impl Drivers {
             },
             inner: StackirInnerArena {
                 protocols: source.inner.protocols.clone(),
+                builtin_functions: source.inner.builtin_functions.clone(),
                 value_protocols: source.inner.value_protocols.clone(),
                 pattern_protocols: source.inner.pattern_protocols.clone(),
                 compu_protocols: source.inner.compu_protocols.clone(),

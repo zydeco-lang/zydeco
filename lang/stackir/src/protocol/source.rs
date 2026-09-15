@@ -234,7 +234,17 @@ impl<'a> SourceProtocols<'a> {
             | Head::Thunk(_, body) => ValueProtocol::Thunk(Box::new(self.stack_at(body))),
             | Head::Type(source) => match self.resolver.statics.normalized_at(ty).cloned() {
                 | Some(ss::Type::Abst(witness)) => {
-                    ValueProtocol::Parameter(self.parameter(witness, ProtocolParameterKind::Value))
+                    if self.resolver.statics.builtin_roles.witness(witness)
+                        == Some(zydeco_syntax::BuiltinRole::Type(
+                            zydeco_syntax::BuiltinTypeRole::Addr,
+                        ))
+                    {
+                        ValueProtocol::Address
+                    } else {
+                        ValueProtocol::Parameter(
+                            self.parameter(witness, ProtocolParameterKind::Value),
+                        )
+                    }
                 }
                 | Some(ss::Type::Unit(_)) => ValueProtocol::Unit,
                 | Some(ss::Type::Primitive(ss::PrimitiveTy(ty))) => ValueProtocol::Primitive(ty),

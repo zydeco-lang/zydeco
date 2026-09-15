@@ -85,8 +85,46 @@ impl ExternalFunction {
     where
         Arena: AsMut<StackirArena>,
     {
+        if matches!(self, ExternalFunction::Host(BuiltinValueRole::MemoryOffset)) {
+            return AddrOffset::make_function(arena);
+        }
         let stack = Bullet.build(arena, None);
         let body = ExternCall { function: self, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)
+    }
+}
+
+impl AddrOffset {
+    /// Materialize the builtin's pure body even when optional normalization is disabled.
+    fn make_function<Arena: AsMut<StackirArena>>(arena: &mut Arena) -> ValueId {
+        use crate::protocol::ValueProtocol;
+
+        let [base, displacement] = ["__address_base__", "__byte_displacement__"].map(|name| {
+            let admin = &mut arena.as_mut().admin;
+            let def = admin.fresh();
+            admin.insert_def(def, VarName(name.into()));
+            def
+        });
+        let value = AddrOffset {
+            base: base.build(arena, None),
+            displacement: displacement.build(arena, None),
+        }
+        .build(arena, None);
+        let stack = Bullet.build(arena, None);
+        let body = SReturn { stack, value }.build(arena, None);
+        let body = [
+            (displacement, ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))),
+            (base, ValueProtocol::Address),
+        ]
+        .into_iter()
+        .fold(body, |tail, (def, protocol)| {
+            let binder = def.build(arena, None);
+            arena.as_mut().inner.pattern_protocols.insert_new(binder, protocol);
+            let bindee = Bullet.build(arena, None);
+            Let { binder: Cons(binder, Bullet), bindee, tail }.build(arena, None)
+        });
+        let function = Closure { stack: Bullet, body }.build(arena, None);
+        arena.as_mut().inner.builtin_functions.insert_new(function, BuiltinValueRole::MemoryOffset);
+        function
     }
 }

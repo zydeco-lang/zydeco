@@ -333,6 +333,94 @@ fn unoptimized_integer_zero_divisors_fail_before_the_continuation() {
 }
 
 #[test]
+fn address_offsets_lower_without_host_calls_and_preserve_wrapping() {
+    use zydeco_assembly::syntax::{Extern, Instruction, Program, Terminator};
+    use zydeco_syntax::BuiltinValueRole;
+
+    let fixture = Fixture::new(
+        r#"
+let fail = { fn (_ : Int) => ! process/exit 41 } in
+! system/memory/allocate OS 16 8 fail {
+  fn base =>
+    do null <- ! system/memory/null;
+    do before_null <- ! system/memory/offset null (-1);
+    do wrapped <- ! system/memory/offset before_null 1;
+    ! system/memory/store_addr OS base wrapped {
+      ! numeric/uint64/load_le OS base {
+        fn bits =>
+          ! numeric/uint64/eq OS bits (0 : UInt64) {
+            do after <- ! system/memory/offset base 9;
+            do inside <- ! system/memory/offset after (-8);
+            ! numeric/uint8/store_le OS inside (42 : UInt8) {
+              do expected <- ! system/memory/offset base 1;
+              ! numeric/uint8/load_le OS expected {
+                fn value =>
+                  ! system/memory/free OS base 16 8 fail {
+                    ! numeric/uint8/eq OS value (42 : UInt8)
+                      { ! process/exit 0 } { ! process/exit 42 }
+                  }
+              }
+            }
+          } { ! process/exit 43 }
+      }
+    }
+}
+"#,
+    );
+    let reference = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+        .arg("run")
+        .arg(fixture.source())
+        .output()
+        .unwrap();
+    Fixture::assert_success(&reference);
+    for selection in ["none", "default", "normalize,normalize"] {
+        let compiler = CommandCompiler::default().with_sps_passes(selection.parse().unwrap());
+        let backend = compiler.lower(&fixture.source()).unwrap();
+        let programs = &backend.assembly().arena().programs;
+        assert!(programs.iter().any(|(_, program)| matches!(
+            program,
+            Program::Instruction(Instruction::AddrOffset, _)
+        )));
+        assert!(!programs.iter().any(|(_, program)| matches!(
+            program,
+            Program::Terminator(Terminator::Extern(Extern::Host {
+                role: BuiltinValueRole::MemoryOffset,
+                ..
+            }))
+        )));
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            Fixture::assert_success(&fixture.execute(selection, target));
+        }
+    }
+}
+
+#[test]
+fn known_zero_address_offset_disappears() {
+    use zydeco_assembly::syntax::{Instruction, Program};
+    let fixture = Fixture::new(
+        r#"
+let fail = { fn (_ : Int) => ! process/exit 41 } in
+! system/memory/allocate OS 8 8 fail {
+  fn base =>
+    let offset = system/memory/offset in
+    do same <- ! offset base 0;
+    do same <- ! offset same 0;
+    ! numeric/uint64/store_le OS same (42 : UInt64) {
+      ! system/memory/free OS base 8 8 fail { ! process/exit 0 }
+    }
+}
+"#,
+    );
+    let backend = CommandCompiler::default().lower(&fixture.source()).unwrap();
+    assert!(
+        !backend.assembly().arena().programs.iter().any(|(_, program)| matches!(
+            program,
+            Program::Instruction(Instruction::AddrOffset, _)
+        ))
+    );
+}
+
+#[test]
 fn scalar_regions_remove_boxes_and_preserve_results_across_backends() {
     use zydeco_assembly::syntax::{Instruction, Program};
     use zydeco_cli::RepresentationStrategy;

@@ -7,6 +7,11 @@ use zydeco_utils::fold::{Folder, Step};
 pub(super) enum Work {
     Value(ValueId, EnvId, Demand),
     FinishValue(ValueId, bool),
+    OffsetDisplacement {
+        source: ValueId,
+        displacement: ScopedValue,
+        protocol: bool,
+    },
     ValueChildren {
         source: ValueId,
         position: usize,
@@ -247,6 +252,16 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     protocol,
                 });
             }
+            | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                let displacement = ScopedValue { node: displacement, env };
+                if self.norm.zero_displacement(displacement) {
+                    return Step::TailCall(Work::Value(base, env, demand));
+                }
+                return Step::Call {
+                    input: Work::Value(base, env, Demand::Used),
+                    frame: Work::OffsetDisplacement { source: id, displacement, protocol },
+                };
+            }
             | Value::Primitive(Primitive { operation, operands }) => {
                 return Step::TailCall(Work::PrimitiveValue {
                     operation,
@@ -264,6 +279,9 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     ) {
         let site = self.norm.source.admin.terms.back(&TermId::Value(source)).copied();
         let node = value.into().build(self.norm, site);
+        if let Some(role) = self.norm.source.inner.builtin_functions.get(&source) {
+            self.norm.arena.inner.builtin_functions.insert_new(node, *role);
+        }
         if protocol && let Some(protocol) = self.norm.source.inner.value_protocols.get(&source) {
             self.norm.arena.inner.value_protocols.insert_new(node, protocol.clone());
         }
@@ -323,6 +341,11 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 let stack = ScopedStack { node: stack, scope: scope.clone() };
                 if let KnownValue::External(function) = known.as_ref() {
                     self.external_call(function.clone(), stack, site)
+                } else if self.norm.movable_stack(stack.node)
+                    && let KnownValue::BuiltinBody(body) = known.as_ref()
+                {
+                    let stack = Some(self.norm.delay_stack(stack));
+                    Step::TailCall(Work::Computation(*body, Scope { values: scope.values, stack }))
                 } else if self.norm.movable_stack(stack.node)
                     && let Value::Closure(Closure { body, .. }) =
                         self.norm.source.inner.values[&thunk]
@@ -626,7 +649,23 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     frame: Work::PrimitiveReturn { site },
                 };
             }
+            | Work::OffsetDisplacement { source, displacement, protocol } => {
+                return Step::Call {
+                    input: Work::Value(displacement.node, displacement.env, Demand::Used),
+                    frame: Work::FinishValue(source, protocol),
+                };
+            }
             | Work::FinishValue(id, protocol) => match self.norm.source.inner.values[&id].clone() {
+                | Value::AddrOffset(_) => {
+                    let displacement = self.value();
+                    let base = self.value();
+                    self.build_value(
+                        id,
+                        AddrOffset { base: base.node, displacement: displacement.node },
+                        base.demands.join(displacement.demands),
+                        protocol,
+                    );
+                }
                 | Value::Closure(Closure { stack, .. }) => {
                     let body = self.computation();
                     self.build_value(

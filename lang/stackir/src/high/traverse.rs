@@ -52,6 +52,10 @@ impl Node<'_> {
                 | Value::Primitive(Primitive { operands: items, .. }) => {
                     items.iter().for_each(|item| ordinary((*item).into()));
                 }
+                | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                    ordinary((*base).into());
+                    ordinary((*displacement).into());
+                }
             },
             | Self::Stack(_, stack) => match stack {
                 | Stack::Var(_) => {}

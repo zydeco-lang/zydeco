@@ -12,8 +12,9 @@ The worked example follows a header-array update from source types to machine co
 The proposal retains the gaps identified on 2026-09-14 and gives them concrete interfaces and implementation boundaries.
 
 The implemented foundation remains [L13](../references/language.md#manual-memory).
-`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc` below are proposed std interfaces;
-the memory IR and raw component transport across calls remain proposed compiler work.
+`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc` below are proposed std interfaces.
+[Pure address calculations](../references/compiler.md#address-calculations) are implemented;
+ordered memory-access IR and raw component transport across calls remain proposed compiler work.
 The [interface sketch](../examples/memory-compilation/interfaces.zy) checks with the current kinds and value functions.
 It checks the shapes only: its aliases expose candidate representations and supply no validated constructors,
 new std implementation, or code-generation guarantee.
@@ -294,12 +295,14 @@ recursive specialization needs a finite cache and a conservative fallback, not u
 
 ### 4.2 Represent memory effects in the IR
 
-Current native address arithmetic and scalar loads/stores use runtime calls.
-For example, [offset](../../runtime/memory.rs) decodes a tagged integer, and wide scalar loads receive a spare box
+The compiler now lowers [pure address calculations](../references/compiler.md#address-calculations) directly
+and can eliminate an exposed zero displacement.
+Scalar loads/stores still use runtime calls, and wide scalar loads receive a spare box
 under the [builtin contract](../references/compiler.md#c14-builtin-contracts-primitive-operations-and-foreign-calls).
-Even a known zero displacement can survive as a call in the header-view probe.
+The earlier header-view probe's zero-offset host call predates this address lowering; its remaining dictionary,
+callback, and scalar-boundary costs still need end-to-end measurement.
 
-Introduce typed memory operations in the compiler IR and target lowering for address calculations and scalar accesses.
+Extend typed IR and target lowering from address calculations to scalar accesses.
 Expose known arithmetic and redundant checks to simplification while preserving required runtime validation.
 Preserve byte width, little-endian interpretation, unaligned access, effects, aliases, and failure order.
 Deleting or moving an access needs semantic evidence; neither an unsafe API nor `Ret` supplies it.
@@ -308,12 +311,11 @@ Memory target and embedding costs must be assessed separately, including the cur
 
 The current [high SPS computation](../../lang/stackir/src/high/syntax.rs) has `ExternCall`,
 while scalar arithmetic lives in value-level `Primitive` nodes.
-Add a pure `AddrOffset` value operation and an ordered `MemoryStep` computation,
+Extend the implemented pure `AddrOffset` value operation with an ordered `MemoryStep` computation,
 recognized by builtin role in [builtin lowering](../../lang/stackir/src/high/lower/builtin.rs).
 A proposed internal domain is:
 
 ```text
-AddrOffset { base, signed_byte_displacement }                    -- wrapping address calculation
 MemoryOp = Load { scalar, address, access_alignment, byte_order }
          | Store { scalar, address, value, access_alignment, byte_order }
          | Copy { source, destination, byte_count, overlap: MayOverlap }

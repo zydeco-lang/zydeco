@@ -26,6 +26,7 @@ pub enum Output {
 #[derive(Clone, Debug)]
 pub enum Value {
     Atom(Atom),
+    Address(zydeco_machine::memory::Address),
     /// A pointer to a value in the heap.
     Pointer(usize),
     Tag(Tag),
@@ -190,6 +191,20 @@ impl Eval for Instruction {
             }
             | Instruction::PushTag(Push(tag)) => {
                 interp.runtime.stack.push(Value::Tag(tag));
+                Ok(())
+            }
+            | Instruction::AddrOffset => {
+                let base = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
+                let displacement = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
+                let (Value::Address(base), Value::Atom(Atom::Imm(Imm::Integer(displacement)))) =
+                    (base, displacement)
+                else {
+                    return Err(Error::TypeError("addr.offset expects Addr and Int".into()));
+                };
+                if displacement.integer_type() != Some(IntegerType::Int) {
+                    return Err(Error::TypeError("addr.offset expects an Int displacement".into()));
+                }
+                interp.runtime.stack.push(Value::Address(base.offset(displacement.value() as i64)));
                 Ok(())
             }
             | Instruction::Scalar(region) => {

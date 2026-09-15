@@ -141,7 +141,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                     frame: Work::FinishValue(source),
                 };
             }
-            | high::Value::VCons(_) | high::Value::Primitive(_) => {
+            | high::Value::VCons(_) | high::Value::Primitive(_) | high::Value::AddrOffset(_) => {
                 return Step::TailCall(Work::ValueChildren(source, env, 0));
             }
         }
@@ -248,6 +248,13 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     | high::Value::Primitive(high::Primitive { operands, .. }) => {
                         operands.get(position)
                     }
+                    | high::Value::AddrOffset(high::AddrOffset { base, displacement }) => {
+                        match position {
+                            | 0 => Some(base),
+                            | 1 => Some(displacement),
+                            | _ => None,
+                        }
+                    }
                     | _ => unreachable!("value fields"),
                 };
                 return match child {
@@ -269,6 +276,11 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                         let second = self.value();
                         let first = self.value();
                         low::Primitive { operation, operands: [first, second] }.into()
+                    }
+                    | high::Value::AddrOffset(_) => {
+                        let displacement = self.value();
+                        let base = self.value();
+                        low::AddrOffset { base, displacement }.into()
                     }
                     | _ => unreachable!("value with children"),
                 };

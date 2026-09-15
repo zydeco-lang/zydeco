@@ -14,6 +14,7 @@ impl Drivers {
                 ..Default::default()
             },
             inner: high::StackirInnerArena {
+                builtin_functions: source.inner.builtin_functions.clone(),
                 protocols: source.inner.protocols.clone(),
                 value_protocols: source.inner.value_protocols.clone(),
                 pattern_protocols: source.inner.pattern_protocols.clone(),

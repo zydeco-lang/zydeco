@@ -23,6 +23,7 @@ pub enum TermId {
 
 pub type ValuePattern = common::ValuePattern<VPatId>;
 pub type Primitive = common::Primitive<ValueId>;
+pub type AddrOffset = common::AddrOffset<ValueId>;
 pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
 pub type SCoprodMatch = common::SCoprodMatch<ValueId, VPatId, CompuId>;
 pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, Bullet>, CompuId>;
@@ -59,6 +60,7 @@ pub enum Value {
     VCons(VCons<ValueId>),
     Literal(Literal),
     Primitive(Primitive),
+    AddrOffset(AddrOffset),
 }
 
 /* ---------------------------------- Stacks -------------------------------- */

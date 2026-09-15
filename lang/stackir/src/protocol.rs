@@ -32,6 +32,8 @@ pub enum ValueProtocol {
     Parameter(ProtocolParameterId),
     Unit,
     Primitive(PrimitiveType),
+    /// An unmanaged data address, distinct from numeric bits and managed values.
+    Address,
     Product(Vec<ValueProtocol>),
     Thunk(Box<StackProtocol>),
 }
@@ -248,6 +250,7 @@ impl fmt::Display for ValueProtocol {
             | Self::Parameter(parameter) => write!(f, "{parameter}"),
             | Self::Unit => f.write_str("Unit"),
             | Self::Primitive(ty) => write!(f, "{ty}"),
+            | Self::Address => f.write_str("Addr"),
             | Self::Thunk(stack) => write!(f, "Thk({stack})"),
             | Self::Product(fields) => {
                 f.write_str("(")?;

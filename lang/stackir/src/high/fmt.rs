@@ -118,6 +118,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::text(lit.ugly(&statics_fmt))
             }
+            | Value::AddrOffset(AddrOffset { base, displacement }) => RcDoc::concat([
+                RcDoc::text("addr.offset("),
+                base.pretty(f),
+                RcDoc::text(", "),
+                displacement.pretty(f),
+                RcDoc::text(")"),
+            ]),
             | Value::Primitive(Primitive { operation, operands }) => {
                 let op_str = format!("<primitive:{}>", operation);
                 let ops_doc = RcDoc::concat(

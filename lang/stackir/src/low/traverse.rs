@@ -75,6 +75,9 @@ impl Node<'_> {
                 | Value::Primitive(Primitive { operands, .. }) => {
                     operands.get(position).map(|id| (*id).into())
                 }
+                | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                    [(*base).into(), (*displacement).into()].get(position).copied()
+                }
             },
             | Self::Stack(_, stack) => match stack {
                 | Stack::Var(_) => None,

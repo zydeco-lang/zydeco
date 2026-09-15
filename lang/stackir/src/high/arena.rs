@@ -101,6 +101,9 @@ pub struct StackirArena {
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackirInnerArena {
     pub protocols: std::sync::Arc<crate::protocol::ProtocolGraph>,
+    /// Closed compiler-defined builtin bodies may be exposed at every known call.
+    /// This is compiler provenance, not an annotation on arbitrary source closures.
+    pub(crate) builtin_functions: ArenaAssoc<ValueId, BuiltinValueRole>,
     pub value_protocols: ArenaAssoc<ValueId, crate::protocol::ValueProtocol>,
     pub pattern_protocols: ArenaAssoc<VPatId, crate::protocol::ValueProtocol>,
     /// Intrinsic protocols of recursive entries and codata eliminations.

@@ -229,6 +229,11 @@ impl<'a> EntryValidator<'a> {
                 }
                 ValueEvidence::Unknown
             }
+            | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                self.value(*base, context)?;
+                self.value(*displacement, context)?;
+                ValueEvidence::Unknown
+            }
             | Value::Triv(_) => ValueEvidence::Unit,
             | Value::Hole(_) | Value::Literal(_) => ValueEvidence::Unknown,
         })

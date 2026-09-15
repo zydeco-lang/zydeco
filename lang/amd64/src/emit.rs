@@ -230,6 +230,7 @@ impl<'e> Emitter<'e> {
             | Instruction::PushArg(_)
             | Instruction::PushTag(_)
             | Instruction::PopArg(_)
+            | Instruction::AddrOffset
             | Instruction::RetainFrame(_) => true,
             | Instruction::Scalar(region) => region.region().inputs.len() % 2 == 0,
             | Instruction::AllocContext(_) | Instruction::Clear(_) => false,
@@ -1130,6 +1131,17 @@ impl<'a> Emit<'a> for Instruction {
                     )),
                 ]);
                 em.shift_stack_parity(1);
+            }
+            | Instruction::AddrOffset => {
+                em.asm.text.extend([
+                    Instr::Comment("wrapping byte address offset".into()),
+                    Instr::Pop(Loc::Reg(Reg::Rax)),
+                    Instr::Pop(Loc::Reg(Reg::Rcx)),
+                    Instr::Sar(ShArgs { reg: Reg::Rcx, by: 1 }),
+                    Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))),
+                    Instr::Push(Arg32::Reg(Reg::Rax)),
+                ]);
+                em.shift_stack_parity(-1);
             }
             | Instruction::Scalar(region) => {
                 region.emit(id, em);

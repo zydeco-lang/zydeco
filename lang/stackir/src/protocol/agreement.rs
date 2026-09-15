@@ -21,6 +21,7 @@ enum Term {
     Variable(VariableId),
     Unit,
     Primitive(PrimitiveType),
+    Address,
     Product(Vec<TermId>),
     Thunk(TermId),
     Argument(TermId, TermId),
@@ -135,6 +136,7 @@ impl<'a> Agreement<'a> {
             }
             | ValueProtocol::Unit => Term::Unit,
             | ValueProtocol::Primitive(ty) => Term::Primitive(*ty),
+            | ValueProtocol::Address => Term::Address,
             | ValueProtocol::Product(fields) => {
                 Term::Product(fields.iter().map(|field| self.value(field, scope)).collect())
             }
@@ -327,6 +329,7 @@ impl<'a> Agreement<'a> {
                 | (Term::Variable(variable), _) => self.constrain(variable, right, &mut pending),
                 | (_, Term::Variable(variable)) => self.constrain(variable, left, &mut pending),
                 | (Term::Unit, Term::Unit) => {}
+                | (Term::Address, Term::Address) => {}
                 | (Term::Primitive(a), Term::Primitive(b)) if a == b => {}
                 | (Term::Product(a), Term::Product(b)) if a.len() == b.len() => {
                     pending.extend(a.into_iter().zip(b).map(|(a, b)| (a, b, mode)));

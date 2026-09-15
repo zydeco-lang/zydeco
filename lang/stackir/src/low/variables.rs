@@ -74,6 +74,9 @@ impl Variables {
                 .map(|operand| operand.summary(self))
                 .fold(CoContext::new(), |vars, operand| vars + operand),
             | Value::Hole(Hole) | Value::Triv(Triv) | Value::Literal(_) => CoContext::new(),
+            | Value::AddrOffset(AddrOffset { base, displacement }) => {
+                base.summary(self) + displacement.summary(self)
+            }
         }
     }
     fn stack(&self, node: Stack) -> CoContext<DefId> {

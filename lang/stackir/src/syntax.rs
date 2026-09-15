@@ -68,6 +68,14 @@ pub struct Primitive<V> {
     pub operands: [V; 2],
 }
 
+/// Pure wrapping byte displacement of an unmanaged address. Evaluate the
+/// displacement before the base, as when consuming their argument stack.
+#[derive(Clone, Debug)]
+pub struct AddrOffset<V> {
+    pub base: V,
+    pub displacement: V,
+}
+
 /* ---------------------------------- Stack --------------------------------- */
 
 /// The one and only stack variable.
