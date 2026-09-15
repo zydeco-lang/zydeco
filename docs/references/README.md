@@ -17,7 +17,7 @@ including rationale and explicit limits.
 [todos](../todos/README.md) record observed discrepancies.
 [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation) describes how to review and consolidate material.
 
-## Rule ownership
+## Rule Ownership
 
 Each chapter owns its semantic boundary.
 The table links source rules to their implementation accounts; it does not assign a second home to the same rule.

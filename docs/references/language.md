@@ -1,27 +1,27 @@
-# Zydeco language reference
+# Zydeco Language Reference
 
 This reference describes the current source language and its execution boundaries.
 It assumes basic familiarity with typed lambda calculi, polymorphism, and operational semantics.
 The [language guide](../tutorial/zydeco-guide.md) provides a longer introduction;
 [CONTRIBUTING](../../CONTRIBUTING.md) covers command-line workflows.
 
-1. [Conventions and the language model](#1-conventions-and-the-language-model)
-2. [Lexical structure and syntax](#2-lexical-structure-and-syntax)
-3. [Bindings and scope](#3-bindings-and-scope)
-4. [Classification and inference](#4-classification-and-inference)
-5. [Values, products, and data](#5-values-products-and-data)
-6. [Computations and control](#6-computations-and-control)
-7. [Patterns and coverage](#7-patterns-and-coverage)
-8. [Value functions and views](#8-value-functions-and-views)
-9. [Polymorphism and packed values](#9-polymorphism-and-packed-values)
-10. [Static elimination](#10-static-elimination)
-11. [Relative monads](#11-relative-monads)
-12. [Sources, imports, and entry](#12-sources-imports-and-entry)
-13. [Primitive values and capabilities](#13-primitive-values-and-capabilities)
-14. [Foreign interfaces](#14-foreign-interfaces)
-15. [Execution profiles](#15-execution-profiles)
+1. [Conventions and the Language Model](#1-conventions-and-the-language-model)
+2. [Lexical Structure and Syntax](#2-lexical-structure-and-syntax)
+3. [Bindings and Scope](#3-bindings-and-scope)
+4. [Classification and Inference](#4-classification-and-inference)
+5. [Values, Products, and Data](#5-values-products-and-data)
+6. [Computations and Control](#6-computations-and-control)
+7. [Patterns and Coverage](#7-patterns-and-coverage)
+8. [Value Functions and Views](#8-value-functions-and-views)
+9. [Polymorphism and Packed Values](#9-polymorphism-and-packed-values)
+10. [Static Elimination](#10-static-elimination)
+11. [Relative Monads](#11-relative-monads)
+12. [Sources, Imports, and Entry](#12-sources-imports-and-entry)
+13. [Primitive Values and Capabilities](#13-primitive-values-and-capabilities)
+14. [Foreign Interfaces](#14-foreign-interfaces)
+15. [Execution Profiles](#15-execution-profiles)
 
-## 1. Conventions and the language model
+## 1. Conventions and the Language Model
 
 Zydeco separates values from computations. Values are inert data, including suspended computations;
 computations consume continuation stacks and may perform effects.
@@ -49,7 +49,7 @@ Examples marked `zydeco check` are complete source terms.
 Other code blocks use the displayed metavariables or an explicitly described context.
 A checked term need not be a standalone executable.
 
-### Term-oriented composition
+### Term-Oriented Composition
 
 Zydeco's term-oriented design uses binding, abstraction, and application
 to compose expressions at the language's different sorts.
@@ -67,7 +67,7 @@ Composition follows the relevant typing and phase rules: computation sequencing 
 and execution requires static elimination of value-function applications and static witness structure (§10).
 Source files, packages, and compilation units apply this composition model to reuse and distribution (§12).
 
-## 2. Lexical structure and syntax
+## 2. Lexical Structure and Syntax
 
 Source is UTF-8. Whitespace separates tokens but indentation and line breaks do not determine syntax.
 `--` starts a line comment; `/- ... -/` is a nestable block comment.
@@ -112,7 +112,7 @@ Expression annotations use parentheses, `(e : S)`, or the contents of a `begin .
 Write `((#x = 1) : (#x :: Int))` to annotate the whole named value; `(#x = 1 : Int)` annotates its payload.
 Metadata in an application argument also needs parentheses.
 
-## 3. Bindings and scope
+## 3. Bindings and Scope
 
 `param p in e` introduces a type or computation abstraction; `param val p in v` introduces a value function.
 `let p = e in body` binds a type or value transparently.
@@ -157,7 +157,7 @@ Recursive block components must consist of sealed type definitions whose kinds a
 Parameters, values, and transparent aliases cannot form such cycles.
 Runtime recursion is explicit through `fix`; refutable binding patterns follow §7.
 
-## 4. Classification and inference
+## 4. Classification and Inference
 
 Kinds are `VType`, `CType`, kind arrows, and named kinds `#field :: K`.
 Type functions use `fn (X : K) => T` and ordinary application.
@@ -233,7 +233,7 @@ let value = 1 in @[typeof] value
 A query inside an established runtime context can still introduce a static alias.
 The [formal calculus](../../lang/statics/type-system.typ) provides the mathematical companion to these judgments.
 
-## 5. Values, products, and data
+## 5. Values, Products, and Data
 
 Values include variables, literals, `()`, products, named values, constructor applications,
 thunks, existential values, and total value functions.
@@ -265,7 +265,7 @@ match (+On() : Flag)
 end
 ```
 
-## 6. Computations and control
+## 6. Computations and Control
 
 The basic computation forms are:
 
@@ -312,7 +312,7 @@ Matching selects the first successful arm; partial binders may terminate executi
 terminates, aborts, or diverges; it has no ordinary source return.
 An explicit successor `Thk OS` is suspended code and need not be a captured machine continuation.
 
-### Ret and explicit CPS
+### Ret and Explicit CPS
 
 The public API convention is `Ret A` for observably pure calculations
 and explicit continuation-passing style (CPS) for effectful operations.
@@ -326,7 +326,7 @@ failure can have its own continuation.
 Both styles coexist, and CPS supplies no single-use or cleanup guarantee.
 The [C FFI](#14-foreign-interfaces) keeps the native return protocol beneath these public interfaces.
 
-### Ret and stack extent
+### Ret and Stack Extent
 
 **`Ret A` describes an installed continuation accepting an `A`, not a stack-frame marker.**
 It specifies the return-address protocol at the point of use.
@@ -342,7 +342,7 @@ A compiler may record a known argument prefix and the continuation's accepted va
 but must keep unknown or recursive stack structure explicit.
 Physical frame layout and lifetime require separate backend evidence.
 
-## 7. Patterns and coverage
+## 7. Patterns and Coverage
 
 Variables and holes match any input.
 Unit, products, named wrappers, and existential openings are irrefutable when their components are.
@@ -390,7 +390,7 @@ the checker does not prove properties of a view's image.
 Generalized comatches must cover arguments and destructors along every observation path.
 Duplicate integer arms are not currently rejected as redundant.
 
-## 8. Value functions and views
+## 8. Value Functions and Views
 
 `val (x : A) => v` introduces a total value transformation.
 If `v : A'`, its classifier is `val pi (x : A) . A'`.
@@ -463,7 +463,7 @@ Type abstraction/application has the corresponding beta and eta equations.
 These equations concern value transformations; execution still requires the bounded static elimination in §10.
 An explicitly authored thunk is the runtime callable form when an implementation must remain dynamically selectable.
 
-## 9. Polymorphism and packed values
+## 9. Polymorphism and Packed Values
 
 Polymorphism lets code use a type supplied by its caller.
 A packed value lets a provider supply types together with values whose classifiers may depend on them.
@@ -559,7 +559,7 @@ so related fields share witnesses and `whole` can forward the same packed value.
 Type projection selects the payload of a named kind.
 Module factories and explicit dictionaries use these ordinary packed value and function forms.
 
-### Module interfaces and shared openings
+### Module Interfaces and Shared Openings
 
 A module interface exposes the names a client needs without requiring the client
 to unpack the provider's entire product layout.
@@ -591,7 +591,7 @@ Remaining questions concern [kind-witness introduction](../ideas/kind-witness-in
 [computation witness routes](../ideas/computation-witness-routes.md),
 and [companion generation](../ideas/companion-interface-generation.md).
 
-## 10. Static elimination
+## 10. Static Elimination
 
 Before execution, value-function applications, views, and static packed value structure must reduce
 to a representable residual program.
@@ -633,7 +633,7 @@ An unfinished witness inspection supplies no evidence to dependent checking.
 These are implementation resource limits, not a termination theorem.
 Optional backend simplification does not relax this source acceptance boundary.
 
-## 11. Relative monads
+## 11. Relative Monads
 
 A relative monad has carrier `M : VType -> CType`.
 The library's `Monad M` is codata with operations `.return : forall (A : VType) . A -> M A`
@@ -669,7 +669,7 @@ arbitrary captured runtime values are rejected.
 The [control library](../../lib/std/control) supplies State and Exception examples.
 Library-encoded delimited control does not imply primitive capture or duplication of the native machine stack.
 
-## 12. Sources, imports, and entry
+## 12. Sources, Imports, and Entry
 
 A source file contains one complete term and contributes no surrounding context.
 `@(import("path"))` imports a term, with relative paths resolved from the importing file.
@@ -712,7 +712,7 @@ By default it inspects kinds/types and evaluates values or directly returning co
 Explicit execution can supply Builtin.
 REPL evaluation captures output and uses empty stdin and arguments.
 
-### Source packages
+### Source Packages
 
 A package is a term chosen as a unit of code distribution and reuse.
 It may be supplied as source or, when its external contract supports independent emission, as compiled artifacts.
@@ -753,7 +753,7 @@ Source libraries may expose any source classifier.
 `check` additionally validates the declared compiled-library interface and the executable Builtin/OS contract
 for binaries and tests.
 
-#### Names and project catalogs
+#### Names and Project Catalogs
 
 Package names are unquoted identifiers, optionally qualified with `/`: `std`, `std/data`, `std/data/smoke`.
 Each segment begins with an ASCII letter or underscore and continues with ASCII letters,
@@ -812,7 +812,7 @@ by source identity in first-selection order.
 All requested names resolve before an operation begins; an unknown name is an error, never a file fallback.
 `show` without package options lists all declarations; with them, it lists only the selected entries.
 
-#### Concluding files and exact term selection
+#### Concluding Files and Exact Term Selection
 
 Declarations can remain on their implementation files or be collected in one or a few concluding files.
 For example, a file can register imported terms without changing the implementations:
@@ -848,7 +848,7 @@ Graph identity is the canonical path and selected root term.
 Repeated imports of that root share checking and source inputs; imported computations still execute at each dynamic use.
 A `.zyi` companion applies to the complete file only, never to an arbitrary nested entry.
 
-#### Bounded discovery
+#### Bounded Discovery
 
 Test-side associations let tests join a suite without editing the library.
 A file-root `discover` annotation declares the candidate files explicitly:
@@ -895,7 +895,7 @@ Unreadable directories or invalid matched sources reject preparation.
 The prepared catalog is reused for name resolution, test planning, checking, and later materialization.
 Compilation validates annotations but never expands discovery.
 
-#### Relationships and operations
+#### Relationships and Operations
 
 Relationships are typed associations, kept separate from the code graph:
 
@@ -945,7 +945,7 @@ Remote fetching, source dependency lockfiles, package versions and source compat
 and programmable relationship handlers remain deferred.
 Compiled artifacts already have [manifest compatibility checks](compiler.md#compilation-unit-preparation-and-artifacts).
 
-## 13. Primitive values and capabilities
+## 13. Primitive Values and Capabilities
 
 [Builtin](../../lib/std/builtin.zy) exposes canonical kinds and fixed-representation types as manifest fields.
 Repeating an intrinsic splice denotes the same canonical kind or type across independently checked sources.
@@ -1001,7 +1001,7 @@ Integer parsing rejects values outside the `Int` range through its failure conti
 random integers range over that same domain.
 Float rendering uses the selected width's Rust Display spelling, including signed zero, `inf`, `-inf`, and `NaN`.
 
-### Text and byte sequences
+### Text and Byte Sequences
 
 `String` indices are scalar positions, not byte offsets or grapheme clusters; `byte_length` observes UTF-8 bytes.
 The source-defined `Bytes` type contains immutable octets; equality compares contents and ordering is lexicographic.
@@ -1016,7 +1016,7 @@ The [source codecs](../../lib/std/numeric/codecs.zy) provide `to_le_bytes` and `
 and std includes them in its numeric modules.
 Decoders require the exact scalar width.
 
-### Streams and process arguments
+### Streams and Process Arguments
 
 `args/at : Thk (forall (R : CType) . Int -> Thk R -> Thk (String -> R) -> R)` looks up a zero-based argument
 in the invocation's stable sequence, excluding the executable name.
@@ -1045,7 +1045,7 @@ process control is separate.
 A UTF-8 `Path` prevents text/path interchange but cannot represent every native path.
 Growable writers, seeking, and asynchronous protocols remain in the [stream proposal](../proposals/filesystem.md).
 
-### Manual memory
+### Manual Memory
 
 Systems code needs to choose storage, initialize it, and release it explicitly.
 [std/memory](../../lib/std/memory/package.zy) provides that interface using ordinary packed values,
@@ -1077,7 +1077,7 @@ CPS alone does not guarantee allocation-free callbacks or stack frames.
 `Buffer` builds bytes; the [array factory](#array-storage-and-element-builders) also provides generic element builders.
 No `Frozen` state is needed for this manual interface.
 
-#### Unsafe obligations
+#### Unsafe Obligations
 
 A library field named `unsafe` documents caller obligations; it is not a language keyword or a checked effect.
 Raw addresses and typed pointers may be copied freely.
@@ -1094,7 +1094,7 @@ There are no implicit destructors.
 Raw storage must not contain movable managed references without a separate rooting protocol;
 the supplied layouts cover scalars and unmanaged addresses.
 
-### Independent storage and codecs
+### Independent Storage and Codecs
 
 [Storage](../../lib/std/memory/storage.zy) validates geometry without selecting a logical value type or allocator.
 `storage/constant/create size alignment` returns `Result (exists L. Storage L) LayoutError`;
@@ -1134,7 +1134,7 @@ Record and array factories compose storage; callers select logical conversion on
 Its lower-level `unsafe/product_at` and `unsafe/relabel` recipes require the caller
 to establish valid nonoverlapping offsets and a compatible parent layout; they perform no geometry validation.
 
-### Allocation and release
+### Allocation and Release
 
 The [allocator interface](../../lib/std/memory/allocator.type.zy) receives byte size and alignment explicitly.
 `allocation/heap` uses the host allocator; `allocation/limited maximum parent` rejects oversized requests
@@ -1158,7 +1158,7 @@ Scalar `load_le` and `store_le` access the exact little-endian width without req
 Valid raw loads, stores, copies, and fills use only a success/completion continuation.
 There is no runtime initialization check and no implicit initialization of padding.
 
-### Typed pointers and slices
+### Typed Pointers and Slices
 
 Selecting a fixed representation produces `exists L. (#storage :: Storage L) * (#codec :: Codec L A)`.
 Its dynamic counterpart substitutes `DynamicStorage` and `DynamicCodec` in that same packed value shape.
@@ -1190,7 +1190,7 @@ Zero-sized elements have zero stride. The resulting pointer keeps the same `L` a
 The caller supplies an allocation covering the elements; bounds checks do not verify that assertion.
 A raw slice does not retain its allocation.
 
-### Static layout plans
+### Static Layout Plans
 
 Fixed placement belongs to source value calculation.
 The [fixed builder](../../lib/std/memory/layout.zy) exposes `Layout A = Result (Plan A) LayoutError`,
@@ -1213,7 +1213,7 @@ initializes and reads its fields, then takes the value and releases the allocati
 [Type and phase tests](../../lang/tests/tests/static_layout.rs) pair accepted layouts with invalid arithmetic,
 forged plans, mismatched logical types, and runtime placement operands.
 
-#### Layout laws
+#### Layout Laws
 
 Supported scalar widths are 1, 2, 4, or 8 bytes, with matching natural alignment.
 The current interpreter/native 64-bit profiles and Wasm's virtual-address profile use an 8-byte address slot.
@@ -1233,7 +1233,7 @@ No temporary `Bytes` encoding or canonical-zero-padding check participates in th
 Serialization and foreign functions that inspect every byte require the caller to initialize padding explicitly,
 for example with `raw/unsafe/fill` before field initialization.
 
-### Dynamic layouts
+### Dynamic Layouts
 
 The [dynamic builder](../../lib/std/memory/dynamic-layout.zy) supports the same layout combinators
 when their inputs are runtime values.
@@ -1243,7 +1243,7 @@ Invalid placement selects `no` before allocation or writes.
 Dynamic size, alignment, and offsets remain captured where needed; they are not appended to each typed pointer.
 The [runtime-layout example](../../lib/tests/std/representation.zy) exercises this distinction.
 
-### Typed records and field paths
+### Typed Records and Field Paths
 
 The [record factories](../../lib/std/memory/record.zy) compose child storage geometry while preserving its witnesses.
 `records/product Left Right left_storage right_storage` calculates ordinary product placement;
@@ -1298,7 +1298,7 @@ An arbitrary path cannot propagate a parent's entire `Fields` state onto one chi
 The [record and view example](../../lib/tests/std/general-views.zy) exercises direct construction and untouched padding;
 [type/state regressions](../../lang/tests/tests/general_memory.rs) cover nested paths and rejected transitions.
 
-### Array storage and element builders
+### Array Storage and Element Builders
 
 The [array factory](../../lib/std/memory/array.zy) composes element storage without selecting a logical value type.
 `arrays/make Element storage capacity boundary` takes `Storage Element` and static inputs,
@@ -1358,7 +1358,7 @@ A typed no-read discard operation remains
 [proposed](../proposals/memory.md#independently-selectable-storage-operations);
 manual address reinterpretation remains available under its existing obligations.
 
-### Memory views
+### Memory Views
 
 Storage layout, handle representation, and handle interpretation are independent choices.
 A handle `H` is the value passed by the caller; a view describes how it leads to a payload pointer and observations.
@@ -1445,7 +1445,7 @@ Fixed recipes and state witnesses erase, while ordinary products, thunks,
 and frames retain the compiler's representation policy.
 Staging and CPS alone do not guarantee that all runtime allocations disappear.
 
-### Immutable owners and source bytes
+### Immutable Owners and Source Bytes
 
 [Bytes](../../lib/std/text/bytes.zy) is a source abstraction with a private address and byte count.
 Its backing allocations are explicitly retained until the runtime instance is destroyed.
@@ -1476,7 +1476,7 @@ Concatenation allocates once and copies each input; alignment conversion allocat
 These pure-content wrappers may use internal allocation while following the [Ret convention](#ret-and-explicit-cps).
 The [byte regressions](../../lib/tests/std/source-bytes.zy) exercise slicing, bounds, UTF-8, copying, and retention.
 
-### Byte builders
+### Byte Builders
 
 The source [Buffer](../../lib/std/memory/buffer.zy) is a manually managed byte builder.
 `allocate` takes an explicit allocator and capacity and starts with an empty initialized prefix.
@@ -1495,7 +1495,7 @@ independent snapshots, spare capacity at publication, and explicit cleanup.
 Growth and integration
 with `Writer` remain [proposed](../proposals/filesystem.md#memory-backed-writer-and-byte-builder).
 
-### Stored-call interfaces
+### Stored-Call Interfaces
 
 Source modules share pointer types and CPS operations from the same layout opening.
 A worker can accept `Ptr L Init`, take its fields, initialize the same destination,
@@ -1506,7 +1506,7 @@ A different layout needs an explicit allocation and field conversion, with both 
 Equal numerical placement does not equate independent witnesses.
 These calls use the existing source word convention; managed logical values and continuations may still allocate.
 
-## 14. Foreign interfaces
+## 14. Foreign Interfaces
 
 A foreign implementation is an annotated hole:
 
@@ -1553,7 +1553,7 @@ and larger signatures remain [extensions](../proposals/c-ffi.md).
 C exports currently admit only scalar arguments and scalar or unit results.
 The `zydeco` convention instead names a [native unit initializer](#native-zydeco-units).
 
-### Storage and foreign transport
+### Storage and Foreign Transport
 
 `Int` and `UInt` use eight-byte little-endian storage in the current profiles.
 Signed storage sign-extends the 63-bit value; unsigned storage leaves its top bit zero.
@@ -1576,7 +1576,7 @@ The [mutable output fixture](../../lib/tests/ffi/mutable-output.zy) passes an un
 interprets the C status through a CPS wrapper, and asserts `Init` only after the promised fields have been written.
 The raw adapter supplies no ownership inference for these transitions.
 
-#### Foreign decoding
+#### Foreign Decoding
 
 The [C specimen](../../lib/tests/ffi/contracts.c) produces a `UInt8` tag and `UInt32` payload with `0x58` padding.
 The [source decoder](../../lib/tests/ffi/record-input.zy) obtains size and offsets from a static plan,
@@ -1588,7 +1588,7 @@ on all four backends using actual output from the C specimen.
 Other bindings must establish their own endianness, valid field encodings, union alternatives, and length conventions.
 Canonical serialization, when required, is a separate codec contract.
 
-### Compiled libraries and C exports
+### Compiled Libraries and C Exports
 
 A [compiled library package](#source-packages) exposes selected functions through an FFI entry profile. Its evolution
 follows the
@@ -1665,7 +1665,7 @@ to `build`, `run`, or `test`.
 This supports separate compilation without the producer's implementation source.
 The interpreter accepts only shared libraries matching its own host; Wasm has no adapter for these artifacts.
 
-### Native Zydeco units
+### Native Zydeco Units
 
 `@[package(library(zydeco), name(example/math))]` selects a native library
 whose initializer returns the complete prepared source value.
@@ -1721,7 +1721,7 @@ The [workflow](../../CONTRIBUTING.md#compile-and-consume-native-zydeco-units) sh
 the [compiler contract](compiler.md#native-unit-artifacts) owns artifact and linkage details.
 Broader type interfaces and host-language bindings remain in the [ABI proposal](../proposals/zydeco-abi.md).
 
-## 15. Execution profiles
+## 15. Execution Profiles
 
 The execution paths share source checking and static elimination, but have different allocation and host boundaries.
 The native layout is an implementation ABI, not source-level control over addresses or object layout.
@@ -1752,7 +1752,7 @@ Source memory capabilities support checked allocation, addresses, and the explic
 Ordinary compiler-managed values have no source-controlled ABI layout; primitive concurrency remains absent.
 Runtime-managed capabilities provide the current resource boundary.
 
-### Selecting an execution backend
+### Selecting an Execution Backend
 
 Backend selection is command-line execution policy, independent of package meta annotations.
 `run SOURCE -t TARGET` selects one of `interpreter`, `exe` (AMD64), `wasm-am`, or `wasm-sps`.
@@ -1775,7 +1775,7 @@ The summary counts pairs, and the command fails if any pair fails.
 Wasm requires Node.js and uses the bundled host; native execution requires the AMD64 tools and runtime sources.
 See the [workflow](../../CONTRIBUTING.md#check-and-run-source-terms) for tool and runtime configuration.
 
-## Meta annotations (compile-time metadata)
+## Meta Annotations (Compile-Time Metadata)
 
 Meta annotations are written `@[meta] e`; `@(meta)` abbreviates a hole payload.
 These forms supply compile-time metadata to the compiler.
@@ -1807,14 +1807,14 @@ Formatting options include `width`, `indent`, `layout`, `parentheses`, and `verb
 their [directive contract](compiler.md#formatter-directives) lives in the compiler reference,
 and [CONTRIBUTING](../../CONTRIBUTING.md#format-and-lint) gives the workflow.
 
-### Source documentation
+### Source Documentation
 
 Zydeco documentation combines Markdown attached to source terms with the compiler's information
 about bindings, imports, and named fields.
 The same explanation appears in hover, completion, the VS Code documentation panel, and generated project references.
 The [documentation workflow](compiler.md#documentation-workflow) describes those tools and their commands.
 
-#### Attaching documentation
+#### Attaching Documentation
 
 Write an uninterrupted `--|` block immediately above `@[doc]`:
 
@@ -1842,7 +1842,7 @@ section and grouping options have no implemented presentation contract.
 Parameter and constructor-arm documentation remain unsupported extensions,
 tracked in the [documentation proposal](../proposals/documentation.md).
 
-#### Semantic documentation links
+#### Semantic Documentation Links
 
 Ordinary Markdown links work alongside two explicit semantic destinations.
 For names already in the annotation's lexical scope:
@@ -1866,7 +1866,7 @@ Source links in a copied reference require access to the original source paths.
 Standalone guide pages use the [selected public root](compiler.md#documentation-publication-and-verification) instead
 of an implicit lexical source scope.
 
-## Diagnostic index
+## Diagnostic Index
 
 | Diagnostic family | Relevant rule |
 | --- | --- |

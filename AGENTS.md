@@ -134,6 +134,11 @@ Keep complete sentences together when they fit; allow short final lines instead 
 Preserve code blocks and other structural Markdown.
 Reflow edited Markdown with `python3 docs/scripts/reflow-markdown.py path/to/document.md`; reflow Typst manually.
 
+Capitalize titles in `docs/references/` with Chicago title case: capitalize most words,
+including both parts of hyphenated compounds; keep short function words (a, an, the, and, or, of, in, to,
+as, with) lowercase unless first; preserve code terms' exact spelling regardless of position (`SPSLow`,
+`Ret`, `ZASM`, `AMD64`).
+
 ## Commit Messages
 
 Use `prefix: lowercase description`, on one line with no trailing period.
