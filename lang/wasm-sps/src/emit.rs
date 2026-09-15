@@ -5,6 +5,7 @@ use wasm_encoder::{
     BlockType, CodeSection, ConstExpr, Function, FunctionSection, GlobalType, ImportSection,
     Instruction as WasmInstruction, Module, NameMap, NameSection, TypeSection, ValType,
 };
+use zydeco_stackir::low::scalar::ScalarPlans;
 use zydeco_stackir::{
     SpsLowProgram,
     low::syntax::{
@@ -12,7 +13,8 @@ use zydeco_stackir::{
         VPatId, ValueId, ValuePattern,
     },
 };
-use zydeco_syntax::{BuiltinValueRole, Literal, PrimitiveOp};
+use zydeco_syntax::scalar::ScalarBoxing;
+use zydeco_syntax::{BuiltinValueRole, Literal};
 use zydeco_wasm_common::{
     AllocFunction, EncodedScalar, HostCallKind, HostImport, HostSections, Limits, PointerLocal,
     ProductFields, RuntimeFailure, RuntimeWord, StaticString, StringTable, WASM_PAGE_BYTES,
@@ -34,15 +36,21 @@ const AMBIENT_STACK_GLOBAL: u32 = 2;
 /// Direct structured `SPS_l`-to-WebAssembly emitter.
 pub struct Emitter<'a> {
     program: &'a SpsLowProgram,
+    scalar_boxing: ScalarBoxing,
 }
 
 impl<'a> Emitter<'a> {
     pub fn new(program: &'a SpsLowProgram) -> Self {
-        Self { program }
+        Self { program, scalar_boxing: ScalarBoxing::default() }
+    }
+
+    pub fn with_scalar_boxing(mut self, scalar_boxing: ScalarBoxing) -> Self {
+        self.scalar_boxing = scalar_boxing;
+        self
     }
 
     pub fn run(self) -> Result<WasmModule, EmitError> {
-        let plan = ModulePlan::new(self.program)?;
+        let plan = ModulePlan::new(self.program, self.scalar_boxing)?;
         ModuleEncoder::new(self.program, plan).encode()
     }
 }
@@ -120,13 +128,12 @@ struct LocalPlan {
     transfer_closure: u32,
     transfer_first: u32,
     transfer_second: u32,
-    decoded_first: u32,
-    decoded_second: u32,
+    scalar_base: u32,
     local_count: u32,
 }
 
 impl LocalPlan {
-    fn new(arena: &sps::SpsLowArena) -> Result<Self, EmitError> {
+    fn new(arena: &sps::SpsLowArena, scalar_count: usize) -> Result<Self, EmitError> {
         let mut next = 1_u32;
 
         let mut defs = arena
@@ -161,8 +168,10 @@ impl LocalPlan {
         let transfer_closure = Self::take(&mut next, "SPS local count")?;
         let transfer_first = Self::take(&mut next, "SPS local count")?;
         let transfer_second = Self::take(&mut next, "SPS local count")?;
-        let decoded_first = Self::take(&mut next, "SPS local count")?;
-        let decoded_second = Self::take(&mut next, "SPS local count")?;
+        let scalar_base = next;
+        for _ in 0..scalar_count {
+            Self::take(&mut next, "SPS scalar local count")?;
+        }
 
         Ok(Self {
             variables,
@@ -176,8 +185,7 @@ impl LocalPlan {
             transfer_closure,
             transfer_first,
             transfer_second,
-            decoded_first,
-            decoded_second,
+            scalar_base,
             local_count: next - 1,
         })
     }
@@ -227,10 +235,11 @@ struct ModulePlan {
     import_count: u32,
     layout: MemoryLayout,
     locals: LocalPlan,
+    scalars: ScalarPlans,
 }
 
 impl ModulePlan {
-    fn new(program: &SpsLowProgram) -> Result<Self, EmitError> {
+    fn new(program: &SpsLowProgram, boxing: ScalarBoxing) -> Result<Self, EmitError> {
         let arena = program.arena();
         let mut blocks = arena
             .inner
@@ -313,7 +322,8 @@ impl ModulePlan {
         let import_count = first_host_function
             .checked_add(Limits::u32(host_imports.len(), "host import count")?)
             .ok_or(WasmEmitError::Limit { what: "host import count", value: host_imports.len() })?;
-        let locals = LocalPlan::new(arena)?;
+        let scalars = ScalarPlans::new(program, boxing);
+        let locals = LocalPlan::new(arena, scalars.max_definitions())?;
 
         Ok(Self {
             cases,
@@ -326,6 +336,7 @@ impl ModulePlan {
             import_count,
             layout,
             locals,
+            scalars,
         })
     }
 
@@ -562,8 +573,10 @@ impl<'a> CaseEncoder<'a> {
                     break;
                 }
                 | Computation::LetValue(sps::LetValue { binder, bindee, tail: body }) => {
-                    self.emit_value(bindee)?;
-                    self.emit_pattern(binder)?;
+                    if !self.plan.scalars.elided(id) {
+                        self.emit_value(bindee)?;
+                        self.emit_pattern(binder)?;
+                    }
                     id = body;
                 }
                 | Computation::LetStack(sps::LetStack {
@@ -733,8 +746,8 @@ impl<'a> CaseEncoder<'a> {
                 self.emit_product(target, items, layout)?;
             }
             | sps::Value::Literal(literal) => self.emit_literal(id, literal)?,
-            | sps::Value::Primitive(sps::Primitive { operation, operands }) => {
-                self.emit_primitive(operation, operands)?;
+            | sps::Value::Primitive(_) => {
+                self.emit_scalar(id)?;
             }
         }
         self.function.instruction(&WasmInstruction::LocalTee(target));
@@ -958,26 +971,22 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::Return);
     }
 
-    fn emit_primitive(
-        &mut self, operation: PrimitiveOp, operands: [ValueId; 2],
-    ) -> Result<(), EmitError> {
+    fn emit_scalar(&mut self, id: ValueId) -> Result<(), EmitError> {
+        let call = self.plan.scalars.call(id).clone();
         // Match the value evaluation order used by Stack IR and ZASM lowering.
-        for operand in operands.into_iter().rev() {
+        for &operand in call.inputs.iter().rev() {
             self.emit_value(operand)?;
             self.function.instruction(&WasmInstruction::Drop);
         }
-        for (operand, local) in operands
-            .into_iter()
-            .zip([self.plan.locals.decoded_first, self.plan.locals.decoded_second])
-        {
+        for (index, operand) in call.inputs.into_iter().enumerate() {
             self.function.instruction(&WasmInstruction::LocalGet(self.plan.locals.value(operand)?));
-            self.function.instruction(&WasmInstruction::LocalSet(local));
+            self.function.instruction(&WasmInstruction::LocalSet(
+                self.plan.locals.scalar_base + index as u32,
+            ));
         }
-        WordEmitter::new(&mut self.function, self.plan.alloc_function()).primitive(
-            operation,
-            self.plan.locals.decoded_first,
-            self.plan.locals.decoded_second,
-            self.plan.locals.result,
+        WordEmitter::new(&mut self.function, self.plan.alloc_function()).scalar_region(
+            &call.program,
+            self.plan.locals.scalar_base,
             self.plan.locals.pointer(),
         );
         Ok(())

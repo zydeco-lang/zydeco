@@ -206,7 +206,7 @@ pub enum Commands {
         /// Target backend
         #[arg(short, long, default_value = "exe")]
         target: BuildTarget,
-        /// Local representation policy for zasm, asm, exe, or wasm-am
+        /// Local representation policy for native, ZASM, and Wasm targets
         #[arg(long)]
         representation: Option<RepresentationChoice>,
         #[command(flatten)]

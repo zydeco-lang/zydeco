@@ -231,7 +231,7 @@ impl<'e> Emitter<'e> {
             | Instruction::PushTag(_)
             | Instruction::PopArg(_)
             | Instruction::RetainFrame(_) => true,
-            | Instruction::Primitive(_) => true,
+            | Instruction::Scalar(region) => region.region().inputs.len() % 2 == 0,
             | Instruction::AllocContext(_) | Instruction::Clear(_) => false,
         }
     }
@@ -389,6 +389,12 @@ impl<'e> Emitter<'e> {
     /// words and the frame slots selected by this descriptor and pending
     /// suspensions. Slot maps establish liveness; word tags identify immediates.
     fn emit_alloc_call(&mut self, size_words: usize, kind: AllocationKind, id: ProgId) {
+        self.emit_alloc_call_at(size_words, kind, id, Reg::Rsp);
+    }
+
+    fn emit_alloc_call_at(
+        &mut self, size_words: usize, kind: AllocationKind, id: ProgId, cursor: Reg,
+    ) {
         let roots = self.frame_descriptor(
             format!("frame_roots_{}", id.concise_inner().replace('#', "_")),
             Action::roots(self.frames.owners[&id], self.frames.live[&id].len()),
@@ -408,7 +414,7 @@ impl<'e> Emitter<'e> {
             )),
             // Capture the root cursor before `emit_aligned_call` adds any temporary
             // ABI padding beneath it.
-            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rsp))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(cursor))),
             Instr::Lea(Reg::Rdx, LeaArgs::RelLabel(RelLabel { label: roots, offset: None })),
         ]);
         self.emit_aligned_call(JmpArgs::Label(kind.symbol().to_string()));
@@ -1125,8 +1131,8 @@ impl<'a> Emit<'a> for Instruction {
                 ]);
                 em.shift_stack_parity(1);
             }
-            | Instruction::Primitive(operation) => {
-                operation.emit(id, em);
+            | Instruction::Scalar(region) => {
+                region.emit(id, em);
             }
             | Instruction::Clear(_) => {
                 // Slot maps exclude dead bindings from collection. A pending continuation

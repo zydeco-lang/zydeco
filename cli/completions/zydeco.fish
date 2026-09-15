@@ -112,7 +112,7 @@ sharedlib\t''
 wasm-am\t''
 wasm-sps\t''
 exe\t''"
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l representation -d 'Local representation policy for zasm, asm, exe, or wasm-am' -r -f -a "boxed\t''
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l representation -d 'Local representation policy for native, ZASM, and Wasm targets' -r -f -a "boxed\t''
 direct\t''
 local\t''
 shared\t''"

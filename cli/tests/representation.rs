@@ -83,8 +83,7 @@ fn unsupported_targets_and_unknown_policies_fail_before_artifact_creation() {
     let directory = tempfile::tempdir().unwrap();
     let build = directory.path().join("uncreated");
     for (target, policy, diagnostic) in [
-        ("zir", "shared", "this target does not use assembly representation analysis"),
-        ("wasm-sps", "local", "this target does not use assembly representation analysis"),
+        ("zir", "shared", "this target does not select physical representations"),
         ("exe", "unknown", "invalid value 'unknown'"),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))

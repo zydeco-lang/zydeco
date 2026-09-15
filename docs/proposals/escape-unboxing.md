@@ -69,30 +69,22 @@ Frame-resident products, mixed raw/reference fields, and layout-directed machine
 they need lifetime or entry evidence that the current policy cannot supply.
 The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduction and validation commands.
 
-## Scalar box elimination (proposed)
+## Further scalar unboxing
 
-The implemented [scalar value boundary](../references/compiler.md#scalar-value-boundaries) already
-permits raw arithmetic and C transport without changing the ordinary word ABI.
-The next useful optimization is a chain such as `int64/add` followed by `int64/mul`:
-keep the intermediate result in a raw register and box only where a consumer requires a value word.
+Verified scalar regions and straight-line box elimination are implemented;
+[scalar value boundaries](../references/compiler.md#scalar-value-boundaries) own their rules and validation.
+Local storage currently gives each definition a distinct home.
+Reusing homes or selecting registers needs liveness checks and measurements of spills and runtime cost.
+Extensions beyond a local arithmetic region require additional evidence:
 
-A valid pass needs explicit evidence for each rewritten edge:
+- **Joins:** each predecessor supplies the same representation or an explicit conversion.
+- **Calls:** caller and callee agree on raw transport, and live values have valid storage at every safepoint.
+  Unknown and separately compiled entries retain the canonical word ABI until a distinct contract is specified.
+- **Captures and fields:** layouts distinguish traced references from raw payloads and establish their lifetimes.
 
-1. The producer and every consumer agree on raw width and signedness.
-2. Raw temporaries have untraced storage through every allocation or call that can collect.
-3. Every general argument, return, capture, or product field receives its canonical encoded value.
-4. Joins agree on representation, or insert a conversion on each differing predecessor.
-5. Changes to a callable entry have matching caller and callee contracts; an unknown
-   or exported call preserves the word ABI.
-
-Represent this evidence in compiler IR and verify it before instruction selection.
-A source `unboxed` preference alone cannot establish any of these facts.
-Start with straight-line primitive chains whose operands and uses are known, then measure removed allocations.
-Compare optimized and ordinary execution on boundary arithmetic, pointer-shaped payloads,
-control-flow joins, GC safepoints, and calls through separately compiled units.
-Add negative verifier cases for raw bits in traced slots and for incompatible caller/callee representations
-before extending the optimization to captures or indirect calls.
-Mixed raw/reference layouts and a published raw-call ABI remain separate extensions.
+Add rejected verifier counterparts before enabling each extension, and compare execution,
+allocation counts, and collection behavior with the boxed policy.
+A source meta annotation can express a preference; it cannot establish representation or lifetime evidence.
 
 ## Local CPS continuations (proposed)
 

@@ -51,10 +51,15 @@ impl Fixture {
     }
 
     fn execute(&self, selection: &str, target: &str) -> Output {
+        self.execute_options(selection, target, &[])
+    }
+
+    fn execute_options(&self, selection: &str, target: &str, extra: &[&str]) -> Output {
         if target == "exe" || target == "zasm" {
-            return self.build(selection, target, &["--execute"]);
+            let extra = extra.iter().copied().chain(["--execute"]).collect::<Vec<_>>();
+            return self.build(selection, target, &extra);
         }
-        let compiled = self.build(selection, target, &[]);
+        let compiled = self.build(selection, target, extra);
         Self::assert_success(&compiled);
         let extension = if target == "wasm-am" { "am" } else { "sps" };
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
@@ -323,6 +328,125 @@ fn unoptimized_integer_zero_divisors_fail_before_the_continuation() {
                 assert!(output.stdout.is_empty());
                 assert!(String::from_utf8_lossy(&output.stderr).contains(diagnostic));
             }
+        }
+    }
+}
+
+#[test]
+fn scalar_regions_remove_boxes_and_preserve_results_across_backends() {
+    use zydeco_assembly::syntax::{Instruction, Program};
+    use zydeco_cli::RepresentationStrategy;
+    let fixture = Fixture::new(
+        r#"
+let fix floating (x : Float64) (n : Int) : Ret Float64 =
+  ! numeric/int/eq (Ret Float64) n 0 { ret x } {
+    do y <- ! numeric/float64/add x 1.0;
+    do z <- ! numeric/float64/mul y 2.0;
+    do m <- ! numeric/int/sub n 1;
+    ! floating z m
+  }
+in
+do x <- ! numeric/int64/from_int 4096;
+do y <- ! numeric/int64/add x (9223372036854775807 : Int64);
+do z <- ! numeric/int64/sub y (9223372036854775807 : Int64);
+do text <- ! numeric/int64/to_string z;
+! system/stdio/write_line text {
+  do x <- ! numeric/uint64/from_uint 4096;
+  do y <- ! numeric/uint64/add x (18446744073709551615 : UInt64);
+  do z <- ! numeric/uint64/mul y (2 : UInt64);
+  do text <- ! numeric/uint64/to_string z;
+  ! system/stdio/write_line text {
+    do z <- ! floating 2.0 4;
+    do text <- ! numeric/float64/to_string z;
+    ! system/stdio/write_line text { ! process/exit 0 }
+  }
+}
+
+"#,
+    );
+    let counts = [RepresentationStrategy::Boxed, RepresentationStrategy::Local].map(|policy| {
+        let compiler = CommandCompiler::default().with_representation(policy);
+        let backend = compiler.lower(&fixture.source()).unwrap();
+        backend
+            .assembly()
+            .arena()
+            .programs
+            .iter()
+            .map(|(_, program)| match program {
+                | Program::Instruction(Instruction::Scalar(region), _) => region.allocation_count(),
+                | _ => 0,
+            })
+            .sum::<usize>()
+    });
+    assert_eq!(
+        counts[0] - counts[1],
+        3,
+        "one intermediate box removed from each of three scalar chains"
+    );
+    let reference = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+        .arg("run")
+        .arg(fixture.source())
+        .output()
+        .unwrap();
+    Fixture::assert_success(&reference);
+    assert_eq!(reference.stdout, b"4096\n8190\n62\n");
+    for policy in ["boxed", "local"] {
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            let output = fixture.execute_options("default", target, &["--representation", policy]);
+            Fixture::assert_success(&output);
+            assert_eq!(output.stdout, reference.stdout, "{policy}/{target}");
+        }
+    }
+}
+
+#[test]
+fn scalar_regions_survive_collection_and_keep_failure_order() {
+    for (ty, group, initial, increment, expected) in [
+        ("Int64", "int64", "9223372036854775807", "1", "-9223372036854575809"),
+        ("UInt64", "uint64", "18446744073709551615", "1", "199999"),
+        ("Float64", "float64", "1.5", "1.0", "200001.5"),
+    ] {
+        let fixture = Fixture::new(&format!(
+            r#"
+let fix churn (n : Int) (value : {ty}) : Ret {ty} =
+  ! numeric/int/eq (Ret {ty}) n 0 {{ ret value }} {{
+    do first <- ! numeric/{group}/add value ({increment} : {ty});
+    do second <- ! numeric/{group}/add first ({increment} : {ty});
+    do remaining <- ! numeric/int/sub n 1;
+    ! churn remaining second
+  }}
+in
+do result <- ! churn 100000 ({initial} : {ty});
+! numeric/{group}/eq OS result ({expected} : {ty}) {{ ! process/exit 0 }} {{ ! process/exit 42 }}
+"#
+        ));
+        for policy in ["boxed", "local"] {
+            Fixture::assert_success(&fixture.execute_options(
+                "default",
+                "exe",
+                &["--representation", policy],
+            ));
+        }
+    }
+    // Both divisions remain runtime operations. Fusion must keep the first
+    // failure, even when the later operation also fails and neither returns.
+    let fixture = Fixture::new(
+        r#"
+! system/stdio/write_line "before" {
+  do first <- ! numeric/int64/mod (7 : Int64) (0 : Int64);
+  do second <- ! numeric/int64/div first (0 : Int64);
+  ! system/stdio/write_line "after" { ! process/exit 0 }
+}
+"#,
+    );
+    for policy in ["boxed", "local"] {
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            let output = fixture.execute_options("default", target, &["--representation", policy]);
+            assert!(!output.status.success());
+            assert_eq!(output.stdout, b"before\n", "{policy}/{target}");
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert!(error.contains("integer remainder by zero"), "{policy}/{target}: {error}");
+            assert!(!error.contains("panicked"));
         }
     }
 }

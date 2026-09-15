@@ -200,8 +200,8 @@ impl<'a> StackMeasure<'a> for ProgId {
                     | Instruction::RetainFrame(_) => {
                         si.push_control(&mut layout, Slot::Unknown);
                     }
-                    | Instruction::Primitive(_) => {
-                        (0..2).for_each(|_| {
+                    | Instruction::Scalar(region) => {
+                        (0..region.region().inputs.len()).for_each(|_| {
                             si.pop_control(&mut layout);
                         });
                         si.push_control(&mut layout, Slot::Unknown);
@@ -257,7 +257,7 @@ impl<'a> StackInline<'a> for ProgId {
                     | Instruction::AllocContext(_)
                     | Instruction::PopArg(_)
                     | Instruction::PushTag(_)
-                    | Instruction::Primitive(_)
+                    | Instruction::Scalar(_)
                     | Instruction::Clear(_)
                     | Instruction::RetainFrame(_),
                     _,

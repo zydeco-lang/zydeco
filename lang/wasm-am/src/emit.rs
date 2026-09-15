@@ -41,8 +41,7 @@ const TRANSFER_COUNT_LOCAL: u32 = 8;
 const TRANSFER_CLOSURE_LOCAL: u32 = 9;
 const TRANSFER_FIRST_LOCAL: u32 = 10;
 const TRANSFER_SECOND_LOCAL: u32 = 11;
-const DECODED_FIRST_LOCAL: u32 = 12;
-const DECODED_SECOND_LOCAL: u32 = 13;
+const SCALAR_BASE_LOCAL: u32 = 12;
 
 /// The pointer temporary shared by the word-emission sequences.
 const POINTER: PointerLocal = PointerLocal::I32(POINTER_LOCAL);
@@ -487,7 +486,7 @@ impl<'a> ModuleEncoder<'a> {
                 | Instruction::PushArg(_) => "push",
                 | Instruction::PopArg(_) => "pop",
                 | Instruction::PushTag(_) => "tag",
-                | Instruction::Primitive(_) => "primitive",
+                | Instruction::Scalar(_) => "scalar",
                 | Instruction::Clear(_) => "clear",
                 | Instruction::RetainFrame(_) => "retain_frame",
             },
@@ -510,12 +509,18 @@ struct CaseEncoder<'a> {
 
 impl<'a> CaseEncoder<'a> {
     fn new(assembly: &'a AssemblyArena, plan: &'a ModulePlan) -> Self {
-        // Two i32 temporaries followed by twelve i64 temporaries.
-        let function = Function::new([(2, ValType::I32), (12, ValType::I64)]);
+        let function = Function::new([]);
         Self { assembly, plan, function }
     }
 
     fn encode(mut self, body: &Program) -> Result<Function, EmitError> {
+        let scalar_locals = match body {
+            | Program::Instruction(Instruction::Scalar(region), _) => {
+                Limits::u32(region.representations().len(), "scalar local count")?
+            }
+            | _ => 0,
+        };
+        self.function = Function::new([(2, ValType::I32), (10 + scalar_locals, ValType::I64)]);
         match body {
             | Program::Instruction(instruction, next) => {
                 self.emit_instruction(instruction)?;
@@ -545,7 +550,7 @@ impl<'a> CaseEncoder<'a> {
             | Instruction::PushTag(zasm::Push(tag)) => {
                 self.push_constant(RuntimeWord::index(tag.idx)? as i64);
             }
-            | Instruction::Primitive(operation) => self.emit_primitive(*operation),
+            | Instruction::Scalar(region) => self.emit_scalar(region),
             | Instruction::Clear(context) => {
                 for variable in context {
                     let address = self.plan.variable_address(*variable)?;
@@ -759,14 +764,13 @@ impl<'a> CaseEncoder<'a> {
         self.function.instruction(&WasmInstruction::GlobalSet(PROGRAM_COUNTER_GLOBAL));
     }
 
-    fn emit_primitive(&mut self, operation: zydeco_syntax::PrimitiveOp) {
-        self.pop_to(DECODED_FIRST_LOCAL);
-        self.pop_to(DECODED_SECOND_LOCAL);
-        WordEmitter::new(&mut self.function, self.plan.alloc_function()).primitive(
-            operation,
-            DECODED_FIRST_LOCAL,
-            DECODED_SECOND_LOCAL,
-            RESULT_LOCAL,
+    fn emit_scalar(&mut self, region: &zydeco_syntax::scalar::ScalarProgram) {
+        for index in 0..region.region().inputs.len() {
+            self.pop_to(SCALAR_BASE_LOCAL + index as u32);
+        }
+        WordEmitter::new(&mut self.function, self.plan.alloc_function()).scalar_region(
+            region,
+            SCALAR_BASE_LOCAL,
             POINTER,
         );
         self.function.instruction(&WasmInstruction::Call(self.plan.push_function()));

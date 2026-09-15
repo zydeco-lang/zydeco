@@ -555,7 +555,7 @@ impl Application {
         if !libraries.is_empty() && target != BuildTarget::Exe {
             return Err(ApplicationError::LibraryLinkTarget);
         }
-        if representation.is_some() && matches!(target, BuildTarget::Zir | BuildTarget::WasmSps) {
+        if representation.is_some() && matches!(target, BuildTarget::Zir) {
             return Err(ApplicationError::RepresentationTarget);
         }
         if execute && sources.len() != 1 {
@@ -691,7 +691,7 @@ enum ApplicationError {
     #[error(transparent)]
     PipelinePlan(#[from] HighSpsPlanError),
     #[error(
-        "--representation applies to zasm, asm, exe, wasm-am, object, staticlib, and sharedlib; this target does not use assembly representation analysis"
+        "--representation applies to zasm, asm, exe, wasm-am, wasm-sps, object, staticlib, and sharedlib; this target does not select physical representations"
     )]
     RepresentationTarget,
     #[error("documentation worker failed: {0}")]

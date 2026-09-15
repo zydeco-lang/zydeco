@@ -35,6 +35,7 @@ pub struct Lowerer<'a> {
     pub sps_low: &'a sk::SpsLowArena,
     pub root: sk::CompuId,
     unboxing: crate::unbox::LocalUnboxing,
+    scalars: zydeco_stackir::low::scalar::ScalarPlans,
     unboxed_var_slots: HashMap<sk::DefId, Vec<VarId>>,
     native_frames: bool,
 }
@@ -62,6 +63,7 @@ impl<'a> Lowerer<'a> {
             sps_low: sps_low.arena(),
             root: sps_low.root(),
             unboxing,
+            scalars: zydeco_stackir::low::scalar::ScalarPlans::new(sps_low, policy.scalar_boxing()),
             unboxed_var_slots: HashMap::new(),
             native_frames: false,
         }
@@ -212,9 +214,11 @@ impl Lowering<'_, '_> {
                 };
                 self.emit(Push(atom), context, ContextUpdate::Keep, next)
             }
-            | Value::Primitive(sk::Primitive { operation, operands }) => {
-                let next = self.instruction(operation, next);
-                let next = operands
+            | Value::Primitive(_) => {
+                let call = self.lo.scalars.call(id).clone();
+                let next = self.instruction(call.program, next);
+                let next = call
+                    .inputs
                     .into_iter()
                     .fold(next, |next, value| self.then(Action::Value(value), next));
                 Step::TailCall(Work::Apply(next, context))
@@ -278,6 +282,12 @@ impl Lowering<'_, '_> {
 
     fn compu(&mut self, id: sk::CompuId, context: Context) -> Step<Self> {
         use sk::Computation as Compu;
+        if self.lo.scalars.elided(id) {
+            let Compu::LetValue(binding) = &self.lo.sps_low.inner.compus[&id] else {
+                unreachable!()
+            };
+            return Step::TailCall(Work::Compu(binding.tail, context));
+        }
         match self.lo.sps_low.inner.compus[&id].clone() {
             | Compu::Hole(sk::SHole(stack)) => {
                 let next = self.save(Continuation::End(Abort.into()));

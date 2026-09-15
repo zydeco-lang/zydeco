@@ -160,7 +160,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --target-arch 'Target architecture (defaults to host architecture)'
             cand -t 'Target backend'
             cand --target 'Target backend'
-            cand --representation 'Local representation policy for zasm, asm, exe, or wasm-am'
+            cand --representation 'Local representation policy for native, ZASM, and Wasm targets'
             cand --sps-passes 'High-SPS passes: default, none, or a comma-separated list; order and duplicates are preserved'
             cand -b 'Build Directory'
             cand --build-dir 'Build Directory'

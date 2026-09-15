@@ -197,6 +197,7 @@ fn source_free_units_share_captures_and_continuations_across_collection() {
         ("UInt64", "uint64", "18446744073709551615", "1", "0"),
     ] {
         let fixture = Fixture::new();
+        let one = if ty == "Float64" { "1.0" } else { "1" };
         let producer = fixture.write(
             "producer.zy",
             &format!(
@@ -211,7 +212,10 @@ param val (/Thk; /Ret; /Unit; /Int; /{ty}; /numeric) : @(import({:?})) in
           {{ do next <- ! numeric/int/sub n 1; ! churn next }}
       in
       do () <- ! churn 100000;
-      ! numeric/{group}/add delta value
+      do sum <- ! numeric/{group}/add delta value;
+      do product <- ! numeric/{group}/mul sum ({one} : {ty});
+      do () <- ! churn 100000;
+      ret product
     }}
   }} : Thk ({ty} -> Ret (Thk ({ty} -> Ret {ty})))),
   #pair = ((({delta} : {ty}), ({argument} : {ty})), "native unit")

@@ -192,7 +192,7 @@ impl Eval for Instruction {
                 interp.runtime.stack.push(Value::Tag(tag));
                 Ok(())
             }
-            | Instruction::Primitive(operation) => {
+            | Instruction::Scalar(region) => {
                 let mut operand =
                     || match interp.runtime.stack.pop().ok_or(Error::StackUnderflow)? {
                         | Value::Atom(Atom::Imm(Imm::Integer(value))) => {
@@ -201,7 +201,10 @@ impl Eval for Instruction {
                         | Value::Atom(Atom::Imm(Imm::Float(value))) => Ok(Literal::Float(value)),
                         | _ => Err(Error::Primitive(PrimitiveError::OperandType)),
                     };
-                let result = operation.evaluate(&[operand()?, operand()?])?;
+                let operands = (0..region.region().inputs.len())
+                    .map(|_| operand())
+                    .collect::<Result<Vec<_>, _>>()?;
+                let result = region.evaluate(&operands)?;
                 let result = match result {
                     | Literal::Integer(value) => Imm::Integer(value),
                     | Literal::Float(value) => Imm::Float(value),

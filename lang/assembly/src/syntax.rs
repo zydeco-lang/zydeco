@@ -65,8 +65,8 @@ pub enum Instruction {
     /// Push a tag onto the stack.
     /// Destructed by [`PopBranch`].
     PushTag(Push<Tag>),
-    /// Builtin instructions.
-    Primitive(PrimitiveOp),
+    /// Verified scalar operations with ordinary value inputs and one ordinary result.
+    Scalar(zydeco_syntax::scalar::ScalarProgram),
     /// Clear specified variables from the current context.
     Clear(Context),
     /// Retain the active activation for a checked native continuation entry.

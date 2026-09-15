@@ -22,6 +22,7 @@ impl Storage {
             sps_low: &arena,
             root,
             unboxing: crate::unbox::LocalUnboxing::default(),
+            scalars: Default::default(),
             unboxed_var_slots: HashMap::new(),
             native_frames: false,
         };

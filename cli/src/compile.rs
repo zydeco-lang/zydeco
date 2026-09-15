@@ -126,7 +126,7 @@ impl CommandCompiler {
         self
     }
 
-    /// Select local value representations for assembly-derived targets.
+    /// Select local product and scalar representation policies.
     pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
         self.representation = strategy;
         self
@@ -645,7 +645,9 @@ impl BackendProgram {
     }
 
     pub fn emit_wasm_sps(&self) -> Result<Vec<u8>, CompileError> {
+        use zydeco_assembly::representation::RepresentationPolicy as _;
         zydeco_wasm_sps::Emitter::new(&self.sps_low)
+            .with_scalar_boxing(self.representation.scalar_boxing())
             .run()
             .map(zydeco_wasm_sps::WasmModule::into_bytes)
             .map_err(CompileError::WasmSps)

@@ -25,6 +25,10 @@ pub struct UnboxingOpportunity {
 /// A preference among valid choices, consumed only during compiler analysis.
 pub trait RepresentationPolicy {
     fn unbox(&self, opportunity: UnboxingOpportunity) -> bool;
+
+    fn scalar_boxing(&self) -> zydeco_syntax::scalar::ScalarBoxing {
+        zydeco_syntax::scalar::ScalarBoxing::Eliminate
+    }
 }
 
 /// Keep residual products and closures boxed.
@@ -34,6 +38,10 @@ pub struct Boxed;
 impl RepresentationPolicy for Boxed {
     fn unbox(&self, _: UnboxingOpportunity) -> bool {
         false
+    }
+
+    fn scalar_boxing(&self) -> zydeco_syntax::scalar::ScalarBoxing {
+        zydeco_syntax::scalar::ScalarBoxing::Keep
     }
 }
 
@@ -97,6 +105,15 @@ impl RepresentationPolicy for RepresentationStrategy {
             | Self::Direct => Direct.unbox(opportunity),
             | Self::Local => Local.unbox(opportunity),
             | Self::Shared => Shared.unbox(opportunity),
+        }
+    }
+
+    fn scalar_boxing(&self) -> zydeco_syntax::scalar::ScalarBoxing {
+        match self {
+            | Self::Boxed => zydeco_syntax::scalar::ScalarBoxing::Keep,
+            | Self::Direct | Self::Local | Self::Shared => {
+                zydeco_syntax::scalar::ScalarBoxing::Eliminate
+            }
         }
     }
 }

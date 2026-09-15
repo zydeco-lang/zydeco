@@ -1528,9 +1528,9 @@ and spare-box contracts as their corresponding primitive instructions.
 
 Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
 An unknown callee remains indirect; other known Builtin operations remain external calls.
-The typed primitive survives SPSLow and ZASM, where C11 and C13 select native or Wasm arithmetic instructions.
-Word decoding, encoding, and conditional boxing still follow the target representation;
-this optimization does not prove that all scalar boxes disappear.
+The typed primitive survives SPSLow;
+[scalar region lowering](#scalar-value-boundaries) then makes representation conversions explicit for ZASM
+and direct Wasm instruction selection.
 
 ### Pattern decisions and validation
 
@@ -1987,11 +1987,12 @@ The collector first establishes a compatible producer/consumer shape and the req
 then asks the policy about an `UnboxingOpportunity`: its reason and field-word count.
 Accepting every opportunity cannot waive an escape, width, or calling-contract restriction.
 Rejecting a closure's expansion also prevents expansion of an environment transported inside that boxed closure.
-Fields retain their ordinary tagged-word representation; the policy cannot assign raw scalar or pointer layouts.
+Product fields retain their ordinary tagged-word representation.
+[Scalar regions](#scalar-value-boundaries) separately justify local raw arithmetic without changing field layouts.
 
 | Policy | Selected opportunities |
 | --- | --- |
-| `Boxed` | Keep residual product and closure cells after the selected high-SPS transformations. |
+| `Boxed` | Keep residual product, closure, and scalar operation boxes after the selected high-SPS transformations. |
 | `Direct` | Immediate product elimination and opening of a syntactic closure package. |
 | `Local` (default) | `Direct`, plus a variable-bound product used only through compatible projections. |
 | `Shared` (experimental) | `Local`, plus a variable-bound closure used only through closure openings. |
@@ -2004,8 +2005,9 @@ Custom Rust policies can restrict selection by reason or width without replacing
 `CommandCompiler::with_representation` and `BackendProgram::with_representation` provide per-compilation enum selection.
 Changing a backend program's strategy invalidates its cached portable assembly.
 Native frame preparation consumes the same policy before establishing its frame and root maps.
-The CLI's `build --representation` applies to ZASM, AMD64 assembly/executables, and AM Wasm.
-An explicit selection for Zir or SPS Wasm is rejected because those paths do not consume this analysis.
+The CLI's `build --representation` applies to ZASM, AMD64 assembly/executables, and both Wasm backends.
+SPS Wasm consumes its [scalar choice](#scalar-value-boundaries); product policies remain assembly-specific.
+Zir rejects an explicit selection because it precedes physical representation lowering.
 The old process-wide `ZYDECO_DISABLE_UNBOXING` switch has been removed; select `Boxed` explicitly instead.
 
 The delivered analysis is local representation selection.
@@ -2320,28 +2322,39 @@ This includes arguments, returns, products, captures, existential/polymorphic va
 The payload contains raw bits and the collector never traces it; only the enclosing pointer is a root.
 These compiler-owned primitive representations require no source meta annotation.
 
-The [AMD64 primitive emitter](../../lang/amd64/src/emit/primitive.rs)
-and [shared Wasm emitter](../../lang/wasm-common/src/word.rs) decode operands to raw registers/locals,
-perform machine arithmetic, and encode the result at the next ordinary value boundary.
-Signed `Int64` minimum divided by `-1` is handled before a target instruction that would trap on overflow.
-When native result boxing allocates, raw bits survive in an untraced callee-saved register.
-They must never be pushed among tagged control-stack roots or stored in scanned object fields.
-Host builtins receive any needed spare box before their arguments are decoded,
-so their conversion helpers do not collect.
-Widening conversions use this spare-box path; checked narrowing returns a tagged value
-through its selected continuation.
+[Scalar regions](../../lang/syntax/src/scalar.rs) make representation changes explicit
+as `Decode`, `Encode`, and raw `Arithmetic` instructions.
+Their verifier derives each definition's `Value(T)` or `Raw(T)` representation, checks width and signedness
+through its scalar type, rejects unavailable operands, and checks the declared ordinary result type.
+Regions contain no calls, branches, or scanned-field construction.
+Only a verified, immutable `ScalarProgram` reaches instruction selection.
+Source typing and SPSLow protocol validation supply the input classifiers;
+region verification checks their representation-preserving use, rather than reconstructing source typing.
 
-This implements local raw arithmetic and the [C adapter](#foreign-calls), while retaining the general word ABI.
-It does not eliminate intermediate scalar boxes across separate operations,
-specialize indirect call signatures, or add raw fields to scanned products. Those optimizations need the
-[representation evidence described in the proposal](../proposals/escape-unboxing.md#scalar-box-elimination-proposed).
+The shared [SPSLow analysis](../../lang/stackir/src/low/scalar.rs) groups `Int64`, `UInt64`,
+and `Float64` primitive trees and adjacent single-use primitive bindings, up to 32 operations per region.
+Leaves must be scalar literals or variables.
+Calls, branches, captures, shared bindings, and intervening constructions preserve ordinary value boundaries.
+Arithmetic retains its evaluation order, including division/remainder failures.
+The rewrite cancels `Decode(Encode(raw))`, removes unused conversions, and verifies the result again.
+`Boxed` retains individual primitive boundaries; `Direct`, `Local`, and `Shared` enable this elimination.
+The [execution regression](../../cli/tests/passes.rs) compares both policies with the interpreter
+and all compiled backends, and counts the removed scalar allocation sites.
 
-The regression boundary includes arithmetic with and without normalization on all four backends,
-full-width C import/export round trips, checked conversion failures,
-and source-free transitive unit calls with captured scalars across collection.
-Native entry tests additionally keep numeric payloads equal to heap addresses alive through collection,
-asserting that payload bits do not move with pointers.
-These checks validate the implemented paths; they are not a proof of future box-elimination passes.
+Native preparation assigns checked, distinct homes for value words and raw bits.
+The [AMD64 emitter](../../lang/amd64/src/emit/primitive.rs) initializes additional value homes
+before allocation and places raw homes below an explicit collector root cursor.
+Live box pointers can therefore move during collection while raw numeric bits remain unchanged.
+The [Wasm emitter](../../lang/wasm-common/src/word.rs) uses distinct locals; its heaps currently do not collect.
+Signed minimum divided by `-1` is handled before target overflow traps.
+Host builtins still receive spare boxes before decoding arguments, so their conversion helpers do not collect.
+
+Negative tests reject representation mismatches, raw region exits, and incorrect or aliased native homes.
+Runtime regressions cover full-width C round trips, source-free unit calls across collection,
+and numeric payloads equal to heap addresses.
+These checks cover the implemented lowering; machine instruction selection remains trusted and tested.
+[Further scalar unboxing](../proposals/escape-unboxing.md#further-scalar-unboxing) needs explicit evidence at joins,
+source calls, captures, and mixed raw/reference layouts.
 
 ### Runtime instances
 

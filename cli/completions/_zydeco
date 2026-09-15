@@ -218,7 +218,7 @@ _arguments "${_arguments_options[@]}" : \
 '--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:(x86-64 aarch64)' \
 '-t+[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe)' \
 '--target=[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe)' \
-'--representation=[Local representation policy for zasm, asm, exe, or wasm-am]:REPRESENTATION:(boxed direct local shared)' \
+'--representation=[Local representation policy for native, ZASM, and Wasm targets]:REPRESENTATION:(boxed direct local shared)' \
 '--sps-passes=[High-SPS passes\: default, none, or a comma-separated list; order and duplicates are preserved]:PLAN:_default' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \

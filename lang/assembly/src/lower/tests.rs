@@ -234,6 +234,7 @@ impl Fixture {
             sps_low: &self.arena,
             root,
             unboxing,
+            scalars: zydeco_stackir::low::scalar::ScalarPlans::unoptimized(&self.arena.inner),
             unboxed_var_slots: HashMap::new(),
             native_frames,
         }

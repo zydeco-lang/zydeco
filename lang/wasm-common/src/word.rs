@@ -6,6 +6,7 @@
 //! that decode, encode, box, and divide tagged words.
 
 use wasm_encoder::{Function, Instruction as WasmInstruction};
+use zydeco_syntax::scalar::{ScalarProgram, ScalarStep, ScalarType};
 
 use zydeco_syntax::{
     FloatArithmetic, FloatType, IntegerArithmetic, IntegerType, PrimitiveOp, SpareBox,
@@ -142,17 +143,60 @@ impl<'f> WordEmitter<'f> {
         }
     }
 
-    /// Execute typed binary arithmetic on two encoded scratch locals, leaving
-    /// the encoded result on the operand stack. Scratch locals may be overwritten.
-    pub fn primitive(
-        &mut self, operation: PrimitiveOp, first: u32, second: u32, result: u32,
-        pointer: PointerLocal,
-    ) {
+    /// Each definition has a distinct i64 local; raw bits never enter value memory.
+    /// Inputs have been placed in the first locals. Leave the ordinary result on the stack.
+    pub fn scalar_region(&mut self, program: &ScalarProgram, base: u32, pointer: PointerLocal) {
+        for (index, step) in program.region().steps.iter().enumerate() {
+            let target = base + (program.region().inputs.len() + index) as u32;
+            match *step {
+                | ScalarStep::Decode { ty, value } => {
+                    let source = base + value.0 as u32;
+                    self.function.instruction(&WasmInstruction::LocalGet(source));
+                    self.function.instruction(&WasmInstruction::LocalSet(target));
+                    match ty {
+                        | ScalarType::Integer(ty) => self.decode_integer(target, ty),
+                        | ScalarType::Float(ty) => {
+                            self.function.instruction(&WasmInstruction::LocalGet(target));
+                            match ty {
+                                | FloatType::Float32 => {
+                                    self.function.instruction(&WasmInstruction::I64Const(1));
+                                    self.function.instruction(&WasmInstruction::I64ShrU);
+                                }
+                                | FloatType::Float64 => {
+                                    self.function.instruction(&WasmInstruction::I32WrapI64);
+                                    self.function
+                                        .instruction(&WasmInstruction::I64Load(WORD_MEMORY));
+                                }
+                            }
+                            self.function.instruction(&WasmInstruction::LocalSet(target));
+                        }
+                    }
+                }
+                | ScalarStep::Encode { ty, raw } => {
+                    let source = base + raw.0 as u32;
+                    match ty.representation() {
+                        | ScalarRepresentation::Immediate => self.tag_local(source),
+                        | ScalarRepresentation::OpaqueBox => self.box_local(source, pointer),
+                    }
+                    self.function.instruction(&WasmInstruction::LocalSet(target));
+                }
+                | ScalarStep::Arithmetic { operation, operands } => {
+                    self.raw_arithmetic(
+                        operation,
+                        base + operands[0].0 as u32,
+                        base + operands[1].0 as u32,
+                        target,
+                    );
+                }
+            }
+        }
+        self.function
+            .instruction(&WasmInstruction::LocalGet(base + program.region().result.0 as u32));
+    }
+
+    fn raw_arithmetic(&mut self, operation: PrimitiveOp, first: u32, second: u32, result: u32) {
         match operation {
             | PrimitiveOp::Integer(ty, operation) => {
-                for local in [first, second] {
-                    self.decode_integer(local, ty);
-                }
                 match operation {
                     | IntegerArithmetic::Div | IntegerArithmetic::Mod if ty.is_signed() => {
                         self.signed_division(
@@ -206,24 +250,16 @@ impl<'f> WordEmitter<'f> {
                     WasmInstruction::I64ShrU
                 });
                 self.function.instruction(&WasmInstruction::LocalSet(result));
-                match ty.representation() {
-                    | ScalarRepresentation::Immediate => self.tag_local(result),
-                    | ScalarRepresentation::OpaqueBox => self.box_local(result, pointer),
-                }
             }
             | PrimitiveOp::Float(ty, operation) => {
                 for local in [first, second] {
                     self.function.instruction(&WasmInstruction::LocalGet(local));
                     match ty {
                         | FloatType::Float32 => {
-                            self.function.instruction(&WasmInstruction::I64Const(1));
-                            self.function.instruction(&WasmInstruction::I64ShrU);
                             self.function.instruction(&WasmInstruction::I32WrapI64);
                             self.function.instruction(&WasmInstruction::F32ReinterpretI32);
                         }
                         | FloatType::Float64 => {
-                            self.function.instruction(&WasmInstruction::I32WrapI64);
-                            self.function.instruction(&WasmInstruction::I64Load(WORD_MEMORY));
                             self.function.instruction(&WasmInstruction::F64ReinterpretI64);
                         }
                     }
@@ -248,10 +284,6 @@ impl<'f> WordEmitter<'f> {
                     }
                 }
                 self.function.instruction(&WasmInstruction::LocalSet(result));
-                match ty {
-                    | FloatType::Float32 => self.tag_local(result),
-                    | FloatType::Float64 => self.box_local(result, pointer),
-                }
             }
         }
     }

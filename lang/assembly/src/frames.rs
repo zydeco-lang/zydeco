@@ -52,6 +52,8 @@ pub struct FramePlan {
     pub owners: BTreeMap<ProgId, LayoutId>,
     pub slots: BTreeMap<VarId, usize>,
     pub live: BTreeMap<ProgId, Vec<usize>>,
+    /// Checked homes for each scalar region's value words and untraced bits.
+    pub scalars: BTreeMap<ProgId, zydeco_syntax::scalar::ScalarStorage>,
 }
 
 impl FramePlan {
@@ -320,7 +322,17 @@ impl FramePlan {
                 (program, words.into_iter().collect())
             })
             .collect();
-        Ok(Self { entries: arena.frame_entries.clone(), layouts, owners, slots, live })
+        let scalars = arena
+            .programs
+            .iter()
+            .filter_map(|(id, program)| match program {
+                | Program::Instruction(Instruction::Scalar(region), _) => {
+                    Some((*id, zydeco_syntax::scalar::ScalarStorage::for_program(region)))
+                }
+                | _ => None,
+            })
+            .collect();
+        Ok(Self { entries: arena.frame_entries.clone(), layouts, owners, slots, live, scalars })
     }
 
     fn interfere(conflicts: &mut BTreeMap<VarId, BTreeSet<VarId>>, variables: &BTreeSet<VarId>) {

@@ -12,6 +12,7 @@ pub use word::*;
 
 pub mod primitive;
 pub use primitive::*;
+pub mod scalar;
 
 pub mod unit;
 pub use unit::*;
