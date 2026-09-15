@@ -1,0 +1,29 @@
+param (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /OS; /memory; /numeric; /process; builtin) :
+@(import("../../../lib/std/builtin.zy")) in
+let fail = { ! process/exit 1 } in
+let no = { fn (_ : Int64) => ! fail } in
+let (/views; /fixed; /Init) = builtin |> (@(import("../../../lib/std/memory/package.zy"))) in
+let (= Plan, = Layout, layouts) = fixed in
+let open : Thk (Addr -> Thk (Int64 -> OS) -> OS) =
+  match layouts/int64
+  | +Err(_) => { fn _ _ => ! fail }
+  | +Ok(plan) =>
+    let (= L, operations) = layouts/realize Int64 plan in
+    let (/H; /unsafe = header) = views/unsafe/inline Int64 L L operations 0 in
+    {
+      fn address yes =>
+        ! (header/open Init (header/from_address Init address)) OS { fn (_, value) => ! yes value }
+    }
+  end
+in
+! memory/allocate OS 8 8 no {
+  fn address =>
+    ! numeric/int64/store_le OS address 123 {
+      ! open address {
+        fn result =>
+          ! memory/free OS address 8 8 no {
+            ! numeric/int64/eq OS result 123 { ! process/exit 0 } fail
+          }
+      }
+    }
+}

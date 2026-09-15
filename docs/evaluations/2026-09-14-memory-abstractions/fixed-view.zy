@@ -1,0 +1,24 @@
+param (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /OS; /memory; /numeric; /process; builtin) :
+@(import("../../../lib/std/builtin.zy")) in
+let fail = { ! process/exit 1 } in
+let no = { fn (_ : Int64) => ! fail } in
+let (/views) = builtin |> (@(import("../../../lib/std/memory/package.zy"))) in
+let (/View; /Cps) = views in
+let load : View Cps Addr Int64 = val address =>
+  {
+    fn R yes => ! numeric/int64/load_le R address yes
+  } in
+let open : Thk (Addr -> Thk (Int64 -> OS) -> OS) = {
+  fn address yes => ! (load address) OS yes
+} in
+! memory/allocate OS 8 8 no {
+  fn address =>
+    ! numeric/int64/store_le OS address 123 {
+      ! open address {
+        fn result =>
+          ! memory/free OS address 8 8 no {
+            ! numeric/int64/eq OS result 123 { ! process/exit 0 } fail
+          }
+      }
+    }
+}

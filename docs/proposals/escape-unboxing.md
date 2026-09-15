@@ -10,6 +10,8 @@ unboxed fields, a frame-resident cell, or a managed heap cell.
 Stack-product allocation and interprocedural escape constraints are not implemented.
 The complementary [local CPS experiment](#local-cps-continuations-proposed) would remove eligible callback machinery
 before closure conversion.
+The [memory compilation proposal](memory-compilation.md) connects these analyses to memory specialization,
+primitive lowering, and measurable acceptance targets.
 
 SPSLow has explicit closure captures and a single lexical occurrence per value node; sharing uses named variables.
 That makes producer/consumer structure available before ZASM decomposes it into stack operations. The runtime's

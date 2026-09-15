@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-14",
+  "compiler_revision": "6ddbca3f1cb4196e1939b8b9877d5a6e698c7b14",
+  "source_changes": "Only documentation and these new evaluation fixtures; compiler and std unchanged",
+  "host": "Darwin arm64",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+  "compiler_profile": "repository development profile: cargo build --bin zydeco",
+  "generated_target": "asm --target-arch x86-64; default normalization and Local representation",
+  "execution": "interpreter only, all three fixtures exit 0; native assembly not linked or executed",
+  "sha256": {
+    "docs/evaluations/2026-09-14-memory-abstractions/raw.zy": "9bf41355bebf54d366e3bb9383ecc10a6bd64ad042629a96fdba7ada827825fc",
+    "docs/evaluations/2026-09-14-memory-abstractions/fixed-view.zy": "046fb9862b0e3fee14a216e5ebe77b4cff65c51f51aa881816e83b72c6b0066a",
+    "docs/evaluations/2026-09-14-memory-abstractions/header-view.zy": "9039fef653b67e4357e0980c1045ee1de9463e9d2b0d7afab022e16c7c71d03f"
+  }
+}

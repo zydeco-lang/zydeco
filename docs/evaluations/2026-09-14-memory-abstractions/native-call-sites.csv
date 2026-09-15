@@ -1,0 +1,4 @@
+source,zydeco_alloc_scanned,zydeco_alloc_opaque,zydeco_memory_offset,zydeco_int64_load_le_branch,zydeco_int64_store_le_branch
+raw,12,1,0,1,1
+fixed-view,12,1,0,1,1
+header-view,13,1,2,1,1
