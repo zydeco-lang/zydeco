@@ -4,7 +4,7 @@ The optional [typed-arena lint](../references/compiler.md#typed-arena-lint) owns
 constructor checks, ambient witnesses, and their limits.
 This proposal concerns the evidence needed to strengthen them.
 The checker's transient environments are absent from the finished artifact; adding checks must account for
-that boundary and preserve valid generic instantiations and package openings.
+that boundary and preserve valid generic instantiations and openings of packed values.
 
 ## Use-site derivation evidence
 
@@ -16,14 +16,14 @@ against the [retained-fact boundary](../references/compiler.md#analysis-facts-an
 
 Checking a shared node under every scope needs a scope-sensitive traversal or recorded occurrence evidence.
 A finer policy for skolems and named witnesses must distinguish deliberate export from accidental escape.
-Retain accepted package and recursive-group cases while detecting a seeded leak.
+Retain accepted packed value and recursive-group cases while detecting a seeded leak.
 An independently executed verifier still cannot establish separate soundness
 if it shares the checker's faulty derivation rule.
 
 ## Remaining checks
 
 - Confirm whether every `Type::Label` payload has kind `VType` across all elaborations before asserting it.
-- Establish the precise kinded shapes of `ManifestKind` and the static package prefix `SCons`.
+- Establish the precise kinded shapes of `ManifestKind` and the static witness prefix `SCons`.
 - Determine whether a finished arena may legitimately retain `Type::Var`.
   Bound variables usually become abstract witnesses and definition-backed variables are substituted;
   an absence invariant needs evidence across source and generated roots.

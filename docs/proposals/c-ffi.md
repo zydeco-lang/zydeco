@@ -53,9 +53,9 @@ Neither external ABI is implemented by the current memory examples.
 
 Data pointers and code pointers need distinct leaves.
 Use a proposed `Code S : VType`, where `S : VType` is an abstract static witness introduced
-by a checked foreign-signature package.
-The package supplies the ordered native argument/result description, its source conversion operations,
-and an invocation operation accepting `Code S`.
+by a checked foreign-signature packed value.
+The packed value supplies the ordered native argument/result description,
+its source conversion operations, and an invocation operation accepting `Code S`.
 An independently opened signature witness cannot silently reuse that code value.
 `S` erases; the code address remains.
 The target determines the code-pointer representation, which is not assumed to be interchangeable with a data address.
@@ -65,7 +65,7 @@ It records the calling convention, primitive widths, aggregate grouping, and res
 Source value functions can build its fixed layouts; the compiler validates and classifies the resulting plan.
 Equal source computation types or equal aggregate sizes do not establish equal foreign signatures.
 A dynamically selected foreign method can vary the `Code S` value under one known signature,
-or package distinct witnesses together with their matching invocation operations.
+or pack distinct witnesses together with their matching invocation operations.
 A runtime integer cannot dynamically determine a new native calling convention at a compiled call site.
 
 A `Thk B` may include a captured environment and is not a `Code S`.

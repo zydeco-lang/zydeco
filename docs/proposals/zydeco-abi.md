@@ -43,7 +43,7 @@ These are complementary parts of one interface:
 | --- | --- |
 | Values | Word encoding, product fields, data tags, closure records, and opaque carriers |
 | Control | Argument order, observation tags, return continuation entry, and residual stack ownership |
-| Types | Exported classifiers, nominal identities, binders, equations, and package witness relationships |
+| Types | Exported classifiers, nominal identities, binders, equations, and witness relationships |
 | Runtime | Instance membership, live roots, allocation, code lifetime, and host entry/exit |
 
 Uniform value transport matters for polymorphism.
@@ -153,7 +153,7 @@ An opaque payload may occupy one word even when its hidden implementation is a l
 | `Slice L S` | Address and count in the source library's payload | Query its count and use matching element operations; retain its actual allocation owner separately |
 | `Bytes` | Private address/count payload; storage retained by the runtime instance | Preserve the source abstraction through exported byte operations or a checked generated adapter |
 | `Buffer`, array builders | Library-selected address/capacity/initialization payload | Use the published operations and their caller obligations, not guessed field offsets |
-| `Representation A`, allocator packages, runtime-selected dictionaries | Their runtime operations and captured context remain where needed | Opaque package or typed operations sharing the same witness opening |
+| `Representation A`, allocator packed values, runtime-selected dictionaries | Their runtime operations and captured context remain where needed | Packed value with abstract witnesses or typed operations sharing the same witness opening |
 | Fixed plans, static field paths, fixed views | Recipes eliminate before runtime readiness | Static binding-generation input when explicitly supported; no runtime descriptor export by default |
 | Dynamic layouts, dynamic field paths/views | Runtime placement values or ordinary thunks | Preserve the library's payload and operations, with explicit runtime metadata where needed |
 
@@ -177,7 +177,7 @@ Use the following logical descriptions, with the next consumed component on the 
 | `Ret A` | An installed continuation accepting `V(A)` and owning its hidden residual stack |
 | `codata ... end` | One observation tag selecting `.di`, followed by `S(Bi)` |
 | `forall (X : K) . B` | The instantiated `S(B)`; no runtime type-argument word |
-| Package-dependent `pi (p : P) . B` | One payload word `V(P)` followed by the protocol obtained with the statically related package witnesses |
+| Witness-dependent `pi (p : P) . B` | One payload word `V(P)` followed by the protocol obtained with the statically related type witnesses |
 | `OS` | The host's root protocol; no ordinary source return |
 
 Type functions, named kinds, manifest equations, aliases, and classifier queries normalize or erase.
@@ -253,8 +253,8 @@ It needs no runtime representation of the type `R`.
 
 Erasure makes the binary carrier uniform, but external callers still need the source typing relationships.
 Publish a **typed interface manifest** before erasure discards that information.
-It records exported classifiers, product structure and named routes, data and codata maps,
-nominal type identities, abstract and manifest package entries, type binders, and supported type-level definitions.
+It records exported classifiers, product structure and named routes, data and codata maps, nominal type identities,
+abstract and manifest entries, type binders, and supported type-level definitions.
 This is interface metadata, not an extra field on every runtime value.
 
 The current SPS [partial protocols](../references/compiler.md#partial-source-protocols) are insufficient for this job.
@@ -293,7 +293,7 @@ An exposed nominal data shape can publish constructors while keeping its nominal
 Manifest equations disclose the relationships clients may use; hidden equations stay hidden even
 when the provider's implementation is available to the loader.
 
-Package-dependent arrows connect their result classifier to witnesses opened from an argument.
+Witness-dependent arrows connect their result classifier to witnesses opened from an argument.
 The interface manifest must preserve that binder/substitution relation,
 rather than describing the result as an unrelated opaque type.
 General runtime values still do not index types.
@@ -396,8 +396,8 @@ Closing the wrapper releases its root, with no source-level single-use restricti
 This requires a persistent runtime instance.
 The existing fresh-instance scalar export adapter cannot destroy the instance
 after `make_adder` returns and still hand out a usable closure.
-Ordinary products, data, abstract objects, and package payloads can be returned through the same rooted-value mechanism;
-they need no separate C aggregate schema.
+Ordinary products, data, abstract objects, and packed value payloads can be returned
+through the same rooted-value mechanism; they need no separate C aggregate schema.
 
 For codata, a binding builds observation/argument recipes ending in an appropriate host return delimiter.
 For explicit CPS, it supplies source-compatible successor thunks and the residual protocol.
@@ -574,7 +574,7 @@ init_U : Thk (Deps_U -> Ret Exports_U)
 
 Here `Deps_U` is the ordered runtime dependency environment, and `Exports_U` is the runtime export value.
 Their static components have already been interpreted by unit preparation.
-Provider-dependent classifiers must preserve their package witness binders when that interface form is supported;
+Provider-dependent classifiers must preserve their witness binders when that interface form is supported;
 the displayed ordinary arrow abbreviates the case with no such dependency.
 Builtin preparation must use the same validated provider contract as the surrounding program.
 It can reuse the current lowering hook that materializes Builtin operations against the active runtime.
@@ -621,10 +621,10 @@ and includes local identifiers that have no meaning in another compilation.
 Reconstructed data and codata maps must agree with the producer's maps during consumer lowering.
 
 Extend the current structural subset with exposed nominal data definitions, regular recursive data/codata,
-and universals over `VType` and `CType` before supporting arbitrary package interfaces.
+and universals over `VType` and `CType` before supporting arbitrary packed value interfaces.
 Returned capturing thunks already work; ordinary runtime polymorphism still needs public binder import.
 Continue rejecting other public forms explicitly until their complete interface import is implemented.
-Existentials, package-dependent arrows, and higher-kinded definitions extend this schema and its checker integration;
+Existentials, witness-dependent arrows, and higher-kinded definitions extend this schema and its checker integration;
 they do not require changing the one-word runtime convention.
 
 ### Static factories set the limit on separate compilation
@@ -691,7 +691,7 @@ Follow-on work has different costs:
 
 | Extension beyond that subset | Additional estimated days | Completion scope |
 | --- | --- | --- |
-| Full current representable type interfaces | 10–20 | Existentials, package witness dependencies, higher-kinded and growing recursive definitions; source-free checking with preserved abstraction |
+| Full current representable type interfaces | 10–20 | Existentials, witness dependencies, higher-kinded and growing recursive definitions; source-free checking with preserved abstraction |
 | Synchronous host embedding and one basic binding | 15–25 | Persistent instances, external roots, value construction/access, returning and returned thunks, close semantics, one host language |
 | General protocol bindings and host-implemented thunks | 10–20 | Checked stack plans, recursive codata, generic/witness relationships in host wrappers, transfer driver, cross-runtime context rooting |
 
@@ -757,7 +757,7 @@ Once returning host calls work, extend bindings in this order:
 
 1. Host-implemented returning thunks through the transfer driver in section 7.
 2. Argument/observation stack plans and generic forwarding, after the relevant public type schema is available.
-3. Abstract packages and dependent witness relationships in generated bindings,
+3. Packed values with abstract witnesses and dependent witness relationships in generated bindings,
    with explicit diagnostics for interface forms that a binding generator cannot yet represent.
 4. Additional runtime profiles for nested entry, recoverable faults, or asynchronous work only after their lifetime
    and control rules are implemented.
@@ -798,7 +798,7 @@ checking that the public word boundary is still honored.
 | Compatible independently compiled modules | Runtime/interface mismatch or incomplete descriptor | Loading fails before publishing an incompatible export |
 
 Binding tests should cover both host-consumed and host-implemented interfaces, especially returned closures,
-recursive codata, generics, abstract packages, and collection with external roots.
+recursive codata, generics, abstract witnesses, and collection with external roots.
 Manual address misuse remains a caller contract violation; typed handles cannot validate arbitrary foreign memory.
 The initial context-retention and fatal-fault limits must appear in the published entry profile.
 

@@ -189,7 +189,7 @@ Ptr Object Uninit
   -> Ptr Object Init                        -- finish the record
 ```
 
-`Build Payload` here denotes the array package's abstract `Build`, not a new public type constructor.
+`Build Payload` here denotes the array interface's abstract `Build`, not a new public type constructor.
 Keep the enclosing record handle alongside that builder until `replace` supplies the updated parent state.
 Its address and prefix count are ordinary values; type erasure does not yet prove their pair will be unboxed.
 On element failure, the callback settles the current slot and returns it as `Uninit`;
@@ -197,7 +197,7 @@ the existing failure protocol exposes the completed prefix for cleanup or resump
 Abandoning a callback runs no cleanup.
 Copied pointers/builders can remain stale after a transition.
 
-The additional access operations have these schematic shapes, with `L`, `S`, and `A` shared from their packages:
+The additional access operations have these schematic shapes, with `L`, `S`, and `A` shared from their packed values:
 
 ```text
 at_checked   : Ptr Array S -> Int -> Checked Fault (Ptr Element S)
@@ -248,7 +248,7 @@ Its counts are static code sites, not executed allocations or timings.
 
 ### 4.1 Specialize known operations
 
-Fixed layout construction can still produce ordinary operation packages containing integers and thunks.
+Fixed layout construction can still produce ordinary operation records containing integers and thunks.
 Erasing the static recipe does not prove that all of those residual values disappear.
 Current [local reductions](../references/compiler.md#local-reductions)
 and [consumer demands](../references/compiler.md#consumer-demands) have limited sharing and call visibility;

@@ -3,7 +3,7 @@
 Coverage must preserve relationships among fields.
 Arms `(+True(_), _)` and `(_, +False(_))` mention both Boolean constructors but leave `(+False(_), +True(_))` uncovered.
 This motivates the typed pattern matrix described in the [compiler reference](../references/compiler.md#coverage):
-typing determines constructor spaces, product arities, and erased package components
+typing determines constructor spaces, product arities, and erased witness components
 before the matrix enumerates missing shapes.
 The [language reference](../references/language.md#7-patterns-and-coverage) owns source acceptance and catch-all rules;
 [high SPS lowering](../references/compiler.md#pattern-decisions-and-validation) owns compiled pattern decisions.
@@ -46,7 +46,7 @@ it need not add a structural SPS pattern node.
 
 ## Dependent copattern matrices
 
-Package-dependent arrows currently accept one copattern clause because the result can depend
+Witness-dependent arrows currently accept one copattern clause because the result can depend
 on existential witnesses opened by the argument.
 Several clauses require a dependent form of the generated argument match
 that preserves those witnesses across alternatives.
@@ -54,7 +54,7 @@ Ordinary arrows, universal arguments, and nested destructor paths already use
 [shared argument elaboration](../references/compiler.md#monadic-and-copattern-elaboration).
 
 A proposed extension should show complete and incomplete clause matrices, witness non-escape,
-and agreement between generated matching and direct package-dependent abstraction.
+and agreement between generated matching and direct witness-dependent abstraction.
 [Copattern checking](../../lang/statics/src/check/copattern.rs),
 [coverage validation](../../lang/statics/src/validate/coverage.rs),
 and [coverage regressions](../../lang/tests/tests/coverage.rs) are the implementation and validation entry points.
@@ -63,7 +63,7 @@ and [coverage regressions](../../lang/tests/tests/coverage.rs) are the implement
 
 Projection patterns currently require irrefutable payloads, including under `@[partial]`.
 Supporting `/field = p` with a refutable `p` would need nested failure to reach the next arm
-while retaining one package opening and the selected field's type evidence.
+while retaining one opening of a packed value and the selected field's type evidence.
 Review that together with the existing refutable conjunction questions;
 accepted nesting must have a corresponding missing-case rejection.
 [Refutable value-view coverage](../ideas/view-coverage.md) remains a separate design question.

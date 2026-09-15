@@ -84,12 +84,12 @@ do code <- ! api/run 0;
 ```
 
 Source loading checks the Builtin signature independently.
-Checking resolves `api/run` to a structural field route and relates `process` to the executable's package witnesses.
+Checking resolves `api/run` to a structural field route and relates `process` to the executable's type witnesses.
 Static elaboration erases static evidence while retaining the explicit thunk and computation calls.
 High lowering constructs the product and its consuming stack.
 Normalization exposes the known field and thunk, binds `n` to `0`, forwards the return
-into `code`, and removes unused package fields.
-Any remaining closure crosses C9 as a package with explicit captures.
+into `code`, and removes unused fields.
+Any remaining closure crosses C9 as a closure record with explicit captures.
 The selected backend then realizes the remaining host exit; the interpreter executes the checked residual term directly.
 
 A source error stops before that fork:
@@ -396,7 +396,7 @@ they cannot borrow the mutable folder itself.
 `Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
 `Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
 Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
-Production residual lowering, Builtin package materialization, high SPS normalization,
+Production residual lowering, Builtin packed value materialization, high SPS normalization,
 closure conversion, and CPS assembly lowering use `Explicit`; `Recursive` supports bounded comparisons
 and consumes native stack proportional to pending calls.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
@@ -416,7 +416,7 @@ Driver regressions compare dependent child selection, repeated occurrences, even
 A 100,000-level non-tail fixture executes on a 128 KiB stack through `Explicit`.
 A separate 100,000-step tail-call fixture uses the same small stack through both drivers
 and checks that the original parent resumes.
-The [Builtin package folder](../../lang/stackir/src/high/lower/builtin.rs) is a production client:
+The [Builtin packed value folder](../../lang/stackir/src/high/lower/builtin.rs) is a production client:
 its product frame accumulates fields in input order and transfers the completed vector into the output node.
 Its tests compare both drivers' materialized syntax and arena counts, retain the empty-product rejection,
 and construct and destroy 16,384 nested products on a 512 KiB stack through `Explicit`.
@@ -502,7 +502,7 @@ Child order is deterministic and preserves the structural analysis order:
 | Term or pattern annotation | Payload, then classifier. |
 | View pattern | Function, then pattern. |
 | Abstraction, fixpoint, or quantifier | Pattern, then body. |
-| Let, do, manifest existential, or package layer | Definition or bindee, pattern, then body or tail. |
+| Let, do, manifest existential, or packed value layer | Definition or bindee, pattern, then body or tail. |
 | Match | Scrutinee, then each arm's pattern and tail in arm order. |
 | Copattern clause | Patterns in spine order, then the tail; clauses retain their order. |
 | Recursive group | Each definition's pattern and bindee in group order, then the tail. |
@@ -646,7 +646,7 @@ from a synthetic check-wide site, independent of the first source occurrence nam
 `Tycker::new` materializes those singletons and retains their complete `IntrinsicStatics` identities
 for construction during checking.
 Finished arenas retain the nodes while dropping this construction-only table.
-Unification, fill resolution, substitutions, package opening, copattern elaboration,
+Unification, fill resolution, substitutions, opening of a packed value, copattern elaboration,
 and recursive-group processing retain a checker-owned algorithmic core.
 Their intermediate results depend on mutable inference state; replaying a site alone cannot reconstruct that state.
 
@@ -835,7 +835,7 @@ Independent child checks collect their errors before rejecting the enclosing con
 A rejected source returns all collected errors with their source context and publishes no complete bitter arena.
 
 The [telescope rules](../../lang/surface/src/bitter/desugar/telescopes.rs) lower parameter sequences,
-flatten consecutive existential layers, and construct quantifier and package layers.
+flatten consecutive existential layers, and construct quantifier and packed value layers.
 The [binding rules](../../lang/surface/src/bitter/desugar/bindings.rs) interpret binding flavors
 and build terms together with classifiers over the same parameter fold.
 Classifier state distinguishes absence, an annotation on the complete binding,
@@ -847,7 +847,7 @@ or reject a value abstraction, according to the enclosing rule.
 Already-lowered construction receives the builder;
 [CBPV introductions](../../lang/surface/src/bitter/desugar/cbpv.rs) share this allocation and provenance boundary.
 Rules retain their semantic child schedules: a binding lowers its binder, bindee, classifier, and parameters;
-a package lowers its body before processing parameters in reverse, with evidence before the parameter form.
+a packed value lowers its body before processing parameters in reverse, with evidence before the parameter form.
 Meta annotation inspection precedes payload lowering when its rule depends on authored syntax.
 
 [`MetaRules`](../../lang/surface/src/bitter/desugar/meta.rs) inspects read-only textual syntax
@@ -944,7 +944,7 @@ and source occurrences are recorded in the [statics arena](../../lang/statics/sr
 | Ordinary CBPV functions | `Arrow`, `Forall`, abstractions, and value/type application |
 | Value functions | `ValPi`, its binder sort, and witness projections for structured arguments |
 | Value calculations | `Value::Match` with value arms and `IntValueOp` with two checked integer operands |
-| Packages | `Exists`, manifest equations, `ManifestKind`, and static-prefix patterns |
+| Packed values | `Exists`, manifest equations, `ManifestKind`, and static-prefix patterns |
 | Dependent computation functions | `PackPi` with canonical witnesses and a dependent codomain |
 | Products and named fields | Component vectors, labels, and resolved routes with physical product positions |
 
@@ -995,7 +995,7 @@ The migrated judgment boundaries are:
 | Boundary | Work that continues | Required evidence |
 | --- | --- | --- |
 | Product synthesis and checking | Every component, including the final component | A shared lexical environment; checking first establishes component classifiers and arity |
-| Package payload checking | Every remaining runtime component | The dependent witness prefix has succeeded and instantiated the body classifier |
+| Packed value payload checking | Every remaining runtime component | The dependent witness prefix has succeeded and instantiated the body classifier |
 | Data and codata declarations | Constructor parameter types and destructor result types | The declaration's required kind |
 | Match arms | Other patterns and their bodies, including result-type reconciliation | A checked scrutinee; each body requires its own successful pattern and scope closure |
 | Comatch elaboration | Independent clause bodies, destructor groups, and argument-pattern checks | The expected computation classifier and the current clause prefix |
@@ -1022,11 +1022,11 @@ The [source diagnostics regressions](../../lang/tests/tests/diagnostics.rs)
 and [session regressions](../../lang/session/src/source/tests.rs) cover independent errors, exact locations,
 shared providers, unavailable binder scopes, rejected parent products, and correction through overlays.
 
-### Package evidence and lookup
+### Witness evidence and field lookup
 
 A manifest entry checks its equation and substitutes it through the remaining telescope;
 an abstract entry introduces an identity subject to scope checks.
-Source formation and opening rules live in [L9](language.md#9-polymorphism-and-packages).
+Source formation and opening rules live in [L9](language.md#9-polymorphism-and-packed-values).
 `functions` establishes canonical witness telescopes for dependent binders
 and substitutes caller-visible evidence at application.
 A runtime thunk's implementation can be unknown while its signature supplies the dependency.
@@ -1037,10 +1037,10 @@ and substitutes its abstract witnesses through the codomain.
 its structured evidence handling does not extend `PackPi` to witnesses nested beneath arbitrary product fields.
 
 [Projection checking](../../lang/statics/src/check/projection) resolves a unique route
-through the receiver's allowed structure, including the identities shared by one selective package opening.
+through the receiver's allowed structure, including the identities shared by one selective opening of a packed value.
 The resolved route records every product position and its product type.
 Selected runtime fields elaborate to ordinary typed patterns; unselected static positions receive internal witnesses.
-A whole-package alias carries the same opening's prefix for forwarding.
+A whole-value alias carries the same opening's prefix for forwarding.
 Witness inspection uses C6's static reducer and never obtains evidence by executing a computation.
 
 ### Classifier folders
@@ -1053,7 +1053,7 @@ It reads the inferred graph through `types_pre`; following solutions, unfolding 
 reducing applications or projections, and consulting normalized views remain explicit client operations.
 
 A body callback receives `TypeScope`, distinguishing type abstractions, universal
-and existential telescopes, value functions, and package-dependent functions.
+and existential telescopes, value functions, and witness-dependent functions.
 Domains precede their dependent bodies.
 The callback chooses the inherited substitution: ordered abstract substitution removes formal witnesses
 under type abstractions, `ValPi`, and `PackPi`, and applies only later assignments to a replacement.
@@ -1086,7 +1086,7 @@ while unchanged IDs expose their existing nodes.
 Missing solutions and sort errors remain diagnostics.
 
 The shared context bounds structural traversal by the graph's nodes and edges, plus reductions that create new nodes.
-Starting a fresh memo at every root would repeatedly traverse shared package-signature tails.
+Starting a fresh memo at every root would repeatedly traverse shared signature tails.
 Compiler-owned identity maps use the repository's fast internal hashing;
 changing storage must preserve key-space identity.
 Finalized annotations feed coverage, residualization, and editor facts.
@@ -1115,8 +1115,8 @@ generated code must satisfy the same finalization and residual representation bo
 a codata step groups destructor clauses, an arrow step introduces a shared argument
 and accumulates its patterns, and a universal step introduces a type binder.
 On reaching bodies, pending argument patterns become a correlated match.
-A package-dependent boundary currently admits one clause whose witnesses can scope the dependent result.
-The output has one typed arm per destructor and hints identifying generated argument matches and package binders.
+A witness-dependent boundary currently admits one clause whose witnesses can scope the dependent result.
+The output has one typed arm per destructor and hints identifying generated argument matches and witness binders.
 Repeated source destructors can therefore be exhaustive alternatives over arguments
 without becoming duplicate typed arms.
 
@@ -1125,7 +1125,7 @@ without becoming duplicate typed arms.
 [Coverage validation](../../lang/statics/src/validate/coverage.rs) consumes normalized typed syntax
 and its data/codata hints.
 It converts variables, holes, and admitted alias groups to wildcards, preserves structural heads and product arities,
-erases package witnesses, and treats literal observations as opaque to structural coverage.
+erases type witnesses, and treats literal observations as opaque to structural coverage.
 Opaque patterns contribute no wildcard row.
 This implements the conservative source policy in [L7](language.md#7-patterns-and-coverage).
 
@@ -1134,7 +1134,7 @@ For a selected head, specialization removes that head and inserts its payload co
 Wildcard rows specialize to wildcard payloads.
 The default matrix keeps wildcard rows and removes their first column.
 Data heads have one payload, product heads have their component arity, unit has none,
-and named wrappers and existential packages each have one dynamic field.
+and named wrappers and existential values each have one dynamic field.
 Typed view observations remain opaque unless their nested pattern is already a wildcard.
 The uncovered-row recursion has these base cases:
 
@@ -1163,8 +1163,8 @@ and refutable conjunctions.
 ### Static elimination
 
 [Static elaboration](../../lang/statics/src/elaborate/static_values) uses a lexical evaluator
-whose values can contain static closures, package structure, and shared references to runtime data.
-It reduces type/value applications, known constructors, projections, package openings,
+whose values can contain static closures, packed value structure, and shared references to runtime data.
+It reduces type/value applications, known constructors, projections, openings of packed values,
 value matches, and integer value operations.
 For example, applying `val x => (x, x)` to a runtime variable produces a shared residual binding and product;
 the runtime variable need not become a compile-time constant.
@@ -1177,7 +1177,7 @@ Residualization evaluates the selected value arm in a cloned lexical environment
 Application-site provenance keeps failures in generated primitive bodies attached to source calls.
 The interpreter and compiled backends have no runtime case for these static operations.
 
-`StaticShape` supports witness inspection during dependent checking, including package and product structure.
+`StaticShape` supports witness inspection during dependent checking, including packed value and product structure.
 It exposes only caller-visible witnesses and returns opaque evidence when reduction cannot establish them.
 `StaticElaboration` records the original source root and an optional residual root:
 an unapplied static library export can be checked without having a runtime representation of its own.
@@ -1255,7 +1255,7 @@ reference existence is still checked.
 A reachable abstract witness must be structurally bound or ambient.
 The ambient set includes seals, existential skolems, definition-denoted identities,
 and named witnesses: recursive groups allocate identities together,
-and package elaboration can distribute bindings without one structural encloser.
+and packed value elaboration can distribute bindings without one structural encloser.
 This policy detects unbound anonymous witnesses with existing table entries,
 but does not reconstruct every source non-escape proof.
 The visited-node cache checks a shared node under the first encountered scope only.
@@ -1274,7 +1274,7 @@ paired with clean cases that prevent false positives.
 
 [Linking](../../lang/dynamics/src/link.rs) selects residual syntax, erases types
 and witnesses, and constructs `DynamicsProgram`.
-Builtin root linking materializes the host package from its validated typed signature;
+Builtin root linking materializes the host-provided packed value from its validated typed signature;
 foreign declarations remain checked call plans until their runtime loader is used.
 Named routes become structural tuple access, and aliases preserve a shared bindee.
 
@@ -1319,7 +1319,8 @@ Static composition can produce thousands of nested bindings from a small authore
 The [lowering folder](../../lang/stackir/src/high/lower/fold.rs) uses the shared
 [resumable folder driver](#resumable-folder-execution) for patterns, values, computations,
 and ordered match decisions together; thunk bodies and branch tails resume through the same driver.
-`RootLowerer::run_with_driver::<D>` selects continuation storage for this folder and Builtin package materialization.
+`RootLowerer::run_with_driver::<D>` selects continuation storage for this folder
+and Builtin packed value materialization.
 Production lowering selects `Explicit`, so residual reconstruction depth does not consume the Rust call stack.
 `Lowerer` retains allocation, provenance, product layout, protocol extraction, and diagnostic state.
 
@@ -1492,7 +1493,7 @@ Independent branches join before the producer is rebuilt.
 There is no global demand fixed point or recursive-call specialization.
 
 A known call exposes argument and return bindings before demands are read,
-allowing a consumer to prune a passed package.
+allowing a consumer to prune a passed module value.
 Unknown calls observe arguments whole.
 Escaping thunk bodies contribute demands on their captures while remaining suspended.
 A surviving constructor match observes its scrutinee whole; known selection removes demands from discarded arms.
@@ -1523,7 +1524,7 @@ extern add (arg(x) :: arg(y) :: (kont z => M)) ==> let z = PrimitiveAdd(x, y) in
 
 The argument stack's construction order evaluates the second operand before the first.
 The remaining stack must satisfy the movement conditions above.
-The result stays shared, and exposing its continuation as a binding avoids allocating a continuation package.
+The result stays shared, and exposing its continuation as a binding avoids allocating a continuation record.
 Literal folding obeys [L13's numeric rules](language.md#13-primitive-values-and-capabilities).
 A zero divisor remains a runtime operation at its original position, even if its result is unused.
 
@@ -1545,7 +1546,7 @@ Byte displacement is a pure calculation on an unmanaged address.
 Builtin lowering materializes `memory_offset` as a closed function returning `AddrOffset { base, displacement }`,
 even with optional normalization disabled.
 Compiler provenance identifies this fixed builtin body, so normalization can expose it
-through aliases and package projections at several call sites.
+through aliases and field projections at several call sites.
 General source closures retain their existing sharing restrictions.
 An escaping or unknown function keeps the ordinary thunk calling convention.
 
@@ -1580,7 +1581,7 @@ It determines the exact carrier width, numeric little-endian or native address i
 Stronger alignment, volatile accesses, and atomics require additional contracts.
 The low-SPS checker validates known address, result, and stored-value protocols.
 
-High normalization exposes the fixed builtin body through known aliases and package projections.
+High normalization exposes the fixed builtin body through known aliases and field projections.
 It preserves every access, including a load whose result is unused, and sequences the successor after it.
 Each expanded load gets a fresh result binding. Reusing a builtin wrapper must preserve earlier observations
 that remain live across later stores and loads of the same address.
@@ -1644,17 +1645,17 @@ Resolved field routes already consist of ordinary structural patterns and erased
 
 Normalizer and pipeline tests pair reductions with shared closures, traps, unknown branches, and suspended recursion.
 [Demand tests](../../lang/tests/tests/demand.rs), [pattern fixtures](../../lang/tests/cases/literal-pattern),
-and [core fixtures](../../lang/tests/tests/core.rs) exercise package pruning and compiled decisions.
+and [core fixtures](../../lang/tests/tests/core.rs) exercise field pruning and compiled decisions.
 A new reduction needs both a reducible example and a case where sharing, stack movement, or effects prevent it.
 
 ## C9. Closure conversion and first-order SPSLow
 
 [SpsLowConverter](../../lang/stackir/src/low/convert.rs) consumes lexical high SPS and creates fresh low syntax.
 Free-variable analysis determines ordered captures; renamed capture bindings close each generated block.
-A closure becomes an explicit environment and code package.
+A closure becomes a record with an explicit environment and code pointer.
 Its entry unpacks the captured environment before consuming ordinary arguments.
-A continuation packages its code and residual stack, including the bindings needed when it resumes.
-Force and return become package opening followed by a jump.
+A continuation record retains its code and residual stack, including the bindings needed when it resumes.
+Force and return open the corresponding closure or continuation record and jump to its code.
 
 [Low syntax](../../lang/stackir/src/low/syntax.rs) separates `Block`, `Jump`,
 `ClosurePackage`, `ContinuationPackage`, `OpenClosure`, and `OpenContinuation`.
@@ -1679,7 +1680,7 @@ stack, and computation translation.
 Requests carry source IDs and indices into the conversion's renaming environments.
 Frames retain ordered captures, translated binders, and branch positions
 while typed result vectors hold completed children until their parent can be allocated.
-Capture bindings, recursive labels, block entries, and package metadata retain their established allocation order.
+Capture bindings, recursive labels, block entries, and record metadata retain their established allocation order.
 Each source occurrence creates fresh output syntax with its corresponding origins and protocols.
 
 [Pattern translation](../../lang/stackir/src/low/convert/pattern.rs) is a separate folder using the same driver.
@@ -1714,8 +1715,8 @@ Continuation metadata and provenance refer to existing syntax and add no executa
 `Together` sends the same events to independent observers.
 
 [Variable analysis](../../lang/stackir/src/low/variables.rs) computes bound patterns and free terms at exit.
-Block labels and entry words bind only their body; package openings and local bindings likewise remove definitions
-from their dependent body rather than from the package or bindee.
+Block labels and entry words bind only their body; record openings and local bindings likewise remove definitions
+from their dependent body rather than from the record or bindee.
 A cyclic traversal exposes no usable variable summaries.
 The [structural validator](../../lang/stackir/src/low/check.rs) observes ownership
 and branch-join edges alongside these summaries, then checks block captures,
@@ -1747,7 +1748,7 @@ and each `Jump` supplies an `EntryArgument` before its residual stack:
 
 | Entry kind | Parameters in consumption order | Word supplied by the jump | Residual stack at the jump |
 | --- | --- | --- | --- |
-| Closure | Environment | Environment from the closure package | Ordinary argument/effect stack |
+| Closure | Environment | Environment from the closure record | Ordinary argument/effect stack |
 | Continuation | Result, environment | Returned result | Saved environment followed by the caller's stack |
 
 Every listed parameter occupies one ordinary target value word, including a product or buffer handle.
@@ -1759,7 +1760,7 @@ The explicit entry forms replace administrative `LetArg` prologues and `Arg` pre
 Their lowering preserves the existing physical word convention.
 
 The [entry verifier](../../lang/stackir/src/low/contracts.rs) checks a code value's origin
-and entry kind at each package construction and jump.
+and entry kind at each record construction and jump.
 A block and its recursive self label carry the declared kind.
 Known unit/product environments must agree with a direct block's outer environment arity;
 unknown shapes remain subject to upstream source typing.
@@ -1770,13 +1771,13 @@ An indirect jump or repackaging must preserve that association.
 Opening a continuation similarly associates its code with the restored residual stack;
 returning or repackaging must use that same residual stack.
 Code from one opening cannot consume another opening's environment or continuation stack,
-even if both packages happen to have the same shape.
+even if both records happen to have the same shape.
 The verifier propagates evidence through whole-value aliases and projections of known complete products.
 Destructuring an opaque environment does not establish permission to reconstruct an equivalent one.
 Stack operations retain evidence when their known pushes and pops cancel; a remaining prefix or a pop
 into the opaque restored stack loses the required agreement.
 
-These checks assume source typing and closure conversion establish the shapes of dynamically obtained packages.
+These checks assume source typing and closure conversion establish the shapes of dynamically obtained records.
 The administrative checks are supplemented by the partial source protocol checks below.
 Neither establishes continuation lifetime or reconstructs complete source typing.
 Host and C external calls retain their own upstream signatures and transfer contracts.
@@ -1785,7 +1786,7 @@ source storage alignment and padding alone cannot select a different call layout
 
 For native retained-frame lowering, `ContinuationEntry` additionally records the result pattern,
 body, and ordered capture bindings.
-The verifier compares that metadata with the explicit continuation entry and its package
+The verifier compares that metadata with the explicit continuation entry and its record
 before C11 replaces portable captures with retained slots.
 There is no second executable entry prologue to infer or keep synchronized.
 
@@ -1866,7 +1867,7 @@ It compares a closure's protocol with the supplied argument stack,
 and a continuation's accepted value with the result delivered to it.
 Entry kinds agree with administrative roles; known incoming parameter protocols agree
 with their retained source pattern classifiers.
-Bindings, aliases, product projections, and package openings propagate local evidence.
+Bindings, aliases, product projections, and record openings propagate local evidence.
 An opened thunk supplies its code's protocol; an opened continuation supplies the code's accepted value protocol
 while its restored stack becomes opaque to this analysis.
 The separate provenance check still associates that code with the exact restored stack.
@@ -2025,7 +2026,7 @@ and allocation measurements for the boxed implementation and both folder drivers
 
 [ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes logical arity from the physically stored fields.
 Tuple tails and projections must respect that distinction; a suffix pointer refers into an existing payload.
-Closure package layout is derived from the shared machine model rather
+Closure record layout is derived from the shared machine model rather
 than a separately maintained field-order convention.
 Changing packing must update patterns, closure opening, stack analysis,
 and collector interior-pointer handling together.
@@ -2040,7 +2041,7 @@ The collector observes entry events from the [shared SPSLow traversal](#spslow-t
 Its variable-use folder reuses that traversal's child cursor with a different semantic view:
 closed blocks and binding patterns are boundaries, while immediate projection
 and closure-opening children receive their respective use roles.
-Other value uses are escapes, including captures carried by package environments and continuation residuals.
+Other value uses are escapes, including captures carried by closure environments and continuation residuals.
 This preserves the closed-block rule without duplicating structural child enumeration.
 `LocalUnboxing::with_policy_and_driver::<D>` selects execution for both walks;
 ordinary policy entry points select `Explicit`.
@@ -2073,7 +2074,7 @@ Product fields retain their ordinary tagged-word representation.
 | Policy | Selected opportunities |
 | --- | --- |
 | `Boxed` | Keep residual product, closure, and scalar operation boxes after the selected high-SPS transformations. |
-| `Direct` | Immediate product elimination and opening of a syntactic closure package. |
+| `Direct` | Immediate product elimination and opening of a syntactic closure record. |
 | `Local` (default) | `Direct`, plus a variable-bound product used only through compatible projections. |
 | `Shared` (experimental) | `Local`, plus a variable-bound closure used only through closure openings. |
 
@@ -2113,7 +2114,7 @@ Local unboxing removes cells where justified, without interpreting a source dict
 | [Source `Representation A`](language.md#typed-pointers-and-slices) | One layout witness shared by typed pointers and CPS operations | No selected register class or argument width |
 | [Source `Plan A`](language.md#static-layout-plans) | Validated byte placement and inspectable field offsets | No type identity for each placement, reference map, or calling convention |
 | SPSLow `ProductLayout` | Logical arity and producer/consumer structure | No byte padding or scalar register classification |
-| [Word entries](#word-entry-contracts) | Ordered administrative environment/result words and code/package provenance | No different component transport or complete source stack protocol |
+| [Word entries](#word-entry-contracts) | Ordered administrative environment/result words and code/record provenance | No different component transport or complete source stack protocol |
 | [Partial source protocols](#partial-source-protocols) | Known components, scoped parameters, and regular recursive codata | No nominal storage identity, explicit type-application evidence, or physical stack extent |
 | [Native frame plans](#c11-native-preparation-activation-frames-and-amd64-emission) | Live tagged-word slots, entry roles, and suspension ownership | No layout mixing raw scalar bits with managed references |
 
@@ -2142,7 +2143,7 @@ CLI and test builds link this artifact after one lowering pass.
 
 `ContinuationEntry` provenance records the returned-value pattern, the body after the portable capture preamble,
 and the source-to-capture binding relation.
-Validation checks these against the actual package and preamble;
+Validation checks these against the actual record and preamble;
 metadata does not introduce another executable occurrence.
 Native lowering replaces capture construction and unpacking with `RetainFrame` and resumption aliases.
 Ownership follows local and suspension/resumption edges; forward dataflow verifies initialized bindings independently
@@ -2582,7 +2583,7 @@ The AM path reuses ZASM representation work but emits at machine-program-point g
 ### Module and host ABI
 
 Source values cross as tagged `i64` words. Pointer-shaped values address module or host-owned representations;
-module-created closures and stack packages remain opaque to the host except through the shared protocol.
+module-created closures and stack records remain opaque to the host except through the shared protocol.
 
 | Import shape | Contract |
 | --- | --- |
@@ -2614,7 +2615,7 @@ Host calls retain `BuiltinValueRole` through dynamic and Stack IR syntax.
 The role supplies arity and calling mode; emission derives the external symbol at the target ABI boundary.
 
 Canonical representation types have shared intrinsic identities;
-provider-owned resource capabilities acquire witnesses through their package opening.
+opening a provider's packed value introduces witnesses for its resource capabilities.
 Named structural routes and static fields erase before backend layout.
 [L13](language.md#13-primitive-values-and-capabilities) owns source observations,
 and [module interfaces](language.md#module-interfaces-and-shared-openings) explain dependency choices.
@@ -2659,7 +2660,7 @@ Types and state witnesses erase, while explicit queries may materialize constant
 String imports and primitive I/O reads return a retained address and byte count through a two-argument successor.
 UTF-8 decoding validates the bytes in a caller-established readable range.
 I/O writes receive a writer, raw address, count, error successor, and completion.
-The source system library mediates these raw interfaces through its shared immutable byte package.
+The source system library mediates these raw interfaces through its shared packed value for immutable bytes.
 Byte codecs validate exact lengths before raw scalar reads.
 
 Argument lookup returns one string or selects the missing branch; it retains no Zydeco continuation.
@@ -3203,9 +3204,9 @@ Documentation identity participates in neither type equality nor runtime represe
 
 Resolved variables, simple aliases, imports, and transparent wrappers follow recorded origin edges.
 Field projections and projection patterns use the owning interface and resolved member provenance,
-which survives substitution and package opening.
+which survives substitution and opening of a packed value.
 A field label or similar printed type is insufficient evidence.
-Arbitrary computations constructing a package do not establish origin relationships for every value they use.
+Arbitrary computations constructing a packed value do not establish origin relationships for every value they use.
 When those relationships are unavailable, views show the known type and directly attached prose.
 
 Direct prose appears as local context before inherited content, without rewriting the provider's explanation.

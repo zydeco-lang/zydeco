@@ -1,4 +1,4 @@
-# Documentation extensions
+# Documentation publication and extensions
 
 [C15](../references/compiler.md#documentation-subjects-and-provenance) owns implemented documentation identity,
 contract selection, member provenance, and revision recovery;
@@ -7,9 +7,117 @@ owns exposure routes and isolated static examples.
 The [language reference](../references/language.md#source-documentation) provides authoring syntax;
 the [compiler reference](../references/compiler.md#documentation-workflow) covers editor use and commands.
 This proposal contains the additional compiler relationships, authoring mechanisms, and client work still needed.
-It concerns Zydeco's documentation feature.
+The immediate direction is package-aware documentation with a public-interface model that handles the standard library.
+The [package-management proposal](package-management.md) owns source selection, project context,
+and operation policy; this document owns documentation subjects, lookup, verification, and publication.
 Repository writing and review belong to [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation),
-and observed documentation disagreements to the [drift list](../todos/reference-drift.md).
+and observed implementation failures
+to the [documentation exposure todo](../todos/compiler-boundaries.md#documentation-exposure-collisions).
+
+## Motivation and retained foundation
+
+The 2026-09-15 review found that the bundled counter example supports all four documentation commands,
+but the full `std` entry fails during public-interface expansion.
+The [failure record](../todos/compiler-boundaries.md#documentation-exposure-collisions) owns the reproducer,
+affected entries, and bounded repair criteria.
+A usable standard-library reference is the next concrete consumer.
+
+Retain the compiler's attachment, provenance, contract selection, instantiated types, and example-worker machinery.
+Those relationships explain why documentation belongs with semantic analysis: package catalogs identify entries,
+but do not identify their fields or establish which explanation follows an instantiated use.
+The required redesign concerns selection, public exposure, and operation dependencies.
+
+## Package-aware selection
+
+- [ ] Route documentation commands through the existing source-selection and package-analysis interfaces.
+  Reuse `SourceReference`, catalog bindings, normalized entry identity, and exact term selection;
+  consume the shared project context developed in the [package proposal](package-management.md#shared-project-context).
+- [ ] Support one selected source package through either its name or its file path first.
+  Preserve selected-term documentation boundaries, companion behavior, and captured bindings for example workers.
+- [ ] Define multiple-package publication only when its page organization, anchors, cross-package links,
+  and guide ownership have concrete consumers and validation cases.
+
+The intended command forms below are proposed additions; current `doc` subcommands accept a root file path:
+
+```text
+zydeco doc show -p std
+zydeco doc search -p std int
+zydeco doc build -p std --output std.html
+zydeco doc check -p std
+```
+
+Explicit selection should determine the publication scope.
+Catalog membership makes a package available; it does not require publishing that package.
+Dependency analysis likewise does not require a separate API page for every imported entry.
+Keep source-package names distinct from member selectors and preserve explicit guide selection for the first milestone.
+A new package role or documentation relationship is not required for this integration.
+
+## Subjects, selectors, and published anchors
+
+The current exposure traversal combines structural enumeration, public-route assignment, and duplicate rejection.
+Unnamed components can share a parent path and independently append result steps, creating collisions such as `()/()`.
+The shared rule motivating the change is that a semantic subject can exist without a unique public route.
+
+Separate these responsibilities:
+
+| Responsibility | Question |
+| --- | --- |
+| Subject identity | Which checked interface occurrence is described, including distinct anonymous branches? |
+| Public selector | Does this authored field/result path identify one subject? |
+| Presentation | How are signatures, named members, binders, and anonymous structure displayed? |
+| Published anchor | Which addressable section receives a stable link? |
+
+- [ ] Retain anonymous interface occurrences without forcing each one into the public-selector namespace.
+  Initially render such structure within its containing signature or section;
+  independently address uniquely selectable subjects.
+  Preserve useful, unambiguous result selectors.
+- [ ] Expose named type members through compiler-recorded binder structure and projection evidence.
+  Printed names or local binder hints alone do not establish a public member route.
+- [ ] Preserve distinct subjects and reject ambiguous selectors with a diagnostic about the requested path.
+  Do not choose the first collision, merge unrelated subjects, or expose transient arena IDs as stable URLs.
+- [ ] Preserve stable named routes through formatting and unrelated implementation edits.
+  Decide any anonymous-anchor extension separately from compiler subject identity.
+
+The exact internal subject representation and any additional selector syntax remain open.
+The first implementation must account for products, existential interfaces, named type components,
+generic results, and recursion without executing computations that construct packed values.
+
+## Targeted lookup and independent verification
+
+The [CLI dispatcher](../../cli/src/main.rs) currently constructs the whole reference before every subcommand.
+The [semantic member-link resolver](../../lang/session/src/source/documentation/semantic/links.rs)
+also enumerates all exposure routes before selecting a target.
+An unrelated collision can therefore block a specific lookup or source-example check.
+
+- [ ] Introduce a targeted subject query that resolves the requested selector
+  without requiring all other routes to have independently publishable anchors.
+  Reuse the same semantics for source links and command lookup.
+- [ ] Verify source links and opted-in examples from the selected analysis without requiring HTML publication.
+  Guide member links still require public-target resolution; their validation must remain explicit.
+- [ ] Keep publication dependent on valid links and established exposure rules.
+  Keep example verification an explicit operation, with failures attributed to the authored example or guide.
+
+## First standard-library milestone
+
+The acceptance target is a searchable, compiler-grounded standard-library reference with checked examples.
+Complete the package boundaries above, repair exposure and targeted lookup,
+then add representative authored prose to the standard library.
+A successful build with no explanations is insufficient evidence of documentation usefulness.
+
+- [ ] Exercise `show`, `search`, `build`, and `check` on the full `std` entry and its data,
+  memory, text, numeric, and system entry points.
+  Use file paths now and package selection when implemented.
+- [ ] Document representative generic types, named fields, and a packed value with abstract witnesses;
+  verify that public contracts preserve abstraction and that selected member queries reach their explanations.
+- [ ] Retain the anonymous-branch collision reproducer alongside a named counterpart.
+  Add missing and ambiguous selector cases, shadowed names, unrelated same-labeled members, and recursive interfaces.
+- [ ] Pair valid examples and links with expected compiler rejections, wrong diagnostic codes or positions,
+  missing imports, invalid links, worker failures, and timeouts.
+  Failed builds must not replace existing output.
+- [ ] Check formatting-stable named anchors and consistent semantic targets across CLI, HTML, and editor consumers.
+
+The remaining sections retain later extensions.
+Runtime examples, programmable widgets, and elaborate publication configuration follow this milestone.
 
 ## Richer subjects and interfaces
 

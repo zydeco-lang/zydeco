@@ -42,7 +42,7 @@ own the implemented frame-lifetime contract. Neither is replaced by this draft.
 
 = Motivation and chosen boundary <boundary>
 
-A variable can name an immediate integer, an immutable heap object, or a package containing an environment.
+A variable can name an immediate integer, an immutable heap object, or a packed value containing an environment.
 Introducing that variable does not determine the lifetime of the storage it reaches. A parameter and a
 captured copy of that parameter can occupy different slots while referring to the same object.
 
@@ -68,7 +68,7 @@ The first version makes the following choices:
 - Objects are immutable after initialization. Aliases and copied values are unrestricted.
 - Region names identify individual dynamic lifetimes. Creation generates a fresh name on every execution.
 - All storage reachable from retained roots must remain valid. Keeping a pointer to a freed object in a
-  retained package is rejected even when the package's code would never dereference it.
+  retained closure record is rejected even when its code would never dereference it.
 - Support is an upper bound on reachable *regions*. It does not distinguish two objects in one region,
   and overlapping support does not establish aliasing.
 - Allocation and deallocation are explicit. Inline products and logical existential packaging allocate
@@ -107,12 +107,12 @@ $"Saved"(A,q)$ abbreviates the stack existential used to hide a continuation's r
 
 $ "Saved"(A,q) equiv exists sigma : "SType"[q] . ("Code"(A;sigma) :: sigma). $
 
-This is an opaque *stack package*, not a primitive return computation type. Its result argument $A$
-will be supplied by a later jump and is not already stored in the package.
+This is an opaque *stack record*, not a primitive return computation type. Its result argument $A$
+will be supplied by a later jump and is not already stored in the record.
 
 All types are well-kinded under $D$. A name may remain declared after its arena is retired; declaration
 alone does not establish liveness. Recursive value types, existentially hidden region ownership, and
-kind-polymorphic source packages are extensions beyond the core specified here.
+kind-polymorphic packed values are extensions beyond the core specified here.
 
 == Structural support
 
@@ -169,7 +169,7 @@ environment and stack classifier. Usual capture-avoiding substitution and bound-
 All computation premises also satisfy the environment-validity condition in @environments.
 
 For instance, a witness $"Ptr"(r,"Int")$ cannot implement $alpha:"VType"[emptyset]$.
-Packing that pointer with bound ${r}$ is permitted, but the resulting package still depends on $r$.
+Packing that pointer with bound ${r}$ is permitted, but the resulting packed value still depends on $r$.
 Hiding a type is not evidence that its representation has empty support.
 
 = Environments and the first-order core <environments>
@@ -212,7 +212,7 @@ $
 The metavariables $a,p$ in commands stand for arbitrary value expressions, except where newly bound.
 `new` binds a fresh region name and a descriptor variable. Every other binder is also fresh.
 Runtime descriptors and pointers extend value syntax during evaluation; source terms cannot forge them.
-`use` replaces the ambient stack, `pop` consumes its top argument, and `unsave` opens a stack package.
+`use` replaces the ambient stack, `pop` consumes its top argument, and `unsave` opens a stack record.
 
 The judgments are $D;Gamma tack.r v:A$, $D;Gamma;S tack.r t:S'$, and
 $D;L;Gamma;S tack.r M$. Fixed $D,Psi$ are omitted in rules below unless extended.
@@ -379,9 +379,9 @@ stack, and the environment-validity check supplies the required lifetime evidenc
 needed later must occur in the transferred stack or explicit captures. A jump does not by itself
 retire any arena. `halt n` terminates for an integer literal and discards the machine roots.
 
-= Packages and the SPSLow correspondence <packages>
+= Packed values and the SPSLow correspondence <packed-values>
 
-A closure package can use an ordinary bounded value existential:
+A closure record can use an ordinary bounded value existential:
 
 $
   "Closure"(S,q) equiv exists alpha:"VType"[q].
@@ -390,7 +390,7 @@ $
 $
 
 The witness $alpha$ describes the actual environment representation, including any pointer to its own
-storage. Its support includes all captured references. A separate box around the package in $t$ has
+storage. Its support includes all captured references. A separate box around the closure record in $t$ has
 type $"Ptr"(t,"Closure"(S,q))$ and support ${t} union q$.
 Future arguments described by $S$ are not part of the stored closure until they are actually supplied.
 
@@ -415,7 +415,7 @@ Both use the same jump rule. Constructor payloads and codata branches can extend
 rules; their physical boxes must still be explicit.
 
 This correspondence is a compiler obligation, not an assertion that current SPSLow retains these types.
-The present verifier preserves code/package provenance and selected outer arities. Full support bounds,
+The present verifier preserves code/record provenance and selected outer arities. Full support bounds,
 payload classifiers, and stack witnesses must survive closure conversion and normalization before a
 checker can establish this proposal's rules.
 
@@ -429,7 +429,7 @@ An arena descriptor $h_r$ names $H(r)$, and a pointer $p_(r,i)$ names cell $i$ i
 Dynamic identities are never reused, even when an allocator reuses a physical address.
 
 Value evaluation $[v]_eta$ is total for typed values and performs no allocation. Code labels evaluate
-to static addresses. Products, descriptors, pointers, and existential packages are copied as inert
+to static addresses. Products, descriptors, pointers, and existential values are copied as inert
 representations. Stack evaluation is similarly structural.
 
 For a successor $M$, write $eta_M$ for restriction to its free value variables. Representative steps are:
@@ -453,7 +453,7 @@ For `read`, $[p]_eta=p_(r,i)$. Allocation failure is an explicit terminal outcom
 successful steps do not imply unbounded physical memory.
 
 `use` installs the evaluated stack. `pop` transfers its head into a binding and keeps the tail.
-`save` constructs a logical stack package; `unsave` restores its saved stack and binds its code.
+`save` constructs a logical stack record; `unsave` restores its saved stack and binds its code.
 Value `open` substitutes its type witness and binds its payload. `split` binds the two inline fields.
 At `jump`, evaluate the target, argument, and stack before discarding the caller's current environment.
 Instantiate the target body's static parameters, then enter it with only its administrative binding
@@ -464,7 +464,7 @@ and the supplied stack.
 The runtime relation $reach_(H)(w)$ is the least transitive set of region identities reached from $w$.
 An immediate scalar or static code label reaches nothing. A descriptor $h_r$ reaches ${r}$.
 A pointer $p_(r,i)$ reaches $r$ and recursively the contents of $H(r)(i)$.
-Products and packages take unions; stacks include every retained field and saved residual.
+Products and packed values take unions; stacks include every retained field and saved residual.
 
 $ reach_(H)(eta,s) = union_(x in dom(eta)) reach_(H)(eta(x)) union reach_(H)(s). $
 
@@ -491,12 +491,13 @@ required before claiming a sound extension of Zydeco.
    This is why root-indexed heap validity is used instead of requiring all unreachable payloads to stay live.
 3. *Substitution.* Substituting a well-typed value preserves value and computation typing, allowing
    support bounds to decrease. Context restriction must be recomputed for the substituted successor.
-   Type and support substitution must preserve bound entailment, including through both package forms.
+   Type and support substitution must preserve bound entailment,
+   including through both packed value and stack record forms.
 4. *Preservation.* Each step preserves a well-typed environment and root-valid heap, possibly extending
    or reducing the live set. The `free` case uses the retirement lemma; the jump case uses closed code
    and the complete transferred root interface.
 5. *Progress.* A well-typed closed configuration either steps, terminates, or reports allocation failure.
-   A missing arena, missing cell, incorrect package opening, or incompatible jump cannot be the next action.
+   A missing arena, missing cell, incorrect opening of a packed value, or incompatible jump cannot be the next action.
 
 The target safety statement is: from a well-typed initial configuration, no reachable execution reads
 or allocates through a retired arena, and no retirement leaves a dangling pointer in the retained root graph.
@@ -545,8 +546,8 @@ halt 0
 ```
 
 This is rejected: $"alias":"Ptr"(r,"Int")$ survives, even though the name $p$ does not.
-Discarding both aliases before `free` is accepted. Replacing `alias` by an existential package changes
-neither result: the pointer requires witness bound ${r}$, and the package retains that bound.
+Discarding both aliases before `free` is accepted. Replacing `alias` by an existential value changes
+neither result: the pointer requires witness bound ${r}$, and the packed value retains that bound.
 Claiming witness kind $"VType"[emptyset]$ is rejected at V-Pack before retirement is considered.
 
 == A captured environment spanning two regions
@@ -591,7 +592,7 @@ A newly created arena cannot make an old pointer valid again, even if physical a
 
 The proposed implementation boundary is a typed memory elaboration of SPSLow after captures are explicit,
 before allocation choices and type erasure obscure them. It should preserve representation types,
-abstract support bounds, and typed residual stacks through normalization and package opening.
+abstract support bounds, and typed residual stacks through normalization and opening of a packed value.
 The exact choice of inference before closure conversion versus verification after it remains open.
 
 Representation selection can then choose inline fields, an arena cell, or a justified frame cell.
@@ -623,7 +624,8 @@ The remaining design and proof work includes:
 - A complete inductive or mechanized proof, including bounded existential substitution and the code-table invariant.
 - Recursive data, cyclic initialization, and the relation between structural support and recursive type equations.
 - Source inference and diagnostics for support bounds, and translation of arbitrary computation protocols.
-- Region-ownership packages, foreign borrows, and hidden roots. These require explicit ownership or root contracts.
+- Packed values carrying region ownership, foreign borrows, and hidden roots.
+  These require explicit ownership or root contracts.
 - Mutation and concurrency, which can change the reachable graph after an alias has been typed.
 - Representation of user-selected arena descriptors, allocation failure, alignment, and destruction ordering.
 - Optional collection within arenas. Support establishes lifetime dependencies, but does not provide precise object

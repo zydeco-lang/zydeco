@@ -1,8 +1,8 @@
 # Compiler boundary discrepancies
 
-These bounded implementation issues were retained from the reference audit.
-The relevant code was inspected at `3b4dd665` on 2026-09-14; the accepted
-and rejected source probes below were rechecked with a newly built debug CLI.
+These bounded implementation issues were retained from the reference audit and subsequent focused reviews.
+Except where a section gives a later baseline, the relevant code was inspected at `3b4dd665` on 2026-09-14;
+the accepted and rejected source probes below were rechecked with a newly built debug CLI.
 The checkout included the local 16 MiB CLI worker-stack mitigation; none of these probes depends on deep nesting.
 They record current limitations and intended repairs, without promoting a wider language feature.
 
@@ -28,10 +28,10 @@ The three-component program also passes when `Unit = @(intrinsic(unit))` is boun
 and the function parameter is annotated `(triple : Unit * Unit * Unit)`.
 Review arity-directed refinement and retain all three probes when implementing a change.
 
-## Nested package witness diagnostic
+## Nested witness diagnostic
 
-[L9](../references/language.md#9-polymorphism-and-packages)
-and [C5](../references/compiler.md#package-evidence-and-lookup) govern witness evidence.
+[L9](../references/language.md#9-polymorphism-and-packed-values)
+and [C5](../references/compiler.md#witness-evidence-and-field-lookup) govern witness evidence.
 Computation binders can collect witnesses beneath product patterns,
 but [application instantiation](../../lang/statics/src/check/functions/application.rs)
 traverses a leading existential prefix.
@@ -105,3 +105,56 @@ The bounded repair is to reject unsupported ZASM execution explicitly before run
 Completing host operations and context allocation is a larger alternative.
 Retain the successful interpreter/rendering counterparts and a subprocess rejection regression;
 check that unsupported execution neither panics nor performs earlier program effects.
+
+## Documentation exposure collisions
+
+The [publication contract](../references/compiler.md#documentation-publication-and-verification) exposes a
+selected entry's public classifier, named fields, and generic result interfaces, with unique stable public paths.
+At `d6f8939f`, reviewed on 2026-09-15, valid interfaces can fail reference construction
+because distinct anonymous branches receive the same generated path.
+This failure also blocks targeted lookup and example checking.
+
+Save this complete source as `/tmp/zydeco-doc-collision.zy`:
+
+```zydeco
+param val (x : @(intrinsic(int))) in ({ ret 1 }, { ret 2 })
+```
+
+With a debug CLI built from the checkout, the ordinary check succeeds and documentation lookup fails:
+
+```sh
+target/debug/zydeco check /tmp/zydeco-doc-collision.zy
+target/debug/zydeco doc show /tmp/zydeco-doc-collision.zy
+```
+
+```text
+more than one public member has documentation path `()/()`
+```
+
+The named counterpart passes reference construction:
+
+```zydeco
+param val (x : @(intrinsic(int))) in (#first = { ret 1 }, #second = { ret 2 })
+```
+
+The same failure occurs for all four `doc` commands on `lib/std/std.zy`, while ordinary source checking succeeds.
+Additional reference-construction probes gave these results:
+
+| Entry | Result |
+| --- | --- |
+| `lib/std/std.zy`, `lib/std/data/package.zy`, `lib/std/memory/package.zy` | Duplicate `()/()` path |
+| `lib/std/text/package.zy`, `lib/std/numeric/package.zy`, `lib/std/system/package.zy`, `lib/std/data/option.zy` | Reference construction succeeds |
+
+The [exposure traversal](../../lang/session/src/source/documentation/exposure.rs) visits product components
+at a shared parent path and appends result steps independently before checking uniqueness.
+The [command dispatcher](../../cli/src/main.rs) requires the complete reference even for `show` and `check`.
+Reference-construction success alone does not verify documentation prose or examples.
+
+- [ ] Preserve distinct anonymous subjects while allowing valid standard-library interfaces to be documented.
+  Retain the reproducer and named counterpart as regressions; preserve errors for ambiguous requested selectors.
+- [ ] Verify all four commands on the full standard-library entry, including targeted lookup and example checks.
+  Reject invalid links without replacing an existing output artifact.
+
+The [documentation proposal](../proposals/documentation.md#subjects-selectors-and-published-anchors)
+owns the subject/selector separation and later publication choices.
+This failure record does not choose new selector syntax or authorize silently dropping colliding subjects.

@@ -34,7 +34,7 @@ Host operations live in the same contract under the `numeric`, `text`, and `syst
 and the search descends through them: `param (/stdio; /process) : @(import(std/builtin)) in` selects two operations
 from the `system` group without naming it.
 The [integer example](../tests/std/minimal.zy) selects `Int` and `Ret` this way,
-then uses the assembled standard package for arithmetic.
+then uses the assembled standard-library value for arithmetic.
 
 ## Library boundaries
 
@@ -42,7 +42,7 @@ Runtime operations have two boundaries.
 [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs and the host runtime.
 Its operations expose representation-independent observations and effects,
 but never construct library-defined `Bool`, `Option`, `Result`, `List`, or `Bytes` values.
-[`std.zy`](std.zy) applies the topic packages in this directory and assembles the public package,
+[`std.zy`](std.zy) applies the factories supplied by topic packages and assembles the public packed value,
 whose sealed type its final `pack` introduction synthesizes.
 
 Each topic owns exactly one implementation: `data`, `text`, `system`, and `numeric` each provide `package.zy`,
@@ -61,7 +61,7 @@ The interpreter and native runtime only need to agree on the small Builtin ABI,
 while the files under `data/` and the derived operations in the topic packages remain ordinary Zydeco code.
 
 `system/arguments.zy` builds a lazy `fold` from the Builtin `args/at` lookup.
-Apply it to the Builtin package directly when a list is unnecessary; `process/arg_list` uses the same builder.
+Apply it to the Builtin packed value directly when a list is unnecessary; `process/arg_list` uses the same builder.
 Callers of the former Builtin `args/fold` should instantiate this builder and call its `fold` field.
 Tails are ordinary reusable computations, and host runtimes need no special closure implementation.
 [Argument semantics](../../docs/references/language.md#13-primitive-values-and-capabilities) specify lookup failures
@@ -108,7 +108,7 @@ The files at the root of this directory define the public entry points:
 
 ```text
 builtin.zy                 complete host ABI: surface kinds and types, operation groups
-std.zy                     wiring for the public package
+std.zy                     wiring for the public packed value
 
 builtin/numeric/*.zy       primitive numeric operations
 builtin/text/*.zy          Char and String host operations
@@ -123,10 +123,10 @@ numeric/package.zy         the twelve numeric modules and their capability dicti
 numeric/codecs.zy          source byte codecs over scalar memory leaves
 
 text/bytes.zy              abstract immutable byte sequences over retained raw allocations
-text/bytes.type.zy         shared byte-package witness and primitive-free sequence API
+text/bytes.type.zy         shared byte-type witness and primitive-free sequence API
 text/package.zy            text conveniences and byte collection operations
 
-memory/package.zy          manual-memory package and shared pointer/state witnesses
+memory/package.zy          manual-memory interface and shared pointer/state witnesses
 memory/types.zy            erased Ptr<L,S> abstraction and state markers
 memory/storage.zy          sealed fixed/runtime geometry
 memory/codecs.zy           independent fixed/runtime scalar codecs
@@ -147,17 +147,17 @@ control/*.zy               monadic basis, State, Exception, and their combinatio
 **/*.type.zy               reusable type terms imported by implementations and companions
 ```
 
-Topic implementations are independently checkable package functions.
-The public package keeps one opening for `Reader`, `Writer`, and `OS`; splitting
-that opening would give related I/O operations incompatible abstract types.
+Topic implementations are independently checkable module factories.
+The public packed value keeps one opening for `Reader`, `Writer`, and `OS`;
+splitting that opening would give related I/O operations incompatible abstract types.
 No compatibility forwarding files remain at the old flat paths.
 
-## Builtin packages
+## Builtin interface
 
-The host contract is one launcher-supplied value.
-Its complete leading telescope carries every public static name as a manifest field — the CBPV kinds,
-constructors, and fixed-representation types — followed by generative host capabilities,
-and its body groups the runtime operations:
+The launcher supplies one packed value implementing the [Builtin contract](builtin.zy).
+The signature begins with manifest fields for the CBPV kinds, constructors, and fixed-representation types,
+followed by abstract witnesses for runtime-owned capabilities.
+Its value payload groups the runtime operations:
 
 - Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the twelve numeric types, `Char`,
   `String`, then abstract `Addr`, `Reader`, `Writer`, and `OS`.
@@ -166,23 +166,22 @@ and its body groups the runtime operations:
 - `system`: the re-exposed capabilities plus checked memory, I/O, filesystem, standard stream, argument,
   randomness, and process operations.
 
-Each public name is unique across the complete package, so one field search reaches kinds, types,
+Each public name is unique across the complete packed value, so one field search reaches kinds, types,
 operations, and capabilities alike, and every selection shares the contract's identities.
 Fixed representations are compiler-canonical intrinsics, so independent selections share one `Int` identity.
-Only the runtime-owned system capabilities are generative existential types.
+Opening the runtime-owned system capabilities introduces fresh abstract witnesses.
 A composition root that must pass the dependency onward keeps the whole-alias `builtin` beside its selections.
-The [language reference](../../docs/references/language.md#13-primitive-values-and-capabilities) defines primitive
-identity; the [package design](../../docs/references/language.md#13-primitive-values-and-capabilities)
-explains how it determines these boundaries.
+The [primitive and capability rules](../../docs/references/language.md#13-primitive-values-and-capabilities)
+define these identity boundaries.
 Compiler intrinsics are spliced inline as `@(intrinsic(name))` wherever a contract needs the canonical term,
 so no one-line indirection files sit between type expressions and the compiler metadata they name.
 Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file,
 so their classifiers read as ordinary type expressions.
 
-## Package composition
+## Packed value composition
 
 Select related types and operations in one projection group so they share one abstract opening.
-A whole-package alias passes that same dependency to a factory:
+A whole-value alias passes that same dependency to a factory:
 
 ```zydeco check
 param (/Reader; /io; builtin) : @(import("builtin.zy")) in
@@ -192,10 +191,10 @@ do value <- ! bytes/empty;
 ! bytes/length value
 ```
 
-Here `Reader` and primitive `io` come from one Builtin opening; `builtin` forwards that package.
+Here `Reader` and primitive `io` come from one Builtin opening; `builtin` forwards that packed value.
 `Bytes`, convenient `bytes`, and `fs` share the std opening.
-For low-level memory composition, instantiate `text/bytes.zy` once and pass that byte package to dependent builders.
-Slash selection follows the [language rules](../../docs/references/language.md#9-polymorphism-and-packages),
+For low-level memory composition, instantiate `text/bytes.zy` once and pass that packed value to dependent builders.
+Slash selection follows the [language rules](../../docs/references/language.md#9-polymorphism-and-packed-values),
 including nested products and ambiguity.
 A view such as `make_std ~> (/bytes; /fs)` combines application and opening.
 
@@ -204,7 +203,7 @@ Use an explicit existential annotation when the contract must prescribe an abstr
 use a companion `.zyi` source when the contract deserves independent authorship.
 Named product values also synthesize their types, so naming fields alone does not require a companion.
 
-Kind fields currently need an annotated package introduction rather than `pack`:
+Kind fields currently need an annotated packed value introduction rather than `pack`:
 
 ```zydeco check
 let VType = @(intrinsic(vtype)) in
@@ -218,13 +217,14 @@ in
 ```
 
 The annotation discloses the kind equations, while the inner `pack` supplies a type constructor.
-The shared [package design](../../docs/references/language.md#module-interfaces-and-shared-openings) explains
+The [module-interface rules](../../docs/references/language.md#module-interfaces-and-shared-openings) explain
 when inferred and authored interfaces serve different maintenance needs.
 
 ## Explicit runtime contracts
 
-A value functor is a total package-to-package value function and undergoes static elimination.
-A computation functor receives a package through a computation protocol; its thunk may remain dynamically selectable.
+A value functor is a total function between packed values and undergoes static elimination.
+A computation functor receives a packed value through a computation protocol;
+its thunk may remain dynamically selectable.
 The callee body need not be statically known when its signature and the argument's witnesses are available.
 
 For `Sig = exists (X : K) . A X`, explicit adapters connect `pi ((X, x) : Sig) . C X`
@@ -258,7 +258,8 @@ let restored : Thk Curried = {
 
 These are explicit adapters, not definitional equality between `PackPi` and `Forall`
 or a theorem equating arbitrary effectful protocols.
-A package `pi` outside codata opens once for the residual protocol; inside a method arm it opens for that observation.
+A witness-dependent `pi` outside codata opens once for the residual protocol;
+inside a method arm it opens for that observation.
 Moving it changes where payloads and witnesses are shared.
 
 When the provider chooses a hidden type, a polymorphic callback can give the consumer one scoped opening:
@@ -335,7 +336,7 @@ Import [std/memory](memory/package.zy) directly with a shared Builtin opening.
 Its `fixed` builder calculates placement in source value functions; `dynamic` accepts runtime inputs.
 The [language reference](../../docs/references/language.md#manual-memory) owns memory state,
 layout laws, unsafe obligations, and retention.
-The package introduces no lifetimes or borrow checker.
+The library introduces no lifetimes or borrow checker.
 
 ```zydeco check
 param (/VType; /CType; /Thk; /OS; /UInt8; /Unit; /process; builtin) : @(import("builtin.zy")) in
@@ -421,7 +422,7 @@ The counts below describe payload work; Wasm host address lookup and ordinary so
 
 [numeric/codecs.zy](numeric/codecs.zy) gives every scalar `to_le_bytes` and `from_le_bytes`;
 std includes these operations in its numeric modules.
-The low-level byte package groups `from_retained`, `with_window`, `copy_to`,
+The low-level packed value for bytes groups `from_retained`, `with_window`, `copy_to`,
 and fixed-size `build` under `bytes/unsafe`.
 Their [caller contracts](../../docs/references/language.md#immutable-owners-and-source-bytes) cover initialized extents,
 retention, immutable aliases, and one completion per fill.
@@ -475,12 +476,12 @@ In particular, every ordered comparison with NaN is false, while `float32/ne` an
 The exact host-facing operations live directly in the Builtin contract's `numeric` group, one module per width.
 Their comparisons select one of two computation continuations directly,
 avoiding a dependency on the library's `Bool` representation.
-The width-specific modules in the public package reify those branches as `Bool` and add derived helpers.
+The width-specific modules in the public packed value reify those branches as `Bool` and add derived helpers.
 
 ## Numeric capabilities and explicit instances
 
 Generic numeric functions receive the operations they need as ordinary arguments.
-The public package exports five capability type constructors; their linked definitions give the exact field types:
+The public packed value exposes five capability type constructors; their linked definitions give the exact field types:
 
 | Interface | Fields |
 | --- | --- |
@@ -513,7 +514,7 @@ Division, integer remainder, rendering, extrema,
 and other representation-specific operations stay in the width modules. The numeric layer inherits the
 [literal and conversion rules](../../docs/references/language.md#13-primitive-values-and-capabilities).
 
-A library can also expose the selected carrier together with its dictionary in a manifest package.
+A library can also expose the selected carrier together with its dictionary in a packed value with a manifest carrier.
 The following complete example names the disclosed type `Int`, renames it to `Carrier` when opening,
 and checks that the operations use that same carrier:
 
@@ -530,15 +531,16 @@ let _ : Numeric Bool Carrier = operations in
 ! operations/additive/add (21 : Carrier) 21
 ```
 
-The [manifest type rules](../../docs/references/language.md#9-polymorphism-and-packages) supply the disclosed equation;
-[package selection](../../docs/references/language.md#9-polymorphism-and-packages) governs the shared opening.
+The [manifest type rules](../../docs/references/language.md#9-polymorphism-and-packed-values)
+supply the disclosed equation;
+[field selection](../../docs/references/language.md#9-polymorphism-and-packed-values) governs the shared opening.
 Naming a manifest field after its carrier avoids imposing a generic role label on each consumer.
 When exporting several instances, use distinctive value names such as `int_instance` and `float32_instance`
 so their selection is unambiguous.
 
 Selection remains explicit value flow: lexical bindings and arguments determine which dictionary is used.
 Several implementations for one carrier can coexist without global instance search or coherence checking.
-A wrapper can carry additional abstract or manifest type fields under the same package scope rules.
+A wrapper can carry additional abstract or manifest type fields under the same witness scope rules.
 Its static components obey the [static elimination contract](../../docs/references/language.md#10-static-elimination);
 ordinary dictionary thunks may remain at runtime.
 The [runtime contract design](README.md#explicit-runtime-contracts) describes adapters
@@ -570,7 +572,7 @@ The [stream guide](#streams-and-files) gives the operations and lifecycle contra
 [filesystem design](../../docs/proposals/filesystem.md) retains the rationale and extension questions.
 
 The topic files are independently importable value functions.
-`std.zy` is the composition root used by most programs; its public package carries the library-defined types
+`std.zy` is the composition root used by most programs; its public packed value carries the library-defined types
 and modules, while the Builtin contract remains the home of every host type and capability.
 Its public record nests one sub-record per topic, and its sealed type is synthesized from the final `pack` introduction,
 so no restated contract sits between the implementation and its consumers.

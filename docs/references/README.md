@@ -31,7 +31,7 @@ Chapter contents provide the detailed topic indexes.
 | Computations and stack protocols | [L6](language.md#6-computations-and-control) | [C7: evaluator](compiler.md#c7-linking-and-the-reference-interpreter) |
 | Patterns and coverage | [L7](language.md#7-patterns-and-coverage) | [C6: pattern checking](compiler.md#pattern-decisions-and-validation) |
 | Value functions and views | [L8](language.md#8-value-functions-and-views) | [C6: static elaboration](compiler.md#static-elimination) |
-| Package witnesses and fields | [L9](language.md#9-polymorphism-and-packages) | [C5: package evidence](compiler.md#package-evidence-and-lookup) |
+| Packed values, witnesses, and fields | [L9](language.md#9-polymorphism-and-packed-values) | [C5: witness evidence](compiler.md#witness-evidence-and-field-lookup) |
 | Required static elimination | [L10](language.md#10-static-elimination) | [C6: elaboration](compiler.md#static-elimination) |
 | Relative monads | [L11](language.md#11-relative-monads) | [C6: translation](compiler.md#monadic-and-copattern-elaboration) |
 | Sources and source packages | [L12](language.md#12-sources-imports-and-entry) | [C3: loading and sessions](compiler.md#c3-source-loading-sessions-queries-and-memory-retention), [C4: assembly](compiler.md#c4-parsing-desugaring-and-name-resolution) |

@@ -4,6 +4,9 @@
 
 Zydeco is a proof-of-concept programming language based on call-by-push-value (CBPV).
 It explores explicit control flow, stack-manipulating computation, and relative monads.
+Its [term-oriented design](docs/references/language.md#term-oriented-composition) uses expressions
+for type construction, local programming, and library composition.
+
 The repository includes an interpreter, a terminal REPL, experimental native and WebAssembly backends,
 and editor support through the Cajun language server.
 
@@ -46,8 +49,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#build-the-cli) for release builds and addi
 
 A source file contains one complete term.
 Imports are relative to the importing file; there is no implicit prelude or distinguished `main` declaration.
-The example above explicitly accepts the host's Builtin package and selects the operations it needs.
-The launcher supplies that package when running the program.
+The example above explicitly accepts the host's Builtin value and selects the operations it needs.
+The launcher supplies it when running the program.
 
 Pure library terms select the foundational kinds and types directly from the Builtin contract:
 
@@ -58,9 +61,9 @@ fn (value : Int) => (ret value : Ret Int)
 
 `@(import("path"))` abbreviates `@[import("path")] _`.
 `zydeco check` accepts library terms as well as executable programs.
-`zydeco run` requires a computation accepting the Builtin package and ending in its `OS` protocol;
+`zydeco run` requires a computation accepting the Builtin value and ending in its `OS` protocol;
 a pure function or `ret 1` can pass checking without being a runnable file root.
-The [standard library guide](lib/std/README.md) describes the package boundary, library assembly,
+The [standard library guide](lib/std/README.md) describes the Builtin interface, library assembly,
 and available operations.
 
 Prefer complete files as package entry points.

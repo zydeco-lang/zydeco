@@ -10,14 +10,14 @@ The [reference ownership map](../references/README.md#rule-ownership) locates ea
 
 - [ ] **Recursive field search.** The [calculus](../../lang/statics/type-system.typ) still gives
   `field` an immediate-component search and explicitly excludes deeper traversal.
-  [L9](../references/language.md#9-polymorphism-and-packages)
+  [L9](../references/language.md#9-polymorphism-and-packed-values)
   and [field lookup](../../lang/statics/src/check/projection/field.rs) recursively search named wrappers,
-  products, and package telescopes.
+  products, and witness telescopes.
   Reconcile the mathematical rule with those supported routes and ambiguity checks.
-- [ ] **Computation package witnesses.** Compare the calculus's package-dependent computation rules
-  with the leading-prefix boundary in [L9](../references/language.md#9-polymorphism-and-packages)
+- [ ] **Computation witnesses.** Compare the calculus's witness-dependent computation rules
+  with the leading-prefix boundary in [L9](../references/language.md#9-polymorphism-and-packed-values)
   and [the current application checker](../../lang/statics/src/check/functions/application.rs).
-  The [nested-package probe](compiler-boundaries.md#nested-package-witness-diagnostic) reaches an application failure.
+  The [nested-witness probe](compiler-boundaries.md#nested-witness-diagnostic) reaches an application failure.
   Keep value-function witness routes separate;
   their implemented structural routes do not extend computation application.
 - [ ] **Value matches and integer operations.** Add the value-producing match

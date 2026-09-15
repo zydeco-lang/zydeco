@@ -123,7 +123,7 @@ The proposed boundary description will connect five complementary agreements:
 
 An **ABI profile** will supply target-specific transport rules and identify its required runtime services.
 The compiler will resolve and validate each call's signature before emitting the adapter.
-Existing static packages and value functions are candidates for assembling descriptions;
+Existing static packed values and value functions are candidates for assembling descriptions;
 whether the current type system can express the necessary evidence is an explicit research question.
 The core language may need additional boundary or resource constructs.
 

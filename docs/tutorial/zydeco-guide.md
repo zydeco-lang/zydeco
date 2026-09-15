@@ -1,6 +1,6 @@
 # Zydeco Guide
 
-This guide introduces current Zydeco source syntax, CBPV control, and package and monadic-block idioms.
+This guide introduces current Zydeco source syntax, CBPV control, library composition, and monadic blocks.
 It assumes familiarity with typed functional programming.
 The [language reference](../references/language.md) gives the precise rules; implementation details belong
 to the [compiler reference](../references/compiler.md).
@@ -35,7 +35,7 @@ A computation type describes the stack a computation can consume.
 A thunk suspends code compatible with its protocol.
 Forcing it again runs that code again.
 
-A runnable file accepts the host's Builtin package and ends in that provider's `OS` protocol:
+A runnable file accepts the host's Builtin value and ends in that provider's `OS` protocol:
 
 ```zydeco check
 param (/stdio; /process) : @(import("../../lib/std/builtin.zy")) in
@@ -117,7 +117,7 @@ ret (first, second)
 ```
 
 Both names can also be passed directly wherever their thunk type is expected.
-A package value uses plain `let` or `def`; adding `!` would require its body to be a computation.
+A packed value uses plain `let` or `def`; adding `!` would require its body to be a computation.
 
 Documentation uses `--|` Markdown blocks attached to a following `@[doc]` annotation.
 Use `--` for ordinary comments; see [the documentation reference](../references/language.md#source-documentation)
@@ -135,8 +135,8 @@ let Pair = fn (A : VType) (B : VType) => A * B in
 ret ((1, 'x') : Pair Int Char)
 ```
 
-Value types include `Unit`, products, data, thunks, existential packages, and total value-function types.
-Computation types include `Ret A`, `A -> B`, `forall`, package-dependent `pi`, codata, and the provider's `OS`.
+Value types include `Unit`, products, data, thunks, existential types, and total value-function types.
+Computation types include `Ret A`, `A -> B`, `forall`, witness-dependent `pi`, codata, and the provider's `OS`.
 Names such as `Int`, `Char`, and `Thk` come from explicit bindings; the examples obtain them from Builtin.
 
 Unconstrained integer and decimal literals default to `Int` and `Float64`.
@@ -161,7 +161,7 @@ For example, `@[typeof] ret 1` is `Ret Int`, and `@[typeof] Int` is `VType` in t
 The operand must still check. Use `@[typeof] (1 : Int8)` when the queried literal should have type `Int8`.
 Queries preserve abstract identities and cannot extract `Set` from a kind.
 
-### Quantifiers and package boundaries
+### Quantifiers and witness boundaries
 
 `forall` introduces computation-level polymorphism:
 
@@ -173,7 +173,9 @@ let identity : Thk (forall (A : VType) . A -> Ret A) = {
 ! identity Int 42
 ```
 
-Existentials package type witnesses with values.
+Existential types describe type witnesses together with a value payload.
+The [language reference](../references/language.md#9-polymorphism-and-packed-values) defines existential values,
+the broader term packed value, and abstract and manifest witnesses.
 The abstract and manifest forms are:
 
 ```text
@@ -186,7 +188,7 @@ A named binder such as `exists (#Item = X : VType) . A` exposes the public name 
 Manifest entries use `as`, for example `exists (= Item as Int : VType) . A`.
 An existential may also disclose a kind equation, with its inferred classifier omitted.
 
-`pi` abstracts over a parameter whose pattern may open package witnesses used in the result type.
+`pi` abstracts over a parameter whose pattern may open type witnesses used in the result type.
 It supports dependency on those static witnesses, not arbitrary runtime values:
 
 ```zydeco check
@@ -198,7 +200,7 @@ let reveal : Thk (pi ((T, value) : Box) . Ret T) = {
 ! reveal ((Int, 42) : Box)
 ```
 
-## 4. Products, named fields, and packages
+## 4. Products, named fields, and packed values
 
 `A * B * C` is one three-component product type.
 Parentheses preserve nesting: `A * (B * C)` is a two-component product with a product in its second slot.
@@ -233,7 +235,7 @@ ret (first, rest)
 
 Against an expected existential, a comma sequence instead supplies leading witnesses and the remaining payload.
 For `exists (X : VType) (Y : VType) . X * Y`, `(Int, Char, 0, 'z')` supplies two witnesses and two payload fields.
-This classifier-directed package opening does not make ordinary products associative.
+This classifier-directed opening of a packed value does not make ordinary products associative.
 
 ### Named fields and projection groups
 
@@ -249,16 +251,16 @@ ret (seed, value)
 
 `/field = local_name` renames; `/field` puns that binding.
 A final ordinary member, as in `(/initial; whole)`, retains the whole value.
-Search follows named wrappers, product components, and package telescopes.
+Search follows named wrappers, product components, and witness telescopes.
 Functions, thunks, and data payloads stop the search.
 Missing and ambiguous names are distinct static errors.
 
-A manifest package publishes equations and supports direct selection.
-Opening an abstract package requires a projection pattern; selecting related fields
-in one group shares one opening and the same witnesses.
+Manifest components publish equations and support direct selection.
+Selecting fields across an abstract witness requires a projection pattern;
+selecting related fields in one group shares one opening and the same witnesses.
 This is why module examples retain `builtin` and forward it to their builders.
 
-`pack` introduces explicit type witnesses and synthesizes the package type from its payload:
+`pack` introduces explicit type witnesses and synthesizes the existential type from its payload:
 
 ```zydeco check
 let Int = @(intrinsic(int)) in
@@ -270,8 +272,8 @@ ret (value : Item)
 For an abstract interface, write an expected `exists` type and supply its witness and payload.
 An abstract `pack (X : K) is T where value end` also exists,
 but cannot infer an arbitrary hidden interface from concrete payload values.
-Kind witnesses currently require an annotated package rather than `pack`.
-[The package reference](../references/language.md#9-polymorphism-and-packages) covers these boundaries.
+Kind witnesses currently require an annotated packed value rather than `pack`.
+[The packed value reference](../references/language.md#9-polymorphism-and-packed-values) covers these boundaries.
 
 Type-level named projection uses the same slash: if `T : (#field :: K)`, then `T/field : K`.
 For a manifest named type, `(#field = A)/field` reduces to `A`.
@@ -297,7 +299,7 @@ ret record/value
 ### Total value functions and views
 
 `val` introduces a total value function, classified by `val pi`.
-Its irrefutable parameter may contain a product or open a package.
+Its irrefutable parameter may contain a product or open a packed value.
 `f value`, `value |> f`, and `f <| value` are the same application.
 A view pattern `f ~> pattern` applies such a function before matching its result:
 
@@ -308,7 +310,7 @@ let (first ~> value; whole) = (3, 4) in
 ret (value, whole)
 ```
 
-Value functions can construct packages, return thunks, and compose other value functions.
+Value functions can construct packed values, return thunks, and compose other value functions.
 They undergo [static elimination](../references/language.md#10-static-elimination) before execution;
 a runtime-selectable callable should have an explicit thunked computation type.
 
@@ -376,20 +378,20 @@ returning suspended counter code would instead use `Ret (Thk Counter)`.
 The `fix` binding introduces recursive computation code behind a thunk, invoked here as `! counter`.
 The recursive type uses a mobile sealed binding with an explicit kind, so its identity is available in its own body.
 
-## 6. The Builtin package
+## 6. The Builtin interface
 
-[Builtin](../../lib/std/builtin.zy) is the host provider signature.
-Its abstract system capabilities receive identities when the package is opened.
-Open it once and retain the package value to pass the same capabilities into library builders.
+The host supplies a packed value implementing the [Builtin signature](../../lib/std/builtin.zy).
+Opening that value introduces identities for its abstract system capabilities.
+Open it once and retain the value to pass the same capabilities into library builders.
 
 | Group | Contents |
 | --- | --- |
-| Manifest prefix | `VType`, `CType`, `Thk`, `Ret`, `Unit`, fixed-width integer and floating-point types, `Char`, `String`, `Bytes` |
+| Manifest prefix | `VType`, `CType`, `Thk`, `Ret`, `Unit`, fixed-width integer and floating-point types, `Char`, `String` |
 | `numeric` | Operations grouped by numeric type, such as `numeric/int` |
-| `text` | `char`, `string`, and `bytes` operations |
-| `system` | Public `Buffer`, `Reader`, `Writer`, and `OS` names; `buffer`, `io`, `fs`, `stdio`, `args`, `random`, and `process` operations |
+| `text` | `char` and `string` operations |
+| `system` | Public `Addr`, `Reader`, `Writer`, and `OS` names; `memory`, `io`, `fs`, `stdio`, `args`, `random`, and `process` operations |
 
-Recursive field selection reaches these public names from the whole package:
+Recursive field selection reaches these public names from the whole packed value:
 
 ```zydeco check
 param (/numeric) : @(import("../../lib/std/builtin.zy")) in
@@ -400,11 +402,11 @@ ret answer
 The numeric groups provide returning arithmetic and continuation-based comparisons.
 The larger [standard facade](../../lib/std/std.zy) adds ordinary data types,
 numeric capabilities, and source-level text and system helpers.
-It is a value-function builder applied to an existing Builtin package.
+It is a value-function builder applied to an existing Builtin packed value.
 
-`Bytes` is immutable data. `Buffer` supports checked mutable storage with explicit allocation and `close`;
+The standard library supplies immutable `Bytes`;
 [the memory library](../../lib/std/README.md#explicit-storage) builds allocator protocols and source-level `Storage`,
-`Representation`, and static `Plan` recipes over those capabilities.
+`Representation`, and static `Plan` recipes over Builtin's address and I/O capabilities.
 Those explicit storage interfaces coexist with compiler-managed ordinary values.
 `args/at` supports indexed access; the standard argument fold composes it in ordinary CBPV.
 The [primitive reference](../references/language.md#13-primitive-values-and-capabilities) lists current contracts.
@@ -497,7 +499,7 @@ in [the relative-monad reference](../references/language.md#11-relative-monads).
 
 ## 9. Effect modules
 
-The control modules are ordinary value-function builders from Builtin to packages:
+The control modules are ordinary value-function builders from Builtin to packed values:
 
 | Module | Exports |
 | --- | --- |
@@ -537,11 +539,11 @@ let (/raise; /handle_exception) = builtin |> make_exception in
 A new module can use `val (dependency : Signature) => value`, or `param val ... that` inside a block,
 then finish with `pack`.
 Its classifier is a `val pi` inferred from the annotated parameter and result.
-See [package composition](../../lib/std/README.md#package-composition) for reusable patterns.
+See [packed value composition](../../lib/std/README.md#packed-value-composition) for reusable patterns.
 
-## 10. Capability packages
+## 10. Capability dictionaries
 
-Package the operations required by generic user code as named fields with `Ret` signatures.
+Group the operations required by generic user code as named fields with `Ret` signatures.
 Monadic translation lifts the fields together, and the caller chooses the concrete operations and carrier.
 This complete example reads the old state, replaces it, and returns both the old and final state:
 
@@ -583,8 +585,8 @@ with polymorphic `raise` and `catch`, their structure arguments, and an executab
 4. `do` eliminates `Ret`. Sequence an `OS` action through its explicit continuation,
    and an arbitrary relative monad through its dictionary or a monadic block.
 5. A thunk is already a value. Pass its name directly when the expected argument is a thunk.
-6. Use transparent aliases when an equation is part of the interface; manifest packages publish that equation.
-   Open an abstract package once to keep its related fields at the same witnesses.
+6. Use transparent aliases when an equation is part of the interface; manifest witnesses publish that equation.
+   Open a packed value with abstract witnesses once to keep its related fields at the same witnesses.
 7. Monadic blocks need lexical `Monad` and `Algebra`.
    Write generic operation signatures with `Ret` and account for structure arguments in lifted polymorphic operations.
 8. Value functions and value-level choices must satisfy static elimination.
@@ -603,8 +605,8 @@ codata                         computation type constructor
 forall (X : K) . B             computation-level polymorphism
 pi (pattern : A) . B           computation parameter, possibly opening witnesses
 val pi (pattern : A) . A'      total value-function type
-exists (X : K) . A             abstract existential value package
-exists (X as T : K) . A        manifest existential value package
+exists (X : K) . A             existential type with an abstract witness
+exists (X as T : K) . A        existential type with a manifest equation
 
 { M }                          thunk value
 ! V                            force
@@ -623,8 +625,8 @@ V / field                      named projection
 #field :: A                    named payload classifier
 #field = term                  named payload introduction/pattern
 (/field; /other; whole)        projection-pattern group
-pack (X as T : K) where V end  manifest package introduction
-pack (X : K) is T where V end  abstract package introduction
+pack (X as T : K) where V end  packed value with a manifest witness
+pack (X : K) is T where V end  packed value with an abstract witness
 
 begin term end                 mobile-binding block
 param P in/that term           parameter
@@ -641,8 +643,8 @@ let val f P = V in term        total value-function binding
 ## 13. Where to look next
 
 - [Language reference](../references/language.md) — source rules and execution boundaries.
-- [Standard library guide](../../lib/std/README.md) — current capabilities, storage, and package composition.
-- [Effect examples](../../lib/tests/effects/) — complete programs using control modules and capability packages.
+- [Standard library guide](../../lib/std/README.md) — current capabilities, storage, and packed value composition.
+- [Effect examples](../../lib/tests/effects/) — complete programs using control modules and capability dictionaries.
 - [OOPSLA artifact overview](../../lib/tests/oopsla/README.md) — paper examples, transformers,
   and evaluation instructions.
 - [Compiler reference](../references/compiler.md) — phase contracts and maintenance entry points.

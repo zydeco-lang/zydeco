@@ -45,7 +45,7 @@ or the phase's acceptance boundary.
 ## Further resumable folder migrations
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution) provides
-statically selected native and explicit-stack drivers for residual lowering, Builtin package materialization,
+statically selected native and explicit-stack drivers for residual lowering, Builtin packed value materialization,
 high SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
 and [CPS assembly lowering](../references/compiler.md#cps-assembly-lowering).
 Their equivalence and depth checks support using the interface for those boundaries.
@@ -57,7 +57,7 @@ or consumer interfaces need a further design choice.
 The [raw classifier folder](../../lang/statics/src/fold.rs) supplies immediate recursive callbacks.
 For `ValPi`, it first rebuilds a parameter's domain, then lends the updated local binder
 to `fold_body` through `TypeScope::ValueFunction`.
-Package bodies similarly receive a reference to their local witness telescope.
+Existential type bodies similarly receive a reference to their local witness telescope.
 [Abstract substitution](../../lang/statics/src/normalize/substitution.rs) filters its ordered assignments
 into a local vector and lends that vector to a temporary child folder.
 These references remain valid while the original Rust calls are active.
@@ -142,7 +142,7 @@ The implemented [SPSLow scan](../references/compiler.md#spslow-traversal-and-ana
 and variable summaries.
 The [entry-contract validator](../../lang/stackir/src/low/contracts.rs)
 and [protocol validator](../../lang/stackir/src/low/protocols.rs) require more than the same structural events.
-They propagate entry-specific evidence through bindings, open packages, and branch-local contexts.
+They propagate entry-specific evidence through bindings, opened records, and branch-local contexts.
 
 `ValueEvidence::Product` owns nested field evidence, while `StackEvidence` owns boxed argument and tag tails.
 Branch contexts and alias binders clone those structures.

@@ -20,6 +20,8 @@
 
 The calculus is the checked core after desugaring and name resolution.
 Surface wrappers are given only where they affect checking or elaboration.
+Terminology follows the #link("../../docs/references/language.md#9-polymorphism-and-packed-values")[language reference].
+Below, $Pi^"pkg"$ denotes the witness-dependent computation classifier implemented by `PackPi`.
 
 = Syntax
 
@@ -86,7 +88,7 @@ the source spelling `A * B * C` denotes $op("Prod")(A, B, C)$, while `A * (B * C
 $op("Prod")(A, op("Prod")(B, C))$. These types are distinct. Binary notation $A times B$ abbreviates
 $op("Prod")(A, B)$ only; it does not impose an association law.
 Source products have $n >= 2$; `()` has the separate type `Unit`, and `(N)` is grouping.
-The same tuple syntax denotes a package when its expected type has a leading static package prefix.
+The same tuple syntax denotes an existential value when its expected type has a leading static witness prefix.
 
 Contexts and visible existential witnesses are
 
@@ -137,11 +139,11 @@ $Gamma[Q := W]$ binds the leaf variable of $Q$ to $op("elim")_Q(W)$; a hole bind
 Substitution $S[W slash alpha]$ substitutes an internal abstract identity.
 The operation $op("lead")(A)$ returns the maximal leading prefix of manifest-kind and existential fields.
 $op("abs")(op("lead")(A))$ returns, in order, only the abstract existential payload kinds.
-Manifest fields do not contribute package-dependent witnesses.
+Manifest fields contribute no abstract witnesses to the function's telescope.
 
 Checking an irrefutable value-function parameter computes a structural route $rho = op("route")_A(P)$.
-The route selects exactly the package components opened by $P$, including openings nested beneath products.
-The partial operation $op("wits")_(rho,A)(V)$ follows that route through a package constructor, immutable alias,
+The route selects exactly the packed value components opened by $P$, including openings nested beneath products.
+The partial operation $op("wits")_(rho,A)(V)$ follows that route through a packed value constructor, immutable alias,
 named wrapper, or administrative value `let`. $op("inst")_(rho,A)(B, V)$ checks manifest witnesses and substitutes
 the selected abstract payloads into $B$. Retaining $rho$ prevents unrelated existential witnesses in a composite
 argument from being confused with those disclosed by the parameter.
@@ -340,7 +342,7 @@ A value-binder surface `sigma` elaborates its body in the pattern's context, the
 Any existential witnesses opened by that pattern must be absent from the component type when its scope closes.
 Erased uses of runtime names are permitted; the resulting product has no runtime dependency or witness telescope.
 
-== Quantifiers and packages
+== Quantifiers and packed values
 
 $
   frac(
@@ -394,9 +396,9 @@ $
   quad #text(size: 6.5pt)[T-PACK-PI]
 $
 
-The package-dependent computation arrow binds its witness telescope only in the codomain. The implementation admits
+The witness-dependent computation arrow binds its witness telescope only in the codomain. The implementation admits
 only witnesses from the leading static prefix of the domain. A value-binder `ValPi` retains the analogous telescope
-inside the source classifier and may select multiple package components through its structural route.
+inside the source classifier and may select multiple packed value components through its structural route.
 
 == Data and codata
 
@@ -518,10 +520,10 @@ pattern. The function must already be instantiated to a runtime value binder; ty
 elaborate to ordinary erased `ValPi` applications before this rule. At runtime, matching applies the checked value
 function and continues with its result. Matching may fail only after that transformed result reaches $P$.
 
-== Package patterns
+== Packed value patterns
 
-In the following rules, $Q_1$ is the binder stored in the package type, $Q_2$ is the consumer's type pattern,
-and $alpha_1$ is the identity bound in the package body.
+In the following rules, $Q_1$ is the binder stored in the existential type, $Q_2$ is the consumer's type pattern,
+and $alpha_1$ is the identity bound in the existential body.
 
 $
   frac(
@@ -570,7 +572,7 @@ $
 
 The rules iterate over the flattened tuple until the leading static prefix ends. Only P-OPEN-ABS contributes to
 $Omega$. A result checked outside the pattern must satisfy the non-escape condition
-$op("fsk")(J) inter Omega = emptyset$ unless $Omega$ is bound by a package-dependent arrow.
+$op("fsk")(J) inter Omega = emptyset$ unless $Omega$ is bound by a witness-dependent arrow.
 
 = Values
 
@@ -694,7 +696,7 @@ $
 
 Missing and duplicate product fields are errors; the search does not recurse beneath an immediate component.
 
-== Package introduction
+== Packed value introduction
 
 $
   frac(
@@ -727,7 +729,7 @@ $
   ) quad #text(size: 6.5pt)[V-PACK-KIND]
 $
 
-Static witnesses are retained for `ValPi` cut and package-dependent computation application, then erased before
+Static witnesses are retained for `ValPi` cut and witness-dependent computation application, then erased before
 dynamics. A value-function parameter binds only the abstract type witnesses opened by its pattern; it does not make
 runtime value variables available to types. Its structural route recovers those same witnesses, and no others,
 from the runtime argument's checked memory representation.
@@ -754,7 +756,7 @@ $
 $
 
 With an annotated domain, an abstraction synthesizes an ordinary arrow when it opens no existential. If its
-boundary package pattern opens the nonempty canonical telescope $overline(alpha)$, it synthesizes
+boundary packed value pattern opens the nonempty canonical telescope $overline(alpha)$, it synthesizes
 $Pi^"pkg"_(overline(alpha))(A\;B)$ instead. An opened witness below a product or constructor boundary is rejected.
 
 == Type abstraction and application
@@ -781,7 +783,7 @@ $
 An annotated type-pattern abstraction synthesizes a `forall` when its body synthesizes a computation, and a type
 function when its body synthesizes a type. Abstraction over `Set` is rejected.
 
-== Package-dependent functions
+== Witness-dependent functions
 
 $
   frac(
@@ -807,7 +809,7 @@ $
   ) quad #text(size: 6.5pt)[C-PACK-APP]
 $
 
-If the argument's retained witnesses are unavailable, package-dependent application does not type-check.
+If the argument's retained witnesses are unavailable, witness-dependent application does not type-check.
 
 == CBPV terms
 
@@ -1012,7 +1014,7 @@ $
 
 A builtin type role attaches only to an abstract existential field of the indicated universe.
 A builtin operation role attaches only to a named value classifier, must match its fixed ABI classifier,
-and may occur at most once in one package-dependent signature.
+and may occur at most once in one witness-dependent signature.
 
 == Blocks and wrappers
 
@@ -1092,7 +1094,7 @@ the displayed `forall` and computation arrow are the exact wrapper emitted by th
 Local inference is monomorphic and region-scoped. An unannotated value-pattern binder receives a fresh flexible
 value-type metavariable. Body uses and call sites constrain it through $#lub$; shape-directed eliminations may refine
 it to a computation arrow, thunk, return, or product. Closing a block or source interface rejects every
-metavariable that remains unconstrained. Constructor ownership, existential/package structure, recursive boundaries,
+metavariable that remains unconstrained. Constructor ownership, existential structure, recursive boundaries,
 polymorphism, and generalization remain annotation-directed.
 
 == Flexible metavariables
@@ -1271,7 +1273,7 @@ $
 REFINE-PROD records the current inference helper's two-component refinement of an unknown expected type.
 An already known product retains its component vector; refinement does not identify nested and flat products.
 
-No REFINE rule invents a data, codata, existential, package-dependent, or nominal shape.
+No REFINE rule invents a data, codata, existential, witness-dependent, or nominal shape.
 
 == Closing an inference region
 

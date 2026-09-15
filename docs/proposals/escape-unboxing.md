@@ -138,7 +138,7 @@ A modular extension needs the following boundaries in order:
    An entry contract needs explicit evidence at the call boundary; a compiler policy cannot infer permission
    to change an ABI from an arbitrary `Int` field.
 2. **One entry contract for both ends.** The checked word entry experiment establishes administrative roles
-   and package agreement; partial source protocols now preserve known argument/result
+   and closure/continuation record agreement; partial source protocols now preserve known argument/result
    and recursive observation structure.
    Extend that boundary with representation evidence shared by direct calls,
    indirect calls, closures, and return continuations.

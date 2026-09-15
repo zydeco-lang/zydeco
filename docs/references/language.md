@@ -13,7 +13,7 @@ The [language guide](../tutorial/zydeco-guide.md) provides a longer introduction
 6. [Computations and control](#6-computations-and-control)
 7. [Patterns and coverage](#7-patterns-and-coverage)
 8. [Value functions and views](#8-value-functions-and-views)
-9. [Polymorphism and packages](#9-polymorphism-and-packages)
+9. [Polymorphism and packed values](#9-polymorphism-and-packed-values)
 10. [Static elimination](#10-static-elimination)
 11. [Relative monads](#11-relative-monads)
 12. [Sources, imports, and entry](#12-sources-imports-and-entry)
@@ -25,8 +25,7 @@ The [language guide](../tutorial/zydeco-guide.md) provides a longer introduction
 
 Zydeco separates values from computations. Values are inert data, including suspended computations;
 computations consume continuation stacks and may perform effects.
-The surface grammar is shared by kinds, types, values, and computations.
-Checking determines the sort.
+Kinds, types, values, and computations share the surface term grammar; checking determines the sort of a term.
 
 | Notation | Meaning |
 | --- | --- |
@@ -49,6 +48,24 @@ These protocols do not prescribe physical stack layout or linear use.
 Examples marked `zydeco check` are complete source terms.
 Other code blocks use the displayed metavariables or an explicitly described context.
 A checked term need not be a standalone executable.
+
+### Term-oriented composition
+
+Zydeco's term-oriented design uses binding, abstraction, and application
+to compose expressions at the language's different sorts.
+Bindings and parameters are themselves term forms with scoped bodies (§3):
+`let x = e in body` combines a definition with its use, while `param p in body` constructs an abstraction.
+Both forms can occur within larger expressions.
+Type functions build types, and value functions assemble values (§8).
+
+The benefit is that library composition can use ordinary language mechanisms.
+Products group operations, packed values associate them with abstract or manifest type witnesses (§9),
+and functions take dependencies explicitly (§8).
+These structures can be nested, passed, and composed wherever their classifiers permit them.
+
+Composition follows the relevant typing and phase rules: computation sequencing is explicit (§6),
+and execution requires static elimination of value-function applications and static witness structure (§10).
+Source files, packages, and compilation units apply this composition model to reuse and distribution (§12).
 
 ## 2. Lexical structure and syntax
 
@@ -106,8 +123,8 @@ A binding form determines transparency or nominal identity;
 its `in` or `that` connective determines placement and scope.
 These choices are independent: moving a definition before or after a use does not turn a transparent alias
 into a nominal type.
-`let` supports transparent package composition, while `def` establishes an identity that clients can share
-without equating it with its implementation.
+`let` supports composition of packed values with disclosed equations, while `def` establishes an identity
+that clients can share without equating it with its implementation.
 
 A `that` binding contributes to the nearest `begin ... end` block.
 Its names are visible throughout that block, and dependencies from bodies and annotations determine its placement.
@@ -125,7 +142,7 @@ end
 ```
 
 The example elaborates to a function taking `seed` before binding `answer`.
-An unannotated `begin` adds no effect or package boundary.
+An unannotated `begin` adds no effect or existential boundary.
 
 Binding headers abbreviate abstractions:
 
@@ -144,7 +161,7 @@ Runtime recursion is explicit through `fix`; refutable binding patterns follow �
 
 Kinds are `VType`, `CType`, kind arrows, and named kinds `#field :: K`.
 Type functions use `fn (X : K) => T` and ordinary application.
-Type application reduces by substitution; transparent aliases and manifest package equations participate in equality.
+Type application reduces by substitution; transparent aliases and manifest witness equations participate in equality.
 Products retain order, arity, and explicit nesting; labels retain their names.
 
 A nominal `def` keeps its identity distinct from its implementation and other definitions.
@@ -176,7 +193,8 @@ Variables, unit, named patterns, and ordinary tuple patterns can synthesize; exp
 Refinement can expose product, value-to-computation arrow, thunk, and return shapes.
 It does not guess constructor ownership, nominal definitions, or existential telescopes.
 Solutions must satisfy occurs and witness-scope checks.
-Constructors and package openings generally require an expected type; type and kind binders remain annotation-directed.
+Constructors and openings of packed values generally require an expected type;
+type and kind binders remain annotation-directed.
 Sources close their inference independently before an import-site expectation is compared (§12).
 
 `@[typeof] e` reuses the synthesized classifier of `e` as a static term:
@@ -218,9 +236,9 @@ The [formal calculus](../../lang/statics/type-system.typ) provides the mathemati
 ## 5. Values, products, and data
 
 Values include variables, literals, `()`, products, named values, constructor applications,
-thunks, existential packages, and total value functions.
+thunks, existential values, and total value functions.
 `() : Unit`; `(v)` is grouping; `(v1, ..., vn)` introduces a product or,
-under an expected existential, a witness-prefixed package.
+under an expected existential type, a witness-prefixed value.
 `A * B * C` has three components and differs from `A * (B * C)`.
 
 `#field = v` introduces a named payload of type `#field :: A` when `v : A`.
@@ -355,7 +373,7 @@ The group requires at least two members and can nest wherever a pattern is accep
 It neither constructs a product nor passes one member's result to the next.
 General aliases require an expected value type and irrefutable members, even under `@[partial]`.
 Type and kind pattern aliases are rejected.
-Direct field-projection groups additionally support the shared package opening in §9.
+Direct field-projection groups additionally support the shared opening of a packed value in §9.
 
 ```zydeco check
 let ((left, right); whole) = (1, 2) in ret whole
@@ -377,7 +395,7 @@ Duplicate integer arms are not currently rejected as redundant.
 `val (x : A) => v` introduces a total value transformation.
 If `v : A'`, its classifier is `val pi (x : A) . A'`.
 Type parameters express polymorphism within this value-function space.
-Value binders may also open package witnesses used in the result type; arbitrary runtime values cannot index types.
+Value binders may also open type witnesses used in the result type; arbitrary runtime values cannot index types.
 
 ```zydeco check
 let val duplicate (x : @(intrinsic(int))) = (x, x) in
@@ -445,13 +463,17 @@ Type abstraction/application has the corresponding beta and eta equations.
 These equations concern value transformations; execution still requires the bounded static elimination in §10.
 An explicitly authored thunk is the runtime callable form when an implementation must remain dynamically selectable.
 
-## 9. Polymorphism and packages
+## 9. Polymorphism and packed values
+
+Polymorphism lets code use a type supplied by its caller.
+A packed value lets a provider supply types together with values whose classifiers may depend on them.
+These arrangements determine who chooses a type and where its identity is available.
 
 `forall (X : K) . B` classifies computation polymorphism, introduced by `fn (X : K) => M`
 and eliminated by type application.
 Type arguments erase.
 At computation-type level, `pi` uses the binder's sort: a type binder yields a universal computation,
-and a value binder yields a computation arrow, possibly dependent on opened package witnesses.
+and a value binder yields a computation arrow, possibly dependent on opened type witnesses.
 With a kind body, `pi (X : K) . L` forms the kind arrow `K -> L`.
 `sigma` similarly yields an existential for a type binder or a product for a value binder.
 These forms do not provide general dependence on runtime values or quantification over kinds.
@@ -459,17 +481,30 @@ These forms do not provide general dependence on runtime values or quantificatio
 Dependency is judged after elaboration: `pi (value : Int) . (@[typeof] ret value)` forms `Int -> Ret Int`.
 The same erasure permits classifier queries in `val pi`, `sigma`, and kind-arrow bodies.
 
-An existential `exists (X : K) . A` hides a type witness used by its payload.
+An **existential type** `exists (X : K) . A` hides a type witness used by its payload;
+an **existential value** inhabits that type.
+The broader term **packed value** also covers structures with manifest type components
+or a mixture of abstract and manifest witnesses.
+For example, a library may expose an element type together with operations on that type.
+Its interface determines which type equations a consumer can use.
+
+An **abstract witness** exposes its kind and identity while keeping its defining equation opaque.
+A **manifest witness** is transparent: its interface exposes an equation, such as `Element = Int`.
+An exposed equation `Element = T` can still refer to an abstract `T`,
+so manifest does not imply that the underlying representation is known.
+Visibility belongs to each exposed witness; a packed value can contain both abstract and manifest witnesses.
+The [static elimination rules](#10-static-elimination) determine which components erase.
+
 The telescope may mix abstract witnesses, manifest equations `(X as T : K)`,
 and manifest kind entries such as `(VType as @(intrinsic(vtype)))`.
 Later entries may refer to earlier ones. Naming and punning compose with these binder forms.
 Static and value entries may be interleaved through nested existentials and products;
-package formation does not require all existentials to precede all products.
+packed value formation does not require all existentials to precede all products.
 A manifest binder may omit its classifier when its definition synthesizes it, including a kind classified by `Set`.
 An explicit classifier checks that same definition.
 
 Against an expected existential, `(T, v)` supplies the witness and payload.
-`pack` synthesizes a package type from explicit evidence:
+`pack` synthesizes an existential type from explicit evidence:
 
 ```zydeco check
 let Int = @(intrinsic(int)) in
@@ -488,14 +523,15 @@ For example, `pack (X : VType) is Int where 42 end` synthesizes `exists (X : VTy
 Use an expected existential annotation when its abstract payload interface must be prescribed.
 `pack` currently introduces type witnesses, not kind witnesses.
 
-Opening an abstract package introduces fresh witnesses whose scope includes its payload bindings.
+Opening a packed value introduces fresh identities for its abstract witnesses, with scope over its payload bindings.
 Those witnesses cannot escape an ordinary binding's result type.
-A package-dependent function binder can retain them in its result classifier: `pi ((X, x) : exists (X : K) . A) . B`.
+A **witness-dependent** function classifier binds the abstract witnesses opened from its argument,
+allowing its result classifier to refer to them: `pi ((X, x) : exists (X : K) . A) . B`.
 Application requires corresponding witness evidence available in the caller's static scope.
 The runtime implementation may be an unknown thunk; its signature carries the dependency.
 Opening a manifest entry substitutes the disclosed equation and creates no fresh witness.
 Introduction checks the supplied witness against that equation.
-Manifest entries erase and contribute no abstract witnesses to a package-dependent arrow.
+Manifest entries erase and contribute no abstract witnesses to a witness-dependent arrow.
 Disclosed equations substitute transparent provider-local names;
 normalization cannot recover an equation hidden by sealing.
 At computation application, witness instantiation currently traverses a leading existential prefix;
@@ -504,12 +540,12 @@ An ordinary value `sigma` introduces no witness telescope, so witnesses opened b
 from the resulting component type, even when mentioned only through `typeof`.
 
 Field selection `v/field` recursively searches named wrappers, product components,
-and package telescopes for exactly one matching public name.
+and witness telescopes for exactly one matching public name.
 Functions, thunks, and data payloads are opacity boundaries.
 Explicit named fields and public punned binder names, including manifest kind entries, share this search namespace.
 Missing and ambiguous names are different errors, and an explicit path performs a new search at each slash.
-Manifest packages are transparent; selecting through an abstract package requires a projection pattern.
-Its hidden fields still count when checking ambiguity.
+Selection can traverse manifest entries directly; crossing an abstract witness requires a projection pattern.
+Fields behind an abstract witness still count when checking ambiguity.
 
 ```zydeco reject=tyck.missing-named-field at=1:15
 (#value = 42)/missing
@@ -518,10 +554,10 @@ Its hidden fields still count when checking ambiguity.
 `/field = p` selects and binds the payload; `/field` puns that binding.
 Payload patterns are irrefutable and may carry annotations.
 Projection patterns associate to the right: `/outer = /inner = p` selects `outer`, then `inner` from its payload.
-A group such as `(/Item; /value; whole)` opens each selected package occurrence once,
-so related fields share witnesses and `whole` can forward the same package.
+A group such as `(/Item; /value; whole)` opens each selected packed value occurrence once,
+so related fields share witnesses and `whole` can forward the same packed value.
 Type projection selects the payload of a named kind.
-Module factories and explicit dictionaries use these ordinary package and function forms.
+Module factories and explicit dictionaries use these ordinary packed value and function forms.
 
 ### Module interfaces and shared openings
 
@@ -531,9 +567,10 @@ Recursive field search permits grouping operations for organization; explicit pa
 The opacity boundaries above prevent selection from forcing a thunk or inspecting an arbitrary data payload.
 Changing grouping is compatible only where existing selections remain unique and preserve their witness evidence.
 
-An abstract carrier and the operations consuming it must share the witness from one package opening.
-Projection groups and whole-package aliases preserve that opening for forwarding through a composition root.
-Independently opened abstract packages remain distinct even when their fields have identical names or layouts.
+An abstract carrier and the operations consuming it must share the witness from one opening of a packed value.
+Projection groups and whole-value aliases preserve that opening for forwarding through a composition root.
+Independent openings introduce distinct abstract witnesses even
+when the packed values have identical field names or layouts.
 This relationship uses existential elimination and ordinary bindings; it introduces no separate module object.
 
 An inferred `pack` interface is useful when its witnesses and payload already express the intended contract.
@@ -543,7 +580,7 @@ No companion is required merely because a term is used as a module.
 
 Value functions compose modules statically (§8).
 A provider selected at runtime instead uses an ordinary thunk or codata protocol;
-a package-dependent computation arrow carries any witness dependency needed by its result.
+a witness-dependent computation arrow carries any witness dependency needed by its result.
 Explicit adapters can expose curried universal interfaces when that is the desired public protocol.
 
 A consumer can open a provider inside a scoped existential elimination and pass its carrier
@@ -556,10 +593,10 @@ and [companion generation](../ideas/companion-interface-generation.md).
 
 ## 10. Static elimination
 
-Before execution, value-function applications, views, and static package structure must reduce
+Before execution, value-function applications, views, and static packed value structure must reduce
 to a representable residual program.
 Reduction follows lexical bindings, type and value application, known constructors, projections,
-package introduction/opening, value matches, and the integer value operations in §8.
+construction and opening of packed values, value matches, and the integer value operations in §8.
 It preserves runtime value sharing and the order and multiplicity of effects.
 It never runs a computation, force, or general recursion to discover static information.
 
@@ -582,7 +619,7 @@ val (x : @(intrinsic(unit))) => x
 ret (val (x : @(intrinsic(unit))) => x)
 ```
 
-Explicit computation thunks and representable package payloads may remain.
+Explicit computation thunks and representable packed value payloads may remain.
 Types, witnesses, labels, and resolved static routes erase; erasure does not reveal an abstract representation.
 Putting a value function inside a thunk does not exempt the thunk's residual body from the rule.
 
@@ -660,7 +697,8 @@ Classifier queries couple a signature to the inspected implementation; use an ex
 when its contract should remain stable across implementation changes.
 
 `check` accepts kinds, types, values, and computations.
-`run` and executable builds require a computation accepting the host Builtin package and ending in its `OS` protocol:
+`run` and executable builds require a computation accepting the host Builtin packed value
+and ending in its `OS` protocol:
 
 ```zydeco check
 param (/stdio; /process) : @(import("../../lib/std/builtin.zy")) in
@@ -676,7 +714,11 @@ REPL evaluation captures output and uses empty stdin and arguments.
 
 ### Source packages
 
-Packages name source terms for reuse, execution, and testing.
+A package is a term chosen as a unit of code distribution and reuse.
+It may be supplied as source or, when its external contract supports independent emission, as compiled artifacts.
+Package management names, locates, and selects these terms; a package need not be separately compiled.
+This distribution role is independent of the term's language-level structure:
+a source package can supply a type term, a packed value (§9), or a function that constructs one.
 Prefer complete files as library and binary entry points.
 A file is already an unnamed library package; a root meta annotation can give it a name and role:
 
@@ -698,8 +740,9 @@ The first argument chooses a role:
 
 A compilation unit is an independently selected source term with a complete external entry contract.
 Binary and test roles already establish that contract; a compiled library declares its own.
+The compiled-library contract exposes the term through the C or Zydeco ABI, within the supported entry profile.
 There is no additional `unit` annotation or package argument.
-Names identify independently reusable artifacts, but naming alone supplies no machine entry point.
+Naming makes the term selectable by name; independent emission additionally requires the external contract.
 The [compiler reference](compiler.md#compilation-unit-preparation-and-artifacts) explains how the designs
 of compilation units, FFI, and package management evolve together.
 
@@ -913,10 +956,10 @@ Pure libraries can name canonical carriers without requiring a numeric or resour
 Resource operations instead share their provider's abstract opening,
 so a composition root must forward the capability and its operations together.
 The `numeric`, `text`, and `system` groups contain host operations.
-The [standard library](../../lib/std/README.md) assembles ordinary package functions and defines `Bool`, `Option`,
+The [standard library](../../lib/std/README.md) assembles ordinary module factories and defines `Bool`, `Option`,
 `Result`, `List`, and abstract `Bytes`; host operations select continuations instead of constructing those types.
 
-The memory interfaces build on those capabilities using ordinary packages and computation protocols:
+The memory interfaces build on those capabilities using ordinary packed values and computation protocols:
 
 | Question | Owning section |
 | --- | --- |
@@ -1005,7 +1048,7 @@ Growable writers, seeking, and asynchronous protocols remain in the [stream prop
 ### Manual memory
 
 Systems code needs to choose storage, initialize it, and release it explicitly.
-[std/memory](../../lib/std/memory/package.zy) provides that interface using ordinary packages,
+[std/memory](../../lib/std/memory/package.zy) provides that interface using ordinary packed values,
 abstract type witnesses, and [CPS](#ret-and-explicit-cps).
 It introduces no lifetimes, borrow checker, affine types, or special continuation kind.
 
@@ -1118,7 +1161,7 @@ There is no runtime initialization check and no implicit initialization of paddi
 ### Typed pointers and slices
 
 Selecting a fixed representation produces `exists L. (#storage :: Storage L) * (#codec :: Codec L A)`.
-Its dynamic counterpart substitutes `DynamicStorage` and `DynamicCodec` in that same package shape.
+Its dynamic counterpart substitutes `DynamicStorage` and `DynamicCodec` in that same packed value shape.
 The [representation alias](../../lib/std/memory/representation.type.zy) is parameterized by these component families.
 [Ptr](../../lib/std/memory/types.zy) privately aliases `Addr` and has no runtime wrapper.
 Allocate and release using the selected storage and provider; initialize, observe, or take using the selected codec.
@@ -1211,7 +1254,7 @@ Zero-sized fields occupy no bytes; padding remains uninterpreted.
 
 Opening the result yields a fresh parent `L`, its `storage : Storage L`,
 `left` and `right` field groups, and state conversions.
-Names come from ordinary source packages: a record module may expose `#length = left` and `#payload = right`.
+Names come from ordinary named values: a record module may expose `#length = left` and `#payload = right`.
 Nested records require neither reflection nor a compiler row system.
 
 [Field](../../lib/std/memory/field.zy) is an abstract source family `Field Parent Child`.
@@ -1269,11 +1312,11 @@ Fixed arithmetic uses [size.zy](../../lib/std/memory/size.zy),
 dynamic arithmetic uses [dynamic-size.zy](../../lib/std/memory/dynamic-size.zy).
 No integer-dependent type is required.
 
-Opening either package introduces an array-layout witness `L`, construction handle `Build`, and family `Values A`.
-The package supplies `storage`, `capacity`, `stride`, and element/builder operations.
+Opening either packed value introduces an array-layout witness `L`, construction handle `Build`, and family `Values A`.
+The packed value supplies `storage`, `capacity`, `stride`, and element/builder operations.
 `Ptr L S` is one address.
-Fixed recipes specialize their geometry; dynamic packages retain the geometry and ordinary operation thunks.
-Dynamic packages contain no static value-function fields.
+Fixed recipes specialize their geometry; dynamic packed values retain the geometry and ordinary operation thunks.
+Dynamic packed values contain no static value-function fields.
 `elements/unsafe/at` checks an index against capacity and produces `Ptr Element S`;
 zero-sized elements have zero stride and require no backing bytes.
 `elements/unsafe/base` is a pure address interpretation and supplies no dereference bounds.
@@ -1345,7 +1388,7 @@ No adapter asserts that arbitrary CPS code is pure.
 The fixed recipe itself must disappear under static elimination; runtime handle fields and captured context can remain.
 
 For runtime selection, `materialize` explicitly produces `DynamicView` with its ordinary thunk and captured data.
-Different handle types can be paired with their matching operations in an existential package.
+Different handle types can be paired with their matching operations in an existential value.
 Neither form inserts a view dictionary into each handle.
 
 ```zydeco check
@@ -1369,7 +1412,8 @@ The supplied constructors support these handle forms:
 | `unsafe/prefix` | Payload address in `H S` | Metadata at a signed displacement; preserve payload address |
 | `unsafe/indirect` | Address of an unmanaged pointer slot | Load its pointer, then run another CPS view |
 
-A `Header M Payload` package supplies the handle family `H S` and its unsafe wrapping, address, and opening operations.
+A `Header M Payload` packed value supplies the handle family `H S` and its unsafe wrapping,
+address, and opening operations.
 The caller establishes initialized metadata fields and payload state `S` independently;
 finding an uninitialized destination does not require a fully initialized enclosing object.
 For a counted initialized element interpretation, the obligation covers the stated extent, not spare capacity.
@@ -1635,7 +1679,7 @@ The initial interface profile supports `Unit`, the supported integers, `Float32`
 named value types, n-ary products, and `Thk B`, where `B` consists of arrows and `Ret`.
 These forms can nest, so an exported function may accept a thunk or return a capturing thunk.
 Product order, nesting, names, scalar widths, and all argument/result classifiers remain in the interface.
-Nominal data, codata, abstract types and capabilities, universals, existentials, package-dependent arrows,
+Nominal data, codata, abstract types and capabilities, universals, existentials, witness-dependent arrows,
 and static functions are rejected in public classifiers in this profile.
 Their use inside an implementation remains governed by ordinary typing and static elimination.
 The interface has a maximum structural depth of 48 and 4,096 nodes.
@@ -1746,7 +1790,7 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 | `package(role, ...)` | Register the annotated term with a role, metadata name, and typed relationships (§12); compiled libraries require a name |
 | `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare ordered file-root discovery rules for an explicit package catalog (§12) |
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
-| `builtin(role)` | Mark a host capability or operation in a typed package contract (§13) |
+| `builtin(role)` | Mark a host capability or operation in a typed Builtin interface (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
 | `typeof` | Extract a synthesized classifier (§4); no arguments |
 | `monadic` | Algebra translation under the lexical basis (§11); no arguments |
@@ -1830,7 +1874,7 @@ of an implicit lexical source scope.
 | Invalid binding cycle, missing seal | Bindings and nominal recursion (§3–§4) |
 | Sort/kind/type mismatch, unknown constructor/destructor | Classification and introduction/elimination (§4–§6) |
 | Refutable binding/alias/projection, coverage, overlapping copatterns | Patterns and coverage (§7) |
-| Missing/ambiguous/sealed field, unavailable/escaping witnesses | Package scope and selection (§9) |
+| Missing/ambiguous/sealed field, unavailable/escaping witnesses | Witness scope and field selection (§9) |
 | Static elimination | Residual representation and reduction limits (§10) |
 | Integer/float literal range errors | Primitive representation (§13) |
 

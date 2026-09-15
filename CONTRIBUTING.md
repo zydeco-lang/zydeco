@@ -65,7 +65,7 @@ zydeco run path/to/main.zy -t wasm-sps -- first-argument second-argument
 ```
 
 `check` accepts any complete term that synthesizes its classifier, including types and library values.
-`run` additionally requires the executable Builtin package boundary.
+`run` additionally requires the executable Builtin interface boundary.
 `run --dry` performs analysis and selects an executable root without evaluating it; it does not compile a backend,
 require its tools, exercise runtime Builtin linking, or load foreign libraries.
 `run -t TARGET` (`--target`) selects `interpreter` (the default), `exe`, `wasm-am`, or `wasm-sps`.
@@ -88,11 +88,11 @@ A program is one complete source term.
 Imports appear at their use sites and resolve relative to the importing file.
 No authored project configuration or `main` declaration is needed.
 A companion `foo.zyi` is an optional, independently checked type contract for `foo.zy`.
-Use it when maintaining that contract separately is useful; otherwise, annotate introductions
-in place or let `pack` synthesize an existential package type.
+Use it when maintaining that contract separately is useful; otherwise,
+annotate introductions in place or let `pack` synthesize an existential type.
 `pack` currently accepts type witnesses but not kind witnesses such as `VType` and `CType`.
-The [package examples](lib/std/README.md#package-composition) show an annotated kind prefix and use `@[typeof]`
-to reuse the remaining package type.
+The [packed value examples](lib/std/README.md#packed-value-composition) show an annotated kind prefix
+and use `@[typeof]` to reuse the remaining existential type.
 
 ## Use Source Packages
 
@@ -431,7 +431,7 @@ The REPL accepts one complete term per numbered input.
 | `@(quit)` | Exit the REPL. |
 
 Without a command, the REPL inspects kinds and types and evaluates values or directly returning computations.
-Use `@[run]` for computations requiring the host package; arbitrary unapplied functions still need arguments.
+Use `@[run]` for computations requiring the host's Builtin value; arbitrary unapplied functions still need arguments.
 REPL evaluation captures stdout and stderr separately, labels stderr in the result,
 and supplies empty stdin and an empty argument list.
 

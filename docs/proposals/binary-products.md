@@ -31,9 +31,9 @@ The alternative to this change is the current n-ary model, where arity and expli
 Its direct correspondence between source components, typed vectors,
 and coverage heads avoids a separate equivalence between tuple grouping and product type shape.
 
-## Surface syntax and packages
+## Surface syntax and packed values
 
-The proposal would retain the shared comma syntax and classifier-directed interpretation of products and packages.
+The proposal would retain the shared comma syntax and classifier-directed interpretation of products and packed values.
 `()` would remain `Triv : Unit`, `(term)` would remain grouping, and a source tuple would have at least two terms.
 A nonempty tuple would synthesize a product; against an existential classifier,
 its leading entries would supply static witnesses and the rest would form the payload.
@@ -43,8 +43,8 @@ For example:
 exists (X : VType) (Y : VType) . X * Y
 ```
 
-would accept `(Int, Char, 0, 'z')`, opened by `(Left, Right, number, letter)`.
-These package operations already have their own [current rules](../references/language.md#9-polymorphism-and-packages);
+would accept `(Int, Char, 0, 'z')`, opened by `(Left, Right, number, letter)`. These packed value operations
+already have their own [current rules](../references/language.md#9-polymorphism-and-packed-values);
 the proposed change concerns how the remaining value product is typed and represented.
 
 ## Proposed representation
@@ -61,7 +61,7 @@ struct ConsN<S, T>(Vec<S>, T);
 compiler-generated structures such as singleton closure environments could use `ConsN(vec![], value)`.
 Surface syntax and name resolution would retain one `Cons(ConsN<_, _>)` per comma sequence.
 Typed product values and patterns would use `VCons(ConsN<Value, Value>)`.
-Typed packages would use `TCons(ConsN<Type, Value>)`, separating the witness prefix
+Typed packed values would use `TCons(ConsN<Type, Value>)`, separating the witness prefix
 from the payload; their patterns would mirror that shape.
 `Triv` would remain separate from every nonempty product.
 
@@ -84,7 +84,7 @@ A nested product in another position would remain a separate aggregate.
 - Confirm that suffix binding and binary typing justify changing the current source-level arity rule.
   Include flat and explicitly nested values, patterns, and rejected left-nested counterparts.
 - Specify how equality, local inference, coverage, static elimination,
-  and package payload checking agree on right-spine expansion.
+  and packed value payload checking agree on right-spine expansion.
   Update them together rather than allowing each phase to flatten independently.
 - Reconcile suffix copying and interior pointers with representation policies,
   storage contracts, and allocation lifetimes.
