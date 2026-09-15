@@ -60,7 +60,7 @@ fn standard_library_runs_its_standalone_suite_without_fixture_dependent_programs
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let output = Fixture::success_in(&root, &["test", "std"]);
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("23 passed; 0 failed."), "{stdout}");
+    assert!(stdout.contains("29 passed; 0 failed."), "{stdout}");
     assert!(stdout.contains("represented-call/main.zy"), "nested tests belong to the suite");
     for harness_only in ["arg-list.zy", "filesystem.zy", "read-line-as-int.zy"] {
         assert!(
@@ -390,8 +390,8 @@ fn nonzero_tests_are_reported_and_the_selected_suite_continues() {
 fn obsolete_forms_duplicate_names_and_implicit_captures_are_rejected() {
     let fixture = Fixture::new();
     for (source, expected) in [
-        (r#"@[package(library("lib", "lib.zy"))] ()"#, "requires the C ABI"),
-        (r#"@[package(library("lib"))] ()"#, "requires the C ABI"),
+        (r#"@[package(library("lib", "lib.zy"))] ()"#, "compiled library requires"),
+        (r#"@[package(library("lib"))] ()"#, "compiled library requires"),
         (
             r#"(#lib = @[package(library, name(lib))] 1, #lib = @[package(test, name(lib))] ())"#,
             "duplicate package name",
@@ -400,7 +400,8 @@ fn obsolete_forms_duplicate_names_and_implicit_captures_are_rejected() {
         fixture.write("workspace.zy", source);
         let output = fixture.command(&["show"]);
         assert!(!output.status.success(), "{source}");
-        assert!(String::from_utf8_lossy(&output.stderr).contains(expected));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(expected), "{source}: expected {expected:?}, received {stderr}");
         assert!(output.stdout.is_empty());
     }
     fixture.write(
