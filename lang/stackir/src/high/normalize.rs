@@ -368,7 +368,30 @@ impl Normalization {
     }
 
     fn pattern<D: Driver>(&mut self, id: VPatId) -> VPatId {
-        D::run(&mut pattern::PatternFolder { norm: self }, id)
+        D::run(&mut pattern::PatternFolder { norm: self, renamings: HashMap::new() }, id)
+    }
+
+    /// A builtin body can be expanded repeatedly inside one continuation. Each
+    /// load must bind a distinct observation, including while older observations
+    /// remain live across a later store and load.
+    fn load_pattern<D: Driver>(&mut self, result: VPatId, env: EnvId) -> (VPatId, EnvId) {
+        let renamings: HashMap<_, _> = result
+            .vars(&self.source)
+            .into_iter()
+            .map(|original| {
+                let fresh = self.arena.admin.fresh();
+                self.arena.admin.insert_def(fresh, VarName("__memory_read__".into()));
+                (original, fresh)
+            })
+            .collect();
+        let env = self.extend(
+            env,
+            renamings
+                .iter()
+                .map(|(original, fresh)| (*original, Rc::new(KnownValue::Alias(*fresh)))),
+        );
+        let pattern = D::run(&mut pattern::PatternFolder { norm: self, renamings }, result);
+        (pattern, env)
     }
 
     fn delay_stack(&mut self, stack: ScopedStack) -> ScopedStackId {

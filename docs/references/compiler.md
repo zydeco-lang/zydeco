@@ -1582,6 +1582,8 @@ The low-SPS checker validates known address, result, and stored-value protocols.
 
 High normalization exposes the fixed builtin body through known aliases and package projections.
 It preserves every access, including a load whose result is unused, and sequences the successor after it.
+Each expanded load gets a fresh result binding. Reusing a builtin wrapper must preserve earlier observations
+that remain live across later stores and loads of the same address.
 Memory effects do not enter pure value commoning or arithmetic evaluation.
 An unknown callback remains an ordinary thunk invocation after the access;
 primitive recognition alone asserts no callback lifetime, uniqueness, or contification guarantee.

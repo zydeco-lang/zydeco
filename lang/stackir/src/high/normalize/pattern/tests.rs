@@ -42,8 +42,10 @@ fn drivers_preserve_pattern_children_definitions_layouts_and_evidence() {
     let root =
         fixture.pattern(VCons::new(vec![constructor, alias, empty], ProductLayout { arity: 4 }));
     let mut norm = fixture.normalization(root);
-    let explicit = Explicit::run(&mut PatternFolder { norm: &mut norm }, root);
-    let recursive = Recursive::run(&mut PatternFolder { norm: &mut norm }, root);
+    let explicit =
+        Explicit::run(&mut PatternFolder { norm: &mut norm, renamings: HashMap::new() }, root);
+    let recursive =
+        Recursive::run(&mut PatternFolder { norm: &mut norm, renamings: HashMap::new() }, root);
     assert_ne!(explicit, recursive);
     assert_eq!(norm.arena.inner.vpats.len(), 14);
 
@@ -92,7 +94,7 @@ fn drivers_reject_invalid_product_layouts_before_allocating_the_parent() {
         };
         product.layout.arity = arity;
         let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            D::run(&mut PatternFolder { norm: &mut norm }, root)
+            D::run(&mut PatternFolder { norm: &mut norm, renamings: HashMap::new() }, root)
         }));
         let error = rejected.expect_err("an invalid product layout cannot be reconstructed");
         let message = error

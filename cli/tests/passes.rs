@@ -421,6 +421,37 @@ let fail = { fn (_ : Int) => ! process/exit 41 } in
 }
 
 #[test]
+fn scalar_memory_repeated_builtin_loads_keep_independent_observations() {
+    let fixture = Fixture::new(
+        r#"
+let fail = { ! process/exit 41 } in
+let no = { fn (_ : Int) => ! fail } in
+! system/memory/allocate OS 8 8 no { fn address =>
+  let load = numeric/int/load_le in
+  ! numeric/int/store_le OS address 4 {
+    ! load OS address { fn saved =>
+      ! numeric/int/store_le OS address 0 {
+        ! load OS address { fn current =>
+          ! numeric/int/eq OS saved 4 {
+            ! numeric/int/eq OS current 0 {
+              ! system/memory/free OS address 8 8 no { ! process/exit 0 }
+            } fail
+          } fail
+        }
+      }
+    }
+  }
+}
+"#,
+    );
+    for selection in ["none", "default"] {
+        for target in ["exe", "wasm-am", "wasm-sps"] {
+            Fixture::assert_success(&fixture.execute(selection, target));
+        }
+    }
+}
+
+#[test]
 fn scalar_memory_accesses_preserve_width_endianness_and_unaligned_extremes() {
     use zydeco_assembly::syntax::{Extern, Program, Terminator};
     use zydeco_syntax::memory::{MemoryAccess, MemoryScalar};

@@ -4,6 +4,12 @@ use super::*;
 use std::marker::PhantomData;
 use zydeco_utils::fold::{Folder, Step};
 
+pub(super) struct MemoryFrame {
+    source: CompuId,
+    env: EnvId,
+    load_result: Option<VPatId>,
+}
+
 pub(super) enum Work {
     Value(ValueId, EnvId, Demand),
     FinishValue(ValueId, bool),
@@ -30,9 +36,9 @@ pub(super) enum Work {
         binder: VPatId,
     },
     Computation(CompuId, Scope),
-    MemoryAddress(CompuId, EnvId),
-    MemoryValue(CompuId, EnvId),
-    FinishMemory(CompuId),
+    MemoryAddress(MemoryFrame),
+    MemoryValue(MemoryFrame),
+    FinishMemory(MemoryFrame),
     FinishComputation(CompuId),
     ComputationValue {
         source: CompuId,
@@ -337,15 +343,16 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         match self.norm.source.inner.compus[&id].clone() {
             | Computation::Memory(step) => {
                 let env = scope.values;
-                let (next, values) = match step {
+                let (next, values, load_result) = match step {
                     | MemoryStep::Load { result, next, .. } => {
-                        (next, self.norm.bind(env, result, Rc::default()))
+                        let (result, values) = self.norm.load_pattern::<D>(result, env);
+                        (next, values, Some(result))
                     }
-                    | MemoryStep::Store { next, .. } => (next, env),
+                    | MemoryStep::Store { next, .. } => (next, env, None),
                 };
                 Step::Call {
                     input: Work::Computation(next, Scope { values, ..scope }),
-                    frame: Work::MemoryAddress(id, env),
+                    frame: Work::MemoryAddress(MemoryFrame { source: id, env, load_result }),
                 }
             }
             | Computation::Hole(SHole(stack)) => Step::Call {
@@ -571,7 +578,8 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             | Work::Value(id, env, demand) => return self.visit_value(id, env, demand),
             | Work::Stack(stack) => return self.visit_stack(stack),
             | Work::Computation(id, scope) => return self.visit_computation(id, scope),
-            | Work::MemoryAddress(source, env) => {
+            | Work::MemoryAddress(frame) => {
+                let MemoryFrame { source, env, .. } = frame;
                 let Computation::Memory(step) = self.norm.source.inner.compus[&source].clone()
                 else {
                     unreachable!()
@@ -583,34 +591,36 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 };
                 return Step::Call {
                     input: Work::Value(address, env, Demand::Used),
-                    frame: Work::MemoryValue(source, env),
+                    frame: Work::MemoryValue(frame),
                 };
             }
-            | Work::MemoryValue(source, env) => {
+            | Work::MemoryValue(frame) => {
+                let MemoryFrame { source, env, .. } = frame;
                 if let Computation::Memory(MemoryStep::Store { value, .. }) =
                     self.norm.source.inner.compus[&source]
                 {
                     return Step::Call {
                         input: Work::Value(value, env, Demand::Used),
-                        frame: Work::FinishMemory(source),
+                        frame: Work::FinishMemory(frame),
                     };
                 }
-                return Step::TailCall(Work::FinishMemory(source));
+                return Step::TailCall(Work::FinishMemory(frame));
             }
-            | Work::FinishMemory(source) => {
+            | Work::FinishMemory(frame) => {
+                let source = frame.source;
                 let mut next = self.computation();
                 let Computation::Memory(original) = self.norm.source.inner.compus[&source].clone()
                 else {
                     unreachable!()
                 };
                 let step = match original {
-                    | MemoryStep::Load { scalar, result, .. } => {
+                    | MemoryStep::Load { scalar, .. } => {
+                        let result = frame.load_result.expect("a load has a fresh result binder");
                         let address = self.value();
-                        for def in result.vars(&self.norm.source) {
+                        for def in result.vars(&self.norm.arena) {
                             next.demands.remove(&def);
                         }
                         next.demands = next.demands.join(address.demands);
-                        let result = self.norm.pattern::<D>(result);
                         MemoryStep::Load { scalar, address: address.node, result, next: next.node }
                     }
                     | MemoryStep::Store { scalar, .. } => {

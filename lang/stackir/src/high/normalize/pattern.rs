@@ -5,6 +5,7 @@ use zydeco_utils::fold::{Folder, Step};
 
 pub(super) struct PatternFolder<'a> {
     pub norm: &'a mut Normalization,
+    pub renamings: HashMap<DefId, DefId>,
 }
 
 pub(super) struct PatternFrame {
@@ -56,6 +57,9 @@ impl PatternFolder<'_> {
         let site = self.norm.source.admin.pats.back(&frame.source).copied();
         let pattern = match frame.pattern {
             | ValuePattern::VCons(VCons { items, layout }) => VCons::new(items, layout).into(),
+            | ValuePattern::Var(def) => {
+                ValuePattern::Var(self.renamings.get(&def).copied().unwrap_or(def))
+            }
             | pattern => pattern,
         };
         let node = pattern.build(self.norm, site);
