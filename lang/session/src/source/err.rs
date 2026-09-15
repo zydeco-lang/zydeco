@@ -1,6 +1,5 @@
 use crate::source::SourceImportId;
 use std::{
-    error::Error,
     fmt::{Display, Formatter},
     io,
     ops::Range,
@@ -338,7 +337,7 @@ pub struct SourceCycleStep {
 }
 
 /// A cycle containing imports, implementation-signature pairs, or both.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub struct SourceCycle {
     pub steps: Vec<SourceCycleStep>,
 }
@@ -370,5 +369,3 @@ impl Display for SourceCycle {
         )
     }
 }
-
-impl Error for SourceCycle {}

@@ -42,7 +42,7 @@ impl fmt::Display for CoveragePattern {
 }
 
 /// A post-check coverage failure tied to one typed term.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum CoverageError {
     NonExhaustiveMatch {
         term: TermId,

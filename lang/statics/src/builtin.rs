@@ -4,7 +4,6 @@ use super::{
 };
 use std::{
     collections::{BTreeMap, HashSet},
-    error::Error,
     fmt::{Display, Formatter},
 };
 use thiserror::Error;
@@ -390,23 +389,14 @@ impl Display for DuplicateBuiltinRole {
 }
 
 /// A host operation whose classifier does not implement its assigned role.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum BuiltinClassifierError {
+    #[error("operation role `{role}` requires classifier `{expected}`")]
     Mismatch { role: BuiltinValueRole, entry: ss::TypeId, expected: BuiltinValueClassifier },
 }
 
-impl Display for BuiltinClassifierError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            | Self::Mismatch { role, expected, .. } => {
-                write!(f, "operation role `{role}` requires classifier `{expected}`")
-            }
-        }
-    }
-}
-
 /// A package signature whose host-role interpretation is ambiguous.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub struct BuiltinSignatureError {
     pub duplicates: Vec<DuplicateBuiltinRole>,
     pub classifiers: Vec<BuiltinClassifierError>,
@@ -424,8 +414,6 @@ impl Display for BuiltinSignatureError {
         write!(f, "Builtin signature {errors}")
     }
 }
-
-impl Error for BuiltinSignatureError {}
 
 /// Checks package-local uniqueness of typed Builtin roles.
 pub struct BuiltinSignatureValidator<'a> {

@@ -96,7 +96,7 @@ impl fmt::Display for LintSite {
 }
 
 /// One violated lint invariant.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum LintError {
     /// A kind cell still awaiting its hole solution after a successful check.
     UnfilledKind { kind: KindId, fill: FillId },

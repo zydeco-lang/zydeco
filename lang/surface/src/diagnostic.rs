@@ -1,7 +1,7 @@
 //! Typed diagnostic collections and continuation after independent source failures.
 
 /// A nonempty collection of source failures from one rejected analysis.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub struct Diagnostics<E> {
     errors: Vec<E>,
 }
@@ -50,8 +50,6 @@ impl<E: std::fmt::Display> std::fmt::Display for Diagnostics<E> {
         Ok(())
     }
 }
-
-impl<E: std::error::Error + 'static> std::error::Error for Diagnostics<E> {}
 
 /// The producer has recorded the error; propagating rejection must not report it again.
 #[derive(Clone, Copy, Debug)]

@@ -17,7 +17,8 @@ use std::{
 use zydeco_utils::{err::Errorable, prelude::ArenaAccess};
 
 /// A static requirement that remains at an executable boundary.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("{}", self.message())]
 pub enum StaticEliminationError {
     UnresolvedApplication { function: ValueId },
     UnresolvedMatch { value: ValueId },

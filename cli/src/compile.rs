@@ -397,6 +397,7 @@ pub struct BackendProgram {
 }
 
 /// One source-level SPS lowering failure with the provenance its reports need.
+#[derive(Error)]
 pub struct SpsLowerFailure {
     pub errors: Vec<SpsLowerError>,
     pub spans: Arc<SpanArena>,

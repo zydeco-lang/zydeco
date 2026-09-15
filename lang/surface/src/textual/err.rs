@@ -4,16 +4,11 @@ use std::{fmt::Display, ops::Range};
 use zydeco_utils::span::{FileMap, PathDisplay};
 
 /// A strict parse failure together with the exact source snapshot that failed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub struct ParseError {
+    #[source]
     pub error: ParseFailure,
     pub file_map: FileMap,
-}
-
-impl std::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.error)
-    }
 }
 
 impl ParseError {
