@@ -69,7 +69,7 @@ impl<'a> Iterator for RuntimeNodes<'a> {
                         self.pending.push((*scrut).into());
                         self.pending.extend(arms.iter().map(|arm| TermId::Value(arm.tail)));
                     }
-                    | Value::Int64Op(Int64ValueOp { operands, .. }) => {
+                    | Value::IntOp(IntValueOp { operands, .. }) => {
                         self.pending.extend(operands.iter().map(|operand| TermId::Value(*operand)));
                     }
                     | Value::Let(Let { bindee, tail, .. }) => {

@@ -5,8 +5,8 @@ begin
     | +True : Unit
     end
   that
-  param (/Thk; /Unit; /OS; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
-  def ! f : Bool -> Thk (Int64 -> OS) -> OS = fn (b : Bool) (k : Thk (Int64 -> OS)) =>
+  param (/Thk; /Unit; /OS; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
+  def ! f : Bool -> Thk (Int -> OS) -> OS = fn (b : Bool) (k : Thk (Int -> OS)) =>
     -- k might be large
     match b
     | +True(_) => ! k 0

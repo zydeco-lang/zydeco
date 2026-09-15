@@ -1,14 +1,14 @@
 begin
-  param (/VType; /Ret; /Unit; /process; /Int64; /numeric; /system) : @(import(
+  param (/VType; /Ret; /Unit; /process; /Int; /numeric; /system) : @(import(
     "../../std/builtin.zy"
   )) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let TypeIdentity = begin
     let Result = A that
     param A : VType that
     Result
   end that
-  let IdentityResult = TypeIdentity Int64 that
+  let IdentityResult = TypeIdentity Int that
   let InferredType :
     VType -> VType = begin
       param A that
@@ -21,44 +21,44 @@ begin
     Result
   that
   let LexicalHidden =
-    def Secret : VType = Int64 in
+    def Secret : VType = Int in
     Secret
   that
   let Hidden = begin
-    def Secret : VType = Int64 that
+    def Secret : VType = Int that
     Secret
   end that
   let RecursiveList = begin
     def RecursiveList : VType =
       data
       | +Nil : Unit
-      | +Cons : Int64 * RecursiveList
+      | +Cons : Int * RecursiveList
       end
     that
     RecursiveList
   end that
-  def plain : Int64 = begin
+  def plain : Int = begin
     42
   end that
-  def ! inferred : Int64 -> Ret Int64 = begin
+  def ! inferred : Int -> Ret Int = begin
     param value that
     ret value
   end that
   def ! lexical_run =
-    param value : Int64 in
-    def expected : Int64 = 42 in
+    param value : Int in
+    def expected : Int = 42 in
     let answer = value in
-    do status <- ! int64/sub answer expected;
+    do status <- ! int/sub answer expected;
     ! process/exit status
   that
   def ! run = begin
     let answer : Number = seed that
     param seed : Number that
-    def expected : Int64 = 42 that
+    def expected : Int = 42 that
     let Number = A that
     param A : VType that
-    def Opaque : VType = Int64 that
-    do status <- ! int64/sub expected 42;
+    def Opaque : VType = Int that
+    do status <- ! int/sub expected 42;
     ! process/exit status
   end that
 

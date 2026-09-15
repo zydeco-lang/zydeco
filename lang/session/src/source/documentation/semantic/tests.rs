@@ -95,7 +95,7 @@ fn imports_preserve_prose_origin_and_local_context() {
 fn documentation_follows_owned_fields_and_projection_patterns() {
     for use_site in ["counter/¦value", "let (/value = selected) = counter in ¦selected"] {
         let source = format!(
-            "let I = @(intrinsic(i64)) in\nlet Interface =\n--| Counter value.\n@[doc] (#value :: I) in\nlet counter : Interface = (#value = 3) in\n{use_site}"
+            "let I = @(intrinsic(int)) in\nlet Interface =\n--| Counter value.\n@[doc] (#value :: I) in\nlet counter : Interface = (#value = 3) in\n{use_site}"
         );
         assert_eq!(Fixture::new(&source).markdown(), "Counter value.", "{source}");
     }
@@ -103,13 +103,13 @@ fn documentation_follows_owned_fields_and_projection_patterns() {
 
 #[test]
 fn identical_field_labels_keep_distinct_documentation() {
-    let source = "let I = @(intrinsic(i64)) in\nlet First =\n--| First contract.\n@[doc] (#value :: I) in\nlet Second =\n--| Second contract.\n@[doc] (#value :: I) in\nlet first : First = (#value = 1) in\nlet second : Second = (#value = 2) in\nsecond/¦value";
+    let source = "let I = @(intrinsic(int)) in\nlet First =\n--| First contract.\n@[doc] (#value :: I) in\nlet Second =\n--| Second contract.\n@[doc] (#value :: I) in\nlet first : First = (#value = 1) in\nlet second : Second = (#value = 2) in\nsecond/¦value";
     assert_eq!(Fixture::new(source).markdown(), "Second contract.");
 }
 
 #[test]
 fn generic_field_docs_survive_type_substitution() {
-    let source = "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(i64)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in\ncounter/¦value";
+    let source = "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(int)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in\ncounter/¦value";
     assert_eq!(Fixture::new(source).markdown(), "Generic value.");
     let fixture = Fixture::new(source);
     let reference = fixture
@@ -118,7 +118,7 @@ fn generic_field_docs_survive_type_substitution() {
         .unwrap();
     assert!(reference.get(&crate::source::DocumentationPath::default()).is_some());
     let package = Fixture::new(
-        "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(i64)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in ¦counter",
+        "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(int)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in ¦counter",
     );
     let reference = package
         .session
@@ -136,7 +136,7 @@ fn companion_contract_documentation_follows_imported_fields() {
         "let library = @(import(\"library.zy\")) in library/¦value",
         &[
             ("library.zy", "--| Implementation detail.\n@[doc] (#value = 3)"),
-            ("library.zyi", "--| Public contract.\n@[doc] (#value :: @(intrinsic(i64)))"),
+            ("library.zyi", "--| Public contract.\n@[doc] (#value :: @(intrinsic(int)))"),
         ],
     );
     assert_eq!(fixture.markdown(), "Public contract.");
@@ -251,7 +251,7 @@ fn semantic_link_ranges_select_destinations_instead_of_repeated_labels_or_titles
 #[test]
 fn semantic_member_links_follow_the_explicit_owner() {
     let fixture = Fixture::new(
-        "let I = @(intrinsic(i64)) in let Interface = (\n--| The field.\n@[doc] (#value :: I)) in\n--| See [value](zydeco:member:Interface/value).\n@[doc] let object : Interface = (#value = 3) in ¦object",
+        "let I = @(intrinsic(int)) in let Interface = (\n--| The field.\n@[doc] (#value :: I)) in\n--| See [value](zydeco:member:Interface/value).\n@[doc] let object : Interface = (#value = 3) in ¦object",
     );
     let analysis = fixture.analyze();
     let link = &analysis.documentation().entries()[1].links[0];
@@ -266,7 +266,7 @@ fn semantic_member_links_follow_the_explicit_owner() {
 #[test]
 fn semantic_links_reject_missing_names_members_and_implicit_global_lookup() {
     let fixture = Fixture::new(
-        "let I = @(intrinsic(i64)) in let Interface = (#value :: I) in\n--| [x](zydeco:name:missing) [v](zydeco:member:Interface/missing) [label](zydeco:name:value)\n@[doc] ¦42",
+        "let I = @(intrinsic(int)) in let Interface = (#value :: I) in\n--| [x](zydeco:name:missing) [v](zydeco:member:Interface/missing) [label](zydeco:name:value)\n@[doc] ¦42",
     );
     let analysis = fixture.analyze();
     let links = &analysis.documentation().entries()[0].links;

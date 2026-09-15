@@ -7,10 +7,10 @@ fn discarded_computation_results_keep_their_dependencies() {
     for source in [
         "let z = 7 in do _ <- ret z; ! exit 0",
         "let w = 7 in do _ <- ret (w, 6); ! exit 0",
-        "let w = 7 in do _ <- (fn (y : Int64) => ret w) 3; ! exit 0",
+        "let w = 7 in do _ <- (fn (y : Int) => ret w) 3; ! exit 0",
         "let w = 7 in let t = { ret w } in do _ <- ret t; ! exit 0",
-        "let val k (_ : Int64) : Int64 = 0 in let w = 5 in let r = k w in ! exit r",
-        "let val k (x : Int64) : Int64 = x in do _ <- ret (k 1); ! exit 0",
+        "let val k (_ : Int) : Int = 0 in let w = 5 in let r = k w in ! exit r",
+        "let val k (x : Int) : Int = x in do _ <- ret (k 1); ! exit 0",
     ] {
         SourceCase::assert_accepted(SourceCase::run(source));
         SourceCase::assert_accepted(SourceCase::lower(source));
@@ -39,16 +39,16 @@ fn rendered_assembly(relative: &str) -> String {
 fn dead_definitions_and_undemanded_operations_are_not_emitted() {
     let assembly = rendered_assembly("tests/demand/prune.zy");
     assert!(
-        assembly.lines().any(|line| line.trim() == "int64_add;"),
+        assembly.lines().any(|line| line.trim() == "int_add;"),
         "the called operation must survive elimination:\n{assembly}"
     );
-    assert!(!assembly.contains("extern:int64_add"), "arithmetic must be inline:\n{assembly}");
+    assert!(!assembly.contains("extern:int_add"), "arithmetic must be inline:\n{assembly}");
     assert!(
         assembly.contains("extern:exit"),
         "the exit operation must survive elimination:\n{assembly}"
     );
     assert!(
-        !assembly.contains("extern:int64_mul"),
+        !assembly.contains("extern:int_mul"),
         "an operation referenced only by a dead definition must be pruned:\n{assembly}"
     );
     assert!(

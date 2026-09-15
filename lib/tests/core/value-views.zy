@@ -1,19 +1,19 @@
 begin
-  param (/VType; /Unit; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Unit; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
   let Tagged =
     data
-    | +Tagged : Int64
+    | +Tagged : Int
     | +Other : Unit
     end
   that
 
   let val keep (A : VType) (value : A) : A = value that
-  let val tag (value : Int64) : Tagged = +Tagged(value) that
-  let val other (_ : Int64) : Tagged = +Other(()) that
+  let val tag (value : Int) : Tagged = +Tagged(value) that
+  let val other (_ : Int) : Tagged = +Other(()) that
 
-  let forward : Int64 = 0 |> keep Int64 that
-  let backward : Int64 = keep Int64 <| forward that
-  let keep[Int64] ~> via_pattern = backward that
+  let forward : Int = 0 |> keep Int that
+  let backward : Int = keep Int <| forward that
+  let keep[Int] ~> via_pattern = backward that
   match via_pattern
   | other ~> +Tagged(_) => ! process/exit 1
   | tag ~> +Tagged(status) => ! process/exit status

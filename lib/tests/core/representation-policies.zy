@@ -1,7 +1,7 @@
 -- The recursive closure is opened locally; its captured wide scalar remains live.
 begin
-  param (/VType; /Unit; /Int64; /String; /Ret; /OS; /process; /numeric;
-    /int64; /string; /args) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Unit; /Int; /Float64; /String; /Ret; /OS; /process; /numeric;
+    /int; /string; /args) : @(import("../../std/builtin.zy")) that
   def Chain : VType =
     data
     | +End : Unit
@@ -10,24 +10,24 @@ begin
   that
   do input <- ! args/at (Ret String) 0 { ret "alpha" } { fn value => ret value };
   do length <- ! string/length input;
-  do wide <- ! int64/mul length 1000000000000000000;
+  do wide <- ! numeric/float64/add 1e18 4e18;
   def fix walk (chain : Chain) (again : Chain) (remaining : Chain) : OS =
     match chain
     | +End() =>
       match remaining
       | +End() =>
-        do difference <- ! numeric/int64/sub wide 5000000000000000000;
-        do length_difference <- ! int64/sub length 5;
-        do result <- ! int64/add difference length_difference;
-        ! process/exit result
+        ! numeric/float64/eq OS wide 5e18 {
+          do result <- ! int/sub length 5;
+          ! process/exit result
+        } { ! process/exit 1 }
       | +Link(next) => ! walk again again next
       end
     | +Link(tail) => ! walk tail again remaining
     end
   in
-  def fix make (remaining : Int64) (chain : Chain) : OS =
-    ! int64/eq OS remaining 0 { ! walk chain chain chain } {
-      do next <- ! int64/sub remaining 1;
+  def fix make (remaining : Int) (chain : Chain) : OS =
+    ! int/eq OS remaining 0 { ! walk chain chain chain } {
+      do next <- ! int/sub remaining 1;
       ! make next +Link(chain)
     }
   in

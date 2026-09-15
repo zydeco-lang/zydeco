@@ -4,7 +4,7 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   let UInt8 = @(intrinsic(u8)) in
   let String = @(intrinsic(string)) in
   let Fault = @(import("../memory/fault.zy")) in
@@ -13,37 +13,37 @@ begin
     (
       #bytes ::
         (#empty :: Thk (Ret Bytes))
-      * (#length :: Thk (Bytes -> Ret Int64))
+      * (#length :: Thk (Bytes -> Ret Int))
       * (#append :: Thk (Bytes -> Bytes -> Ret Bytes))
       * (#from_string :: Thk (String -> Ret Bytes))
       * (#singleton :: Thk (UInt8 -> Ret Bytes))
       * (#to_string :: Thk (forall (R : CType) . Bytes -> Thk R -> Thk (String -> R) -> R))
-      * (#get :: Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (UInt8 -> R) -> R))
+      * (#get :: Thk (forall (R : CType) . Bytes -> Int -> Thk R -> Thk (UInt8 -> R) -> R))
       * (
           #slice :: Thk (
-            forall (R : CType) . Bytes -> Int64 -> Int64 -> Thk R -> Thk (Bytes -> R) -> R
+            forall (R : CType) . Bytes -> Int -> Int -> Thk R -> Thk (Bytes -> R) -> R
           )
         )
       * (#eq :: Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R))
       * (#lt :: Thk (forall (R : CType) . Bytes -> Bytes -> Thk R -> Thk R -> R))
-      * (#aligned :: Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (Bytes -> R) -> R))
+      * (#aligned :: Thk (forall (R : CType) . Bytes -> Int -> Thk R -> Thk (Bytes -> R) -> R))
       * (
           #unsafe ::
             (
               #from_retained :: Thk (
-                forall (R : CType) . Addr -> Int64 -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
+                forall (R : CType) . Addr -> Int -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
               )
             )
           * (
               #with_window :: Thk (
-                forall (R : CType) . Bytes -> Thk (Fault -> R) -> Thk (Addr -> Int64 -> R) -> R
+                forall (R : CType) . Bytes -> Thk (Fault -> R) -> Thk (Addr -> Int -> R) -> R
               )
             )
           * (#copy_to :: Thk (forall (R : CType) . Bytes -> Addr -> Thk R -> R))
           * (
               #build :: Thk (
                 forall (R : CType) .
-                     Int64 -> Int64
+                     Int -> Int
                   -> Thk (Addr -> Thk (Fault -> R) -> Thk R -> R) -> Thk (Fault -> R) -> Thk (
                        Bytes -> R
                      ) -> R

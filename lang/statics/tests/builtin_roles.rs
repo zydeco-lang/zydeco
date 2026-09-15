@@ -113,17 +113,14 @@ fn one_package_signature_rejects_duplicate_operation_roles() {
         tycker
             .statics
             .builtin_roles
-            .attach_value(
-                first,
-                BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add),
-            )
+            .attach_value(first, BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add))
             .unwrap();
         tycker
             .statics
             .builtin_roles
             .attach_value(
                 second,
-                BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add),
+                BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
             )
             .unwrap();
         let signature =
@@ -135,7 +132,7 @@ fn one_package_signature_rejects_duplicate_operation_roles() {
         assert!(matches!(
             error.duplicates.as_slice(),
             [DuplicateBuiltinRole::Value {
-                role: BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add),
+                role: BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
                 entries,
             }] if entries == &vec![first, second]
         ));
@@ -175,7 +172,7 @@ fn foundational_operation_roles_require_their_exact_classifier() {
     TestFixture::run(|tycker| {
         let (vtype, ctype) = TestFixture::kinds(tycker);
         let int =
-            TestFixture::primitive_type(tycker, vtype, PrimitiveType::Integer(IntegerType::Int64));
+            TestFixture::primitive_type(tycker, vtype, PrimitiveType::Integer(IntegerType::Int));
         let (os_witness, os) = TestFixture::builtin_type(tycker, ctype, BuiltinTypeRole::OS);
         let valid_classifier = TestFixture::add_classifier(tycker, vtype, ctype, int, 2);
         let valid_entry = Alloc::alloc(
@@ -189,7 +186,7 @@ fn foundational_operation_roles_require_their_exact_classifier() {
             .builtin_roles
             .attach_value(
                 valid_entry,
-                BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add),
+                BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
             )
             .unwrap();
         let valid_signature = PackPi {
@@ -205,10 +202,7 @@ fn foundational_operation_roles_require_their_exact_classifier() {
         tycker
             .statics
             .builtin_roles
-            .attach_value(
-                entry,
-                BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add),
-            )
+            .attach_value(entry, BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add))
             .unwrap();
         let signature =
             PackPi { domain: entry, witnesses: PackTelescope::singleton(os_witness), codomain: os };
@@ -219,7 +213,7 @@ fn foundational_operation_roles_require_their_exact_classifier() {
         assert!(matches!(
             error.classifiers.as_slice(),
             [BuiltinClassifierError::Mismatch {
-                role: BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add),
+                role: BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add),
                 entry: found,
                 ..
             }] if *found == entry
@@ -232,7 +226,7 @@ fn read_line_as_int_rejects_a_non_branch_classifier() {
     TestFixture::run(|tycker| {
         let (vtype, ctype) = TestFixture::kinds(tycker);
         let int =
-            TestFixture::primitive_type(tycker, vtype, PrimitiveType::Integer(IntegerType::Int64));
+            TestFixture::primitive_type(tycker, vtype, PrimitiveType::Integer(IntegerType::Int));
         let (os_witness, os) = TestFixture::builtin_type(tycker, ctype, BuiltinTypeRole::OS);
         let classifier = TestFixture::add_classifier(tycker, vtype, ctype, int, 2);
         let entry = Alloc::alloc(

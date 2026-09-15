@@ -8,7 +8,7 @@ Chronological record for the `#field` migration of named components (stable desi
 The feature keeps its name: these are still *named components*, now with a marked field spelling.
 `=` was overloaded as the let/def separator, named introduction, and named elimination,
 and field names shared the variable lexical space (`FieldName` rewrapped a `VarName`),
-so `let (Scalar = Int64, int64) = numeric/int64 that` required sort information to read.
+so `let (Scalar = Int, int) = numeric/int that` required sort information to read.
 Alternatives walked through and rejected before landing on the marker:
 
 - a distinct connective `field := value` — assignment connotation, splits the connective family;
@@ -46,7 +46,7 @@ The example was deleted after use.
 - Rust-embedded sources needed three extraction modes: `r#"..."#` raw strings (session and lang tests),
   plain `"` literals (one-line fixtures), and one `format!` template in `lang/tests/src/lib.rs`
   whose `{builtin}` placeholder defeated string extraction and was edited by hand —
-  its prelude contained the `let (Scalar = NumericInt64, ...)` line that every `SourceCase` fixture wraps
+  its prelude contained the `let (Scalar = NumericInt, ...)` line that every `SourceCase` fixture wraps
   around its input.
 - A regex scanner for doc fragments (blocks with `...` that cannot parse) produced two false-mark classes
   before review caught them: destructor copattern arms (`.tick =>`) marked via the `=` inside `=>`,

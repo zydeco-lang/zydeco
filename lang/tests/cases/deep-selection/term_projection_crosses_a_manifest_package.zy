@@ -1,7 +1,7 @@
 -- stage: run
 
 let package =
-  pack (= Tag as Int64 : VType)
+  pack (= Tag as Int : VType)
   where
     #inner = pack (= Mark as String : VType) where #text = "ok" end
   end

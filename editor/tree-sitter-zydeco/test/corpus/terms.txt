@@ -410,8 +410,8 @@ end
 Named terms and existential parameters
 ==================
 
-exists (Counter as Int64 : VType) (= State as Counter)
-  (#Public = ((Hidden as Int64) : VType)) .
+exists (Counter as Int : VType) (= State as Counter)
+  (#Public = ((Hidden as Int) : VType)) .
   (#state = 0, #next :: Thk (State -> Ret State), = State)
 
 ---
@@ -603,7 +603,7 @@ Qualified metadata names
 Package introduction
 ==================
 
-pack (Representation as Int64) where (42 : Representation) end
+pack (Representation as Int) where (42 : Representation) end
 
 ---
 
@@ -625,10 +625,10 @@ pack (Representation as Int64) where (42 : Representation) end
 Package introduction telescope
 ==================
 
-let int64_instance =
-  pack (= Int64 as @(intrinsic(i64)) : VType) where int64_dictionary, end
+let int_instance =
+  pack (= Int as @(intrinsic(int)) : VType) where int_dictionary, end
 in
-int64_instance / dictionary
+int_instance / dictionary
 
 ---
 

@@ -1,21 +1,21 @@
 -- A manually managed byte builder. Copies of its handle do not track later state changes.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /UInt8; /numeric; builtin) : @(import(
+  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /UInt8; /numeric; builtin) : @(import(
     "../builtin.zy"
   )) that
   param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr in
   let (/Fault; /unsafe; native) = builtin |> (@(import("native.zy"))) in
   let Alloc = (@(import("allocator.type.zy"))) Addr in
-  let Buffer = Addr * Int64 * Int64 in
-  let int = numeric/int64 in
+  let Buffer = Addr * Int * Int in
+  let int = numeric/int in
   let allocate : Thk (
-    forall (R : CType) . Alloc -> Int64 -> Thk (Fault -> R) -> Thk (Buffer -> R) -> R
+    forall (R : CType) . Alloc -> Int -> Thk (Fault -> R) -> Thk (Buffer -> R) -> R
   ) = {
     fn R allocator capacity no yes =>
       ! allocator/allocate R capacity 1 no { fn p => ! yes (p, capacity, 0) }
   } in
-  let length : Thk (Buffer -> Ret Int64) = { fn (_, _, length) => ret length } in
-  let capacity : Thk (Buffer -> Ret Int64) = { fn (_, capacity, _) => ret capacity } in
+  let length : Thk (Buffer -> Ret Int) = { fn (_, _, length) => ret length } in
+  let capacity : Thk (Buffer -> Ret Int) = { fn (_, capacity, _) => ret capacity } in
   let push : Thk (
     forall (R : CType) . Buffer -> UInt8 -> Thk (Fault -> R) -> Thk (Buffer -> R) -> R
   ) = {

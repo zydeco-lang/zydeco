@@ -10,12 +10,12 @@ begin
     /process;
     /string;
     /String;
-    /Int64;
+    /Int;
     /numeric;
     /text;
     /system
   ) : @(import("../../lib/std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   def Bool : VType =
     data
     | +True : Unit
@@ -36,10 +36,10 @@ begin
       end
   } that
   def int_equal : Thk (
-    Int64 -> Int64 -> Ret Bool
+    Int -> Int -> Ret Bool
   ) = {
     fn left right =>
-      ! int64/eq
+      ! int/eq
         (Ret Bool)
         left
         right
@@ -47,10 +47,10 @@ begin
         { ret +False() }
   } that
   def int_less : Thk (
-    Int64 -> Int64 -> Ret Bool
+    Int -> Int -> Ret Bool
   ) = {
     fn left right =>
-      ! int64/lt
+      ! int/lt
         (Ret Bool)
         left
         right

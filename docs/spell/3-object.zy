@@ -5,33 +5,33 @@
 -- methods, while a comatch supplies their implementations.
 
 begin
-  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int64; /numeric; /system) : @(import(
+  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int; /numeric; /system) : @(import(
     "../../lib/std/builtin.zy"
   )) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   def Counter : CType =
     codata
-    | .number : Ret Int64
-    | .increment : Int64 -> Counter
+    | .number : Ret Int
+    | .increment : Int -> Counter
     | .format : Ret String
     end
   that
 
   -- `make_counter` closes over `current`. The local fixed point named `this`
   -- permits one method to invoke another method on the same object.
-  def make_counter : Thk (Int64 -> Counter) = {
-    fix (make_counter : Thk (Int64 -> Counter)) =>
+  def make_counter : Thk (Int -> Counter) = {
+    fix (make_counter : Thk (Int -> Counter)) =>
       fn current =>
         fix (this : Thk Counter) =>
           comatch
           | .number => ret current
           | .increment amount =>
             do previous <- ! this .number;
-            do next <- ! int64/add previous amount;
+            do next <- ! int/add previous amount;
             ! make_counter next
           | .format =>
             do value <- ! this .number;
-            ! int64/to_string value
+            ! int/to_string value
           end
   } that
 

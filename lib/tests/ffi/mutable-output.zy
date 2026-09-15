@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt64; /Int32;
+  param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt; /Int32;
     /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
   let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = builtin |> (
     @(import("../../std/memory/package.zy"))
@@ -9,7 +9,7 @@ begin
   let Fault = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
-  let write : Thk (Addr -> UInt64 -> UInt8 -> UInt32 -> Ret Int32) =
+  let write : Thk (Addr -> UInt -> UInt8 -> UInt32 -> Ret Int32) =
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_write_record")))
   in
   match layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32

@@ -1,10 +1,10 @@
-param (/VType; /Thk; /Ret; /Unit; /Int64; /OS; /numeric; /process) : @(import(
+param (/VType; /Thk; /Ret; /Unit; /Int; /OS; /numeric; /process) : @(import(
   "../../std/builtin.zy"
 )) in
 let Choice =
   data
-  | +First : Int64
-  | +Second : Int64
+  | +First : Int
+  | +Second : Int
   | +Third : Unit
   | +Fourth : Unit
   | +Fifth : Unit
@@ -14,7 +14,7 @@ let Choice =
   | +Ninth : Unit
   end
 in
-let classify : Thk (Choice -> Ret Int64) = {
+let classify : Thk (Choice -> Ret Int) = {
   fn choice =>
     match choice
     | +First(1) => ret 10
@@ -30,9 +30,9 @@ let classify : Thk (Choice -> Ret Int64) = {
       end
     end
 } in
-let ensure : Thk (Int64 -> Int64 -> Ret Unit) = {
+let ensure : Thk (Int -> Int -> Ret Unit) = {
   fn actual expected =>
-    do delta <- ! numeric/int64/sub actual expected;
+    do delta <- ! numeric/int/sub actual expected;
     @[partial]
     let 0 = delta in
     ret ()

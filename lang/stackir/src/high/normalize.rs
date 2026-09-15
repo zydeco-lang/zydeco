@@ -441,7 +441,7 @@ mod tests {
             let stack = self.build(Bullet);
             let body = self.build(ExternCall {
                 function: ExternalFunction::Host(BuiltinValueRole::Integer(
-                    IntegerType::Int64,
+                    IntegerType::Int,
                     IntegerOperation::Add,
                 )),
                 stack,
@@ -471,15 +471,14 @@ mod tests {
         }
 
         fn trap(&mut self, operation: &str) -> ValueId {
-            let first =
-                self.build(Literal::Integer(IntegerLiteral::Int64(if operation == "left" {
-                    1
-                } else {
-                    2
-                })));
-            let second = self.build(Literal::Integer(IntegerLiteral::Int64(0)));
+            let first = self.build(Literal::Integer(IntegerLiteral::Int(if operation == "left" {
+                1
+            } else {
+                2
+            })));
+            let second = self.build(Literal::Integer(IntegerLiteral::Int(0)));
             self.build(Primitive {
-                operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Div),
+                operation: PrimitiveOp::Integer(IntegerType::Int, IntegerArithmetic::Div),
                 operands: [first, second],
             })
         }
@@ -587,14 +586,14 @@ mod tests {
             (IntegerArithmetic::Add, 1, true, true),
         ] {
             let mut fixture = Fixture::default();
-            let role = PrimitiveOp::Integer(IntegerType::Int64, arithmetic).builtin();
+            let role = PrimitiveOp::Integer(IntegerType::Int, arithmetic).builtin();
             let thunk = ExternalFunction::Host(role).make_function(&mut fixture.arena);
             let first = if trapping_operand {
                 fixture.trap("operand")
             } else {
-                fixture.build(Literal::Integer(IntegerLiteral::Int64(7)))
+                fixture.build(Literal::Integer(IntegerLiteral::Int(7)))
             };
-            let second = fixture.build(Literal::Integer(IntegerLiteral::Int64(divisor)));
+            let second = fixture.build(Literal::Integer(IntegerLiteral::Int(divisor)));
             let after = fixture.external(BuiltinValueRole::WriteLine);
             let binder = fixture.build(Hole);
             let rest = fixture.build(Kont { binder, body: after });
@@ -753,7 +752,7 @@ mod tests {
         let left = fixture.build(Triv);
         let right = fixture.build(Triv);
         let bindee = fixture.build(Primitive {
-            operation: PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Div),
+            operation: PrimitiveOp::Integer(IntegerType::Int, IntegerArithmetic::Div),
             operands: [left, right],
         });
         let value = fixture.build(Triv);

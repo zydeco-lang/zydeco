@@ -14,10 +14,10 @@ begin
     /random;
     /process;
     /String;
-    /Int64;
+    /Int;
     builtin
   ) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let string = text/string that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
@@ -94,8 +94,8 @@ begin
     that
     def ! flip-os (unit : Unit) (continuation : Thk (Bool -> OS)) : OS = ! random/generate {
       fn random =>
-        do remainder <- ! int64/mod random 2;
-        ! int64/eq
+        do remainder <- ! int/mod random 2;
+        ! int/eq
           OS
           remainder
           0

@@ -1,17 +1,17 @@
 -- A slice carries only a typed pointer and a runtime element count.
 -- The caller guarantees allocation extent, element stride, state, and alias validity.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /numeric; /memory; builtin) : @(import(
+  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
   let Fault = @(import("fault.zy")) in
-  let int = numeric/int64 in
-  let Slice (L : VType) (S : VType) = Ptr L S * Int64 in
-  let val length (L : VType) (S : VType) ((_, count) : Slice L S) : Int64 = count in
+  let int = numeric/int in
+  let Slice (L : VType) (S : VType) = Ptr L S * Int in
+  let val length (L : VType) (S : VType) ((_, count) : Slice L S) : Int = count in
   let from_parts : Thk (
     forall (L : VType) (S : VType) (R : CType) .
-      Ptr L S -> Int64 -> Thk (Fault -> R) -> Thk (Slice L S -> R) -> R
+      Ptr L S -> Int -> Thk (Fault -> R) -> Thk (Slice L S -> R) -> R
   ) = {
     fn L S R pointer count no yes =>
       ! int/lt R count 0 { ! no +Bounds() } { ! yes (pointer, count) }
@@ -23,11 +23,11 @@ begin
   let val for_layout (L : VType) (A : VType) (layout : Operations L A) =
     let at : Thk (
       forall (S : VType) (R : CType) .
-        Slice L S -> Int64 -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
+        Slice L S -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
     ) = {
       fn S R slice index no yes =>
-        let view = as_cps (Ptr L S * Int64) (Ptr L S * Int64) (fat L S Int64) in
-        ! (counted L A S (Ptr L S * Int64) layout view (slice, index)) R no yes
+        let view = as_cps (Ptr L S * Int) (Ptr L S * Int) (fat L S Int) in
+        ! (counted L A S (Ptr L S * Int) layout view (slice, index)) R no yes
     } in
     (#unsafe = = at)
   in

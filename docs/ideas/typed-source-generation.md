@@ -1,7 +1,7 @@
 # Source generation from elaborated terms
 
 Survey which diagnostics need elaborated identities and which interactions need source-shaped output.
-Readable names such as `Int64` do not reproduce an intrinsic source expression by themselves.
+Readable names such as `Int` do not reproduce an intrinsic source expression by themselves.
 
 Reassess a typed-to-textual bridge or shared precedence vocabulary when a source-faithful consumer needs it,
 such as inserting a reparseable elaborated annotation.

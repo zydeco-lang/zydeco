@@ -11,10 +11,10 @@ begin
     /OS;
     /stdio;
     /process;
-    /Int64;
+    /Int;
     builtin
   ) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let (= Monad, = Algebra, ()) =
     builtin |> monadic_basis
   in
@@ -59,8 +59,8 @@ begin
       end
     that
     -- | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R
-    def ! int_eq (left : Int64) (right : Int64) : Ret Bool =
-      ! int64/eq
+    def ! int_eq (left : Int) (right : Int) : Ret Bool =
+      ! int/eq
         (Ret Bool)
         left
         right
@@ -115,7 +115,7 @@ begin
         }
       end
     that
-    def ! choose (xs : List Int64) : MList Int64 =
+    def ! choose (xs : List Int) : MList Int =
       fn .done =>
         ret xs
     that
@@ -126,32 +126,32 @@ begin
       end
     that
 
-    let ! demo : MList (Pair Int64 Int64) =
-      ! mlist .bind Int64 (Pair Int64 Int64)
+    let ! demo : MList (Pair Int Int) =
+      ! mlist .bind Int (Pair Int Int)
         { ! choose +Cons(1, +Cons(2, +Nil())) }
         {
           fn x =>
-            ! mlist .bind Int64 (Pair Int64 Int64)
+            ! mlist .bind Int (Pair Int Int)
               { ! choose +Cons(3, +Cons(4, +Nil())) }
               {
                 fn y =>
-                  ! mlist .bind Unit (Pair Int64 Int64)
+                  ! mlist .bind Unit (Pair Int Int)
                     {
-                      do r <- ! int64/add x y;
+                      do r <- ! int/add x y;
                       do b <- ! int_eq r 5;
                       ! guard b
                     }
                     {
                       fn _ =>
                         ! mlist .return
-                          (Pair Int64 Int64)
+                          (Pair Int Int)
                           +Cons(x, y)
                     }
               }
         }
     in
     do ps <- ! demo .done;
-    let fix print (ps : List (Pair Int64 Int64)) (kont : Thk OS) : OS =
+    let fix print (ps : List (Pair Int Int)) (kont : Thk OS) : OS =
       match ps
       | +Nil() => ! kont
       | +Cons(p, ps) =>

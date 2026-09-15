@@ -4,16 +4,16 @@
 -- Then it loops.
 -- If the input is not a number, the program exits.
 begin
-  param (/Thk; /OS; /stdio; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  param (/Thk; /OS; /stdio; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
   (
-    fix (loop : Thk (Int64 -> OS)) =>
+    fix (loop : Thk (Int -> OS)) =>
       fn sum =>
         ! stdio/read_int
           { ! process/exit 0 }
           {
             fn i =>
-              do sum <- ! int64/add i sum;
+              do sum <- ! int/add i sum;
               ! stdio/write_int sum {
                 ! stdio/write_line " = sum" {
                   ! loop sum

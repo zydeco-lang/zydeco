@@ -5,7 +5,7 @@
 Select the foundational kinds and types directly from the Builtin contract:
 
 ```zydeco
-param (/VType; /CType; /Ret; /Thk; /Int64; /Float32; /Float64) : @(import(std/builtin)) in
+param (/VType; /CType; /Ret; /Thk; /Int; /Float32; /Float64) : @(import(std/builtin)) in
 ...
 ```
 
@@ -15,8 +15,8 @@ so one field search reaches every public name and every selection shares one typ
 A pure library function states its interface with just this parameter:
 
 ```zydeco
-param (/Ret; /Int64) : @(import(std/builtin)) in
-fn (value : Int64) => (ret value : Ret Int64)
+param (/Ret; /Int) : @(import(std/builtin)) in
+fn (value : Int) => (ret value : Ret Int)
 ```
 
 The available surface names are:
@@ -24,8 +24,8 @@ The available surface names are:
 | Family | Names |
 | --- | --- |
 | CBPV | `VType`, `CType`, `Thk`, `Ret`, `Unit` |
-| Signed integers | `Int8`, `Int16`, `Int32`, `Int64` |
-| Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt64` |
+| Signed integers | `Int8`, `Int16`, `Int32`, `Int` |
+| Unsigned integers | `UInt8`, `UInt16`, `UInt32`, `UInt` |
 | Floating point | `Float32`, `Float64` |
 | Text | `Char`, `String` |
 | Capabilities | `Addr`, `Reader`, `Writer`, `OS` |
@@ -33,7 +33,7 @@ The available surface names are:
 Host operations live in the same contract under the `numeric`, `text`, and `system` groups,
 and the search descends through them: `param (/stdio; /process) : @(import(std/builtin)) in` selects two operations
 from the `system` group without naming it.
-The [integer example](../tests/std/minimal.zy) selects `Int64` and `Ret` this way,
+The [integer example](../tests/std/minimal.zy) selects `Int` and `Ret` this way,
 then uses the assembled standard package for arithmetic.
 
 ## Library boundaries
@@ -110,7 +110,7 @@ The files at the root of this directory define the public entry points:
 builtin.zy                 complete host ABI: surface kinds and types, operation groups
 std.zy                     wiring for the public package
 
-builtin/numeric/*.zy       exact-width primitive operations
+builtin/numeric/*.zy       primitive numeric operations
 builtin/text/*.zy          Char and String host operations
 builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
 
@@ -119,8 +119,8 @@ data/package.type.zy       DataPackage existential wrapper with the module teles
 data/bool.type.zy          BoolModule telescope shared with the numeric builders
 
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
-numeric/package.zy         the ten width modules and their capability dictionaries
-numeric/codecs.zy          source byte codecs over exact-width memory leaves
+numeric/package.zy         the ten numeric modules and their capability dictionaries
+numeric/codecs.zy          source byte codecs over scalar memory leaves
 
 text/bytes.zy              abstract immutable byte sequences over retained raw allocations
 text/bytes.type.zy         shared byte-package witness and primitive-free sequence API
@@ -158,16 +158,16 @@ Its complete leading telescope carries every public static name as a manifest fi
 constructors, and fixed-representation types — followed by generative host capabilities,
 and its body groups the runtime operations:
 
-- Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the ten fixed-width numeric types, `Char`, `String`,
-  then abstract `Addr`, `Reader`, `Writer`, and `OS`.
-- `numeric`: exact-width arithmetic, branch comparisons, rendering, and checked scalar loads/stores.
-- `text`: operations crossing `Char`, `String`, and `Int64`.
+- Surface: `VType`, `CType`, `Thk`, `Ret`, `Unit`, the ten numeric types, `Char`, `String`, then abstract `Addr`,
+  `Reader`, `Writer`, and `OS`.
+- `numeric`: typed arithmetic, branch comparisons, rendering, and checked scalar loads/stores.
+- `text`: operations crossing `Char`, `String`, and `Int`.
 - `system`: the re-exposed capabilities plus checked memory, I/O, filesystem, standard stream, argument,
   randomness, and process operations.
 
 Each public name is unique across the complete package, so one field search reaches kinds, types,
 operations, and capabilities alike, and every selection shares the contract's identities.
-Fixed representations are compiler-canonical intrinsics, so independent selections share one `Int64` identity.
+Fixed representations are compiler-canonical intrinsics, so independent selections share one `Int` identity.
 Only the runtime-owned system capabilities are generative existential types.
 A composition root that must pass the dependency onward keeps the whole-alias `builtin` beside its selections.
 The [language reference](../../docs/references/language.md#13-primitive-values-and-capabilities) defines primitive
@@ -263,8 +263,8 @@ Moving it changes where payloads and witnesses are shared.
 When the provider chooses a hidden type, a polymorphic callback can give the consumer one scoped opening:
 
 ```zydeco check
-param (/VType; /CType; /Thk; /Ret; /Int64) : @(import("builtin.zy")) in
-let Entry = exists (X : VType) . X * Thk (X -> Ret Int64) in
+param (/VType; /CType; /Thk; /Ret; /Int) : @(import("builtin.zy")) in
+let Entry = exists (X : VType) . X * Thk (X -> Ret Int) in
 let Hidden = codata
   | .open : forall (R : CType) . Thk (pi ((X, _, _) : Entry) . R) -> R
 end in
@@ -273,7 +273,7 @@ ret ()
 
 The callback receives a value and an operation at the same abstract `X`.
 Its result protocol `R` is chosen outside the opening, so the private witness cannot escape through that result.
-The corresponding curried callback takes `forall (X : VType) . X -> Thk (X -> Ret Int64) -> R`.
+The corresponding curried callback takes `forall (X : VType) . X -> Thk (X -> Ret Int) -> R`.
 Neither callback type promises purity or single invocation.
 
 ## Relative monads and control examples
@@ -430,13 +430,13 @@ would provide incremental construction without changing immutable-byte observati
 Operations whose inputs may be invalid report that fact in their types:
 
 ```zydeco
-string/get          : String -> Int64 -> Ret (Option Char)
-string/split_at     : String -> Int64 -> Ret (Option (String * String))
-string/parse_int    : String -> Ret (Option Int64)
-char/from_codepoint : Int64 -> Ret (Option Char)
-bytes/get           : Bytes -> Int64 -> Ret (Option UInt8)
-bytes/slice         : Bytes -> Int64 -> Int64 -> Ret (Option Bytes)
-list/get            : forall (A : VType) . List A -> Int64 -> Ret (Option A)
+string/get          : String -> Int -> Ret (Option Char)
+string/split_at     : String -> Int -> Ret (Option (String * String))
+string/parse_int    : String -> Ret (Option Int)
+char/from_codepoint : Int -> Ret (Option Char)
+bytes/get           : Bytes -> Int -> Ret (Option UInt8)
+bytes/slice         : Bytes -> Int -> Int -> Ret (Option Bytes)
+list/get            : forall (A : VType) . List A -> Int -> Ret (Option A)
 ```
 
 `bytes/get` returns the octet at a position as a `UInt8`, the type an octet already is.
@@ -452,9 +452,9 @@ The Builtin forms implement these results as computation-polymorphic branches.
 The public library reifies a successful branch with `option/some` and a failed branch with `option/none`.
 Neither backend has a hidden sentinel, and malformed input does not panic the host runtime.
 
-The integer types are `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, and `UInt64`.
-Their representations and arithmetic domains correspond directly to Rust's `i8` through `i64` and `u8` through `u64`;
-arithmetic wraps at the selected width, and signed and unsigned comparisons remain distinct.
+The integer types are `Int8`, `Int16`, `Int32`, `Int`, `UInt8`, `UInt16`, `UInt32`, and `UInt`.
+Their domains and arithmetic follow [L13](../../docs/references/language.md#13-primitive-values-and-capabilities).
+`Int` and `UInt` are tagged machine integers; the numbered integer types have exact widths.
 Integer division and remainder are not yet wrapped in checked operations.
 The generic numeric capability layer deliberately excludes them;
 a future checked-arithmetic capability should make their failure behavior explicit.
@@ -487,18 +487,18 @@ The public package exports five capability type constructors; their linked defin
 Larger dictionaries contain smaller ones as named fields.
 This preserves paths such as `dictionary/additive/add` and `dictionary/order/equality/eq`,
 and lets a consumer receive just `Additive A` when it only needs addition.
-The `dictionaries` module contains one dictionary per fixed-width representation,
+The `dictionaries` module contains one dictionary per numeric representation,
 from `int8_dictionary` through `float64_dictionary`.
 Generic code explicitly selects and passes one:
 
 ```zydeco check
-param (/VType; /Ret; /Int64; builtin) : @(import("builtin.zy")) in
+param (/VType; /Ret; /Int; builtin) : @(import("builtin.zy")) in
 let make_std = @(import("std.zy")) in
 let (/Additive; /dictionaries) = builtin |> make_std in
 let ! twice (A : VType) (operations : Additive A) (value : A) : Ret A =
   ! operations/add value value
 in
-! twice Int64 (dictionaries/int64_dictionary/additive) 21
+! twice Int (dictionaries/int_dictionary/additive) 21
 ```
 
 These interfaces describe operations rather than proving algebraic laws.
@@ -508,18 +508,18 @@ and other representation-specific operations stay in the width modules. The nume
 [literal and conversion rules](../../docs/references/language.md#13-primitive-values-and-capabilities).
 
 A library can also expose the selected carrier together with its dictionary in a manifest package.
-The following complete example names the disclosed type `Int64`, renames it to `Carrier` when opening,
+The following complete example names the disclosed type `Int`, renames it to `Carrier` when opening,
 and checks that the operations use that same carrier:
 
 ```zydeco check
 param (/VType; builtin) : @(import("builtin.zy")) in
 let make_std = @(import("std.zy")) in
 let (/Bool; /Numeric; /dictionaries) = builtin |> make_std in
-let int64_instance =
-  pack (= Int64 as @(intrinsic(i64)) : VType)
-  where #operations = dictionaries/int64_dictionary end
+let int_instance =
+  pack (= Int as @(intrinsic(int)) : VType)
+  where #operations = dictionaries/int_dictionary end
 in
-let (/Int64 = Carrier; /operations) = int64_instance in
+let (/Int = Carrier; /operations) = int_instance in
 let _ : Numeric Bool Carrier = operations in
 ! operations/additive/add (21 : Carrier) 21
 ```
@@ -527,7 +527,7 @@ let _ : Numeric Bool Carrier = operations in
 The [manifest type rules](../../docs/references/language.md#9-polymorphism-and-packages) supply the disclosed equation;
 [package selection](../../docs/references/language.md#9-polymorphism-and-packages) governs the shared opening.
 Naming a manifest field after its carrier avoids imposing a generic role label on each consumer.
-When exporting several instances, use distinctive value names such as `int64_instance` and `float32_instance`
+When exporting several instances, use distinctive value names such as `int_instance` and `float32_instance`
 so their selection is unambiguous.
 
 Selection remains explicit value flow: lexical bindings and arguments determine which dictionary is used.
@@ -545,8 +545,8 @@ when operations must be dynamically selectable.
 - `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
 - `dictionaries`: one explicitly passed capability dictionary per numeric representation.
-- `int8` through `int64` and `uint8` through `uint64`: arithmetic, complete comparisons,
-  successor/predecessor, wrapping negation, extrema, and string rendering.
+- `int8` through `int` and `uint8` through `uint`: arithmetic, complete comparisons, successor/predecessor,
+  wrapping negation, extrema, and string rendering.
 - `float32` and `float64`: IEEE-754 arithmetic, comparisons, negation, and string rendering.
 - `char`: UTF-8 text rendering and checked Unicode codepoint conversion.
 - `string`: scalar-aware observation, safe decomposition, character-list conversion, concatenation, and parsing.
@@ -579,7 +579,7 @@ The following computation protocols apply after forcing the exported operation t
 Fallible resource operations use the standard library's continuation-passing `OS` convention:
 
 ```text
-io/read       : Reader -> Int64 -> Thk (Result Bytes IoError -> OS) -> OS
+io/read       : Reader -> Int -> Thk (Result Bytes IoError -> OS) -> OS
 io/read_line  : Reader -> Thk (Result (Option Bytes) IoError -> OS) -> OS
 io/read_all   : Reader -> Thk (Result Bytes IoError -> OS) -> OS
 io/write_all  : Writer -> Bytes -> Thk (Result Unit IoError -> OS) -> OS

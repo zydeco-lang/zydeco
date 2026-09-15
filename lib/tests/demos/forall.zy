@@ -1,10 +1,10 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /process; /Int64; /system) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /OS; /process; /Int; /system) : @(import(
     "../../std/builtin.zy"
   )) that
   def ! id (A : VType) (value : A) : Ret A = ret value that
   def ! id~ (B : CType) (b : Thk B) : B = ! b that
 
-  do x <- ! id Int64 0;
+  do x <- ! id Int 0;
   ! id~ OS { ! process/exit x }
 end

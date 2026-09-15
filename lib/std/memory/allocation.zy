@@ -1,14 +1,14 @@
 -- Allocator context is explicit. Free requires the same allocator and allocation layout.
 begin
-  param val (/VType; /CType; /Thk; /Addr; /Int64; /numeric; builtin) : @(import("../builtin.zy")) that
+  param val (/VType; /CType; /Thk; /Addr; /Int; /numeric; builtin) : @(import("../builtin.zy")) that
   let Alloc = (@(import("allocator.type.zy"))) Addr in
   let (/Fault; native) = builtin |> (@(import("native.zy"))) in
   let heap : Alloc = (#allocate = native/allocate, #free = native/unsafe/free) in
-  let val limited (maximum : Int64) (parent : Alloc) : Alloc =
+  let val limited (maximum : Int) (parent : Alloc) : Alloc =
     (
       #allocate = {
         fn R size alignment no yes =>
-          ! numeric/int64/gt R size maximum { ! no +AllocationFailed() } {
+          ! numeric/int/gt R size maximum { ! no +AllocationFailed() } {
             ! parent/allocate R size alignment no yes
           }
       },

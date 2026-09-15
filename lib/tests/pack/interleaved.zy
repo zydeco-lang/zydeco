@@ -1,8 +1,8 @@
 begin
-  param (/VType; /Ret; /Unit; /process; /Char; /Int64; /numeric; /system) : @(import(
+  param (/VType; /Ret; /Unit; /process; /Char; /Int; /numeric; /system) : @(import(
     "../../std/builtin.zy"
   )) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let Interleaved = exists (Leading as Unit : VType)
     (X : VType)
     (AliasX as X : VType)
@@ -48,8 +48,8 @@ begin
     ) that
   def packed : Interleaved = (
     Unit,
-    Int64,
-    Int64,
+    Int,
+    Int,
     Unit,
     Char,
     Char,
@@ -58,6 +58,6 @@ begin
   ) that
 
   do (value, _) <- ! reveal packed;
-  do status <- ! int64/sub value 40;
+  do status <- ! int/sub value 40;
   ! process/exit status
 end

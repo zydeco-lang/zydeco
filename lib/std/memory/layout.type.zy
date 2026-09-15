@@ -5,7 +5,7 @@ begin
   param Init : VType in
   param Ptr : VType -> VType -> VType in
   let Unit = @(intrinsic(unit)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   let Error = @(import("layout-error.zy")) in
   let Shape = @(import("shape.zy")) in
   let Result = @(import("../data/result.zy")) in
@@ -14,22 +14,22 @@ begin
     (= Layout as fn (A : VType) => Result (Plan A) Error : VType -> VType)
   .
       (#unit :: Layout Unit)
-    * (#padding :: val pi (count : Int64) . Layout Unit)
+    * (#padding :: val pi (count : Int) . Layout Unit)
     * (
         #product :: val pi (A : VType) (B : VType) (left : Layout A) (right : Layout B) .
           Layout (A * B)
       )
-    * (#align :: val pi (A : VType) (boundary : Int64) (layout : Layout A) . Layout A)
+    * (#align :: val pi (A : VType) (boundary : Int) (layout : Layout A) . Layout A)
     * (#inspect :: val pi (A : VType) (plan : Plan A) . Shape)
     * (#realize :: val pi (A : VType) (plan : Plan A) . Representation A)
     * (#int8 :: Layout (@(intrinsic(i8))))
     * (#int16 :: Layout (@(intrinsic(i16))))
     * (#int32 :: Layout (@(intrinsic(i32))))
-    * (#int64 :: Layout Int64)
+    * (#int :: Layout Int)
     * (#uint8 :: Layout (@(intrinsic(u8))))
     * (#uint16 :: Layout (@(intrinsic(u16))))
     * (#uint32 :: Layout (@(intrinsic(u32))))
-    * (#uint64 :: Layout (@(intrinsic(u64))))
+    * (#uint :: Layout (@(intrinsic(uint))))
     * (#float32 :: Layout (@(intrinsic(f32))))
     * (#float64 :: Layout (@(intrinsic(f64))))
     * (#addr :: Layout Addr)

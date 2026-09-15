@@ -1,4 +1,4 @@
-param (/process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) in
-let int64 = numeric/int64 in
-do status <- ! int64/add 1 2;
+param (/process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) in
+let int = numeric/int in
+do status <- ! int/add 1 2;
 ! process/exit status

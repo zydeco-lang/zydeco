@@ -33,7 +33,7 @@ impl PrimitiveFixture {
 fn known_primitive_calls_do_not_allocate_thunks() {
     for fixture in ["add.zy", "primitive-aliases.zy"] {
         let sps = PrimitiveFixture::sps_low(fixture);
-        assert!(!sps.contains("<extern:int64_add/2>"), "{sps}");
+        assert!(!sps.contains("<extern:int_add/2>"), "{sps}");
         assert!(!sps.contains("pack-continuation("), "arithmetic returns must be inlined:\n{sps}");
         assert_eq!(sps.matches("<extern:exit/1>").count(), 1, "{sps}");
         assert!(!sps.contains("pack-closure("), "known calls must not allocate thunks:\n{sps}");
@@ -47,7 +47,7 @@ fn known_primitive_calls_do_not_allocate_thunks() {
 #[test]
 fn dynamically_selected_primitives_keep_their_thunks() {
     let sps = PrimitiveFixture::sps_low("primitive-selection.zy");
-    assert!(sps.contains("<extern:int64_eq_branch/4>"), "the branch primitive is known:\n{sps}");
+    assert!(sps.contains("<extern:int_eq_branch/4>"), "the branch primitive is known:\n{sps}");
     assert!(sps.contains("pack-closure("), "escaping primitives must remain values:\n{sps}");
     assert!(sps.contains("open-closure "), "the selected primitive needs runtime dispatch:\n{sps}");
 }

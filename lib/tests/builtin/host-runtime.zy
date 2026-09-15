@@ -1,17 +1,17 @@
 begin
-  param (/Ret; /OS; /args; /process; /Char; /Int64; /numeric; /text; /system; builtin) : @(import(
+  param (/Ret; /OS; /args; /process; /Char; /Int; /numeric; /text; /system; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
   let make_arguments = @(import("../../std/system/arguments.zy")) in
   let arguments = builtin |> make_arguments in
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let char = text/char that
   let string = text/string that
-  do twelve <- ! int64/to_string 12;
+  do twelve <- ! int/to_string 12;
   do combined <- ! string/append twelve twelve;
   do length <- ! string/length combined;
   do parsed <- ! string/parse_int
-    (Ret Int64)
+    (Ret Int)
     combined
     { ret 0 }
     { fn integer => ret integer };
@@ -23,8 +23,8 @@ begin
     { fn character => ret character };
   do first_code <- ! char/codepoint first;
   do first_string <- ! char/to_string first;
-  do one_string <- ! int64/to_string 1;
-  do negative <- ! int64/to_string -1;
+  do one_string <- ! int/to_string 1;
+  do negative <- ! int/to_string -1;
   do dash <- ! string/get
     (Ret Char)
     negative
@@ -32,17 +32,17 @@ begin
     { ret ' ' }
     { fn character => ret character };
   do fold_status <- ! arguments/fold
-    (Ret Int64)
+    (Ret Int)
     { ret 0 }
     {
       fn argument remaining => ret 1
     };
-  do length_status <- ! int64/sub length 4;
-  do parsed_status <- ! int64/sub parsed 1212;
-  do first_status <- ! int64/sub first_code 49;
-  do status <- ! int64/add length_status parsed_status;
-  do status <- ! int64/add status first_status;
-  do status <- ! int64/add status fold_status;
+  do length_status <- ! int/sub length 4;
+  do parsed_status <- ! int/sub parsed 1212;
+  do first_status <- ! int/sub first_code 49;
+  do status <- ! int/add length_status parsed_status;
+  do status <- ! int/add status first_status;
+  do status <- ! int/add status fold_status;
   ! string/eq
     OS
     first_string
@@ -56,7 +56,7 @@ begin
         {
           fn prefix suffix =>
             do prefix_length <- ! string/length prefix;
-            ! int64/eq
+            ! int/eq
               OS
               prefix_length
               0

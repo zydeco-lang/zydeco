@@ -71,34 +71,6 @@ impl<'f> WordEmitter<'f> {
         Self { function, alloc_function }
     }
 
-    /// Replace a signed local with its tagged encoding, boxing when outside the
-    /// immediate range, and leave the word on the operand stack.
-    pub fn encode_signed_local(&mut self, input: u32, pointer: PointerLocal) {
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::SIGNED_MIN));
-        self.function.instruction(&WasmInstruction::I64GeS);
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(RuntimeWord::SIGNED_MAX));
-        self.function.instruction(&WasmInstruction::I64LeS);
-        self.function.instruction(&WasmInstruction::I32And);
-        self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Result(
-            wasm_encoder::ValType::I64,
-        )));
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Const(1));
-        self.function.instruction(&WasmInstruction::I64Shl);
-        self.function.instruction(&WasmInstruction::I64Const(1));
-        self.function.instruction(&WasmInstruction::I64Or);
-        self.function.instruction(&WasmInstruction::Else);
-        self.function.instruction(&WasmInstruction::I32Const(1));
-        self.function.instruction(&WasmInstruction::Call(self.alloc_function));
-        pointer.bind_allocation(self.function);
-        self.function.instruction(&WasmInstruction::LocalGet(input));
-        self.function.instruction(&WasmInstruction::I64Store(WORD_MEMORY));
-        pointer.push_word(self.function);
-        self.function.instruction(&WasmInstruction::End);
-    }
-
     /// Store `bits` in a fresh one-word box and leave the tagged pointer word on the
     /// operand stack.
     pub fn boxed(&mut self, bits: u64, pointer: PointerLocal) {
@@ -111,8 +83,8 @@ impl<'f> WordEmitter<'f> {
     }
 
     /// Compute a signed division or remainder of the decoded locals into `result`,
-    /// trapping on a zero divisor and wrapping `i64::MIN / -1`.
-    fn wrapping_division(&mut self, first: u32, second: u32, result: u32, remainder: bool) {
+    /// trapping on a zero divisor. The caller wraps the result to the source width.
+    fn signed_division(&mut self, first: u32, second: u32, result: u32, remainder: bool) {
         self.function.instruction(&WasmInstruction::LocalGet(second));
         self.function.instruction(&WasmInstruction::I64Eqz);
         self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Empty));
@@ -123,25 +95,12 @@ impl<'f> WordEmitter<'f> {
         }
         self.function.instruction(&WasmInstruction::End);
         self.function.instruction(&WasmInstruction::LocalGet(first));
-        self.function.instruction(&WasmInstruction::I64Const(i64::MIN));
-        self.function.instruction(&WasmInstruction::I64Eq);
-        self.function.instruction(&WasmInstruction::LocalGet(second));
-        self.function.instruction(&WasmInstruction::I64Const(-1));
-        self.function.instruction(&WasmInstruction::I64Eq);
-        self.function.instruction(&WasmInstruction::I32And);
-        self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Result(
-            wasm_encoder::ValType::I64,
-        )));
-        self.function.instruction(&WasmInstruction::I64Const(if remainder { 0 } else { i64::MIN }));
-        self.function.instruction(&WasmInstruction::Else);
-        self.function.instruction(&WasmInstruction::LocalGet(first));
         self.function.instruction(&WasmInstruction::LocalGet(second));
         self.function.instruction(&if remainder {
             WasmInstruction::I64RemS
         } else {
             WasmInstruction::I64DivS
         });
-        self.function.instruction(&WasmInstruction::End);
         self.function.instruction(&WasmInstruction::LocalSet(result));
     }
 
@@ -173,7 +132,7 @@ impl<'f> WordEmitter<'f> {
                 }
                 match operation {
                     | IntegerArithmetic::Div | IntegerArithmetic::Mod if ty.is_signed() => {
-                        self.wrapping_division(
+                        self.signed_division(
                             first,
                             second,
                             result,
@@ -212,33 +171,18 @@ impl<'f> WordEmitter<'f> {
                         self.function.instruction(&WasmInstruction::LocalSet(result));
                     }
                 }
-                if ty.bits() < 64 {
-                    let by = i64::from(64 - ty.bits());
-                    self.function.instruction(&WasmInstruction::LocalGet(result));
-                    self.function.instruction(&WasmInstruction::I64Const(by));
-                    self.function.instruction(&WasmInstruction::I64Shl);
-                    self.function.instruction(&WasmInstruction::I64Const(by));
-                    self.function.instruction(&if ty.is_signed() {
-                        WasmInstruction::I64ShrS
-                    } else {
-                        WasmInstruction::I64ShrU
-                    });
-                    self.function.instruction(&WasmInstruction::LocalSet(result));
-                    self.tag_local(result);
-                } else if ty.is_signed() {
-                    self.encode_signed_local(result, pointer);
+                let by = i64::from(64 - ty.bits());
+                self.function.instruction(&WasmInstruction::LocalGet(result));
+                self.function.instruction(&WasmInstruction::I64Const(by));
+                self.function.instruction(&WasmInstruction::I64Shl);
+                self.function.instruction(&WasmInstruction::I64Const(by));
+                self.function.instruction(&if ty.is_signed() {
+                    WasmInstruction::I64ShrS
                 } else {
-                    self.function.instruction(&WasmInstruction::LocalGet(result));
-                    self.function.instruction(&WasmInstruction::I64Const(0));
-                    self.function.instruction(&WasmInstruction::I64GeS);
-                    self.function.instruction(&WasmInstruction::If(
-                        wasm_encoder::BlockType::Result(wasm_encoder::ValType::I64),
-                    ));
-                    self.tag_local(result);
-                    self.function.instruction(&WasmInstruction::Else);
-                    self.box_local(result, pointer);
-                    self.function.instruction(&WasmInstruction::End);
-                }
+                    WasmInstruction::I64ShrU
+                });
+                self.function.instruction(&WasmInstruction::LocalSet(result));
+                self.tag_local(result);
             }
             | PrimitiveOp::Float(ty, operation) => {
                 for local in [first, second] {
@@ -286,19 +230,6 @@ impl<'f> WordEmitter<'f> {
     }
 
     fn decode_integer(&mut self, local: u32, ty: IntegerType) {
-        if ty.bits() == 64 {
-            self.function.instruction(&WasmInstruction::LocalGet(local));
-            self.function.instruction(&WasmInstruction::I64Const(1));
-            self.function.instruction(&WasmInstruction::I64And);
-            self.function.instruction(&WasmInstruction::I64Eqz);
-            self.function.instruction(&WasmInstruction::If(wasm_encoder::BlockType::Result(
-                wasm_encoder::ValType::I64,
-            )));
-            self.function.instruction(&WasmInstruction::LocalGet(local));
-            self.function.instruction(&WasmInstruction::I32WrapI64);
-            self.function.instruction(&WasmInstruction::I64Load(WORD_MEMORY));
-            self.function.instruction(&WasmInstruction::Else);
-        }
         self.function.instruction(&WasmInstruction::LocalGet(local));
         self.function.instruction(&WasmInstruction::I64Const(1));
         self.function.instruction(&if ty.is_signed() {
@@ -306,9 +237,6 @@ impl<'f> WordEmitter<'f> {
         } else {
             WasmInstruction::I64ShrU
         });
-        if ty.bits() == 64 {
-            self.function.instruction(&WasmInstruction::End);
-        }
         self.function.instruction(&WasmInstruction::LocalSet(local));
     }
 

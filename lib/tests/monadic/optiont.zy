@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Ret; /Unit; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Ret; /Unit; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
   def Option (A : VType) =
     data
     | +None : Unit
@@ -13,7 +13,7 @@ begin
   that
   let Return (X : VType) = Ret X that
   let Option' (A : VType) = OptionT Return A that
-  def ! o : Option' Int64 =
+  def ! o : Option' Int =
     comatch
     | .trans => ret +Some(1)
     end

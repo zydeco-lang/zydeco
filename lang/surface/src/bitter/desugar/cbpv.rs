@@ -43,8 +43,8 @@ impl BitterBuilder {
             | IntrinsicRole::Ret => self.ret(prev),
             | IntrinsicRole::Unit => self.unit(prev),
             | IntrinsicRole::Primitive(primitive) => self.primitive(primitive, prev),
-            | IntrinsicRole::ValueInt64(operation) => {
-                Alloc::alloc(self, b::Internal::ValueInt64(operation).into(), prev)
+            | IntrinsicRole::ValueInt(operation) => {
+                Alloc::alloc(self, b::Internal::ValueInt(operation).into(), prev)
             }
         }
     }

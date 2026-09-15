@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Unit; /Int64; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Unit; /Int; /process) : @(import("../../std/builtin.zy")) that
   let Tagged =
     data
     | +First : Unit

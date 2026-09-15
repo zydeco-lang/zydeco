@@ -1,6 +1,6 @@
 -- replace requires the same projected child after its state transition; aliases remain manual.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /memory; builtin) : @(import(
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
   param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr that
@@ -12,9 +12,9 @@ begin
   let Result = @(import("../data/result.zy")) in
   let Error = @(import("layout-error.zy")) in
   let size = @(import("size.zy")) in
-  let compare = @(intrinsic(i64_compare)) in
-  let bits = @(intrinsic(i64_and)) in
-  let sub = @(intrinsic(i64_sub)) in
+  let compare = @(intrinsic(int_compare)) in
+  let bits = @(intrinsic(int_and)) in
+  let sub = @(intrinsic(int_sub)) in
   let Descriptor = (@(import("descriptor.type.zy"))) Addr in
   let codec = (builtin |> (@(import("codec.zy")))) types in
   let Record (Left : VType) (Right : VType) (A : VType) (B : VType) =
@@ -102,7 +102,7 @@ begin
   in
   let val make (Left : VType) (Right : VType) (A : VType) (B : VType)
     (left : Operations Left A) (right : Operations Right B)
-    (left_offset : Int64) (right_offset : Int64) (count : Int64) (alignment : Int64)
+    (left_offset : Int) (right_offset : Int) (count : Int) (alignment : Int)
   :
     Record Left Right A B
   =
@@ -227,20 +227,20 @@ begin
   in
   let val at (Left : VType) (Right : VType) (A : VType) (B : VType)
     (left : Operations Left A) (right : Operations Right B)
-    (left_offset : Int64) (right_offset : Int64) (count : Int64) (alignment : Int64)
+    (left_offset : Int) (right_offset : Int) (count : Int) (alignment : Int)
   : Result (Record Left Right A B) Error =
       let Out = Record Left Right A B in
-      size/bind Int64 Out (size/alignment alignment) (
+      size/bind Int Out (size/alignment alignment) (
         val alignment =>
-          size/bind Int64 Out (size/alignment left/alignment) (
+          size/bind Int Out (size/alignment left/alignment) (
             val la =>
-              size/bind Int64 Out (size/alignment right/alignment) (
+              size/bind Int Out (size/alignment right/alignment) (
                 val ra =>
-                  size/bind Int64 Out (size/add left_offset left/size) (
+                  size/bind Int Out (size/add left_offset left/size) (
                     val le =>
-                      size/bind Int64 Out (size/add right_offset right/size) (
+                      size/bind Int Out (size/add right_offset right/size) (
                         val re =>
-                          size/bind Int64 Out (size/size count) (
+                          size/bind Int Out (size/size count) (
                             val count =>
                               let val valid () : Result Out Error =
                                 +Ok(
@@ -291,12 +291,12 @@ begin
     (left : Operations Left A) (right : Operations Right B)
   : Result (Record Left Right A B) Error =
       let Out = Record Left Right A B in
-      size/bind Int64 Out (size/round_up left/size right/alignment) (
+      size/bind Int Out (size/round_up left/size right/alignment) (
         val offset =>
-          size/bind Int64 Out (size/add offset right/size) (
+          size/bind Int Out (size/add offset right/size) (
             val field_end =>
               let alignment = size/maximum left/alignment right/alignment in
-              size/bind Int64 Out (size/round_up field_end alignment) (
+              size/bind Int Out (size/round_up field_end alignment) (
                 val count =>
                   at Left Right A B left right 0 offset count alignment
               )

@@ -51,7 +51,7 @@ fn documentation_panel_checks_current_examples_and_rejects_stale_requests() {
     let target = json!({ "textDocument": { "uri": uri }, "position": position });
     let view = fixture.view(target.clone());
     assert!(view["sections"][0]["markdown"].as_str().unwrap().contains("Longer explanation."));
-    assert_eq!(view["signature"], "Int64");
+    assert_eq!(view["signature"], "Int");
     assert_eq!(view["examples"].as_array().unwrap().len(), 2);
     for example in [0, 1] {
         let checked = fixture.server.request(

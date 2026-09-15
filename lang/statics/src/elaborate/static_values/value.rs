@@ -33,13 +33,13 @@ impl StaticElaborator<'_, '_> {
                 let function = self.value(function, env, bindings)?;
                 return self.apply(source, function, argument, env, bindings);
             }
-            | Value::Int64Op(Int64ValueOp { operation, operands }) => {
+            | Value::IntOp(IntValueOp { operation, operands }) => {
                 let operands = operands
                     .into_iter()
                     .map(|operand| {
                         let operand = self.value(operand, env, bindings)?.unnamed();
                         if let ValueForm::Runtime(id) = operand.0.form
-                            && let Value::Lit(Literal::Integer(IntegerLiteral::Int64(value))) =
+                            && let Value::Lit(Literal::Integer(IntegerLiteral::Int(value))) =
                                 self.tycker.statics.values[&id]
                         {
                             Ok(value)
@@ -50,7 +50,7 @@ impl StaticElaborator<'_, '_> {
                         }
                     })
                     .collect::<ResultKont<Vec<_>>>()?;
-                let literal = Literal::Integer(IntegerLiteral::Int64(
+                let literal = Literal::Integer(IntegerLiteral::Int(
                     operation.evaluate([operands[0], operands[1]]),
                 ));
                 ValueForm::Runtime(self.alloc_value(source, Value::Lit(literal), ty))

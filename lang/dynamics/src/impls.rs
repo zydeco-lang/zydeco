@@ -94,9 +94,9 @@ pub fn integer_branch(
             ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(second))),
         ) => integer_comparison(first, second, operation),
         | (
-            IntegerType::Int64,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(second))),
+            IntegerType::Int,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(second))),
         ) => integer_comparison(first, second, operation),
         | (
             IntegerType::UInt8,
@@ -114,9 +114,9 @@ pub fn integer_branch(
             ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(second))),
         ) => integer_comparison(first, second, operation),
         | (
-            IntegerType::UInt64,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(second))),
+            IntegerType::UInt,
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt(first))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt(second))),
         ) => integer_comparison(first, second, operation),
         | _ => unreachable!("type-checked integer branch received mismatched values"),
     };
@@ -257,7 +257,7 @@ pub fn str_split_at_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(index))),
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
@@ -303,7 +303,7 @@ pub fn str_get_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
             ZValue::Literal(Literal::String(string)),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(index))),
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
@@ -339,7 +339,7 @@ pub fn char_codepoint(args: Vec<ZValue>) -> Result<ZCompute, i32> {
 pub fn char_from_codepoint_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(codepoint))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(codepoint))),
             when_none @ ZValue::Thunk(_),
             when_some @ ZValue::Thunk(_),
         ] => {
@@ -365,7 +365,8 @@ pub fn str_parse_int_branch(args: Vec<ZValue>) -> Result<ZCompute, i32> {
                 .as_str()
                 .parse::<i64>()
                 .ok()
-                .map(|integer| Literal::Integer(integer.into()).into());
+                .and_then(|integer| IntegerLiteral::new(integer.into()).with_type(IntegerType::Int))
+                .map(|integer| Literal::Integer(integer).into());
             OptionalValueBranch::select(integer, when_none, when_some)
         }
         | _ => unreachable!(""),
@@ -472,7 +473,7 @@ pub fn io_read(
     match args.as_slice() {
         | [
             ZValue::Host(HostValue::Reader(reader)),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(count))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(count))),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
         ] => {
@@ -559,7 +560,7 @@ pub fn io_write_all(
         | [
             ZValue::Host(HostValue::Writer(writer)),
             ZValue::Host(HostValue::Address(address)),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(length))),
+            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(length))),
             when_error @ ZValue::Thunk(_),
             when_success @ ZValue::Thunk(_),
         ] => match host.write_memory(*writer, *address, *length, output, stderr) {
@@ -691,7 +692,7 @@ pub fn write_str(args: Vec<ZValue>, output: &mut dyn Write) -> Result<ZCompute, 
 /// Write an integer to output and then force the provided continuation.
 pub fn write_int(args: Vec<ZValue>, output: &mut dyn Write) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(i))), e @ ZValue::Thunk(..)] => {
+        | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int(i))), e @ ZValue::Thunk(..)] => {
             write!(output, "{i}")
                 .and_then(|_| output.flush())
                 .expect("legacy standard-output write failed");
@@ -740,12 +741,16 @@ pub fn read_line_as_int_branch(
         | [failure @ ZValue::Thunk(_), success @ ZValue::Thunk(_)] => {
             let line = ReaderIo::run(ReaderHandle::STDIN, input, host, Input::line)
                 .expect("legacy standard-input read failed");
-            match line.parse::<i64>() {
-                | Ok(integer) => Ok(app(
+            match line
+                .parse::<i64>()
+                .ok()
+                .and_then(|integer| IntegerLiteral::new(integer.into()).with_type(IntegerType::Int))
+            {
+                | Some(integer) => Ok(app(
                     mk_rc(Force(mk_rc(success.clone().into())).into()),
-                    Literal::Integer(integer.into()).into(),
+                    Literal::Integer(integer).into(),
                 )),
-                | Err(_) => Ok(Force(mk_rc(failure.clone().into())).into()),
+                | None => Ok(Force(mk_rc(failure.clone().into())).into()),
             }
         }
         | _ => unreachable!(""),
@@ -772,11 +777,7 @@ pub fn read_till_eof(
 /// Lookup in the invocation's stable argument sequence; tails are ordinary library computations.
 pub fn arg_at(args: Vec<ZValue>, argv: &[String]) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(index))),
-            when_none,
-            when_some,
-        ] => {
+        | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int(index))), when_none, when_some] => {
             let argument = usize::try_from(*index).ok().and_then(|index| argv.get(index));
             Ok(match argument {
                 | Some(argument) => app(
@@ -796,7 +797,13 @@ pub fn random_int(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [k] => {
             let mut rng = rand::rng();
-            let i = Literal::Integer(rng.random_range(i64::MIN..=i64::MAX).into());
+            let i = Literal::Integer(
+                rng.random_range(
+                    zydeco_syntax::word::RuntimeWord::SIGNED_MIN
+                        ..=zydeco_syntax::word::RuntimeWord::SIGNED_MAX,
+                )
+                .into(),
+            );
             Ok(app(mk_rc(Force(mk_rc(k.clone().into())).into()), i.into()))
         }
         | _ => unreachable!(""),
@@ -806,7 +813,7 @@ pub fn random_int(args: Vec<ZValue>) -> Result<ZCompute, i32> {
 /// Exit evaluation with the provided integer exit code.
 pub fn exit(args: Vec<ZValue>) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(a)))] => Err(*a as i32),
+        | [ZValue::Literal(Literal::Integer(IntegerLiteral::Int(a)))] => Err(*a as i32),
         | _ => unreachable!(""),
     }
 }

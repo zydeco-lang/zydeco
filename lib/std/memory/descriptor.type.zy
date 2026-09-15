@@ -3,10 +3,10 @@ begin
   let VType = @(intrinsic(vtype)) in
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   param Addr : VType in
   fn (A : VType) =>
-      (#size :: Int64) * (#alignment :: Int64)
+      (#size :: Int) * (#alignment :: Int)
     * (#write :: Thk (forall (R : CType) . A -> Addr -> Thk R -> R))
     * (#read :: Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
 end

@@ -24,7 +24,7 @@ impl Fixture {
     fn program(body: &str) -> String {
         let builtin = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
         format!(
-            "param (/OS; /Unit; /Int64; /String; /process; /system) : @(import({:?})) in {body}",
+            "param (/OS; /Unit; /Int; /String; /process; /system) : @(import({:?})) in {body}",
             builtin.to_str().unwrap()
         )
     }
@@ -382,12 +382,17 @@ fn native_run_and_all_backend_tests_share_the_runner() {
 }
 
 #[test]
-fn wasm_random_integers_use_the_host_generator_and_preserve_full_width() {
+fn wasm_random_integers_use_the_host_generator_and_wrap_to_payload_width() {
     let fixture = Fixture::new();
     fixture.write("main.zy", &Fixture::program(
         "! system/random/generate { fn value => ! system/stdio/write_int value { ! process/exit 0 } }",
     ));
-    for value in [i64::MIN, i64::MAX] {
+    for value in [
+        i64::MIN,
+        zydeco_syntax::word::RuntimeWord::SIGNED_MIN,
+        zydeco_syntax::word::RuntimeWord::SIGNED_MAX,
+        i64::MAX,
+    ] {
         fixture.write(
             "random.cjs",
             &format!(
@@ -411,7 +416,49 @@ fn wasm_random_integers_use_the_host_generator_and_preserve_full_width() {
                 )
                 .output()
                 .unwrap();
-            assert_eq!(Fixture::stdout(&output, 0), value.to_string(), "{target}");
+            assert_eq!(
+                Fixture::stdout(&output, 0),
+                zydeco_syntax::word::RuntimeWord::wrap_signed(value).to_string(),
+                "{target}"
+            );
+        }
+    }
+}
+
+#[test]
+fn line_integer_input_accepts_payload_limits_and_rejects_carrier_overflow() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "input.zy",
+        &Fixture::program(
+            r#"
+! system/stdio/read_int
+    { ! system/stdio/write "invalid" { ! process/exit 0 } }
+    { fn value => ! system/stdio/write_int value { ! process/exit 0 } }
+"#,
+        ),
+    );
+    let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime");
+    for target in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+        for (input, expected) in [
+            ("-4611686018427387904", "-4611686018427387904"),
+            ("4611686018427387903", "4611686018427387903"),
+            ("-4611686018427387905", "invalid"),
+            ("4611686018427387904", "invalid"),
+        ] {
+            let mut child = fixture
+                .command(&["run", "input.zy", "-t", target])
+                .arg("-r")
+                .arg(&runtime)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            writeln!(child.stdin.take().unwrap(), "{input}").unwrap();
+            let output = child.wait_with_output().unwrap();
+            assert_eq!(Fixture::stdout(&output, 0), expected, "{target}, {input}");
+            assert!(output.stderr.is_empty());
         }
     }
 }

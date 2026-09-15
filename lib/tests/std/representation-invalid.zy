@@ -1,6 +1,6 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int64;
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int;
     /UInt8; /numeric; /process; builtin) : @(import(std/builtin)) that
   let (/Bytes; /bytes) = builtin |> (@(import("../../std/text/bytes.zy"))) in
   let (/dynamic) = builtin |> (@(import(std/memory))) in
@@ -9,7 +9,7 @@ begin
   let ! rejected (A : VType) (layout : Layout A) (next : Thk OS) : OS =
     ! memory/realize A OS layout next { fn _ => ! fail }
   in
-  let ! bad_alignment (buffer : Bytes) (alignment : Int64) (next : Thk OS) : OS =
+  let ! bad_alignment (buffer : Bytes) (alignment : Int) (next : Thk OS) : OS =
     ! bytes/aligned OS buffer alignment next { fn _ => ! fail }
   in
   do buffer <- ! bytes/from_string "test";
@@ -21,31 +21,31 @@ begin
             {
               ! rejected Unit (memory/padding -1)
                 {
-                  ! rejected Unit (memory/padding -9223372036854775808)
+                  ! rejected Unit (memory/padding -4611686018427387904)
                     {
-                      ! rejected Int64 (memory/align Int64 0 memory/int64)
+                      ! rejected Int (memory/align Int 0 memory/int)
                         {
-                          ! rejected Int64 (memory/align Int64 3 memory/int64)
+                          ! rejected Int (memory/align Int 3 memory/int)
                             {
-                              ! rejected Int64 (memory/align Int64 -8 memory/int64)
+                              ! rejected Int (memory/align Int -8 memory/int)
                                 {
                                   ! rejected (Unit * UInt8)
                                     (
-                                      memory/product Unit UInt8 (memory/padding 9223372036854775807)
+                                      memory/product Unit UInt8 (memory/padding 4611686018427387903)
                                         memory/uint8
                                     )
                                     {
                                       ! rejected Unit (
-                                        memory/align Unit 8 (memory/padding 9223372036854775807)
+                                        memory/align Unit 8 (memory/padding 4611686018427387903)
                                       )
                                         {
                                           -- Maximum size is representable as metadata until rounding or adding overflows.
                                           ! memory/realize Unit OS (
-                                            memory/padding 9223372036854775807
+                                            memory/padding 4611686018427387903
                                           ) fail
                                             {
                                               fn (= L, repr) =>
-                                                ! numeric/int64/eq OS repr/size 9223372036854775807
+                                                ! numeric/int/eq OS repr/size 4611686018427387903
                                                   {
                                                     -- Validation did not modify an aliased input buffer.
                                                     do expected <- ! bytes/from_string "test";

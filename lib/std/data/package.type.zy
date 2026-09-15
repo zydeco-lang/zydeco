@@ -4,7 +4,7 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let Unit = @(intrinsic(unit)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   let Bool = @(import("bool.zy")) in
   let Option = @(import("option.zy")) in
   let Result = @(import("result.zy")) in
@@ -107,7 +107,7 @@ begin
     (Bool : VType)
     (Option : VType -> VType)
     (List : VType -> VType)
-    (Int64 : VType)
+    (Int : VType)
   =
       (#nil :: Thk (forall (A : VType) . Ret (List A)))
     * (#cons :: Thk (forall (A : VType) . A -> List A -> Ret (List A)))
@@ -134,7 +134,7 @@ begin
         )
       )
     * (#reverse :: Thk (forall (A : VType) . List A -> Ret (List A)))
-    * (#length :: Thk (forall (A : VType) . List A -> Ret Int64))
+    * (#length :: Thk (forall (A : VType) . List A -> Ret Int))
     * (#is_empty :: Thk (forall (A : VType) . List A -> Ret Bool))
     * (#head :: Thk (forall (A : VType) . List A -> Ret (Option A)))
     * (
@@ -144,7 +144,7 @@ begin
       )
     * (
         #get :: Thk (
-          forall (A : VType) . List A -> Int64 -> Ret (Option A)
+          forall (A : VType) . List A -> Int -> Ret (Option A)
         )
       )
   in
@@ -158,5 +158,5 @@ begin
       (#bool :: BoolModule Bool)
     * (#option :: OptionModule Bool Option)
     * (#result :: ResultModule Bool Result)
-    * (#list :: ListModule Bool Option List Int64)
+    * (#list :: ListModule Bool Option List Int)
 end

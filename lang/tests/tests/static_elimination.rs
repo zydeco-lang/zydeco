@@ -13,15 +13,15 @@ struct ResidualValues<'a> {
 #[test]
 fn calculated_values_leave_only_literals_in_the_residual_program() {
     let source = r#"
-let add = @(intrinsic(i64_add)) in
-let sub = @(intrinsic(i64_sub)) in
+let add = @(intrinsic(int_add)) in
+let sub = @(intrinsic(int_sub)) in
 let result = match add 12 4 | 16 => sub 16 16 | _ => 1 end in
 ! exit result
 "#;
     let (statics, root) = SourceCase::checked_arena(source).unwrap();
     assert!(LintChecker::new(&statics).validate(root).is_empty());
     assert!(statics.values.iter().any(|(_, node)| matches!(node, Value::Match(_))));
-    assert!(statics.values.iter().any(|(_, node)| matches!(node, Value::Int64Op(_))));
+    assert!(statics.values.iter().any(|(_, node)| matches!(node, Value::IntOp(_))));
     let Some(TermAnnId::Compu(root, _)) = statics.static_elaboration.as_ref().unwrap().residual
     else {
         panic!("calculation has an executable residual")
@@ -31,7 +31,7 @@ let result = match add 12 4 | 16 => sub 16 16 | _ => 1 end in
     reachable.computation(root);
     assert!(reachable.values.iter().any(|value| matches!(
         statics.values[value],
-        Value::Lit(Literal::Integer(IntegerLiteral::Int64(0)))
+        Value::Lit(Literal::Integer(IntegerLiteral::Int(0)))
     )));
 }
 
@@ -40,11 +40,11 @@ fn known_named_witnesses_bind_the_payload_type_during_static_elimination() {
     let source = r#"
 let Package = exists (= Stored : VType) . (#value :: Stored) in
 let val package (A : VType) (value : A) : Package = (#Stored = A, #value = value) in
-let (= Stored, payload) = package Int64 0 in
+let (= Stored, payload) = package Int 0 in
 let consume : Thk (Stored -> Ret Stored) = { fn value => ret value } in
 do _ <- ! consume payload/value;
 let val identity ((#item = A) : (#item :: VType)) (value : A) : A = value in
-! exit (identity (#item = Int64) 0)
+! exit (identity (#item = Int) 0)
 "#;
     SourceCase::assert_accepted(SourceCase::check_linted(source));
     SourceCase::assert_accepted(SourceCase::run(source));
@@ -53,10 +53,10 @@ let val identity ((#item = A) : (#item :: VType)) (value : A) : A = value in
 
 #[test]
 fn pack_preserves_named_type_arguments_for_both_disclosed_and_sealed_evidence() {
-    for evidence in ["(= Item as Int64 : VType)", "(= Item : VType) is Int64"] {
+    for evidence in ["(= Item as Int : VType)", "(= Item : VType) is Int"] {
         let source = format!(
             r#"
-let package = pack {evidence} where #value = (0 : Int64) end in
+let package = pack {evidence} where #value = (0 : Int) end in
 let (= Item, fields) = package in
 let val keep (A : VType) (value : Unit) : Unit = value in
 let _ = keep Item () in
@@ -91,7 +91,7 @@ impl ResidualValues<'_> {
             return;
         }
         match self.statics.values[&value].clone() {
-            | Value::ValAbs(_) | Value::ValApp(_) | Value::Match(_) | Value::Int64Op(_) => {
+            | Value::ValAbs(_) | Value::ValApp(_) | Value::Match(_) | Value::IntOp(_) => {
                 panic!("a static value operation survived static elimination")
             }
             | Value::Named(Named(_, inner))
@@ -159,7 +159,7 @@ fn static_composition_shares_runtime_values_and_retains_source_facts() {
     let source = r#"
 begin
   let val duplicate (A : VType) (value : A) : A * A = (value, value) that
-  let pair = duplicate (Thk (Ret Int64)) { ret 0 } that
+  let pair = duplicate (Thk (Ret Int)) { ret 0 } that
   let (first, second) = pair that
   do left <- ! first;
   do right <- ! second;
@@ -203,14 +203,14 @@ end
 fn static_arguments_and_results_can_be_functions_and_packages() {
     let source = r#"
 begin
-  let Transform = val pi (_ : Int64) . Int64 that
+  let Transform = val pi (_ : Int) . Int that
   let val keep (A : VType) (value : A) : A = value that
   let val twice (function : Transform) : Transform =
-    val (value : Int64) => function (function value)
+    val (value : Int) => function (function value)
   that
   let Package = exists (A : VType) . (val pi (_ : A) . A) * A that
   let val forward (package : Package) : Package = package that
-  let package : Package = (Int64, twice (keep Int64), 0) that
+  let package : Package = (Int, twice (keep Int), 0) that
   let (A, transform, value) = forward package that
   let transformed : A = transform value that
   ! exit 0
@@ -232,8 +232,8 @@ in
     let source = format!(
         r#"{factory}
 let units = factory Unit Unit in
-let integers = factory Int64 Int64 in
-let discard = factory Int64 Unit in
+let integers = factory Int Int in
+let discard = factory Int Unit in
 let unit = units/wrap (Ret Unit) {{ fn value => ret value }} in
 let integer = integers/wrap OS {{ fn value => ret value }} in
 let ignore = discard/wrap OS {{ fn value => ret () }} in
@@ -248,7 +248,7 @@ do code <- ! integer 0;
     SourceCase::assert_accepted(SourceCase::lower(&source));
     SourceCase::assert_rejected(
         SourceCase::check(&format!(
-            "{factory} let discard = factory Int64 Unit in \
+            "{factory} let discard = factory Int Unit in \
              let broken = discard/wrap OS {{ fn value => ret value }} in ! exit 0"
         )),
         TyckDiagnosticCode::TypeMismatch,
@@ -266,13 +266,13 @@ begin
   let unbox : Thk (pi ((A, _) : Box) . Ret A) = {
     fn ((A, value) : Box) => ret value
   } that
-  let direct : Box = (Int64, 0) that
+  let direct : Box = (Int, 0) that
   let forwarded = keep Box direct that
-  let value : Int64 = take forwarded that
-  let constructed = box Int64 value that
+  let value : Int = take forwarded that
+  let constructed = box Int value that
   let fields = (#box = keep Box constructed, #other = ()) that
-  let selected : Int64 = take fields/box that
-  do status <- ! unbox (keep Box (box Int64 selected));
+  let selected : Int = take fields/box that
+  do status <- ! unbox (keep Box (box Int selected));
   ! exit status
 end
 "#;
@@ -288,8 +288,8 @@ begin
   let Box = exists (A : VType) . A that
   let val keep (A : VType) (value : A) : A = value that
   let val pair ((A, first) : Box, (B, second) : Box) : A * B = (first, second) that
-  let arguments = keep (Box * Box) ((Int64, 0), (Unit, ())) that
-  let result : Int64 * Unit = pair arguments that
+  let arguments = keep (Box * Box) ((Int, 0), (Unit, ())) that
+  let result : Int * Unit = pair arguments that
   let (status, _) = result that
   ! exit status
 end
@@ -304,13 +304,13 @@ fn witness_inspection_keeps_runtime_constructor_payloads_opaque() {
     let source = r#"
 begin
   let Box = exists (A : VType) . A that
-  let Wrapped = data | +Wrap : Int64 end that
+  let Wrapped = data | +Wrap : Int end that
   let val box (wrapped : Wrapped) : Box =
-    let +Wrap(value) = wrapped in (Int64, value)
+    let +Wrap(value) = wrapped in (Int, value)
   that
   let val take ((A, value) : Box) : A = value that
   do wrapped <- ret (+Wrap(0) : Wrapped);
-  let status : Int64 = take (box wrapped) in
+  let status : Int = take (box wrapped) in
   ! exit status
 end
 "#;
@@ -344,7 +344,7 @@ begin
   let unbox : Thk (pi ((A, _) : Box) . Ret A) = {{
     fn ((A, value) : Box) => ret value
   }} that
-  let consumer : Thk (Box -> Ret Int64) = {{
+  let consumer : Thk (Box -> Ret Int) = {{
     fn (hidden : Box) => {use_package}
   }} that
   ! exit 0
@@ -365,9 +365,9 @@ fn specialization_keeps_type_arguments_and_lexical_captures_distinct() {
 begin
   let val suspend (A : VType) (value : A) : Thk (Ret A) = { ret value } that
   do captured <- ret 0;
-  let integer = suspend Int64 captured in
+  let integer = suspend Int captured in
   let unit = suspend Unit () in
-  let captured : Int64 = 1 in
+  let captured : Int = 1 in
   do ignored <- ! unit;
   do status <- ! integer;
   ! exit status
@@ -404,12 +404,12 @@ fn runtime_boundaries_reject_static_requirements_consistently() {
 #[test]
 fn aliases_of_partial_value_applications_preserve_bound_arguments() {
     let source = r#"
-let val pair (a : Int64) (b : Int64) : Int64 * Int64 = (a, b) in
+let val pair (a : Int) (b : Int) : Int * Int = (a, b) in
 let partial = pair 1 in
 let alias = partial in
 let (a, b) = alias 2 in
-! int64/eq OS a 1 {
-  ! int64/eq OS b 2 { ! exit 0 } { ! exit 41 }
+! int/eq OS a 1 {
+  ! int/eq OS b 2 { ! exit 0 } { ! exit 41 }
 } { ! exit 42 }
 "#;
     SourceCase::assert_accepted(SourceCase::check_linted(source));
@@ -420,10 +420,10 @@ let (a, b) = alias 2 in
 #[test]
 fn exponentially_composed_value_functions_reach_the_static_reduction_limit() {
     for depth in [10, 16, 20] {
-        let mut source = "let val g0 (x : Int64) : Int64 = x in\n".to_owned();
+        let mut source = "let val g0 (x : Int) : Int = x in\n".to_owned();
         source.extend((1..=depth).map(|level| {
             let previous = level - 1;
-            format!("let val g{level} (x : Int64) : Int64 = g{previous} (g{previous} x) in\n")
+            format!("let val g{level} (x : Int) : Int = g{previous} (g{previous} x) in\n")
         }));
         source += &format!("let result = g{depth} 0 in ! exit result");
         if depth == 10 {

@@ -1,7 +1,8 @@
 -- Array handles contain one address. Builders additionally retain the initialized-prefix count.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /numeric; /memory; builtin) :
-  @(import("../builtin.zy")) that
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+    "../builtin.zy"
+  )) that
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
   let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
   let Alloc = (@(import("allocator.type.zy"))) Addr in
@@ -10,7 +11,7 @@ begin
   let Result = @(import("../data/result.zy")) in
   let size = @(import("size.zy")) in
   let indexed = (builtin |> (@(import("indexed.zy")))) types in
-  let int = numeric/int64 in
+  let int = numeric/int in
   def Contents (A : VType) : VType =
     data
     | +Nil : Unit
@@ -19,12 +20,12 @@ begin
   that
   let Array (Element : VType) (A : VType) =
     exists (= L : VType) (= Build : VType) (= Values : VType) .
-        (#capacity :: Int64)
+        (#capacity :: Int)
       * (#contents :: Operations L Values)
       * (
           #values ::
-            (#generate :: Thk (Thk (Int64 -> Ret A) -> Ret Values))
-          * (#at :: Thk (Values -> Int64 -> Ret (Result A Fault)))
+            (#generate :: Thk (Thk (Int -> Ret A) -> Ret Values))
+          * (#at :: Thk (Values -> Int -> Ret (Result A Fault)))
         )
       * (
           #elements :: (
@@ -33,7 +34,7 @@ begin
             * (
                 #at :: Thk (
                   forall (S : VType) (R : CType) .
-                    Ptr L S -> Int64 -> Thk (Fault -> R) -> Thk (Ptr Element S -> R) -> R
+                    Ptr L S -> Int -> Thk (Fault -> R) -> Thk (Ptr Element S -> R) -> R
                 )
               )
             * (
@@ -46,7 +47,7 @@ begin
                   forall (R : CType) .
                        Ptr L Uninit
                     -> Thk (
-                         Int64 -> Ptr Element Uninit -> Thk (
+                         Int -> Ptr Element Uninit -> Thk (
                            Fault -> Ptr Element Uninit -> R
                          ) -> Thk (Ptr Element Init -> R) -> R
                        )
@@ -60,8 +61,8 @@ begin
             #unsafe ::
               (#start :: Thk (Ptr L Uninit -> Ret Build))
             * (#resume :: Thk (Ptr L Init -> Ret Build))
-            * (#length :: Thk (Build -> Ret Int64))
-            * (#prefix :: Thk (Build -> Ret (Ptr Element Init * Int64)))
+            * (#length :: Thk (Build -> Ret Int))
+            * (#prefix :: Thk (Build -> Ret (Ptr Element Init * Int)))
             * (
                 #push :: Thk (
                   forall (R : CType) . Build -> A -> Thk (Fault -> R) -> Thk (Build -> R) -> R
@@ -82,11 +83,11 @@ begin
         )
   in
   let val make (Element : VType) (A : VType) (element : Operations Element A)
-    (capacity : Int64) (count : Int64) (alignment : Int64)
+    (capacity : Int) (count : Int) (alignment : Int)
   : Array Element A =
-      let Build = Addr * Int64 in
+      let Build = Addr * Int in
       let Values = Contents A in
-      let fix write (R : CType) (base : Addr) (index : Int64) (values : Values) (done : Thk R) : R =
+      let fix write (R : CType) (base : Addr) (index : Int) (values : Values) (done : Thk R) : R =
         match values
         | +Nil(_) => ! done
         | +Cons(head, tail) =>
@@ -99,7 +100,7 @@ begin
           }
         end
       in
-      let fix read (R : CType) (base : Addr) (index : Int64) (yes : Thk (Values -> R)) : R =
+      let fix read (R : CType) (base : Addr) (index : Int) (yes : Thk (Values -> R)) : R =
         ! int/eq R index capacity { ! yes +Nil() } {
           do displacement <- ! int/mul index element/size;
           do address <- ! memory/offset base displacement;
@@ -148,7 +149,7 @@ begin
           #values = (
             #generate = {
               fn generate =>
-                let fix loop (index : Int64) : Ret Values =
+                let fix loop (index : Int) : Ret Values =
                   ! int/eq (Ret Values) index capacity { ret +Nil() } {
                     do head <- ! generate index;
                     do next <- ! int/add index 1;
@@ -160,7 +161,7 @@ begin
             },
             #at = {
               fn values index =>
-                let fix loop (values : Values) (index : Int64) : Ret (Result A Fault) =
+                let fix loop (values : Values) (index : Int) : Ret (Result A Fault) =
                   match values
                   | +Nil(_) => ret +Err(+Bounds())
                   | +Cons(head, tail) =>
@@ -193,7 +194,7 @@ begin
               #init_each = {
                 fn R pointer fill no yes =>
                   let base = unsafe/address Unit Uninit pointer in
-                  let fix loop (index : Int64) : R =
+                  let fix loop (index : Int) : R =
                     ! int/eq R index capacity { ! yes (unsafe/from_address Unit Init base) } {
                       do displacement <- ! int/mul index element/size;
                       do address <- ! memory/offset base displacement;
@@ -260,16 +261,16 @@ begin
       )
   in
   let val make_fixed (Element : VType) (A : VType) (element : Operations Element A)
-    (capacity : Int64) (boundary : Int64)
+    (capacity : Int) (boundary : Int)
   : Result (Array Element A) Error =
-      size/bind Int64 (Array Element A) (size/alignment element/alignment) (
+      size/bind Int (Array Element A) (size/alignment element/alignment) (
         val natural =>
-          size/bind Int64 (Array Element A) (size/alignment boundary) (
+          size/bind Int (Array Element A) (size/alignment boundary) (
             val boundary =>
-              size/bind Int64 (Array Element A) (size/multiply element/size capacity) (
+              size/bind Int (Array Element A) (size/multiply element/size capacity) (
                 val bytes =>
                   let alignment = size/maximum natural boundary in
-                  size/bind Int64 (Array Element A) (size/round_up bytes alignment) (
+                  size/bind Int (Array Element A) (size/round_up bytes alignment) (
                     val count =>
                       +Ok(make Element A element capacity count alignment)
                   )
@@ -277,7 +278,7 @@ begin
           )
       )
   in
-  let fix power_of_two (R : CType) (value : Int64) (no : Thk R) (yes : Thk R) : R =
+  let fix power_of_two (R : CType) (value : Int) (no : Thk R) (yes : Thk R) : R =
     ! int/lt R value 1 no {
       ! int/eq R value 1 yes {
         do remainder <- ! int/mod value 2;
@@ -290,7 +291,7 @@ begin
   in
   let dynamic : Thk (
     forall (Element : VType) (A : VType) (R : CType) .
-      Operations Element A -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk (Array Element A -> R) -> R
+      Operations Element A -> Int -> Int -> Thk (Fault -> R) -> Thk (Array Element A -> R) -> R
   ) = {
     fn Element A R element capacity boundary no yes =>
       let invalid = { ! no +InvalidLayout() } in
@@ -298,16 +299,16 @@ begin
         ! int/lt R element/size 0 invalid {
           ! power_of_two R element/alignment invalid {
             ! power_of_two R boundary invalid {
-              do alignment <- ! int/gt (Ret Int64) boundary element/alignment { ret boundary } {
+              do alignment <- ! int/gt (Ret Int) boundary element/alignment { ret boundary } {
                 ret element/alignment
               };
               let bytes = {
-                fn (count : Int64) =>
+                fn (count : Int) =>
                   do remainder <- ! int/mod count alignment;
                   ! int/eq R remainder 0 { ! yes (make Element A element capacity count alignment) }
                     {
                       do padding <- ! int/sub alignment remainder;
-                      do limit <- ! int/sub 9223372036854775807 padding;
+                      do limit <- ! int/sub 4611686018427387903 padding;
                       ! int/gt R count limit { ! no +Overflow() } {
                         do rounded <- ! int/add count padding;
                         ! yes (make Element A element capacity rounded alignment)
@@ -315,7 +316,7 @@ begin
                     }
               } in
               ! int/eq R element/size 0 { ! bytes 0 } {
-                do maximum <- ! int/div 9223372036854775807 element/size;
+                do maximum <- ! int/div 4611686018427387903 element/size;
                 ! int/gt R capacity maximum { ! no +Overflow() } {
                   do count <- ! int/mul capacity element/size;
                   ! bytes count

@@ -1,22 +1,22 @@
 -- Shared bounds and displacement checks for layout-bound counted views and arrays.
 -- The caller guarantees allocation extent, element stride, state, and alias validity.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /numeric; /memory; builtin) : @(import(
+  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
   param val (/Uninit; /Init; /Ptr; /unsafe) : (@(import("types.type.zy"))) Addr in
   let Fault = @(import("fault.zy")) in
-  let int = numeric/int64 in
+  let int = numeric/int in
   let at : Thk (
     forall (L : VType) (S : VType) (R : CType) .
-      Int64 -> Ptr L S -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
+      Int -> Ptr L S -> Int -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
   ) = {
     fn L S R stride pointer count index no yes =>
       ! int/lt R stride 0 { ! no +InvalidLayout() } {
         ! int/lt R index 0 { ! no +Bounds() } {
           ! int/lt R index count {
             ! int/eq R stride 0 { ! yes pointer } {
-              do maximum <- ! int/div 9223372036854775807 stride;
+              do maximum <- ! int/div 4611686018427387903 stride;
               ! int/gt R index maximum { ! no +Overflow() } {
                 do offset <- ! int/mul index stride;
                 do address <- ! memory/offset (unsafe/address L S pointer) offset;

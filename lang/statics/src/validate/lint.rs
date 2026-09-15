@@ -675,7 +675,7 @@ impl<'a> LintChecker<'a> {
                 )
                 .filter_map(|node| self.require(referenced_by, node))
                 .collect(),
-            | Value::Int64Op(Int64ValueOp { operands, .. }) => operands
+            | Value::IntOp(IntValueOp { operands, .. }) => operands
                 .iter()
                 .filter_map(|operand| self.require(referenced_by, LintNode::Value(*operand)))
                 .collect(),

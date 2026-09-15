@@ -55,12 +55,12 @@ fn types_are_label_details_and_plain_detail_fallbacks_not_inserted_text() {
         let [item] = items.as_slice() else { panic!("one prefix-matching name") };
         assert_eq!(item.label, "value");
         assert_eq!(item.kind, Some(CompletionItemKind::VARIABLE));
-        assert_eq!(item.detail.as_deref(), Some("Int64"));
+        assert_eq!(item.detail.as_deref(), Some("Int"));
         assert_eq!(item.filter_text.as_deref(), Some("value"));
         assert_eq!(item.insert_text_format, None);
         assert_eq!(
             item.label_details.as_ref().and_then(|details| details.detail.as_deref()),
-            label_details.then_some(" : Int64"),
+            label_details.then_some(" : Int"),
         );
         assert_eq!(fixture.apply(item), "let value = 1 in value");
     }
@@ -92,7 +92,7 @@ fn completion_does_not_reuse_shadowed_documentation() {
 
 #[test]
 fn type_definitions_share_classification_with_semantic_highlighting() {
-    let fixture = Fixture::new("let Number = @[intrinsic(i64)] _ in Nu¦mber");
+    let fixture = Fixture::new("let Number = @[intrinsic(int)] _ in Nu¦mber");
     let items = fixture.items(true).unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].kind, Some(CompletionItemKind::CLASS));
@@ -134,20 +134,20 @@ fn sorting_preserves_compiler_order_and_shadowed_names_appear_once() {
 #[test]
 fn expected_types_order_equal_names_and_omit_rigid_mismatches() {
     let fixture = Fixture::new(
-        "let matching = 1 in let other = 'x' in val unknown => (_¦ : @[intrinsic(i64)] _)",
+        "let matching = 1 in let other = 'x' in val unknown => (_¦ : @[intrinsic(int)] _)",
     );
     let items = fixture.items(true).unwrap();
     assert_eq!(
         items.iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),
         ["matching", "unknown"]
     );
-    assert_eq!(items[0].detail.as_deref(), Some("Int64"));
+    assert_eq!(items[0].detail.as_deref(), Some("Int"));
     assert!(items.windows(2).all(|pair| pair[0].sort_text < pair[1].sort_text));
 }
 
 #[test]
 fn exact_prefix_quality_precedes_expected_type_evidence() {
-    let fixture = Fixture::new("let item_equal = 1 in val item => (item¦ : @[intrinsic(i64)] _)");
+    let fixture = Fixture::new("let item_equal = 1 in val item => (item¦ : @[intrinsic(int)] _)");
     let items = fixture.items(true).unwrap();
     assert_eq!(
         items.iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),

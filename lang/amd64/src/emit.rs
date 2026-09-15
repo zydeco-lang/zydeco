@@ -431,7 +431,7 @@ impl<'e> Emitter<'e> {
         }
     }
 
-    fn emit_foreign_call(&mut self, id: ProgId, import: &ForeignImport) {
+    fn emit_foreign_call(&mut self, import: &ForeignImport) {
         assert_eq!(import.target.abi, ForeignAbi::C);
         let arguments = import.signature.arguments().collect::<Vec<_>>();
         let scratch_words = arguments.len();
@@ -492,8 +492,8 @@ impl<'e> Emitter<'e> {
         self.emit_aligned_call(JmpArgs::Label(self.foreign_symbol(&import.target.symbol)));
         self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R12, Arg64::Reg(Reg::Rax))));
 
-        // Discard all raw scratch words before the allocation safe point. R12 holds
-        // unboxed scalar bits, not a GC root, and is callee-saved across the allocation.
+        // Discard raw scratch words before resuming source code. R12 holds the C result
+        // across stack cleanup; integer encoding range-checks the tagged payload.
         let consumed_words = scratch_words + import.signature.parameters().len();
         if consumed_words != 0 {
             self.asm.text.push(Instr::Add(BinArgs::ToReg(
@@ -507,12 +507,6 @@ impl<'e> Emitter<'e> {
                 self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(1))));
             }
             | ForeignResult::Integer(integer) => {
-                if integer.bits() == 64 {
-                    self.emit_alloc_call(1, AllocationKind::Opaque, id);
-                    self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))));
-                } else {
-                    self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Signed(0))));
-                }
                 self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R12))));
                 self.emit_aligned_call(JmpArgs::Label(format!(
                     "zydeco_ffi_encode_{}",
@@ -539,7 +533,6 @@ impl Emitter<'_> {
         self.asm.text.extend([
             Instr::Extern(entry.guard.to_string()),
             Instr::Extern(EXPORT_ENTRY_SYMBOL.into()),
-            Instr::Extern("zydeco_entry_box".into()),
             Instr::Extern("zydeco_entry_end".into()),
             Instr::Global(symbol.clone()),
             Instr::Label(symbol),
@@ -578,19 +571,12 @@ impl Emitter<'_> {
             let ForeignParameter::Integer(integer) = parameter else {
                 panic!("checked C export has a non-invertible parameter")
             };
-            if integer.bits() == 64 {
-                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rsp))));
-                self.emit_aligned_call(JmpArgs::Label("zydeco_entry_box".into()));
-                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Reg(Reg::Rax))));
-            } else {
-                self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rsi, Arg64::Unsigned(0))));
-            }
             self.asm.text.push(Instr::Mov(MovArgs::ToReg(
                 Reg::Rdi,
                 Arg64::Mem(MemRef { reg: Reg::R13, offset: (index * WORD_BYTES) as i32 }),
             )));
             // The shared encoder accepts a raw Word and explicitly truncates it to the
-            // declared width, so unspecified upper argument bits never enter tagged values.
+            // C carrier width, then range-checks Int/UInt before constructing tagged values.
             self.emit_aligned_call(JmpArgs::Label(format!(
                 "zydeco_ffi_encode_{}",
                 integer.source_name()
@@ -969,7 +955,7 @@ impl<'a> Emit<'a> for Terminator {
                 }
             }
             | Terminator::Extern(sa::Extern::Foreign(import)) => {
-                em.emit_foreign_call(id, import);
+                em.emit_foreign_call(import);
             }
             | Terminator::Extern(sa::Extern::Unit(import)) => {
                 em.asm

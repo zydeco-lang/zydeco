@@ -3576,17 +3576,16 @@ mod tests {
 
     #[test]
     fn compacts_manifest_existentials_when_grouping_is_semantically_transparent() {
-        let parsed =
-            ParsedSource::new("exists (#Counter = ((Counter as Int64) : VType)) . Counter");
+        let parsed = ParsedSource::new("exists (#Counter = ((Counter as Int) : VType)) . Counter");
 
         assert_eq!(
             parsed.render(LayoutIntentions::Ignore),
-            "exists (= Counter as Int64 : VType) . Counter\n"
+            "exists (= Counter as Int : VType) . Counter\n"
         );
         let reparsed = ParsedSource::new(&parsed.render(LayoutIntentions::Ignore));
         assert_eq!(
             reparsed.render(LayoutIntentions::Ignore),
-            "exists (= Counter as Int64 : VType) . Counter\n"
+            "exists (= Counter as Int : VType) . Counter\n"
         );
     }
 
@@ -3683,7 +3682,7 @@ mod tests {
         let source = concat!(
             "begin\n",
             "  param (\n",
-            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /String; /OS; /int64; /string; /stdio; /process) :\n",
+            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :\n",
             "    @(import(\"package.zy\"))\n",
             "  ) that\n",
             "  _\n",
@@ -3696,20 +3695,8 @@ mod tests {
             formatted,
             concat!(
                 "begin\n",
-                "  param (\n",
-                "    /VType;\n",
-                "    /CType;\n",
-                "    /Thk;\n",
-                "    /Ret;\n",
-                "    /Unit;\n",
-                "    /Int64;\n",
-                "    /String;\n",
-                "    /OS;\n",
-                "    /int64;\n",
-                "    /string;\n",
-                "    /stdio;\n",
-                "    /process\n",
-                "  ) : @(import(\"package.zy\")) that\n",
+                "  param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /int; /string; /stdio; /process) :\n",
+                "  @(import(\"package.zy\")) that\n",
                 "  _\n",
                 "end\n",
             )
@@ -3734,7 +3721,7 @@ mod tests {
         let source = concat!(
             "begin\n",
             "  param (\n",
-            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /Float64; /Char; /String; /Addr; /Access; /Reader; /Writer; /OS) :\n",
+            "    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Float64; /Char; /String; /Addr; /Access; /Reader; /Writer; /OS) :\n",
             "    @(import(\"package.zy\"))\n",
             "  ) in\n",
             "  _\n",
@@ -3906,14 +3893,14 @@ mod tests {
             ),
             (
                 concat!(
-                    "def ! height (tree : Avl A) : Ret Int64 = match tree\n",
+                    "def ! height (tree : Avl A) : Ret Int = match tree\n",
                     "| +Leaf() => ret 0\n",
                     "| +Node(/tree_height) => ret tree_height\n",
                     "end that\n",
                     "height",
                 ),
                 concat!(
-                    "def ! height (tree : Avl A) : Ret Int64 =\n",
+                    "def ! height (tree : Avl A) : Ret Int =\n",
                     "  match tree\n",
                     "  | +Leaf() => ret 0\n",
                     "  | +Node(/tree_height) => ret tree_height\n",
@@ -4533,13 +4520,13 @@ mod tests {
         let cases = [
             // A hand-wrapped application rejoins when its compact form fits.
             (
-                "! (bool/if)\n  (Ret Int64)\n  greater\n  { ret left }\n  { ret right }",
-                "! bool/if (Ret Int64) greater { ret left } { ret right }\n",
+                "! (bool/if)\n  (Ret Int)\n  greater\n  { ret left }\n  { ret right }",
+                "! bool/if (Ret Int) greater { ret left } { ret right }\n",
             ),
             // A blank line still partitions the argument rows and survives.
             (
-                "! (bool/if)\n  (Ret Int64)\n\n  greater\n  { ret left }\n  { ret right }",
-                "! bool/if (Ret Int64)\n\n  greater { ret left } { ret right }\n",
+                "! (bool/if)\n  (Ret Int)\n\n  greater\n  { ret left }\n  { ret right }",
+                "! bool/if (Ret Int)\n\n  greater { ret left } { ret right }\n",
             ),
             // A single infix break rejoins; a blank line keeps the hanging form.
             ("A *\nB", "A * B\n"),
@@ -4574,24 +4561,24 @@ mod tests {
             (
                 concat!(
                     "@[format(layout(ignore))] ! (bool/if)\n",
-                    "  (Ret Int64)\n",
+                    "  (Ret Int)\n",
                     "  greater\n",
                     "  { ret left }\n",
                     "  { ret right }\n",
                 ),
-                "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n",
+                "@[format(layout(ignore))] ! bool/if (Ret Int) greater { ret left } { ret right }\n",
             ),
             (
                 concat!(
                     "@[format(layout(blank_lines))] ! (bool/if)\n",
-                    "  (Ret Int64)\n",
+                    "  (Ret Int)\n",
                     "\n",
                     "  greater\n",
                     "  { ret left }\n",
                     "  { ret right }\n",
                 ),
                 concat!(
-                    "@[format(layout(blank_lines))] ! bool/if (Ret Int64)\n",
+                    "@[format(layout(blank_lines))] ! bool/if (Ret Int)\n",
                     "\n",
                     "  greater { ret left } { ret right }\n",
                 ),
@@ -4641,10 +4628,10 @@ mod tests {
     fn format_annotations_scope_line_width() {
         let cases = [
             (
-                "@[format(width(24))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+                "@[format(width(24))] ! (bool/if) (Ret Int) greater { ret left } { ret right }\n",
                 concat!(
                     "@[format(width(24))]\n",
-                    "! bool/if (Ret Int64)\n",
+                    "! bool/if (Ret Int)\n",
                     "  greater { ret left } {\n",
                     "  ret right\n",
                     "}\n",
@@ -4654,7 +4641,7 @@ mod tests {
                 concat!(
                     "@[format(width(20))] ! (bool/if)\n",
                     "\n",
-                    "  (Ret Int64)\n",
+                    "  (Ret Int)\n",
                     "  greater\n",
                     "  { ret left }\n",
                     "  { ret right }\n",
@@ -4663,7 +4650,7 @@ mod tests {
                     "@[format(width(20))]\n",
                     "! bool/if\n",
                     "\n",
-                    "  (Ret Int64)\n",
+                    "  (Ret Int)\n",
                     "  greater\n",
                     "  { ret left }\n",
                     "  { ret right }\n",
@@ -4688,7 +4675,7 @@ mod tests {
     fn format_annotations_compose_innermost_first() {
         let source = concat!(
             "@[format(width(24))] @[format(layout(ignore))] ! (bool/if)\n",
-            "  (Ret Int64)\n",
+            "  (Ret Int)\n",
             "  greater\n",
             "  { ret left }\n",
             "  { ret right }\n",
@@ -4696,7 +4683,7 @@ mod tests {
         let expected = concat!(
             "@[format(width(24))]\n",
             "@[format(layout(ignore))]\n",
-            "! bool/if (Ret Int64)\n",
+            "! bool/if (Ret Int)\n",
             "  greater { ret left } {\n",
             "  ret right\n",
             "}\n",
@@ -4714,19 +4701,19 @@ mod tests {
     fn format_annotations_scope_whole_annotated_terms() {
         let source = concat!(
             "@[format(layout(ignore))] ! (bool/if)\n",
-            "  (Ret Int64)\n",
+            "  (Ret Int)\n",
             "  greater\n",
             "  { ret left }\n",
             "  { ret right }\n",
             "* ! (other/if)\n",
-            "  (Ret Int64)\n",
+            "  (Ret Int)\n",
             "  other\n",
             "  { ret a }\n",
             "  { ret b }\n",
         );
         let expected = concat!(
-            "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right } * ! other/if (\n",
-            "  Ret Int64\n",
+            "@[format(layout(ignore))] ! bool/if (Ret Int) greater { ret left } { ret right } * ! other/if (\n",
+            "  Ret Int\n",
             ") other { ret a } { ret b }\n",
         );
         let parsed = ParsedSource::new(source);

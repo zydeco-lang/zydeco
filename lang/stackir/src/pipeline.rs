@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn known_addition_aliases_inline_calls_and_their_return_continuation() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add);
+        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let alias = fixture.def("alias");
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn an_escaping_primitive_keeps_its_interface_but_its_body_is_inline_arithmetic() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add);
+        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let result = fixture.def("result");
@@ -377,13 +377,13 @@ mod tests {
         );
         assert!(arena.values.iter().any(|(_, value)| matches!(
             value,
-            low::Value::Literal(Literal::Integer(IntegerLiteral::Int64(23)))
+            low::Value::Literal(Literal::Integer(IntegerLiteral::Int(23)))
         )));
     }
 
     #[test]
     fn repeated_uses_share_one_inline_primitive_result() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add);
+        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
         let mut fixture = PrimitiveFixture::default();
         let input = fixture.def("input");
         let result = fixture.def("result");
@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn unknown_arithmetic_callees_keep_runtime_dispatch() {
-        let role = BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add);
+        let role = BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add);
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let thunk = fixture.build(operation);

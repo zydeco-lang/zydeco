@@ -1,32 +1,32 @@
 -- Data constructors treat a named tuple as an ordinary payload type.
 begin
-  param (/Unit; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  param (/Unit; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
   def Packet =
     data
     | +Packet : (
-      #tag :: Int64
-    ) * Int64 * (#payload :: Int64)
+      #tag :: Int
+    ) * Int * (#payload :: Int)
     | +Empty : Unit
     end
   that
   def packet : Packet = +Packet(
-    #tag = 7 : Int64,
-    8 : Int64,
-    #payload = 9 : Int64
+    #tag = 7 : Int,
+    8 : Int,
+    #payload = 9 : Int
   ) that
 
   match packet
   | +Packet(
-    = tag : Int64,
-    body : Int64,
-    = payload : Int64
+    = tag : Int,
+    body : Int,
+    = payload : Int
   ) =>
-    do tag_check <- ! int64/sub tag 7;
-    do body_check <- ! int64/sub body 8;
-    do payload_check <- ! int64/sub payload 9;
-    do total <- ! int64/add tag_check body_check;
-    do total <- ! int64/add total payload_check;
+    do tag_check <- ! int/sub tag 7;
+    do body_check <- ! int/sub body 8;
+    do payload_check <- ! int/sub payload 9;
+    do total <- ! int/add tag_check body_check;
+    do total <- ! int/add total payload_check;
     ! process/exit total
   | +Empty() => ! process/exit 1
   end

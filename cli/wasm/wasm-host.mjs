@@ -85,32 +85,21 @@ class RuntimeWords {
   }
 
   decodeSigned(word, width) {
-    const bits = RuntimeWords.isImmediate(word)
-      ? RuntimeWords.decodeImmediateSigned(word)
-      : BigInt.asIntN(WORD_BITS, this.loadBits(word));
-    return BigInt.asIntN(width, bits);
+    return BigInt.asIntN(width, RuntimeWords.decodeImmediateSigned(word));
   }
 
   decodeUnsigned(word, width) {
-    const bits = RuntimeWords.isImmediate(word)
-      ? RuntimeWords.decodeImmediateUnsigned(word)
-      : this.loadBits(word);
-    return BigInt.asUintN(width, bits);
+    return BigInt.asUintN(width, RuntimeWords.decodeImmediateUnsigned(word));
   }
 
-  encodeSigned(value, width, spare) {
-    const wrapped = BigInt.asIntN(width, value);
-    return wrapped >= IMMEDIATE_SIGNED_MIN && wrapped <= IMMEDIATE_SIGNED_MAX
-      ? RuntimeWords.immediateSigned(wrapped)
-      : this.storeBits(spare, BigInt.asUintN(width, wrapped));
+  encodeSigned(value, width) {
+    return RuntimeWords.immediateSigned(BigInt.asIntN(width, value));
   }
 
-  encodeUnsigned(value, width, spare) {
-    const wrapped = BigInt.asUintN(width, value);
-    return wrapped <= IMMEDIATE_UNSIGNED_MAX
-      ? RuntimeWords.immediateUnsigned(wrapped)
-      : this.storeBits(spare, wrapped);
+  encodeUnsigned(value, width) {
+    return RuntimeWords.immediateUnsigned(BigInt.asUintN(width, value));
   }
+
 }
 
 class HostValues {
@@ -405,18 +394,18 @@ class ZydecoHost {
       ["int8", 8, true],
       ["int16", 16, true],
       ["int32", 32, true],
-      ["int64", 64, true],
+      ["int", 63, true],
       ["uint8", 8, false],
       ["uint16", 16, false],
       ["uint32", 32, false],
-      ["uint64", 64, false],
+      ["uint", 63, false],
     ];
     for (const [name, width, signed] of integerTypes) {
       const decode = (word) =>
         signed ? this.words.decodeSigned(word, width) : this.words.decodeUnsigned(word, width);
-      const encode = (value, spare) => signed
-        ? this.words.encodeSigned(value, width, spare)
-        : this.words.encodeUnsigned(value, width, spare);
+      const encode = (value) => signed
+        ? this.words.encodeSigned(value, width)
+        : this.words.encodeUnsigned(value, width);
       const arithmetic = {
         add: (left, right) => left + right,
         sub: (left, right) => left - right,
@@ -431,8 +420,8 @@ class ZydecoHost {
         },
       };
       for (const [operation, evaluate] of Object.entries(arithmetic)) {
-        functions.set(`${name}_${operation}`, (first, second, spare) =>
-          encode(evaluate(decode(first), decode(second)), spare),
+        functions.set(`${name}_${operation}`, (first, second) =>
+          encode(evaluate(decode(first), decode(second))),
         );
       }
       const comparisons = {
@@ -446,7 +435,17 @@ class ZydecoHost {
         );
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(decode(word).toString()));
-      this.installScalarMemory(functions, name, width, decode, encode);
+      const storageWidth = width === 63 ? 64 : width;
+      const load = (bits) => {
+        const value = signed ? BigInt.asIntN(storageWidth, bits) : bits;
+        if (width === 63 && (signed
+          ? value < IMMEDIATE_SIGNED_MIN || value > IMMEDIATE_SIGNED_MAX
+          : value > IMMEDIATE_UNSIGNED_MAX)) {
+          ZydecoHost.fail("integer exceeds the tagged payload range");
+        }
+        return encode(value);
+      };
+      this.installScalarMemory(functions, name, storageWidth, decode, load);
     }
 
     const floats = [
@@ -530,7 +529,7 @@ class ZydecoHost {
     );
     functions.set("str_get_branch", (string, index, whenNone, whenSome) => {
       const characters = [...this.values.getString(string)];
-      const decoded = this.words.decodeSigned(index, 64);
+      const decoded = this.words.decodeSigned(index, 63);
       if (decoded < 0n || decoded >= BigInt(characters.length)) {
         return Transfers.withoutArguments(whenNone);
       }
@@ -553,7 +552,7 @@ class ZydecoHost {
     });
     functions.set("str_split_at_branch", (string, index, whenNone, whenSome) => {
       const characters = [...this.values.getString(string)];
-      const decoded = this.words.decodeSigned(index, 64);
+      const decoded = this.words.decodeSigned(index, 63);
       if (decoded < 0n || decoded > BigInt(characters.length)) {
         return Transfers.withoutArguments(whenNone);
       }
@@ -578,7 +577,7 @@ class ZydecoHost {
       RuntimeWords.immediateSigned(RuntimeWords.decodeImmediateUnsigned(character)),
     );
     functions.set("char_from_codepoint_branch", (codepoint, whenNone, whenSome) => {
-      const decoded = this.words.decodeSigned(codepoint, 64);
+      const decoded = this.words.decodeSigned(codepoint, 63);
       const valid =
         decoded >= 0n &&
         decoded <= 0x10ffffn &&
@@ -587,21 +586,21 @@ class ZydecoHost {
         ? Transfers.withOneArgument(whenSome, RuntimeWords.immediateUnsigned(decoded))
         : Transfers.withoutArguments(whenNone);
     });
-    functions.set("str_parse_int_branch", (string, whenNone, whenSome, spare) => {
+    functions.set("str_parse_int_branch", (string, whenNone, whenSome) => {
       const source = this.values.getString(string);
       if (!/^[+-]?[0-9]+$/.test(source)) {
         return Transfers.withoutArguments(whenNone);
       }
       const parsed = BigInt(source);
-      if (parsed < -(1n << 63n) || parsed > (1n << 63n) - 1n) {
+      if (parsed < IMMEDIATE_SIGNED_MIN || parsed > IMMEDIATE_SIGNED_MAX) {
         return Transfers.withoutArguments(whenNone);
       }
-      return Transfers.withOneArgument(whenSome, this.words.encodeSigned(parsed, 64, spare));
+      return Transfers.withOneArgument(whenSome, RuntimeWords.immediateSigned(parsed));
     });
   }
 
   installMemory(functions) {
-    const integer = (word) => this.words.decodeSigned(word, 64);
+    const integer = (word) => this.words.decodeSigned(word, 63);
     const guard = (error, action) => {
       try { return action(); }
       catch (exception) {
@@ -651,7 +650,7 @@ class ZydecoHost {
     functions.set("stderr", () => HostIo.encodeHandle(1));
     functions.set("io_read", (reader, count, whenError, whenSuccess) =>
       this.ioControl(whenError, () => {
-        const decoded = this.words.decodeSigned(count, 64);
+        const decoded = this.words.decodeSigned(count, 63);
         if (decoded < 0n || decoded > BigInt(Number.MAX_SAFE_INTEGER)) {
           throw Object.assign(new Error("byte count is outside the host range"), {
             code: "ERR_INVALID_ARG_VALUE",
@@ -675,7 +674,7 @@ class ZydecoHost {
     );
     functions.set("io_write_all", (writer, pointer, length, whenError, whenSuccess) =>
       this.ioUnit(whenError, whenSuccess, () => {
-        const bytes = this.manualMemory.bytes(pointer, this.words.decodeSigned(length, 64));
+        const bytes = this.manualMemory.bytes(pointer, this.words.decodeSigned(length, 63));
         this.io.write(writer, bytes);
       }),
     );
@@ -712,15 +711,15 @@ class ZydecoHost {
     functions.set("read_line", (continuation) =>
       Transfers.withOneArgument(continuation, this.values.string(this.readLegacyLine())),
     );
-    functions.set("read_line_as_int_branch", (whenInvalid, whenValid, spare) => {
+    functions.set("read_line_as_int_branch", (whenInvalid, whenValid) => {
       const line = this.readLegacyLine();
       if (!/^[+-]?[0-9]+$/.test(line)) {
         return Transfers.withoutArguments(whenInvalid);
       }
       const parsed = BigInt(line);
-      return parsed < -(1n << 63n) || parsed > (1n << 63n) - 1n
+      return parsed < IMMEDIATE_SIGNED_MIN || parsed > IMMEDIATE_SIGNED_MAX
         ? Transfers.withoutArguments(whenInvalid)
-        : Transfers.withOneArgument(whenValid, this.words.encodeSigned(parsed, 64, spare));
+        : Transfers.withOneArgument(whenValid, RuntimeWords.immediateSigned(parsed));
     });
     functions.set("read_till_eof", (continuation) =>
       Transfers.withOneArgument(
@@ -733,7 +732,7 @@ class ZydecoHost {
       return Transfers.withoutArguments(continuation);
     });
     functions.set("write_int", (integer, continuation) => {
-      process.stdout.write(this.words.decodeSigned(integer, 64).toString());
+      process.stdout.write(this.words.decodeSigned(integer, 63).toString());
       return Transfers.withoutArguments(continuation);
     });
     functions.set("write_line", (string, continuation) => {
@@ -791,17 +790,17 @@ class ZydecoHost {
 
   installProcess(functions) {
     functions.set("arg_at", (index, whenNone, whenSome) => {
-      const offset = this.words.decodeSigned(index, 64);
+      const offset = this.words.decodeSigned(index, 63);
       if (offset < 0n || offset >= BigInt(this.arguments.length)) {
         return Transfers.withoutArguments(whenNone);
       }
       return Transfers.withOneArgument(whenSome, this.values.string(this.arguments[Number(offset)]));
     });
-    functions.set("random_int", (continuation, spare) =>
-      Transfers.withOneArgument(continuation, this.words.encodeSigned(randomBytes(8).readBigInt64LE(), 64, spare)),
+    functions.set("random_int", (continuation) =>
+      Transfers.withOneArgument(continuation, this.words.encodeSigned(randomBytes(8).readBigInt64LE(), 63)),
     );
     functions.set("exit", (code) => {
-      const status = Number(BigInt.asIntN(32, this.words.decodeSigned(code, 64)));
+      const status = Number(BigInt.asIntN(32, this.words.decodeSigned(code, 63)));
       throw new ExitSignal(status);
     });
   }

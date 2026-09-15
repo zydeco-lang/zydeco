@@ -1,9 +1,9 @@
 begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   param OS : CType in
   @[builtin(random_int)] (
-    #generate :: Thk (Thk (Int64 -> OS) -> OS)
+    #generate :: Thk (Thk (Int -> OS) -> OS)
   )
 end

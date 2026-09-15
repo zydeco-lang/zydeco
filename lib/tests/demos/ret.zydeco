@@ -1,7 +1,7 @@
 -- An example that uses forall and type aliases to prove that
 -- `Ret' A` and the `Ret A` primitive are isomorphic to each other.
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /process; /Int64; /system) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /OS; /process; /Int; /system) : @(import(
     "../../std/builtin.zy"
   )) that
   let Ret' (A : VType) =
@@ -26,9 +26,9 @@ begin
     ! g A { ! f A rr }
   that
 
-  do n <- ! id_ret Int64 { ret 0 };
+  do n <- ! id_ret Int { ret 0 };
   ! id_ret'
-    Int64
+    Int
     { fn (R : CType) ar => ! ar n }
     OS
     process/exit

@@ -16,11 +16,11 @@ param (
   /Int8;
   /Int16;
   /Int32;
-  /Int64;
+  /Int;
   /UInt8;
   /UInt16;
   /UInt32;
-  /UInt64;
+  /UInt;
   /Float32;
   /Float64;
   /Char;
@@ -29,8 +29,8 @@ param (
   /text;
   /system
 ) : @(import("../../std/builtin.zy")) in
-let int64 = numeric/int64 in
+let int = numeric/int in
 let char = text/char in
 let string = text/string in
-do zero <- ! int64/add 0 0;
+do zero <- ! int/add 0 0;
 ! process/exit zero

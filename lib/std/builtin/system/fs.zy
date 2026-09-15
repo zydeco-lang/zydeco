@@ -3,11 +3,11 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let String = @(intrinsic(string)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   param Reader : VType in
   param Writer : VType in
   param OS : CType in
-  let Error = Thk (Int64 -> String -> OS) in
+  let Error = Thk (Int -> String -> OS) in
   let ReaderCont = Thk (Reader -> OS) in
   let WriterCont = Thk (Writer -> OS) in
   let Path = Thk (String -> Error -> ReaderCont -> OS) in

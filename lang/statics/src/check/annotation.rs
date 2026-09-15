@@ -110,7 +110,7 @@ mod tests {
             let vtype = ss::VType.build(tycker, &environment);
             let unit = ss::UnitTy.build(tycker, &environment);
             let other_unit: ss::TypeId = Alloc::alloc(tycker, ss::UnitTy, vtype, &environment);
-            let integer = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int64))
+            let integer = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int))
                 .build(tycker, &environment);
 
             assert_ne!(unit, other_unit);
@@ -167,7 +167,7 @@ mod tests {
             let environment = TyEnv::new();
             let vtype = ss::VType.build(tycker, &environment);
             let unit = ss::UnitTy.build(tycker, &environment);
-            let integer = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int64))
+            let integer = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int))
                 .build(tycker, &environment);
             let root = tycker.data.root(tycker.db);
             let fill = Alloc::alloc(tycker, root, (), &());

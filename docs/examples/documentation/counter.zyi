@@ -1,4 +1,4 @@
-let Integer = @(intrinsic(i64)) in
+let Integer = @(intrinsic(int)) in
 --| The current counter value, represented by an [integer](zydeco:name:Integer).
 --|
 --| Read this field to inspect the counter. The public interface describes its meaning;

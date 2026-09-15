@@ -136,13 +136,13 @@ class Study:
         # before exiting so an error of 256 cannot satisfy the output oracle.
         body = body.replace(
             "! process/exit status",
-            "do status <- ! int64/eq (Ret Int64) status 0 { ret 0 } { ret 1 };\n"
+            "do status <- ! int/eq (Ret Int) status 0 { ret 0 } { ret 1 };\n"
             "  ! process/exit status",
         )
         path.write_text(
-            "begin\n  param (/VType; /CType; /Ret; /Thk; /Int64; /numeric; /process; /system)"
+            "begin\n  param (/VType; /CType; /Ret; /Thk; /Int; /numeric; /process; /system)"
             f" : @(import({json.dumps(builtin)})) in\n"
-            "  let int64 = numeric/int64 in\n" + body + "\nend\n"
+            "  let int = numeric/int in\n" + body + "\nend\n"
         )
         self.record("source", workload=name, path=str(path), sha256=self.sha256(path))
         return path
@@ -150,34 +150,34 @@ class Study:
     @staticmethod
     def churn(iterations):
         return f"""
-  def fix churn (remaining : Int64) (acc : Int64) : Ret Int64 =
-    ! int64/eq (Ret Int64) remaining 0 {{ ret acc }} {{
-      do next <- ! int64/sub remaining 1;
-      do acc <- ! int64/add acc 1;
+  def fix churn (remaining : Int) (acc : Int) : Ret Int =
+    ! int/eq (Ret Int) remaining 0 {{ ret acc }} {{
+      do next <- ! int/sub remaining 1;
+      do acc <- ! int/add acc 1;
       ! churn next acc
     }}
   in
   do result <- ! churn {iterations} 0;
-  do status <- ! int64/sub result {iterations};
+  do status <- ! int/sub result {iterations};
   ! process/exit status"""
 
     def nested(self, depth, width, iterations):
-        bindings = "\n".join(f"    do x{i} <- ! int64/add seed {i};" for i in range(width))
-        uses = "\n".join(f"      do result <- ! int64/add result x{i};" for i in range(width))
+        bindings = "\n".join(f"    do x{i} <- ! int/add seed {i};" for i in range(width))
+        uses = "\n".join(f"      do result <- ! int/add result x{i};" for i in range(width))
         churn_definition = self.churn(iterations).split("  do result <- ! churn")[0]
         expected = iterations + depth * sum(5 + i for i in range(width))
         return churn_definition + f"""
-  def fix descend (depth : Int64) (seed : Int64) : Ret Int64 =
+  def fix descend (depth : Int) (seed : Int) : Ret Int =
 {bindings}
-    ! int64/eq (Ret Int64) depth 0 {{ ! churn {iterations} 0 }} {{
-      do next <- ! int64/sub depth 1;
+    ! int/eq (Ret Int) depth 0 {{ ! churn {iterations} 0 }} {{
+      do next <- ! int/sub depth 1;
       do result <- ! descend next seed;
 {uses}
       ret result
     }}
   in
   do result <- ! descend {depth} 5;
-  do status <- ! int64/sub result {expected};
+  do status <- ! int/sub result {expected};
   ! process/exit status"""
 
     def workloads(self):
@@ -187,31 +187,31 @@ class Study:
         saved = saved[saved.index("  -- The returned"):saved.rindex("end")]
         saved = saved.replace("100000", str(scale(100000)))
         protocols = f"""
-  let Done = codata | .done : Ret Int64 end in
-  let Last = codata | .more : Int64 -> Done end in
-  let Chain = codata | .more : Int64 -> Last end in
-  def ! consume (sum : Int64) : Chain =
+  let Done = codata | .done : Ret Int end in
+  let Last = codata | .more : Int -> Done end in
+  let Chain = codata | .more : Int -> Last end in
+  def ! consume (sum : Int) : Chain =
     comatch
     | .more first =>
-      do sum <- ! int64/add sum first;
+      do sum <- ! int/add sum first;
       comatch
       | .more second =>
-        do sum <- ! int64/add sum second;
+        do sum <- ! int/add sum second;
         comatch | .done => ret sum end
       end
     end
   in
-  def fix loop (remaining : Int64) (acc : Int64) : Ret Int64 =
-    ! int64/eq (Ret Int64) remaining 0 {{ ret acc }} {{
+  def fix loop (remaining : Int) (acc : Int) : Ret Int =
+    ! int/eq (Ret Int) remaining 0 {{ ret acc }} {{
       do result <- ! consume 0 .more remaining .more 1 .done;
-      do one <- ! int64/sub result remaining;
-      do acc <- ! int64/add acc one;
-      do next <- ! int64/sub remaining 1;
+      do one <- ! int/sub result remaining;
+      do acc <- ! int/add acc one;
+      do next <- ! int/sub remaining 1;
       ! loop next acc
     }}
   in
   do result <- ! loop {scale(20000)} 0;
-  do status <- ! int64/sub result {scale(20000)};
+  do status <- ! int/sub result {scale(20000)};
   ! process/exit status"""
         bodies = {
             "retained-closure": saved,
@@ -228,28 +228,28 @@ class Study:
                 if not self.args.workloads or name in self.args.workloads}
 
     def repeated(self, width, iterations):
-        bindings = "\n".join(f"    do x{i} <- ! int64/add seed {i};" for i in range(width))
-        uses = "\n".join(f"    do result <- ! int64/add result x{i};" for i in range(width))
+        bindings = "\n".join(f"    do x{i} <- ! int/add seed {i};" for i in range(width))
+        uses = "\n".join(f"    do result <- ! int/add result x{i};" for i in range(width))
         churn_definition = self.churn(3).split("  do result <- ! churn")[0]
         expected = ((width + 1) * iterations * (iterations + 1) // 2
                     + iterations * (width * (width - 1) // 2 + 3))
         return churn_definition + f"""
-  def ! keep (seed : Int64) : Ret Int64 =
+  def ! keep (seed : Int) : Ret Int =
 {bindings}
     do result <- ! churn 3 seed;
 {uses}
     ret result
   in
-  def fix loop (remaining : Int64) (acc : Int64) : Ret Int64 =
-    ! int64/eq (Ret Int64) remaining 0 {{ ret acc }} {{
+  def fix loop (remaining : Int) (acc : Int) : Ret Int =
+    ! int/eq (Ret Int) remaining 0 {{ ret acc }} {{
       do value <- ! keep remaining;
-      do acc <- ! int64/add acc value;
-      do next <- ! int64/sub remaining 1;
+      do acc <- ! int/add acc value;
+      do next <- ! int/sub remaining 1;
       ! loop next acc
     }}
   in
   do result <- ! loop {iterations} 0;
-  do status <- ! int64/sub result {expected};
+  do status <- ! int/sub result {expected};
   ! process/exit status"""
 
     @staticmethod

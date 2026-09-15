@@ -36,7 +36,7 @@ impl Fixture {
     }
     fn source(role: &str, body: &str) -> String {
         format!(
-            "@[package({role}, name(example/math))]\nlet Thk = @(intrinsic(thk)) in let Ret = @(intrinsic(ret)) in let I = @(intrinsic(i64)) in let Unit = @(intrinsic(unit)) in {body}"
+            "@[package({role}, name(example/math))]\nlet Thk = @(intrinsic(thk)) in let Ret = @(intrinsic(ret)) in let I = @(intrinsic(int)) in let Unit = @(intrinsic(unit)) in {body}"
         )
     }
 }
@@ -131,14 +131,14 @@ fn named_entries_are_closed_and_c_exports_reject_incoming_addresses() {
     std::fs::remove_file(fixture.directory.path().join("workspace.zy")).unwrap();
     let builtin =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy").canonicalize().unwrap();
-    fixture.checked(&format!("@[package(library(c, export(root, symbol(\"f\"))), name(window))] param val (/Thk; /Ret;  /Addr; /Int64) : @(import({:?})) in ({{ fn (address : Addr) => ret 0 }} : Thk (Addr -> Ret Int64))", builtin.to_str().unwrap()), Err("incoming pointers"));
+    fixture.checked(&format!("@[package(library(c, export(root, symbol(\"f\"))), name(window))] param val (/Thk; /Ret;  /Addr; /Int) : @(import({:?})) in ({{ fn (address : Addr) => ret 0 }} : Thk (Addr -> Ret Int))", builtin.to_str().unwrap()), Err("incoming pointers"));
 }
 
 #[test]
 #[ignore = "requires NASM, AMD64 native tools, and builds the matching Rust runtime"]
-fn shared_library_c_harness_round_trips_wide_arguments_and_has_only_declared_exports() {
+fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_exports() {
     let fixture = Fixture::new();
-    let integers = ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"];
+    let integers = ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"];
     let mut contracts = integers
         .iter()
         .map(|integer| format!("export(field({integer}), symbol(\"id_{integer}\"))"))
@@ -153,7 +153,7 @@ fn shared_library_c_harness_round_trips_wide_arguments_and_has_only_declared_exp
             format!("#{integer} = ({{ fn x => ret x }} : Thk ({integer} -> Ret {integer}))")
         })
         .collect::<Vec<_>>();
-    fields.extend(["#zero = ({ ret () } : Thk (Ret Unit))".into(), "#six = ({ fn a b c d e f => ret f } : Thk (Int64 -> Int64 -> Int64 -> Int64 -> Int64 -> Int64 -> Ret Int64))".into()]);
+    fields.extend(["#zero = ({ ret () } : Thk (Ret Unit))".into(), "#six = ({ fn a b c d e f => ret f } : Thk (Int -> Int -> Int -> Int -> Int -> Int -> Ret Int))".into()]);
     fixture.write("library.zy", &format!("@[package(library(c, {}), name(example/math))]\nparam val (/Thk; /Ret; /Unit; {}) : @(import({:?})) in ({})", contracts.join(", "), integers.iter().map(|integer| format!("/{integer}")).collect::<Vec<_>>().join("; "), Fixture::builtin(), fields.join(", ")));
     let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime").canonicalize().unwrap();
     let output = fixture.command(&[
@@ -197,10 +197,14 @@ fn shared_library_c_harness_round_trips_wide_arguments_and_has_only_declared_exp
     assert_eq!(visible, expected);
     let checks = integers.iter().map(|integer| {
         let c = integer.to_ascii_uppercase();
-        let minimum = if integer.starts_with('U') { "0".into() } else { format!("{c}_MIN") };
-        format!("assert(id_{integer}({minimum}) == {minimum}); assert(id_{integer}({c}_MAX) == {c}_MAX);")
+        let (minimum, maximum) = match *integer {
+            "Int" => ("(INT64_MIN / 2)".into(), "(INT64_MAX / 2)".into()),
+            "UInt" => ("0".into(), "(UINT64_MAX >> 1)".into()),
+            _ => (if integer.starts_with('U') { "0".into() } else { format!("{c}_MIN") }, format!("{c}_MAX")),
+        };
+        format!("assert(id_{integer}({minimum}) == {minimum}); assert(id_{integer}({maximum}) == {maximum});")
     }).collect::<String>();
-    let source = fixture.write("harness.c", &format!("#include {:?}\n#include <assert.h>\nint main(void) {{ for (int i = 0; i < 100; ++i) {{ {checks} assert(six(1,2,3,4,5,INT64_MIN) == INT64_MIN); zero(); }} return 0; }}\n", header.to_str().unwrap()));
+    let source = fixture.write("harness.c", &format!("#include {:?}\n#include <assert.h>\nint main(void) {{ for (int i = 0; i < 100; ++i) {{ {checks} assert(six(1,2,3,4,5,(INT64_MIN / 2)) == (INT64_MIN / 2)); zero(); }} return 0; }}\n", header.to_str().unwrap()));
     let exe = fixture.directory.path().join("harness");
     let mut cc = Command::new("cc");
     if cfg!(target_os = "macos") {
@@ -219,6 +223,19 @@ fn shared_library_c_harness_round_trips_wide_arguments_and_has_only_declared_exp
         .unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     assert!(Command::new(exe).status().unwrap().success());
+    for argument in
+        ["id_Int(INT64_MIN / 2 - 1)", "id_Int(INT64_MAX / 2 + 1)", "id_UInt(UINT64_C(1) << 63)"]
+    {
+        let invalid = fixture
+            .harness(&manifest_path, &format!("int main(void) {{ {argument}; return 42; }}"));
+        let output = Command::new(invalid).output().unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("integer exceeds the tagged payload range")
+        );
+        assert!(output.stdout.is_empty());
+    }
     // A source consumer checks against the generated binding alone.
     std::fs::remove_file(fixture.directory.path().join("library.zy")).unwrap();
     let output = fixture.command(&["check", base.join(manifest.bindings.path).to_str().unwrap()]);
@@ -348,8 +365,8 @@ fn library_factory_accepts_only_a_builtin_value_domain() {
     fixture.checked(
         &format!(
             r#"@[package(library(c, export(root, symbol("f"))), name(example/composed))]
-let factory = param val (/Thk; /Ret; /Int64; /numeric) : @(import({builtin:?})) in
-({{ fn x => ! numeric/int64/add x 1 }} : Thk (Int64 -> Ret Int64)) in factory"#
+let factory = param val (/Thk; /Ret; /Int; /numeric) : @(import({builtin:?})) in
+({{ fn x => ! numeric/int/add x 1 }} : Thk (Int -> Ret Int)) in factory"#
         ),
         Ok(()),
     );
@@ -379,13 +396,13 @@ fn nested_units_preserve_gc_roots_with_shared_and_raw_runtime_support() {
         &format!(
             r#"
 @[package(library(c, export(root, symbol("inner_identity"))), name(example/inner))]
-param val (/Thk; /Ret; /Int64; /numeric) : @(import({:?})) in
+param val (/Thk; /Ret; /Int; /numeric) : @(import({:?})) in
 ({{ fn x =>
-    let fix loop (n : Int64) : Ret Int64 =
-        ! numeric/int64/eq (Ret Int64) n 0 {{ ret x }}
-            {{ do next <- ! numeric/int64/sub n 1; ! loop next }}
+    let fix loop (n : Int) : Ret Int =
+        ! numeric/int/eq (Ret Int) n 0 {{ ret x }}
+            {{ do next <- ! numeric/int/sub n 1; ! loop next }}
     in ! loop 100000
-}} : Thk (Int64 -> Ret Int64))
+}} : Thk (Int -> Ret Int))
 "#,
             Fixture::builtin()
         ),
@@ -404,15 +421,15 @@ param val (/Thk; /Ret; /Int64; /numeric) : @(import({:?})) in
             &format!(
                 r#"
 @[package(library(c, export(root, symbol("outer_identity"))), name(example/outer))]
-param val (/Thk; /Ret; /Int64; /numeric) : @(import({:?})) in
+param val (/Thk; /Ret; /Int; /numeric) : @(import({:?})) in
 let other = @(import({:?})) in
 ({{ fn x => do y <- ! other x;
-    let fix loop (n : Int64) : Ret Int64 =
-        ! numeric/int64/eq (Ret Int64) n 0
-            {{ do delta <- ! numeric/int64/sub y x; ! numeric/int64/add x delta }}
-            {{ do next <- ! numeric/int64/sub n 1; ! loop next }}
+    let fix loop (n : Int) : Ret Int =
+        ! numeric/int/eq (Ret Int) n 0
+            {{ do delta <- ! numeric/int/sub y x; ! numeric/int/add x delta }}
+            {{ do next <- ! numeric/int/sub n 1; ! loop next }}
     in ! loop 100000
-}} : Thk (Int64 -> Ret Int64))
+}} : Thk (Int -> Ret Int))
 "#,
                 Fixture::builtin(),
                 base.join(&interface.bindings.path)
@@ -421,7 +438,7 @@ let other = @(import({:?})) in
         let outer_dir = format!("outer-{index}");
         Fixture::success(&fixture.build(&outer, outer_kind, &outer_dir, &[inner_manifest]));
         let outer_manifest = fixture.manifest(&outer_dir, "example.outer", outer_kind);
-        let executable = fixture.harness(&outer_manifest, "int main(void) { assert(outer_identity(INT64_MIN) == INT64_MIN); assert(outer_identity(INT64_MAX) == INT64_MAX); return 0; }");
+        let executable = fixture.harness(&outer_manifest, "int main(void) { assert(outer_identity((INT64_MIN / 2)) == (INT64_MIN / 2)); assert(outer_identity((INT64_MAX / 2)) == (INT64_MAX / 2)); return 0; }");
         Fixture::success(&Fixture::run(&executable));
 
         // The generated interface and manifest suffice after the producer source is gone.
@@ -431,10 +448,10 @@ let other = @(import({:?})) in
             "consumer.zy",
             &format!(
                 r#"
-param (/Thk; /Ret; /Int64; /OS; /numeric; /process) : @(import({:?})) in
+param (/Thk; /Ret; /Int; /OS; /numeric; /process) : @(import({:?})) in
 let identity = @(import({:?})) in
-do result <- ! identity -9223372036854775808;
-! numeric/int64/eq OS result -9223372036854775808 {{ ! process/exit 0 }} {{ ! process/exit 1 }}
+do result <- ! identity -4611686018427387904;
+! numeric/int/eq OS result -4611686018427387904 {{ ! process/exit 0 }} {{ ! process/exit 1 }}
 "#,
                 Fixture::builtin(),
                 base.join(&interface.bindings.path)
@@ -511,7 +528,7 @@ fn failed_late_build_preserves_the_published_library() {
     let original = manifest.canonicalize().unwrap();
     let executable = fixture.harness(
         &manifest,
-        "int main(void) { assert(identity(INT64_MIN) == INT64_MIN); return 0; }",
+        "int main(void) { assert(identity((INT64_MIN / 2)) == (INT64_MIN / 2)); return 0; }",
     );
     let runtime = fixture.directory.path().join("broken-runtime");
     std::fs::create_dir(&runtime).unwrap();
@@ -576,10 +593,10 @@ fn interpreter_uses_the_supplied_exact_library_path() {
     }
     Fixture::success(&cc.arg(c).arg("-o").arg(&library).output().unwrap());
     let source = fixture.write("consumer.zy", &format!(r#"
-param (/Thk; /Ret; /Int64; /OS; /numeric; /process) : @(import({:?})) in
-let foreign = (@(ffi(c, library("zydeco_exact_path_fixture"), symbol("exact_identity"))) : Thk (Int64 -> Ret Int64)) in
-do result <- ! foreign -9223372036854775808;
-! numeric/int64/eq OS result -9223372036854775808 {{ ! process/exit 0 }} {{ ! process/exit 1 }}
+param (/Thk; /Ret; /Int; /OS; /numeric; /process) : @(import({:?})) in
+let foreign = (@(ffi(c, library("zydeco_exact_path_fixture"), symbol("exact_identity"))) : Thk (Int -> Ret Int)) in
+do result <- ! foreign -4611686018427387904;
+! numeric/int/eq OS result -4611686018427387904 {{ ! process/exit 0 }} {{ ! process/exit 1 }}
 "#, Fixture::builtin()));
     let compiler = CommandCompiler::default();
     let executable = compiler.executable(&source).unwrap();

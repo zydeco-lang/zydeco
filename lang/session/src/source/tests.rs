@@ -400,21 +400,21 @@ fn checked_trivial_computation() -> CheckedProgram {
 fn builtin_add_exit_source() -> &'static str {
     r#"
 begin
-  let Int64 = @(intrinsic(i64)) that
+  let Int = @(intrinsic(int)) that
   param (
-    (/OS; /int64; /process) :
+    (/OS; /int; /process) :
     exists
       @[builtin(os)] (OS : @(intrinsic(ctype)))
     .
-      (#int64 ::
-        (@[builtin(int64_add)] (#add ::
-          (@(intrinsic(thk))) (Int64 -> Int64 -> (@(intrinsic(ret))) Int64))) *
-        (@[builtin(int64_sub)] (#sub ::
-          (@(intrinsic(thk))) (Int64 -> Int64 -> (@(intrinsic(ret))) Int64)))) *
+      (#int ::
+        (@[builtin(int_add)] (#add ::
+          (@(intrinsic(thk))) (Int -> Int -> (@(intrinsic(ret))) Int))) *
+        (@[builtin(int_sub)] (#sub ::
+          (@(intrinsic(thk))) (Int -> Int -> (@(intrinsic(ret))) Int)))) *
       (#process ::
-        @[builtin(exit)] (#exit :: (@(intrinsic(thk))) (Int64 -> OS)))
+        @[builtin(exit)] (#exit :: (@(intrinsic(thk))) (Int -> OS)))
   ) in
-    do sum <- ! int64/add 1 2;
+    do sum <- ! int/add 1 2;
     ! process/exit sum
 end
 "#
@@ -556,7 +556,7 @@ fn source_graph_discovers_an_adjacent_signature_before_its_implementation() {
 #[test]
 fn source_graph_does_not_pair_program_roots_with_signatures() {
     let fixture = SourceFixture::new();
-    fixture.write("main.zyi", "@(intrinsic(i64))");
+    fixture.write("main.zyi", "@(intrinsic(int))");
     let root = fixture.write("main.zydeco", "()");
 
     let graph = SourceGraph::load(root).unwrap();
@@ -883,7 +883,7 @@ fn textual_program_ascribes_an_implementation_with_its_signature() {
 #[test]
 fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@(builtin(int64_add))");
+    let root = fixture.write("main.zy", "@(builtin(int_add))");
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
@@ -896,7 +896,7 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     assert_eq!(
         meta.specialize::<zydeco_surface::metadata::BuiltinMeta>().unwrap().map(|meta| meta.role),
         Some(zydeco_syntax::BuiltinRole::Value(zydeco_syntax::BuiltinValueRole::Integer(
-            zydeco_syntax::IntegerType::Int64,
+            zydeco_syntax::IntegerType::Int,
             zydeco_syntax::IntegerOperation::Add,
         ),))
     );
@@ -1230,7 +1230,7 @@ fn a_companion_signature_can_import_its_type_dependencies() {
 #[test]
 fn a_mismatched_companion_signature_rejects_the_implementation() {
     let fixture = SourceFixture::new();
-    fixture.write("library.zyi", "@(intrinsic(i64))");
+    fixture.write("library.zyi", "@(intrinsic(int))");
     let root = fixture.write("library.zy", "()");
 
     let analysis = CompilerSession::default().analyze(root).unwrap();
@@ -1494,7 +1494,7 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write(
         "main.zy",
-        "begin let Int64 = @(intrinsic(i64)) that def value : Int64 = 1 that ret value end",
+        "begin let Int = @(intrinsic(int)) that def value : Int = 1 that ret value end",
     );
     let checked = SourceGraph::load(root)
         .unwrap()
@@ -1511,7 +1511,7 @@ fn a_fixed_primitive_intrinsic_classifies_literals_without_a_package_scope() {
 }
 
 #[test]
-fn an_integer_literal_defaults_to_int64_without_a_package_scope() {
+fn an_integer_literal_defaults_to_int_without_a_package_scope() {
     let fixture = SourceFixture::new();
     let root = fixture.write("main.zy", "ret 1");
     let checked = SourceGraph::load(root)
@@ -1540,7 +1540,7 @@ fn an_integer_literal_defaults_to_int64_without_a_package_scope() {
     assert!(matches!(checked.statics.types_pre[ret], Fillable::Done(Type::Ret(_))));
     assert!(matches!(
         checked.statics.types_pre[value],
-        Fillable::Done(Type::Primitive(PrimitiveTy(PrimitiveType::Integer(IntegerType::Int64))))
+        Fillable::Done(Type::Primitive(PrimitiveTy(PrimitiveType::Integer(IntegerType::Int))))
     ));
 }
 
@@ -1550,8 +1550,8 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
     let root = fixture.write(
         "main.zy",
         concat!(
-            "begin let IntA = @(intrinsic(i64)) that ",
-            "let IntB = @(intrinsic(i64)) that ",
+            "begin let IntA = @(intrinsic(int)) that ",
+            "let IntB = @(intrinsic(int)) that ",
             "def a : IntA = 1 that def b : IntB = a that ret b end",
         ),
     );
@@ -1567,7 +1567,7 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
         .unwrap();
 
     // Both aliases must denote one primitive identity: the result of `ret b`
-    // is the Int64 primitive itself, not a choice between the two bindings.
+    // is the Int primitive itself, not a choice between the two bindings.
     use zydeco_statics::syntax::{Fillable, PrimitiveTy, TermAnnId, Type};
     use zydeco_syntax::{App, IntegerType, PrimitiveType};
     let TermAnnId::Compu(_, computation_ty) = checked.root else {
@@ -1583,7 +1583,7 @@ fn repeated_primitive_intrinsics_have_one_applicative_identity() {
     assert!(matches!(checked.statics.types_pre[ret], Fillable::Done(Type::Ret(_))));
     assert!(matches!(
         checked.statics.types_pre[value],
-        Fillable::Done(Type::Primitive(PrimitiveTy(PrimitiveType::Integer(IntegerType::Int64))))
+        Fillable::Done(Type::Primitive(PrimitiveTy(PrimitiveType::Integer(IntegerType::Int))))
     ));
 }
 
@@ -1620,8 +1620,8 @@ param (
   exists
     @[builtin(os)] (OS : @(intrinsic(ctype)))
   .
-    ((@[builtin(int64_add)] (#first :: @(intrinsic(unit)))) *
-     (@[builtin(int64_add)] (#second :: @(intrinsic(unit)))))
+    ((@[builtin(int_add)] (#first :: @(intrinsic(unit)))) *
+     (@[builtin(int_add)] (#second :: @(intrinsic(unit)))))
 ) in
   ret ()
 "#,
@@ -1659,7 +1659,7 @@ fn builtin_host_type_roles_require_abstract_entries_of_the_right_kind() {
 #[test]
 fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int64_add)] (#add :: @(intrinsic(unit)))");
+    let root = fixture.write("main.zy", "@[builtin(int_add)] (#add :: @(intrinsic(unit)))");
     let checked = SourceGraph::load(root)
         .unwrap()
         .parse()
@@ -1677,7 +1677,7 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
     assert_eq!(
         checked.statics.builtin_roles.value(entry),
         Some(zydeco_syntax::BuiltinValueRole::Integer(
-            zydeco_syntax::IntegerType::Int64,
+            zydeco_syntax::IntegerType::Int,
             zydeco_syntax::IntegerOperation::Add,
         ))
     );
@@ -1686,7 +1686,7 @@ fn a_builtin_operation_role_attaches_to_its_named_classifier() {
 #[test]
 fn a_builtin_operation_role_rejects_an_unnamed_classifier() {
     let fixture = SourceFixture::new();
-    let root = fixture.write("main.zy", "@[builtin(int64_add)] @(intrinsic(unit))");
+    let root = fixture.write("main.zy", "@[builtin(int_add)] @(intrinsic(unit))");
     let scoped =
         SourceGraph::load(root).unwrap().parse().unwrap().desugar().unwrap().resolve().unwrap();
 
@@ -1724,7 +1724,7 @@ fn continuation_io_uses_its_foundational_builtin_classifier() {
         "main.zy",
         r#"
 begin
-  let Int64 = @(intrinsic(i64)) that
+  let Int = @(intrinsic(int)) that
   param (
     (/OS; /stdio; /process) :
     exists
@@ -1732,9 +1732,9 @@ begin
     .
       (#stdio :: @[builtin(write_int)]
         (#write_int :: (@(intrinsic(thk)))
-          (Int64 -> (@(intrinsic(thk))) OS -> OS))) *
+          (Int -> (@(intrinsic(thk))) OS -> OS))) *
       (#process :: @[builtin(exit)]
-        (#exit :: (@(intrinsic(thk))) (Int64 -> OS)))
+        (#exit :: (@(intrinsic(thk))) (Int -> OS)))
   ) in
     ! stdio/write_int 7 { ! process/exit 0 }
 end
@@ -1760,16 +1760,16 @@ fn exact_builtin_classifiers_follow_bound_intrinsic_aliases() {
 begin
   let Thk = @(intrinsic(thk)) that
   let Ret = @(intrinsic(ret)) that
-  let Int64 = @(intrinsic(i64)) that
+  let Int = @(intrinsic(int)) that
   param (
-    (/OS; /int64; /process) :
+    (/OS; /int; /process) :
     exists
       @[builtin(os)] (OS : @(intrinsic(ctype)))
     .
-      (#int64 :: @[builtin(int64_add)] (#add :: Thk (Int64 -> Int64 -> Ret Int64))) *
-      (#process :: @[builtin(exit)] (#exit :: Thk (Int64 -> OS)))
+      (#int :: @[builtin(int_add)] (#add :: Thk (Int -> Int -> Ret Int))) *
+      (#process :: @[builtin(exit)] (#exit :: Thk (Int -> OS)))
   ) in
-    do sum <- ! int64/add 1 2;
+    do sum <- ! int/add 1 2;
     ! process/exit sum
 end
 "#,
@@ -2150,7 +2150,7 @@ fn builtin_selection_preserves_numeric_widths_and_cbpv_kinds() {
     let fixture = SourceFixture::new();
     let session = CompilerSession::default();
     let prefix = format!(
-        "param (/VType; /CType; /Thk; /Ret; /Int8; /Int16; /Int64) : @(import({:?})) in\n",
+        "param (/VType; /CType; /Thk; /Ret; /Int8; /Int16; /Int) : @(import({:?})) in\n",
         builtin.to_string_lossy(),
     );
     let cases = [
@@ -2162,14 +2162,14 @@ fn builtin_selection_preserves_numeric_widths_and_cbpv_kinds() {
         ),
         (
             "thunk",
-            "let Callback : VType = Thk (Ret Int64) in ret ()",
-            "let Callback : VType = Thk Int64 in ()",
+            "let Callback : VType = Thk (Ret Int) in ret ()",
+            "let Callback : VType = Thk Int in ()",
             TyckDiagnosticCode::KindMismatch,
         ),
         (
             "return",
-            "let Answer : CType = Ret Int64 in ret ()",
-            "let Answer : CType = Ret (Ret Int64) in ret ()",
+            "let Answer : CType = Ret Int in ret ()",
+            "let Answer : CType = Ret (Ret Int) in ret ()",
             TyckDiagnosticCode::KindMismatch,
         ),
     ];
@@ -2869,7 +2869,7 @@ fn checking_recovers_independent_imports_after_a_failed_binding() {
         (left, right, @(import("left.zy")), @(import("right.zy")))
     "#,
     );
-    let left = fixture.write("left.zy", "let value : @(intrinsic(i64)) = () in value");
+    let left = fixture.write("left.zy", "let value : @(intrinsic(int)) = () in value");
     let right = fixture.write("right.zy", "let value : @(intrinsic(string)) = () in value");
     let signature = fixture.write("contract.zyi", "()");
     let mut session = CompilerSession::default();

@@ -1,0 +1,37 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Ret = @(intrinsic(ret)) in
+  let String = @(intrinsic(string)) in
+  let Int = @(intrinsic(int)) in
+  param Addr : VType in
+  let Binary (A : VType) = Thk (A -> A -> Ret A) in
+  let Branch (A : VType) = Thk (
+    forall (R : CType) . A -> A -> Thk R -> Thk R -> R
+  ) in
+  let Render (A : VType) = Thk (A -> Ret String) in
+    (@[builtin(int_add)] (#add :: Binary Int))
+  * (@[builtin(int_sub)] (#sub :: Binary Int))
+  * (@[builtin(int_mul)] (#mul :: Binary Int))
+  * (@[builtin(int_div)] (#div :: Binary Int))
+  * (@[builtin(int_mod)] (#mod :: Binary Int))
+  * (@[builtin(int_eq)] (#eq :: Branch Int))
+  * (@[builtin(int_lt)] (#lt :: Branch Int))
+  * (@[builtin(int_gt)] (#gt :: Branch Int))
+  * (@[builtin(int_to_string)] (#to_string :: Render Int))
+  * (
+      @[builtin(int_store_le)] (
+        #store_le :: Thk (
+          forall (R : CType) . Addr -> Int -> Thk R -> R
+        )
+      )
+    )
+  * (
+      @[builtin(int_load_le)] (
+        #load_le :: Thk (
+          forall (R : CType) . Addr -> Thk (Int -> R) -> R
+        )
+      )
+    )
+end

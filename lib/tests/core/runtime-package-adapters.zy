@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int64; /Unit; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /Int; /Unit; /process) : @(import("../../std/builtin.zy")) that
 
   let Box = exists (X : VType) . X that
   let Methods (X : VType) =
@@ -26,7 +26,7 @@ begin
   } that
 
   do selected <- ret packaged;
-  do first <- ! selected ((Int64, 0) : Box) .get;
-  do second <- ! restored Int64 first .replace 0;
+  do first <- ! selected ((Int, 0) : Box) .get;
+  do second <- ! restored Int first .replace 0;
   ! process/exit second
 end

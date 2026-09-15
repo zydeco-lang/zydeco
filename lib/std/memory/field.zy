@@ -1,20 +1,21 @@
 -- Field witnesses describe layout relationships, never allocation identity or ownership.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /numeric; /memory; builtin) :
-  @(import("../builtin.zy")) that
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+    "../builtin.zy"
+  )) that
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
-  let Field (P : VType) (C : VType) = val pi (_ : Unit) . Int64 in
-  let val offset (P : VType) (C : VType) (field : Field P C) : Int64 =
-    (@(intrinsic(i64_add))) (field ()) 0
+  let Field (P : VType) (C : VType) = val pi (_ : Unit) . Int in
+  let val offset (P : VType) (C : VType) (field : Field P C) : Int =
+    (@(intrinsic(int_add))) (field ()) 0
   in
-  let val from_offset (P : VType) (C : VType) (offset : Int64) : Field P C =
-    let known = (@(intrinsic(i64_add))) offset 0 in
+  let val from_offset (P : VType) (C : VType) (offset : Int) : Field P C =
+    let known = (@(intrinsic(int_add))) offset 0 in
     val () => known
   in
   let val compose (P : VType) (C : VType) (D : VType)
     (outer : Field P C) (inner : Field C D)
   : Field P D =
-      let known = (@(intrinsic(i64_add))) (outer ()) (inner ()) in
+      let known = (@(intrinsic(int_add))) (outer ()) (inner ()) in
       val () => known
   in
   let val project (P : VType) (C : VType) (S : VType) (field : Field P C)
@@ -36,7 +37,7 @@ begin
   ) =
     project P C Uninit field pointer
   in
-  let DynamicField (P : VType) (C : VType) = Int64 in
+  let DynamicField (P : VType) (C : VType) = Int in
   let val materialize (P : VType) (C : VType) (field : Field P C) : DynamicField P C = offset P C
     field in
   let dynamic = (
@@ -44,7 +45,7 @@ begin
     #compose = {
       fn (P : VType) (C : VType) (D : VType) (outer : DynamicField P C) (inner : DynamicField C D)
       =>
-        ! numeric/int64/add outer inner
+        ! numeric/int/add outer inner
     },
     #initialized = {
       fn (P : VType) (C : VType) (field : DynamicField P C) (pointer : Ptr P Init) =>
@@ -56,7 +57,7 @@ begin
         do address <- ! memory/offset (unsafe/address P Uninit pointer) field;
         (ret (unsafe/from_address C Uninit address) : Ret (Ptr C Uninit))
     },
-    #unsafe = #from_offset = { fn (P : VType) (C : VType) (offset : Int64) => ret offset }
+    #unsafe = #from_offset = { fn (P : VType) (C : VType) (offset : Int) => ret offset }
   ) in
   (
     (

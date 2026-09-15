@@ -86,10 +86,10 @@ mod normalization {
         let sps = Fixture::sps("local-normalization.zy");
         assert_eq!(sps.matches("pack-closure(").count(), 1, "{sps}");
         assert_eq!(sps.matches("open-closure ").count(), 2, "{sps}");
-        assert_eq!(sps.matches("<primitive:int64_add>").count(), 1, "{sps}");
-        assert!(!sps.contains("<extern:int64_add/2>"), "{sps}");
+        assert_eq!(sps.matches("<primitive:int_add>").count(), 1, "{sps}");
+        assert!(!sps.contains("<extern:int_add/2>"), "{sps}");
         assert_eq!(sps.matches("pack-continuation(").count(), 2, "{sps}");
-        assert!(!sps.contains("<extern:int64_mul/2>"), "{sps}");
+        assert!(!sps.contains("<extern:int_mul/2>"), "{sps}");
     }
 }
 

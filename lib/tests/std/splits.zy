@@ -1,12 +1,12 @@
 @[package(test(of(std)))]
 begin
   let make_std = @(import(std)) that
-  param (/Ret; /Int64; /String; builtin) : @(import(std/builtin)) that
-  let (/option; /int64; /string; /process) = builtin |> make_std in
+  param (/Ret; /Int; /String; builtin) : @(import(std/builtin)) that
+  let (/option; /int; /string; /process) = builtin |> make_std in
   do present <- ! string/split_once "left:right" ':';
   do present_status <- ! option/fold
     (String * String)
-    (Ret Int64)
+    (Ret Int)
     present
     { ret 1 }
     {
@@ -15,12 +15,12 @@ begin
   do absent <- ! string/split_at "short" 99;
   do absent_status <- ! option/fold
     (String * String)
-    (Ret Int64)
+    (Ret Int)
     absent
     { ret 0 }
     {
       fn pair => ret 1
     };
-  do status <- ! int64/add present_status absent_status;
+  do status <- ! int/add present_status absent_status;
   ! process/exit status
 end

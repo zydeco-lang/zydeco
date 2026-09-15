@@ -20,7 +20,7 @@ begin
     | +Product(fields) => {
       fn (R : CType) (source : Bytes) (no : Thk R) (yes : Thk (Record -> R)) =>
         do length <- ! bytes/length source;
-        ! numeric/int64/eq R length shape/size {
+        ! numeric/int/eq R length shape/size {
           ! bytes/slice R source 0 fields/left/size no {
             fn first =>
               ! bytes/slice R source fields/offset fields/right/size no {

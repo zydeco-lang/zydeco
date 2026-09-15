@@ -1,6 +1,6 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /UInt32; /Addr; /OS;
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /UInt32; /Addr; /OS;
     /numeric; /process; builtin) : @(import(std/builtin)) that
   let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
     builtin |> (@(import(std/memory)))
@@ -11,7 +11,7 @@ begin
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
 
-  let ! invalid (count : Int64) (alignment : Int64) (next : Thk OS) : OS =
+  let ! invalid (count : Int) (alignment : Int) (next : Thk OS) : OS =
     ! raw/allocate OS count alignment {
       fn fault =>
         match fault

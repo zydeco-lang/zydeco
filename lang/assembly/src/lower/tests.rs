@@ -31,7 +31,7 @@ impl Fixture {
     }
 
     fn integer(&mut self, value: i64) -> sk::ValueId {
-        sk::Literal::Integer(sk::IntegerLiteral::Int64(value)).build(&mut self.arena, None)
+        sk::Literal::Integer(sk::IntegerLiteral::Int(value)).build(&mut self.arena, None)
     }
 
     fn block(&mut self, name: &str, body: sk::CompuId) -> sk::ValueId {
@@ -201,7 +201,7 @@ impl Fixture {
                 let operands = [fixture.integer(3), fixture.integer(5)];
                 let value = sk::Primitive {
                     operation: sk::PrimitiveOp::Integer(
-                        sk::IntegerType::Int64,
+                        sk::IntegerType::Int,
                         sk::IntegerArithmetic::Sub,
                     ),
                     operands,
@@ -382,7 +382,7 @@ fn drivers_preserve_field_order_aliases_and_all_representation_policies() {
                 let mut id = explicit.root;
                 for expected in (0..32).rev() {
                     let Program::Instruction(
-                        Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int64(
+                        Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int(
                             value,
                         ))))),
                         next,
@@ -462,7 +462,7 @@ fn drivers_preserve_observation_tables_literals_primitives_and_external_discover
     assert_eq!(arms.iter().map(|(tag, _)| tag.idx).collect::<Vec<_>>(), [9, 4, 7]);
     for (_, entry) in arms {
         let Program::Instruction(
-            Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int64(value))))),
+            Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int(value))))),
             _,
         ) = explicit.arena.programs[entry]
         else {

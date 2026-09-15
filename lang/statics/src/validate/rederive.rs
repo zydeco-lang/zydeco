@@ -1031,7 +1031,7 @@ impl<'a> RederiveChecker<'a> {
                     self.check_value(tail, &local);
                 }
             }
-            | Value::Int64Op(Int64ValueOp { operands, .. }) => {
+            | Value::IntOp(IntValueOp { operands, .. }) => {
                 for operand in operands {
                     self.check_value(operand, scope);
                 }
@@ -1375,11 +1375,11 @@ fn literal_primitive(literal: &Literal) -> Option<PrimitiveType> {
             | IntegerLiteral::Int8(_) => IntegerType::Int8,
             | IntegerLiteral::Int16(_) => IntegerType::Int16,
             | IntegerLiteral::Int32(_) => IntegerType::Int32,
-            | IntegerLiteral::Int64(_) => IntegerType::Int64,
+            | IntegerLiteral::Int(_) => IntegerType::Int,
             | IntegerLiteral::UInt8(_) => IntegerType::UInt8,
             | IntegerLiteral::UInt16(_) => IntegerType::UInt16,
             | IntegerLiteral::UInt32(_) => IntegerType::UInt32,
-            | IntegerLiteral::UInt64(_) => IntegerType::UInt64,
+            | IntegerLiteral::UInt(_) => IntegerType::UInt,
             | IntegerLiteral::Unresolved(_) => return None,
         }),
         | Literal::Float(float) => PrimitiveType::Float(match float {

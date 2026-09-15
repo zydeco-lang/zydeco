@@ -1,7 +1,8 @@
 -- Fixed recipes specialize before execution; dynamic views retain an explicit thunk.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /numeric; /memory; builtin) :
-  @(import("../builtin.zy")) that
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+    "../builtin.zy"
+  )) that
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
   let Cps (A : VType) = forall (R : CType) . Thk (A -> R) -> R in
   let Checked (E : VType) (A : VType) = forall (R : CType) . Thk (E -> R) -> Thk (A -> R) -> R in
@@ -73,10 +74,10 @@ begin
       )
   in
   let val header (M : VType) (Metadata : VType) (Payload : VType)
-    (metadata : Operations Metadata M) (metadata_offset : Int64) (payload_offset : Int64)
+    (metadata : Operations Metadata M) (metadata_offset : Int) (payload_offset : Int)
   : Header M Payload =
-      let metadata_offset = (@(intrinsic(i64_add))) metadata_offset 0 in
-      let payload_offset = (@(intrinsic(i64_add))) payload_offset 0 in
+      let metadata_offset = (@(intrinsic(int_add))) metadata_offset 0 in
+      let payload_offset = (@(intrinsic(int_add))) payload_offset 0 in
       let H (S : VType) = Addr in
       let val from_address (S : VType) (address : Addr) : H S = address in
       let val address (S : VType) (handle : H S) : Addr = handle in
@@ -95,18 +96,18 @@ begin
       ((= H, #unsafe = (= from_address, = address, = open)) : Header M Payload)
   in
   let val inline (M : VType) (Metadata : VType) (Payload : VType)
-    (metadata : Operations Metadata M) (payload_offset : Int64)
+    (metadata : Operations Metadata M) (payload_offset : Int)
   : Header M Payload =
       header M Metadata Payload metadata 0 payload_offset
   in
   let val prefix (M : VType) (Metadata : VType) (Payload : VType)
-    (metadata : Operations Metadata M) (metadata_offset : Int64)
+    (metadata : Operations Metadata M) (metadata_offset : Int)
   : Header M Payload =
       header M Metadata Payload metadata metadata_offset 0
   in
   let dynamic_header : Thk (
     forall (M : VType) (Metadata : VType) (Payload : VType) (S : VType) .
-      Operations Metadata M -> Int64 -> Int64 -> Addr -> Cps (Ptr Payload S * M)
+      Operations Metadata M -> Int -> Int -> Addr -> Cps (Ptr Payload S * M)
   ) = {
     fn M Metadata Payload S metadata metadata_offset payload_offset handle R yes =>
       do location <- ! memory/offset handle metadata_offset;
@@ -133,17 +134,17 @@ begin
   : View (Checked E) H B =
       val handle => { fn R no yes => ! (view handle) R no { fn value => ! yes (transform value) } }
   in
-  let val bounded (L : VType) (S : VType) (H : VType) (capacity : Int64)
-    (view : View Cps H (Ptr L S * Int64))
-  : View (Checked Fault) H (Ptr L S * Int64) =
+  let val bounded (L : VType) (S : VType) (H : VType) (capacity : Int)
+    (view : View Cps H (Ptr L S * Int))
+  : View (Checked Fault) H (Ptr L S * Int) =
       val handle =>
         {
           fn R no yes =>
-            ! numeric/int64/lt R capacity 0 { ! no +InvalidLayout() } {
+            ! numeric/int/lt R capacity 0 { ! no +InvalidLayout() } {
               ! (view handle) R {
                 fn (pointer, count) =>
-                  ! numeric/int64/lt R count 0 { ! no +Bounds() } {
-                    ! numeric/int64/gt R count capacity { ! no +Bounds() } {
+                  ! numeric/int/lt R count 0 { ! no +Bounds() } {
+                    ! numeric/int/gt R count capacity { ! no +Bounds() } {
                       ! yes (pointer, count)
                     }
                   }
@@ -152,8 +153,8 @@ begin
         }
   in
   let val counted_checked (L : VType) (A : VType) (S : VType) (H : VType)
-    (layout : Operations L A) (view : View (Checked Fault) H (Ptr L S * Int64))
-  : View (Checked Fault) (H * Int64) (Ptr L S) =
+    (layout : Operations L A) (view : View (Checked Fault) H (Ptr L S * Int))
+  : View (Checked Fault) (H * Int) (Ptr L S) =
       val input =>
         {
           fn R no yes =>
@@ -165,9 +166,9 @@ begin
         }
   in
   let val counted (L : VType) (A : VType) (S : VType) (H : VType)
-    (layout : Operations L A) (view : View Cps H (Ptr L S * Int64))
-  : View (Checked Fault) (H * Int64) (Ptr L S) =
-      counted_checked L A S H layout (as_checked Fault H (Ptr L S * Int64) view)
+    (layout : Operations L A) (view : View Cps H (Ptr L S * Int))
+  : View (Checked Fault) (H * Int) (Ptr L S) =
+      counted_checked L A S H layout (as_checked Fault H (Ptr L S * Int) view)
   in
   pack (= Header as Header : VType -> VType -> VType)
       (= Cps as Cps : VType -> CType)

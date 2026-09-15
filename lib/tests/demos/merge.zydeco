@@ -1,23 +1,23 @@
 begin
-  param (/VType; /Ret; /Unit; /process; /Int64; /numeric; /system) : @(import(
+  param (/VType; /Ret; /Unit; /process; /Int; /numeric; /system) : @(import(
     "../../std/builtin.zy"
   )) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   def List (A : VType) : VType =
     data
     | +Nil : Unit
     | +Cons : A * List A
     end
   that
-  def fix merge (a : List Int64) (b : List Int64) : Ret (List Int64) =
+  def fix merge (a : List Int) (b : List Int) : Ret (List Int) =
     match a
     | +Nil() => ret b
     | +Cons(a_head, a_tail) =>
       match b
       | +Nil() => ret a
       | +Cons(b_head, b_tail) =>
-        ! int64/gt
-          (Ret (List Int64))
+        ! int/gt
+          (Ret (List Int))
           a_head
           b_head
           {

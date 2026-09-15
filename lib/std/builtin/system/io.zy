@@ -3,32 +3,32 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let String = @(intrinsic(string)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   param Addr : VType in
   param Reader : VType in
   param Writer : VType in
   param OS : CType in
-  let Error = Thk (Int64 -> String -> OS) in
+  let Error = Thk (Int -> String -> OS) in
   let Success (A : VType) = Thk (A -> OS) in
   let Done = Thk OS in
     (
       @[builtin(io_read)] (
-        #read :: Thk (Reader -> Int64 -> Error -> Thk (Addr -> Int64 -> OS) -> OS)
+        #read :: Thk (Reader -> Int -> Error -> Thk (Addr -> Int -> OS) -> OS)
       )
     )
   * (
       @[builtin(io_read_line)] (
-        #read_line :: Thk (Reader -> Error -> Done -> Thk (Addr -> Int64 -> OS) -> OS)
+        #read_line :: Thk (Reader -> Error -> Done -> Thk (Addr -> Int -> OS) -> OS)
       )
     )
   * (
       @[builtin(io_read_all)] (
-        #read_all :: Thk (Reader -> Error -> Thk (Addr -> Int64 -> OS) -> OS)
+        #read_all :: Thk (Reader -> Error -> Thk (Addr -> Int -> OS) -> OS)
       )
     )
   * (
       @[builtin(io_write_all)] (
-        #write_all :: Thk (Writer -> Addr -> Int64 -> Error -> Done -> OS)
+        #write_all :: Thk (Writer -> Addr -> Int -> Error -> Done -> OS)
       )
     )
   * (

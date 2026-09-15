@@ -1,19 +1,19 @@
 begin
-  param (/Ret; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
-  def fix sum (i : Int64) (acc : Int64) : Ret Int64 = ! int64/eq
-    (Ret Int64)
+  param (/Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
+  def fix sum (i : Int) (acc : Int) : Ret Int = ! int/eq
+    (Ret Int)
     i
     0
     { ret acc }
     {
       -- do i <- ret i;
-      do i' <- ! int64/sub i 1;
-      do acc' <- ! int64/add i acc;
+      do i' <- ! int/sub i 1;
+      do acc' <- ! int/add i acc;
       ! sum i' acc'
     } that
 
   do z <- ! sum 10 0;
-  do r <- ! int64/sub z 55;
+  do r <- ! int/sub z 55;
   ! process/exit r
 end

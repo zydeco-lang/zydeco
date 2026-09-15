@@ -1,7 +1,7 @@
 -- Function Types and the abort example
 -- Funciton Type
 begin
-  param (/VType; /CType; /Thk; /Ret; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
   def Fn (A : VType) (B : CType) =
     codata
     | .push : A -> B
@@ -33,6 +33,6 @@ begin
       end
   that
 
-  do i <- ! abort Int64 0 .more 1 .more 2 .done;
+  do i <- ! abort Int 0 .more 1 .more 2 .done;
   ! process/exit i
 end

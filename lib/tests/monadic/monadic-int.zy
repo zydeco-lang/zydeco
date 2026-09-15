@@ -1,8 +1,7 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (/numeric; /system; /Ret; /OS; /process; /Int64; builtin) :
-  @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  param (/numeric; /system; /Ret; /OS; /process; /Int; builtin) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
 
@@ -20,7 +19,7 @@ begin
     end that
 
     do value <- ! translated Ret { ! ret_monad };
-    ! int64/eq
+    ! int/eq
       OS
       value
       1

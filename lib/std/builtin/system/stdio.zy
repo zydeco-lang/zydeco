@@ -4,7 +4,7 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let String = @(intrinsic(string)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   param Reader : VType in
   param Writer : VType in
   param OS : CType in
@@ -15,12 +15,12 @@ begin
   * (@[builtin(stdout)] (#stdout :: Thk (Ret Writer)))
   * (@[builtin(stderr)] (#stderr :: Thk (Ret Writer)))
   * (@[builtin(write_str)] (#write :: Write))
-  * (@[builtin(write_int)] (#write_int :: Thk (Int64 -> Done -> OS)))
+  * (@[builtin(write_int)] (#write_int :: Thk (Int -> Done -> OS)))
   * (@[builtin(write_line)] (#write_line :: Write))
   * (@[builtin(read_line)] (#read_line :: Thk (Line -> OS)))
   * (
       @[builtin(read_line_as_int)] (
-        #read_int :: Thk (Done -> Thk (Int64 -> OS) -> OS)
+        #read_int :: Thk (Done -> Thk (Int -> OS) -> OS)
       )
     )
   * (@[builtin(read_till_eof)] (#read_all :: Thk (Line -> OS)))

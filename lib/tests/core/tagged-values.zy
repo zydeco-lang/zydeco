@@ -1,17 +1,17 @@
 begin
-  param (/OS; /process; /Int64; /UInt64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
-  let uint64 = numeric/uint64 that
-  do positive_box <- ! int64/add 4611686018427387903 1;
-  ! int64/eq OS positive_box 4611686018427387904 {
-    do negative_box <- ! int64/sub -4611686018427387904 1;
-    ! int64/eq OS negative_box -4611686018427387905 {
-      do unsigned_box <- ! uint64/add 9223372036854775807 1;
-      ! uint64/eq OS unsigned_box 9223372036854775808 {
-        do immediate_again <- ! int64/sub positive_box 1;
-        ! int64/eq
+  param (/OS; /process; /Int; /UInt; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
+  let uint = numeric/uint that
+  do wrapped_min <- ! int/add 4611686018427387903 1;
+  ! int/eq OS wrapped_min -4611686018427387904 {
+    do wrapped_max <- ! int/sub -4611686018427387904 1;
+    ! int/eq OS wrapped_max 4611686018427387903 {
+      do wrapped_zero <- ! uint/add 9223372036854775807 1;
+      ! uint/eq OS wrapped_zero 0 {
+        do maximum_again <- ! int/sub wrapped_min 1;
+        ! int/eq
           OS
-          immediate_again
+          maximum_again
           4611686018427387903
           { ! process/exit 0 }
           { ! process/exit 1 }

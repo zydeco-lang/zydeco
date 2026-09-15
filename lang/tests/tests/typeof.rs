@@ -13,10 +13,10 @@ begin
   let Computation = @[typeof] ret 1 that
   let Suspended = @[typeof] { ret 1 } that
   let value : Value = 2 that
-  let same : Int64 = value that
+  let same : Int = value that
   let computation : Thk Computation = { ret same } that
   let suspended : Suspended = computation that
-  let exact : Thk (Ret Int64) = suspended that
+  let exact : Thk (Ret Int) = suspended that
   ! exact
 end
 "#,
@@ -25,7 +25,7 @@ end
 
 #[test]
 fn typeof_returns_types_as_source_roots_and_kinds_of_type_operands() {
-    ["@[typeof] 1", "@[typeof] @(intrinsic(i64))"].into_iter().for_each(|source| {
+    ["@[typeof] 1", "@[typeof] @(intrinsic(int))"].into_iter().for_each(|source| {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("classifier.zy");
         std::fs::write(&path, source).unwrap();
@@ -39,12 +39,12 @@ fn typeof_returns_types_as_source_roots_and_kinds_of_type_operands() {
     SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
-  let ValueKind = @[typeof] Int64 that
+  let ValueKind = @[typeof] Int that
   let ConstructorKind = @[typeof] Ret that
   let A : ValueKind = Unit that
   let F : ConstructorKind = Ret that
   let nested_kind = @[typeof] @[typeof] 1 that
-  let B : nested_kind = Int64 that
+  let B : nested_kind = Int that
   let value : A = () that
   let computation : Thk (F B) = { ret 0 } that
   ! computation
@@ -81,7 +81,7 @@ begin
   let replacement : Identity = { fn (A : VType) (value : A) => ret value } that
   let Named = @[typeof] (#count = 1) that
   let field : Named = (#count = 2) that
-  ! replacement Int64 field/count
+  ! replacement Int field/count
 end
 "#,
     ));
@@ -96,22 +96,22 @@ fn typeof_allows_erased_value_references_in_pi_val_pi_and_sigma() {
     SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
-  let Call : CType = pi (x : Int64) . (@[typeof] ret x) that
-  let call : Thk Call = { fn (x : Int64) => ret x } that
-  let ValueCall = val pi (x : Int64) . (@[typeof] x) that
-  let value_call : ValueCall = val (x : Int64) => x that
-  let Pair = sigma (x : Int64) . (@[typeof] x) that
+  let Call : CType = pi (x : Int) . (@[typeof] ret x) that
+  let call : Thk Call = { fn (x : Int) => ret x } that
+  let ValueCall = val pi (x : Int) . (@[typeof] x) that
+  let value_call : ValueCall = val (x : Int) => x that
+  let Pair = sigma (x : Int) . (@[typeof] x) that
   let pair : Pair = (1, 2) that
-  let exact : Int64 * Int64 = pair that
+  let exact : Int * Int = pair that
   ! call (value_call 0)
 end
 "#,
     ));
     [
-        "let Bad = pi (x : Int64) . x in ret ()",
-        "let Bad = val pi (x : Int64) . x in ret ()",
-        "let Bad = sigma (x : Int64) . x in ret ()",
-        "let Bad = @[typeof] (pi (x : Int64) . x) in ret ()",
+        "let Bad = pi (x : Int) . x in ret ()",
+        "let Bad = val pi (x : Int) . x in ret ()",
+        "let Bad = sigma (x : Int) . x in ret ()",
+        "let Bad = @[typeof] (pi (x : Int) . x) in ret ()",
     ]
     .into_iter()
     .for_each(|source| {
@@ -126,7 +126,7 @@ fn typeof_allows_erased_type_references_in_kind_arrows() {
 begin
   let ConstructorKind = pi (A : VType) . (@[typeof] A) that
   let Identity : ConstructorKind = fn (A : VType) => A that
-  let value : Identity Int64 = 0 that
+  let value : Identity Int = 0 that
   ret value
 end
 "#,
@@ -140,13 +140,13 @@ fn typeof_shares_local_inference_without_closing_a_new_region() {
 begin
   let identity = { fn value => ret value } that
   let Signature = @[typeof] identity that
-  let replacement : Signature = { fn (value : Int64) => ret value } that
+  let replacement : Signature = { fn (value : Int) => ret value } that
   ! identity 0
 end
 "#,
         r#"
 begin
-  let replacement : Signature = { fn (value : Int64) => ret value } that
+  let replacement : Signature = { fn (value : Int) => ret value } that
   let Signature = @[typeof] identity that
   let identity = { fn value => ret value } that
   ! identity 0
@@ -200,7 +200,7 @@ fn typeof_rejects_unannotated_holes_and_kind_operands() {
     .for_each(|source| {
         SourceCase::assert_rejected(SourceCase::check(source), TyckDiagnosticCode::TypeOfKind)
     });
-    SourceCase::assert_accepted(SourceCase::check("let T = @[typeof] (_ : Int64) in ret (0 : T)"));
+    SourceCase::assert_accepted(SourceCase::check("let T = @[typeof] (_ : Int) in ret (0 : T)"));
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn typeof_reuses_abstract_witnesses_within_one_opening() {
         r#"
 begin
   let Box = exists (X : VType) . X that
-  let boxed : Box = (Int64, 0) that
+  let boxed : Box = (Int, 0) that
   let (X, value) = boxed in
   let T = @[typeof] value in
   let same : T = value in
@@ -271,7 +271,7 @@ end
             r#"
 begin
   let Box = exists (X : VType) . X that
-  let boxed : Box = (Int64, 0) that
+  let boxed : Box = (Int, 0) that
   let (X, first) = boxed in
   let (Y, second) = boxed in
   let wrong : (@[typeof] first) = second in
@@ -319,7 +319,7 @@ fn typeof_kind_queries_can_annotate_recursive_types() {
     SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
-  def Node : (@[typeof] Int64) = data | +End : Unit | +Next : Node end that
+  def Node : (@[typeof] Int) = data | +End : Unit | +Next : Node end that
   ret (+End() : Node)
 end
 "#,
@@ -333,7 +333,7 @@ fn typeof_cannot_extract_an_escaping_existential_witness() {
             r#"
 begin
   let Box = exists (X : VType) . X that
-  let boxed : Box = (Int64, 0) that
+  let boxed : Box = (Int, 0) that
   let Leaked = @[typeof] (let (X, value) = boxed in value) that
   ret ()
 end
@@ -363,7 +363,7 @@ begin
   let Box = exists (X : VType) . X that
   let Unbox = pi ((X, value) : Box) . (@[typeof] ret value) that
   let unbox : Thk Unbox = { fn ((X, value) : Box) => ret value } that
-  let result : Thk (Ret Int64) = { ! unbox (Int64, 0) } that
+  let result : Thk (Ret Int) = { ! unbox (Int, 0) } that
   ! result
 end
 "#,
@@ -375,10 +375,10 @@ fn typeof_imports_the_complete_provider_classifier() {
     SourceCase::check_with_import(
         r#"
 let Builder = @[typeof] @(import("imported.zy")) in
-let make : Builder = val (value : Int64) => (#value = value) in
+let make : Builder = val (value : Int) => (#value = value) in
 ret (make 0)
 "#,
-        "val (value : @(intrinsic(i64))) => (#value = value)",
+        "val (value : @(intrinsic(int))) => (#value = value)",
     )
     .unwrap();
 }
@@ -389,7 +389,7 @@ fn typeof_does_not_infer_across_import_boundaries() {
         SourceCase::check_with_import(
             r#"
 let Signature = @[typeof] @(import("imported.zy")) in
-let replacement : Signature = { fn (value : Int64) => ret value } in
+let replacement : Signature = { fn (value : Int) => ret value } in
 ret ()
 "#,
             "{ fn value => ret value }",
@@ -428,7 +428,7 @@ fn typeof_composes_with_monadic_elaboration() {
     SourceCase::assert_accepted(SourceCase::check_monadic(
         r#"
 begin
-  let translated = { @[monadic] fn (value : Int64) => ret (value : (@[typeof] value)) } that
+  let translated = { @[monadic] fn (value : Int) => ret (value : (@[typeof] value)) } that
   let Signature = @[typeof] translated that
   let same : Signature = translated that
   ret ()

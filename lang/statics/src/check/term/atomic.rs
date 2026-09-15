@@ -290,11 +290,11 @@ impl TermChecker<'_> {
                                 }
                                 | Some(_) | None => {
                                     let default = ss::PrimitiveTy(ss::PrimitiveType::Integer(
-                                        ss::IntegerType::Int64,
+                                        ss::IntegerType::Int,
                                     ))
                                     .build(tycker, &self.info);
                                     let ty = Lub::lub_k(ty, default, tycker)?;
-                                    (ty, ss::IntegerType::Int64)
+                                    (ty, ss::IntegerType::Int)
                                 }
                             },
                             | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker

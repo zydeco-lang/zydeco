@@ -45,7 +45,7 @@ fn hover_combines_type_and_documentation_summary() {
         "--| The answer.\n--|\n--| Longer explanation.\n@[doc] let answer = 42 in ¦answer",
     );
     let hover = fixture.hover();
-    assert!(hover.contains("answer : Int64"), "{hover}");
+    assert!(hover.contains("answer : Int"), "{hover}");
     assert!(hover.contains("The answer."), "{hover}");
     assert!(!hover.contains("Longer explanation."), "{hover}");
 }
@@ -55,7 +55,7 @@ fn projection_hover_includes_the_documented_field() {
     let fixture =
         Fixture::new("let module = (\n--| Current value.\n@[doc] (#value = 3)) in module/¦value");
     let hover = fixture.hover();
-    assert!(hover.contains("Int64"), "{hover}");
+    assert!(hover.contains("Int"), "{hover}");
     assert!(hover.contains("Current value."), "{hover}");
 }
 
@@ -64,7 +64,7 @@ fn shadowed_names_do_not_inherit_outer_documentation() {
     let fixture =
         Fixture::new("--| Outer answer.\n@[doc] let answer = 42 in let answer = 0 in ¦answer");
     let hover = fixture.hover();
-    assert!(hover.contains("answer : Int64"), "{hover}");
+    assert!(hover.contains("answer : Int"), "{hover}");
     assert!(!hover.contains("Outer answer."), "{hover}");
 }
 
@@ -77,7 +77,7 @@ fn source_prose_is_readable_at_its_comment() {
         .prepare_documentation(&fixture.path, fixture.position, HoverOptions::default())
         .unwrap();
     assert!(prepared.view.signature.is_none());
-    assert_eq!(prepared.view.declared_signature.as_deref(), Some("Int64"));
+    assert_eq!(prepared.view.declared_signature.as_deref(), Some("Int"));
     let origin = prepared.view.origin.unwrap();
     let followed = fixture
         .project
@@ -112,14 +112,14 @@ fn semantic_links_navigate_and_report_errors_at_the_authored_destination() {
 #[test]
 fn persistent_documentation_keeps_generic_contract_beside_concrete_type() {
     let fixture = Fixture::new(
-        "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(i64)) in\nlet Module = param Integer : VType in\n--| Generic value.\n--|\n--| Read this value to inspect the module.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in\ncounter/¦value",
+        "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(int)) in\nlet Module = param Integer : VType in\n--| Generic value.\n--|\n--| Read this value to inspect the module.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in\ncounter/¦value",
     );
     let prepared = fixture
         .project
         .prepare_documentation(&fixture.path, fixture.position, HoverOptions::default())
         .unwrap();
     assert_eq!(prepared.view.title, "value");
-    assert_eq!(prepared.view.signature.as_deref(), Some("Int64"));
+    assert_eq!(prepared.view.signature.as_deref(), Some("Int"));
     assert_eq!(prepared.view.declared_signature.as_deref(), Some("Integer"));
     assert!(prepared.view.sections[0].markdown.contains("Read this value"));
     assert!(prepared.view.origin.is_some());

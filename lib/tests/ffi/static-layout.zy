@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt64; /Int64;
+  param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt; /Int;
     /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
   let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
     @(import("../../std/memory/package.zy"))
@@ -9,7 +9,7 @@ begin
   let Fault = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
-  let inspect : Thk (Addr -> Int64 -> Ret UInt64) =
+  let inspect : Thk (Addr -> Int -> Ret UInt) =
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_record")))
   in
   match layouts/align (UInt8 * UInt32) 64 (
@@ -26,7 +26,7 @@ begin
           ! repr/unsafe/init OS vacant (7 : UInt8, 16909060 : UInt32) {
             fn value =>
               do result <- ! inspect (pointer/unsafe/address L Init value) repr/size;
-              ! numeric/uint64/eq OS result 1 {
+              ! numeric/uint/eq OS result 1 {
                 ! repr/unsafe/take OS value {
                   fn vacant _ =>
                     ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }

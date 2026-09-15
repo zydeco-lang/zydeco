@@ -1,17 +1,17 @@
 -- One recursive interface instantiated with both value and computation arguments.
 begin
-  param (/VType; /CType; /Int64; /Char; /String; /Thk; /Ret;
-    /int64; /char; /string; /args; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Int; /Char; /String; /Thk; /Ret;
+    /int; /char; /string; /args; /process) : @(import("../../std/builtin.zy")) that
   def Stream (A : VType) (R : CType) : CType =
     codata
     | .item : A -> Stream A R
     | .done : R
     end
   that
-  def fix integers (total : Int64) : Stream Int64 (Ret Int64) =
+  def fix integers (total : Int) : Stream Int (Ret Int) =
     comatch
     | .item value =>
-      do next <- ! int64/add total value;
+      do next <- ! int/add total value;
       ! integers next
     | .done => ret total
     end
@@ -22,12 +22,12 @@ begin
     | .done => ret last
     end
   in
-  def ! choose (selector : Int64) : Ret (Thk (Stream Int64 (Ret Int64))) =
-    ! int64/eq (Ret (Thk (Stream Int64 (Ret Int64)))) selector 0
+  def ! choose (selector : Int) : Ret (Thk (Stream Int (Ret Int))) =
+    ! int/eq (Ret (Thk (Stream Int (Ret Int)))) selector 0
       { ret { ! integers 0 } }
       {
         ret {
-          do zero <- ! int64/sub selector selector;
+          do zero <- ! int/sub selector selector;
           ! integers zero
         }
       }
@@ -38,8 +38,8 @@ begin
   do total <- ! sink .item 5 .item 7 .done;
   do last <- ! characters 'a' .item 'b' .item 'c' .done;
   do codepoint <- ! char/codepoint last;
-  do character_difference <- ! int64/sub codepoint 99;
-  do difference <- ! int64/sub total 12;
-  do difference <- ! int64/add difference character_difference;
+  do character_difference <- ! int/sub codepoint 99;
+  do difference <- ! int/sub total 12;
+  do difference <- ! int/add difference character_difference;
   ! process/exit difference
 end

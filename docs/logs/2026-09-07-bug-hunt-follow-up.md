@@ -128,7 +128,7 @@ Removing the separate stack-allocation path for A6 did not remove suffix layouts
 
 ### G9: abstraction annotations during package introduction
 
-The report flags `pack ... is Int64 where (0 : X)` because the resulting package can expose a concrete payload type
+The report flags `pack ... is Int where (0 : X)` because the resulting package can expose a concrete payload type
 despite the source annotation naming the abstract binder.
 No warning or new annotation policy was implemented in the fix pass. The current account
 of concrete and abstract payloads is in [Package Introduction](../../DESIGN.md#package-introduction).

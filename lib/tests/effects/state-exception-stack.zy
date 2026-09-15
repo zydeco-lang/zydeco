@@ -16,10 +16,10 @@ begin
     /stdio;
     /process;
     /String;
-    /Int64;
+    /Int;
     builtin
   ) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   let (/MonadState) = builtin |> state_basis in
   let (/MonadThrow) = builtin |> exception_basis in
@@ -81,49 +81,49 @@ begin
     that
 
     -- A State-specific operation lifted into the concrete stack.
-    def ! add_state_exn (x : Int64) (y : Int64) : StateExn Int64 String Int64 =
-      do z <- ! int64/add x y;
-      ! mo_state_exn Int64 String .return Int64 z
+    def ! add_state_exn (x : Int) (y : Int) : StateExn Int String Int =
+      do z <- ! int/add x y;
+      ! mo_state_exn Int String .return Int z
     that
 
     -- Only here do we choose M, its Monad instance, and one capability package
     -- implementing the source signature above.
     let capability : (
-      #get :: Thk (StateExn Int64 String Int64)
+      #get :: Thk (StateExn Int String Int)
     ) * (
-      #put :: Thk (Int64 -> StateExn Int64 String Unit)
+      #put :: Thk (Int -> StateExn Int String Unit)
     ) * (
       #raise :: Thk (
         forall (A : VType) .
-          Thk Top -> String -> StateExn Int64 String A
+          Thk Top -> String -> StateExn Int String A
       )
     ) * (
       #catch :: Thk (
         forall (A : VType) .
-             Thk Top -> Thk (StateExn Int64 String A)
-          -> Thk (String -> StateExn Int64 String A)
-          -> StateExn Int64 String A
+             Thk Top -> Thk (StateExn Int String A)
+          -> Thk (String -> StateExn Int String A)
+          -> StateExn Int String A
       )
     ) * (
-      #add :: Thk (Int64 -> Int64 -> StateExn Int64 String Int64)
+      #add :: Thk (Int -> Int -> StateExn Int String Int)
     ) = (
-      #get = { ! get Int64 String },
-      #put = { ! put Int64 String },
-      #raise = { ! raise Int64 String },
-      #catch = { ! catch Int64 String },
+      #get = { ! get Int String },
+      #put = { ! put Int String },
+      #raise = { ! raise Int String },
+      #catch = { ! catch Int String },
       #add = add_state_exn
     ) in
 
-    let ! production : StateExn Int64 String Int64 =
-      ! user_program Int64 String
-        (StateExn Int64 String)
-        { ! mo_state_exn Int64 String }
+    let ! production : StateExn Int String Int =
+      ! user_program Int String
+        (StateExn Int String)
+        { ! mo_state_exn Int String }
         capability
         1
         "boom"
     in
 
-    ! run_state_exn Int64 String Int64 OS 7 { ! production }
+    ! run_state_exn Int String Int OS 7 { ! production }
       {
         fn msg =>
           ! stdio/write_line msg {
@@ -136,8 +136,8 @@ begin
             ! stdio/write " " {
               ! stdio/write_int final_state {
                 ! stdio/write "\n" {
-                  ! int64/eq OS answer 8 {
-                    ! int64/eq OS final_state 8 {
+                  ! int/eq OS answer 8 {
+                    ! int/eq OS final_state 8 {
                       ! process/exit 0
                     } {
                       ! process/exit 2

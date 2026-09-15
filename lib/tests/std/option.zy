@@ -1,12 +1,12 @@
 @[package(test(of(std)))]
 begin
   let make_std = @(import(std)) that
-  param (/system; /OS; /Int64; builtin) : @(import(std/builtin)) that
+  param (/system; /OS; /Int; builtin) : @(import(std/builtin)) that
   let (/Option; /option; /process) = builtin |> make_std in
   do value <- ! option/map
-    Int64
-    Int64
-    (+Some(0) : Option Int64)
+    Int
+    Int
+    (+Some(0) : Option Int)
     { fn status => ret status };
   match value
   | +None() => ! process/exit 1

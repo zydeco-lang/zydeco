@@ -169,7 +169,7 @@ impl<'a, P: DebugArena> Pretty<'a, Formatter<'a, P>> for Internal {
             | Internal::Ret => RcDoc::text("Ret"),
             | Internal::Unit => RcDoc::text("Unit"),
             | Internal::Primitive(primitive) => RcDoc::text(primitive.type_name()),
-            | Internal::ValueInt64(operation) => RcDoc::text(operation.intrinsic_name()),
+            | Internal::ValueInt(operation) => RcDoc::text(operation.intrinsic_name()),
             | Internal::OS => RcDoc::text("OS"),
             | Internal::Monad => RcDoc::text("Monad"),
             | Internal::Algebra => RcDoc::text("Algebra"),

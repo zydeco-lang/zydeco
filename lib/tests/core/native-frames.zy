@@ -1,17 +1,17 @@
 begin
-  param (/Ret; /Thk; /Int64; /numeric; /process; /system) : @(import("../../std/builtin.zy")) in
-  let int64 = numeric/int64 in
+  param (/Ret; /Thk; /Int; /numeric; /process; /system) : @(import("../../std/builtin.zy")) in
+  let int = numeric/int in
   -- The returned closure must own its captures after make's activation is reclaimed.
-  def fix make (value : Int64) : Ret (Thk (Ret Int64)) = ret { ret value } in
+  def fix make (value : Int) : Ret (Thk (Ret Int)) = ret { ret value } in
   -- Every iteration returns through local arithmetic continuations and then tail-calls.
-  def fix count (remaining : Int64) : Ret Int64 =
-    ! int64/eq
-      (Ret Int64)
+  def fix count (remaining : Int) : Ret Int =
+    ! int/eq
+      (Ret Int)
       remaining
       0
       { ret 0 }
       {
-        do next <- ! int64/sub remaining 1;
+        do next <- ! int/sub remaining 1;
         ! count next
       }
   in
@@ -19,7 +19,7 @@ begin
   -- saved is held by the suspended caller while this chain reuses active storage.
   do zero <- ! count 100000;
   do value <- ! saved;
-  do status <- ! int64/sub value 71;
-  do status <- ! int64/add status zero;
+  do status <- ! int/sub value 71;
+  do status <- ! int/add status zero;
   ! process/exit status
 end

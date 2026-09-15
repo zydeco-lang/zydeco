@@ -1,10 +1,10 @@
 -- Raw operations: callers establish lifetime, initialization, bounds, and allocator ownership.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int64; /UInt8; /memory; /numeric; builtin) :
+  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /UInt8; /memory; /numeric; builtin) :
   @(import("../builtin.zy")) that
   let Fault = @(import("fault.zy")) in
-  let error : Thk (forall (R : CType) . Thk (Fault -> R) -> Int64 -> R) = {
-    fn (R : CType) (no : Thk (Fault -> R)) (code : Int64) =>
+  let error : Thk (forall (R : CType) . Thk (Fault -> R) -> Int -> R) = {
+    fn (R : CType) (no : Thk (Fault -> R)) (code : Int) =>
       match code
       | 0 => ! no +InvalidLayout()
       | 1 => ! no +AllocationFailed()
@@ -12,16 +12,16 @@ begin
       end
   } in
   let allocate : Thk (
-    forall (R : CType) . Int64 -> Int64 -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
+    forall (R : CType) . Int -> Int -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
   ) = {
     fn (R : CType) size alignment (no : Thk (Fault -> R)) yes =>
       ! memory/allocate R size alignment { ! error R no } yes
   } in
-  let free : Thk (forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R) = {
+  let free : Thk (forall (R : CType) . Addr -> Int -> Int -> Thk (Fault -> R) -> Thk R -> R) = {
     fn (R : CType) address size alignment (no : Thk (Fault -> R)) done =>
       ! memory/free R address size alignment { ! error R no } done
   } in
-  let retain : Thk (forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Fault -> R) -> Thk R -> R) =
+  let retain : Thk (forall (R : CType) . Addr -> Int -> Int -> Thk (Fault -> R) -> Thk R -> R) =
     {
       fn (R : CType) address size alignment (no : Thk (Fault -> R)) done =>
         ! memory/retain R address size alignment { ! error R no } done
@@ -36,7 +36,7 @@ begin
         #copy = memory/copy, #fill = memory/fill,
         #load_addr = memory/load_addr, #store_addr = memory/store_addr,
         #load_u8 = numeric/uint8/load_le, #store_u8 = numeric/uint8/store_le,
-        #load_i64 = numeric/int64/load_le, #store_i64 = numeric/int64/store_le)
+        #load_i64 = numeric/int/load_le, #store_i64 = numeric/int/store_le)
     )
   end
 end

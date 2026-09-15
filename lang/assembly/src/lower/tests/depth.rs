@@ -40,7 +40,7 @@ impl Deep {
         let mut id = build.root;
         for index in 0..Self::DEPTH {
             let Program::Instruction(
-                Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int64(value))))),
+                Instruction::PushArg(Push(Atom::Imm(Imm::Integer(IntegerLiteral::Int(value))))),
                 next,
             ) = build.arena.programs[&id]
             else {

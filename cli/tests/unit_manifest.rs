@@ -75,14 +75,14 @@ fn native_profiles_check_types_identity_and_content_before_linking() {
     let (path, manifest) = fixture.publish(
         "scalar",
         "example/scalar",
-        UnitValueType::Integer(IntegerType::Int64),
+        UnitValueType::Integer(IntegerType::Int),
         &[],
         vec![],
     );
     let import = manifest.import();
     Fixture::validate(std::slice::from_ref(&path), std::slice::from_ref(&import)).unwrap();
     let mut wrong = import.clone();
-    wrong.exports = UnitValueType::Integer(IntegerType::UInt64);
+    wrong.exports = UnitValueType::Integer(IntegerType::UInt);
     assert!(matches!(
         Fixture::validate(std::slice::from_ref(&path), &[wrong]),
         Err(LibraryError::UnitSignature(_))
@@ -185,7 +185,7 @@ fn dependency_closures_share_one_artifact_and_reject_hidden_or_conflicting_provi
     let (conflict, _) = fixture.publish(
         "conflict",
         "example/leaf",
-        UnitValueType::Integer(IntegerType::Int64),
+        UnitValueType::Integer(IntegerType::Int),
         &[],
         vec![],
     );

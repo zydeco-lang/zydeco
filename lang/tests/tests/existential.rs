@@ -8,10 +8,10 @@ fn opens_a_manifest_witness_as_its_disclosed_type() {
         r#"
 begin
   let Transparent =
-    exists (X as Int64 : VType) . X
+    exists (X as Int : VType) . X
   that
-  def packed : Transparent = (Int64, 42) that
-  let val disclose ((X, value) : Transparent) : Int64 = value that
+  def packed : Transparent = (Int, 42) that
+  let val disclose ((X, value) : Transparent) : Int = value that
 
   disclose packed
 end
@@ -26,7 +26,7 @@ fn rejects_a_witness_that_disagrees_with_the_manifest_definition() {
             r#"
 begin
   let Transparent =
-    exists (X as Int64 : VType) . X
+    exists (X as Int : VType) . X
   that
   def packed : Transparent = (Char, 'x') that
 
@@ -44,14 +44,14 @@ fn composes_manifest_existentials_with_named_package_fields() {
         r#"
 begin
   let CounterLibrary =
-    exists (#Counter = ((Representation as Int64) : VType)) .
+    exists (#Counter = ((Representation as Int) : VType)) .
       (#zero :: Representation)
   that
   def library : CounterLibrary = (
-    #Counter = Int64,
+    #Counter = Int,
     #zero = 0,
   ) that
-  let val disclose ((= Counter, = zero) : CounterLibrary) : Int64 = zero that
+  let val disclose ((= Counter, = zero) : CounterLibrary) : Int = zero that
 
   disclose library
 end
@@ -67,10 +67,10 @@ begin
   let Box =
     exists (#Item = Hidden : VType) .
       (#value :: Hidden) *
-      (#consume :: Thk (Hidden -> Ret Int64))
+      (#consume :: Thk (Hidden -> Ret Int))
   that
   def boxed : Box = (
-    #Item = Int64,
+    #Item = Int,
     #value = 41,
     #consume = { fn value => ret value },
   ) that
@@ -93,7 +93,7 @@ begin
     exists (Item : VType) .
       (#value :: Item)
   that
-  def boxed : Box = (Int64, #value = 42) that
+  def boxed : Box = (Int, #value = 42) that
 
   let (/Item; /value) = boxed in
   def selected : Item = value in
@@ -112,7 +112,7 @@ begin
     exists (Item : VType) .
       (#value :: Item)
   that
-  def boxed : Box = (Int64, #value = 42) that
+  def boxed : Box = (Int, #value = 42) that
 
   let (/Item = Left; /Item = Right; /value) = boxed in
   def left : Left = value in
@@ -133,7 +133,7 @@ begin
     exists (Item : VType) .
       (#value :: Item)
   that
-  def boxed : Box = (Int64, #value = 42) that
+  def boxed : Box = (Int, #value = 42) that
 
   let (/Missing) = boxed in
   ()
@@ -154,7 +154,7 @@ begin
     exists (Item : VType) .
       (#Item :: Item)
   that
-  def boxed : Box = (Int64, #Item = 42) that
+  def boxed : Box = (Int, #Item = 42) that
 
   let (/Item) = boxed in
   ()
@@ -175,7 +175,7 @@ begin
     exists (Y as X : VType) .
       Y
   that
-  def packed : Mixed = (Int64, Int64, 7) that
+  def packed : Mixed = (Int, Int, 7) that
   def unpack = {
     fn ((X, Y, value) : Mixed) => ret value
   } that
@@ -192,11 +192,11 @@ fn skips_a_leading_manifest_component_when_instantiating_pack_pi() {
         r#"
 begin
   let Mixed =
-    exists (Y as Int64 : VType) .
+    exists (Y as Int : VType) .
     exists (X : VType) .
       X
   that
-  def packed : Mixed = (Int64, Int64, 9) that
+  def packed : Mixed = (Int, Int, 9) that
   def unpack = {
     fn ((Y, X, value) : Mixed) => ret value
   } that
@@ -213,12 +213,12 @@ fn accepts_payload_at_its_fresh_witness() {
         r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int64)
+    exists (X : VType) . X * Thk (X -> Ret Int)
   that
   def boxed : Box = (
-    Int64,
+    Int,
     0,
-    { fn (x : Int64) => ret x },
+    { fn (x : Int) => ret x },
   ) that
 
   {
@@ -239,12 +239,12 @@ fn scopes_opened_witnesses_over_let_and_function_bodies() {
         r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int64)
+    exists (X : VType) . X * Thk (X -> Ret Int)
   that
   def boxed : Box = (
-    Int64,
+    Int,
     0,
-    { fn (x : Int64) => ret x },
+    { fn (x : Int) => ret x },
   ) that
   def consume_box = {
     fn ((X, value, consume) : Box) => ! consume value
@@ -267,14 +267,14 @@ fn scopes_an_opened_witness_over_a_do_tail() {
         r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int64)
+    exists (X : VType) . X * Thk (X -> Ret Int)
   that
   def boxed : Box = (
-    Int64,
+    Int,
     0,
-    { fn (x : Int64) => ret x },
+    { fn (x : Int) => ret x },
   ) that
-  let val run_box ((X, value, consume) : Box) : Thk (Ret Int64) = {
+  let val run_box ((X, value, consume) : Box) : Thk (Ret Int) = {
     ! consume value
   } that
 
@@ -294,12 +294,12 @@ fn rejects_mixing_payloads_from_distinct_openings() {
             r#"
 begin
   let Box =
-    exists (X : VType) . X * Thk (X -> Ret Int64)
+    exists (X : VType) . X * Thk (X -> Ret Int)
   that
   def ints : Box = (
-    Int64,
+    Int,
     0,
-    { fn (x : Int64) => ret x },
+    { fn (x : Int) => ret x },
   ) that
   def chars : Box = (
     Char,
@@ -333,7 +333,7 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def boxed : Box = (Int64, 0) that
+  def boxed : Box = (Int, 0) that
   def leak = {
     match boxed
     | (X, value) => ret value
@@ -374,7 +374,7 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def boxed : Box = (Int64, 0) that
+  def boxed : Box = (Int, 0) that
   let val repack ((X, value) : Box) : Box = (X, value) that
 
   boxed |> repack
@@ -389,12 +389,12 @@ fn pack_synthesizes_a_manifest_existential_package() {
         r#"
 begin
   let Transparent =
-    exists (X as Int64 : VType) . X
+    exists (X as Int : VType) . X
   that
 
-  let val disclose ((X, value) : Transparent) : Int64 = value that
+  let val disclose ((X, value) : Transparent) : Int = value that
 
-  let packed = pack (X as Int64 : VType) where (42 : X) end in
+  let packed = pack (X as Int : VType) where (42 : X) end in
   disclose packed
 end
 "#,
@@ -407,11 +407,11 @@ fn pack_infers_the_witness_classifier_from_the_definition() {
         r#"
 begin
   let Transparent =
-    exists (X as Int64 : VType) . X
+    exists (X as Int : VType) . X
   that
-  let val disclose ((X, value) : Transparent) : Int64 = value that
+  let val disclose ((X, value) : Transparent) : Int = value that
 
-  let packed = pack (X as Int64) where (42 : X) end in
+  let packed = pack (X as Int) where (42 : X) end in
   disclose packed
 end
 "#,
@@ -424,11 +424,11 @@ fn pack_takes_the_payload_type_verbatim() {
         r#"
 begin
   let Degenerate =
-    exists (X as Int64 : VType) . Int64
+    exists (X as Int : VType) . Int
   that
-  let val disclose ((X, value) : Degenerate) : Int64 = value that
+  let val disclose ((X, value) : Degenerate) : Int = value that
 
-  let packed = pack (X as Int64 : VType) where 42 end in
+  let packed = pack (X as Int : VType) where 42 end in
   disclose packed
 end
 "#,
@@ -441,13 +441,13 @@ fn pack_supports_witness_telescopes() {
         r#"
 begin
   let Mixed =
-    exists (X as Int64 : VType) .
+    exists (X as Int : VType) .
     exists (Y as Char : VType) .
       X
   that
-  let val disclose ((X, Y, value) : Mixed) : Int64 = value that
+  let val disclose ((X, Y, value) : Mixed) : Int = value that
 
-  let mixed = pack (X as Int64 : VType) (Y as Char : VType) where (7 : X), end in
+  let mixed = pack (X as Int : VType) (Y as Char : VType) where (7 : X), end in
   disclose mixed
 end
 "#,
@@ -460,13 +460,13 @@ fn pack_composes_named_witness_fields() {
         r#"
 begin
   let CounterLibrary =
-    exists (#Counter = ((Representation as Int64) : VType)) .
+    exists (#Counter = ((Representation as Int) : VType)) .
       (#zero :: Representation)
   that
-  let val disclose ((= Counter, = zero) : CounterLibrary) : Int64 = zero that
+  let val disclose ((= Counter, = zero) : CounterLibrary) : Int = zero that
 
   let library =
-    pack (#Counter = ((Representation as Int64) : VType))
+    pack (#Counter = ((Representation as Int) : VType))
     where #zero = (0 : Representation) end
   in
   disclose library
@@ -481,10 +481,10 @@ fn pack_checks_against_an_expected_existential() {
         r#"
 begin
   let Transparent =
-    exists (X as Int64 : VType) . X
+    exists (X as Int : VType) . X
   that
-  def packed : Transparent = pack (X as Int64 : VType) where (42 : X) end that
-  let val disclose ((X, value) : Transparent) : Int64 = value that
+  def packed : Transparent = pack (X as Int : VType) where (42 : X) end that
+  let val disclose ((X, value) : Transparent) : Int = value that
 
   disclose packed
 end
@@ -497,10 +497,10 @@ fn pack_elaborates_to_a_runtime_package() {
     SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
-  let Box = exists (X as Int64 : VType) . X that
+  let Box = exists (X as Int : VType) . X that
   let val unpack ((X, value) : Box) : X = value that
-  let packed = pack (X as Int64 : VType) where (0 : X) end in
-  let result : Int64 = unpack packed in
+  let packed = pack (X as Int : VType) where (0 : X) end in
+  let result : Int = unpack packed in
   ! exit result
 end
 "#,
@@ -528,7 +528,7 @@ fn rejects_redundant_evidence_on_a_manifest_parameter() {
         SourceCase::check_value(
             r#"
 begin
-  let packed = pack (X as Int64 : VType) is Char where (42 : X) end in
+  let packed = pack (X as Int : VType) is Char where (42 : X) end in
   packed
 end
 "#,
@@ -567,8 +567,8 @@ fn sealed_pack_elaborates_to_a_runtime_package() {
     SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
-  let Sealed = exists (X : VType) . Int64 that
-  let packed = pack (X : VType) is Int64 where 0 end in
+  let Sealed = exists (X : VType) . Int that
+  let packed = pack (X : VType) is Int where 0 end in
   match packed
   | (X, value) => ! exit 0
   end
@@ -583,10 +583,10 @@ fn sealed_pack_composes_with_a_disclosed_telescope() {
         r#"
 begin
   let Mixed =
-    exists (Y as Char : VType) (X : VType) . Y * Int64
+    exists (Y as Char : VType) (X : VType) . Y * Int
   that
   def packed : Mixed =
-    pack (Y as Char : VType) (X : VType) is Int64 where ('x' : Y, 42) end
+    pack (Y as Char : VType) (X : VType) is Int where ('x' : Y, 42) end
   that
 
   packed
@@ -650,7 +650,7 @@ fn rejects_a_computation_payload() {
         SourceCase::check_value(
             r#"
 begin
-  let packed = pack (X as Int64 : VType) where ret 42 end in
+  let packed = pack (X as Int : VType) where ret 42 end in
   packed
 end
 "#,
@@ -667,9 +667,9 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def boxed : Box = (Int64, 0) that
-  let Module = exists (M : VType) . (Box * Int64) * (#peer :: Box) that
-  def module : Module = ((Int64, (boxed, 0), #peer = boxed)) that
+  def boxed : Box = (Int, 0) that
+  let Module = exists (M : VType) . (Box * Int) * (#peer :: Box) that
+  def module : Module = ((Int, (boxed, 0), #peer = boxed)) that
 
   module
 end
@@ -685,10 +685,10 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def consume : Thk (Box -> Ret Int64) = {
+  def consume : Thk (Box -> Ret Int) = {
     fn (boxed : Box) => ret 0
   } that
-  do value <- ! consume (Int64, 0);
+  do value <- ! consume (Int, 0);
   ! exit value
 end
 "#,
@@ -703,7 +703,7 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def boxed : Box = (Int64, 0) that
+  def boxed : Box = (Int, 0) that
   def producer : Thk (Ret Box) = {
     ret boxed
   } that
@@ -723,7 +723,7 @@ begin
   let Box =
     exists (X : VType) . X
   that
-  def boxed : Box = (Int64, 0) that
+  def boxed : Box = (Int, 0) that
   def Holder = data | +Hold : Box end that
   do stored <- ret (+Hold(boxed) : Holder);
   match stored

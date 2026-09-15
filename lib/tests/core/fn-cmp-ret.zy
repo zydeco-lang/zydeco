@@ -1,8 +1,8 @@
 begin
-  param (/Ret; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
-  def ! f (x : Int64) : Ret Int64 = ! int64/eq
-    (Ret Int64)
+  param (/Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
+  def ! f (x : Int) : Ret Int = ! int/eq
+    (Ret Int)
     x
     0
     { ret 0 }

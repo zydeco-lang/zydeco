@@ -455,11 +455,11 @@ mod tests {
             tail =
                 sk::LetValue { binder: ignored, bindee: unrelated, tail }.build(&mut arena, None);
             let operands = [0, 1].map(|value| {
-                sk::Literal::Integer(sk::IntegerLiteral::Int64(value)).build(&mut arena, None)
+                sk::Literal::Integer(sk::IntegerLiteral::Int(value)).build(&mut arena, None)
             });
             let unrelated = sk::Primitive {
                 operation: sk::PrimitiveOp::Integer(
-                    sk::IntegerType::Int64,
+                    sk::IntegerType::Int,
                     sk::IntegerArithmetic::Add,
                 ),
                 operands,

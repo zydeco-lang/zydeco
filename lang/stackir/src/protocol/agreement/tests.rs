@@ -5,7 +5,7 @@ struct Fixture;
 
 impl Fixture {
     fn integer() -> ValueProtocol {
-        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int64))
+        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))
     }
 
     fn character() -> ValueProtocol {

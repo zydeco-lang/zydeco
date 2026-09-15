@@ -1,19 +1,19 @@
 begin
-  param (/VType; /Unit; /Thk; /Ret; /Int64; /process) : @(import("../../std/builtin.zy")) that
-  let Entry = exists (X : VType) . X * Thk (X -> Ret Int64) that
+  param (/VType; /Unit; /Thk; /Ret; /Int; /process) : @(import("../../std/builtin.zy")) that
+  let Entry = exists (X : VType) . X * Thk (X -> Ret Int) that
   let Holder =
     data
     | +Hold : Entry
     end
   that
 
-  def ! choose (which : Int64) : Ret Entry =
+  def ! choose (which : Int) : Ret Entry =
     match which
-    | 0 => ret ((Int64, 0, { fn (value : Int64) => ret value }) : Entry)
+    | 0 => ret ((Int, 0, { fn (value : Int) => ret value }) : Entry)
     | _ => ret ((Unit, (), { fn (_ : Unit) => ret 1 }) : Entry)
     end
   that
-  def ! consume (entry : Entry) : Ret Int64 =
+  def ! consume (entry : Entry) : Ret Int =
     let (X, value, read) = entry in
     ! read value
   that

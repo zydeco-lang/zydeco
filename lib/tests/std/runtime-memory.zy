@@ -1,6 +1,6 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int64; /Addr; /OS; /numeric; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Int; /Addr; /OS; /numeric; /process; builtin) : @(import(
     std/builtin
   )) that
   let (
@@ -25,15 +25,15 @@ begin
   let Fault = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
-  let int = numeric/int64 in
+  let int = numeric/int in
   let run =
-    match layout/int64
+    match layout/int
     | +Err(_) => fail
     | +Ok(plan) =>
-      let (#L = Element, element) = layout/realize Int64 plan in
-      let allocate : Thk (Int64 -> OS) = {
+      let (#L = Element, element) = layout/realize Int plan in
+      let allocate : Thk (Int -> OS) = {
         fn count =>
-          ! arrays/realize Element Int64 OS element count 16 no {
+          ! arrays/realize Element Int OS element count 16 no {
             fn array =>
               let (/L = Array; /Values; /contents; /values; /elements; /buffer) = array in
               do generated <- ! values/generate { fn index => ret index };
@@ -75,7 +75,7 @@ begin
               }
           }
       } in
-      match records/product Element Element Int64 Int64 element element
+      match records/product Element Element Int Int element element
       | +Err(_) => fail
       | +Ok(record) =>
         let (/L; /value = object) = record in
@@ -90,9 +90,9 @@ begin
                   ! element/unsafe/read OS member {
                     fn value =>
                       ! int/eq OS value 99 {
-                        let view : DynamicView Cps Addr (Ptr Element Init * Int64) = {
+                        let view : DynamicView Cps Addr (Ptr Element Init * Int) = {
                           fn handle =>
-                            ! view_unsafe/dynamic_header Int64 Element Element Init element 0
+                            ! view_unsafe/dynamic_header Int Element Element Init element 0
                               displacement handle
                         } in
                         ! view (pointer/unsafe/address L Init live) OS {

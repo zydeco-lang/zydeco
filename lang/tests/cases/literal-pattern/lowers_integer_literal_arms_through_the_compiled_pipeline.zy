@@ -1,7 +1,7 @@
 -- stage: lower
 
 begin
-  let n : Int64 = 3 that
+  let n : Int = 3 that
   match n
   | 0 => ! exit 1
   | 42 => ! exit 0

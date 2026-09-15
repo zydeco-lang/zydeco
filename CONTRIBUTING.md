@@ -285,10 +285,10 @@ see the generated header and the source entry profile before embedding it.
 For a Zydeco consumer, save this complete term as `consumer.zy` in the repository root:
 
 ```zydeco
-param (/Ret; /Int64; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
+param (/Ret; /Int; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
 let api = @(import("build/example.arithmetic.imports.zy")) in
 do sum <- ! api/add 19 23;
-! numeric/int64/eq OS sum 42 { ! process/exit 0 } { ! process/exit 1 }
+! numeric/int/eq OS sum 42 { ! process/exit 0 } { ! process/exit 1 }
 ```
 
 Compile or run it with the manifest explicitly supplied:
@@ -330,10 +330,10 @@ Save this producer as `math.zy` in the repository root:
 
 ```zydeco
 @[package(library(zydeco), name(example/math))]
-param val (/Thk; /Ret; /Int64; /numeric) : @(import("lib/std/builtin.zy")) in
-(#make_adder = ({ fn (delta : Int64) =>
-  ret { fn (value : Int64) => ! numeric/int64/add delta value }
-} : Thk (Int64 -> Ret (Thk (Int64 -> Ret Int64)))))
+param val (/Thk; /Ret; /Int; /numeric) : @(import("lib/std/builtin.zy")) in
+(#make_adder = ({ fn (delta : Int) =>
+  ret { fn (value : Int) => ! numeric/int/add delta value }
+} : Thk (Int -> Ret (Thk (Int -> Ret Int)))))
 ```
 
 Build the initializer object and interface:
@@ -349,12 +349,12 @@ Keep that bundle and its dependency bundles when distributing the unit.
 Save this consumer as `client.zy` in the repository root:
 
 ```zydeco
-param (/Ret; /Int64; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
+param (/Ret; /Int; /OS; /numeric; /process) : @(import("lib/std/builtin.zy")) in
 let initialize = @(import("unit-build/example.math.imports.zy")) in
 do math <- ! initialize;
 do add_seven <- ! math/make_adder 7;
 do result <- ! add_seven 35;
-! numeric/int64/eq OS result 42 { ! process/exit 0 } { ! process/exit 1 }
+! numeric/int/eq OS result 42 { ! process/exit 0 } { ! process/exit 1 }
 ```
 
 Build or run the consumer with its exact manifest.

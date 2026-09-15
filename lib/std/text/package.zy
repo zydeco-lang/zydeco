@@ -1,11 +1,11 @@
 @[package(library, name(std/text))]
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit;
-    /Char; /String; /UInt8; /Int64; /Addr;
+    /Char; /String; /UInt8; /Int; /Addr;
     /numeric; /char; /string; builtin) : @(import("../builtin.zy")) that
   param val (/Bytes; /bytes) : (@(import("bytes.type.zy"))) Addr in
   param val (/Bool; /Option; /List; /bool; /option; /list) : @(import("../data/package.type.zy")) in
-  let int64 = numeric/int64 in
+  let int = numeric/int in
   let ! compare (A : VType)
     (
       predicate : Thk (
@@ -21,8 +21,8 @@ begin
       { ret bool/true }
       { ret bool/false }
   in
-  let ! int64_eq (left : Int64) (right : Int64) : Ret Bool = ! compare Int64 int64/eq left right in
-  let ! int64_lt (left : Int64) (right : Int64) : Ret Bool = ! compare Int64 int64/lt left right in
+  let ! int_eq (left : Int) (right : Int) : Ret Bool = ! compare Int int/eq left right in
+  let ! int_lt (left : Int) (right : Int) : Ret Bool = ! compare Int int/lt left right in
   let ! str_eq (left : String) (right : String) : Ret Bool = ! compare String string/eq left right
   in
   let ! str_split_once (value : String)
@@ -37,7 +37,7 @@ begin
       }
   in
   let ! str_split_at (value : String)
-    (index : Int64)
+    (index : Int)
   : Ret (Option (String * String)) = ! string/split_at
       (Ret (Option (String * String)))
       value
@@ -47,7 +47,7 @@ begin
         fn first second => ! option/some (String * String) (first, second)
       }
   in
-  let ! str_get (value : String) (index : Int64) : Ret (Option Char) = ! string/get
+  let ! str_get (value : String) (index : Int) : Ret (Option Char) = ! string/get
     (Ret (Option Char))
     value
     index
@@ -55,23 +55,23 @@ begin
     {
       fn character => ! option/some Char character
     } in
-  let ! char_from_codepoint (codepoint : Int64) : Ret (Option Char) = ! char/from_codepoint
+  let ! char_from_codepoint (codepoint : Int) : Ret (Option Char) = ! char/from_codepoint
     (Ret (Option Char))
     codepoint
     { ! option/none Char }
     {
       fn character => ! option/some Char character
     } in
-  let ! str_parse_int (value : String) : Ret (Option Int64) = ! string/parse_int
-    (Ret (Option Int64))
+  let ! str_parse_int (value : String) : Ret (Option Int) = ! string/parse_int
+    (Ret (Option Int))
     value
-    { ! option/none Int64 }
+    { ! option/none Int }
     {
-      fn integer => ! option/some Int64 integer
+      fn integer => ! option/some Int integer
     } in
   let ! str_is_empty (value : String) : Ret Bool =
     do length <- ! string/length value;
-    ! int64_eq length 0
+    ! int_eq length 0
   in
   let ! str_head (value : String) : Ret (Option Char) = ! str_get value 0 in
   let ! str_uncons (value : String) : Ret (Option (Char * String)) =
@@ -131,7 +131,7 @@ begin
     {
       fn string => ! option/some String string
     } in
-  let ! bytes_get (value : Bytes) (index : Int64) : Ret (Option UInt8) = ! bytes/get
+  let ! bytes_get (value : Bytes) (index : Int) : Ret (Option UInt8) = ! bytes/get
     (Ret (Option UInt8))
     value
     index
@@ -140,8 +140,8 @@ begin
       fn octet => ! option/some UInt8 octet
     } in
   let ! bytes_slice (value : Bytes)
-    (start : Int64)
-    (length : Int64)
+    (start : Int)
+    (length : Int)
   : Ret (Option Bytes) = ! bytes/slice
       (Ret (Option Bytes))
       value
@@ -166,9 +166,9 @@ begin
   in
   let ! bytes_is_empty (value : Bytes) : Ret Bool =
     do length <- ! bytes/length value;
-    ! int64_eq length 0
+    ! int_eq length 0
   in
-  let fix bytes_to_list_from (value : Bytes) (index : Int64) : Ret (List UInt8) =
+  let fix bytes_to_list_from (value : Bytes) (index : Int) : Ret (List UInt8) =
     do octet <- ! bytes_get value index;
     ! option/fold
       UInt8
@@ -177,7 +177,7 @@ begin
       { ! list/nil UInt8 }
       {
         fn head =>
-          do successor <- ! int64/add index 1;
+          do successor <- ! int/add index 1;
           do tail <- ! bytes_to_list_from value successor;
           ! list/cons UInt8 head tail
       }
@@ -207,7 +207,7 @@ begin
   let ! bytes_starts_with (value : Bytes) (prefix : Bytes) : Ret Bool =
     do value_length <- ! bytes/length value;
     do prefix_length <- ! bytes/length prefix;
-    do too_short <- ! int64_lt value_length prefix_length;
+    do too_short <- ! int_lt value_length prefix_length;
     do fits <- ! bool/not too_short;
     ! bool/if
       (Ret Bool)
@@ -228,13 +228,13 @@ begin
   let ! bytes_ends_with (value : Bytes) (suffix : Bytes) : Ret Bool =
     do value_length <- ! bytes/length value;
     do suffix_length <- ! bytes/length suffix;
-    do too_short <- ! int64_lt value_length suffix_length;
+    do too_short <- ! int_lt value_length suffix_length;
     do fits <- ! bool/not too_short;
     ! bool/if
       (Ret Bool)
       fits
       {
-        do offset <- ! int64/sub value_length suffix_length;
+        do offset <- ! int/sub value_length suffix_length;
         do window <- ! bytes_slice value offset suffix_length;
         ! option/fold
           Bytes

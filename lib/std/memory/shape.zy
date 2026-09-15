@@ -1,16 +1,16 @@
 begin
   let VType = @(intrinsic(vtype)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   let Unit = @(intrinsic(unit)) in
   let Node (Form : VType) =
-    (#size :: Int64) * (#alignment :: Int64) * (#form :: Form)
+    (#size :: Int) * (#alignment :: Int) * (#form :: Form)
   in
   begin
     def Form : VType =
       data
-      | +Scalar : (#width :: Int64)
+      | +Scalar : (#width :: Int)
       | +Padding : Unit
-      | +Product : (#offset :: Int64) * (#left :: Node Form) * (#right :: Node Form)
+      | +Product : (#offset :: Int) * (#left :: Node Form) * (#right :: Node Form)
       end
     that
     Node Form

@@ -151,8 +151,8 @@ impl InternalTerm {
                 let ty = ss::PrimitiveTy(primitive).build(tycker, env);
                 TermAnnId::Type(ty, tycker.statics.type_kind(ty))
             }
-            | su::Internal::ValueInt64(operation) => {
-                let domain = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int64))
+            | su::Internal::ValueInt(operation) => {
+                let domain = ss::PrimitiveTy(ss::PrimitiveType::Integer(ss::IntegerType::Int))
                     .build(tycker, env);
                 let kind = ss::VType.build(tycker, env);
                 let variables = ["left", "right"].map(|name| {
@@ -165,7 +165,7 @@ impl InternalTerm {
                 });
                 let mut body = Alloc::alloc(
                     tycker,
-                    ss::Value::Int64Op(ss::Int64ValueOp {
+                    ss::Value::IntOp(ss::IntValueOp {
                         operation,
                         operands: variables.map(|(_, value)| value),
                     }),

@@ -47,7 +47,7 @@ impl Fixture {
         format!(
             "@[package(library(zydeco), name(example/unit))]\n\
             let VType = @(intrinsic(vtype)) in let Thk = @(intrinsic(thk)) in\n\
-            let Ret = @(intrinsic(ret)) in let I = @(intrinsic(i64)) in\n\
+            let Ret = @(intrinsic(ret)) in let I = @(intrinsic(int)) in\n\
             let Unit = @(intrinsic(unit)) in {body}"
         )
     }
@@ -173,9 +173,9 @@ fn native_initializer_requires_a_native_artifact_before_execution() {
         "client.zy",
         &format!(
             r#"
-param (/Thk; /Ret; /Int64; /OS; /process) : @(import({:?})) in
+param (/Thk; /Ret; /Int; /OS; /process) : @(import({:?})) in
 let init = (@(ffi(zydeco, library("missing.unit"), symbol("zydeco_unit_missing_init")))
-    : Thk (Ret Int64)) in
+    : Thk (Ret Int)) in
 do result <- ! init;
 ! process/exit 0
 "#,
@@ -197,19 +197,19 @@ fn source_free_units_share_captures_and_continuations_across_collection() {
         &format!(
             r#"
 @[package(library(zydeco), name(example/producer))]
-param val (/Thk; /Ret; /Unit; /Int64; /numeric) : @(import({:?})) in
+param val (/Thk; /Ret; /Unit; /Int; /Float64; /numeric) : @(import({:?})) in
 (
-  #make_adder = ({{ fn (delta : Int64) =>
-    ret {{ fn (value : Int64) =>
-      let fix churn (n : Int64) : Ret Unit =
-        ! numeric/int64/eq (Ret Unit) n 0 {{ ret () }}
-          {{ do next <- ! numeric/int64/sub n 1; ! churn next }}
+  #make_adder = ({{ fn (delta : Float64) =>
+    ret {{ fn (value : Float64) =>
+      let fix churn (n : Int) : Ret Unit =
+        ! numeric/int/eq (Ret Unit) n 0 {{ ret () }}
+          {{ do next <- ! numeric/int/sub n 1; ! churn next }}
       in
       do () <- ! churn 100000;
-      ! numeric/int64/add delta value
+      ! numeric/float64/add delta value
     }}
-  }} : Thk (Int64 -> Ret (Thk (Int64 -> Ret Int64)))),
-  #pair = ((-9223372036854775808, 9223372036854775807), "native unit")
+  }} : Thk (Float64 -> Ret (Thk (Float64 -> Ret Float64)))),
+  #pair = ((-1.5, 0.5), "native unit")
 )
 "#,
             Fixture::builtin()
@@ -227,12 +227,12 @@ param val (/Thk; /Ret; /Unit; /Int64; /numeric) : @(import({:?})) in
         &format!(
             r#"
 @[package(library(zydeco), name(example/middle))]
-param val (/Thk; /Ret; /Int64) : @(import({:?})) in
+param val (/Thk; /Ret; /Float64) : @(import({:?})) in
 let init = @(import({:?})) in
 ({{ do api <- ! init;
     let ((delta, _), _) = api/pair in
     ! api/make_adder delta
-}} : Thk (Ret (Thk (Int64 -> Ret Int64))))
+}} : Thk (Ret (Thk (Float64 -> Ret Float64))))
 "#,
             Fixture::builtin(),
             producer_binding
@@ -248,27 +248,27 @@ let init = @(import({:?})) in
         "client.zy",
         &format!(
             r#"
-param (/Unit; /Ret; /Int64; /OS; /numeric; /process) : @(import({:?})) in
+param (/Unit; /Ret; /Int; /Float64; /OS; /numeric; /process) : @(import({:?})) in
 let init = @(import({:?})) in
 let shifted = {{
     do make <- ! init;
     do add <- ! make;
-    fn (_ : Int64) =>
-    do value <- ! add 9223372036854775807;
-    ! numeric/int64/eq OS value -1 {{ ! process/exit 0 }} {{ ! process/exit 3 }}
+    fn (_ : Int) =>
+    do value <- ! add 0.5;
+    ! numeric/float64/eq OS value -1.0 {{ ! process/exit 0 }} {{ ! process/exit 3 }}
 }} in
 do make <- ! init;
 do add <- ! make;
-let fix churn (n : Int64) : Ret Unit =
-    ! numeric/int64/eq (Ret Unit) n 0 {{ ret () }}
-        {{ do next <- ! numeric/int64/sub n 1; ! churn next }}
+let fix churn (n : Int) : Ret Unit =
+    ! numeric/int/eq (Ret Unit) n 0 {{ ret () }}
+        {{ do next <- ! numeric/int/sub n 1; ! churn next }}
 in
 do () <- ! churn 100000;
-do first <- ! add 9223372036854775807;
+do first <- ! add 0.5;
 do () <- ! churn 100000;
-do second <- ! add 9223372036854775807;
-! numeric/int64/eq OS first -1
-    {{ ! numeric/int64/eq OS second -1 {{ ! shifted 0 }} {{ ! process/exit 2 }} }}
+do second <- ! add 0.5;
+! numeric/float64/eq OS first -1.0
+    {{ ! numeric/float64/eq OS second -1.0 {{ ! shifted 0 }} {{ ! process/exit 2 }} }}
     {{ ! process/exit 1 }}
 "#,
             Fixture::builtin(),

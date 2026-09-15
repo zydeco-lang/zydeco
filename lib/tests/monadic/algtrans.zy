@@ -1,8 +1,8 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (/numeric; /system; /VType; /CType; /Thk; /Ret; /OS; /process; /String; /Int64; builtin) :
+  param (/numeric; /system; /VType; /CType; /Thk; /Ret; /OS; /process; /String; /Int; builtin) :
   @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
 
@@ -40,7 +40,7 @@ begin
       | +Right(a) => ! f a
       end that
     -- test algebra generation for ret and bind
-    def ! mo-return (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
+    def ! mo-return (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
       let ! translated =
         -- use mo
         @[monadic] begin
@@ -51,7 +51,7 @@ begin
       ! translated (Exn E) mo
     that
     -- test algebra generation for thunk
-    def ! mo-thunk (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
+    def ! mo-thunk (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
       let ! translated =
         -- use mo
         @[monadic] begin
@@ -62,7 +62,7 @@ begin
       ! translated (Exn E) mo
     that
     -- test algebra generation for thunk at argument position
-    def ! mo-thunk-arg (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int64 =
+    def ! mo-thunk-arg (E : VType) (mo : Thk (Monad (Exn E))) : Exn E Int =
       let ! translated =
         -- use mo
         @[monadic] begin
@@ -104,8 +104,8 @@ begin
         --     ! strY .bindA X m { fn x => ! f x a }
         --   end : Algebra (Exn E) (U Y -> Y)) .bindA X m { fn x => ! f x Y strY }
         -- end : Algebra (Exn E) (forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X))
-        -- .bindA Int64 { ! mo .return Int64 -1 }
-        -- { fn (_: Int64) => fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) => ! b }
+        -- .bindA Int { ! mo .return Int -1 }
+        -- { fn (_: Int) => fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) => ! b }
         -- use mo
         @[monadic] begin
           do _ <- ret -1;
@@ -162,7 +162,7 @@ begin
     -- end
     -- -- run it
     -- def ! _mo-prim-id : OS =
-    --   do i? <- ! mo-prim-id (Exn String) { ! mo-exn String } Int64 0;
+    --   do i? <- ! mo-prim-id (Exn String) { ! mo-exn String } Int 0;
     --   match i?
     --   | +Left(e) => ! panic "error"
     --   | +Right(i) => ! process/exit i
@@ -185,7 +185,7 @@ begin
     --   ! mo-prim-id~ (Exn String) { ! mo-exn String } OS { ! alg-exn-os String } { ! process/exit 0 }
     -- end
     -- def ! _mo-prim-id~' : OS =
-    --   do i <- ! mo-prim-id~ (Exn String) { ! mo-exn String } (Ret Int64) { _ } { ret 0 };
+    --   do i <- ! mo-prim-id~ (Exn String) { ! mo-exn String } (Ret Int) { _ } { ret 0 };
     --   ! process/exit i
     -- end
     -- -- primitive ret in contravariant position
@@ -215,7 +215,7 @@ begin
     do returned <- ! mo-return String { ! mo-exn String };
     match returned
     | +Left(_) => ! process/exit 1
-    | +Right(returned) => ! int64/eq
+    | +Right(returned) => ! int/eq
       OS
       returned
       1
@@ -223,7 +223,7 @@ begin
         do thunked <- ! mo-thunk String { ! mo-exn String };
         match thunked
         | +Left(_) => ! process/exit 1
-        | +Right(thunked) => ! int64/eq
+        | +Right(thunked) => ! int/eq
           OS
           thunked
           1
@@ -233,7 +233,7 @@ begin
             };
             match argument
             | +Left(_) => ! process/exit 1
-            | +Right(argument) => ! int64/eq
+            | +Right(argument) => ! int/eq
               OS
               argument
               1
@@ -241,12 +241,12 @@ begin
                 do quantified <- ! mo-forallv
                   String
                   { ! mo-exn String }
-                  Int64
+                  Int
                   top
                   0;
                 match quantified
                 | +Left(_) => ! process/exit 1
-                | +Right(quantified) => ! int64/eq
+                | +Right(quantified) => ! int/eq
                   OS
                   quantified
                   0

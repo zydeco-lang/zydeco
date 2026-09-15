@@ -4,14 +4,14 @@ use std::{path::PathBuf, process::Command};
 fn non_executable_roots_report_their_source_type() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("library.zy");
-    for body in ["ret 0", "let Int64 = @(intrinsic(i64)) in fn (x : Int64) => ret x"] {
+    for body in ["ret 0", "let Int = @(intrinsic(int)) in fn (x : Int) => ret x"] {
         std::fs::write(&source, body).unwrap();
         let output =
             Command::new(env!("CARGO_BIN_EXE_zydeco")).arg("run").arg(&source).output().unwrap();
         let error = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success());
         assert!(error.contains("package-dependent root"), "{error}");
-        assert!(error.contains("Ret") && error.contains("Int64"), "{error}");
+        assert!(error.contains("Ret") && error.contains("Int"), "{error}");
         assert!(!error.contains("TypeId") && !error.contains("#"), "{error}");
     }
 }
@@ -23,7 +23,7 @@ fn typed_holes_are_inspectable_but_rejected_before_execution_or_lowering() {
     let source = directory.path().join("hole.zy");
     for hole in ["_", "0"] {
         std::fs::write(&source, format!(
-            "param (/Int64; /process) : @(import(\"{}\")) in let x : Int64 = {hole} in ! process/exit x",
+            "param (/Int; /process) : @(import(\"{}\")) in let x : Int = {hole} in ! process/exit x",
             workspace.join("lib/std/builtin.zy").display()
         )).unwrap();
         let checked =
@@ -57,7 +57,7 @@ fn typed_holes_are_inspectable_but_rejected_before_execution_or_lowering() {
         }
     }
     std::fs::write(&source, format!(
-        "param (/Int64; /process) : @(import(\"{}\")) in let val unused (x : Int64) : Int64 = _ in ! process/exit 0",
+        "param (/Int; /process) : @(import(\"{}\")) in let val unused (x : Int) : Int = _ in ! process/exit 0",
         workspace.join("lib/std/builtin.zy").display()
     )).unwrap();
     let output =
@@ -80,7 +80,7 @@ fn partial_patterns_report_runtime_failure_across_backends() {
     for (body, expected) in [
         ("@[partial] let 0 = 0 in ! process/exit 0", 0),
         ("@[partial] let 0 = 1 in ! process/exit 42", 1),
-        ("do r <- (@[partial] fn (0 : Int64) => ret 0) 1; ! process/exit 42", 1),
+        ("do r <- (@[partial] fn (0 : Int) => ret 0) 1; ! process/exit 42", 1),
         (
             "let B = data | +T : Unit | +F : Unit end in @[partial] let +T() = (+F() : B) in ! process/exit 42",
             1,
@@ -89,7 +89,7 @@ fn partial_patterns_report_runtime_failure_across_backends() {
         std::fs::write(
             &source,
             format!(
-                "param (/process; /Int64; /Unit) : @(import(\"{}\")) in {body}\n",
+                "param (/process; /Int; /Unit) : @(import(\"{}\")) in {body}\n",
                 builtin.display()
             ),
         )
@@ -137,7 +137,7 @@ fn rebuilding_a_native_program_uses_the_current_assembly() {
         std::fs::write(
             &source,
             format!(
-                "param (/process; /Int64) : @(import(\"{}\")) in ! process/exit {expected}\n",
+                "param (/process; /Int) : @(import(\"{}\")) in ! process/exit {expected}\n",
                 builtin.display()
             ),
         )
@@ -267,5 +267,5 @@ fn check_renders_debug_observations_from_the_materialized_program() {
     let observation = String::from_utf8_lossy(&output.stdout);
     assert!(observation.contains(r#"[debug printing] "answer""#), "{observation}");
     assert!(observation.contains("ret 1"), "{observation}");
-    assert!(observation.contains("Ret Int64"), "{observation}");
+    assert!(observation.contains("Ret Int"), "{observation}");
 }

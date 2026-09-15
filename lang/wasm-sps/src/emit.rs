@@ -1003,7 +1003,6 @@ mod tests {
     use super::*;
     use wasmparser::{Parser, Payload, Validator};
     use zydeco_stackir::{arena::Construct as _, low::SpsLowArena};
-    use zydeco_syntax::IntegerLiteral;
 
     struct Fixture {
         arena: SpsLowArena,
@@ -1042,7 +1041,7 @@ mod tests {
         let mut fixture = Fixture::new();
         let body = fixture.hole();
         let bindee =
-            Literal::Integer(IntegerLiteral::Int64(i64::MAX)).build(&mut fixture.arena, None);
+            Literal::Float(zydeco_syntax::FloatLiteral::from(1.5)).build(&mut fixture.arena, None);
         let binder = sps::Hole.build(&mut fixture.arena, None);
         let root = sps::LetValue { binder, bindee, tail: body }.build(&mut fixture.arena, None);
         let program = SpsLowProgram::try_new(fixture.arena, root).unwrap();

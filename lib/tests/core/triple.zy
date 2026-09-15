@@ -1,8 +1,8 @@
 begin
-  param (/VType; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
   def packed :
-    exists (X : VType) (Y : VType) . X * Y * Int64 =
-      (Int64, Int64, 10, 20, 0)
+    exists (X : VType) (Y : VType) . X * Y * Int =
+      (Int, Int, 10, 20, 0)
   that
 
   match packed

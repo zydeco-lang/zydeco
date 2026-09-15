@@ -1,7 +1,7 @@
 begin
   let Tagged =
     data
-    | +Tagged : Int64
+    | +Tagged : Int
     | +Other : Unit
     end
   that

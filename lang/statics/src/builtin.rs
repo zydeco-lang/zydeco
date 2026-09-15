@@ -106,7 +106,7 @@ impl BuiltinOperationAbi {
         use BuiltinValueAtom as Atom;
         use BuiltinValueRole as Role;
 
-        let int64 = Atom::Integer(IntegerType::Int64);
+        let int = Atom::Integer(IntegerType::Int);
         let classifier = match role {
             | Role::Integer(integer, operation) => {
                 let atom = Atom::Integer(integer);
@@ -139,50 +139,48 @@ impl BuiltinOperationAbi {
                     | FloatOperation::LoadLe => Self::memory_success([Atom::Addr], Some(atom)),
                 }
             }
-            | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], int64),
+            | Role::StrScalarLength | Role::StrByteLength => Self::pure([Atom::String], int),
             | Role::StrAppend => Self::pure([Atom::String, Atom::String], Atom::String),
             | Role::StrSplitOnce => Self::optional_pair([Atom::String, Atom::Char]),
-            | Role::StrSplitAt => Self::optional_pair([Atom::String, int64]),
-            | Role::StrGet => Self::optional([Atom::String, int64], Atom::Char),
+            | Role::StrSplitAt => Self::optional_pair([Atom::String, int]),
+            | Role::StrGet => Self::optional([Atom::String, int], Atom::Char),
             | Role::StrEq => Self::branch([Atom::String, Atom::String]),
             | Role::CharToStr => Self::pure([Atom::Char], Atom::String),
-            | Role::CharCodepoint => Self::pure([Atom::Char], int64),
-            | Role::CharFromCodepoint => Self::optional([int64], Atom::Char),
-            | Role::StrParseInt => Self::optional([Atom::String], int64),
+            | Role::CharCodepoint => Self::pure([Atom::Char], int),
+            | Role::CharFromCodepoint => Self::optional([int], Atom::Char),
+            | Role::StrParseInt => Self::optional([Atom::String], int),
             | Role::MemoryNull => Self::pure([], Atom::Addr),
-            | Role::MemoryOffset => Self::pure([Atom::Addr, int64], Atom::Addr),
-            | Role::MemoryAllocate => Self::memory_operation([int64, int64], Some(Atom::Addr)),
+            | Role::MemoryOffset => Self::pure([Atom::Addr, int], Atom::Addr),
+            | Role::MemoryAllocate => Self::memory_operation([int, int], Some(Atom::Addr)),
             | Role::MemoryFree | Role::MemoryRetain => {
-                Self::memory_operation([Atom::Addr, int64, int64], None)
+                Self::memory_operation([Atom::Addr, int, int], None)
             }
-            | Role::MemoryFromString => Self::memory_operation([Atom::String], [Atom::Addr, int64]),
-            | Role::MemoryToString => {
-                Self::memory_operation([Atom::Addr, int64], Some(Atom::String))
-            }
+            | Role::MemoryFromString => Self::memory_operation([Atom::String], [Atom::Addr, int]),
+            | Role::MemoryToString => Self::memory_operation([Atom::Addr, int], Some(Atom::String)),
             | Role::MemoryLoadAddr => Self::memory_success([Atom::Addr], Some(Atom::Addr)),
             | Role::MemoryStoreAddr => Self::memory_success([Atom::Addr, Atom::Addr], None),
-            | Role::MemoryCopy => Self::memory_success([Atom::Addr, Atom::Addr, int64], None),
+            | Role::MemoryCopy => Self::memory_success([Atom::Addr, Atom::Addr, int], None),
             | Role::MemoryFill => {
-                Self::memory_success([Atom::Addr, int64, Atom::Integer(IntegerType::UInt8)], None)
+                Self::memory_success([Atom::Addr, int, Atom::Integer(IntegerType::UInt8)], None)
             }
             | Role::Stdin => Self::pure([], Atom::Reader),
             | Role::Stdout | Role::Stderr => Self::pure([], Atom::Writer),
             | Role::IoRead => Self::io_effect(
-                [Self::atom(Atom::Reader), Self::atom(int64)],
-                Self::continuation_with([Atom::Addr, int64]),
+                [Self::atom(Atom::Reader), Self::atom(int)],
+                Self::continuation_with([Atom::Addr, int]),
             ),
             | Role::IoReadAll => Self::io_effect(
                 [Self::atom(Atom::Reader)],
-                Self::continuation_with([Atom::Addr, int64]),
+                Self::continuation_with([Atom::Addr, int]),
             ),
             | Role::IoReadLine => Self::effect([
                 Self::atom(Atom::Reader),
                 Self::io_error_continuation(),
                 Self::os_continuation(),
-                Self::continuation_with([Atom::Addr, int64]),
+                Self::continuation_with([Atom::Addr, int]),
             ]),
             | Role::IoWriteAll => Self::io_effect(
-                [Self::atom(Atom::Writer), Self::atom(Atom::Addr), Self::atom(int64)],
+                [Self::atom(Atom::Writer), Self::atom(Atom::Addr), Self::atom(int)],
                 Self::os_continuation(),
             ),
             | Role::IoFlush | Role::IoCloseWriter => {
@@ -198,17 +196,17 @@ impl BuiltinOperationAbi {
                 Self::io_effect([Self::atom(Atom::String)], Self::continuation(Atom::Writer))
             }
             | Role::WriteStr => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
-            | Role::WriteInt => Self::effect([Self::atom(int64), Self::os_continuation()]),
+            | Role::WriteInt => Self::effect([Self::atom(int), Self::os_continuation()]),
             | Role::WriteLine => Self::effect([Self::atom(Atom::String), Self::os_continuation()]),
             | Role::ReadLine | Role::ReadTillEof => {
                 Self::effect([Self::continuation(Atom::String)])
             }
             | Role::ReadLineAsInt => {
-                Self::effect([Self::os_continuation(), Self::continuation(int64)])
+                Self::effect([Self::os_continuation(), Self::continuation(int)])
             }
-            | Role::ArgAt => Self::optional([int64], Atom::String),
-            | Role::RandomInt => Self::effect([Self::continuation(int64)]),
-            | Role::Exit => Self::effect([Self::atom(int64)]),
+            | Role::ArgAt => Self::optional([int], Atom::String),
+            | Role::RandomInt => Self::effect([Self::continuation(int)]),
+            | Role::Exit => Self::effect([Self::atom(int)]),
         };
         Self { classifier }
     }
@@ -285,7 +283,7 @@ impl BuiltinOperationAbi {
     ) -> BuiltinValueClassifier {
         let result = BuiltinComputationClassifier::Bound(0);
         let error = Self::thunk(Self::arrows(
-            [Self::atom(BuiltinValueAtom::Integer(IntegerType::Int64))],
+            [Self::atom(BuiltinValueAtom::Integer(IntegerType::Int))],
             result.clone(),
         ));
         let success = Self::thunk(Self::arrows(output.into_iter().map(Self::atom), result.clone()));
@@ -317,7 +315,7 @@ impl BuiltinOperationAbi {
 
     fn io_error_continuation() -> BuiltinValueClassifier {
         Self::continuation_with([
-            BuiltinValueAtom::Integer(IntegerType::Int64),
+            BuiltinValueAtom::Integer(IntegerType::Int),
             BuiltinValueAtom::String,
         ])
     }

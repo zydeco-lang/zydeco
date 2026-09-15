@@ -299,15 +299,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
             | Value::Named(value) => value.pretty(f),
             | Value::Let(value) => value.pretty(f),
             | Value::Match(value) => value.pretty(f),
-            | Value::Int64Op(Int64ValueOp { operation, operands: [left, right] }) => {
-                RcDoc::concat([
-                    RcDoc::text(operation.intrinsic_name()),
-                    RcDoc::space(),
-                    left.pretty(f),
-                    RcDoc::space(),
-                    right.pretty(f),
-                ])
-            }
+            | Value::IntOp(IntValueOp { operation, operands: [left, right] }) => RcDoc::concat([
+                RcDoc::text(operation.intrinsic_name()),
+                RcDoc::space(),
+                left.pretty(f),
+                RcDoc::space(),
+                right.pretty(f),
+            ]),
             | Value::ValAbs(Abs(binder, body)) => RcDoc::concat([
                 RcDoc::text("val"),
                 RcDoc::space(),
@@ -1129,61 +1127,58 @@ mod tests {
     #[test]
     fn pack_pi_witness_lists_break_at_commas() {
         let mut fixture = FormatterFixture::default();
-        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int));
         let character = fixture.primitive(PrimitiveType::Char);
         let left = fixture.named_witness("SystemOS");
         let right = fixture.named_witness("SystemReader");
         let pack_pi = fixture.pack_pi(&[left, right], int, character);
 
-        assert_eq!(
-            fixture.render(pack_pi, 100),
-            "pack-pi ([SystemOS, SystemReader] : Int64) . Char"
-        );
+        assert_eq!(fixture.render(pack_pi, 100), "pack-pi ([SystemOS, SystemReader] : Int) . Char");
         assert_eq!(
             fixture.render(pack_pi, 36),
-            "pack-pi ([SystemOS,\n  SystemReader] : Int64) . Char"
+            "pack-pi ([SystemOS,\n  SystemReader] : Int) . Char"
         );
     }
 
     #[test]
     fn infix_chains_stay_compact_when_they_fit() {
         let mut fixture = FormatterFixture::default();
-        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int));
         let string = fixture.primitive(PrimitiveType::String);
         let codomain = fixture.arrow(string, int);
         let chain = fixture.arrow(int, codomain);
 
-        assert_eq!(fixture.render(chain, 100), "Int64 -> String -> Int64");
+        assert_eq!(fixture.render(chain, 100), "Int -> String -> Int");
 
         let product = fixture.product(vec![int, string]);
-        assert_eq!(fixture.render(product, 100), "Int64 * String");
+        assert_eq!(fixture.render(product, 100), "Int * String");
     }
 
     #[test]
     fn overflowing_arrow_chains_lead_continuations_with_operators() {
         let mut fixture = FormatterFixture::default();
-        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int));
         let string = fixture.primitive(PrimitiveType::String);
         let codomain = fixture.arrow(string, int);
         let chain = fixture.arrow(int, codomain);
 
-        assert_eq!(fixture.render(chain, 15), "Int64\n-> String\n-> Int64");
+        assert_eq!(fixture.render(chain, 15), "Int\n-> String\n-> Int");
     }
 
     #[test]
     fn overflowing_product_chains_lead_continuations_with_operators() {
         let mut fixture = FormatterFixture::default();
-        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int));
         let string = fixture.primitive(PrimitiveType::String);
         let product = fixture.product(vec![int, string, int]);
 
-        assert_eq!(fixture.render(product, 15), "Int64\n* String\n* Int64");
+        assert_eq!(fixture.render(product, 15), "Int\n* String\n* Int");
     }
 
     #[test]
     fn overflowing_regions_nest_contents_and_return_their_closer() {
         let mut fixture = FormatterFixture::default();
-        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int));
         let string = fixture.primitive(PrimitiveType::String);
         let codomain = fixture.arrow(string, int);
         let chain = fixture.arrow(int, codomain);
@@ -1191,33 +1186,33 @@ mod tests {
 
         assert_eq!(
             fixture.render(product, 21),
-            "(\n    Int64\n    -> String\n    -> Int64\n  )\n* Int64"
+            "(\n    Int\n    -> String\n    -> Int\n  )\n* Int"
         );
     }
 
     #[test]
     fn fitting_regions_stay_intact_when_their_chain_breaks() {
         let mut fixture = FormatterFixture::default();
-        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int));
         let string = fixture.primitive(PrimitiveType::String);
         let product = fixture.product(vec![int, string]);
         let arrow = fixture.arrow(product, int);
 
-        assert_eq!(fixture.render(arrow, 16), "(Int64 * String)\n-> Int64");
+        assert_eq!(fixture.render(arrow, 16), "(Int * String)\n-> Int");
     }
 
     #[test]
     fn nested_chains_parenthesize_compactly() {
         let mut fixture = FormatterFixture::default();
-        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int64));
+        let int = fixture.primitive(PrimitiveType::Integer(IntegerType::Int));
         let string = fixture.primitive(PrimitiveType::String);
         let product = fixture.product(vec![int, string]);
         let arrow = fixture.arrow(int, string);
 
         let product_domain = fixture.arrow(product, int);
-        assert_eq!(fixture.render(product_domain, 100), "(Int64 * String) -> Int64");
+        assert_eq!(fixture.render(product_domain, 100), "(Int * String) -> Int");
 
         let arrow_component = fixture.product(vec![arrow, int]);
-        assert_eq!(fixture.render(arrow_component, 100), "(Int64 -> String) * Int64");
+        assert_eq!(fixture.render(arrow_component, 100), "(Int -> String) * Int");
     }
 }

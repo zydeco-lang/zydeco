@@ -332,17 +332,17 @@ pub mod utils {
                 r#"let Builtin = @(import("{builtin}")) in
 {monadic}param (
   /VType; /CType; /Thk; /Ret; /Unit;
-  /Int8; /Int16; /Int32; /Int64;
-  /UInt8; /UInt16; /UInt32; /UInt64;
+  /Int8; /Int16; /Int32; /Int;
+  /UInt8; /UInt16; /UInt32; /UInt;
   /Float32; /Float64; /Char; /String; /Addr;
   /Reader; /Writer; /OS; /numeric; /process; builtin
 ) : Builtin in
-let int64 = numeric/int64 in
+let int = numeric/int in
 let Thunk = Thk in
 let U = Thk in
 let F = Ret in
 {open_monadic}
-let api = (#int64 = int64, #exit = process/exit) in
+let api = (#int = int, #exit = process/exit) in
 let exit = process/exit in
 let Top : CType = codata end in
 let triv : Thk Top = {{ comatch end }} in

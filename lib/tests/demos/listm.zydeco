@@ -1,6 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/system; /VType; /CType; /Thk; /Ret; /Unit; /OS; /Int64; builtin) : @(import(
+  param (/system; /VType; /CType; /Thk; /Ret; /Unit; /OS; /Int; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
   def List~ (A : VType) : VType =
@@ -24,31 +24,31 @@ begin
       end
   that
 
-  let (/bool; /int64; /stdio; /process) = builtin |> make_std in
+  let (/bool; /int; /stdio; /process) = builtin |> make_std in
   -- List~ is actually coinductive type
-  def fix loop : Ret (List~ Int64) =
+  def fix loop : Ret (List~ Int) =
     ret +Cons(0, loop)
   in
   -- Since it's coinductive, here's iota
-  def fix iota (i : Int64) : Ret (List~ Int64) =
-    do i+1 <- ! int64/add i 1;
+  def fix iota (i : Int) : Ret (List~ Int) =
+    do i+1 <- ! int/add i 1;
     ret +Cons(i, { ! iota i+1 })
   in
 
   -- foldr~ and an example of summing up the list and exiting with the sum
   let ! loopy : OS =
     ! foldr~
-      Int64
+      Int
       OS
       { ! iota 0 }
       {
         fn x b =>
-          do next? <- ! int64/lt x 10;
+          do next? <- ! int/lt x 10;
           ! bool/if
             OS
             next?
             {
-              do rendered <- ! int64/to_string x;
+              do rendered <- ! int/to_string x;
               ! stdio/write_line rendered { fn _ => ! b }
             }
             { ! process/exit 0 }

@@ -13,10 +13,10 @@ begin
     /stdio;
     /process;
     /String;
-    /Int64;
+    /Int;
     builtin
   ) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let string = text/string that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
   begin
@@ -52,7 +52,7 @@ begin
     that
     def State =
       data
-      | +State : Int64 * String
+      | +State : Int * String
       end
     that
 
@@ -109,7 +109,7 @@ begin
       fn s =>
         match s
         | +State(c, o) =>
-          do c' <- ! int64/add c 1;
+          do c' <- ! int/add c 1;
           ret +Cons(
             +State(c', o),
             +Right({ ! kret v })

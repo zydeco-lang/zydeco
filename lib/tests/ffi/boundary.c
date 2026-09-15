@@ -9,7 +9,7 @@ uint64_t zyffi_options(const void *data, uint64_t a, uint64_t b,
     return zyffi_first(data) + a + 3 * b + 5 * c + 7 * d + 11 * e;
 }
 
-uint64_t zyffi_zero(void) { return UINT64_MAX; }
+uint64_t zyffi_zero(void) { return UINT64_MAX >> 1; }
 
 uint64_t zyffi_echo(uint64_t value) { return value; }
 
@@ -63,16 +63,16 @@ uint64_t zyffi_record(const void *data, size_t length) {
     return 1;
 }
 
-/* Fixed-width declarations exercise each signedness/width independently. */
+/* Each source integer has its own signedness and C carrier. */
 #define ZYFFI_ECHO(type, name) type zyffi_##name(type value) { return value; }
 ZYFFI_ECHO(int8_t, int8)
 ZYFFI_ECHO(int16_t, int16)
 ZYFFI_ECHO(int32_t, int32)
-ZYFFI_ECHO(int64_t, int64)
+ZYFFI_ECHO(int64_t, int)
 ZYFFI_ECHO(uint8_t, uint8)
 ZYFFI_ECHO(uint16_t, uint16)
 ZYFFI_ECHO(uint32_t, uint32)
-ZYFFI_ECHO(uint64_t, uint64)
+ZYFFI_ECHO(uint64_t, uint)
 
 /* The ABI defines only the low bits of a narrow integer return register. */
 #if defined(__x86_64__)
@@ -109,3 +109,8 @@ int32_t zyffi_write_record(void *data, uint64_t capacity, uint8_t tag, uint32_t 
     memcpy(bytes + 4, &payload, sizeof payload);
     return 0;
 }
+
+/* Rejected counterparts to the representable source integer boundaries. */
+int64_t zyffi_int_below_range(void) { return INT64_MIN / 2 - 1; }
+int64_t zyffi_int_above_range(void) { return INT64_MAX / 2 + 1; }
+uint64_t zyffi_uint_above_range(void) { return UINT64_C(1) << 63; }

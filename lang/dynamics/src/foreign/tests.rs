@@ -47,16 +47,13 @@ impl ForeignFixture {
                 library: ForeignLibraryName::parse("zyffi_boundary").unwrap(),
                 symbol: ForeignSymbolName::parse(symbol).unwrap(),
             },
-            signature: ForeignSignature::new(
-                parameters,
-                ForeignResult::Integer(IntegerType::UInt64),
-            )
-            .unwrap(),
+            signature: ForeignSignature::new(parameters, ForeignResult::Integer(IntegerType::UInt))
+                .unwrap(),
         }
     }
 
     fn integer(value: u64) -> ds::SemValue {
-        ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt64(value)))
+        ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt(value)))
     }
 
     fn window(&mut self, value: &[u8]) -> ds::SemValue {
@@ -75,8 +72,8 @@ impl ForeignFixture {
         else {
             panic!("C call must return through Ret")
         };
-        let ds::Value::Lit(Literal::Integer(IntegerLiteral::UInt64(result))) = *value else {
-            panic!("C call must preserve the UInt64 result representation")
+        let ds::Value::Lit(Literal::Integer(IntegerLiteral::UInt(result))) = *value else {
+            panic!("C call must preserve the UInt result representation")
         };
         result
     }
@@ -109,11 +106,15 @@ fn preserves_every_integer_width_and_signedness() {
         (IntegerType::Int8, i8::MIN as i128, i8::MAX as i128),
         (IntegerType::Int16, i16::MIN as i128, i16::MAX as i128),
         (IntegerType::Int32, i32::MIN as i128, i32::MAX as i128),
-        (IntegerType::Int64, i64::MIN as i128, i64::MAX as i128),
+        (
+            IntegerType::Int,
+            zydeco_syntax::word::RuntimeWord::SIGNED_MIN as i128,
+            zydeco_syntax::word::RuntimeWord::SIGNED_MAX as i128,
+        ),
         (IntegerType::UInt8, 0, u8::MAX as i128),
         (IntegerType::UInt16, 0, u16::MAX as i128),
         (IntegerType::UInt32, 0, u32::MAX as i128),
-        (IntegerType::UInt64, 0, u64::MAX as i128),
+        (IntegerType::UInt, 0, zydeco_syntax::word::RuntimeWord::UNSIGNED_MAX as i128),
     ] {
         for value in [minimum, maximum] {
             let literal = IntegerLiteral::from_value(value, integer);
@@ -148,13 +149,15 @@ fn preserves_every_integer_width_and_signedness() {
 #[test]
 fn void_calls_execute_and_resume_with_unit() {
     let mut fixture = ForeignFixture::new();
-    for value in [i64::MIN, i64::MAX] {
-        let literal = IntegerLiteral::Int64(value);
+    for value in
+        [zydeco_syntax::word::RuntimeWord::SIGNED_MIN, zydeco_syntax::word::RuntimeWord::SIGNED_MAX]
+    {
+        let literal = IntegerLiteral::Int(value);
         let returned = fixture.call_result("zyffi_save", ForeignResult::Unit, Some(literal));
         assert!(matches!(*returned, ds::Value::Triv(Triv)));
         let returned = fixture.call_result(
             "zyffi_saved_value",
-            ForeignResult::Integer(IntegerType::Int64),
+            ForeignResult::Integer(IntegerType::Int),
             None,
         );
         assert!(matches!(*returned, ds::Value::Lit(Literal::Integer(actual)) if actual == literal));
@@ -164,10 +167,13 @@ fn void_calls_execute_and_resume_with_unit() {
 #[test]
 fn calls_c_with_zero_scalar_and_borrowed_arguments() {
     use ForeignParameter::Address as B;
-    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
+    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt);
     let mut fixture = ForeignFixture::new();
-    assert_eq!(fixture.call("zyffi_zero", vec![], vec![]), u64::MAX);
-    for value in [0, 7, 1 << 63, u64::MAX] {
+    assert_eq!(
+        fixture.call("zyffi_zero", vec![], vec![]),
+        zydeco_syntax::word::RuntimeWord::UNSIGNED_MAX
+    );
+    for value in [0, 7, 1 << 62, zydeco_syntax::word::RuntimeWord::UNSIGNED_MAX] {
         assert_eq!(
             fixture.call("zyffi_echo", vec![U], vec![ForeignFixture::integer(value)]),
             value
@@ -196,7 +202,7 @@ fn borrows_shared_subranges_of_retained_immutable_storage() {
         assert_eq!(
             fixture.call(
                 "zyffi_bytes",
-                vec![ForeignParameter::Address, ForeignParameter::Integer(IntegerType::UInt64)],
+                vec![ForeignParameter::Address, ForeignParameter::Integer(IntegerType::UInt)],
                 vec![ForeignFixture::address(address), ForeignFixture::integer(length as u64)]
             ),
             expected
@@ -207,7 +213,7 @@ fn borrows_shared_subranges_of_retained_immutable_storage() {
 #[test]
 fn preserves_source_order_across_six_explicit_c_arguments() {
     use ForeignParameter::Address as B;
-    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
+    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt);
     let mut fixture = ForeignFixture::new();
     let hello = fixture.window(b"hello");
     let world = fixture.window(b"world");
@@ -217,7 +223,7 @@ fn preserves_source_order_across_six_explicit_c_arguments() {
             "zyffi_mixed",
             vec![U, B, U, B, U, U],
             vec![
-                ForeignFixture::integer(1 << 63),
+                ForeignFixture::integer(1 << 62),
                 hello.clone(),
                 ForeignFixture::integer(5),
                 world.clone(),
@@ -225,7 +231,7 @@ fn preserves_source_order_across_six_explicit_c_arguments() {
                 ForeignFixture::integer(7),
             ]
         ),
-        9_223_378_066_988_860_778
+        4_611_692_048_561_472_874
     );
     assert_eq!(
         fixture.call(
@@ -251,7 +257,7 @@ fn preserves_source_order_across_six_explicit_c_arguments() {
 #[test]
 fn rejects_invalid_runtime_arguments_before_loading_or_calling() {
     use ForeignParameter::Address as B;
-    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt64);
+    const U: ForeignParameter = ForeignParameter::Integer(IntegerType::UInt);
     let mut runtime = ForeignRuntime::new();
     for (parameters, arguments) in [
         (vec![U], vec![]),
@@ -293,7 +299,10 @@ fn missing_symbol_does_not_poison_subsequent_calls() {
         if library == import.target.library && symbol == import.target.symbol)
     );
     assert!(fixture.runtime.functions.is_empty());
-    assert_eq!(fixture.call("zyffi_zero", vec![], vec![]), u64::MAX);
+    assert_eq!(
+        fixture.call("zyffi_zero", vec![], vec![]),
+        zydeco_syntax::word::RuntimeWord::UNSIGNED_MAX
+    );
 }
 
 #[test]
@@ -314,7 +323,7 @@ fn foreign_borrows_preserve_concrete_storage_alignment_and_contents() {
         assert_eq!(
             fixture.call(
                 "zyffi_record",
-                vec![ForeignParameter::Address, ForeignParameter::Integer(IntegerType::UInt64)],
+                vec![ForeignParameter::Address, ForeignParameter::Integer(IntegerType::UInt)],
                 vec![ForeignFixture::address(address), ForeignFixture::integer(length as u64)]
             ),
             expected
@@ -335,7 +344,7 @@ fn mutable_c_output_preserves_failed_preflight_and_initializes_fields() {
     import.signature = ForeignSignature::new(
         vec![
             ForeignParameter::Address,
-            ForeignParameter::Integer(IntegerType::UInt64),
+            ForeignParameter::Integer(IntegerType::UInt),
             ForeignParameter::Integer(IntegerType::UInt8),
             ForeignParameter::Integer(IntegerType::UInt32),
         ],
@@ -366,4 +375,37 @@ fn mutable_c_output_preserves_failed_preflight_and_initializes_fields() {
     unsafe {
         layout.deallocate(address);
     }
+}
+
+#[test]
+fn rejects_foreign_integers_outside_the_payload_before_resuming() {
+    let mut fixture = ForeignFixture::new();
+    for (symbol, integer) in [
+        ("zyffi_int_below_range", IntegerType::Int),
+        ("zyffi_int_above_range", IntegerType::Int),
+        ("zyffi_uint_above_range", IntegerType::UInt),
+    ] {
+        let mut import = ForeignFixture::import(symbol, vec![]);
+        import.signature = ForeignSignature::new(vec![], ForeignResult::Integer(integer)).unwrap();
+        assert!(matches!(fixture.runtime.invoke(&import, vec![]),
+            Err(ForeignRuntimeError::InvalidResult(name)) if name == import.target.symbol));
+    }
+    // An invalid argument fails before trying to load even a nonexistent symbol.
+    for literal in [
+        IntegerLiteral::Int(i64::MIN),
+        IntegerLiteral::Int(i64::MAX),
+        IntegerLiteral::UInt(u64::MAX),
+    ] {
+        let integer = literal.integer_type().unwrap();
+        let import =
+            ForeignFixture::import("must_not_load", vec![ForeignParameter::Integer(integer)]);
+        assert!(matches!(
+            fixture.runtime.invoke(&import, vec![ds::SemValue::Literal(Literal::Integer(literal))]),
+            Err(ForeignRuntimeError::InvalidArguments(_))
+        ));
+    }
+    assert_eq!(
+        fixture.call("zyffi_zero", vec![], vec![]),
+        zydeco_syntax::word::RuntimeWord::UNSIGNED_MAX
+    );
 }

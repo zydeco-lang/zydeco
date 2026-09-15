@@ -29,9 +29,9 @@ fn public_reference_shows_and_searches_documented_fields() {
     let reference = fixture.reference();
     let renderer = DocumentationRenderer { reference: &reference };
     let show = renderer.show(&DocumentationPath::parse("value")).unwrap();
-    assert!(show.starts_with("value : Int64"), "{show}");
+    assert!(show.starts_with("value : Int"), "{show}");
     assert!(show.contains("Read it to inspect progress."));
-    assert!(renderer.search("counter progress").contains("value : Int64"));
+    assert!(renderer.search("counter progress").contains("value : Int"));
     assert!(renderer.search("private").is_empty());
     assert!(matches!(
         renderer.show(&DocumentationPath::parse("private")),
@@ -42,7 +42,7 @@ fn public_reference_shows_and_searches_documented_fields() {
 #[test]
 fn semantic_links_reach_exposed_fields_without_prose() {
     let fixture = Fixture::new(
-        "let Interface = (#value :: @(intrinsic(i64))) in\n--| Read [value](zydeco:member:Interface/value).\n@[doc] ((#value = 42) : Interface)",
+        "let Interface = (#value :: @(intrinsic(int))) in\n--| Read [value](zydeco:member:Interface/value).\n@[doc] ((#value = 42) : Interface)",
     );
     let reference = fixture.reference();
     let html = DocumentationRenderer { reference: &reference }.html("Value", &[]).unwrap();
@@ -126,7 +126,7 @@ fn public_companion_contract_excludes_private_implementation_docs() {
         .session
         .set_overlay(
             fixture.root.with_extension("zyi"),
-            "--| Public counter.\n@[doc] (#value :: @(intrinsic(i64)))".to_owned(),
+            "--| Public counter.\n@[doc] (#value :: @(intrinsic(int)))".to_owned(),
         )
         .unwrap();
     let reference = fixture.reference();

@@ -18,7 +18,7 @@ fn fmt_formats_each_source_file_in_place() {
     let first = directory.path().join("first.zy");
     let second = directory.path().join("second.zy");
     fs::write(&first, "(#field = field, ((x)))").unwrap();
-    fs::write(&second, "exists (#Counter = ((Counter as Int64) : VType)) . Counter").unwrap();
+    fs::write(&second, "exists (#Counter = ((Counter as Int) : VType)) . Counter").unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
         .arg("fmt")
@@ -37,7 +37,7 @@ fn fmt_formats_each_source_file_in_place() {
     assert_eq!(fs::read_to_string(first).unwrap(), "(= field, x)\n");
     assert_eq!(
         fs::read_to_string(second).unwrap(),
-        "exists (= Counter as Int64 : VType) . Counter\n"
+        "exists (= Counter as Int : VType) . Counter\n"
     );
 }
 
@@ -83,10 +83,10 @@ fn fmt_check_is_silent_and_succeeds_for_formatted_files() {
 fn fmt_format_annotations_control_break_retention() {
     let directory = tempfile::tempdir().unwrap();
     let joined =
-        "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n";
+        "@[format(layout(ignore))] ! bool/if (Ret Int) greater { ret left } { ret right }\n";
     let wrapped = concat!(
         "@[format(layout(ignore))] ! (bool/if)\n",
-        "  (Ret Int64)\n",
+        "  (Ret Int)\n",
         "  greater\n",
         "  { ret left }\n",
         "  { ret right }\n",
@@ -141,7 +141,7 @@ fn fmt_format_annotations_scope_width_and_indentation() {
     let narrow = directory.path().join("narrow.zy");
     fs::write(
         &narrow,
-        "@[format(width(24))] ! (bool/if) (Ret Int64) greater { ret left } { ret right }\n",
+        "@[format(width(24))] ! (bool/if) (Ret Int) greater { ret left } { ret right }\n",
     )
     .unwrap();
     let output =
@@ -151,7 +151,7 @@ fn fmt_format_annotations_scope_width_and_indentation() {
         fs::read_to_string(narrow).unwrap(),
         concat!(
             "@[format(width(24))]\n",
-            "! bool/if (Ret Int64)\n",
+            "! bool/if (Ret Int)\n",
             "  greater { ret left } {\n",
             "  ret right\n",
             "}\n",

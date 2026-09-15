@@ -1,8 +1,8 @@
 @[package(library, name(std/system))]
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit;
-    /Int64; /String; /Addr; /Reader; /Writer; /OS;
-    /io; /fs; /stdio; /args; /random; /process; /int64; builtin) : @(import("../builtin.zy")) that
+    /Int; /String; /Addr; /Reader; /Writer; /OS;
+    /io; /fs; /stdio; /args; /random; /process; /int; builtin) : @(import("../builtin.zy")) that
   param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr in
   param val (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) : @(import(
     "../data/package.type.zy"
@@ -30,43 +30,43 @@ begin
     def broken_pipe : IoErrorKind = +BrokenPipe() that
     def closed : IoErrorKind = +Closed() that
     def other : IoErrorKind = +Other() that
-    def ! from_code (code : Int64) : Ret IoErrorKind = ! int64/eq
+    def ! from_code (code : Int) : Ret IoErrorKind = ! int/eq
       (Ret IoErrorKind)
       code
       0
       { ret not_found }
       {
-        ! int64/eq
+        ! int/eq
           (Ret IoErrorKind)
           code
           1
           { ret permission_denied }
           {
-            ! int64/eq
+            ! int/eq
               (Ret IoErrorKind)
               code
               2
               { ret already_exists }
               {
-                ! int64/eq
+                ! int/eq
                   (Ret IoErrorKind)
                   code
                   3
                   { ret invalid_input }
                   {
-                    ! int64/eq
+                    ! int/eq
                       (Ret IoErrorKind)
                       code
                       4
                       { ret invalid_data }
                       {
-                        ! int64/eq
+                        ! int/eq
                           (Ret IoErrorKind)
                           code
                           5
                           { ret broken_pipe }
                           {
-                            ! int64/eq
+                            ! int/eq
                               (Ret IoErrorKind)
                               code
                               6
@@ -78,7 +78,7 @@ begin
               }
           }
       } that
-    def ! kind_code (kind : IoErrorKind) : Ret Int64 =
+    def ! kind_code (kind : IoErrorKind) : Ret Int =
       match kind
       | +NotFound(_) => ret 0
       | +PermissionDenied(_) => ret 1
@@ -98,7 +98,7 @@ begin
     : R =
         do left_code <- ! kind_code left;
         do right_code <- ! kind_code right;
-        ! int64/eq R left_code right_code when_equal when_different
+        ! int/eq R left_code right_code when_equal when_different
     that
     def IoError =
       data
@@ -129,7 +129,7 @@ begin
       | +Path(string) => ret string
       end
     that
-    let ! make_io_error (code : Int64) (message : String) : Ret IoError =
+    let ! make_io_error (code : Int) (message : String) : Ret IoError =
       do kind <- ! from_code code;
       ! error kind message
     in
@@ -157,14 +157,14 @@ begin
     in
     let ! continue_host_error (A : VType)
       (continuation : Thk (Result A IoError -> OS))
-      (code : Int64)
+      (code : Int)
       (message : String)
     : OS =
         do error <- ! make_io_error code message;
         ! continue_io_error A continuation error
     in
     let ! io_read (reader : Reader)
-      (count : Int64)
+      (count : Int)
       (continuation : Thk (Result Bytes IoError -> OS))
     : OS = ! io/read
         reader

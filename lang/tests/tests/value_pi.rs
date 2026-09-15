@@ -7,8 +7,8 @@ fn pipelines_apply_value_functions_in_both_directions() {
         r#"
 begin
   let val keep (A : VType) (value : A) : A = value that
-  let forward : Int64 = 0 |> keep Int64 that
-  let backward : Int64 = keep Int64 <| forward that
+  let forward : Int = 0 |> keep Int that
+  let backward : Int = keep Int <| forward that
   ! exit backward
 end
 "#,
@@ -188,7 +188,7 @@ begin
   : B =
     value
   that
-  let status : Int64 = ((Unit, ()), (Int64, 0)) |> take_second that
+  let status : Int = ((Unit, ()), (Int, 0)) |> take_second that
   ! exit status
 end
 "#,
@@ -206,8 +206,8 @@ begin
   : A * B =
     (left, right)
   that
-  let (_ : Unit, status : Int64) =
-    ((Unit, ()), (Int64, 0)) |> unpack_both
+  let (_ : Unit, status : Int) =
+    ((Unit, ()), (Int, 0)) |> unpack_both
   that
   ! exit status
 end
@@ -221,7 +221,7 @@ fn value_functions_capture_runtime_values() {
         r#"
 begin
   do captured <- ret 0;
-  let val constant (_ : Unit) : Int64 = captured in
+  let val constant (_ : Unit) : Int = captured in
   let status = () |> constant in
   ! exit status
 end
@@ -234,10 +234,10 @@ fn value_functions_share_the_value_namespace() {
     SourceCase::assert_accepted(SourceCase::run(
         r#"
 begin
-  let val keep (value : Int64) : Int64 = value in
+  let val keep (value : Int) : Int = value in
   let stored = keep in
   let keep : Unit = () in
-  let transformed : Int64 = 0 |> stored in
+  let transformed : Int = 0 |> stored in
   let _ : Unit = keep in
   ! exit transformed
 end
@@ -269,10 +269,10 @@ begin
   let Maybe =
     data
     | +None : Unit
-    | +Some : Int64
+    | +Some : Int
     end
   that
-  let val invalid ((+Some(value)) : Maybe) : Int64 = value that
+  let val invalid ((+Some(value)) : Maybe) : Int = value that
   ! exit 0
 end
 "#,

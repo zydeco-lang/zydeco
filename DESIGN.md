@@ -54,7 +54,7 @@ The host interface illustrates the resulting control convention:
 
 ```text
 write : Thk (String -> Thk OS -> OS)
-exit  : Thk (Int64 -> OS)
+exit  : Thk (Int -> OS)
 ```
 
 `write` receives an explicit `Thk OS` successor, whereas `exit` terminates.
@@ -201,17 +201,17 @@ The same distinction lifts one level to named types and named kinds:
 Γ ⊢ (#field :: K) : Set        Γ ⊢ (#field = A) : (#field :: K)
 ```
 
-For example, `(#item = Int64) : (#item :: VType)` is a type-level judgment,
-while `#item :: Int64` is the value type classifying values such as `(#item = 1) : (#item :: Int64)`.
+For example, `(#item = Int) : (#item :: VType)` is a type-level judgment,
+while `#item :: Int` is the value type classifying values such as `(#item = 1) : (#item :: Int)`.
 A type constructor can be named at its higher kind in the same way.
 This complete example, saved in the repository root, checks `42` against a type obtained by projecting
 and applying the named constructor:
 
 ```zydeco
-param (/Ret; /VType; /Int64) : @(import("lib/std/builtin.zy")) in
+param (/Ret; /VType; /Int) : @(import("lib/std/builtin.zy")) in
 let Identity : VType -> VType = fn (X : VType) => X in
 let NamedIdentity : (#constructor :: (VType -> VType)) = (#constructor = Identity) in
-let IntAgain = NamedIdentity/constructor Int64 in
+let IntAgain = NamedIdentity/constructor Int in
 ret (42 : IntAgain)
 ```
 
@@ -238,7 +238,7 @@ When a field and a variable or pattern binder have the same name, prefix `=` pro
 
 ```zydeco
 (= x, = y)                 -- equivalent to (#x = x, #y = y)
-(= x : Int64, middle, = y)  -- the annotation describes the payload x
+(= x : Int, middle, = y)  -- the annotation describes the payload x
 ```
 
 The set of valid field names is exactly the set of valid variable names; the `#` marker,
@@ -393,8 +393,8 @@ and the abstract witnesses a package opening introduces.
 A witness defined as a transparent type function has no such abstraction by the time the payload is elaborated,
 so sealing such a witness leaves the body concrete; the comma form, whose inversion checks the payload
 against the expected body under a skolem, remains the spelling for that case.
-An unannotated payload such as `pack (X : VType) is Int64 where 42 end`
-therefore synthesizes the degenerate but sound `exists (X : VType) . Int64`.
+An unannotated payload such as `pack (X : VType) is Int where 42 end` therefore synthesizes the degenerate
+but sound `exists (X : VType) . Int`.
 The manifest form stays in the synthesized type, so a disclosed value joins a manifest expected existential
 by the ordinary least-upper-bound operation, and a sealed value joins an abstract one once their bodies agree
 under the respective binders.
@@ -481,7 +481,7 @@ context extension, and separation from ordinary metadata forwarding.
 ## Standard Library and Host Boundary
 
 Compiler-canonical kinds and fixed-representation types are manifest fields on the surface
-of `lib/std/builtin.zy`, the launcher-supplied package contract, so selecting `Int64`,
+of `lib/std/builtin.zy`, the launcher-supplied package contract, so selecting `Int`,
 `Thk`, or `Ret` is one field search and every selection shares one intrinsic identity.
 Its operation groups are `numeric`, `text`, and `system`, and the field search descends through them,
 so a source selects `(/stdio; /process)` without naming the enclosing group.
@@ -710,15 +710,10 @@ Storage and access have separate contracts:
 
 ### Numeric Representations
 
-Zydeco exposes fixed-width numeric types whose runtime domains match Rust's primitive representations:
-`Int8`, `Int16`, `Int32`, and `Int64` use `i8`, `i16`, `i32`, and `i64`; `UInt8`, `UInt16`, `UInt32`,
-and `UInt64` use the corresponding unsigned Rust types; `Float32` and `Float64` use `f32` and `f64`.
-Integer arithmetic wraps within the selected representation, comparisons retain signedness,
-and floating-point operations follow IEEE 754 at the selected width.
-Integer division and remainder by zero stop execution with a clear runtime error and nonzero exit status.
-Signed minimum divided by `-1` wraps to the signed minimum; the corresponding remainder is zero.
-Float `to_string` uses Rust's `Display` spelling at the selected width: the shortest round-tripping decimal
-without exponent notation, with `-0`, `inf`, `-inf`, and `NaN` for the corresponding special values.
+Zydeco has tagged machine integers `Int` and `UInt`, exact-width integers through 32 bits,
+and IEEE 754 `Float32` and `Float64`.
+The [primitive-value reference](docs/references/language.md#13-primitive-values-and-capabilities) specifies
+numeric domains, default literal types, arithmetic, and parsing.
 
 An expected numeric type selects a literal's representation.
 Numeric literals use decimal digits, with an optional decimal fraction or complete exponent for floats.
@@ -728,24 +723,14 @@ Integer literals must fit that representation; floating-point literals are round
 to the selected width, including subnormal rounding and underflow to zero.
 Literals that overflow the finite `Float64` range are rejected during parsing,
 and narrowing a finite literal to `Float32` also rejects overflow.
-When no expected type selects a representation, integer literals synthesize `Int64`
+When no expected type selects a representation, integer literals synthesize `Int`
 and decimal literals synthesize `Float64`.
 There are no implicit conversions between numeric types for existing values.
 
-At the AMD64 runtime boundary, a value occupies one machine word.
-The low bit is a runtime tag:
-
-- Odd words are immediate values. They represent `Unit`, constructor indices, `Char`, all integers through 32 bits,
-  `Float32`, `Int64` values from `-2^62` through `2^62 - 1`, and `UInt64` values through `2^63 - 1`.
-- Even words are pointer-shaped values.
-  Region-allocated products and closures refer to scanned blocks in the fixed two-space heap.
-  An `Int64` or `UInt64` outside the immediate range and every `Float64` instead point
-  to an opaque one-word block containing all 64 payload bits.
-
-This encoding preserves the full source-level numeric domains while letting the copying collector distinguish immediates
-from movable pointers exactly.
-Opaque scalar blocks are copied but their payload bits are never traced.
-Aligned Rust-owned pointers, such as host strings, are outside both semispaces and remain unchanged.
+The [runtime-word reference](docs/references/compiler.md#c12-shared-native-model-allocation-and-collection)
+owns tagged encodings and tracing.
+All supported integers fit immediate words; `Float64` uses an opaque box. Storage
+and C transport follow their [separate carrier contract](docs/references/language.md#storage-and-foreign-transport).
 
 ### Shared Rust Runtime Model
 
@@ -889,8 +874,8 @@ The [library guide](lib/std/README.md#explicit-storage) locates the source inter
 ### Returning C Imports
 
 A foreign annotation supplies an implementation for a thunk.
-The supported classifier has the form `Thk (A1 -> ... -> An -> Ret B)`, with each argument either a fixed-width integer
-or `Addr`, and result `B` a fixed-width integer or `Unit` (C `void`).
+The supported classifier has the form `Thk (A1 -> ... -> An -> Ret B)`, with each argument either a supported integer
+or `Addr`, and result `B` a supported integer or `Unit` (C `void`).
 An address supplies one C pointer; the binding supplies any length separately and establishes validity.
 The C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.

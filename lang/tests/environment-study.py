@@ -34,23 +34,23 @@ class EnvironmentStudy(RUNTIME.Study):
     def workloads(self):
         workloads = super().workloads()
         width = 128
-        steps = "\n".join("    do value <- ! int64/add value 1;" for _ in range(width))
+        steps = "\n".join("    do value <- ! int/add value 1;" for _ in range(width))
         iterations = max(1, round(1000 * self.args.scale))
         body = f"""
-  def ! chain (value : Int64) : Ret Int64 =
+  def ! chain (value : Int) : Ret Int =
 {steps}
     ret value
   in
-  def fix loop (remaining : Int64) (acc : Int64) : Ret Int64 =
-    ! int64/eq (Ret Int64) remaining 0 {{ ret acc }} {{
+  def fix loop (remaining : Int) (acc : Int) : Ret Int =
+    ! int/eq (Ret Int) remaining 0 {{ ret acc }} {{
       do value <- ! chain 0;
-      do acc <- ! int64/add acc value;
-      do next <- ! int64/sub remaining 1;
+      do acc <- ! int/add acc value;
+      do next <- ! int/sub remaining 1;
       ! loop next acc
     }}
   in
   do result <- ! loop {iterations} 0;
-  do status <- ! int64/sub result {iterations * width};
+  do status <- ! int/sub result {iterations * width};
   ! process/exit status"""
         workloads["sequential-locals"] = self.source("sequential-locals", body)
         if self.args.fragments:
@@ -63,33 +63,33 @@ class EnvironmentStudy(RUNTIME.Study):
     def sparse_repeated(self, width, iterations):
         # Reduce the wide live set before calling churn. The wide frame layout
         # still exists, but the continuation needs only the completed subtotal.
-        uses = "\n".join(f"    do result <- ! int64/add result x{i};" for i in range(width))
+        uses = "\n".join(f"    do result <- ! int/add result x{i};" for i in range(width))
         original = f"    do result <- ! churn 3 seed;\n{uses}"
         replacement = (f"    let result = 0 in\n{uses}\n"
                        "    do returned <- ! churn 3 seed;\n"
-                       "    do result <- ! int64/add result returned;")
+                       "    do result <- ! int/add result returned;")
         body = self.repeated(width, iterations)
         assert body.count(original) == 1
         return body.replace(original, replacement)
 
     def sparse_nested(self, width, depth, iterations):
-        bindings = "\n".join(f"      do x{i} <- ! int64/add seed {i};" for i in range(width))
-        uses = "\n".join(f"      do subtotal <- ! int64/add subtotal x{i};" for i in range(width))
+        bindings = "\n".join(f"      do x{i} <- ! int/add seed {i};" for i in range(width))
+        uses = "\n".join(f"      do subtotal <- ! int/add subtotal x{i};" for i in range(width))
         churn = self.churn(iterations).split("  do result <- ! churn")[0]
         expected = depth * width * (width + 1) // 2 + iterations + 1
         return churn + f"""
-  def fix nest (remaining : Int64) (seed : Int64) : Ret Int64 =
-    ! int64/eq (Ret Int64) remaining 0 {{ ! churn {iterations} seed }} {{
+  def fix nest (remaining : Int) (seed : Int) : Ret Int =
+    ! int/eq (Ret Int) remaining 0 {{ ! churn {iterations} seed }} {{
 {bindings}
       let subtotal = 0 in
 {uses}
-      do next <- ! int64/sub remaining 1;
+      do next <- ! int/sub remaining 1;
       do returned <- ! nest next seed;
-      ! int64/add returned subtotal
+      ! int/add returned subtotal
     }}
   in
   do result <- ! nest {depth} 1;
-  do status <- ! int64/sub result {expected};
+  do status <- ! int/sub result {expected};
   ! process/exit status"""
 
     def layouts(self):

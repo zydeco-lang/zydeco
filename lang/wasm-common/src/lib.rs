@@ -37,6 +37,8 @@ pub const WORD_MEMORY: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 /// Errors raised by the shared WebAssembly backend support.
 #[derive(Debug, Error)]
 pub enum WasmEmitError {
+    #[error("integer exceeds the tagged payload range")]
+    IntegerRange,
     #[error("unresolved integer literal reached WebAssembly emission")]
     UnresolvedInteger,
     #[error("{what} ({value}) exceeds the wasm32 backend limit")]
@@ -46,6 +48,7 @@ pub enum WasmEmitError {
 impl From<WordError> for WasmEmitError {
     fn from(error: WordError) -> Self {
         match error {
+            | WordError::IntegerRange => Self::IntegerRange,
             | WordError::UnresolvedInteger => Self::UnresolvedInteger,
             | WordError::TagIndex(value) => Self::Limit { what: "runtime tag index", value },
         }

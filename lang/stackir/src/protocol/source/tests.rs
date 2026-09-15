@@ -21,7 +21,7 @@ impl Fixture {
         for (id, ty) in [
             (
                 integer,
-                ss::Type::Primitive(ss::PrimitiveTy(PrimitiveType::Integer(IntegerType::Int64))),
+                ss::Type::Primitive(ss::PrimitiveTy(PrimitiveType::Integer(IntegerType::Int))),
             ),
             (character, ss::Type::Primitive(ss::PrimitiveTy(PrimitiveType::Char))),
             (ret, ss::Type::Ret(ss::RetTy)),
@@ -88,7 +88,7 @@ impl Fixture {
     }
 
     fn integer() -> ValueProtocol {
-        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int64))
+        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))
     }
 
     fn character() -> ValueProtocol {

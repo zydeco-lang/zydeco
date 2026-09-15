@@ -1,9 +1,9 @@
 begin
-  param (/OS; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
+  param (/OS; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
   def Choice =
     codata
     | .left : OS
-    | .right : Int64 -> OS
+    | .right : Int -> OS
     end
   that
 

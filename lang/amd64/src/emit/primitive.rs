@@ -14,8 +14,8 @@ impl<'a> Emit<'a> for PrimitiveOp {
         em.shift_stack_parity(-2);
         match *self {
             | PrimitiveOp::Integer(ty, operation) => {
-                em.decode_integer(Reg::Rax, ty, id, "first");
-                em.decode_integer(Reg::Rcx, ty, id, "second");
+                em.decode_integer(Reg::Rax, ty);
+                em.decode_integer(Reg::Rcx, ty);
                 let args = BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx));
                 match operation {
                     | IntegerArithmetic::Add => em.asm.text.push(Instr::Add(args)),
@@ -26,7 +26,7 @@ impl<'a> Emit<'a> for PrimitiveOp {
                     }
                 }
                 em.narrow_integer(ty);
-                em.encode_integer(ty, id);
+                em.tag_integer();
             }
             | PrimitiveOp::Float(ty, operation) => {
                 for reg in [Reg::Rax, Reg::Rcx] {
@@ -69,34 +69,16 @@ impl Emitter<'_> {
         format!("primitive_{}_{}", id.concise_inner().replace('#', "_"), suffix)
     }
 
-    fn decode_integer(&mut self, reg: Reg, ty: IntegerType, id: ProgId, operand: &str) {
-        let boxed = Self::primitive_label(id, &format!("{operand}_boxed"));
-        let decoded = Self::primitive_label(id, &format!("{operand}_decoded"));
-        if ty.bits() == 64 {
-            self.asm.text.extend([
-                Instr::Test(BinArgs::ToReg(reg, Arg32::Signed(1))),
-                Instr::JCC(ConditionCode::Z, JmpArgs::Label(boxed.clone())),
-            ]);
-        }
+    fn decode_integer(&mut self, reg: Reg, ty: IntegerType) {
         self.asm.text.push(if ty.is_signed() {
             Instr::Sar(ShArgs { reg, by: 1 })
         } else {
             Instr::Shr(ShArgs { reg, by: 1 })
         });
-        if ty.bits() == 64 {
-            self.asm.text.extend([
-                Instr::Jmp(JmpArgs::Label(decoded.clone())),
-                Instr::Label(boxed),
-                Instr::Mov(MovArgs::ToReg(reg, Arg64::Mem(MemRef { reg, offset: 0 }))),
-                Instr::Label(decoded),
-            ]);
-        }
     }
 
     fn integer_division(&mut self, ty: IntegerType, remainder: bool, id: ProgId) {
         let nonzero = Self::primitive_label(id, "nonzero");
-        let divide = Self::primitive_label(id, "divide");
-        let done = Self::primitive_label(id, "divided");
         self.asm.text.extend([
             Instr::Test(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rcx))),
             Instr::JCC(ConditionCode::NZ, JmpArgs::Label(nonzero.clone())),
@@ -110,19 +92,6 @@ impl Emitter<'_> {
             .into(),
         ));
         self.asm.text.extend([Instr::Ud2, Instr::Label(nonzero)]);
-        if ty == IntegerType::Int64 {
-            self.asm.text.extend([
-                Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Signed(-1))),
-                Instr::JCC(ConditionCode::NE, JmpArgs::Label(divide.clone())),
-                Instr::Mov(MovArgs::ToReg(Reg::Rdx, Arg64::Signed(i64::MIN))),
-                Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdx))),
-                Instr::JCC(ConditionCode::NE, JmpArgs::Label(divide.clone())),
-            ]);
-            if remainder {
-                self.asm.text.push(Instr::Xor(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rax))));
-            }
-            self.asm.text.extend([Instr::Jmp(JmpArgs::Label(done.clone())), Instr::Label(divide)]);
-        }
         if ty.is_signed() {
             self.asm.text.extend([Instr::Cqo, Instr::IDiv(Reg::Rcx)]);
         } else {
@@ -133,9 +102,6 @@ impl Emitter<'_> {
         }
         if remainder {
             self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdx))));
-        }
-        if ty == IntegerType::Int64 {
-            self.asm.text.push(Instr::Label(done));
         }
     }
 
@@ -160,33 +126,6 @@ impl Emitter<'_> {
                 offset: Some(1),
             },
         ));
-    }
-
-    fn encode_integer(&mut self, ty: IntegerType, id: ProgId) {
-        if ty.bits() < 64 {
-            self.tag_integer();
-            return;
-        }
-        let boxed = Self::primitive_label(id, "result_boxed");
-        let done = Self::primitive_label(id, "result_encoded");
-        if ty.is_signed() {
-            self.asm.text.extend([
-                Instr::Mov(MovArgs::ToReg(Reg::Rcx, Arg64::Reg(Reg::Rax))),
-                Instr::Shl(ShArgs { reg: Reg::Rcx, by: 1 }),
-                Instr::Sar(ShArgs { reg: Reg::Rcx, by: 1 }),
-                Instr::Cmp(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rax))),
-                Instr::JCC(ConditionCode::NE, JmpArgs::Label(boxed.clone())),
-            ]);
-        } else {
-            self.asm.text.extend([
-                Instr::Test(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rax))),
-                Instr::JCC(ConditionCode::S, JmpArgs::Label(boxed.clone())),
-            ]);
-        }
-        self.tag_integer();
-        self.asm.text.extend([Instr::Jmp(JmpArgs::Label(done.clone())), Instr::Label(boxed)]);
-        self.box_scalar(id);
-        self.asm.text.push(Instr::Label(done));
     }
 
     fn box_scalar(&mut self, id: ProgId) {

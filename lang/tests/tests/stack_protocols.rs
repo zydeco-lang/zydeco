@@ -24,7 +24,7 @@ impl Fixture {
     }
 
     fn integer() -> ValueProtocol {
-        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int64))
+        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))
     }
 
     fn worker() -> StackProtocol {
@@ -239,8 +239,8 @@ fn erased_polymorphic_calls_check_repeated_value_parameters_together() {
             matches!(
                 (&arena.inner.values[first], &arena.inner.values[second]),
                 (
-                    Value::Literal(Literal::Integer(IntegerLiteral::Int64(5))),
-                    Value::Literal(Literal::Integer(IntegerLiteral::Int64(7)))
+                    Value::Literal(Literal::Integer(IntegerLiteral::Int(5))),
+                    Value::Literal(Literal::Integer(IntegerLiteral::Int(7)))
                 ),
             )
             .then_some((*id, *second))

@@ -73,7 +73,7 @@ mod tests {
             &provider,
             concat!(
                 "--| Provider term\n",
-                "@[doc(module,\"provider\")] fn (value : @(intrinsic(i64))) => ret value\n",
+                "@[doc(module,\"provider\")] fn (value : @(intrinsic(int))) => ret value\n",
             ),
         )
         .unwrap();
@@ -105,7 +105,7 @@ mod tests {
             provider_doc.site.directive.meta.arguments,
             [Meta::ident("module"), Meta::string("provider")]
         );
-        assert_eq!(provider_doc.term_source(), "fn (value : @(intrinsic(i64))) => ret value");
+        assert_eq!(provider_doc.term_source(), "fn (value : @(intrinsic(int))) => ret value");
         assert!(matches!(provider_doc.term(), Term::Abs(_)));
 
         assert_eq!(import_doc.path(), root.canonicalize().unwrap());

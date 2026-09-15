@@ -4,15 +4,16 @@
 > [`../spell/`](../spell/) corpus; some old spellings here no longer match the root-term syntax.
 
 ## Types
-Zydeco has two kinds (`VType` and `CType`) of types: value type (`A`) and computation type (`B`). 
+Zydeco has two kinds (`VType` and `CType`) of types: value type (`A`) and computation type (`B`).
 
 A value type classifies inert data and a computation type classifies programs that compute things.
 
-Value type can be: 
+Value type can be:
 - `X`: type variable defined using `data`.
-- `Int8 | ... | Int64`, `UInt8 | ... | UInt64`, `Float32 | Float64`, `String`, `Boolean`, and `Unit`:
-  basic types with built-in functions. Unconstrained numeric literals default to `Int64` or `Float64`.
-- `Thunk Y`: suspend a computation type `Y` and consider it as a value type. 
+- `Int8 | ... | Int`, `UInt8 | ... | UInt`, `Float32 | Float64`, `String`, `Boolean`,
+  and `Unit`: basic types with built-in functions.
+  Unconstrained numeric literals default to `Int` or `Float64`.
+- `Thunk Y`: suspend a computation type `Y` and consider it as a value type.
 
 Computation type can be:
 - `Y`: type variable defined using `codata`.
@@ -24,12 +25,12 @@ For `Thunk B` type, we can represent its value as `{ some_computation_value }`.
 For `Ret A` type, we can represent its value as `ret some_value_type`
 
 ## Playing with REPL
-Using the REPL can help us get familiar with syntax and basic idea of zydeco fast. 
+Using the REPL can help us get familiar with syntax and basic idea of zydeco fast.
 
 Key points: `Force`, `Binding`, `Function`
 ```
 > 1
-1 : Int64
+1 : Int
 > "ann arbor"
 "ann arbor" : String
 > True()
@@ -40,26 +41,29 @@ Unit() : Unit
 Basic value types can be interpreted in the ways above.
 ```
 > add
-add : Thunk(Int64 -> Int64 -> Ret(Int64))
+add : Thunk(Int -> Int -> Ret(Int))
 ```
-Now `add` has a value type of `Thunk B`, where `B` is a computation type which takes two `Int64` and returns a computation type `Ret Int64`.
+Now `add` has a value type of `Thunk B`, where `B` is a computation type which takes two `Int`
+and returns a computation type `Ret Int`.
 
-Notice that `add` is still suspended, so if we try to apply it into practice by `add 1 2` and get the result, there will be an error.
+Notice that `add` is still suspended, so if we try to apply it into practice by `add 1 2` and get the result,
+there will be an error.
 ```
 > add 1 2
 Parse Error: Unrecognized token `NumLiteral(1)` found at 4:5
 ```
-In fact, we need to `force` the `Thunk` type first and then apply it. The syntax is like:
+In fact, we need to `force` the `Thunk` type first and then apply it.
+The syntax is like:
 ```
 > ! add 1 2
 3
 ```
-`3` is the returned `Int64`.
+`3` is the returned `Int`.
 
 Another example is the `exit` function:
 ```
 > exit
-exit : Thunk(Int64 -> OS)
+exit : Thunk(Int -> OS)
 ```
 `OS` is the other type of the computation result.
 ```
@@ -67,9 +71,10 @@ exit : Thunk(Int64 -> OS)
 ```
 The REPL will exit directly without printing anything.
 
-We have some ways of binding a certain value to variables which can be used later. There're two main ways: `let` and `do`.
+We have some ways of binding a certain value to variables which can be used later.
+There're two main ways: `let` and `do`.
 
-We can bind something with `value` type to a variable using `let`. 
+We can bind something with `value` type to a variable using `let`.
 ```
 > let pre = "ann " in ! str_append pre "arbor"
 "ann arbor"
@@ -78,24 +83,34 @@ We can bind something with `value` type to a variable using `let`.
 We can also define a function using `let`.
 ```
 > mod
-mod : Thunk(Int64 -> Int64 -> Ret(Int64))
-> let mod10 = {fn (n : Int64) => ! mod n 10} in ! mod10 54
+mod : Thunk(Int -> Int -> Ret(Int))
+> let mod10 = {fn (n : Int) => ! mod n 10} in ! mod10 54
 4
 ```
-`mod` is a built-in function and we can define a function taking an `x : Int64` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk B`. Therefore, we add `{}` at each side of the definition part.
+`mod` is a built-in function and we can define a function taking an `x : Int` and calculating `x mod 10`.
+The type of defined function `mod10` should also be `Thunk B`.
+Therefore, we add `{}` at each side of the definition part.
 
-For each `let` statement, a semicolon `;` is needed, indicating that it's not the main expression. We can add more `let` to bind more variables, but there must be a main expression at the end of the program.
+For each `let` statement, a semicolon `;` is needed, indicating that it's not the main expression.
+We can add more `let` to bind more variables, but there must be a main expression at the end of the program.
 
-Binding the result of computation to a variable using `let` is not allowed. Instead, we use `do`.
+Binding the result of computation to a variable using `let` is not allowed.
+Instead, we use `do`.
 ```
 > do x <- ! mod 10 4; ! add x 2    
 4
 ```
-The process a `do` statement is executed is similar to the process that we call another function and a new stack frame is created. The return value of the function is binded to the variable after `do`.
+The process a `do` statement is executed is similar to the process that we call another function
+and a new stack frame is created.
+The return value of the function is binded to the variable after `do`.
 
 
 ## OS (Operating System)
-Besides `Ret A`, main expression can also have the built-in type of `OS` which classifies computations that can be run as a process that interacts with the `OS`. The idea of kontinuation requires programmers to specify what the `OS` looks like after the program reads or writes something. Here are some examples:
+Besides `Ret A`, main expression can also have the built-in type of `OS` which classifies computations
+that can be run as a process that interacts with the `OS`.
+The idea of kontinuation requires programmers to specify what the `OS` looks like
+after the program reads or writes something.
+Here are some examples:
 ```
 pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
@@ -136,7 +151,7 @@ end
 # Recursive
 data ListInt where
   | +NoInt : Unit
-  | +Cons  : Int64 * ListInt
+  | +Cons  : Int * ListInt
 end
 
 # Here's a function print every element in the ListInt seperated by a ' '
@@ -155,19 +170,23 @@ let printListInt = {
 ```
 
 ## codata (and comatch)
-If we consider functions as computations, we can use `codata` to simulate the process of calling functions. We take a value type `A` and return a computation type `B`. The `codata` type itself is a computation type.
+If we consider functions as computations, we can use `codata` to simulate the process of calling functions.
+We take a value type `A` and return a computation type `B`.
+The `codata` type itself is a computation type.
 
-For example, when we try to calculate the sum of a list of number recursively, we can simulate the construction of stack model and execute the computation by destructing the stack. The existence of `codata` helps label different kind of stacks and indicate when the computation stops.
+For example, when we try to calculate the sum of a list of number recursively,
+we can simulate the construction of stack model and execute the computation by destructing the stack.
+The existence of `codata` helps label different kind of stacks and indicate when the computation stops.
 ```
 # When adding a list of numbers, the process should be either finishing or keeping adding numbers
 codata Summer where
-  | .done : Ret Int64
-  | .addN : Int64 -> Summer
+  | .done : Ret Int
+  | .addN : Int -> Summer
 end
 
-# Since Summer includes the return type Ret(Int64), it can be used directly instead of using the original return type.
-def rec retSummer : Int64 -> Summer =
-  fn (n : Int64) =>
+# Since Summer includes the return type Ret(Int), it can be used directly instead of using the original return type.
+def rec retSummer : Int -> Summer =
+  fn (n : Int) =>
     comatch
     | .done   => ret n
     | .addN x =>
@@ -187,6 +206,8 @@ end
 
 ## System F_ω
 
-We have `forall (Y: CType) . B` and `exists (Y: CType) . A` just as normal system F. The term level syntax for types are the same as terms. For example, `(fn (X: VType) => ...) Int64` introduces a forall-typed function which takes Int64 as an argument; `match (Int64, ...) | (X, x) => ... end` works similarly (though to actually use them, you'll need more type annotation).
+We have `forall (Y: CType) . B` and `exists (Y: CType) . A` just as normal system F. The term level syntax for types are the same as terms. For example, `(fn (X: VType) => ...) Int` introduces a forall-typed function which takes Int as an argument; `match (Int, ...) | (X, x) => ... end` works similarly (though to actually use them, you'll need more type annotation).
 
-Besides base kinds, `K -> K` are also valid kinds, for example, type (constructor) `(fn (X: VType) => Ret X)` as kind `VType -> CType`. The syntax for type level is the same as term level.
+Besides base kinds, `K -> K` are also valid kinds, for example,
+type (constructor) `(fn (X: VType) => Ret X)` as kind `VType -> CType`.
+The syntax for type level is the same as term level.

@@ -1,10 +1,9 @@
 begin
-  param (/VType; /Thk; /Ret; /process; /Int64; /numeric; /system) :
-  @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  param (/VType; /Thk; /Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
   let CounterLibrary = exists
     (
-      #Counter = Representation as Int64 :
+      #Counter = Representation as Int :
       VType
     )
   .
@@ -13,19 +12,19 @@ begin
         #increment :: Thk (Representation -> Ret Representation)
       ) that
   def counter : CounterLibrary = (
-    #Counter = Int64,
+    #Counter = Int,
     #zero = 0,
     #increment = {
-      fn (value : Int64) => ! int64/add value 1
+      fn (value : Int) => ! int/add value 1
     }
   ) that
   let val use_counter
     ((= Counter, = zero, = increment) : CounterLibrary)
-  : Thk (Ret Int64) =
+  : Thk (Ret Int) =
       { ! increment zero }
   that
 
   do value <- ! (counter |> use_counter);
-  do status <- ! int64/sub value 1;
+  do status <- ! int/sub value 1;
   ! process/exit status
 end

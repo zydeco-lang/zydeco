@@ -1,6 +1,6 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /UInt32; /Addr; /OS;
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /UInt32; /Addr; /OS;
     /numeric; /process; builtin) : @(import(std/builtin)) that
   let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
     builtin |> (@(import(std/memory)))
@@ -12,7 +12,7 @@ begin
   let no = { fn (_ : Fault) => ! fail } in
 
   let (#Layout = DynLayout, = Representation, layouts) = dynamic in
-  let ! run (alignment : Int64) : OS =
+  let ! run (alignment : Int) : OS =
     ! layouts/realize (UInt8 * UInt32) OS
       (
         layouts/align (UInt8 * UInt32) alignment (
@@ -21,7 +21,7 @@ begin
       )
       fail {
       fn (= L, repr) =>
-        ! numeric/int64/eq OS repr/alignment alignment {
+        ! numeric/int/eq OS repr/alignment alignment {
           ! repr/allocate OS heap no {
             fn pointer =>
               ! repr/unsafe/init OS pointer (7 : UInt8, 42 : UInt32) {

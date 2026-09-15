@@ -92,7 +92,7 @@ The thin arrow `->` constructs a classifier; `=>` separates a function or matchi
 Annotations and named components have a separate grouping layer: `:` is non-associative
 and binds more tightly than the right-associative `=` and `::` naming forms.
 Expression annotations use parentheses, `(e : S)`, or the contents of a `begin ... end` block.
-Write `((#x = 1) : (#x :: Int64))` to annotate the whole named value; `(#x = 1 : Int64)` annotates its payload.
+Write `((#x = 1) : (#x :: Int))` to annotate the whole named value; `(#x = 1 : Int)` annotates its payload.
 Metadata in an application argument also needs parentheses.
 
 ## 3. Bindings and scope
@@ -119,7 +119,7 @@ a nested `begin` provides a nearer boundary.
 ```zydeco check
 begin
   let answer = seed that
-  param (seed : @(intrinsic(i64))) that
+  param (seed : @(intrinsic(int))) that
   ret answer
 end
 ```
@@ -183,10 +183,10 @@ Sources close their inference independently before an import-site expectation is
 
 | Operand | Query result |
 | --- | --- |
-| `1` | `Int64` |
-| `ret 1` | `Ret Int64` |
-| `{ ret 1 }` | `Thk (Ret Int64)` |
-| `Int64` | `VType` |
+| `1` | `Int` |
+| `ret 1` | `Ret Int` |
+| `{ ret 1 }` | `Thk (Ret Int)` |
+| `Int` | `VType` |
 | `Ret` | `VType -> CType` |
 
 The annotation takes no arguments; `@[typeof()] e` is equivalent.
@@ -270,8 +270,8 @@ and destructor names, as in `.route argument .result`.
 
 ```zydeco check
 let Ret = @(intrinsic(ret)) in
-let Int64 = @(intrinsic(i64)) in
-def Probe = codata | .read : Ret Int64 end in
+let Int = @(intrinsic(int)) in
+def Probe = codata | .read : Ret Int end in
 (comatch | .read => ret 42 end : Probe).read
 ```
 
@@ -380,7 +380,7 @@ Type parameters express polymorphism within this value-function space.
 Value binders may also open package witnesses used in the result type; arbitrary runtime values cannot index types.
 
 ```zydeco check
-let val duplicate (x : @(intrinsic(i64))) = (x, x) in
+let val duplicate (x : @(intrinsic(int))) = (x, x) in
 ret (4 |> duplicate)
 ```
 
@@ -392,21 +392,21 @@ A thunk in the result keeps its computation suspended.
 
 `match` also produces a value when every arm produces a value of the same type.
 It uses the patterns and exhaustive coverage of §7; computation-producing arms keep their usual meaning.
-The four integer value intrinsics below have classifier `val pi (left : Int64) (right : Int64) . Int64`,
-where `Int64` denotes `@(intrinsic(i64))`:
+The four integer value intrinsics below have classifier `val pi (left : Int) (right : Int) . Int`,
+where `Int` denotes `@(intrinsic(int))`:
 
 | Intrinsic | Result |
 | --- | --- |
-| `i64_add` | Addition wrapping modulo 2⁶⁴ |
-| `i64_sub` | Subtraction wrapping modulo 2⁶⁴ |
-| `i64_and` | Bitwise conjunction |
-| `i64_compare` | Signed comparison: −1, 0, or 1 |
+| `int_add` | Addition wrapping within the `Int` payload |
+| `int_sub` | Subtraction wrapping within the `Int` payload |
+| `int_and` | Bitwise conjunction |
+| `int_compare` | Signed comparison: −1, 0, or 1 |
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
-let add = @(intrinsic(i64_add)) in
-let compare = @(intrinsic(i64_compare)) in
-let val maximum (left : Int64) (right : Int64) : Int64 =
+let Int = @(intrinsic(int)) in
+let add = @(intrinsic(int_add)) in
+let compare = @(intrinsic(int_compare)) in
+let val maximum (left : Int) (right : Int) : Int =
   match compare left right | -1 => right | _ => left end
 in
 ret (maximum 16 (add 5 11))
@@ -421,8 +421,8 @@ The source head is a variable, optionally with bracketed type arguments, as in `
 Its result pattern may be refutable in a match or partial computation binding.
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
-let val first ((x, _) : Int64 * Int64) = x in
+let Int = @(intrinsic(int)) in
+let val first ((x, _) : Int * Int) = x in
 let (first ~> x; whole) = (3, 4) in
 ret (x, whole)
 ```
@@ -456,7 +456,7 @@ With a kind body, `pi (X : K) . L` forms the kind arrow `K -> L`.
 `sigma` similarly yields an existential for a type binder or a product for a value binder.
 These forms do not provide general dependence on runtime values or quantification over kinds.
 
-Dependency is judged after elaboration: `pi (value : Int64) . (@[typeof] ret value)` forms `Int64 -> Ret Int64`.
+Dependency is judged after elaboration: `pi (value : Int) . (@[typeof] ret value)` forms `Int -> Ret Int`.
 The same erasure permits classifier queries in `val pi`, `sigma`, and kind-arrow bodies.
 
 An existential `exists (X : K) . A` hides a type witness used by its payload.
@@ -472,9 +472,9 @@ Against an expected existential, `(T, v)` supplies the witness and payload.
 `pack` synthesizes a package type from explicit evidence:
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
+let Int = @(intrinsic(int)) in
 let package =
-  pack (= Item as Int64 : @(intrinsic(vtype)))
+  pack (= Item as Int : @(intrinsic(vtype)))
   where #value = 42 end
 in
 let (/Item; /value) = package in
@@ -484,7 +484,7 @@ ret (value : Item)
 A manifest entry discloses its witness with `as`; an abstract entry uses `(X : K) is T`.
 The payload must synthesize its type. Sealing abstracts occurrences of a recoverable witness identity;
 it does not infer an arbitrary abstract interface from concrete values.
-For example, `pack (X : VType) is Int64 where 42 end` synthesizes `exists (X : VType) . Int64`.
+For example, `pack (X : VType) is Int where 42 end` synthesizes `exists (X : VType) . Int`.
 Use an expected existential annotation when its abstract payload interface must be prescribed.
 `pack` currently introduces type witnesses, not kind witnesses.
 
@@ -929,17 +929,27 @@ The memory interfaces build on those capabilities using ordinary packages and co
 
 | Family | Source behavior |
 | --- | --- |
-| `Int8/16/32/64`, `UInt8/16/32/64` | Exact signed/unsigned widths; arithmetic wraps at the chosen width |
+| `Int`, `UInt` | Tagged machine integers; arithmetic wraps within the payload |
+| `Int8/16/32`, `UInt8/16/32` | Exact signed/unsigned widths; arithmetic wraps at the chosen width |
 | `Float32`, `Float64` | IEEE 754 arithmetic at the chosen width |
 | `Char` | One Unicode scalar, excluding surrogates |
 | `String` | Immutable valid UTF-8; indexed operations count Unicode scalars |
 
-Integer and float literals default to `Int64` and `Float64`.
+`Int` and `UInt` use every payload bit of a tagged runtime word.
+The current interpreter, AMD64, and Wasm profiles have 64-bit words and 63-bit integer payloads:
+`Int` ranges from `-2^62` through `2^62 - 1`, and `UInt` from zero through `2^63 - 1`.
+Their arithmetic wraps modulo `2^63`; a signed result uses two's-complement interpretation.
+All values of these types are immediate. `Float64` retains its boxed, exact-width representation.
+Exact-width `Int64` and `UInt64` are deferred; they have no source type or compatibility alias today.
+
+Integer and float literals default to `Int` and `Float64`.
 An expected primitive type selects another width; integers must fit and floats round to that width.
 Finite-range overflow is rejected, while float underflow may round to zero.
 Existing numeric values have no implicit cross-width conversion.
 Integer division or remainder by zero terminates unsuccessfully; signed minimum divided
 by `-1` wraps, with remainder zero.
+Integer parsing rejects values outside the `Int` range through its failure continuation;
+random integers range over that same domain.
 Float rendering uses the selected width's Rust Display spelling, including signed zero, `inf`, `-inf`, and `NaN`.
 
 ### Text and byte sequences
@@ -959,7 +969,7 @@ Decoders require the exact scalar width.
 
 ### Streams and process arguments
 
-`args/at : Thk (forall (R : CType) . Int64 -> Thk R -> Thk (String -> R) -> R)` looks up a zero-based argument
+`args/at : Thk (forall (R : CType) . Int -> Thk R -> Thk (String -> R) -> R)` looks up a zero-based argument
 in the invocation's stable sequence, excluding the executable name.
 Negative and out-of-range indices select the first continuation; valid indices supply the string to the second.
 Lookup neither advances nor consumes the sequence.
@@ -1110,7 +1120,7 @@ Unknown runtime inputs to placement or fixed realization produce a `StaticElimin
 `realize A plan` introduces `L` with the [representation interface](../../lib/std/memory/representation.type.zy).
 Size and alignment are known constants at this boundary.
 The source recipes specialize field offsets and selected accesses; the pointer carries none of this evidence.
-Explicit queries can materialize size or alignment as an `Int64`, and allocation receives those constants.
+Explicit queries can materialize size or alignment as an `Int`, and allocation receives those constants.
 Transporting a plan through an unknown runtime argument does not make its placement static.
 Use `dynamic` when execution chooses sizes or alignment.
 
@@ -1127,7 +1137,7 @@ This is an explicit storage format; it does not select a C aggregate ABI or the 
 
 For a product, the second field starts at the first field's size rounded up to the second field's alignment.
 Aggregate alignment is the maximum field alignment; total size rounds the field end up to that alignment.
-All size arithmetic is checked against nonnegative `Int64` bounds before any wrapping primitive arithmetic.
+All size arithmetic is checked against nonnegative `Int` bounds before any wrapping primitive arithmetic.
 Raising alignment preserves internal field offsets and rounds the final size to the greater boundary.
 Unit has size zero and alignment one.
 `padding count` reserves bytes and contributes only a logical `Unit`.
@@ -1275,11 +1285,11 @@ Different handle types can be paired with their matching operations in an existe
 Neither form inserts a view dictionary into each handle.
 
 ```zydeco check
-param (/VType; /CType; /Thk; /Ret; /Int64; builtin) : @(import("../../lib/std/builtin.zy")) in
+param (/VType; /CType; /Thk; /Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let (/views) = builtin |> (@(import("../../lib/std/memory/package.zy"))) in
 let (/Cps; /View; /identity; /as_cps) = views in
-let run : Thk (Int64 -> Ret Int64) = {
-  fn value => ! ((as_cps Int64 Int64 (identity Int64)) value) (Ret Int64) { fn result => ret result }
+let run : Thk (Int -> Ret Int) = {
+  fn value => ! ((as_cps Int Int (identity Int)) value) (Ret Int) { fn result => ret result }
 } in
 ! run 7
 ```
@@ -1305,7 +1315,7 @@ A header containing a vtable address is supported as data; calling code pointers
 [headers/from_fields](../../lib/std/memory/header.zy) derives inline and prefix recipes
 from metadata and payload paths sharing one parent layout.
 Prefix recovery includes the padding chosen by that layout.
-For example, an `Int64` length followed by four `UInt32` elements with payload alignment 16 has offsets 0
+For example, an `Int` length followed by four `UInt32` elements with payload alignment 16 has offsets 0
 and 16, total size 32, and alignment 16.
 The inline handle is the allocation base; the prefix handle is `base + 16`.
 The [complete example](../../lib/tests/std/header-array.zy) constructs that layout and uses both interpretations.
@@ -1390,15 +1400,20 @@ These calls use the existing source word convention; managed logical values and 
 A foreign implementation is an annotated hole:
 
 ```zydeco check
-param val (/Thk; /Ret; /Addr; /Int64; /UInt64) : @(import("../../lib/std/builtin.zy")) in
-(@(ffi(c, library("xxhash"), symbol("XXH3_64bits"))) : Thk (Addr -> Int64 -> Ret UInt64))
+param val (/Thk; /Ret; /Addr; /Int; /UInt32) : @(import("../../lib/std/builtin.zy")) in
+(@(ffi(c, library("xxhash"), symbol("XXH32"))) : Thk (Addr -> Int -> UInt32 -> Ret UInt32))
 ```
 
 For `ffi(c, ...)`, the supported classifier is `Thk (A1 -> ... -> An -> Ret B)`, including zero arguments.
-Each fixed-width integer contributes its matching C `intN_t` or `uintN_t`; `Addr` contributes one raw data pointer.
+`Int8/16/32` and `UInt8/16/32` contribute their matching C `intN_t` or `uintN_t`.
+`Int` and `UInt` use `int64_t` and `uint64_t` carriers in the current profiles;
+their source ranges remain those in [L13](#13-primitive-values-and-capabilities).
+Values entering Zydeco, whether a C import result or an export argument, are range-checked.
+An out-of-range value terminates execution before source code resumes.
+`Addr` contributes one raw data pointer.
 Any C length or capacity parameter is a separate integer argument.
-The result is a fixed-width integer or `Unit`; `Ret Unit` corresponds to C `void`.
-At most six C arguments are accepted. The declaration chooses exact widths and signedness; C `int`, `long`,
+The result is a supported integer or `Unit`; `Ret Unit` corresponds to C `void`.
+At most six C arguments are accepted. The declaration chooses carriers and signedness; C `int`, `long`,
 enums, and typedefs require platform-specific agreement.
 
 The declaration author supplies the real symbol's ABI and pointer contract.
@@ -1429,11 +1444,18 @@ The `zydeco` convention instead names a [native unit initializer](#native-zydeco
 
 ### Storage and foreign transport
 
+`Int` and `UInt` use eight-byte little-endian storage in the current profiles.
+Signed storage sign-extends the 63-bit value; unsigned storage leaves its top bit zero.
+Raw integer loads reject out-of-range carrier bits.
+The safe numeric `from_le_bytes` codecs check both length and payload range
+and select their failure continuation on invalid input.
+The raw memory operations still require a valid address and initialized readable extent.
+
 A storage layout determines byte placement; the foreign signature independently determines argument transport.
 `Ptr L S` requires explicit address exposure before a C import; its abstract library type is not a foreign classifier.
 A logical product or `Slice L S` does not become a C aggregate or expand into arguments automatically.
 A binding passes the address and any required count separately.
-The current 64-bit profiles use a 64-bit `size_t`; a validated nonnegative `Int64` count has the same bits.
+The current 64-bit profiles use a 64-bit `size_t`; a validated nonnegative `Int` count has the same bits.
 
 The [aligned record fixture](../../lib/tests/ffi/static-layout.zy) allocates storage, explicitly initializes padding
 because its C inspector reads every byte, writes the typed fields, calls C with the address, and releases storage.
@@ -1466,10 +1488,10 @@ A compiled library declares a named source implementation and its complete publi
     export(field(add), symbol("example_add")),
     export(field(identity), symbol("example_identity"))),
   name(example/arithmetic))]
-param val (/Thk; /Ret; /Int64; /numeric) : @(import("../../lib/std/builtin.zy")) in
+param val (/Thk; /Ret; /Int; /numeric) : @(import("../../lib/std/builtin.zy")) in
 (
-  #add = ({ fn x y => ! numeric/int64/add x y } : Thk (Int64 -> Int64 -> Ret Int64)),
-  #identity = ({ fn x => ret x } : Thk (Int64 -> Ret Int64))
+  #add = ({ fn x y => ! numeric/int/add x y } : Thk (Int -> Int -> Ret Int)),
+  #identity = ({ fn x => ret x } : Thk (Int -> Ret Int))
 )
 ```
 
@@ -1495,8 +1517,8 @@ its captures, and its reachable body must be complete and representable.
 Missing or ambiguous projections, escaping static values, and reachable executable holes reject the unit.
 Preparing the interface never executes the exported computation.
 
-The export classifier is `Thk (I1 -> ... -> In -> Ret R)`, with zero through six fixed-width integer parameters
-and a fixed-width integer or `Unit` result.
+The export classifier is `Thk (I1 -> ... -> In -> Ret R)`, with zero through six supported integer parameters
+and a supported integer or `Unit` result.
 It shares the import signature's widths and scalar conversions, but reverses the transport direction.
 Incoming pointer adapters and their binding-specific ownership contracts remain unimplemented;
 therefore the outgoing readable-window adapter cannot serve as an export parameter.
@@ -1540,7 +1562,7 @@ Preparation accepts a closed value or one leading value function over a validate
 applies that provider statically, and checks the resulting value, captures, and reachable computations for readiness.
 An initializer materializes the value without forcing its exported thunks.
 
-The initial interface profile supports `Unit`, fixed-width integers, `Float32`, `Float64`, `Char`, `String`,
+The initial interface profile supports `Unit`, the supported integers, `Float32`, `Float64`, `Char`, `String`,
 named value types, n-ary products, and `Thk B`, where `B` consists of arrows and `Ret`.
 These forms can nest, so an exported function may accept a thunk or return a capturing thunk.
 Product order, nesting, names, scalar widths, and all argument/result classifiers remain in the interface.
@@ -1654,7 +1676,7 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 | `import(source)` | Replace a hole with an independently checked source term; select a catalog name, quoted file path, or positive input number (§12) |
 | `package(role, ...)` | Register the annotated term with a role, metadata name, and typed relationships (§12); compiled libraries require a name |
 | `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare ordered file-root discovery rules for an explicit package catalog (§12) |
-| `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
+| `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed package contract (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
 | `typeof` | Extract a synthesized classifier (§4); no arguments |

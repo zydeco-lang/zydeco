@@ -16,7 +16,7 @@ impl Fixture {
             workspace: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         };
         std::fs::write(fixture.source(), format!(
-            "param (/system; /process; /numeric; /OS; /Ret; /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
+            "param (/system; /process; /numeric; /OS; /Ret; /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt; /Float32; /Float64) : @(import(\"{}\")) in {body}\n",
             fixture.workspace.join("lib/std/builtin.zy").display(),
         )).unwrap();
         fixture
@@ -69,7 +69,7 @@ impl Fixture {
     }
 
     fn arithmetic() -> Self {
-        Self::new("do value <- ! numeric/int64/add 20 22; ! process/exit 0")
+        Self::new("do value <- ! numeric/int/add 20 22; ! process/exit 0")
     }
 }
 
@@ -179,10 +179,10 @@ fn selected_sequences_preserve_sharing_effects_and_results_across_backends() {
     let fixture = Fixture::new(
         r#"
 ! system/stdio/write_line "before" {
-  do value <- ! numeric/int64/add 20 22;
-  do first <- ! numeric/int64/to_string value;
+  do value <- ! numeric/int/add 20 22;
+  do first <- ! numeric/int/to_string value;
   ! system/stdio/write_line first {
-    do second <- ! numeric/int64/to_string value;
+    do second <- ! numeric/int/to_string value;
     ! system/stdio/write_line second { ! process/exit 0 }
   }
 }
@@ -211,7 +211,7 @@ fn selected_sequences_preserve_sharing_effects_and_results_across_backends() {
 fn selected_sequences_keep_unused_traps_between_effects() {
     let fixture = Fixture::new(
         r#"
-let fix divide (x : Int64) (y : Int64) : Ret Int64 = ! numeric/int64/div x y in
+let fix divide (x : Int) (y : Int) : Ret Int = ! numeric/int/div x y in
 ! system/stdio/write_line "before" {
   do unused <- ! divide 7 0;
   ! system/stdio/write_line "after" { ! process/exit 0 }
@@ -234,7 +234,7 @@ let fix divide (x : Int64) (y : Int64) : Ret Int64 = ! numeric/int64/div x y in
 #[test]
 fn unoptimized_numeric_imports_match_primitive_execution() {
     let mut cases = Vec::new();
-    for ty in ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"] {
+    for ty in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
         for operation in ["add", "sub", "mul", "div", "mod"] {
             cases.push((ty, operation, "20", "3"));
         }
@@ -248,17 +248,17 @@ fn unoptimized_numeric_imports_match_primitive_execution() {
         ("Int8", "add", "127", "1"),
         ("Int16", "sub", "-32768", "1"),
         ("Int32", "mul", "1073741824", "4"),
-        ("Int64", "add", "9223372036854775807", "1"),
-        ("Int64", "div", "-9223372036854775808", "-1"),
-        ("Int64", "mod", "-9223372036854775808", "-1"),
-        ("Int64", "div", "-20", "3"),
-        ("Int64", "mod", "-20", "3"),
+        ("Int", "add", "4611686018427387903", "1"),
+        ("Int", "div", "-4611686018427387904", "-1"),
+        ("Int", "mod", "-4611686018427387904", "-1"),
+        ("Int", "div", "-20", "3"),
+        ("Int", "mod", "-20", "3"),
         ("UInt8", "sub", "0", "1"),
         ("UInt16", "mul", "32768", "2"),
         ("UInt32", "add", "4294967295", "1"),
-        ("UInt64", "add", "18446744073709551615", "1"),
-        ("UInt64", "div", "18446744073709551615", "2"),
-        ("UInt64", "sub", "0", "1"),
+        ("UInt", "add", "9223372036854775807", "1"),
+        ("UInt", "div", "9223372036854775807", "2"),
+        ("UInt", "sub", "0", "1"),
         ("Float32", "add", "0.1", "0.2"),
         ("Float64", "add", "0.1", "0.2"),
         ("Float32", "add", "-0.0", "-0.0"),
@@ -289,7 +289,7 @@ fn unoptimized_numeric_imports_match_primitive_execution() {
         if target == "exe" {
             continue;
         }
-        for ty in ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"] {
+        for ty in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
             for (operation, diagnostic) in
                 [("div", "integer division by zero"), ("mod", "integer remainder by zero")]
             {

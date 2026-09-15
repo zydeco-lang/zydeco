@@ -25,7 +25,7 @@ let C (R : CType) = codata | .go : Thk R -> R end in
 let make : Thk (forall (R : CType) . C R) = {
   fn R => comatch | .go next => ! next end
 } in
-let left : Thk (C (Ret Int64)) = { ! make (Ret Int64) } in
+let left : Thk (C (Ret Int)) = { ! make (Ret Int) } in
 let right : Thk (C (Ret Unit)) = { ! make (Ret Unit) } in
 ! left
 "#;
@@ -70,7 +70,7 @@ let right : Thk (C (Ret Unit)) = { ! make (Ret Unit) } in
 #[test]
 fn named_data_shapes_compare_structure_and_still_reject_different_payloads() {
     let source = r#"
-let I = @(intrinsic(i64)) in
+let I = @(intrinsic(int)) in
 let item : data | +Ok : I | +Err : Unit end = +Ok(0) in
 let named : (#item :: data | +Ok : I | +Err : Unit end) = (#item = item) in
 let wrong : (#item :: data | +Ok : Unit | +Err : Unit end) = (#item = +Ok()) in

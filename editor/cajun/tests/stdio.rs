@@ -503,17 +503,17 @@ fn stdio_server_completes_current_names_after_parse_errors_with_optional_type_la
                 panic!("the current source should have exactly one visible name: {response}")
             };
             assert_eq!(item["label"], "current");
-            assert_eq!(item["detail"], "Int64");
+            assert_eq!(item["detail"], "Int");
             assert_eq!(item["textEdit"]["newText"], "current");
             assert_eq!(item["filterText"], "current");
             assert_eq!(
                 item["labelDetails"]["detail"],
-                if label_details { json!(" : Int64") } else { Value::Null }
+                if label_details { json!(" : Int") } else { Value::Null }
             );
         }
 
         let source =
-            "let matching = 1 in let other = 'x' in val unknown => (_ : @(intrinsic(i64)))";
+            "let matching = 1 in let other = 'x' in val unknown => (_ : @(intrinsic(int)))";
         server.notify(
             "textDocument/didChange",
             json!({
@@ -534,7 +534,7 @@ fn stdio_server_completes_current_names_after_parse_errors_with_optional_type_la
             items.iter().map(|item| item["label"].as_str().unwrap()).collect::<Vec<_>>(),
             ["matching", "unknown"]
         );
-        assert_eq!(items[0]["detail"], "Int64");
+        assert_eq!(items[0]["detail"], "Int");
 
         let source = "let current = 1 in fn binder => current";
         server.notify(
@@ -896,7 +896,7 @@ fn stdio_server_follows_source_format_annotations() {
     let path = directory.path().join("main.zy");
     let source = concat!(
         "@[format(layout(ignore))] ! (bool/if)\n",
-        "  (Ret Int64)\n",
+        "  (Ret Int)\n",
         "  greater\n",
         "  { ret left }\n",
         "  { ret right }\n",
@@ -938,7 +938,7 @@ fn stdio_server_follows_source_format_annotations() {
     assert_eq!(edits.len(), 1);
     assert_eq!(
         edits[0]["newText"],
-        "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n"
+        "@[format(layout(ignore))] ! bool/if (Ret Int) greater { ret left } { ret right }\n"
     );
 
     server.finish();

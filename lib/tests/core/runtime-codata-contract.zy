@@ -1,10 +1,10 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int64; /Unit; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /Int; /Unit; /process) : @(import("../../std/builtin.zy")) that
 
   let Contract =
     codata
     | .identity : forall (A : VType) . A -> Ret A
-    | .status : Ret Int64
+    | .status : Ret Int
     end
   that
   def first : Thk Contract = {
@@ -19,7 +19,7 @@ begin
     | .status => ret 1
     end
   } that
-  def ! choose (which : Int64) : Ret (Thk Contract) =
+  def ! choose (which : Int) : Ret (Thk Contract) =
     match which
     | 0 => ret first
     | _ => ret second
@@ -34,7 +34,7 @@ begin
   let stored : Holder = +Hold(selected) in
   match stored
   | +Hold(object) =>
-    do zero <- ! object .identity Int64 0;
+    do zero <- ! object .identity Int 0;
     do unit <- ! object .identity Unit ();
     do status <- ! object .status;
     ! process/exit status

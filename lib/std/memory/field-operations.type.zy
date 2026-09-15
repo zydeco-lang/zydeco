@@ -2,7 +2,7 @@ begin
   let VType = @(intrinsic(vtype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   param Uninit : VType in
   param Init : VType in
   param Ptr : VType -> VType -> VType in
@@ -10,7 +10,7 @@ begin
   param DynamicField : VType -> VType -> VType in
     (
       #constant ::
-        (#offset :: val pi (P : VType) (C : VType) (field : Field P C) . Int64)
+        (#offset :: val pi (P : VType) (C : VType) (field : Field P C) . Int)
       * (
           #compose :: val pi (P : VType) (C : VType) (D : VType)
             (outer : Field P C) (inner : Field C D)
@@ -29,12 +29,12 @@ begin
           .
             Thk (Ret (Ptr C Uninit))
         )
-      * (#unsafe :: #from_offset :: val pi (P : VType) (C : VType) (offset : Int64) . Field P C)
+      * (#unsafe :: #from_offset :: val pi (P : VType) (C : VType) (offset : Int) . Field P C)
       * (#materialize :: val pi (P : VType) (C : VType) (field : Field P C) . DynamicField P C)
     )
   * (
       #runtime ::
-        (#offset :: Thk (forall (P : VType) (C : VType) . DynamicField P C -> Ret Int64))
+        (#offset :: Thk (forall (P : VType) (C : VType) . DynamicField P C -> Ret Int))
       * (
           #compose :: Thk (
             forall (P : VType) (C : VType) (D : VType) .
@@ -55,7 +55,7 @@ begin
         )
       * (
           #unsafe :: (
-            #from_offset :: Thk (forall (P : VType) (C : VType) . Int64 -> Ret (DynamicField P C))
+            #from_offset :: Thk (forall (P : VType) (C : VType) . Int -> Ret (DynamicField P C))
           )
         )
     )

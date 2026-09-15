@@ -1,10 +1,10 @@
-param (/OS; /stdio; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) in
-let int64 = numeric/int64 in
+param (/OS; /stdio; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) in
+let int = numeric/int in
 ! stdio/read_int
   { ! process/exit 1 }
   {
     fn integer =>
-      ! int64/eq
+      ! int/eq
         OS
         integer
         42

@@ -1,6 +1,6 @@
 -- a binary tree
 begin
-  param (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /Int64; /system) : @(import(
+  param (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /Int; /system) : @(import(
     "../../std/builtin.zy"
   )) that
   def Tree (A : VType) : VType =
@@ -30,7 +30,7 @@ begin
     end
   that
   -- here's a test
-  def t0 : Tree Int64 =
+  def t0 : Tree Int =
     +Node(
       +Node(
         +Node(+Leaf(), 1, +Leaf()),
@@ -76,12 +76,12 @@ begin
     end
   that
 
-  do t1 <- ! trace Int64 t0 +Nil();
-  ! write_tree Int64 stdio/write_int t0 {
+  do t1 <- ! trace Int t0 +Nil();
+  ! write_tree Int stdio/write_int t0 {
     ! stdio/write_line "" {
       ! write_tree
-        (List Int64)
-        { ! write_list Int64 stdio/write_int }
+        (List Int)
+        { ! write_list Int stdio/write_int }
         t1
         {
           ! stdio/write_line "" {

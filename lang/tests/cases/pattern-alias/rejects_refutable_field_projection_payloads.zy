@@ -3,7 +3,7 @@
 begin
   def Maybe : VType =
     data
-    | +Some : Int64
+    | +Some : Int
     | +None : Unit
     end
   that

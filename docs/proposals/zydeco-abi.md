@@ -77,15 +77,15 @@ as discussed in section 8.
 
 Let `W` be a 64-bit word. An immediate integer payload is encoded as `(bits << 1) | 1`;
 signed decoding uses an arithmetic shift. The meaning of the bits comes from the source classifier.
-The low bit distinguishes an immediate from a pointer-shaped word, not `Int64` from `Char` or a constructor tag.
+The low bit distinguishes an immediate from a pointer-shaped word, not `Int` from `Char` or a constructor tag.
 
 | Type | Current native `V(A)` | Host binding behavior |
 | --- | --- | --- |
 | `Unit` | Immediate word `1` | Construct/read unit; it still occupies a value slot when supplied as a source argument or result |
 | `Int8`, `Int16`, `Int32` | Sign-extended integer encoded as an immediate | Check input range and use the signed constructor/accessor for that width |
 | `UInt8`, `UInt16`, `UInt32` | Unsigned integer encoded as an immediate | Check input range and use the unsigned constructor/accessor |
-| `Int64` | Immediate for `[-2^62, 2^62 - 1]`; otherwise a pointer to an opaque one-word scalar box | Preserve all 64 bits; boxing is the runtime's responsibility |
-| `UInt64` | Immediate through `2^63 - 1`; otherwise an opaque scalar box | Preserve all 64 bits without interpreting a boxed value as an address supplied by the caller |
+| `Int` | Signed tagged machine integer | Check the [source range](../references/language.md#13-primitive-values-and-capabilities) before constructing an immediate |
+| `UInt` | Unsigned tagged machine integer | Check the source range before constructing an immediate |
 | `Float32` | Its 32 payload bits encoded as an immediate | Bit-preserving float constructor/accessor, including signed zero and NaN payloads |
 | `Float64` | Pointer to an opaque scalar box holding its 64 payload bits | Runtime allocation plus bit-preserving conversion |
 | `Char` | Unicode scalar value encoded as an immediate | Validate Unicode scalar range, including exclusion of surrogates |
@@ -96,7 +96,8 @@ The low bit distinguishes an immediate from a pointer-shaped word, not `Int64` f
 The [word model](../../lang/machine/src/word.rs), [native scalar helpers](../../runtime/stub.rs),
 and [literal emission](../../lang/amd64/src/emit.rs) implement these encodings today.
 Scalar boxes are opaque to tracing; their bits must never be scanned as managed references.
-A rooted generic value can hold either encoding of a wide integer without changing its call-site width.
+A future exact-width `Int64` or `UInt64` should follow `Float64` with a distinct boxed representation.
+Those types and their operations are deferred to a later change.
 
 ### Products, sums, and closures
 
@@ -183,7 +184,7 @@ These are the existing [static elimination rules](../references/language.md#10-s
 
 ### Calling and returning
 
-For `f : Thk (Int64 -> Int64 -> Ret Int64)`, a foreign caller supplies two encoded arguments
+For `f : Thk (Int -> Int -> Ret Int)`, a foreign caller supplies two encoded arguments
 and a return continuation, then enters the closure with its environment.
 In the current native implementation, the conceptual entry stack is:
 
@@ -214,8 +215,8 @@ For a protocol such as:
 
 ```text
 Stream = codata
-  | .item : Int64 -> Stream
-  | .done : Ret Int64
+  | .item : Int -> Stream
+  | .done : Ret Int
 end
 ```
 
@@ -352,12 +353,12 @@ This restriction leaves ordinary reusable `Thk B` values fully usable.
 Consider this complete source factory, accepted by the current language:
 
 ```zydeco check
-param val (/Thk; /Ret; /Int64; /numeric) : @(import("../../lib/std/builtin.zy")) in
+param val (/Thk; /Ret; /Int; /numeric) : @(import("../../lib/std/builtin.zy")) in
 (
   #make_adder = ({
-    fn (delta : Int64) =>
-      ret { fn (value : Int64) => ! numeric/int64/add delta value }
-  } : Thk (Int64 -> Ret (Thk (Int64 -> Ret Int64))))
+    fn (delta : Int) =>
+      ret { fn (value : Int) => ! numeric/int/add delta value }
+  } : Thk (Int -> Ret (Thk (Int -> Ret Int))))
 )
 ```
 
@@ -384,7 +385,7 @@ instance.close()
 
 The first invocation encodes `7`, enters `make_adder`, and registers the returned closure as a root.
 Its environment retains `delta`; the instance remains alive after the host call returns.
-The second invocation builds a new `Int64 -> Ret Int64` stack, supplies `35`, and enters that same closure.
+The second invocation builds a new `Int -> Ret Int` stack, supplies `35`, and enters that same closure.
 The host reads `42` through the scalar accessor after the source return reaches its delimiter.
 Closing the wrapper releases its root, with no source-level single-use restriction on the thunk.
 
@@ -424,7 +425,7 @@ The existing [HostTransfer](../../lang/machine/src/native.rs)
 and [Wasm host transfers](../references/compiler.md#module-and-host-abi) are bounded examples of this pattern,
 not implementations of the general interface proposed here.
 
-For a returning `Int64 -> Ret Int64` worker, the host reads one integer and a return port,
+For a returning `Int -> Ret Int` worker, the host reads one integer and a return port,
 computes the result, and returns `Deliver(port, encoded_result)`.
 For a generic effectful worker of `forall R. A -> Thk (B -> R) -> R`, it reads the argument and successor,
 computes `b : B`, then returns `Enter(successor, b :: residual_R)`.
@@ -729,7 +730,7 @@ checking that the public word boundary is still honored.
 
 | Accepted case | Rejected counterpart or required contrast | Observation |
 | --- | --- | --- |
-| Immediate and boxed 64-bit values | Out-of-range narrow input, invalid `Char` | Correct payload conversion; invalid construction publishes no value |
+| Immediate integers and boxed `Float64` values | Out-of-range integer input, invalid `Char` | Correct payload conversion; invalid construction publishes no value |
 | Products with known order and nesting | Wrong arity, field type, or nested shape | Typed projection and construction agree with source behavior |
 | Constructor creation through its published map | Unknown tag or wrong payload classifier | No malformed source value enters the program |
 | A returned capturing thunk called repeatedly | Invocation after instance close or from another instance | Roots and code remain live; invalid invocation rejects before entry |

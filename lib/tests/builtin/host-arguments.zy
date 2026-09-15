@@ -1,21 +1,21 @@
 begin
-  param (/Ret; /OS; /args; /process; /Int64; /numeric; /text; /system; builtin) : @(import(
+  param (/Ret; /OS; /args; /process; /Int; /numeric; /text; /system; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
   let make_arguments = @(import("../../std/system/arguments.zy")) in
   let arguments = builtin |> make_arguments in
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let string = text/string that
   do length <- ! arguments/fold
-    (Ret Int64)
+    (Ret Int)
     { ret 0 }
     {
       fn argument remaining =>
         do suffix_length <- ! remaining;
         do argument_length <- ! string/length argument;
-        ! int64/add argument_length suffix_length
+        ! int/add argument_length suffix_length
     };
-  ! int64/eq
+  ! int/eq
     OS
     length
     9

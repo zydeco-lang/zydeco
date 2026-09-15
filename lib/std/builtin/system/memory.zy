@@ -4,40 +4,40 @@ begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   let UInt8 = @(intrinsic(u8)) in
   let String = @(intrinsic(string)) in
   param Addr : VType in
     (@[builtin(memory_null)] (#null :: Thk (Ret Addr)))
-  * (@[builtin(memory_offset)] (#offset :: Thk (Addr -> Int64 -> Ret Addr)))
+  * (@[builtin(memory_offset)] (#offset :: Thk (Addr -> Int -> Ret Addr)))
   * (
       @[builtin(memory_allocate)] (
         #allocate :: Thk (
-          forall (R : CType) . Int64 -> Int64 -> Thk (Int64 -> R) -> Thk (Addr -> R) -> R)
+          forall (R : CType) . Int -> Int -> Thk (Int -> R) -> Thk (Addr -> R) -> R)
       )
     )
   * (
       @[builtin(memory_free)] (
         #free :: Thk (
-          forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk R -> R)
+          forall (R : CType) . Addr -> Int -> Int -> Thk (Int -> R) -> Thk R -> R)
       )
     )
   * (
       @[builtin(memory_retain)] (
         #retain :: Thk (
-          forall (R : CType) . Addr -> Int64 -> Int64 -> Thk (Int64 -> R) -> Thk R -> R)
+          forall (R : CType) . Addr -> Int -> Int -> Thk (Int -> R) -> Thk R -> R)
       )
     )
   * (
       @[builtin(memory_copy)] (
         #copy :: Thk (
-          forall (R : CType) . Addr -> Addr -> Int64 -> Thk R -> R)
+          forall (R : CType) . Addr -> Addr -> Int -> Thk R -> R)
       )
     )
   * (
       @[builtin(memory_fill)] (
         #fill :: Thk (
-          forall (R : CType) . Addr -> Int64 -> UInt8 -> Thk R -> R)
+          forall (R : CType) . Addr -> Int -> UInt8 -> Thk R -> R)
       )
     )
   * (
@@ -55,13 +55,13 @@ begin
   * (
       @[builtin(memory_from_string)] (
         #from_string :: Thk (
-          forall (R : CType) . String -> Thk (Int64 -> R) -> Thk (Addr -> Int64 -> R) -> R)
+          forall (R : CType) . String -> Thk (Int -> R) -> Thk (Addr -> Int -> R) -> R)
       )
     )
   * (
       @[builtin(memory_to_string)] (
         #to_string :: Thk (
-          forall (R : CType) . Addr -> Int64 -> Thk (Int64 -> R) -> Thk (String -> R) -> R)
+          forall (R : CType) . Addr -> Int -> Thk (Int -> R) -> Thk (String -> R) -> R)
       )
     )
 end

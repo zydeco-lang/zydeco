@@ -182,7 +182,7 @@ fn metadata_names_register_exact_terms_and_roles_are_separate_from_relationships
 
 #[test]
 fn root_annotations_need_no_name_and_preserve_transparent_wrappers() {
-    for source in ["@[package(library)] 1", "(@[doc] (@[package(library)] 1) : @(intrinsic(i64)))"]
+    for source in ["@[package(library)] 1", "(@[doc] (@[package(library)] 1) : @(intrinsic(int)))"]
     {
         let fixture = Fixture::parse(source);
         let packages = fixture.packages().unwrap();

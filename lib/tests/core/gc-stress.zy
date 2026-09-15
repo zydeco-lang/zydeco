@@ -1,18 +1,19 @@
+-- The live row keeps a boxed Float64 payload reachable across collection.
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/Ret; /Int64; /OS; builtin) : @(import("../../std/builtin.zy")) that
-  let (/bool; /int64; /process) = builtin |> make_std in
+  param (/Ret; /Int; /Float64; /numeric; /OS; builtin) : @(import("../../std/builtin.zy")) that
+  let (/bool; /int; /process) = builtin |> make_std in
   let Row =
-      Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
-    * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
-    * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
-    * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
-    * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
-    * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
-    * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
-    * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64 * Int64
+      Float64 * Int * Int * Int * Int * Int * Int * Int
+    * Int * Int * Int * Int * Int * Int * Int * Int
+    * Int * Int * Int * Int * Int * Int * Int * Int
+    * Int * Int * Int * Int * Int * Int * Int * Int
+    * Int * Int * Int * Int * Int * Int * Int * Int
+    * Int * Int * Int * Int * Int * Int * Int * Int
+    * Int * Int * Int * Int * Int * Int * Int * Int
+    * Int * Int * Int * Int * Int * Int * Int * Int
   in
-  def ! discard (row : Row) : Ret Int64 =
+  def ! discard (row : Row) : Ret Int =
     let (
       _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
       _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
@@ -25,10 +26,10 @@ begin
     ret 0
   in
   @[format(verbatim)]
-  def fix churn (i : Int64) (live : Row) : Ret Int64 =
-    do zero? <- ! (int64/eq) i 0;
+  def fix churn (i : Int) (live : Row) : Ret Float64 =
+    do zero? <- ! (int/eq) i 0;
     ! (bool/if)
-      (Ret Int64)
+      (Ret Float64)
       zero?
       {
         let (
@@ -41,7 +42,7 @@ begin
       }
       {
         let garbage = (
-          0, 1, 2, 3, 4, 5, 6, 7,
+          0.0, 1, 2, 3, 4, 5, 6, 7,
           8, 9, 10, 11, 12, 13, 14, 15,
           16, 17, 18, 19, 20, 21, 22, 23,
           24, 25, 26, 27, 28, 29, 30, 31,
@@ -51,12 +52,12 @@ begin
           56, 57, 58, 59, 60, 61, 62, 63
         ) in
         do _ <- ! discard garbage;
-        do i' <- ! (int64/sub) i 1;
+        do i' <- ! (int/sub) i 1;
         ! churn i' live
       }
   in
   let live = (
-    9223372036854775807, 99, 99, 99, 99, 99, 99, 99,
+    1.5, 99, 99, 99, 99, 99, 99, 99,
     99, 99, 99, 99, 99, 99, 99, 99,
     99, 99, 99, 99, 99, 99, 99, 99,
     99, 99, 99, 99, 99, 99, 99, 99,
@@ -66,6 +67,5 @@ begin
     99, 99, 99, 99, 99, 99, 99, 99
   ) in
   do result <- ! churn 4096 live;
-  do correct? <- ! (int64/eq) result 9223372036854775807;
-  ! (bool/if) OS correct? { ! (process/exit) 0 } { ! (process/exit) 1 }
+  ! numeric/float64/eq OS result 1.5 { ! process/exit 0 } { ! process/exit 1 }
 end

@@ -557,13 +557,17 @@ struct LibraryInterface;
 
 impl LibraryInterface {
     fn c_type(integer: IntegerType) -> String {
-        format!("{}int{}_t", if integer.is_signed() { "" } else { "u" }, integer.bits())
+        format!("{}int{}_t", if integer.is_signed() { "" } else { "u" }, integer.storage_bits())
     }
 
     fn header(exports: &[PublishedExport]) -> String {
-        let mut text = String::from(
-            "#pragma once\n#include <stdint.h>\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n/* Each call owns fresh state. Runtime faults terminate the process.\n   Concurrent or reentrant entry into this library is rejected. */\n",
-        );
+        let mut text = String::from(concat!(
+            "#pragma once\n#include <stdint.h>\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n",
+            "/* Each call owns fresh state. Runtime faults terminate the process.\n",
+            "   Concurrent or reentrant entry into this library is rejected.\n",
+            "   Zydeco Int uses int64_t with range [-2^62, 2^62-1];\n",
+            "   UInt uses uint64_t with range [0, 2^63-1]. Inputs outside these ranges fail. */\n",
+        ));
         for export in exports {
             let result = match export.signature.result() {
                 | ForeignResult::Unit => "void".into(),
@@ -641,14 +645,13 @@ impl LibraryInterface {
             IntegerType::Int8,
             IntegerType::Int16,
             IntegerType::Int32,
-            IntegerType::Int64,
+            IntegerType::Int,
             IntegerType::UInt8,
             IntegerType::UInt16,
             IntegerType::UInt32,
-            IntegerType::UInt64,
+            IntegerType::UInt,
         ] {
-            let intrinsic =
-                format!("{}{}", if integer.is_signed() { "i" } else { "u" }, integer.bits());
+            let intrinsic = zydeco_syntax::PrimitiveType::Integer(integer).intrinsic_name();
             text.push_str(&format!("let {} = @(intrinsic({intrinsic})) in\n", integer.type_name()));
         }
         if matches!(exports[0].selector, ExportSelector::Root) {
@@ -1138,7 +1141,7 @@ mod tests {
                 exports: vec![PublishedExport {
                     selector: ExportSelector::Root,
                     symbol: ForeignSymbolName::parse(symbol).unwrap(),
-                    signature: Self::signature(IntegerType::Int64),
+                    signature: Self::signature(IntegerType::Int),
                 }],
                 imports: vec![],
                 dependencies: dependencies
@@ -1194,7 +1197,7 @@ mod tests {
         LinkedLibraries::load(std::slice::from_ref(&path))
             .unwrap()
             .validate_imports(
-                &[Fixture::import("example.math", "identity", IntegerType::Int64)],
+                &[Fixture::import("example.math", "identity", IntegerType::Int)],
                 LibraryPlatform::Linux,
                 None,
                 true,
@@ -1215,8 +1218,8 @@ mod tests {
             std::fs::write(&path, &original).unwrap();
         }
         for import in [
-            Fixture::import("example.math", "absent", IntegerType::Int64),
-            Fixture::import("example.math", "identity", IntegerType::UInt64),
+            Fixture::import("example.math", "absent", IntegerType::Int),
+            Fixture::import("example.math", "identity", IntegerType::UInt),
         ] {
             assert!(matches!(
                 LinkedLibraries::load(std::slice::from_ref(&path)).unwrap().validate_imports(
@@ -1247,9 +1250,9 @@ mod tests {
         std::fs::write(&path, &original).unwrap();
         Fixture::edit(&path, |manifest| {
             manifest["imports"] =
-                serde_json::json!([Fixture::import("c", "foreign", IntegerType::Int64)]);
+                serde_json::json!([Fixture::import("c", "foreign", IntegerType::Int)]);
             manifest["imports"][0]["signature"]["parameters"] =
-                serde_json::json!(vec![ForeignParameter::Integer(IntegerType::Int64); 7]);
+                serde_json::json!(vec![ForeignParameter::Integer(IntegerType::Int); 7]);
         });
         assert!(matches!(
             LinkedLibraries::load(std::slice::from_ref(&path)),
@@ -1305,7 +1308,7 @@ mod tests {
         assert!(!libraries.contains(&ForeignLibraryName::parse("example.raw").unwrap()));
         assert!(matches!(
             libraries.validate_imports(
-                &[Fixture::import("example.raw", "raw", IntegerType::Int64)],
+                &[Fixture::import("example.raw", "raw", IntegerType::Int)],
                 LibraryPlatform::Linux,
                 None,
                 true

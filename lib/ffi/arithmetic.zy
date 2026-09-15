@@ -4,8 +4,8 @@
     export(field(identity), symbol("example_identity"))),
   name(example/arithmetic)
 )]
-param val (/Thk; /Ret; /Int64; /numeric) : @(import("../std/builtin.zy")) in
+param val (/Thk; /Ret; /Int; /numeric) : @(import("../std/builtin.zy")) in
 (
-  #add = { fn x y => ! numeric/int64/add x y } : Thk (Int64 -> Int64 -> Ret Int64),
-  #identity = { fn x => ret x } : Thk (Int64 -> Ret Int64)
+  #add = { fn x y => ! numeric/int/add x y } : Thk (Int -> Int -> Ret Int),
+  #identity = { fn x => ret x } : Thk (Int -> Ret Int)
 )

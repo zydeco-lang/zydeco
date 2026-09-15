@@ -1,5 +1,5 @@
-param (/process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) in
-let int64 = numeric/int64 in
-do z <- ! int64/mul 10 10;
-do r <- ! int64/sub z 100;
+param (/process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) in
+let int = numeric/int in
+do z <- ! int/mul 10 10;
+do r <- ! int/sub z 100;
 ! process/exit r

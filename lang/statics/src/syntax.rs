@@ -623,7 +623,7 @@ pub enum Value {
     ValAbs(Abs<ValBinder, ValueId>),
     ValApp(App<ValueId, ValArgument>),
     Match(Match<ValueId, VPatId, ValueId>),
-    Int64Op(Int64ValueOp),
+    IntOp(IntValueOp),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
@@ -635,8 +635,8 @@ pub enum Value {
 
 /// A total primitive application whose operands must be known during static elimination.
 #[derive(Clone, Debug)]
-pub struct Int64ValueOp {
-    pub operation: zydeco_syntax::ValueInt64Op,
+pub struct IntValueOp {
+    pub operation: zydeco_syntax::ValueIntOp,
     pub operands: [ValueId; 2],
 }
 

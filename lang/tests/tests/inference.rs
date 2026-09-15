@@ -269,7 +269,7 @@ fn rejects_an_existential_witness_escaping_through_an_inferred_domain() {
             r#"
 begin
   let Box = exists (X : VType) . X that
-  def boxed : Box = (Int64, 0) that
+  def boxed : Box = (Int, 0) that
   let identity = { fn value => ret value } that
 
   match boxed
@@ -283,23 +283,23 @@ end
 }
 
 #[test]
-fn checks_literals_in_each_rust_numeric_domain() {
+fn checks_literals_in_each_numeric_domain() {
     SourceCase::assert_accepted(SourceCase::check(
         r#"
 begin
   let int8_value : Int8 = -128 that
   let int16_value : Int16 = -32768 that
   let int32_value : Int32 = -2147483648 that
-  let int64_value : Int64 = -9223372036854775808 that
+  let int_value : Int = -4611686018427387904 that
   let uint8_value : UInt8 = 255 that
   let uint16_value : UInt16 = 65535 that
   let uint32_value : UInt32 = 4294967295 that
-  let uint64_value : UInt64 = 18446744073709551615 that
+  let uint_value : UInt = 9223372036854775807 that
   let float32_value : Float32 = 1.5 that
   let float64_value : Float64 = 1.5 that
   ret (
-    int8_value, int16_value, int32_value, int64_value,
-    uint8_value, uint16_value, uint32_value, uint64_value,
+    int8_value, int16_value, int32_value, int_value,
+    uint8_value, uint16_value, uint32_value, uint_value,
     float32_value, float64_value
   )
 end
@@ -308,7 +308,7 @@ end
 }
 
 #[test]
-fn rejects_signed_literals_outside_the_selected_rust_domain() {
+fn rejects_signed_literals_outside_the_selected_numeric_domain() {
     SourceCase::assert_rejected(
         SourceCase::check("let value : Int8 = 128 in ret value"),
         TyckDiagnosticCode::IntegerLiteralOutOfRange,
@@ -316,7 +316,7 @@ fn rejects_signed_literals_outside_the_selected_rust_domain() {
 }
 
 #[test]
-fn rejects_negative_literals_in_unsigned_rust_domains() {
+fn rejects_negative_literals_in_unsigned_domains() {
     SourceCase::assert_rejected(
         SourceCase::check("let value : UInt8 = -1 in ret value"),
         TyckDiagnosticCode::IntegerLiteralOutOfRange,
@@ -328,5 +328,28 @@ fn rejects_finite_literals_that_overflow_float32() {
     SourceCase::assert_rejected(
         SourceCase::check("let value : Float32 = 3.5e38 in ret value"),
         TyckDiagnosticCode::FloatLiteralOutOfRange,
+    );
+}
+
+#[test]
+fn machine_integer_literals_enforce_the_tagged_payload_range() {
+    for (ty, accepted, rejected) in [
+        ("Int", "-4611686018427387904", "-4611686018427387905"),
+        ("Int", "4611686018427387903", "4611686018427387904"),
+        ("UInt", "0", "-1"),
+        ("UInt", "9223372036854775807", "9223372036854775808"),
+    ] {
+        SourceCase::assert_accepted(SourceCase::check(&format!(
+            "let value : {ty} = {accepted} in ret value"
+        )));
+        SourceCase::assert_rejected(
+            SourceCase::check(&format!("let value : {ty} = {rejected} in ret value")),
+            TyckDiagnosticCode::IntegerLiteralOutOfRange,
+        );
+    }
+    SourceCase::assert_accepted(SourceCase::check("ret 4611686018427387903"));
+    SourceCase::assert_rejected(
+        SourceCase::check("ret 4611686018427387904"),
+        TyckDiagnosticCode::IntegerLiteralOutOfRange,
     );
 }

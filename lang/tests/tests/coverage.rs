@@ -432,7 +432,7 @@ begin
   do status <-
     (comatch
     | .unbox ((A, value) : Box) => ret value
-    end : Service) .unbox (Int64, 0);
+    end : Service) .unbox (Int, 0);
   ! api/exit status
 end
 "#,
@@ -471,14 +471,14 @@ fn executes_a_mixed_copattern_observation_path() {
 begin
   let Input =
     data
-    | +First : Int64
-    | +Second : Int64
+    | +First : Int
+    | +Second : Int
     end
   that
   let Choice =
     codata
-    | .left : Ret Int64
-    | .right : Ret Int64
+    | .left : Ret Int
+    | .right : Ret Int
     end
   that
   let Router =

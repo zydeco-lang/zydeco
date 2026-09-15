@@ -1,29 +1,29 @@
 @[package(test(of(std)))]
 begin
   let make_std = @(import(std)) that
-  param (/system; /Ret; /OS; /Int64; builtin) : @(import(std/builtin)) that
-  let (/list; /int64; /process) = builtin |> make_std in
-  do empty <- ! list/nil Int64;
-  do one <- ! list/cons Int64 1 empty;
-  do values <- ! list/cons Int64 2 one;
+  param (/system; /Ret; /OS; /Int; builtin) : @(import(std/builtin)) that
+  let (/list; /int; /process) = builtin |> make_std in
+  do empty <- ! list/nil Int;
+  do one <- ! list/cons Int 1 empty;
+  do values <- ! list/cons Int 2 one;
   ! list/case
-    Int64
+    Int
     OS
     values
     { ! process/exit 1 }
     {
       fn head tail =>
         do total <- ! list/fold
-          Int64
-          (Ret Int64)
+          Int
+          (Ret Int)
           tail
           { ret head }
           {
             fn value rest =>
               do subtotal <- ! rest;
-              ! int64/add value subtotal
+              ! int/add value subtotal
           };
-        do status <- ! int64/sub total 3;
+        do status <- ! int/sub total 3;
         ! process/exit status
     }
 end

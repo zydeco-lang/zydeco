@@ -185,6 +185,8 @@ pub enum ProgKont {
 /// Failures reported to the host without unwinding the evaluator.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum RuntimeError {
+    #[error("integer exceeds the tagged payload range")]
+    IntegerRange,
     #[error("pattern match failed")]
     PatternMatch,
     #[error("integer division by zero")]

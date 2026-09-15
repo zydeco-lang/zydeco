@@ -3,9 +3,9 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let Char = @(intrinsic(char)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   let String = @(intrinsic(string)) in
-  let Count = Thk (String -> Ret Int64) in
+  let Count = Thk (String -> Ret Int) in
   let Append = Thk (String -> String -> Ret String) in
   let Eq = Thk (forall (R : CType) . String -> String -> Thk R -> Thk R -> R) in
     (@[builtin(str_scalar_length)] (#length :: Count))
@@ -23,7 +23,7 @@ begin
       @[builtin(str_split_at)] (
         #split_at :: Thk (
           forall (R : CType) .
-            String -> Int64 -> Thk R -> Thk (String -> String -> R) -> R
+            String -> Int -> Thk R -> Thk (String -> String -> R) -> R
         )
       )
     )
@@ -31,14 +31,14 @@ begin
   * (
       @[builtin(str_get)] (
         #get :: Thk (
-          forall (R : CType) . String -> Int64 -> Thk R -> Thk (Char -> R) -> R
+          forall (R : CType) . String -> Int -> Thk R -> Thk (Char -> R) -> R
         )
       )
     )
   * (
       @[builtin(str_parse_int)] (
         #parse_int :: Thk (
-          forall (R : CType) . String -> Thk R -> Thk (Int64 -> R) -> R
+          forall (R : CType) . String -> Thk R -> Thk (Int -> R) -> R
         )
       )
     )

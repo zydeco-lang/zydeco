@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Ret; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
   def FnRet (A : VType) =
     codata
     | .arg : A -> Ret A
@@ -11,12 +11,12 @@ begin
     | .zero : Ret A
     end
   that
-  def ! fn_int : FnRet Int64 =
+  def ! fn_int : FnRet Int =
     comatch
     | .arg i => ret i
     end
   that
-  def ! fn_opt_int : FnOpt Int64 =
+  def ! fn_opt_int : FnOpt Int =
     comatch
     | .one i => ! fn_int .arg i
     | .zero => ! fn_int .arg 0

@@ -9,12 +9,12 @@ begin
     /process;
     /Char;
     /String;
-    /Int64;
+    /Int;
     /numeric;
     /text;
     /system
   ) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let char = text/char that
   let string = text/string that
   def Bool =
@@ -52,7 +52,7 @@ begin
     end
   that
 
-  def ! int_lt (left : Int64) (right : Int64) : Ret Bool = ! int64/lt
+  def ! int_lt (left : Int) (right : Int) : Ret Bool = ! int/lt
     (Ret Bool)
     left
     right
@@ -60,7 +60,7 @@ begin
     {
       ret +False()
     } that
-  def ! str_get_or_space (text : String) (index : Int64) : Ret Char = ! string/get
+  def ! str_get_or_space (text : String) (index : Int) : Ret Char = ! string/get
     (Ret Char)
     text
     index
@@ -71,7 +71,7 @@ begin
   def ! char_eq (left : Char) (right : Char) : Ret Bool =
     do left <- ! char/codepoint left;
     do right <- ! char/codepoint right;
-    ! int64/eq
+    ! int/eq
       (Ret Bool)
       left
       right
@@ -80,9 +80,9 @@ begin
         ret +False()
       }
   that
-  def ! str_chop_hd (s : String) (i : Int64) : Ret String =
+  def ! str_chop_hd (s : String) (i : Int) : Ret String =
     do l <- ! string/length s;
-    let fix str_collect (s : String) (i : Int64) (r : String) : Ret String =
+    let fix str_collect (s : String) (i : Int) (r : String) : Ret String =
       do continue? <- ! int_lt i l;
       match continue?
       | +False() => ret r
@@ -90,19 +90,19 @@ begin
         do tl <- ! str_get_or_space s i;
         do tl <- ! char/to_string tl;
         do r <- ! string/append r tl;
-        do i+1 <- ! int64/add i 1;
+        do i+1 <- ! int/add i 1;
         ! str_collect s i+1 r
       end
     in
     ! str_collect s i ""
   that
-  def ! str_eq_at (a : String) (b : String) (i : Int64) : Ret Bool =
+  def ! str_eq_at (a : String) (b : String) (i : Int) : Ret Bool =
     do ai <- ! str_get_or_space a i;
     do bi <- ! str_get_or_space b i;
     ! char_eq ai bi
   that
   def ! str_match (s : String) (p : String) : Ret (Option String) =
-    let fix str_match (i : Int64) (s : String) (p : String) : Ret (Option String) =
+    let fix str_match (i : Int) (s : String) (p : String) : Ret (Option String) =
       do s_len <- ! string/length s;
       do p_len <- ! string/length p;
       do i_lt_s <- ! int_lt i s_len;
@@ -119,7 +119,7 @@ begin
           match eq?
           | +False() => ret +None()
           | +True() =>
-            do i+1 <- ! int64/add i 1;
+            do i+1 <- ! int/add i 1;
             ! str_match i+1 s p
           end
         end

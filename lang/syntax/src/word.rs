@@ -4,22 +4,21 @@ use crate::{FloatLiteral, IntegerLiteral};
 pub use zydeco_machine::word::{EncodedScalar, RuntimeWord, WordError};
 
 impl IntegerLiteral {
-    /// The encoding of an integer literal, boxing payloads outside the immediate range.
+    /// Every supported integer fits the immediate payload; integers never allocate boxes.
     pub fn encode_runtime(self) -> Result<EncodedScalar, WordError> {
         use IntegerLiteral::*;
         let immediate = match self {
             | Int8(value) => RuntimeWord::signed(value.into()),
             | Int16(value) => RuntimeWord::signed(value.into()),
             | Int32(value) => RuntimeWord::signed(value.into()),
-            | Int64(value) => RuntimeWord::signed(value),
+            | Int(value) => RuntimeWord::signed(value),
             | UInt8(value) => RuntimeWord::unsigned(value.into()),
             | UInt16(value) => RuntimeWord::unsigned(value.into()),
             | UInt32(value) => RuntimeWord::unsigned(value.into()),
-            | UInt64(value) => RuntimeWord::unsigned(value),
+            | UInt(value) => RuntimeWord::unsigned(value),
             | Unresolved(_) => return Err(WordError::UnresolvedInteger),
         };
-        Ok(immediate
-            .map_or_else(|| EncodedScalar::Boxed(self.to_word_bits()), EncodedScalar::Immediate))
+        immediate.map(EncodedScalar::Immediate).ok_or(WordError::IntegerRange)
     }
 }
 
@@ -48,9 +47,22 @@ mod tests {
         assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MAX), Some(0x7fff_ffff_ffff_ffff));
         assert_eq!(RuntimeWord::signed(RuntimeWord::SIGNED_MIN - 1), None);
         assert_eq!(RuntimeWord::unsigned(RuntimeWord::UNSIGNED_MAX), Some(u64::MAX));
+        for value in [RuntimeWord::SIGNED_MIN, -1, 0, RuntimeWord::SIGNED_MAX] {
+            assert_eq!(
+                IntegerLiteral::Int(value).encode_runtime(),
+                Ok(EncodedScalar::Immediate(RuntimeWord::signed(value).unwrap()))
+            );
+        }
+        for value in [RuntimeWord::SIGNED_MIN - 1, RuntimeWord::SIGNED_MAX + 1] {
+            assert_eq!(IntegerLiteral::Int(value).encode_runtime(), Err(WordError::IntegerRange));
+        }
         assert_eq!(
-            IntegerLiteral::Int64(i64::MAX).encode_runtime().unwrap(),
-            EncodedScalar::Boxed(i64::MAX as u64)
+            IntegerLiteral::UInt(RuntimeWord::UNSIGNED_MAX).encode_runtime(),
+            Ok(EncodedScalar::Immediate(u64::MAX))
+        );
+        assert_eq!(
+            IntegerLiteral::UInt(RuntimeWord::UNSIGNED_MAX + 1).encode_runtime(),
+            Err(WordError::IntegerRange)
         );
     }
 

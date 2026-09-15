@@ -386,7 +386,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             | ss::Value::ValAbs(_)
             | ss::Value::ValApp(_)
             | ss::Value::Match(_)
-            | ss::Value::Int64Op(_) => Step::TailCall(Work::FinishValue(source)),
+            | ss::Value::IntOp(_) => Step::TailCall(Work::FinishValue(source)),
         }
     }
 
@@ -409,7 +409,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             | ss::Value::ValAbs(_)
             | ss::Value::ValApp(_)
             | ss::Value::Match(_)
-            | ss::Value::Int64Op(_) => {
+            | ss::Value::IntOp(_) => {
                 self.lo.lower_errors.push(SpsLowerError::ResidualStaticValue { value: source });
                 ValuePlan::pure(Hole.build(self.lo, site))
             }

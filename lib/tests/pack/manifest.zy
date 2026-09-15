@@ -1,13 +1,13 @@
 begin
-  param (/VType; /Ret; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
-  let Transparent = exists (Representation as Int64 : VType) . Representation that
+  param (/VType; /Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
+  let Transparent = exists (Representation as Int : VType) . Representation that
   def packed : Transparent = (
-    Int64,
+    Int,
     42
   ) that
-  let val reveal ((Representation, value) : Transparent) : Int64 = value that
+  let val reveal ((Representation, value) : Transparent) : Int = value that
 
-  do status <- ! int64/sub (reveal packed) 42;
+  do status <- ! int/sub (reveal packed) 42;
   ! process/exit status
 end

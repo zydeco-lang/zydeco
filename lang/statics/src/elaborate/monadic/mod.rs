@@ -1666,12 +1666,12 @@ fn value_translation(
             let value = Alloc::alloc(tycker, Value::Match(Match { scrut, arms }), ty_, &env.ty);
             (env, value)
         }
-        | Value::Int64Op(Int64ValueOp { operation, operands: [left, right] }) => {
+        | Value::IntOp(IntValueOp { operation, operands: [left, right] }) => {
             let (env, left) = value_translation(tycker, env, left)?;
             let (env, right) = value_translation(tycker, env, right)?;
             let value = Alloc::alloc(
                 tycker,
-                Value::Int64Op(Int64ValueOp { operation, operands: [left, right] }),
+                Value::IntOp(IntValueOp { operation, operands: [left, right] }),
                 ty_,
                 &env.ty,
             );

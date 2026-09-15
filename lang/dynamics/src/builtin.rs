@@ -50,7 +50,8 @@ impl BuiltinRuntime {
                 | IntegerOperation::ToString => integer_to_string(integer, args),
                 | IntegerOperation::StoreLe => ScalarMemory::store(args),
                 | IntegerOperation::LoadLe => {
-                    ScalarMemory::load(PrimitiveType::Integer(integer), args)
+                    return ScalarMemory::load(PrimitiveType::Integer(integer), args)
+                        .map_err(BuiltinFailure::Runtime);
                 }
             },
             | Role::Float(float, operation) => match operation {
@@ -65,7 +66,10 @@ impl BuiltinRuntime {
                 }
                 | FloatOperation::ToString => float_to_string(float, args),
                 | FloatOperation::StoreLe => ScalarMemory::store(args),
-                | FloatOperation::LoadLe => ScalarMemory::load(PrimitiveType::Float(float), args),
+                | FloatOperation::LoadLe => {
+                    return ScalarMemory::load(PrimitiveType::Float(float), args)
+                        .map_err(BuiltinFailure::Runtime);
+                }
             },
             | Role::StrScalarLength => str_scalar_length(args),
             | Role::StrByteLength => str_byte_length(args),
@@ -143,11 +147,11 @@ mod tests {
             IntegerType::Int8,
             IntegerType::Int16,
             IntegerType::Int32,
-            IntegerType::Int64,
+            IntegerType::Int,
             IntegerType::UInt8,
             IntegerType::UInt16,
             IntegerType::UInt32,
-            IntegerType::UInt64,
+            IntegerType::UInt,
         ] {
             for operation in [IntegerOperation::Div, IntegerOperation::Mod] {
                 for divisor in [0, 2] {

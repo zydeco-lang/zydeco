@@ -1,10 +1,10 @@
 @[package(library, name(std/data))]
 val
   (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /numeric) : @(import("../builtin.zy"))
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric) : @(import("../builtin.zy"))
   )
 =>
-  let int64 = numeric/int64 in
+  let int = numeric/int in
   let Bool = @(import("bool.zy")) in
   let Option = @(import("option.zy")) in
   let Result = @(import("result.zy")) in
@@ -284,8 +284,8 @@ val
         fn reversed value => ! cons A value reversed
       }
     that
-    def ! length (A : VType) (list : List A) : Ret Int64 = ! fold_left A Int64 list 0 {
-      fn count _ => ! int64/add count 1
+    def ! length (A : VType) (list : List A) : Ret Int = ! fold_left A Int list 0 {
+      fn count _ => ! int/add count 1
     } that
     def ! is_empty (A : VType) (values : List A) : Ret Bool = ! case
       A
@@ -313,9 +313,9 @@ val
       } that
 
     def ! compare
-      (predicate : Thk (forall (B : CType) . Int64 -> Int64 -> Thk B -> Thk B -> B))
-      (left : Int64)
-      (right : Int64)
+      (predicate : Thk (forall (B : CType) . Int -> Int -> Thk B -> Thk B -> B))
+      (left : Int)
+      (right : Int)
     : Ret Bool = ! predicate
         (Ret Bool)
         left
@@ -323,10 +323,10 @@ val
         { ret true }
         { ret false }
     that
-    def ! int64_eq (left : Int64) (right : Int64) : Ret Bool = ! compare int64/eq left right that
-    def ! int64_lt (left : Int64) (right : Int64) : Ret Bool = ! compare int64/lt left right that
-    def fix get (A : VType) (values : List A) (index : Int64) : Ret (Option A) =
-      do negative <- ! int64_lt index 0;
+    def ! int_eq (left : Int) (right : Int) : Ret Bool = ! compare int/eq left right that
+    def ! int_lt (left : Int) (right : Int) : Ret Bool = ! compare int/lt left right that
+    def fix get (A : VType) (values : List A) (index : Int) : Ret (Option A) =
+      do negative <- ! int_lt index 0;
       ! if
         (Ret (Option A))
         negative
@@ -339,13 +339,13 @@ val
             { ! none A }
             {
               fn first rest =>
-                do zero <- ! int64_eq index 0;
+                do zero <- ! int_eq index 0;
                 ! if
                   (Ret (Option A))
                   zero
                   { ! some A first }
                   {
-                    do previous <- ! int64/sub index 1;
+                    do previous <- ! int/sub index 1;
                     ! get A rest previous
                   }
             }

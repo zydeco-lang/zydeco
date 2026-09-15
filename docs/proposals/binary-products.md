@@ -43,7 +43,7 @@ For example:
 exists (X : VType) (Y : VType) . X * Y
 ```
 
-would accept `(Int64, Char, 0, 'z')`, opened by `(Left, Right, number, letter)`.
+would accept `(Int, Char, 0, 'z')`, opened by `(Left, Right, number, letter)`.
 These package operations already have their own [current rules](../references/language.md#9-polymorphism-and-packages);
 the proposed change concerns how the remaining value product is typed and represented.
 

@@ -1,6 +1,6 @@
 -- Direct destination recipes. No intermediate Bytes, allocation, or padding reads.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int64; /memory; builtin) : @(import(
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
@@ -9,7 +9,7 @@ begin
   let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
   let Alloc = (@(import("allocator.type.zy"))) Addr in
   let Fault = @(import("fault.zy")) in
-  let val scalar (A : VType) (size : Int64) (alignment : Int64)
+  let val scalar (A : VType) (size : Int) (alignment : Int)
     (write : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
     (read : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
   : Descriptor A =
@@ -20,7 +20,7 @@ begin
         = read
       )
   in
-  let val padding (count : Int64) : Descriptor Unit =
+  let val padding (count : Int) : Descriptor Unit =
     (
       #size = count,
       #alignment = 1,
@@ -29,7 +29,7 @@ begin
     )
   in
   let val product (A : VType) (B : VType) (left : Descriptor A) (right : Descriptor B)
-    (offset : Int64) (size : Int64) (alignment : Int64)
+    (offset : Int) (size : Int) (alignment : Int)
   : Descriptor (A * B) =
       (
         = size,
@@ -51,7 +51,7 @@ begin
         }
       )
   in
-  let val align (A : VType) (layout : Descriptor A) (size : Int64) (alignment : Int64) : Descriptor
+  let val align (A : VType) (layout : Descriptor A) (size : Int) (alignment : Int) : Descriptor
     A =
     (= size, = alignment, #write = layout/write, #read = layout/read)
   in

@@ -1,10 +1,10 @@
 begin
-  param (/process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
-  do quotient <- ! int64/div -7 3;
-  do remainder <- ! int64/mod -7 3;
-  do quotient_error <- ! int64/sub quotient -2;
-  do remainder_error <- ! int64/sub remainder -1;
-  do status <- ! int64/add quotient_error remainder_error;
+  param (/process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
+  do quotient <- ! int/div -7 3;
+  do remainder <- ! int/mod -7 3;
+  do quotient_error <- ! int/sub quotient -2;
+  do remainder_error <- ! int/sub remainder -1;
+  do status <- ! int/add quotient_error remainder_error;
   ! process/exit status
 end

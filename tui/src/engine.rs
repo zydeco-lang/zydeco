@@ -413,7 +413,7 @@ mod tests {
                 .unwrap();
             let result = engine.evaluate(&input, ExpressionMode::Evaluate);
             match result {
-                | EvaluationOutcome::Success(text) if accepted => assert_eq!(text, "42 : Int64"),
+                | EvaluationOutcome::Success(text) if accepted => assert_eq!(text, "42 : Int"),
                 | EvaluationOutcome::Error(text) if !accepted => {
                     assert!(text.contains("unknown package"))
                 }
@@ -423,7 +423,7 @@ mod tests {
                 let later =
                     engine.install(SourceNumber::new(2).unwrap(), "@(import(1))".into()).unwrap();
                 assert!(matches!(engine.evaluate(&later, ExpressionMode::Evaluate),
-                    EvaluationOutcome::Success(text) if text == "42 : Int64"));
+                    EvaluationOutcome::Success(text) if text == "42 : Int"));
             }
         }
     }
@@ -435,7 +435,7 @@ mod tests {
         let input = engine
             .install(
                 SourceNumber::new(1).unwrap(),
-                "let Int64 = @(intrinsic(i64)) in let x : Int64 = _ in ret x".to_owned(),
+                "let Int = @(intrinsic(int)) in let x : Int = _ in ret x".to_owned(),
             )
             .unwrap();
         assert!(matches!(
@@ -459,7 +459,7 @@ mod tests {
         let third = SourceNumber::new(3).unwrap();
         let first_path = engine.install(first, "1".to_owned()).unwrap();
         match engine.evaluate(&first_path, ExpressionMode::Evaluate) {
-            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int64"),
+            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
                 panic!("first input failed: {error}")
             }
@@ -467,7 +467,7 @@ mod tests {
 
         let second_path = engine.install(second, "@(import(1))".to_owned()).unwrap();
         match engine.evaluate(&second_path, ExpressionMode::Evaluate) {
-            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int64"),
+            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
                 panic!("numbered import failed: {error}")
             }
@@ -475,7 +475,7 @@ mod tests {
 
         let third_path = engine.install(third, "ret (@(import(1)))".to_owned()).unwrap();
         match engine.evaluate(&third_path, ExpressionMode::Evaluate) {
-            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int64"),
+            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
                 panic!("nested numbered import failed: {error}")
             }
@@ -491,7 +491,7 @@ mod tests {
 
         match engine.evaluate(&path, ExpressionMode::Type) {
             | EvaluationOutcome::Success(result) => {
-                assert!(result.contains("Ret Int64"), "{result}")
+                assert!(result.contains("Ret Int"), "{result}")
             }
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
                 panic!("type command failed: {error}")
@@ -506,7 +506,7 @@ mod tests {
         let path = engine.install(SourceNumber::new(1).unwrap(), "ret 1".to_owned()).unwrap();
 
         match engine.evaluate(&path, ExpressionMode::Evaluate) {
-            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int64"),
+            | EvaluationOutcome::Success(result) => assert_eq!(result, "1 : Int"),
             | EvaluationOutcome::TypeRejected(error) | EvaluationOutcome::Error(error) => {
                 panic!("return evaluation failed: {error}")
             }

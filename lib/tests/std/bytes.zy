@@ -1,7 +1,7 @@
 @[package(test(of(std)))]
 begin
   let make_std = @(import(std)) that
-  param (/Ret; /Int64; /String; /UInt8; builtin) : @(import(std/builtin)) that
+  param (/Ret; /Int; /String; /UInt8; builtin) : @(import(std/builtin)) that
   let (
     /Bytes;
     /Bool;
@@ -10,7 +10,7 @@ begin
     /bool;
     /option;
     /list;
-    /int64;
+    /int;
     /uint8;
     /bytes;
     /string;
@@ -19,16 +19,16 @@ begin
   =
     builtin |> make_std
   in
-  let ! status (condition : Bool) : Ret Int64 = ! bool/if
-    (Ret Int64)
+  let ! status (condition : Bool) : Ret Int = ! bool/if
+    (Ret Int)
     condition
     { ret 0 }
     {
       ret 1
     } in
-  let ! octet_status (found : Option UInt8) (expected : UInt8) : Ret Int64 = ! option/fold
+  let ! octet_status (found : Option UInt8) (expected : UInt8) : Ret Int = ! option/fold
     UInt8
-    (Ret Int64)
+    (Ret Int)
     found
     { ret 1 }
     {
@@ -36,9 +36,9 @@ begin
         do correct <- ! uint8/eq octet expected;
         ! status correct
     } in
-  let ! window_status (found : Option Bytes) (expected : Bytes) : Ret Int64 = ! option/fold
+  let ! window_status (found : Option Bytes) (expected : Bytes) : Ret Int = ! option/fold
     Bytes
-    (Ret Int64)
+    (Ret Int)
     found
     { ret 1 }
     {
@@ -190,7 +190,7 @@ begin
   do decoded <- ! bytes/to_string encoded;
   do decoded_status <- ! option/fold
     String
-    (Ret Int64)
+    (Ret Int)
     decoded
     { ret 1 }
     {
@@ -199,39 +199,39 @@ begin
         ! status same
     };
 
-  do total_1 <- ! int64/add first_status last_status;
-  do total_2 <- ! int64/add total_1 past_end_status;
-  do total_3 <- ! int64/add total_2 negative_index_status;
-  do total_4 <- ! int64/add total_3 middle_status;
-  do total_5 <- ! int64/add total_4 whole_status;
-  do total_6 <- ! int64/add total_5 empty_tail_status;
-  do total_7 <- ! int64/add total_6 too_long_status;
-  do total_8 <- ! int64/add total_7 off_end_status;
-  do total_9 <- ! int64/add total_8 bad_start_status;
-  do total_10 <- ! int64/add total_9 bad_length_status;
-  do total_11 <- ! int64/add total_10 joined_status;
-  do total_12 <- ! int64/add total_11 differs_status;
-  do total_13 <- ! int64/add total_12 empty_first_status;
-  do total_14 <- ! int64/add total_13 prefix_first_status;
-  do total_15 <- ! int64/add total_14 longer_status;
-  do total_16 <- ! int64/add total_15 byte_order_status;
-  do total_17 <- ! int64/add total_16 world_greater_status;
-  do total_18 <- ! int64/add total_17 self_ge_status;
-  do total_19 <- ! int64/add total_18 self_le_status;
-  do total_20 <- ! int64/add total_19 capital_status;
-  do total_21 <- ! int64/add total_20 top_octet_status;
-  do total_22 <- ! int64/add total_21 rebuilt_status;
-  do total_23 <- ! int64/add total_22 empty_rebuilt_status;
-  do total_24 <- ! int64/add total_23 combined_status;
-  do total_25 <- ! int64/add total_24 starts_status;
-  do total_26 <- ! int64/add total_25 starts_wrong_status;
-  do total_27 <- ! int64/add total_26 ends_status;
-  do total_28 <- ! int64/add total_27 ends_wrong_status;
-  do total_29 <- ! int64/add total_28 starts_empty_status;
-  do total_30 <- ! int64/add total_29 ends_too_long_status;
-  do total_31 <- ! int64/add total_30 empty_is_empty_status;
-  do total_32 <- ! int64/add total_31 a_not_empty_status;
-  do total_33 <- ! int64/add total_32 rejected_status;
-  do total_34 <- ! int64/add total_33 decoded_status;
+  do total_1 <- ! int/add first_status last_status;
+  do total_2 <- ! int/add total_1 past_end_status;
+  do total_3 <- ! int/add total_2 negative_index_status;
+  do total_4 <- ! int/add total_3 middle_status;
+  do total_5 <- ! int/add total_4 whole_status;
+  do total_6 <- ! int/add total_5 empty_tail_status;
+  do total_7 <- ! int/add total_6 too_long_status;
+  do total_8 <- ! int/add total_7 off_end_status;
+  do total_9 <- ! int/add total_8 bad_start_status;
+  do total_10 <- ! int/add total_9 bad_length_status;
+  do total_11 <- ! int/add total_10 joined_status;
+  do total_12 <- ! int/add total_11 differs_status;
+  do total_13 <- ! int/add total_12 empty_first_status;
+  do total_14 <- ! int/add total_13 prefix_first_status;
+  do total_15 <- ! int/add total_14 longer_status;
+  do total_16 <- ! int/add total_15 byte_order_status;
+  do total_17 <- ! int/add total_16 world_greater_status;
+  do total_18 <- ! int/add total_17 self_ge_status;
+  do total_19 <- ! int/add total_18 self_le_status;
+  do total_20 <- ! int/add total_19 capital_status;
+  do total_21 <- ! int/add total_20 top_octet_status;
+  do total_22 <- ! int/add total_21 rebuilt_status;
+  do total_23 <- ! int/add total_22 empty_rebuilt_status;
+  do total_24 <- ! int/add total_23 combined_status;
+  do total_25 <- ! int/add total_24 starts_status;
+  do total_26 <- ! int/add total_25 starts_wrong_status;
+  do total_27 <- ! int/add total_26 ends_status;
+  do total_28 <- ! int/add total_27 ends_wrong_status;
+  do total_29 <- ! int/add total_28 starts_empty_status;
+  do total_30 <- ! int/add total_29 ends_too_long_status;
+  do total_31 <- ! int/add total_30 empty_is_empty_status;
+  do total_32 <- ! int/add total_31 a_not_empty_status;
+  do total_33 <- ! int/add total_32 rejected_status;
+  do total_34 <- ! int/add total_33 decoded_status;
   ! process/exit total_34
 end

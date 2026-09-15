@@ -1,13 +1,13 @@
 begin
   param (
-    /Int64;
+    /Int;
 
     /Addr;
     /Thk;
     /Ret;
     /OS;
     /process;
-    /UInt64;
+    /UInt;
     /text;
     /numeric;
     /system;
@@ -17,93 +17,93 @@ begin
   )) that
   let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
 
-  let uint64 = numeric/uint64 that
-  let zero = (@(ffi(c, library("zyffi_boundary"), symbol("zyffi_zero"))) : Thk (Ret UInt64)) that
+  let uint = numeric/uint that
+  let zero = (@(ffi(c, library("zyffi_boundary"), symbol("zyffi_zero"))) : Thk (Ret UInt)) that
   let echo = (
-    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_echo"))) : Thk (UInt64 -> Ret UInt64)
+    @(ffi(c, library("zyffi_boundary"), symbol("zyffi_echo"))) : Thk (UInt -> Ret UInt)
   ) that
   let inspect_raw = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_bytes"))) : Thk (
-      Addr -> Int64 -> Ret UInt64
+      Addr -> Int -> Ret UInt
     )
   ) that
   let first_raw = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_first"))) : Thk (
-      Addr -> Ret UInt64
+      Addr -> Ret UInt
     )
   ) that
   let options_raw = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_options"))) : Thk (
-      Addr -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64
+      Addr -> UInt -> UInt -> UInt -> UInt -> UInt -> Ret UInt
     )
   ) that
   let mixed_raw = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_mixed"))) : Thk (
-      UInt64 -> Addr -> Int64 -> Addr -> Int64 -> UInt64 -> Ret
-        UInt64
+      UInt -> Addr -> Int -> Addr -> Int -> UInt -> Ret
+        UInt
     )
   ) that
   let triple_raw = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_three_bytes"))) : Thk (
-      Addr -> Int64 -> Addr -> Int64 -> (
+      Addr -> Int -> Addr -> Int -> (
         Addr
-      ) -> Int64 -> Ret UInt64
+      ) -> Int -> Ret UInt
     )
   ) that
   let six = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_six"))) : Thk (
-      UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64
+      UInt -> UInt -> UInt -> UInt -> UInt -> UInt -> Ret UInt
     )
   ) that
   let Fault = @(import("../../std/memory/fault.zy")) in
-  let fail : Thk (Fault -> Ret UInt64) = {
+  let fail : Thk (Fault -> Ret UInt) = {
     fn _ =>
       @[partial]
       let 0 = 1 in
-      ret (0 : UInt64)
+      ret (0 : UInt)
   } in
-  let inspect : Thk (Bytes -> Ret UInt64) = {
+  let inspect : Thk (Bytes -> Ret UInt) = {
     fn value =>
-      ! bytes/unsafe/with_window (Ret UInt64) value fail {
+      ! bytes/unsafe/with_window (Ret UInt) value fail {
         fn address length => ! inspect_raw address length
       }
   } in
-  let mixed : Thk (UInt64 -> Bytes -> Bytes -> UInt64 -> Ret UInt64) = {
+  let mixed : Thk (UInt -> Bytes -> Bytes -> UInt -> Ret UInt) = {
     fn seed left right tail =>
-      ! bytes/unsafe/with_window (Ret UInt64) left fail {
+      ! bytes/unsafe/with_window (Ret UInt) left fail {
         fn p n =>
-          ! bytes/unsafe/with_window (Ret UInt64) right fail {
+          ! bytes/unsafe/with_window (Ret UInt) right fail {
             fn q m =>
               ! mixed_raw seed p n q m tail
           }
       }
   } in
-  let triple : Thk (Bytes -> Bytes -> Bytes -> Ret UInt64) = {
+  let triple : Thk (Bytes -> Bytes -> Bytes -> Ret UInt) = {
     fn first second third =>
-      ! bytes/unsafe/with_window (Ret UInt64) first fail {
+      ! bytes/unsafe/with_window (Ret UInt) first fail {
         fn p n =>
-          ! bytes/unsafe/with_window (Ret UInt64) second fail {
+          ! bytes/unsafe/with_window (Ret UInt) second fail {
             fn q m =>
-              ! bytes/unsafe/with_window (Ret UInt64) third fail {
+              ! bytes/unsafe/with_window (Ret UInt) third fail {
                 fn r k =>
                   ! triple_raw p n q m r k
               }
           }
       }
   } in
-  let ensure : Thk (UInt64 -> UInt64 -> Thk OS -> OS) = {
+  let ensure : Thk (UInt -> UInt -> Thk OS -> OS) = {
     fn actual expected next =>
-      ! uint64/eq OS actual expected next { ! process/exit 1 }
+      ! uint/eq OS actual expected next { ! process/exit 1 }
   } in
-  def fix churn (remaining : UInt64) (live : UInt64) (buffer : Bytes) : Ret UInt64 =
-    ! uint64/eq (Ret UInt64) remaining 0
+  def fix churn (remaining : UInt) (live : UInt) (buffer : Bytes) : Ret UInt =
+    ! uint/eq (Ret UInt) remaining 0
       {
         do inspected <- ! inspect buffer;
-        ! uint64/eq (Ret UInt64) inspected 1389 { ret live } { ret 0 }
+        ! uint/eq (Ret UInt) inspected 1389 { ret live } { ret 0 }
       }
       {
         do live' <- ! echo live;
-        do remaining' <- ! uint64/sub remaining 1;
+        do remaining' <- ! uint/sub remaining 1;
         ! churn remaining' live' buffer
       }
   in
@@ -113,33 +113,33 @@ begin
   do world <- ! bytes/from_string "world";
   do empty <- ! bytes/slice (Ret Bytes) hello 5 0 { ret hello } { fn window => ret window };
   do constant <- ! zero;
-  do maximum <- ! echo 18446744073709551615;
-  do high_bit <- ! echo 9223372036854775808;
+  do maximum <- ! echo 9223372036854775807;
+  do high_bit <- ! echo 4611686018427387904;
   do immediate <- ! echo 7;
   do empty_result <- ! inspect empty;
   do bytes_result <- ! inspect hello;
-  do first_result <- ! bytes/unsafe/with_window (Ret UInt64) hello fail {
+  do first_result <- ! bytes/unsafe/with_window (Ret UInt) hello fail {
     fn address _ => ! first_raw address
   };
-  do options_result <- ! bytes/unsafe/with_window (Ret UInt64) hello fail {
+  do options_result <- ! bytes/unsafe/with_window (Ret UInt) hello fail {
     fn address _ => ! options_raw address 1 2 3 4 5
   };
-  do ordered <- ! mixed 9223372036854775808 hello world 7;
+  do ordered <- ! mixed 4611686018427387904 hello world 7;
   do three_buffers <- ! triple hello empty world;
   do all_registers <- ! six 1 2 3 4 5 6;
   do after_gc <- ! churn 100000 maximum hello;
   ! ensure options_result 209 {
     ! ensure first_result 104 {
-      ! ensure constant 18446744073709551615 {
-        ! ensure maximum 18446744073709551615 {
-          ! ensure high_bit 9223372036854775808 {
+      ! ensure constant 9223372036854775807 {
+        ! ensure maximum 9223372036854775807 {
+          ! ensure high_bit 4611686018427387904 {
             ! ensure immediate 7 {
               ! ensure empty_result 0 {
                 ! ensure bytes_result 1389 {
-                  ! ensure ordered 9223378066988860778 {
+                  ! ensure ordered 4611692048561472874 {
                     ! ensure three_buffers 8409 {
                       ! ensure all_registers 183 {
-                        ! ensure after_gc 18446744073709551615 { ! process/exit 0 }
+                        ! ensure after_gc 9223372036854775807 { ! process/exit 0 }
                       }
                     }
                   }

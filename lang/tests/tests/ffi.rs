@@ -57,7 +57,7 @@ fn foreign_imports_supply_only_their_own_implementation_holes() {
         [(foreign, "0", true), ("_", "0", false), (foreign, "_", false)]
     {
         let source = format!(
-            "let foreign : Thk (UInt64 -> Ret UInt64) = {implementation} in \
+            "let foreign : Thk (UInt -> Ret UInt) = {implementation} in \
              do _ <- ! foreign {argument}; ! exit 0"
         );
         SourceCase::check(&source).unwrap();
@@ -82,21 +82,18 @@ fn foreign_imports_supply_only_their_own_implementation_holes() {
 fn xxhash_binding_reaches_the_native_c_call_boundary() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("xxhash.zy")).unwrap();
 
-    assert!(backend.render_sps_low().contains("<extern:XXH64/3>"));
-    assert!(backend.render_sps_low().contains("<extern:XXH3_64bits/2>"));
+    assert!(backend.render_sps_low().contains("<extern:XXH32/3>"));
     let zydeco_cli::Amd64Artifact { assembly, foreign_libraries, .. } =
         backend.emit_amd64(TargetOs::Linux);
-    assert!(assembly.contains("extern XXH64"));
-    assert!(assembly.contains("call XXH64"));
-    assert!(assembly.contains("call XXH3_64bits"));
+    assert!(assembly.contains("extern XXH32"));
+    assert!(assembly.contains("call XXH32"));
     assert!(!assembly.contains("zydeco_ffi_borrow_memory"));
     assert_eq!(
         foreign_libraries.iter().map(|library| library.as_str()).collect::<Vec<_>>(),
         ["xxhash"]
     );
     let macho = backend.emit_amd64(TargetOs::Macos).assembly;
-    assert!(macho.contains("call _XXH64"));
-    assert!(macho.contains("call _XXH3_64bits"));
+    assert!(macho.contains("call _XXH32"));
 }
 
 #[test]
@@ -114,19 +111,19 @@ fn unsupported_backends_report_the_native_import() {
 #[test]
 fn accepts_compositional_classifiers_without_loading_a_library() {
     for classifier in [
-        "Thk (Ret UInt64)",
+        "Thk (Ret UInt)",
         "Thk (Ret Unit)",
-        "Thk (Int8 -> Int16 -> Int32 -> Ret Int64)",
+        "Thk (Int8 -> Int16 -> Int32 -> Ret Int)",
         "Thk (UInt8 -> UInt16 -> UInt32 -> Ret Unit)",
-        "Thk (UInt64 -> Ret UInt64)",
-        "Thk (Addr -> Int64 -> Ret UInt64)",
-        "Thk (UInt64 -> Addr -> Int64 -> Addr -> Int64 -> UInt64 -> Ret UInt64)",
-        "Thk (Addr -> Addr -> Addr -> Ret UInt64)",
-        "Thk (UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64)",
+        "Thk (UInt -> Ret UInt)",
+        "Thk (Addr -> Int -> Ret UInt)",
+        "Thk (UInt -> Addr -> Int -> Addr -> Int -> UInt -> Ret UInt)",
+        "Thk (Addr -> Addr -> Addr -> Ret UInt)",
+        "Thk (UInt -> UInt -> UInt -> UInt -> UInt -> UInt -> Ret UInt)",
     ] {
         SourceCase::check(&FfiCase::declaration(classifier)).unwrap();
     }
-    for integer in ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"] {
+    for integer in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
         SourceCase::check(&FfiCase::declaration(&format!("Thk ({integer} -> Ret {integer})")))
             .unwrap();
     }
@@ -135,17 +132,17 @@ fn accepts_compositional_classifiers_without_loading_a_library() {
 #[test]
 fn rejects_unsupported_classifier_components_with_specific_diagnostics() {
     FfiCase::rejected("Thk ((UInt8 * UInt32) -> Ret Unit)", "argument 1");
-    FfiCase::rejected("UInt64", "requires a thunk");
-    FfiCase::rejected("Thk (Float32 -> Ret UInt64)", "argument 1");
-    FfiCase::rejected("Thk (Addr -> String -> Ret UInt64)", "argument 2");
-    FfiCase::rejected("Thk (Addr -> Ret Addr)", "fixed-width integer or `Unit`");
-    FfiCase::rejected("Thk (UInt64 -> OS)", "must end in `Ret B`");
+    FfiCase::rejected("UInt", "requires a thunk");
+    FfiCase::rejected("Thk (Float32 -> Ret UInt)", "argument 1");
+    FfiCase::rejected("Thk (Addr -> String -> Ret UInt)", "argument 2");
+    FfiCase::rejected("Thk (Addr -> Ret Addr)", "supported integer or `Unit`");
+    FfiCase::rejected("Thk (UInt -> OS)", "must end in `Ret B`");
     FfiCase::rejected(
-        "Thk (Addr -> Int64 -> Addr -> Int64 -> Addr -> Int64 -> UInt64 -> Ret UInt64)",
+        "Thk (Addr -> Int -> Addr -> Int -> Addr -> Int -> UInt -> Ret UInt)",
         "needs 7",
     );
     FfiCase::rejected(
-        "Thk (Addr -> Int64 -> Addr -> Int64 -> Addr -> Int64 -> Addr -> Int64 -> Ret UInt64)",
+        "Thk (Addr -> Int -> Addr -> Int -> Addr -> Int -> Addr -> Int -> Ret UInt)",
         "needs 8",
     );
 }
@@ -214,5 +211,41 @@ fn native_c_boundary_executes_the_compositional_protocol() {
             output.status,
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+    for (symbol, integer) in [
+        ("zyffi_int_below_range", "Int"),
+        ("zyffi_int_above_range", "Int"),
+        ("zyffi_uint_above_range", "UInt"),
+    ] {
+        let source = directory.path().join("rejected.zy");
+        let builtin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/builtin.zy");
+        std::fs::write(
+            &source,
+            format!(
+                r#"
+param (/Thk; /Ret; /{integer}; /process) : @(import({builtin:?})) in
+let foreign : Thk (Ret {integer}) = @(ffi(c, library("zyffi_boundary"), symbol("{symbol}"))) in
+do _ <- ! foreign;
+! process/exit 42
+"#
+            ),
+        )
+        .unwrap();
+        let native =
+            CommandCompiler::default().lower(&source).unwrap().emit_amd64(operating_system);
+        let executable = options
+            .link_amd64("ffi_rejected", &native.assembly, &native.foreign_libraries)
+            .unwrap();
+        let output = Command::new(executable.path())
+            .env("LD_LIBRARY_PATH", directory.path())
+            .env("DYLD_LIBRARY_PATH", directory.path())
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("integer exceeds the tagged payload range")
+        );
+        assert!(output.stdout.is_empty());
     }
 }

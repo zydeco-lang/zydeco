@@ -1447,7 +1447,7 @@ mod tests {
             format!(
                 concat!(
                     "```zydeco\n",
-                    "process/exit : Thk (Int64 -> SystemOS)\n",
+                    "process/exit : Thk (Int -> SystemOS)\n",
                     "```\n\n",
                     "Types:\n\n",
                     "- [`SystemOS` ↗](<{definition}>)"
@@ -1532,18 +1532,18 @@ mod tests {
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
 
         let application = project
-            .hover(&session, &path, source_position(&source, " Int64 0"), HoverOptions::default())
+            .hover(&session, &path, source_position(&source, " Int 0"), HoverOptions::default())
             .unwrap();
         let HoverContents::Markup(contents) = application.contents else {
             panic!("term hover should use markup content")
         };
         assert_eq!(
             fenced_zydeco_sources(&contents.value),
-            vec!["(! id Int64) : Int64 -> Ret Int64"],
+            vec!["(! id Int) : Int -> Ret Int"],
             "hovering between the parts of an application should report the innermost term:\n{}",
             contents.value
         );
-        assert_eq!(application.range.unwrap().start, source_position(&source, "! id Int64"));
+        assert_eq!(application.range.unwrap().start, source_position(&source, "! id Int"));
 
         let literal = project
             .hover(&session, &path, source_position(&source, "0;"), HoverOptions::default())
@@ -1553,7 +1553,7 @@ mod tests {
         };
         assert_eq!(
             fenced_zydeco_sources(&contents.value),
-            vec!["0 : Int64"],
+            vec!["0 : Int"],
             "hovering a literal should report its type:\n{}",
             contents.value
         );
@@ -1591,7 +1591,7 @@ mod tests {
 
         assert!(has("VType", "typeParameter", "kind"));
         assert!(has("A", "typeParameter", "valueType"));
-        assert!(has("Int64", "typeParameter", "valueType"));
+        assert!(has("Int", "typeParameter", "valueType"));
         assert!(has("OS", "typeParameter", "computationType"));
         assert!(has("x", "variable", "value"));
         assert!(has("process", "parameter", "value"));
@@ -1709,7 +1709,7 @@ mod tests {
         let decoded = SemanticTokenDecoder::new(&broken).decode(&encoded);
 
         assert!(decoded.iter().any(|token| {
-            token.text == "Int64" && token.modifiers.iter().any(|modifier| modifier == "valueType")
+            token.text == "Int" && token.modifiers.iter().any(|modifier| modifier == "valueType")
         }));
         assert!(decoded.iter().any(|token| {
             token.text == "OS"

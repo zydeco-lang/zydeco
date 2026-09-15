@@ -36,7 +36,7 @@ pub fn literal_syn_judgment<'db>(
     };
     let (lit, ty) = match lit {
         | Literal::Integer(i) => {
-            let integer_type = IntegerType::Int64;
+            let integer_type = IntegerType::Int;
             let value = i.value();
             let Some(i) = i.with_type(integer_type) else {
                 return Some(LiteralSynOutcome::Error(

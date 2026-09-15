@@ -52,8 +52,8 @@ The launcher supplies that package when running the program.
 Pure library terms select the foundational kinds and types directly from the Builtin contract:
 
 ```zydeco
-param (/Ret; /Int64) : @(import("lib/std/builtin.zy")) in
-fn (value : Int64) => (ret value : Ret Int64)
+param (/Ret; /Int) : @(import("lib/std/builtin.zy")) in
+fn (value : Int) => (ret value : Ret Int)
 ```
 
 `@(import("path"))` abbreviates `@[import("path")] _`.

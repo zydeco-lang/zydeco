@@ -28,15 +28,15 @@ fn size_arithmetic_checks_signed_bounds_before_wrapping_operations() {
     for (expression, pattern) in [
         ("size/size 0", "+Ok(0)"),
         ("size/size -1", "+Err(+NegativeSize())"),
-        ("size/add 9223372036854775807 0", "+Ok(9223372036854775807)"),
-        ("size/add 9223372036854775807 1", "+Err(+SizeOverflow())"),
+        ("size/add 4611686018427387903 0", "+Ok(4611686018427387903)"),
+        ("size/add 4611686018427387903 1", "+Err(+SizeOverflow())"),
         ("size/add 0 -1", "+Err(+NegativeSize())"),
         ("size/round_up 1 16", "+Ok(16)"),
         ("size/round_up 16 16", "+Ok(16)"),
-        ("size/round_up 0 4611686018427387904", "+Ok(0)"),
-        ("size/round_up 9223372036854775807 1", "+Ok(9223372036854775807)"),
-        ("size/round_up 9223372036854775792 16", "+Ok(9223372036854775792)"),
-        ("size/round_up 9223372036854775793 16", "+Err(+SizeOverflow())"),
+        ("size/round_up 0 2305843009213693952", "+Ok(0)"),
+        ("size/round_up 4611686018427387903 1", "+Ok(4611686018427387903)"),
+        ("size/round_up 4611686018427387888 16", "+Ok(4611686018427387888)"),
+        ("size/round_up 4611686018427387889 16", "+Err(+SizeOverflow())"),
         ("size/round_up -1 16", "+Err(+NegativeSize())"),
     ] {
         LayoutCase::accepts(expression, pattern);
@@ -45,7 +45,7 @@ fn size_arithmetic_checks_signed_bounds_before_wrapping_operations() {
 
 #[test]
 fn layouts_propagate_typed_validation_errors_without_realizing_storage() {
-    for boundary in [-9223372036854775808_i64, -1, 0, 3, 9223372036854775807] {
+    for boundary in [-4611686018427387904_i64, -1, 0, 3, 4611686018427387903] {
         LayoutCase::accepts(
             &format!("memory/align UInt8 {boundary} memory/uint8"),
             "+Err(+InvalidAlignment())",
@@ -56,12 +56,12 @@ fn layouts_propagate_typed_validation_errors_without_realizing_storage() {
         ("memory/product Unit UInt8 (memory/padding -1) memory/uint8", "+Err(+NegativeSize())"),
         ("memory/product UInt8 Unit memory/uint8 (memory/padding -1)", "+Err(+NegativeSize())"),
         (
-            "memory/product Unit Unit (memory/padding 9223372036854775807) (memory/padding 1)",
+            "memory/product Unit Unit (memory/padding 4611686018427387903) (memory/padding 1)",
             "+Err(+SizeOverflow())",
         ),
-        ("memory/align Unit 16 (memory/padding 9223372036854775807)", "+Err(+SizeOverflow())"),
-        ("memory/padding 9223372036854775807", "+Ok(_)"),
-        ("memory/align Unit 4611686018427387904 memory/unit", "+Ok(_)"),
+        ("memory/align Unit 16 (memory/padding 4611686018427387903)", "+Err(+SizeOverflow())"),
+        ("memory/padding 4611686018427387903", "+Ok(_)"),
+        ("memory/align Unit 2305843009213693952 memory/unit", "+Ok(_)"),
     ] {
         LayoutCase::accepts(expression, pattern);
     }
@@ -72,7 +72,7 @@ fn static_construction_rejects_runtime_sizes_with_a_source_diagnostic() {
     SourceCase::assert_rejected(
         SourceCase::check(&LayoutCase::source(
             r#"
-let build : Thk (Int64 -> Ret (Layout Unit)) = {
+let build : Thk (Int -> Ret (Layout Unit)) = {
   fn count => ret (memory/padding count)
 } in
 ! exit 0

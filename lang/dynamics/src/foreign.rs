@@ -28,6 +28,8 @@ pub enum ForeignRuntimeError {
     MissingSymbol { library: ForeignLibraryName, symbol: ForeignSymbolName, message: String },
     #[error("foreign symbol `{0}` received values inconsistent with its checked classifier")]
     InvalidArguments(ForeignSymbolName),
+    #[error("foreign symbol `{0}` returned an integer outside the tagged payload range")]
+    InvalidResult(ForeignSymbolName),
 }
 
 /// Process-local dynamic libraries retained for one interpreter invocation.
@@ -68,7 +70,9 @@ impl ForeignRuntime {
         let arguments = ForeignArguments::new(&import.signature, &arguments)
             .map_err(|_| ForeignRuntimeError::InvalidArguments(import.target.symbol.clone()))?;
         let function = self.function(import)?;
-        let result = function.invoke(&arguments);
+        let result = function
+            .invoke(&arguments)
+            .ok_or_else(|| ForeignRuntimeError::InvalidResult(import.target.symbol.clone()))?;
         Ok(ds::Computation::Ret(Return(Rc::new(result))))
     }
 
@@ -140,15 +144,15 @@ impl ForeignFunction {
             | IntegerType::Int8 => Type::i8(),
             | IntegerType::Int16 => Type::i16(),
             | IntegerType::Int32 => Type::i32(),
-            | IntegerType::Int64 => Type::i64(),
+            | IntegerType::Int => Type::i64(),
             | IntegerType::UInt8 => Type::u8(),
             | IntegerType::UInt16 => Type::u16(),
             | IntegerType::UInt32 => Type::u32(),
-            | IntegerType::UInt64 => Type::u64(),
+            | IntegerType::UInt => Type::u64(),
         }
     }
 
-    fn invoke(&self, arguments: &ForeignArguments) -> ds::Value {
+    fn invoke(&self, arguments: &ForeignArguments) -> Option<ds::Value> {
         let arguments = arguments.scalars.iter().map(ForeignScalar::as_arg).collect::<Vec<_>>();
         // SAFETY: the call interface and scalar storage follow the same checked signature.
         // The declaration author must ensure that the external symbol actually obeys that
@@ -158,7 +162,7 @@ impl ForeignFunction {
             let integer = match self.result {
                 | ForeignResult::Unit => {
                     self.interface.call_return_into(self.code, &arguments, Ret::void());
-                    return ds::Value::Triv(Triv);
+                    return Some(ds::Value::Triv(Triv));
                 }
                 // libffi's typed call reserves a register-sized result slot for narrow integers.
                 | ForeignResult::Integer(integer) => match integer {
@@ -171,8 +175,8 @@ impl ForeignFunction {
                     | IntegerType::Int32 => {
                         IntegerLiteral::Int32(self.interface.call(self.code, &arguments))
                     }
-                    | IntegerType::Int64 => {
-                        IntegerLiteral::Int64(self.interface.call(self.code, &arguments))
+                    | IntegerType::Int => {
+                        IntegerLiteral::Int(self.interface.call(self.code, &arguments))
                     }
                     | IntegerType::UInt8 => {
                         IntegerLiteral::UInt8(self.interface.call(self.code, &arguments))
@@ -183,12 +187,14 @@ impl ForeignFunction {
                     | IntegerType::UInt32 => {
                         IntegerLiteral::UInt32(self.interface.call(self.code, &arguments))
                     }
-                    | IntegerType::UInt64 => {
-                        IntegerLiteral::UInt64(self.interface.call(self.code, &arguments))
+                    | IntegerType::UInt => {
+                        IntegerLiteral::UInt(self.interface.call(self.code, &arguments))
                     }
                 },
             };
-            ds::Value::Lit(Literal::Integer(integer))
+            let integer =
+                integer.with_type(integer.integer_type().expect("foreign integer is resolved"))?;
+            Some(ds::Value::Lit(Literal::Integer(integer)))
         }
     }
 }
@@ -239,7 +245,9 @@ impl ForeignScalar {
             | (
                 ForeignComponent::Integer(integer),
                 ds::SemValue::Literal(Literal::Integer(value)),
-            ) if value.integer_type() == Some(integer) => Ok(Self::Integer(*value)),
+            ) if value.integer_type() == Some(integer) && value.with_type(integer).is_some() => {
+                Ok(Self::Integer(*value))
+            }
             | _ => Err(ForeignArgumentError::InvalidValue),
         }
     }
@@ -251,11 +259,11 @@ impl ForeignScalar {
                 | IntegerLiteral::Int8(value) => arg(value),
                 | IntegerLiteral::Int16(value) => arg(value),
                 | IntegerLiteral::Int32(value) => arg(value),
-                | IntegerLiteral::Int64(value) => arg(value),
+                | IntegerLiteral::Int(value) => arg(value),
                 | IntegerLiteral::UInt8(value) => arg(value),
                 | IntegerLiteral::UInt16(value) => arg(value),
                 | IntegerLiteral::UInt32(value) => arg(value),
-                | IntegerLiteral::UInt64(value) => arg(value),
+                | IntegerLiteral::UInt(value) => arg(value),
                 | IntegerLiteral::Unresolved(_) => unreachable!("arguments were validated above"),
             },
         }

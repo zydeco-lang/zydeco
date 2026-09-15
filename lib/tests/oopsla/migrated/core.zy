@@ -13,11 +13,11 @@ begin
     /stdio;
     /process;
     /String;
-    /Int64;
+    /Int;
     /numeric;
     /system
   ) : @(import("../../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let Thunk (B : CType) = Thk B that
 
   --| Interface for Monads and Their Algebras
@@ -129,25 +129,25 @@ begin
   -- end module Core
 
   -- module Arith
-  -- pub extern def div : Thk(Int64 -> Int64 -> Ret Int64) end
-  -- pub extern def mod : Thk(Int64 -> Int64 -> Ret Int64) end
+  -- pub extern def div : Thk(Int -> Int -> Ret Int) end
+  -- pub extern def mod : Thk(Int -> Int -> Ret Int) end
 
-  def ! int_eq (x : Int64) (y : Int64) : Ret Bool =
-    ! int64/eq (Ret Bool) x y { ret +True() } { ret +False() }
+  def ! int_eq (x : Int) (y : Int) : Ret Bool =
+    ! int/eq (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  def ! int_lt (x : Int64) (y : Int64) : Ret Bool =
-    ! int64/lt (Ret Bool) x y { ret +True() } { ret +False() }
+  def ! int_lt (x : Int) (y : Int) : Ret Bool =
+    ! int/lt (Ret Bool) x y { ret +True() } { ret +False() }
   that
-  def ! int_gt (x : Int64) (y : Int64) : Ret Bool =
-    ! int64/gt (Ret Bool) x y { ret +True() } { ret +False() }
+  def ! int_gt (x : Int) (y : Int) : Ret Bool =
+    ! int/gt (Ret Bool) x y { ret +True() } { ret +False() }
   that
   -- end module Arith
 
   -- module String
-  -- pub extern def str_scalar_length : Thk(String -> Ret Int64) end
+  -- pub extern def str_scalar_length : Thk(String -> Ret Int) end
   -- pub extern def str_append : Thk(String -> String -> Ret String) end
   -- pub extern def str_eq : Thk(String -> String -> Ret Bool) end
-  -- pub extern def str_get : Thk(String -> Int64 -> Ret(Option Char)) end
+  -- pub extern def str_get : Thk(String -> Int -> Ret(Option Char)) end
 
   -- --| Conversions
   -- pub def unit_to_str : Thk(Unit -> Ret String) = {
@@ -160,14 +160,14 @@ begin
   --     | +False() => ret "False"
   --     end
   -- } end
-  -- pub extern def int_to_str : Thk(Int64 -> Ret String) end
+  -- pub extern def int_to_str : Thk(Int -> Ret String) end
   --   pub extern def char_to_str : Thk(Char -> Ret String) end
-  --   pub extern def char_codepoint : Thk(Char -> Ret Int64) end
-  --   pub extern def str_parse_int : Thk(String -> Ret(Option Int64)) end
+  --   pub extern def char_codepoint : Thk(Char -> Ret Int) end
+  --   pub extern def str_parse_int : Thk(String -> Ret(Option Int)) end
   -- end module String
 
   -- module OS
-  def ! read_line_as_int (k : Thk (Option Int64 -> OS)) : OS = ! stdio/read_int
+  def ! read_line_as_int (k : Thk (Option Int -> OS)) : OS = ! stdio/read_int
     { ! k +None() }
     {
       fn i => ! k +Some(i)
@@ -186,14 +186,14 @@ begin
   --     ! write_str s k
   -- } end
 
-  -- pub def write_int : Thk(Int64 -> Thk OS -> OS) = {
-  --   fn (i: Int64) (k: Thk OS) =>
+  -- pub def write_int : Thk(Int -> Thk OS -> OS) = {
+  --   fn (i: Int) (k: Thk OS) =>
   --     do s <- ! int_to_str i;
   --     ! write_str s k
   -- } end
 
-  -- pub def write_int_line : Thk(Int64 -> Thk OS -> OS) = {
-  --   fn (i: Int64) (k: Thk OS) =>
+  -- pub def write_int_line : Thk(Int -> Thk OS -> OS) = {
+  --   fn (i: Int) (k: Thk OS) =>
   --     do s <- ! int_to_str i;
   --     ! write_line s k
   -- } end

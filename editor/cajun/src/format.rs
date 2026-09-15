@@ -111,7 +111,7 @@ mod tests {
     fn formatting_follows_source_format_annotations() {
         let source = concat!(
             "@[format(layout(ignore))] ! (bool/if)\n",
-            "  (Ret Int64)\n",
+            "  (Ret Int)\n",
             "  greater\n",
             "  { ret left }\n",
             "  { ret right }\n",
@@ -123,7 +123,7 @@ mod tests {
 
         assert_eq!(
             edit.new_text,
-            "@[format(layout(ignore))] ! bool/if (Ret Int64) greater { ret left } { ret right }\n"
+            "@[format(layout(ignore))] ! bool/if (Ret Int) greater { ret left } { ret right }\n"
         );
     }
 

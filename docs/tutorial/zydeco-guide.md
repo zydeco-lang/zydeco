@@ -43,7 +43,7 @@ param (/stdio; /process) : @(import("../../lib/std/builtin.zy")) in
 ```
 
 `stdio/write_line` has type `Thk (String -> Thk OS -> OS)`.
-Its last argument suspends the next `OS` action; `process/exit : Thk (Int64 -> OS)` terminates with the supplied code.
+Its last argument suspends the next `OS` action; `process/exit : Thk (Int -> OS)` terminates with the supplied code.
 A returning computation such as `ret 1` checks successfully but needs an executable wrapper for file execution.
 
 ### Running programs
@@ -104,13 +104,13 @@ A `foo.zy` implementation may have an independently checked `foo.zyi` type compa
 ### The `!` in a binding is part of the copattern
 
 A binding header describes how its name is eliminated at a use site.
-`def ! identity (x : Int64) : Ret Int64 = ret x in ...` binds a thunk that is forced and then applied.
+`def ! identity (x : Int) : Ret Int = ret x in ...` binds a thunk that is forced and then applied.
 The explicit thunk spelling puts the parameter inside the suspended computation:
 
 ```zydeco check
-param (/Int64; /Thk; /Ret) : @(import("../../lib/std/builtin.zy")) in
-def ! identity (x : Int64) : Ret Int64 = ret x in
-let explicit : Thk (Int64 -> Ret Int64) = { fn (x : Int64) => ret x } in
+param (/Int; /Thk; /Ret) : @(import("../../lib/std/builtin.zy")) in
+def ! identity (x : Int) : Ret Int = ret x in
+let explicit : Thk (Int -> Ret Int) = { fn (x : Int) => ret x } in
 do first <- ! identity 1;
 do second <- ! explicit 2;
 ret (first, second)
@@ -130,16 +130,16 @@ Their base forms are `VType` and `CType`; `Set`, which classifies kinds in the m
 Type constructors use kind arrows, and type-level functions use `fn` and application:
 
 ```zydeco check
-param (/VType; /Int64; /Char) : @(import("../../lib/std/builtin.zy")) in
+param (/VType; /Int; /Char) : @(import("../../lib/std/builtin.zy")) in
 let Pair = fn (A : VType) (B : VType) => A * B in
-ret ((1, 'x') : Pair Int64 Char)
+ret ((1, 'x') : Pair Int Char)
 ```
 
 Value types include `Unit`, products, data, thunks, existential packages, and total value-function types.
 Computation types include `Ret A`, `A -> B`, `forall`, package-dependent `pi`, codata, and the provider's `OS`.
-Names such as `Int64`, `Char`, and `Thk` come from explicit bindings; the examples obtain them from Builtin.
+Names such as `Int`, `Char`, and `Thk` come from explicit bindings; the examples obtain them from Builtin.
 
-Unconstrained integer and decimal literals default to `Int64` and `Float64`.
+Unconstrained integer and decimal literals default to `Int` and `Float64`.
 An expected fixed-width type selects another width, and the literal must fit that type.
 There are no implicit numeric conversions.
 Integer arithmetic wraps at the selected width; floating-point arithmetic uses IEEE 754 at the selected width.
@@ -150,14 +150,14 @@ Integer arithmetic wraps at the selected width; floating-point arithmetic uses I
 The result can name a signature or appear in an annotation:
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
-let identity = { fn (value : Int64) => ret value } in
+let Int = @(intrinsic(int)) in
+let identity = { fn (value : Int) => ret value } in
 let Signature = @[typeof] identity in
-let replacement : Signature = { fn (value : Int64) => ret value } in
+let replacement : Signature = { fn (value : Int) => ret value } in
 ! replacement 0
 ```
 
-For example, `@[typeof] ret 1` is `Ret Int64`, and `@[typeof] Int64` is `VType` in this context.
+For example, `@[typeof] ret 1` is `Ret Int`, and `@[typeof] Int` is `VType` in this context.
 The operand must still check. Use `@[typeof] (1 : Int8)` when the queried literal should have type `Int8`.
 Queries preserve abstract identities and cannot extract `Set` from a kind.
 
@@ -166,11 +166,11 @@ Queries preserve abstract identities and cannot extract `Set` from a kind.
 `forall` introduces computation-level polymorphism:
 
 ```zydeco check
-param (/VType; /Thk; /Ret; /Int64) : @(import("../../lib/std/builtin.zy")) in
+param (/VType; /Thk; /Ret; /Int) : @(import("../../lib/std/builtin.zy")) in
 let identity : Thk (forall (A : VType) . A -> Ret A) = {
   fn (A : VType) (value : A) => ret value
 } in
-! identity Int64 42
+! identity Int 42
 ```
 
 Existentials package type witnesses with values.
@@ -183,19 +183,19 @@ exists (X as T : K) . A     -- disclose the equation X = T
 
 A named binder such as `exists (#Item = X : VType) . A` exposes the public name `Item`.
 `exists (= Item : VType) . A` puns the public and local names.
-Manifest entries use `as`, for example `exists (= Item as Int64 : VType) . A`.
+Manifest entries use `as`, for example `exists (= Item as Int : VType) . A`.
 An existential may also disclose a kind equation, with its inferred classifier omitted.
 
 `pi` abstracts over a parameter whose pattern may open package witnesses used in the result type.
 It supports dependency on those static witnesses, not arbitrary runtime values:
 
 ```zydeco check
-param (/VType; /Thk; /Ret; /Int64) : @(import("../../lib/std/builtin.zy")) in
+param (/VType; /Thk; /Ret; /Int) : @(import("../../lib/std/builtin.zy")) in
 let Box = exists (T : VType) . T in
 let reveal : Thk (pi ((T, value) : Box) . Ret T) = {
   fn ((T, value) : Box) => ret value
 } in
-! reveal ((Int64, 42) : Box)
+! reveal ((Int, 42) : Box)
 ```
 
 ## 4. Products, named fields, and packages
@@ -207,9 +207,9 @@ Tuple introductions and product patterns must have the same arity and nesting as
 `()` inhabits `Unit`; `(value)` is grouping, not a unary product.
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
-let flat : Int64 * Int64 * Int64 = (1, 2, 3) in
-let nested : Int64 * (Int64 * Int64) = (1, (2, 3)) in
+let Int = @(intrinsic(int)) in
+let flat : Int * Int * Int = (1, 2, 3) in
+let nested : Int * (Int * Int) = (1, (2, 3)) in
 let (a, b, c) = flat in
 let (x, (y, z)) = nested in
 ret ((a, b, c), (x, (y, z)))
@@ -218,21 +218,21 @@ ret ((a, b, c), (x, (y, z)))
 The flat value cannot check against the nested type:
 
 ```zydeco reject=tyck.type-expected at=2:2
-let Int64 = @(intrinsic(i64)) in
-((1, 2, 3) : Int64 * (Int64 * Int64))
+let Int = @(intrinsic(int)) in
+((1, 2, 3) : Int * (Int * Int))
 ```
 
 A two-component pattern likewise cannot bind a suffix of a three-component product:
 
 ```zydeco reject=tyck.type-expected at=3:5
-let Int64 = @(intrinsic(i64)) in
-let flat : Int64 * Int64 * Int64 = (1, 2, 3) in
+let Int = @(intrinsic(int)) in
+let flat : Int * Int * Int = (1, 2, 3) in
 let (first, rest) = flat in
 ret (first, rest)
 ```
 
 Against an expected existential, a comma sequence instead supplies leading witnesses and the remaining payload.
-For `exists (X : VType) (Y : VType) . X * Y`, `(Int64, Char, 0, 'z')` supplies two witnesses and two payload fields.
+For `exists (X : VType) (Y : VType) . X * Y`, `(Int, Char, 0, 'z')` supplies two witnesses and two payload fields.
 This classifier-directed package opening does not make ordinary products associative.
 
 ### Named fields and projection groups
@@ -261,8 +261,8 @@ This is why module examples retain `builtin` and forward it to their builders.
 `pack` introduces explicit type witnesses and synthesizes the package type from its payload:
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
-let package = pack (= Item as Int64 : @(intrinsic(vtype))) where #value = 42 end in
+let Int = @(intrinsic(int)) in
+let package = pack (= Item as Int : @(intrinsic(vtype))) where #value = 42 end in
 let (/Item; /value) = package in
 ret (value : Item)
 ```
@@ -302,8 +302,8 @@ Its irrefutable parameter may contain a product or open a package.
 A view pattern `f ~> pattern` applies such a function before matching its result:
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
-let val first ((x, _) : Int64 * Int64) = x in
+let Int = @(intrinsic(int)) in
+let val first ((x, _) : Int * Int) = x in
 let (first ~> value; whole) = (3, 4) in
 ret (value, whole)
 ```
@@ -313,13 +313,13 @@ They undergo [static elimination](../references/language.md#10-static-eliminatio
 a runtime-selectable callable should have an explicit thunked computation type.
 
 `match` may produce a value when its arms produce values of the same type.
-The total integer intrinsics `i64_add`, `i64_sub`, `i64_and`, and `i64_compare` support static calculations:
+The total integer intrinsics `int_add`, `int_sub`, `int_and`, and `int_compare` support static calculations:
 
 ```zydeco check
-let Int64 = @(intrinsic(i64)) in
-let add = @(intrinsic(i64_add)) in
-let compare = @(intrinsic(i64_compare)) in
-let val maximum (left : Int64) (right : Int64) : Int64 =
+let Int = @(intrinsic(int)) in
+let add = @(intrinsic(int_add)) in
+let compare = @(intrinsic(int_compare)) in
+let val maximum (left : Int) (right : Int) : Int =
   match compare left right | -1 => right | _ => left end
 in
 ret (maximum 16 (add 5 11))
@@ -356,10 +356,10 @@ A `codata` term forms a computation type, describing observable residual protoco
 A recursive observation can continue directly at the same codata protocol:
 
 ```zydeco check
-param (/CType; /Ret; /Int64) : @(import("../../lib/std/builtin.zy")) in
+param (/CType; /Ret; /Int) : @(import("../../lib/std/builtin.zy")) in
 begin
   def Counter : CType = codata
-    | .value : Ret Int64
+    | .value : Ret Int
     | .next : Counter
   end that
   def fix counter : Counter = comatch
@@ -385,7 +385,7 @@ Open it once and retain the package value to pass the same capabilities into lib
 | Group | Contents |
 | --- | --- |
 | Manifest prefix | `VType`, `CType`, `Thk`, `Ret`, `Unit`, fixed-width integer and floating-point types, `Char`, `String`, `Bytes` |
-| `numeric` | Operations grouped by numeric type, such as `numeric/int64` |
+| `numeric` | Operations grouped by numeric type, such as `numeric/int` |
 | `text` | `char`, `string`, and `bytes` operations |
 | `system` | Public `Buffer`, `Reader`, `Writer`, and `OS` names; `buffer`, `io`, `fs`, `stdio`, `args`, `random`, and `process` operations |
 
@@ -393,7 +393,7 @@ Recursive field selection reaches these public names from the whole package:
 
 ```zydeco check
 param (/numeric) : @(import("../../lib/std/builtin.zy")) in
-do answer <- ! numeric/int64/add 20 22;
+do answer <- ! numeric/int/add 20 22;
 ret answer
 ```
 
@@ -434,7 +434,7 @@ These are library interfaces; their types do not enforce the monad laws.
 The `Ret` instance implements the operations with ordinary `ret` and `do`:
 
 ```zydeco check
-param (/Ret; /Int64; builtin) : @(import("../../lib/std/builtin.zy")) in
+param (/Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_monad = @(import("../../lib/std/control/monad.zy")) in
 let (/Monad) = builtin |> make_monad in
 let ! mo_ret : Monad Ret = comatch
@@ -443,7 +443,7 @@ let ! mo_ret : Monad Ret = comatch
     do value <- ! computation;
     ! continuation value
 end in
-! mo_ret .return Int64 42
+! mo_ret .return Int 42
 ```
 
 `mo_ret` is already a thunk. Pass it directly where `Thk (Monad Ret)` is required;
@@ -509,10 +509,10 @@ The control modules are ordinary value-function builders from Builtin to package
 Apply a builder and open the selected fields directly:
 
 ```zydeco check
-param (/Int64; builtin) : @(import("../../lib/std/builtin.zy")) in
+param (/Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_state = @(import("../../lib/std/control/state.zy")) in
 let (/State; /get; /eval_state) = builtin |> make_state in
-! eval_state Int64 Int64 7 { ! get Int64 }
+! eval_state Int Int 7 { ! get Int }
 ```
 
 This evaluates the state read with initial state 7.
@@ -525,11 +525,11 @@ The runners provide convenient interfaces; their necessity depends on the expose
 the handler operations expose its alternatives to clients.
 
 ```zydeco check
-param (/String; /Int64; /Ret; builtin) : @(import("../../lib/std/builtin.zy")) in
+param (/String; /Int; /Ret; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_exception = @(import("../../lib/std/control/exception.zy")) in
 let (/raise; /handle_exception) = builtin |> make_exception in
-! handle_exception String Int64 (Ret Int64)
-  { ! raise String Int64 { comatch end } "stop" }
+! handle_exception String Int (Ret Int)
+  { ! raise String Int { comatch end } "stop" }
   { fn _ => ret 0 }
   { fn value => ret value }
 ```
@@ -546,7 +546,7 @@ Monadic translation lifts the fields together, and the caller chooses the concre
 This complete example reads the old state, replaces it, and returns both the old and final state:
 
 ```zydeco check
-param (/VType; /Thk; /Ret; /Unit; /Int64; builtin) : @(import("../../lib/std/builtin.zy")) in
+param (/VType; /Thk; /Ret; /Unit; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_monad = @(import("../../lib/std/control/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> make_monad in
 let make_state = @(import("../../lib/std/control/state.zy")) in
@@ -559,16 +559,16 @@ let ! program (S : VType) = @[monadic] fn (cap : StateCapability S) (next : S) =
   do _ <- ! cap/put next;
   ret old
 in
-let capability = (#get = { ! get Int64 }, #put = { ! put Int64 }) in
-! run_state Int64 Int64 (Ret (Int64 * Int64)) 7
-  { ! program Int64 (State Int64) { ! mo_state Int64 } capability 9 }
+let capability = (#get = { ! get Int }, #put = { ! put Int }) in
+! run_state Int Int (Ret (Int * Int)) 7
+  { ! program Int (State Int) { ! mo_state Int } capability 9 }
   { fn final_state old => ret (old, final_state) }
 ```
 
 The capability is a product value and is passed directly.
-`{ ! mo_state Int64 }` suspends the specialized dictionary computation,
+`{ ! mo_state Int }` suspends the specialized dictionary computation,
 while an already-bound dictionary thunk such as `mo_ret` needs no wrapper.
-The `S` parameter precedes the annotation, so `Int64` precedes the translated carrier and instance arguments.
+The `S` parameter precedes the annotation, so `Int` precedes the translated carrier and instance arguments.
 
 The [State and Exception example](../../lib/tests/effects/state-exception-stack.zy) extends this pattern
 with polymorphic `raise` and `catch`, their structure arguments, and an executable `OS` runner.

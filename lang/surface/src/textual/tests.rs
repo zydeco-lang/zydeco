@@ -663,7 +663,7 @@ fn source_unit_rejects_import_on_a_non_hole_term() {
 
 #[test]
 fn source_unit_decodes_builtin_operation_roles_on_terms() {
-    let source = "@[builtin(int64_add)] _";
+    let source = "@[builtin(int_add)] _";
     let mut parser = Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
 
@@ -672,7 +672,7 @@ fn source_unit_decodes_builtin_operation_roles_on_terms() {
 
     assert_eq!(
         site.directive.role,
-        BuiltinRole::Value(BuiltinValueRole::Integer(IntegerType::Int64, IntegerOperation::Add,))
+        BuiltinRole::Value(BuiltinValueRole::Integer(IntegerType::Int, IntegerOperation::Add,))
     );
     let BuiltinLocation::Term { payload, .. } = site.location else {
         panic!("expected a term annotation")
@@ -848,7 +848,7 @@ fn parses_uniform_term_composition_forms() {
     };
     assert!(matches!(parser.arena.terms[tail], Term::Ret(_)));
 
-    let nominal = "def Hidden = Int64 in Hidden";
+    let nominal = "def Hidden = Int in Hidden";
     let nominal = StrictParser::term(nominal, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&nominal],
@@ -871,7 +871,7 @@ fn parses_value_pi_abstractions_and_bindings() {
     let abstraction = StrictParser::term(abstraction_source, &mut parser).unwrap();
     assert!(matches!(parser.arena.terms[&abstraction], Term::ValAbs(_)));
 
-    let local_source = "let val identity (value : Int64) : Int64 = value that 1 |> identity";
+    let local_source = "let val identity (value : Int) : Int = value that 1 |> identity";
     let mut parser = Parser::new();
     let local = StrictParser::term(local_source, &mut parser).unwrap();
     let Term::ContextBind(ContextBind { binding, placement: Placement::That, tail, .. }) =
@@ -889,14 +889,14 @@ fn parses_value_pi_abstractions_and_bindings() {
 #[test]
 fn parses_lexical_and_block_value_parameters() {
     let mut parser = Parser::new();
-    let lexical_source = "param val (value : Int64) in value";
+    let lexical_source = "param val (value : Int) in value";
     let lexical = StrictParser::term(lexical_source, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&lexical],
         Term::Param(Param { flavor: ParameterFlavor::Value, placement: Placement::In, .. })
     ));
 
-    let mobile_source = "param val (value : Int64) that value";
+    let mobile_source = "param val (value : Int) that value";
     let mobile = StrictParser::term(mobile_source, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&mobile],
@@ -907,21 +907,21 @@ fn parses_lexical_and_block_value_parameters() {
 #[test]
 fn parses_both_pipeline_spellings_and_view_patterns() {
     let mut parser = Parser::new();
-    let forward = "pair |> first Int64 String";
+    let forward = "pair |> first Int String";
     let forward = StrictParser::term(forward, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&forward],
         Term::Pipeline(Pipeline { direction: PipelineDirection::Forward, .. })
     ));
 
-    let backward = "first Int64 String <| pair";
+    let backward = "first Int String <| pair";
     let backward = StrictParser::term(backward, &mut parser).unwrap();
     assert!(matches!(
         parser.arena.terms[&backward],
         Term::Pipeline(Pipeline { direction: PipelineDirection::Backward, .. })
     ));
 
-    let pattern_source = "let first[Int64, String] ~> selected = pair in selected";
+    let pattern_source = "let first[Int, String] ~> selected = pair in selected";
     let pattern_term = StrictParser::term(pattern_source, &mut parser).unwrap();
     let Term::ContextBind(ContextBind { binding, .. }) = &parser.arena.terms[&pattern_term] else {
         panic!("expected a binding with a view pattern")
@@ -942,7 +942,7 @@ fn parses_both_pipeline_spellings_and_view_patterns() {
 
 #[test]
 fn parses_manifest_existential_with_a_punned_field_binder() {
-    let source = "exists (= Counter as Int64 : VType) . Counter";
+    let source = "exists (= Counter as Int : VType) . Counter";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -974,19 +974,19 @@ fn parses_manifest_existential_with_a_punned_field_binder() {
 
     assert_eq!(field.plain(), "Counter");
     assert_eq!(parser.arena.defs[binder].plain(), "Counter");
-    assert_eq!(definition.plain(), "Int64");
+    assert_eq!(definition.plain(), "Int");
     assert_eq!(kind.plain(), "VType");
     assert_eq!(body.plain(), "Counter");
 
     let rendered = term.ugly(&Formatter::new(&parser.arena));
-    assert_eq!(rendered, "exists (#Counter = ((Counter as Int64) : VType)) . Counter");
+    assert_eq!(rendered, "exists (#Counter = ((Counter as Int) : VType)) . Counter");
     let mut roundtrip = Parser::new();
     StrictParser::term(&rendered, &mut roundtrip).unwrap();
 }
 
 #[test]
 fn parses_manifest_existential_inside_an_explicit_named_pattern() {
-    let source = "exists (#Counter = ((Representation as Int64) : VType)) . Representation";
+    let source = "exists (#Counter = ((Representation as Int) : VType)) . Representation";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -1020,7 +1020,7 @@ fn parses_manifest_existential_inside_an_explicit_named_pattern() {
 
     assert_eq!(field.plain(), "Counter");
     assert_eq!(parser.arena.defs[binder].plain(), "Representation");
-    assert_eq!(definition.plain(), "Int64");
+    assert_eq!(definition.plain(), "Int");
     assert_eq!(ty.plain(), "VType");
 }
 
@@ -1093,7 +1093,7 @@ fn parses_interleaved_abstract_and_manifest_existential_parameters() {
 
 #[test]
 fn parses_pack_introduction_with_a_manifest_telescope() {
-    let source = "pack (X as Int64 : VType) (Y as Char) where (0 : X), 'a' : Y, end";
+    let source = "pack (X as Int : VType) (Y as Char) where (0 : X), 'a' : Y, end";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -1135,7 +1135,7 @@ fn parses_pack_introduction_with_a_manifest_telescope() {
 
 #[test]
 fn rejects_an_empty_pack_payload() {
-    let source = "pack (X as Int64 : VType) where end";
+    let source = "pack (X as Int : VType) where end";
     let mut parser = Parser::new();
     assert!(
         StrictParser::term(source, &mut parser).is_err(),
@@ -1209,7 +1209,7 @@ fn parses_named_term_fields() {
 
 #[test]
 fn parses_comma_separated_named_terms_without_early_sorting() {
-    let source = "(#x = Int64, #y = String)";
+    let source = "(#x = Int, #y = String)";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -1231,13 +1231,13 @@ fn parses_comma_separated_named_terms_without_early_sorting() {
 
     assert_eq!(
         fields,
-        vec![("x".to_string(), "Int64".to_string()), ("y".to_string(), "String".to_string()),]
+        vec![("x".to_string(), "Int".to_string()), ("y".to_string(), "String".to_string()),]
     );
 }
 
 #[test]
 fn parses_labeled_product_type() {
-    let source = "(#x :: Int64) * (#y :: String)";
+    let source = "(#x :: Int) * (#y :: String)";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -1268,14 +1268,14 @@ fn parses_labeled_product_type() {
     };
 
     assert_eq!(left_name.plain(), "x");
-    assert_eq!(left_type.plain(), "Int64");
+    assert_eq!(left_type.plain(), "Int");
     assert_eq!(right_name.plain(), "y");
     assert_eq!(right_type.plain(), "String");
 }
 
 #[test]
 fn parses_chained_labels_right_associatively() {
-    let source = "(#outer :: #inner :: Int64)";
+    let source = "(#outer :: #inner :: Int)";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -1293,7 +1293,7 @@ fn parses_chained_labels_right_associatively() {
 
     assert_eq!(outer.plain(), "outer");
     assert_eq!(inner.plain(), "inner");
-    assert_eq!(payload.plain(), "Int64");
+    assert_eq!(payload.plain(), "Int");
 }
 
 #[test]
@@ -1324,7 +1324,7 @@ fn annotation_binds_inside_a_named_classifier() {
 
 #[test]
 fn parses_mixed_named_and_labeled_terms_right_associatively() {
-    let source = "(#outer = #inner :: Int64)";
+    let source = "(#outer = #inner :: Int)";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -1342,7 +1342,7 @@ fn parses_mixed_named_and_labeled_terms_right_associatively() {
 
     assert_eq!(outer.plain(), "outer");
     assert_eq!(inner.plain(), "inner");
-    assert_eq!(payload.plain(), "Int64");
+    assert_eq!(payload.plain(), "Int");
 }
 
 #[test]
@@ -1414,7 +1414,7 @@ fn parses_named_term_payload_annotation() {
 
 #[test]
 fn parses_punned_named_terms_and_payload_annotations() {
-    let source = "(= left, middle, = right : Int64)";
+    let source = "(= left, middle, = right : Int)";
     let mut parser = Parser::new();
     let term = StrictParser::term(source, &mut parser).unwrap();
 
@@ -1450,7 +1450,7 @@ fn parses_punned_named_terms_and_payload_annotations() {
     assert_eq!(middle.plain(), "middle");
     assert_eq!(right_name.plain(), "right");
     assert_eq!(right.plain(), "right");
-    assert_eq!(ty.plain(), "Int64");
+    assert_eq!(ty.plain(), "Int");
 }
 
 #[test]
@@ -1598,7 +1598,7 @@ fn parses_field_projection_patterns_as_alias_members() {
 
 #[test]
 fn parses_punned_field_projection_patterns_and_payload_annotations() {
-    let source = "(/left : Int64; /Right; whole)";
+    let source = "(/left : Int; /Right; whole)";
     let mut parser = Parser::new();
     let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
@@ -1626,7 +1626,7 @@ fn parses_punned_field_projection_patterns_and_payload_annotations() {
 
     assert_eq!(left_name.plain(), "left");
     assert_eq!(parser.arena.defs[left].plain(), "left");
-    assert_eq!(ty.plain(), "Int64");
+    assert_eq!(ty.plain(), "Int");
     assert_eq!(right_name.plain(), "Right");
     assert_eq!(parser.arena.defs[right].plain(), "Right");
 }
@@ -1680,7 +1680,7 @@ fn parses_named_pattern_payload_annotation() {
 
 #[test]
 fn parses_punned_named_patterns_and_payload_annotations() {
-    let source = "(= left : Int64, middle, = right)";
+    let source = "(= left : Int, middle, = right)";
     let mut parser = Parser::new();
     let pattern = StrictParser::pattern(source, &mut parser).unwrap();
 
@@ -1713,7 +1713,7 @@ fn parses_punned_named_patterns_and_payload_annotations() {
 
     assert_eq!(left_name.plain(), "left");
     assert_eq!(parser.arena.defs[left].plain(), "left");
-    assert_eq!(ty.plain(), "Int64");
+    assert_eq!(ty.plain(), "Int");
     assert_eq!(parser.arena.defs[middle].plain(), "middle");
     assert_eq!(right_name.plain(), "right");
     assert_eq!(parser.arena.defs[right].plain(), "right");

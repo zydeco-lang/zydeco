@@ -7,27 +7,27 @@ use crate::{
 
 /// Total integer leaves for value computation. Layout laws are source functions.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum ValueInt64Op {
+pub enum ValueIntOp {
     Add,
     Sub,
     And,
     Compare,
 }
 
-impl ValueInt64Op {
+impl ValueIntOp {
     pub const ALL: &[Self] = &[Self::Add, Self::Sub, Self::And, Self::Compare];
 
     pub fn intrinsic_name(self) -> &'static str {
         match self {
-            | Self::Add => "i64_add",
-            | Self::Sub => "i64_sub",
-            | Self::And => "i64_and",
-            | Self::Compare => "i64_compare",
+            | Self::Add => "int_add",
+            | Self::Sub => "int_sub",
+            | Self::And => "int_and",
+            | Self::Compare => "int_compare",
         }
     }
 
     pub fn evaluate(self, [left, right]: [i64; 2]) -> i64 {
-        match self {
+        zydeco_machine::word::RuntimeWord::wrap_signed(match self {
             | Self::Add => left.wrapping_add(right),
             | Self::Sub => left.wrapping_sub(right),
             | Self::And => left & right,
@@ -36,7 +36,7 @@ impl ValueInt64Op {
                 | std::cmp::Ordering::Equal => 0,
                 | std::cmp::Ordering::Greater => 1,
             },
-        }
+        })
     }
 }
 
@@ -145,27 +145,36 @@ impl PrimitiveOp {
                     }
                 }
                 macro_rules! integer {
-                    ($variant:ident, $ty:ty) => {{
+                    ($ty:ty) => {{
                         let first = first.value() as $ty;
                         let second = second.value() as $ty;
-                        IntegerLiteral::$variant(match op {
+                        let value = match op {
                             | IntegerArithmetic::Add => first.wrapping_add(second),
                             | IntegerArithmetic::Sub => first.wrapping_sub(second),
                             | IntegerArithmetic::Mul => first.wrapping_mul(second),
                             | IntegerArithmetic::Div => first.wrapping_div(second),
                             | IntegerArithmetic::Mod => first.wrapping_rem(second),
-                        })
+                        };
+                        IntegerLiteral::from_value(
+                            if ty.is_signed() {
+                                let shift = 128 - ty.bits();
+                                ((value as i128) << shift) >> shift
+                            } else {
+                                (value as i128) & ((1_i128 << ty.bits()) - 1)
+                            },
+                            ty,
+                        )
                     }};
                 }
                 Ok(Literal::Integer(match ty {
-                    | IntegerType::Int8 => integer!(Int8, i8),
-                    | IntegerType::Int16 => integer!(Int16, i16),
-                    | IntegerType::Int32 => integer!(Int32, i32),
-                    | IntegerType::Int64 => integer!(Int64, i64),
-                    | IntegerType::UInt8 => integer!(UInt8, u8),
-                    | IntegerType::UInt16 => integer!(UInt16, u16),
-                    | IntegerType::UInt32 => integer!(UInt32, u32),
-                    | IntegerType::UInt64 => integer!(UInt64, u64),
+                    | IntegerType::Int8 => integer!(i8),
+                    | IntegerType::Int16 => integer!(i16),
+                    | IntegerType::Int32 => integer!(i32),
+                    | IntegerType::Int => integer!(i64),
+                    | IntegerType::UInt8 => integer!(u8),
+                    | IntegerType::UInt16 => integer!(u16),
+                    | IntegerType::UInt32 => integer!(u32),
+                    | IntegerType::UInt => integer!(u64),
                 }))
             }
             | (Self::Float(ty, op), [Literal::Float(first), Literal::Float(second)])
@@ -262,8 +271,8 @@ mod tests {
             }
         }
         assert_eq!(
-            PrimitiveOp::Integer(IntegerType::Int64, IntegerArithmetic::Add)
-                .evaluate(&[IntegerLiteral::Int64(1).into(), IntegerLiteral::Int32(2).into()]),
+            PrimitiveOp::Integer(IntegerType::Int, IntegerArithmetic::Add)
+                .evaluate(&[IntegerLiteral::Int(1).into(), IntegerLiteral::Int32(2).into()]),
             Err(PrimitiveError::OperandType)
         );
     }
@@ -293,7 +302,7 @@ mod tests {
             };
             assert!(nan.value().is_nan());
             assert_eq!(
-                add.evaluate(&[literal(1.0), IntegerLiteral::Int64(2).into()]),
+                add.evaluate(&[literal(1.0), IntegerLiteral::Int(2).into()]),
                 Err(PrimitiveError::OperandType)
             );
         }

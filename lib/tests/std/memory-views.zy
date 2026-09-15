@@ -1,6 +1,6 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /UInt32; /Addr; /OS;
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /UInt32; /Addr; /OS;
     /numeric; /process; builtin) : @(import(std/builtin)) that
   let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
     builtin |> (@(import(std/memory)))
@@ -11,11 +11,11 @@ begin
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
 
-  match layout/int64
+  match layout/int
   | +Err(_) => ! fail
   | +Ok(plan) =>
-    let (= L, repr) = layout/realize Int64 plan in
-    let access = slices/for_layout L Int64 repr in
+    let (= L, repr) = layout/realize Int plan in
+    let access = slices/for_layout L Int repr in
     ! raw/allocate OS 24 8 no {
       fn base =>
         do second <- ! raw/unsafe/offset base 8;
@@ -39,7 +39,7 @@ begin
                                   fn pointer =>
                                     ! repr/unsafe/read OS pointer {
                                       fn value =>
-                                        ! numeric/int64/eq OS value 22 {
+                                        ! numeric/int/eq OS value 22 {
                                           ! raw/unsafe/free OS base 24 8 no { ! process/exit 0 }
                                         } fail
                                     }

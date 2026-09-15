@@ -119,7 +119,7 @@ fn residual_drivers_preserve_mixed_reconstruction_and_ordered_match_plans() {
     let hole = fixture.pattern(Hole);
     let bindee = fixture.value(Let { binder: hole, bindee: unit, tail: unit });
     let returned = fixture.computation(Return(unit));
-    let scrut = fixture.value(ss::Literal::Integer(IntegerLiteral::Int64(0)));
+    let scrut = fixture.value(ss::Literal::Integer(IntegerLiteral::Int(0)));
     let mut root = returned;
     for index in 0..12 {
         root = fixture.computation(Let { binder: hole, bindee, tail: root });
@@ -128,7 +128,7 @@ fn residual_drivers_preserve_mixed_reconstruction_and_ordered_match_plans() {
         root = fixture.computation(App(root, unit));
         let thunk = fixture.value(Thunk(root));
         root = fixture.computation(Force(thunk));
-        let literal = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int64(index)));
+        let literal = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int(index)));
         let binder = fixture.pattern(Alias(ConsN::from_vec(vec![literal, hole]).unwrap()));
         root = fixture.computation(Match {
             scrut,
@@ -193,12 +193,12 @@ fn deeply_nested_values_and_structural_patterns_lower_on_a_small_stack() {
 fn long_literal_fallthrough_chains_preserve_row_order_on_a_small_stack() {
     Fixture::small_stack(|| {
         let mut fixture = Fixture::new();
-        let scrut = fixture.value(ss::Literal::Integer(IntegerLiteral::Int64(-1)));
+        let scrut = fixture.value(ss::Literal::Integer(IntegerLiteral::Int(-1)));
         let unit = fixture.value(Triv);
         let tail = fixture.computation(Return(unit));
         let mut arms = (0..4096)
             .map(|index| {
-                let binder = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int64(index)));
+                let binder = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int(index)));
                 Matcher { binder, tail }
             })
             .collect::<Vec<_>>();
@@ -226,7 +226,7 @@ fn long_literal_fallthrough_chains_preserve_row_order_on_a_small_stack() {
                 })
                 .collect::<Vec<_>>();
             assert!(
-                matches!(arena.values[&arguments[1]], Value::Literal(ss::Literal::Integer(IntegerLiteral::Int64(actual))) if actual == index)
+                matches!(arena.values[&arguments[1]], Value::Literal(ss::Literal::Integer(IntegerLiteral::Int(actual))) if actual == index)
             );
             let Value::Closure(Closure { body, .. }) = arena.values[&arguments[2]] else {
                 panic!("success closure")
@@ -324,7 +324,7 @@ fn builtin_folder_drivers_preserve_product_order_and_materialization() {
         let input = BuiltinPackageValue::Product(vec![
             BuiltinPackageValue::Unit,
             BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
-                IntegerType::Int64,
+                IntegerType::Int,
                 IntegerOperation::Eq,
             )),
             BuiltinPackageValue::Product(vec![

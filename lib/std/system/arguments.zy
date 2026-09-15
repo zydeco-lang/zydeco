@@ -1,13 +1,13 @@
 -- Lazy folds use ordinary, reusable CBPV thunks over a stable host snapshot.
 begin
-  param val (/CType; /Thk; /Ret; /Int64; /String; /args; /int64) : @(import("../builtin.zy")) that
+  param val (/CType; /Thk; /Ret; /Int; /String; /args; /int) : @(import("../builtin.zy")) that
   let ! fold (R : CType) (when_empty : Thk R)
     (when_item : Thk (String -> Thk R -> R))
   : R =
-      def fix visit (index : Int64) : R =
+      def fix visit (index : Int) : R =
         ! args/at R index when_empty {
           fn argument =>
-            do next <- ! int64/add index 1;
+            do next <- ! int/add index 1;
             ! when_item argument { ! visit next }
         }
       in

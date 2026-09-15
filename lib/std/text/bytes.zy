@@ -7,7 +7,7 @@ begin
     /Ret;
     /Unit;
     /Addr;
-    /Int64;
+    /Int;
     /UInt8;
     /String;
     /memory;
@@ -16,9 +16,9 @@ begin
   ) : @(import("../builtin.zy")) that
   let Package = @(import("bytes.type.zy")) in
   let (/Fault; /allocate; /unsafe) = builtin |> (@(import("../memory/native.zy"))) in
-  let int = numeric/int64 in
+  let int = numeric/int in
   let octet = numeric/uint8 in
-  let Bytes = Addr * Int64 in
+  let Bytes = Addr * Int in
   let panic : Thk (Ret Bytes) = {
     @[partial]
     let 0 = 1 in
@@ -29,15 +29,15 @@ begin
     do p <- ! memory/null;
     ret (p, 0)
   } in
-  let length : Thk (Bytes -> Ret Int64) = { fn ((_, count) : Bytes) => ret count } in
+  let length : Thk (Bytes -> Ret Int) = { fn ((_, count) : Bytes) => ret count } in
   let from_retained : Thk (
-    forall (R : CType) . Addr -> Int64 -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
+    forall (R : CType) . Addr -> Int -> Thk (Fault -> R) -> Thk (Bytes -> R) -> R
   ) = {
-    fn (R : CType) (p : Addr) (count : Int64) (no : Thk (Fault -> R)) yes =>
+    fn (R : CType) (p : Addr) (count : Int) (no : Thk (Fault -> R)) yes =>
       ! int/lt R count 0 { ! no +Bounds() } { ! yes (p, count) }
   } in
   let with_window : Thk (
-    forall (R : CType) . Bytes -> Thk (Fault -> R) -> Thk (Addr -> Int64 -> R) -> R
+    forall (R : CType) . Bytes -> Thk (Fault -> R) -> Thk (Addr -> Int -> R) -> R
   ) = { fn (R : CType) ((p, count) : Bytes) (_ : Thk (Fault -> R)) yes => ! yes p count } in
   let copy_to : Thk (forall (R : CType) . Bytes -> Addr -> Thk R -> R) = {
     fn (R : CType) ((p, count) : Bytes) target done => ! unsafe/copy R p target count done
@@ -46,11 +46,11 @@ begin
   -- ordinary thunk type nor raw memory enforces that contract or prevents escaped aliases.
   let build : Thk (
     forall (R : CType) .
-      Int64 -> Int64 -> Thk (Addr -> Thk (Fault -> R) -> Thk R -> R) -> Thk (Fault -> R) -> Thk (
+      Int -> Int -> Thk (Addr -> Thk (Fault -> R) -> Thk R -> R) -> Thk (Fault -> R) -> Thk (
         Bytes -> R
       ) -> R
   ) = {
-    fn (R : CType) (count : Int64) (alignment : Int64)
+    fn (R : CType) (count : Int) (alignment : Int)
       (fill : Thk (Addr -> Thk (Fault -> R) -> Thk R -> R)) (no : Thk (Fault -> R)) yes
     =>
       ! allocate R count alignment no {
@@ -74,8 +74,8 @@ begin
     fn (R : CType) ((p, count) : Bytes) no yes =>
       ! memory/to_string R p count { fn _ => ! no } yes
   } in
-  let get : Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (UInt8 -> R) -> R) = {
-    fn (R : CType) ((p, count) : Bytes) (index : Int64) no yes =>
+  let get : Thk (forall (R : CType) . Bytes -> Int -> Thk R -> Thk (UInt8 -> R) -> R) = {
+    fn (R : CType) ((p, count) : Bytes) (index : Int) no yes =>
       ! int/lt R index 0 no {
         ! int/lt R index count {
           do target <- ! unsafe/offset p index;
@@ -83,9 +83,9 @@ begin
         } no
       }
   } in
-  let slice : Thk (forall (R : CType) . Bytes -> Int64 -> Int64 -> Thk R -> Thk (Bytes -> R) -> R) =
+  let slice : Thk (forall (R : CType) . Bytes -> Int -> Int -> Thk R -> Thk (Bytes -> R) -> R) =
     {
-      fn (R : CType) ((p, count) : Bytes) (start : Int64) (size : Int64) no yes =>
+      fn (R : CType) ((p, count) : Bytes) (start : Int) (size : Int) no yes =>
         ! int/lt R start 0 no {
           ! int/lt R size 0 no {
             ! int/gt R start count no {
@@ -103,7 +103,7 @@ begin
     fn (left : Bytes) (right : Bytes) =>
       do first <- ! length left;
       do second <- ! length right;
-      do remaining <- ! int/sub 9223372036854775807 first;
+      do remaining <- ! int/sub 4611686018427387903 first;
       ! int/gt (Ret Bytes) second remaining panic {
         do count <- ! int/add first second;
         ! build (Ret Bytes) count 1 {
@@ -115,8 +115,8 @@ begin
         } { fn _ => ! panic } { fn value => ret value }
       }
   } in
-  let aligned : Thk (forall (R : CType) . Bytes -> Int64 -> Thk R -> Thk (Bytes -> R) -> R) = {
-    fn (R : CType) (value : Bytes) (alignment : Int64) no yes =>
+  let aligned : Thk (forall (R : CType) . Bytes -> Int -> Thk R -> Thk (Bytes -> R) -> R) = {
+    fn (R : CType) (value : Bytes) (alignment : Int) no yes =>
       do count <- ! length value;
       ! build R count alignment { fn p _ done => ! copy_to R value p done } { fn _ => ! no } yes
   } in
@@ -124,7 +124,7 @@ begin
     fn (R : CType) (left : Bytes) (right : Bytes) less equal greater =>
       do first <- ! length left;
       do second <- ! length right;
-      let fix at (index : Int64) : R =
+      let fix at (index : Int) : R =
         ! int/eq R index first { ! int/eq R index second equal less } {
           ! int/eq R index second greater {
             ! get R left index greater {

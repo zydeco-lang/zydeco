@@ -17,6 +17,7 @@ use zydeco_machine::memory::RetainedMemory;
 use zydeco_machine::native::{
     AllocationKind, HostArguments, HostTransfer, IMMEDIATE_TAG, Immediate, Word,
 };
+use zydeco_machine::word::RuntimeWord;
 
 /// One full-width scalar payload in an opaque managed block.
 struct OpaqueScalar;
@@ -37,7 +38,19 @@ impl OpaqueScalar {
 
 trait RuntimeInteger: Copy {
     fn decode(value: Word) -> Self;
-    fn encode(self, spare: *mut Word) -> Word;
+    fn encode(self) -> Word;
+
+    fn wrap(self) -> Self {
+        self
+    }
+
+    fn out_of_range() -> ! {
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "Zydeco runtime: integer exceeds the tagged payload range"
+        );
+        std::process::exit(1)
+    }
 }
 
 macro_rules! immediate_signed_integer {
@@ -48,7 +61,7 @@ macro_rules! immediate_signed_integer {
                     Immediate::decode_signed(value) as Self
                 }
 
-                fn encode(self, _spare: *mut Word) -> Word {
+                fn encode(self) -> Word {
                     Immediate::expect_signed(self.into())
                 }
             }
@@ -64,7 +77,7 @@ macro_rules! immediate_unsigned_integer {
                     Immediate::decode_unsigned(value) as Self
                 }
 
-                fn encode(self, _spare: *mut Word) -> Word {
+                fn encode(self) -> Word {
                     Immediate::expect_unsigned(self as Word)
                 }
             }
@@ -77,32 +90,32 @@ immediate_unsigned_integer!(u8, u16, u32);
 
 impl RuntimeInteger for i64 {
     fn decode(value: Word) -> Self {
-        if value & IMMEDIATE_TAG != 0 {
-            Immediate::decode_signed(value)
-        } else {
-            OpaqueScalar::load(value) as Self
-        }
+        Immediate::decode_signed(value)
     }
 
-    fn encode(self, spare: *mut Word) -> Word {
-        Immediate::signed(self).unwrap_or_else(|| OpaqueScalar::store(spare, self as Word))
+    fn encode(self) -> Word {
+        Immediate::signed(self).unwrap_or_else(|| Self::out_of_range())
+    }
+
+    fn wrap(self) -> Self {
+        RuntimeWord::wrap_signed(self)
     }
 }
 
 impl RuntimeInteger for u64 {
     fn decode(value: Word) -> Self {
-        if value & IMMEDIATE_TAG != 0 {
-            Immediate::decode_unsigned(value) as Self
-        } else {
-            OpaqueScalar::load(value) as Self
-        }
+        Immediate::decode_unsigned(value) as Self
     }
 
-    fn encode(self, spare: *mut Word) -> Word {
+    fn encode(self) -> Word {
         usize::try_from(self)
             .ok()
             .and_then(Immediate::unsigned)
-            .unwrap_or_else(|| OpaqueScalar::store(spare, self as Word))
+            .unwrap_or_else(|| Self::out_of_range())
+    }
+
+    fn wrap(self) -> Self {
+        RuntimeWord::wrap_unsigned(self)
     }
 }
 
@@ -515,9 +528,9 @@ macro_rules! foreign_integer {
         }
 
         #[unsafe(export_name = concat!("\x01", stringify!($encode)))]
-        extern "sysv64" fn $encode(value: Word, spare: *mut Word) -> Word {
+        extern "sysv64" fn $encode(value: Word) -> Word {
             // The C ABI leaves excess register bits unspecified for narrow integer results.
-            <$type as RuntimeInteger>::encode(value as $type, spare)
+            <$type as RuntimeInteger>::encode(value as $type)
         }
     };
 }
@@ -525,11 +538,11 @@ macro_rules! foreign_integer {
 foreign_integer!(i8, zydeco_ffi_decode_int8, zydeco_ffi_encode_int8);
 foreign_integer!(i16, zydeco_ffi_decode_int16, zydeco_ffi_encode_int16);
 foreign_integer!(i32, zydeco_ffi_decode_int32, zydeco_ffi_encode_int32);
-foreign_integer!(i64, zydeco_ffi_decode_int64, zydeco_ffi_encode_int64);
+foreign_integer!(i64, zydeco_ffi_decode_int, zydeco_ffi_encode_int);
 foreign_integer!(u8, zydeco_ffi_decode_uint8, zydeco_ffi_encode_uint8);
 foreign_integer!(u16, zydeco_ffi_decode_uint16, zydeco_ffi_encode_uint16);
 foreign_integer!(u32, zydeco_ffi_decode_uint32, zydeco_ffi_encode_uint32);
-foreign_integer!(u64, zydeco_ffi_decode_uint64, zydeco_ffi_encode_uint64);
+foreign_integer!(u64, zydeco_ffi_decode_uint, zydeco_ffi_encode_uint);
 
 #[unsafe(export_name = "\x01zydeco_exit")]
 extern "sysv64" fn zydeco_exit(code: Word) -> ! {
@@ -579,50 +592,60 @@ extern "sysv64" fn zydeco_str_get_branch(
 }
 
 // Optional normalization may leave arithmetic calls intact. These entries obey
-// the same wrapping/trapping and spare-box contracts as emitted primitives.
+// the same wrapping/trapping contracts as emitted primitives.
 macro_rules! integer_arithmetic {
-    ($type:ty, [$($extra:tt)*], $spare:expr;
+    ($type:ty;
         $add:ident, $sub:ident, $mul:ident, $div:ident, $rem:ident) => {
         #[unsafe(export_name = concat!("\x01", stringify!($add)))]
-        extern "sysv64" fn $add(first: Word, second: Word $($extra)*) -> Word {
+        extern "sysv64" fn $add(first: Word, second: Word) -> Word {
             <$type as RuntimeInteger>::decode(first)
-                .wrapping_add(<$type as RuntimeInteger>::decode(second)).encode($spare)
+                .wrapping_add(<$type as RuntimeInteger>::decode(second))
+                .wrap()
+                .encode()
         }
         #[unsafe(export_name = concat!("\x01", stringify!($sub)))]
-        extern "sysv64" fn $sub(first: Word, second: Word $($extra)*) -> Word {
+        extern "sysv64" fn $sub(first: Word, second: Word) -> Word {
             <$type as RuntimeInteger>::decode(first)
-                .wrapping_sub(<$type as RuntimeInteger>::decode(second)).encode($spare)
+                .wrapping_sub(<$type as RuntimeInteger>::decode(second))
+                .wrap()
+                .encode()
         }
         #[unsafe(export_name = concat!("\x01", stringify!($mul)))]
-        extern "sysv64" fn $mul(first: Word, second: Word $($extra)*) -> Word {
+        extern "sysv64" fn $mul(first: Word, second: Word) -> Word {
             <$type as RuntimeInteger>::decode(first)
-                .wrapping_mul(<$type as RuntimeInteger>::decode(second)).encode($spare)
+                .wrapping_mul(<$type as RuntimeInteger>::decode(second))
+                .wrap()
+                .encode()
         }
         #[unsafe(export_name = concat!("\x01", stringify!($div)))]
-        extern "sysv64" fn $div(first: Word, second: Word $($extra)*) -> Word {
+        extern "sysv64" fn $div(first: Word, second: Word) -> Word {
             let first = <$type as RuntimeInteger>::decode(first);
             let second = <$type as RuntimeInteger>::decode(second);
-            if second == 0 { zydeco_integer_division_by_zero(); }
-            first.wrapping_div(second).encode($spare)
+            if second == 0 {
+                zydeco_integer_division_by_zero();
+            }
+            first.wrapping_div(second).wrap().encode()
         }
         #[unsafe(export_name = concat!("\x01", stringify!($rem)))]
-        extern "sysv64" fn $rem(first: Word, second: Word $($extra)*) -> Word {
+        extern "sysv64" fn $rem(first: Word, second: Word) -> Word {
             let first = <$type as RuntimeInteger>::decode(first);
             let second = <$type as RuntimeInteger>::decode(second);
-            if second == 0 { zydeco_integer_remainder_by_zero(); }
-            first.wrapping_rem(second).encode($spare)
+            if second == 0 {
+                zydeco_integer_remainder_by_zero();
+            }
+            first.wrapping_rem(second).wrap().encode()
         }
     };
 }
 
-integer_arithmetic!(i8, [], std::ptr::null_mut(); zydeco_int8_add, zydeco_int8_sub, zydeco_int8_mul, zydeco_int8_div, zydeco_int8_mod);
-integer_arithmetic!(i16, [], std::ptr::null_mut(); zydeco_int16_add, zydeco_int16_sub, zydeco_int16_mul, zydeco_int16_div, zydeco_int16_mod);
-integer_arithmetic!(i32, [], std::ptr::null_mut(); zydeco_int32_add, zydeco_int32_sub, zydeco_int32_mul, zydeco_int32_div, zydeco_int32_mod);
-integer_arithmetic!(i64, [, spare: *mut Word], spare; zydeco_int64_add, zydeco_int64_sub, zydeco_int64_mul, zydeco_int64_div, zydeco_int64_mod);
-integer_arithmetic!(u8, [], std::ptr::null_mut(); zydeco_uint8_add, zydeco_uint8_sub, zydeco_uint8_mul, zydeco_uint8_div, zydeco_uint8_mod);
-integer_arithmetic!(u16, [], std::ptr::null_mut(); zydeco_uint16_add, zydeco_uint16_sub, zydeco_uint16_mul, zydeco_uint16_div, zydeco_uint16_mod);
-integer_arithmetic!(u32, [], std::ptr::null_mut(); zydeco_uint32_add, zydeco_uint32_sub, zydeco_uint32_mul, zydeco_uint32_div, zydeco_uint32_mod);
-integer_arithmetic!(u64, [, spare: *mut Word], spare; zydeco_uint64_add, zydeco_uint64_sub, zydeco_uint64_mul, zydeco_uint64_div, zydeco_uint64_mod);
+integer_arithmetic!(i8; zydeco_int8_add, zydeco_int8_sub, zydeco_int8_mul, zydeco_int8_div, zydeco_int8_mod);
+integer_arithmetic!(i16; zydeco_int16_add, zydeco_int16_sub, zydeco_int16_mul, zydeco_int16_div, zydeco_int16_mod);
+integer_arithmetic!(i32; zydeco_int32_add, zydeco_int32_sub, zydeco_int32_mul, zydeco_int32_div, zydeco_int32_mod);
+integer_arithmetic!(i64; zydeco_int_add, zydeco_int_sub, zydeco_int_mul, zydeco_int_div, zydeco_int_mod);
+integer_arithmetic!(u8; zydeco_uint8_add, zydeco_uint8_sub, zydeco_uint8_mul, zydeco_uint8_div, zydeco_uint8_mod);
+integer_arithmetic!(u16; zydeco_uint16_add, zydeco_uint16_sub, zydeco_uint16_mul, zydeco_uint16_div, zydeco_uint16_mod);
+integer_arithmetic!(u32; zydeco_uint32_add, zydeco_uint32_sub, zydeco_uint32_mul, zydeco_uint32_div, zydeco_uint32_mod);
+integer_arithmetic!(u64; zydeco_uint_add, zydeco_uint_sub, zydeco_uint_mul, zydeco_uint_div, zydeco_uint_mod);
 
 macro_rules! float_arithmetic {
     ($host:ty, $extra:tt, $spare:expr; $( $name:ident => $operation:tt ),+ $(,)?) => {
@@ -717,10 +740,10 @@ integer_runtime!(
 );
 integer_runtime!(
     i64,
-    zydeco_int64_eq_branch => "\x01zydeco_int64_eq_branch",
-    zydeco_int64_lt_branch => "\x01zydeco_int64_lt_branch",
-    zydeco_int64_gt_branch => "\x01zydeco_int64_gt_branch",
-    zydeco_int64_to_string => "\x01zydeco_int64_to_string"
+    zydeco_int_eq_branch => "\x01zydeco_int_eq_branch",
+    zydeco_int_lt_branch => "\x01zydeco_int_lt_branch",
+    zydeco_int_gt_branch => "\x01zydeco_int_gt_branch",
+    zydeco_int_to_string => "\x01zydeco_int_to_string"
 );
 integer_runtime!(
     u8,
@@ -745,10 +768,10 @@ integer_runtime!(
 );
 integer_runtime!(
     u64,
-    zydeco_uint64_eq_branch => "\x01zydeco_uint64_eq_branch",
-    zydeco_uint64_lt_branch => "\x01zydeco_uint64_lt_branch",
-    zydeco_uint64_gt_branch => "\x01zydeco_uint64_gt_branch",
-    zydeco_uint64_to_string => "\x01zydeco_uint64_to_string"
+    zydeco_uint_eq_branch => "\x01zydeco_uint_eq_branch",
+    zydeco_uint_lt_branch => "\x01zydeco_uint_lt_branch",
+    zydeco_uint_gt_branch => "\x01zydeco_uint_gt_branch",
+    zydeco_uint_to_string => "\x01zydeco_uint_to_string"
 );
 
 macro_rules! float_runtime {
@@ -830,11 +853,11 @@ extern "sysv64" fn zydeco_char_from_codepoint_branch(
 
 #[unsafe(export_name = "\x01zydeco_str_parse_int_branch")]
 extern "sysv64" fn zydeco_str_parse_int_branch(
-    string: Word, when_none: Word, when_some: Word, spare: *mut Word,
+    string: Word, when_none: Word, when_some: Word,
 ) -> Word {
-    match unsafe { HostString::borrow(string) }.parse::<i64>() {
-        | Err(_) => HostControl::without_arguments(when_none),
-        | Ok(integer) => HostControl::with_one_argument(when_some, integer.encode(spare)),
+    match unsafe { HostString::borrow(string) }.parse::<i64>().ok().and_then(Immediate::signed) {
+        | None => HostControl::without_arguments(when_none),
+        | Some(integer) => HostControl::with_one_argument(when_some, integer),
     }
 }
 
@@ -1027,12 +1050,10 @@ extern "sysv64" fn zydeco_read_line(continuation: Word) -> Word {
 }
 
 #[unsafe(export_name = "\x01zydeco_read_line_as_int_branch")]
-extern "sysv64" fn zydeco_read_line_as_int_branch(
-    when_invalid: Word, when_valid: Word, spare: *mut Word,
-) -> Word {
-    match Input::line().parse::<i64>() {
-        | Ok(integer) => HostControl::with_one_argument(when_valid, integer.encode(spare)),
-        | Err(_) => HostControl::without_arguments(when_invalid),
+extern "sysv64" fn zydeco_read_line_as_int_branch(when_invalid: Word, when_valid: Word) -> Word {
+    match Input::line().parse::<i64>().ok().and_then(Immediate::signed) {
+        | Some(integer) => HostControl::with_one_argument(when_valid, integer),
+        | None => HostControl::without_arguments(when_invalid),
     }
 }
 
@@ -1091,10 +1112,10 @@ extern "sysv64" fn zydeco_arg_at(index: Word, when_none: Word, when_some: Word) 
 }
 
 #[unsafe(export_name = "\x01zydeco_random_int")]
-extern "sysv64" fn zydeco_random_int(continuation: Word, spare: *mut Word) -> Word {
+extern "sysv64" fn zydeco_random_int(continuation: Word) -> Word {
     use rand::RngExt;
-    let integer = rand::rng().random_range(i64::MIN..=i64::MAX);
-    HostControl::with_one_argument(continuation, integer.encode(spare))
+    let integer = rand::rng().random_range(RuntimeWord::SIGNED_MIN..=RuntimeWord::SIGNED_MAX);
+    HostControl::with_one_argument(continuation, integer.encode())
 }
 
 /* ---------------------------------- Entry --------------------------------- */
@@ -1206,16 +1227,6 @@ extern "sysv64" fn entry_end() {
     if !guard.is_null() {
         unsafe { &*guard }.store(false, Ordering::Release);
     }
-}
-
-/// Root already encoded arguments before allocating the next full-width input box.
-#[unsafe(export_name = "\x01zydeco_entry_box")]
-extern "sysv64" fn entry_box(stack_start: *mut Word) -> *mut Word {
-    let end = unsafe { *RuntimeInstance::stack_end() };
-    let roots = Roots { stack: RootRange { start: stack_start, end }, slots: &mut [] };
-    unsafe { (&mut *RuntimeInstance::heap()).allocate(1, AllocationKind::Opaque, roots) }
-        .unwrap_or_else(|error| out_of_memory(error))
-        .cast()
 }
 
 #[cfg(feature = "process-entry")]

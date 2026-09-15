@@ -1,6 +1,6 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int64; /UInt32; /OS; /numeric; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Int; /UInt32; /OS; /numeric; /process; builtin) : @(import(
     std/builtin
   )) that
   let (/Uninit; /Init; /Ptr; /arrays; /fixed; /allocation) = builtin |> (@(import(std/memory))) in
@@ -63,7 +63,7 @@ begin
             fn vacant =>
               ! elements/init_each OS vacant {
                 fn index pointer error yes =>
-                  ! numeric/int64/eq OS index 2 { ! error +Bounds() pointer } {
+                  ! numeric/int/eq OS index 2 { ! error +Bounds() pointer } {
                     ! element/unsafe/init OS pointer 7 yes
                   }
               } {
@@ -71,7 +71,7 @@ begin
                   match fault
                   | +Bounds() =>
                     do length <- ! buffer/length progress;
-                    ! numeric/int64/eq OS length 2 {
+                    ! numeric/int/eq OS length 2 {
                       ! buffer/free OS heap progress {
                         fn fault =>
                           match fault

@@ -20,7 +20,7 @@ begin
   that
 
   let NamedInt : (#item :: VType) =
-    (#item = (NamedIdentity/constructor Int64))
+    (#item = (NamedIdentity/constructor Int))
   that
 
   let ProjectedInt : VType = NamedInt/item that
@@ -59,7 +59,7 @@ begin
     end
   that
   let PunnedNamedInt : (#Punned :: VType) =
-    PunnedNamedType Int64
+    PunnedNamedType Int
   that
   let PunnedProjectedInt : VType =
     PunnedNamedInt/Punned
@@ -67,7 +67,7 @@ begin
 
   let NestedNamedInt :
     (#outer :: (#inner :: VType)) =
-    (#outer = (#inner = Int64))
+    (#outer = (#inner = Int))
   that
   let NestedProjectedInt : VType =
     NestedNamedInt/inner
@@ -120,7 +120,7 @@ begin
       ret value
   } that
 
-  { ! named_identity (#item = Int64) 0 }
+  { ! named_identity (#item = Int) 0 }
 end
 "#,
     ));
@@ -195,8 +195,8 @@ begin
     ) . Whole/item
   that
 
-  def payload_box : PayloadBox = (#item = Int64, 41) that
-  def whole_box : WholeBox = (#item = Int64, 42) that
+  def payload_box : PayloadBox = (#item = Int, 41) that
+  def whole_box : WholeBox = (#item = Int, 42) that
 
   let (#item = A, payload) = payload_box in
   let (Whole, whole) = whole_box in
@@ -226,7 +226,7 @@ begin
     fn ((#item = A, value) : Box) => ret value
   } that
 
-  def boxed : Box = (#item = Int64, 41) that
+  def boxed : Box = (#item = Int, 41) that
 
   { ! reveal boxed }
 end
@@ -240,7 +240,7 @@ fn rejects_named_term_with_mismatched_label() {
         SourceCase::check_value(
             r#"
 begin
-  def bad : (#x :: Int64) = (#y = 0) that
+  def bad : (#x :: Int) = (#y = 0) that
   bad
 end
 "#,
@@ -255,7 +255,7 @@ fn rejects_named_pattern_with_mismatched_label() {
         SourceCase::check_value(
             r#"
 begin
-  def value : (#x :: Int64) = (#x = 0) that
+  def value : (#x :: Int) = (#x = 0) that
   let (#y = inner) = value in
   inner
 end
@@ -271,12 +271,12 @@ fn rejects_named_pattern_on_unnamed_mixed_component() {
         SourceCase::check_value(
             r#"
 begin
-  let Mixed = (#left :: Int64) * (Int64 * (#right :: Int64)) that
+  let Mixed = (#left :: Int) * (Int * (#right :: Int)) that
   def value : Mixed = (#left = 1, 2, #right = 3) that
   let (
-    #left = left : Int64,
-    #middle = middle : Int64,
-    #right = right : Int64
+    #left = left : Int,
+    #middle = middle : Int,
+    #right = right : Int
   ) = value in
   (left, middle, right)
 end
@@ -292,11 +292,11 @@ fn rejects_mismatched_named_pattern_in_nested_mixed_product() {
         SourceCase::check_value(
             r#"
 begin
-  let Nested = ((#left :: Int64) * Int64) * (#right :: Int64) that
+  let Nested = ((#left :: Int) * Int) * (#right :: Int) that
   def value : Nested = ((#left = 1, 2), #right = 3) that
   let (
-    (#wrong = left : Int64, middle : Int64),
-    #right = right : Int64
+    (#wrong = left : Int, middle : Int),
+    #right = right : Int
   ) = value in
   (left, middle, right)
 end
@@ -312,12 +312,12 @@ fn rejects_incompatible_named_payload_annotation_in_mixed_pattern() {
         SourceCase::check_value(
             r#"
 begin
-  let Mixed = (#left :: Int64) * (Int64 * (#right :: Int64)) that
+  let Mixed = (#left :: Int) * (Int * (#right :: Int)) that
   def value : Mixed = (#left = 1, 2, #right = 3) that
   let (
     #left = left : String,
-    middle : Int64,
-    #right = right : Int64
+    middle : Int,
+    #right = right : Int
   ) = value in
   (left, middle, right)
 end
@@ -368,7 +368,7 @@ fn rejects_missing_named_type_projection() {
             r#"
 begin
   let NamedInt : (#item :: VType) =
-    (#item = Int64)
+    (#item = Int)
   that
   let InvalidProjection : VType =
     NamedInt/other
@@ -387,7 +387,7 @@ fn rejects_missing_named_projection() {
         SourceCase::check_value(
             r#"
 begin
-  let Point = (#x :: Int64) * (#y :: Int64) that
+  let Point = (#x :: Int) * (#y :: Int) that
   def point : Point = (#x = 0, #y = 1) that
   point/z
 end
@@ -403,7 +403,7 @@ fn rejects_ambiguous_named_projection() {
         SourceCase::check_value(
             r#"
 begin
-  let DuplicateFields = (#x :: Int64) * (#x :: Int64) that
+  let DuplicateFields = (#x :: Int) * (#x :: Int) that
   def duplicate : DuplicateFields = (#x = 0, #x = 1) that
   duplicate/x
 end
@@ -419,7 +419,7 @@ fn rejects_ambiguous_nested_named_projection() {
         SourceCase::check_value(
             r#"
 begin
-  let DuplicateFields = ((#x :: Int64) * Int64) * (#outer :: (#x :: Int64)) that
+  let DuplicateFields = ((#x :: Int) * Int) * (#outer :: (#x :: Int)) that
   def duplicate : DuplicateFields = ((#x = 0, 1), #outer = #x = 2) that
   duplicate/x
 end
@@ -436,7 +436,7 @@ fn rejects_ambiguous_nested_named_type_projection() {
             r#"
 begin
   let DuplicateFields : (#x :: (#x :: VType)) =
-    (#x = (#x = Int64))
+    (#x = (#x = Int))
   that
   let InvalidProjection : VType = DuplicateFields/x that
   ()

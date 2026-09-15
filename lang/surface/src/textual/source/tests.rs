@@ -79,7 +79,7 @@ fn independent_sites_report_all_errors_and_retain_valid_facts() {
     assert_eq!(inventory.builtins.diagnostics.len(), 2);
     assert!(inventory.imports.into_result().is_err());
     let valid = Fixture::parse(
-        "(@(import(1)), @(import(2)), @[builtin(int64_add)] _, exists @[builtin(os)] (a : _) . _)",
+        "(@(import(1)), @(import(2)), @[builtin(int_add)] _, exists @[builtin(os)] (a : _) . _)",
     );
     let inventory = SourceInventory::scan(valid.view());
     assert_eq!(inventory.imports.into_result().unwrap().len(), 2);

@@ -1,6 +1,6 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Addr; /OS; /UInt8; /UInt32; /Int64; /numeric; /process; builtin) :
+  param (/VType; /CType; /Thk; /Addr; /OS; /UInt8; /UInt32; /Int; /numeric; /process; builtin) :
   @(import(std/builtin)) that
   let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
     @(import(std/memory))
@@ -39,7 +39,7 @@ begin
       | _ => 1
       end
     in
-    ! numeric/int64/eq OS shape_ok 0 {
+    ! numeric/int/eq OS shape_ok 0 {
       ! repr/allocate OS heap error {
         fn vacant =>
           let address = pointer/unsafe/address L Uninit vacant in

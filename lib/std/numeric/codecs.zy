@@ -1,13 +1,29 @@
 -- Sequence codecs compose scalar memory leaves with immutable source bytes.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Int64; /Addr;
-    /Int8; /Int16; /Int32; /UInt8; /UInt16; /UInt32; /UInt64; /Float32; /Float64;
+  param val (/VType; /CType; /Thk; /Ret; /Int; /Addr;
+    /Int8; /Int16; /Int32; /UInt8; /UInt16; /UInt32; /UInt; /Float32; /Float64;
     /numeric; builtin) : @(import("../builtin.zy")) that
   param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr that
-  let int = numeric/int64 in
-  let val scalar (A : VType) (width : Int64)
+  let int = numeric/int in
+  -- The high storage byte must preserve the sign bit (Int), or leave bit 63 clear (UInt).
+  let any_bytes = { fn (R : CType) (_ : Bytes) (_ : Thk R) (yes : Thk R) => ! yes } in
+  let int_bytes = {
+    fn (R : CType) (value : Bytes) (no : Thk R) (yes : Thk R) =>
+      ! bytes/get R value 7 no {
+        fn high =>
+          ! numeric/uint8/lt R high 64 yes {
+            ! numeric/uint8/gt R high 191 yes no
+          }
+      }
+  } in
+  let uint_bytes = {
+    fn (R : CType) (value : Bytes) (no : Thk R) (yes : Thk R) =>
+      ! bytes/get R value 7 no { fn high => ! numeric/uint8/lt R high 128 yes no }
+  } in
+  let val scalar (A : VType) (width : Int)
     (store : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
     (load : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
+    (valid : Thk (forall (R : CType) . Bytes -> Thk R -> Thk R -> R))
   =
     (
       #to_le_bytes = {
@@ -26,23 +42,25 @@ begin
         fn (R : CType) (value : Bytes) (no : Thk R) (yes : Thk (A -> R)) =>
           do count <- ! bytes/length value;
           ! int/eq R count width {
-            ! bytes/unsafe/with_window R value { fn _ => ! no } {
-              fn address _ => ! load R address yes
+            ! valid R value no {
+              ! bytes/unsafe/with_window R value { fn _ => ! no } {
+                fn address _ => ! load R address yes
+              }
             }
           } no
       }
     )
   in
   (
-    #int8 = scalar Int8 1 numeric/int8/store_le numeric/int8/load_le,
-    #int16 = scalar Int16 2 numeric/int16/store_le numeric/int16/load_le,
-    #int32 = scalar Int32 4 numeric/int32/store_le numeric/int32/load_le,
-    #int64 = scalar Int64 8 numeric/int64/store_le numeric/int64/load_le,
-    #uint8 = scalar UInt8 1 numeric/uint8/store_le numeric/uint8/load_le,
-    #uint16 = scalar UInt16 2 numeric/uint16/store_le numeric/uint16/load_le,
-    #uint32 = scalar UInt32 4 numeric/uint32/store_le numeric/uint32/load_le,
-    #uint64 = scalar UInt64 8 numeric/uint64/store_le numeric/uint64/load_le,
-    #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le,
-    #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le
+    #int8 = scalar Int8 1 numeric/int8/store_le numeric/int8/load_le any_bytes,
+    #int16 = scalar Int16 2 numeric/int16/store_le numeric/int16/load_le any_bytes,
+    #int32 = scalar Int32 4 numeric/int32/store_le numeric/int32/load_le any_bytes,
+    #int = scalar Int 8 numeric/int/store_le numeric/int/load_le int_bytes,
+    #uint8 = scalar UInt8 1 numeric/uint8/store_le numeric/uint8/load_le any_bytes,
+    #uint16 = scalar UInt16 2 numeric/uint16/store_le numeric/uint16/load_le any_bytes,
+    #uint32 = scalar UInt32 4 numeric/uint32/store_le numeric/uint32/load_le any_bytes,
+    #uint = scalar UInt 8 numeric/uint/store_le numeric/uint/load_le uint_bytes,
+    #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le any_bytes,
+    #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le any_bytes
   )
 end

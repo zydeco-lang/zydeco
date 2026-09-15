@@ -1,4 +1,7 @@
 -- expect: reject(tyck.expressivity)
 
-let val f (x : Int64) : Int64 = let 0 = x in 1 in
+let val f (x : Int) : Int =
+  let 0 = x in
+  1
+in
 ret (f 3)

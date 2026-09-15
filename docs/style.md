@@ -87,8 +87,8 @@ For a type family:
 
 ```zydeco
 param Bool : VType in
-exists (= Int64 as @(intrinsic(i64)) : VType) .
-  Numeric Bool Int64
+exists (= Int as @(intrinsic(int)) : VType) .
+  Numeric Bool Int
 ```
 
 The importing file binds the result under whatever name it chooses, so a wrapper name
@@ -257,9 +257,9 @@ Place an abstract type component before the values whose classifiers mention it.
 A manifest existential records a representation equation as part of the interface;
 an ordinary existential publishes the abstract identity alone.
 Write signature binders with the field pun, as in `exists (= Bool : VType)`
-or `exists (= Int64 as @(intrinsic(i64)) : VType)`, so the public field name
-and the payload binder coincide and the body refers to the public name directly.
-The explicit `exists (#Int64 = Hidden : VType)` form is reserved for a provider
+or `exists (= Int as @(intrinsic(int)) : VType)`, so the public field name and the payload binder coincide
+and the body refers to the public name directly.
+The explicit `exists (#Int = Hidden : VType)` form is reserved for a provider
 whose local binder genuinely needs a different name.
 The order of these components forms a telescope and remains significant.
 
@@ -291,7 +291,7 @@ and bind only the public types and module values the consumer needs:
 
 ```zydeco
 param (/VType; /Thk; /String; builtin) : @(import("../std/builtin.zy")) in
-let (/int64; /process) = builtin |> make_std in
+let (/int; /process) = builtin |> make_std in
 ...
 ```
 
@@ -300,9 +300,9 @@ the surface's kinds and types, the nested operation groups, and the system capab
 Place manifest type fields before value modules, and retain the provider's order
 when it makes the list easier to compare with the contract.
 The surface discloses each fixed representation under its public name,
-so the ordinary pun binds it directly, as in `/Int64` inside the group.
+so the ordinary pun binds it directly, as in `/Int` inside the group.
 Use an explicit rename only when the consumer has a clearer role name.
-Select Builtin operations as module values and keep individual calls qualified, such as `int64/add` and `process/exit`.
+Select Builtin operations as module values and keep individual calls qualified, such as `int/add` and `process/exit`.
 A final ordinary pattern such as `builtin` retains the complete package for forwarding,
 while the preceding projections introduce only the requested local names.
 Omit that alias when the consumer does not forward the package.
@@ -310,11 +310,11 @@ This projection-pattern idiom serves the role of package `use` without adding a 
 
 The canonical builtin package is the single source of `@[builtin(...)]` host-capability metadata.
 Compiler intrinsics, in contrast, are canonical importable terms in their own right:
-a source splices `@(intrinsic(i64))` directly where the term is needed, while host operations are acquired
+a source splices `@(intrinsic(int))` directly where the term is needed, while host operations are acquired
 by importing the builtin package and projecting only the required dependencies,
 which keeps the names subject to ordinary language-level resolution without repeating the complete host interface.
 
-Within that signature, fixed representations use canonical primitive intrinsics such as `@(intrinsic(i64))`
+Within that signature, fixed representations use canonical primitive intrinsics such as `@(intrinsic(int))`
 and are re-exported through manifest packages whose fields carry the public type names.
 Host-type roles are reserved for abstract capability patterns, as in `exists @[builtin(reader)] (Reader : VType) . ...`.
 This keeps generative resource identities beside the provider boundary that owns them.

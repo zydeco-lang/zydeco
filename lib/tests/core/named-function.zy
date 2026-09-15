@@ -2,14 +2,14 @@
 -- parameter and result types may contain names, and a thunked arrow may occupy
 -- a named tuple component.
 begin
-  param (/Thk; /Ret; /process; /Int64; /numeric; /system) : @(import("../../std/builtin.zy")) that
-  let int64 = numeric/int64 that
-  let Arguments = (#lhs :: Int64) * Int64 that
-  let FunctionResult = Int64 * (#sum :: Int64) that
-  let FunctionBox = (#apply :: Thk (Arguments -> Ret FunctionResult)) * Int64 that
-  def ! combine ((= lhs : Int64, rhs : Int64) : Arguments) : Ret FunctionResult =
-    do sum <- ! int64/add lhs rhs;
-    ret (lhs, = sum : Int64)
+  param (/Thk; /Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  let int = numeric/int that
+  let Arguments = (#lhs :: Int) * Int that
+  let FunctionResult = Int * (#sum :: Int) that
+  let FunctionBox = (#apply :: Thk (Arguments -> Ret FunctionResult)) * Int that
+  def ! combine ((= lhs : Int, rhs : Int) : Arguments) : Ret FunctionResult =
+    do sum <- ! int/add lhs rhs;
+    ret (lhs, = sum : Int)
   that
   def function_box : FunctionBox = (
     #apply = combine,
@@ -18,22 +18,22 @@ begin
 
   let (
     = apply : Thk (Arguments -> Ret FunctionResult),
-    marker : Int64
+    marker : Int
   )
   =
     function_box
   in
-  do result <- ! apply (#lhs = 10 : Int64, 11 : Int64);
+  do result <- ! apply (#lhs = 10 : Int, 11 : Int);
   let (
-    echoed : Int64,
-    = sum : Int64
+    echoed : Int,
+    = sum : Int
   )
   =
     result
   in
-  do echoed_check <- ! int64/sub echoed 10;
-  do sum_check <- ! int64/sub sum 21;
-  do total <- ! int64/add marker echoed_check;
-  do total <- ! int64/add total sum_check;
+  do echoed_check <- ! int/sub echoed 10;
+  do sum_check <- ! int/sub sum 21;
+  do total <- ! int/add marker echoed_check;
+  do total <- ! int/add total sum_check;
   ! process/exit total
 end

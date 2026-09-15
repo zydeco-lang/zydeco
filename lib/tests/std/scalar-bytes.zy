@@ -1,7 +1,7 @@
 @[package(test(of(std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /OS;
-    /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;
+    /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt;
     /Float32; /Float64; /numeric; /process; builtin) : @(import(std/builtin)) that
   let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
   let codecs = (builtin |> (@(import("../../std/numeric/codecs.zy")))) byte_package in
@@ -55,15 +55,15 @@ begin
       ! check Int32 codecs/int32/to_le_bytes codecs/int32/from_le_bytes -2147483648 (
         +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))
       ) {
-        ! check Int64 codecs/int64/to_le_bytes codecs/int64/from_le_bytes -9223372036854775808 (
-          +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))))))
+        ! check Int codecs/int/to_le_bytes codecs/int/from_le_bytes -4611686018427387904 (
+          +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(192, +Nil()))))))))
         ) {
-          ! check Int64 codecs/int64/to_le_bytes codecs/int64/from_le_bytes 9223372036854775807 (
+          ! check Int codecs/int/to_le_bytes codecs/int/from_le_bytes 4611686018427387903 (
             +Cons(
               255,
               +Cons(
                 255,
-                +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(127, +Nil()))))))
+                +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(63, +Nil()))))))
               )
             )
           ) {
@@ -76,26 +76,26 @@ begin
                 ! check UInt32 codecs/uint32/to_le_bytes codecs/uint32/from_le_bytes 16909060 (
                   +Cons(4, +Cons(3, +Cons(2, +Cons(1, +Nil()))))
                 ) {
-                  ! check UInt64 codecs/uint64/to_le_bytes codecs/uint64/from_le_bytes
-                    18446744073709551615 (
+                  ! check UInt codecs/uint/to_le_bytes codecs/uint/from_le_bytes
+                    9223372036854775807 (
                     +Cons(
                       255,
                       +Cons(
                         255,
                         +Cons(
                           255,
-                          +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Nil())))))
+                          +Cons(255, +Cons(255, +Cons(255, +Cons(255, +Cons(127, +Nil())))))
                         )
                       )
                     )
                   ) {
-                    ! check UInt64 codecs/uint64/to_le_bytes codecs/uint64/from_le_bytes
-                      9223372036854775808 (
+                    ! check UInt codecs/uint/to_le_bytes codecs/uint/from_le_bytes
+                      4611686018427387904 (
                       +Cons(
                         0,
                         +Cons(
                           0,
-                          +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(128, +Nil()))))))
+                          +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(0, +Cons(64, +Nil()))))))
                         )
                       )
                     ) {

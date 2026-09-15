@@ -5,6 +5,6 @@ begin
     | +Some : A
     end
   that
-  let none : Option Int64 = +None() that
+  let none : Option Int = +None() that
   ret ()
 end

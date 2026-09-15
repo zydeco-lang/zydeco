@@ -1,12 +1,12 @@
 begin
-  param (/VType; /CType; /Ret; /process; /Int64; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
   def Stack (A : VType) : CType =
     codata
     | .app : A -> Stack A
     | .return : Ret A
     end
   that
-  def fix abort (x : Int64) : Stack Int64 =
+  def fix abort (x : Int) : Stack Int =
     comatch
     | .app _ => ! abort x
     | .return => ret x

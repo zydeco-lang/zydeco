@@ -1,48 +1,48 @@
 -- Ret describes an installed continuation; pending argument/tag depth is dynamic.
 begin
-  param (/VType; /CType; /Unit; /Int64; /String; /Thk; /Ret; /OS;
-    /numeric; /int64; /string; /args; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Unit; /Int; /String; /Thk; /Ret; /OS;
+    /numeric; /int; /string; /args; /process) : @(import("../../std/builtin.zy")) that
   def Stream : CType =
     codata
-    | .item : Int64 -> Stream
-    | .done : Ret Int64
+    | .item : Int -> Stream
+    | .done : Ret Int
     end
   that
-  def fix consume (total : Int64) : Stream =
+  def fix consume (total : Int) : Stream =
     comatch
     | .item value =>
-      do next <- ! int64/add total value;
+      do next <- ! int/add total value;
       ! consume next
     | .done => ret total
     end
   in
-  def fix push (remaining : Int64) (sink : Thk Stream) : Stream =
-    ! int64/eq Stream remaining 0 { ! sink } {
-      do next <- ! int64/sub remaining 1;
+  def fix push (remaining : Int) (sink : Thk Stream) : Stream =
+    ! int/eq Stream remaining 0 { ! sink } {
+      do next <- ! int/sub remaining 1;
       ! push next sink .item remaining
     }
   in
-  def fix forward (R : CType) (remaining : Int64) (worker : Thk (Int64 -> R)) : Int64 -> R =
-    ! int64/eq (Int64 -> R) remaining 0 {
+  def fix forward (R : CType) (remaining : Int) (worker : Thk (Int -> R)) : Int -> R =
+    ! int/eq (Int -> R) remaining 0 {
       fn value =>
-        do same <- ! int64/add value 0;
+        do same <- ! int/add value 0;
         ! worker same
     } {
-      do next <- ! int64/sub remaining 1;
+      do next <- ! int/sub remaining 1;
       ! forward R next worker
     }
   in
-  def ! choose (length : Int64) : Ret (Thk (Int64 -> Ret Int64)) =
-    ! int64/eq (Ret (Thk (Int64 -> Ret Int64))) length 3
-      { ret { fn value => ! int64/add value 1 } }
-      { ret { fn value => ! int64/sub value -1 } }
+  def ! choose (length : Int) : Ret (Thk (Int -> Ret Int)) =
+    ! int/eq (Ret (Thk (Int -> Ret Int))) length 3
+      { ret { fn value => ! int/add value 1 } }
+      { ret { fn value => ! int/sub value -1 } }
   in
-  def ! choose_stream (length : Int64) : Ret (Thk Stream) =
-    ! int64/eq (Ret (Thk Stream)) length 3
+  def ! choose_stream (length : Int) : Ret (Thk Stream) =
+    ! int/eq (Ret (Thk Stream)) length 3
       { ret { ! consume 0 } }
       {
         ret {
-          do zero <- ! int64/sub length length;
+          do zero <- ! int/sub length length;
           ! consume zero
         }
       }
@@ -51,12 +51,12 @@ begin
   do length <- ! string/length input;
   do sink <- ! choose_stream length;
   do total <- ! push length sink .done;
-  do successor <- ! int64/add length 1;
-  do product <- ! int64/mul length successor;
-  do expected <- ! int64/div product 2;
+  do successor <- ! int/add length 1;
+  do product <- ! int/mul length successor;
+  do expected <- ! int/div product 2;
   do worker <- ! choose length;
-  do result <- ! forward (Ret Int64) length worker total;
-  do expected <- ! int64/add expected 1;
-  do difference <- ! numeric/int64/sub result expected;
+  do result <- ! forward (Ret Int) length worker total;
+  do expected <- ! int/add expected 1;
+  do difference <- ! numeric/int/sub result expected;
   ! process/exit difference
 end

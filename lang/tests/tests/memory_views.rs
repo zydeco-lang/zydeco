@@ -8,9 +8,9 @@ struct SliceCase;
 impl SliceCase {
     fn source(body: &str) -> String {
         memory::source(&format!(
-            "match memory/int64 | +Err(_) => ! fail | +Ok(plan) => \
-             let (= L, repr) = memory/realize Int64 plan in \
-             let access = slices/for_layout L Int64 repr in {body} end"
+            "match memory/int | +Err(_) => ! fail | +Ok(plan) => \
+             let (= L, repr) = memory/realize Int plan in \
+             let access = slices/for_layout L Int repr in {body} end"
         ))
     }
 }
@@ -21,7 +21,11 @@ fn slice_validation_rejects_bounds_and_overflow_before_pointer_arithmetic() {
         (3_i64, -1_i64, "+Bounds()"),
         (3, 3, "+Bounds()"),
         (0, 0, "+Bounds()"),
-        (i64::MAX, i64::MAX - 1, "+Overflow()"),
+        (
+            zydeco_machine::word::RuntimeWord::SIGNED_MAX,
+            zydeco_machine::word::RuntimeWord::SIGNED_MAX - 1,
+            "+Overflow()",
+        ),
     ] {
         let body = format!(
             r#"
@@ -49,8 +53,8 @@ let p = pointer/unsafe/from_address L Uninit address in
 }
 "#,
         r#"
-let (#L = Other, other) = memory/realize Int64 plan in
-let wrong = slices/for_layout Other Int64 other in
+let (#L = Other, other) = memory/realize Int plan in
+let wrong = slices/for_layout Other Int other in
 do address <- ! raw/unsafe/null;
 ! slices/unsafe/from_parts L Uninit OS (pointer/unsafe/from_address L Uninit address) 0 no { fn slice =>
   ! wrong/unsafe/at Uninit OS slice 0 no { fn _ => ! exit 0 }

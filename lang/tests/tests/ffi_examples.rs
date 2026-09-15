@@ -63,7 +63,7 @@ end
 fn checksum_has_a_direct_foreign_classifier() {
     SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
         "sample_checksum",
-        "Thk (Addr -> Int64 -> UInt64 -> Ret UInt64)",
+        "Thk (Addr -> Int -> UInt -> Ret UInt)",
     )));
 }
 
@@ -71,7 +71,7 @@ fn checksum_has_a_direct_foreign_classifier() {
 fn pointer_only_record_imports_have_no_implicit_length_argument() {
     SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
         "sample_inspect_with_options",
-        "Thk (Addr -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> UInt64 -> Ret UInt64)",
+        "Thk (Addr -> UInt -> UInt -> UInt -> UInt -> UInt -> Ret UInt)",
     )));
 }
 
@@ -79,9 +79,9 @@ fn pointer_only_record_imports_have_no_implicit_length_argument() {
 fn typed_pointers_require_explicit_exposure_at_the_c_boundary() {
     let wrapper = ForeignExamples::record(
         r#"
-let raw : Thk (Addr -> Ret UInt64) =
+let raw : Thk (Addr -> Ret UInt) =
   @(ffi(c, library("zyffi_examples"), symbol("sample_inspect"))) in
-let inspect : Thk (Ptr L Init -> Ret UInt64) = {
+let inspect : Thk (Ptr L Init -> Ret UInt) = {
   fn value => ! raw (pointer/unsafe/address L Init value)
 } in ! exit 0
 "#,
@@ -91,7 +91,7 @@ let inspect : Thk (Ptr L Init -> Ret UInt64) = {
     ForeignExamples::rejects(
         &ForeignExamples::record(&ForeignExamples::declaration(
             "sample_inspect",
-            "Thk (Ptr L Init -> Ret UInt64)",
+            "Thk (Ptr L Init -> Ret UInt)",
         )),
         "argument 1",
     );
@@ -100,10 +100,7 @@ let inspect : Thk (Ptr L Init -> Ret UInt64) = {
 #[test]
 fn a_logical_product_does_not_select_the_c_record_value_abi() {
     ForeignExamples::rejects(
-        &ForeignExamples::declaration(
-            "sample_inspect_value",
-            "Thk ((UInt8 * UInt32) -> Ret UInt64)",
-        ),
+        &ForeignExamples::declaration("sample_inspect_value", "Thk ((UInt8 * UInt32) -> Ret UInt)"),
         "argument 1",
     );
 }
@@ -117,7 +114,7 @@ fn raw_mutable_destinations_are_supported_and_capturing_callbacks_remain_unsuppo
     ForeignExamples::rejects(
         &ForeignExamples::declaration(
             "sample_visit",
-            "Thk (Addr -> Thk (Int64 -> Ret Int64) -> Ret Int64)",
+            "Thk (Addr -> Thk (Int -> Ret Int) -> Ret Int)",
         ),
         "argument 2",
     );

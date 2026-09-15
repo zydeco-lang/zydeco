@@ -17,16 +17,16 @@ pub enum ForeignClassifierError {
     #[error(transparent)]
     Unit(#[from] crate::UnitClassifierError),
     #[error(
-        "C export argument {index} must be a fixed-width integer; incoming pointers are not supported"
+        "C export argument {index} must be a supported integer; incoming pointers are not supported"
     )]
     UnsupportedExportParameter { index: usize, classifier: ss::TypeId },
     #[error("C ffi requires a thunk classified by `Thk (A1 -> ... -> Ret B)`")]
     ExpectedThunk { classifier: ss::TypeId },
-    #[error("C ffi argument {index} must be an `Addr` pointer or a fixed-width integer")]
+    #[error("C ffi argument {index} must be an `Addr` pointer or a supported integer")]
     UnsupportedParameter { index: usize, classifier: ss::TypeId },
     #[error("C ffi computation must end in `Ret B`")]
     ExpectedReturn { classifier: ss::TypeId },
-    #[error("C ffi result must be a fixed-width integer or `Unit`")]
+    #[error("C ffi result must be a supported integer or `Unit`")]
     UnsupportedResult { classifier: ss::TypeId },
     #[error(transparent)]
     Signature(#[from] ForeignSignatureError),

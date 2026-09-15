@@ -1,6 +1,6 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  param (/system; /VType; /CType; /Thk; /Ret; /process; /Int64; builtin) : @(import(
+  param (/system; /VType; /CType; /Thk; /Ret; /process; /Int; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
   let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
@@ -120,8 +120,8 @@ begin
       ! f x that
 
     do x <- ! alg_of_ret
-      (Ret Int64)
-      Int64
+      (Ret Int)
+      Int
       { ret 0 }
       {
         fn x => ret x

@@ -10,7 +10,7 @@ struct Fixture;
 
 impl Fixture {
     fn integer() -> ValueProtocol {
-        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int64))
+        ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))
     }
 
     fn tag(index: usize, name: &str) -> DtorIdx {
@@ -139,7 +139,7 @@ fn extraction_preserves_an_argument_prefix_crossing_a_recursive_observation() {
     let sealed = allocator.alloc();
     let mut statics = StaticsArena::default();
     for (id, ty) in [
-        (integer, ss::Type::Primitive(ss::PrimitiveTy(PrimitiveType::Integer(IntegerType::Int64)))),
+        (integer, ss::Type::Primitive(ss::PrimitiveTy(PrimitiveType::Integer(IntegerType::Int)))),
         (arrow, ss::Type::Arrow(Arrow(integer, codata_ty))),
         (codata_ty, ss::Type::CoData(codata_id)),
         (sealed, ss::Type::Abst(witness)),

@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Thk; /Ret; /process; /Int64; /Char; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Thk; /Ret; /process; /Int; /Char; /system) : @(import("../../std/builtin.zy")) that
   def Seal (X : VType) (A : VType) =
     data
     | +Seal : Thk (A -> Ret X) * Thk (X -> Ret A)
@@ -7,18 +7,18 @@ begin
   that
   def ! id (A : VType) (value : A) : Ret A = ret value that
   def nat :
-    exists (X : VType) . Seal X Int64 =
+    exists (X : VType) . Seal X Int =
       (
-        Int64,
+        Int,
         +Seal(
-          { ! id Int64 },
-          { ! id Int64 }
+          { ! id Int },
+          { ! id Int }
         )
       )
   that
   def packed :
-    exists (X : VType) (Y : VType) . X * Y * Int64 =
-      (Int64, Char, 0, 'z', 0)
+    exists (X : VType) (Y : VType) . X * Y * Int =
+      (Int, Char, 0, 'z', 0)
   that
 
   match packed

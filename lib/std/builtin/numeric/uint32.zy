@@ -4,7 +4,7 @@ begin
   let Thk = @(intrinsic(thk)) in
   let Ret = @(intrinsic(ret)) in
   let String = @(intrinsic(string)) in
-  let Int64 = @(intrinsic(i64)) in
+  let Int = @(intrinsic(int)) in
   param Addr : VType in
   let Binary (A : VType) = Thk (A -> A -> Ret A) in
   let Branch (A : VType) = Thk (

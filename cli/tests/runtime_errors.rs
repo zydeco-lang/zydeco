@@ -21,7 +21,7 @@ impl RuntimeFixture {
         std::fs::write(
             &source,
             format!(
-            "param (/OS; /Ret; /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /Float32; /Float64; /String; /numeric; /process; /system; /text; builtin) : @(import(\"{}\")) in {body}\n",
+            "param (/OS; /Ret; /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt; /Float32; /Float64; /String; /numeric; /process; /system; /text; builtin) : @(import(\"{}\")) in {body}\n",
                 self.workspace.join("lib/std/builtin.zy").display(),
             ),
         )
@@ -78,7 +78,7 @@ impl RuntimeFixture {
 fn inline_arithmetic_executes_at_every_numeric_width() {
     let fixture = RuntimeFixture::new();
     let mut cases = Vec::new();
-    for ty in ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"] {
+    for ty in ["Int8", "Int16", "Int32", "Int", "UInt8", "UInt16", "UInt32", "UInt"] {
         for (operation, expected) in
             [("add", "23"), ("sub", "17"), ("mul", "60"), ("div", "6"), ("mod", "2")]
         {
@@ -100,22 +100,22 @@ fn inline_arithmetic_executes_at_every_numeric_width() {
         ("Int8", "add", "127", "1", "-128"),
         ("Int16", "add", "32767", "1", "-32768"),
         ("Int32", "mul", "1073741824", "4", "0"),
-        ("Int64", "add", "9223372036854775807", "1", "-9223372036854775808"),
+        ("Int", "add", "4611686018427387903", "1", "-4611686018427387904"),
         ("UInt8", "sub", "0", "1", "255"),
         ("UInt16", "mul", "32768", "2", "0"),
         ("UInt32", "add", "4294967295", "1", "0"),
-        ("UInt64", "add", "18446744073709551615", "1", "0"),
-        ("Int64", "add", "4611686018427387903", "1", "4611686018427387904"),
-        ("Int64", "sub", "-4611686018427387904", "1", "-4611686018427387905"),
-        ("Int64", "sub", "4611686018427387904", "1", "4611686018427387903"),
-        ("Int64", "div", "-9223372036854775808", "-1", "-9223372036854775808"),
-        ("Int64", "mod", "-9223372036854775808", "-1", "0"),
-        ("Int64", "div", "-20", "3", "-6"),
-        ("Int64", "mod", "-20", "3", "-2"),
-        ("UInt64", "add", "9223372036854775807", "1", "9223372036854775808"),
-        ("UInt64", "sub", "9223372036854775808", "1", "9223372036854775807"),
-        ("UInt64", "div", "18446744073709551615", "2", "9223372036854775807"),
-        ("UInt64", "mod", "18446744073709551615", "2", "1"),
+        ("UInt", "add", "9223372036854775807", "1", "0"),
+        ("Int", "mul", "2305843009213693952", "2", "-4611686018427387904"),
+        ("Int", "sub", "-4611686018427387904", "1", "4611686018427387903"),
+        ("Int", "sub", "-4611686018427387903", "1", "-4611686018427387904"),
+        ("Int", "div", "-4611686018427387904", "-1", "-4611686018427387904"),
+        ("Int", "mod", "-4611686018427387904", "-1", "0"),
+        ("Int", "div", "-20", "3", "-6"),
+        ("Int", "mod", "-20", "3", "-2"),
+        ("UInt", "add", "4611686018427387903", "1", "4611686018427387904"),
+        ("UInt", "sub", "0", "1", "9223372036854775807"),
+        ("UInt", "div", "9223372036854775807", "2", "4611686018427387903"),
+        ("UInt", "mod", "9223372036854775807", "2", "1"),
         ("Float32", "add", "0.1", "0.2", "0.3"),
         ("Float64", "add", "0.1", "0.2", "0.30000000000000004"),
         ("Float32", "add", "-0.0", "-0.0", "-0"),
@@ -145,10 +145,10 @@ fn amd64_arithmetic_uses_machine_instructions_without_runtime_arithmetic_calls()
     let fixture = RuntimeFixture::new();
     for (ty, operation, instruction) in [
         ("Int32", "add", "add rax, rcx"),
-        ("Int64", "sub", "sub rax, rcx"),
-        ("UInt64", "mul", "imul rax, rcx"),
-        ("Int64", "div", "idiv rcx"),
-        ("UInt64", "mod", "div rcx"),
+        ("Int", "sub", "sub rax, rcx"),
+        ("UInt", "mul", "imul rax, rcx"),
+        ("Int", "div", "idiv rcx"),
+        ("UInt", "mod", "div rcx"),
         ("Float32", "add", "addss xmm0, xmm1"),
         ("Float64", "add", "addsd xmm0, xmm1"),
     ] {
@@ -188,7 +188,7 @@ fn amd64_arithmetic_uses_machine_instructions_without_runtime_arithmetic_calls()
 fn arithmetic_modules_import_only_their_remaining_host_calls() {
     let fixture = RuntimeFixture::new();
     let source = fixture.source(
-        "let fix add (x : Int64) (y : Int64) : Ret Int64 = ! numeric/int64/add x y in do result <- ! add 20 22; ! process/exit result",
+        "let fix add (x : Int) (y : Int) : Ret Int = ! numeric/int/add x y in do result <- ! add 20 22; ! process/exit result",
     );
     let backend = zydeco_cli::CommandCompiler::default().lower(&source).unwrap();
     for module in [backend.emit_wasm_am().unwrap(), backend.emit_wasm_sps().unwrap()] {
@@ -244,10 +244,10 @@ fn standard_error_uses_its_own_injected_stream() {
     let body = r#"
 do writer <- ! system/stdio/stderr;
 do message <- ! bytes/from_string "stderr only\n";
-let failed = { fn (_ : Int64) (_ : String) => ! process/exit 42 } in
-! bytes/with_window OS message { fn _ => ! process/exit 42 } {
-  fn access address count =>
-    ! system/io/write_all writer access address count failed {
+let failed = { fn (_ : Int) (_ : String) => ! process/exit 42 } in
+! bytes/unsafe/with_window OS message { fn _ => ! process/exit 42 } {
+  fn address count =>
+    ! system/io/write_all writer address count failed {
       ! system/io/flush writer failed {
         ! system/io/close_writer writer failed {
           ! system/stdio/write "stdout only\n" { ! process/exit 0 }
@@ -279,7 +279,7 @@ fn wasm_machine_stack_overflow_has_a_runtime_diagnostic() {
     let fixture = RuntimeFixture::new();
     for depth in [200, 100_000] {
         let body = format!(
-            "let fix count (n : Int64) : Ret Int64 = ! numeric/int64/eq (Ret Int64) n 0 {{ ret 0 }} {{ do next <- ! numeric/int64/sub n 1; do result <- ! count next; ! numeric/int64/add result 1 }} in do result <- ! count {depth}; ! process/exit 0"
+            "let fix count (n : Int) : Ret Int = ! numeric/int/eq (Ret Int) n 0 {{ ret 0 }} {{ do next <- ! numeric/int/sub n 1; do result <- ! count next; ! numeric/int/add result 1 }} in do result <- ! count {depth}; ! process/exit 0"
         );
         let output = fixture.run(&body, "wasm-am");
         if depth == 200 {
@@ -294,7 +294,7 @@ fn wasm_machine_stack_overflow_has_a_runtime_diagnostic() {
 #[test]
 fn integer_zero_divisors_are_runtime_errors_at_every_width() {
     let fixture = RuntimeFixture::new();
-    for integer in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"] {
+    for integer in ["int8", "int16", "int32", "int", "uint8", "uint16", "uint32", "uint"] {
         for (operation, message) in
             [("div", "integer division by zero"), ("mod", "integer remainder by zero")]
         {
@@ -316,7 +316,7 @@ fn integer_zero_divisors_are_runtime_errors_at_every_width() {
 fn inline_division_errors_keep_their_position_between_effects() {
     let fixture = RuntimeFixture::new();
     let body = r#"
-let fix divide (x : Int64) (y : Int64) : Ret Int64 = ! numeric/int64/div x y in
+let fix divide (x : Int) (y : Int) : Ret Int = ! numeric/int/div x y in
 ! system/stdio/write_line "before" {
   do unused <- ! divide 7 0;
   ! system/stdio/write_line "after" { ! process/exit 0 }
@@ -337,15 +337,15 @@ fn inline_boxed_results_survive_native_collection() {
     // Allocate more than a semispace of boxed results. The raw arithmetic result
     // must survive allocation without being mistaken for a tagged GC root.
     let body = r#"
-let fix churn (n : Int64) (value : Int64) : Ret Int64 =
-  ! numeric/int64/eq (Ret Int64) n 0 { ret value } {
-    do next <- ! numeric/int64/add value 1;
-    do remaining <- ! numeric/int64/sub n 1;
+let fix churn (n : Int) (value : Float64) : Ret Float64 =
+  ! numeric/int/eq (Ret Float64) n 0 { ret value } {
+    do next <- ! numeric/float64/add value 1.0;
+    do remaining <- ! numeric/int/sub n 1;
     ! churn remaining next
   }
 in
-do result <- ! churn 100000 4611686018427387904;
-! numeric/int64/eq OS result 4611686018427487904 { ! process/exit 0 } { ! process/exit 42 }
+do result <- ! churn 100000 1.5;
+! numeric/float64/eq OS result 100001.5 { ! process/exit 0 } { ! process/exit 42 }
 "#;
     let output = fixture.run(body, "exe");
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
@@ -361,15 +361,77 @@ fn integer_division_and_remainder_preserve_wrapping_at_every_width() {
         ("int8", "-128", "-1", "-128", "0"),
         ("int16", "-32768", "-1", "-32768", "0"),
         ("int32", "-2147483648", "-1", "-2147483648", "0"),
-        ("int64", "-9223372036854775808", "-1", "-9223372036854775808", "0"),
+        ("int", "-4611686018427387904", "-1", "-4611686018427387904", "0"),
         ("uint8", "7", "2", "3", "1"),
         ("uint16", "7", "2", "3", "1"),
         ("uint32", "7", "2", "3", "1"),
-        ("uint64", "7", "2", "3", "1"),
+        ("uint", "7", "2", "3", "1"),
     ];
     let body = cases.into_iter().fold("! process/exit 0".to_owned(), |tail, (integer, first, second, quotient, remainder)| {
         format!("do q <- ! numeric/{integer}/div {first} {second}; do r <- ! numeric/{integer}/mod {first} {second}; ! numeric/{integer}/eq OS q {quotient} {{ ! numeric/{integer}/eq OS r {remainder} {{ {tail} }} {{ ! process/exit 42 }} }} {{ ! process/exit 42 }}")
     });
+    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+        let output = fixture.run(&body, backend);
+        assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.stdout.is_empty());
+    }
+}
+
+#[test]
+fn integer_decoding_rejects_noncanonical_storage_on_every_backend() {
+    let fixture = RuntimeFixture::new();
+    for (integer, high) in [("int", 64), ("int", 191), ("uint", 128)] {
+        let body = format!(
+            r#"
+let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{root}/lib/std/text/bytes.zy"))) in
+let codecs = (builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
+do prefix <- ! bytes/from_string "1234567";
+do high <- ! bytes/singleton {high};
+do invalid <- ! bytes/append prefix high;
+! bytes/unsafe/with_window OS invalid {{ fn _ => ! process/exit 42 }} {{
+    fn address _ => ! numeric/{integer}/load_le OS address {{ fn _ => ! system/stdio/write_line "must not resume" {{ ! process/exit 0 }} }}
+}}
+"#,
+            root = fixture.workspace.display()
+        );
+        for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+            RuntimeFixture::assert_failure(
+                fixture.run(&body, backend),
+                "integer exceeds the tagged payload range",
+                backend,
+            );
+        }
+    }
+}
+
+#[test]
+fn integer_parsing_and_byte_codecs_reject_out_of_range_values() {
+    let fixture = RuntimeFixture::new();
+    let mut tail = "! process/exit 0".to_owned();
+    for value in ["-4611686018427387905", "4611686018427387904", "9223372036854775807"] {
+        tail = format!(
+            "! text/string/parse_int OS \"{value}\" {{ {tail} }} {{ fn _ => ! process/exit 42 }}"
+        );
+    }
+    for value in ["-4611686018427387904", "4611686018427387903"] {
+        tail = format!(
+            "! text/string/parse_int OS \"{value}\" {{ ! process/exit 42 }} {{ fn value => ! numeric/int/eq OS value {value} {{ {tail} }} {{ ! process/exit 42 }} }}"
+        );
+    }
+    for (integer, high) in [("int", 64), ("int", 128), ("int", 191), ("uint", 128), ("uint", 255)] {
+        tail = format!(
+            "do high <- ! bytes/singleton {high}; do invalid <- ! bytes/append prefix high; ! codecs/{integer}/from_le_bytes OS invalid {{ {tail} }} {{ fn _ => ! process/exit 42 }}"
+        );
+    }
+    let body = format!(
+        r#"
+let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{root}/lib/std/text/bytes.zy"))) in
+let codecs = (builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
+do prefix <- ! bytes/from_string "1234567";
+{tail}
+"#,
+        root = fixture.workspace.display()
+    );
     for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
         let output = fixture.run(&body, backend);
         assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));

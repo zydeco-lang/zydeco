@@ -124,7 +124,7 @@ pub enum IntrinsicRole {
     #[strum(disabled)]
     Primitive(PrimitiveType),
     #[strum(disabled)]
-    ValueInt64(ValueInt64Op),
+    ValueInt(ValueIntOp),
 }
 
 impl IntrinsicRole {
@@ -132,7 +132,7 @@ impl IntrinsicRole {
     pub fn all() -> impl Iterator<Item = Self> {
         Self::iter()
             .chain(PrimitiveType::all().map(Self::Primitive))
-            .chain(ValueInt64Op::ALL.iter().copied().map(Self::ValueInt64))
+            .chain(ValueIntOp::ALL.iter().copied().map(Self::ValueInt))
     }
 
     pub fn from_source_name(name: &str) -> Option<Self> {
@@ -142,7 +142,7 @@ impl IntrinsicRole {
     pub fn source_name(self) -> &'static str {
         match self {
             | Self::Primitive(primitive) => primitive.intrinsic_name(),
-            | Self::ValueInt64(operation) => operation.intrinsic_name(),
+            | Self::ValueInt(operation) => operation.intrinsic_name(),
             | role => IntrinsicRoleDiscriminants::from(role).into(),
         }
     }
@@ -227,11 +227,11 @@ pub enum IntegerType {
     Int8,
     Int16,
     Int32,
-    Int64,
+    Int,
     UInt8,
     UInt16,
     UInt32,
-    UInt64,
+    UInt,
 }
 
 impl IntegerType {
@@ -244,16 +244,16 @@ impl IntegerType {
             | Self::Int8 => "Int8",
             | Self::Int16 => "Int16",
             | Self::Int32 => "Int32",
-            | Self::Int64 => "Int64",
+            | Self::Int => "Int",
             | Self::UInt8 => "UInt8",
             | Self::UInt16 => "UInt16",
             | Self::UInt32 => "UInt32",
-            | Self::UInt64 => "UInt64",
+            | Self::UInt => "UInt",
         }
     }
 
     pub fn is_signed(self) -> bool {
-        matches!(self, Self::Int8 | Self::Int16 | Self::Int32 | Self::Int64)
+        matches!(self, Self::Int8 | Self::Int16 | Self::Int32 | Self::Int)
     }
 
     pub fn bits(self) -> u8 {
@@ -261,8 +261,14 @@ impl IntegerType {
             | Self::Int8 | Self::UInt8 => 8,
             | Self::Int16 | Self::UInt16 => 16,
             | Self::Int32 | Self::UInt32 => 32,
-            | Self::Int64 | Self::UInt64 => 64,
+            | Self::Int | Self::UInt => zydeco_machine::word::RuntimeWord::INTEGER_BITS,
         }
+    }
+
+    /// Byte storage and C transport round the payload width to a whole scalar carrier.
+    /// Int/UInt use a 64-bit carrier in the current runtime profile, with checked decoding.
+    pub fn storage_bits(self) -> u8 {
+        self.bits().next_power_of_two()
     }
 }
 
@@ -364,11 +370,11 @@ impl PrimitiveType {
             | Self::Integer(IntegerType::Int8) => "i8",
             | Self::Integer(IntegerType::Int16) => "i16",
             | Self::Integer(IntegerType::Int32) => "i32",
-            | Self::Integer(IntegerType::Int64) => "i64",
+            | Self::Integer(IntegerType::Int) => "int",
             | Self::Integer(IntegerType::UInt8) => "u8",
             | Self::Integer(IntegerType::UInt16) => "u16",
             | Self::Integer(IntegerType::UInt32) => "u32",
-            | Self::Integer(IntegerType::UInt64) => "u64",
+            | Self::Integer(IntegerType::UInt) => "uint",
             | Self::Float(FloatType::Float32) => "f32",
             | Self::Float(FloatType::Float64) => "f64",
             | primitive => PrimitiveTypeDiscriminants::from(primitive).into(),
@@ -692,24 +698,10 @@ impl BuiltinValueRole {
 
     /// The hidden spare-box argument this builtin receives after its source arguments.
     ///
-    /// 64-bit integer and double-float arithmetic can overflow the tagged-word immediate
-    /// range, so the native and WebAssembly runtimes allocate a box for the result and
-    /// pass its spare pointer to the builtin. `None` means the builtin takes no spare.
+    /// Double-float results need a box, whose spare pointer is passed to the builtin.
+    /// Integer results are always immediate. `None` means the builtin takes no spare.
     pub fn spare_box(self) -> Option<SpareBox> {
         match self {
-            | Self::Integer(
-                integer,
-                IntegerOperation::Add
-                | IntegerOperation::Sub
-                | IntegerOperation::Mul
-                | IntegerOperation::Div
-                | IntegerOperation::Mod
-                | IntegerOperation::LoadLe,
-            ) => Some(if matches!(integer, IntegerType::Int64 | IntegerType::UInt64) {
-                SpareBox::Opaque
-            } else {
-                SpareBox::Unused
-            }),
             | Self::Float(
                 float,
                 FloatOperation::Add
@@ -720,7 +712,6 @@ impl BuiltinValueRole {
             ) => {
                 Some(if float == FloatType::Float64 { SpareBox::Opaque } else { SpareBox::Unused })
             }
-            | Self::StrParseInt | Self::ReadLineAsInt | Self::RandomInt => Some(SpareBox::Opaque),
             | _ => None,
         }
     }
@@ -1214,11 +1205,11 @@ pub enum IntegerLiteral {
     Int8(i8),
     Int16(i16),
     Int32(i32),
-    Int64(i64),
+    Int(i64),
     UInt8(u8),
     UInt16(u16),
     UInt32(u32),
-    UInt64(u64),
+    UInt(u64),
     Unresolved(i128),
 }
 
@@ -1233,11 +1224,19 @@ impl IntegerLiteral {
             | IntegerType::Int8 => Self::Int8(value.try_into().ok()?),
             | IntegerType::Int16 => Self::Int16(value.try_into().ok()?),
             | IntegerType::Int32 => Self::Int32(value.try_into().ok()?),
-            | IntegerType::Int64 => Self::Int64(value.try_into().ok()?),
+            | IntegerType::Int => {
+                let value = value.try_into().ok()?;
+                zydeco_machine::word::RuntimeWord::signed(value)?;
+                Self::Int(value)
+            }
             | IntegerType::UInt8 => Self::UInt8(value.try_into().ok()?),
             | IntegerType::UInt16 => Self::UInt16(value.try_into().ok()?),
             | IntegerType::UInt32 => Self::UInt32(value.try_into().ok()?),
-            | IntegerType::UInt64 => Self::UInt64(value.try_into().ok()?),
+            | IntegerType::UInt => {
+                let value = value.try_into().ok()?;
+                zydeco_machine::word::RuntimeWord::unsigned(value)?;
+                Self::UInt(value)
+            }
         })
     }
 
@@ -1252,11 +1251,11 @@ impl IntegerLiteral {
             | Self::Int8(value) => value.into(),
             | Self::Int16(value) => value.into(),
             | Self::Int32(value) => value.into(),
-            | Self::Int64(value) => value.into(),
+            | Self::Int(value) => value.into(),
             | Self::UInt8(value) => value.into(),
             | Self::UInt16(value) => value.into(),
             | Self::UInt32(value) => value.into(),
-            | Self::UInt64(value) => value.into(),
+            | Self::UInt(value) => value.into(),
             | Self::Unresolved(value) => value,
         }
     }
@@ -1266,11 +1265,11 @@ impl IntegerLiteral {
             | Self::Int8(_) => IntegerType::Int8,
             | Self::Int16(_) => IntegerType::Int16,
             | Self::Int32(_) => IntegerType::Int32,
-            | Self::Int64(_) => IntegerType::Int64,
+            | Self::Int(_) => IntegerType::Int,
             | Self::UInt8(_) => IntegerType::UInt8,
             | Self::UInt16(_) => IntegerType::UInt16,
             | Self::UInt32(_) => IntegerType::UInt32,
-            | Self::UInt64(_) => IntegerType::UInt64,
+            | Self::UInt(_) => IntegerType::UInt,
             | Self::Unresolved(_) => return None,
         })
     }
@@ -1280,11 +1279,11 @@ impl IntegerLiteral {
             | Self::Int8(value) => value as u8 as u64,
             | Self::Int16(value) => value as u16 as u64,
             | Self::Int32(value) => value as u32 as u64,
-            | Self::Int64(value) => value as u64,
+            | Self::Int(value) => value as u64,
             | Self::UInt8(value) => value.into(),
             | Self::UInt16(value) => value.into(),
             | Self::UInt32(value) => value.into(),
-            | Self::UInt64(value) => value,
+            | Self::UInt(value) => value,
             | Self::Unresolved(_) => panic!("unresolved integer literal reached lowering"),
         }
     }
@@ -1292,7 +1291,7 @@ impl IntegerLiteral {
 
 impl From<i64> for IntegerLiteral {
     fn from(value: i64) -> Self {
-        Self::Int64(value)
+        Self::from_value(value.into(), IntegerType::Int)
     }
 }
 
@@ -1390,15 +1389,40 @@ mod numeric_tests {
     use super::*;
 
     #[test]
-    fn integer_literals_use_exact_rust_carriers() {
+    fn machine_integer_intrinsics_replace_the_old_exact_width_names() {
+        for (name, integer) in [("int", IntegerType::Int), ("uint", IntegerType::UInt)] {
+            assert_eq!(
+                PrimitiveType::from_intrinsic_name(name),
+                Some(PrimitiveType::Integer(integer))
+            );
+            assert_eq!(integer.bits(), 63);
+            assert_eq!(integer.storage_bits(), 64);
+            for &operation in IntegerOperation::VARIANTS {
+                assert_eq!(BuiltinValueRole::Integer(integer, operation).spare_box(), None);
+            }
+        }
+        for old in ["i64", "u64"] {
+            assert_eq!(PrimitiveType::from_intrinsic_name(old), None);
+        }
+        assert_eq!(
+            BuiltinValueRole::Float(FloatType::Float64, FloatOperation::Add).spare_box(),
+            Some(SpareBox::Opaque)
+        );
+    }
+
+    #[test]
+    fn integer_literals_check_payload_ranges() {
         assert_eq!(
             IntegerLiteral::new(-128).with_type(IntegerType::Int8),
             Some(IntegerLiteral::Int8(i8::MIN))
         );
         assert_eq!(
-            IntegerLiteral::new(u64::MAX.into()).with_type(IntegerType::UInt64),
-            Some(IntegerLiteral::UInt64(u64::MAX))
+            IntegerLiteral::new(zydeco_machine::word::RuntimeWord::UNSIGNED_MAX.into())
+                .with_type(IntegerType::UInt),
+            Some(IntegerLiteral::UInt(zydeco_machine::word::RuntimeWord::UNSIGNED_MAX))
         );
+        assert_eq!(IntegerLiteral::new(u64::MAX.into()).with_type(IntegerType::UInt), None);
+        assert_eq!(IntegerLiteral::new(i64::MAX.into()).with_type(IntegerType::Int), None);
         assert_eq!(IntegerLiteral::new(128).with_type(IntegerType::Int8), None);
         assert_eq!(IntegerLiteral::new(-1).with_type(IntegerType::UInt8), None);
     }
@@ -1416,14 +1440,14 @@ mod numeric_tests {
     #[test]
     fn fixed_primitive_builtin_type_roles_are_retired() {
         [
-            "int", "float", "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32",
-            "uint64", "float32", "float64", "char", "string", "bytes",
+            "int", "float", "int8", "int16", "int32", "uint8", "uint16", "uint32", "uint",
+            "float32", "float64", "char", "string", "bytes",
         ]
         .into_iter()
         .for_each(|name| {
             assert_eq!(BuiltinTypeRole::from_source_name(name), None);
         });
-        ["add", "int_eq", "float_add"].into_iter().for_each(|name| {
+        ["add", "int64_eq", "uint64_add", "float_add"].into_iter().for_each(|name| {
             assert_eq!(BuiltinValueRole::from_source_name(name), None);
         });
     }

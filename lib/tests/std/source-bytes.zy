@@ -1,22 +1,22 @@
 @[package(test(of(std)))]
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int64; /UInt8; /String; /Addr; /OS;
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /String; /Addr; /OS;
   /numeric; /process; builtin) : @(import(std/builtin)) in
 let (/Bytes; /bytes) = builtin |> (@(import("../../std/text/bytes.zy"))) in
 let (/Fault; native) = builtin |> (@(import("../../std/memory/native.zy"))) in
-let int = numeric/int64 in
+let int = numeric/int in
 let exit = process/exit in
 let no = { ! exit 1 } in
-let ! assert (actual : Int64) (expected : Int64) : Ret Unit =
+let ! assert (actual : Int) (expected : Int) : Ret Unit =
   do delta <- ! int/sub actual expected;
   @[partial]
   let 0 = delta in
   ret ()
 in
-let ! found (value : Bytes) (index : Int64) : Ret Int64 =
-  ! bytes/get (Ret Int64) value index { ret 0 } { fn _ => ret 1 }
+let ! found (value : Bytes) (index : Int) : Ret Int =
+  ! bytes/get (Ret Int) value index { ret 0 } { fn _ => ret 1 }
 in
-let ! slice_ok (value : Bytes) (start : Int64) (count : Int64) : Ret Int64 =
-  ! bytes/slice (Ret Int64) value start count { ret 0 } { fn _ => ret 1 }
+let ! slice_ok (value : Bytes) (start : Int) (count : Int) : Ret Int =
+  ! bytes/slice (Ret Int) value start count { ret 0 } { fn _ => ret 1 }
 in
 do empty <- ! bytes/empty;
 do size <- ! bytes/length empty;
@@ -34,25 +34,25 @@ do valid <- ! slice_ok source 3 0;
 do _ <- ! assert valid 1;
 do valid <- ! slice_ok source 0 -1;
 do _ <- ! assert valid 0;
-do valid <- ! slice_ok source 1 9223372036854775807;
+do valid <- ! slice_ok source 1 4611686018427387903;
 do _ <- ! assert valid 0;
-do valid <- ! slice_ok source 9223372036854775807 1;
+do valid <- ! slice_ok source 4611686018427387903 1;
 do _ <- ! assert valid 0;
 do valid <- ! slice_ok source -1 0;
 do _ <- ! assert valid 0;
 do one <- ! bytes/singleton (255 : UInt8);
-do utf8 <- ! bytes/to_string (Ret Int64) one { ret 0 } { fn _ => ret 1 };
+do utf8 <- ! bytes/to_string (Ret Int) one { ret 0 } { fn _ => ret 1 };
 do _ <- ! assert utf8 0;
 do suffix <- ! bytes/from_string "d";
 do joined <- ! bytes/append source suffix;
 do expected <- ! bytes/from_string "abcd";
-do same <- ! bytes/eq (Ret Int64) joined expected { ret 1 } { ret 0 };
+do same <- ! bytes/eq (Ret Int) joined expected { ret 1 } { ret 0 };
 do _ <- ! assert same 1;
-do ordered <- ! bytes/lt (Ret Int64) source joined { ret 1 } { ret 0 };
+do ordered <- ! bytes/lt (Ret Int) source joined { ret 1 } { ret 0 };
 do _ <- ! assert ordered 1;
-do ordered <- ! bytes/lt (Ret Int64) joined source { ret 1 } { ret 0 };
+do ordered <- ! bytes/lt (Ret Int) joined source { ret 1 } { ret 0 };
 do _ <- ! assert ordered 0;
-do aligned <- ! bytes/aligned (Ret Int64) source 3 { ret 0 } { fn _ => ret 1 };
+do aligned <- ! bytes/aligned (Ret Int) source 3 { ret 0 } { fn _ => ret 1 };
 do _ <- ! assert aligned 0;
 do copied <- ! bytes/unsafe/build (Ret Bytes) 3 64 {
   fn address _ done => ! bytes/unsafe/copy_to (Ret Bytes) source address done
@@ -62,7 +62,7 @@ do copied <- ! bytes/unsafe/build (Ret Bytes) 3 64 {
     let 0 = 1 in
     ret empty
 } { fn value => ret value };
-do same <- ! bytes/eq (Ret Int64) copied source { ret 1 } { ret 0 };
+do same <- ! bytes/eq (Ret Int) copied source { ret 1 } { ret 0 };
 do _ <- ! assert same 1;
 ! bytes/slice OS copied 1 2 no {
   fn tail =>

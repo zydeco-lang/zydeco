@@ -1,9 +1,9 @@
 @[package(test(of(std)))]
 begin
   let make_std = @(import(std)) that
-  param (/VType; /Ret; /OS; /Int64; /Float64; /numeric; builtin) : @(import(std/builtin)) that
-  let (/Bool; /Numeric; /bool; /int64; /float64; /process; dictionaries) = builtin |> make_std in
-  let int64_raw = numeric/int64 in
+  param (/VType; /Ret; /OS; /Int; /Float64; /numeric; builtin) : @(import(std/builtin)) that
+  let (/Bool; /Numeric; /bool; /int; /float64; /process; dictionaries) = builtin |> make_std in
+  let int_raw = numeric/int in
   let ! multiply_add_equal (A : VType)
     (dictionary : Numeric Bool A)
     (left : A)
@@ -21,9 +21,9 @@ begin
     (right : A)
   : Ret Bool = ! dictionary/order/lt left right in
 
-  let IntScalar = Int64 in
-  let (/int64_dictionary = int_dictionary) = dictionaries in
-  do primitive_total <- ! int64_raw/add 40 2;
+  let IntScalar = Int in
+  let (/int_dictionary) = dictionaries in
+  do primitive_total <- ! int_raw/add 40 2;
   do primitive_ok <- ! int_dictionary/order/equality/eq primitive_total 42;
   do int_arithmetic <- ! multiply_add_equal
     IntScalar int_dictionary 6 7 0 42;

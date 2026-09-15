@@ -77,8 +77,8 @@ Checked-root lowering, SPSLow conversion, and assembly lowering compose through 
 Consider this executable, which exits successfully:
 
 ```zydeco check
-param (/Int64; /process) : @(import("../../lib/std/builtin.zy")) in
-let api = (#run = { fn (n : Int64) => ret n }, #spare = 7) in
+param (/Int; /process) : @(import("../../lib/std/builtin.zy")) in
+let api = (#run = { fn (n : Int) => ret n }, #spare = 7) in
 do code <- ! api/run 0;
 ! process/exit code
 ```
@@ -943,7 +943,7 @@ and source occurrences are recorded in the [statics arena](../../lang/statics/sr
 | Nominal and abstract types | Seals, `AbstId`s, definition bodies, and witness scopes |
 | Ordinary CBPV functions | `Arrow`, `Forall`, abstractions, and value/type application |
 | Value functions | `ValPi`, its binder sort, and witness projections for structured arguments |
-| Value calculations | `Value::Match` with value arms and `Int64ValueOp` with two checked integer operands |
+| Value calculations | `Value::Match` with value arms and `IntValueOp` with two checked integer operands |
 | Packages | `Exists`, manifest equations, `ManifestKind`, and static-prefix patterns |
 | Dependent computation functions | `PackPi` with canonical witnesses and a dependent codomain |
 | Products and named fields | Component vectors, labels, and resolved routes with physical product positions |
@@ -1749,8 +1749,8 @@ Applying a checked type abstraction binds the argument to its witness;
 a named binder projects its payload, while a plain binder keeps the whole argument.
 Nested abstractions capture the outer arguments they use.
 Known named projections, value products, thunk protocols, and computation arguments use these bindings as well.
-For example, `Stream A R = codata .item : A -> Stream A R; .done : R end` retains an `Int64` payload
-and `cont(Int64)` result when applied to `Int64` and `Ret Int64`.
+For example, `Stream A R = codata .item : A -> Stream A R; .done : R end` retains an `Int` payload
+and `cont(Int)` result when applied to `Int` and `Ret Int`.
 Applying the same family to `Char` preserves a separate instance.
 
 Instance keys contain the source codata identity and its captured source expressions and bindings.
@@ -1802,14 +1802,14 @@ The [agreement checker](../../lang/stackir/src/protocol/agreement.rs) compares t
 with a fresh constraint set.
 Each side has its own parameter namespace, and each universal occurrence gets a fresh scope.
 Within a scope, repeated occurrences of a parameter share constraints.
-For example, `forall A . A -> Ret A` agrees with `Int64 :: cont(Int64)` but rejects `Int64 :: cont(Char)`.
+For example, `forall A . A -> Ret A` agrees with `Int :: cont(Int)` but rejects `Int :: cont(Char)`.
 Two separately quantified thunk components can each instantiate the same source binder differently.
 A computation parameter can relate a callback's required protocol to the stack supplied after it.
 The SPS verifier skips leading universal binders when inspecting the next runtime stack component;
 these binders never add a physical stack word.
 
 Parameter constraints retain every known partial shape rather than selecting one representative.
-For example, observations of `(?)`, `(Int64)`, and `(Char)` for one value parameter must still reject:
+For example, observations of `(?)`, `(Int)`, and `(Char)` for one value parameter must still reject:
 the unknown field cannot discard the later concrete conflict.
 Ordinary unknown occurrences remain independent gaps, including repeated visits to an unknown codata payload.
 For a computation parameter, different supplied tags can select different alternatives of the same interface;
@@ -1834,17 +1834,17 @@ Those remain upstream typing obligations. Layout/reference-map evidence is not r
 Host and C external transfers keep their existing signature checks.
 No frame-size, frame-lifetime, or stack-scanning plan is derived from these descriptors.
 
-`zydeco build --target zir` displays entries such as `closure[Int64 :: cont(Int64)]`
-and `continuation[Thk(Int64 :: cont(Int64))]` alongside their administrative word parameters.
+`zydeco build --target zir` displays entries such as `closure[Int :: cont(Int)]`
+and `continuation[Thk(Int :: cont(Int))]` alongside their administrative word parameters.
 It also prints finite definitions such as:
 
 ```text
-[protocol:p0] codata { .done#0: cont(Int64); .item#1: Int64 :: p0; }
+[protocol:p0] codata { .done#0: cont(Int); .item#1: Int :: p0; }
 ```
 
 Parameter declarations print their kinds, for example `[parameter:a0] VType` and `[parameter:a1] CType`.
 A polymorphic relay can retain an entry such
-as `closure[forall a0 . forall a1 . Int64 :: a0 :: a0 :: Thk(a0 :: a0 :: a1) :: a1]`.
+as `closure[forall a0 . forall a1 . Int :: a0 :: a0 :: Thk(a0 :: a0 :: a1) :: a1]`.
 These names describe source relationships and convey no representation size or allocation policy.
 
 [Protocol regressions](../../lang/tests/tests/stack_protocols.rs) check those surviving descriptions,
@@ -1855,7 +1855,7 @@ through a recursive computation-polymorphic forwarder on all backends.
 The [declaration-order regression](../../lib/tests/core/codata-order.zy) exercises equal structural interfaces
 with reversed source ordering on all backends.
 The [parameterized regression](../../lib/tests/core/parameterized-protocols.zy) instantiates one recursive family
-with both `Int64` and `Char`, including a dynamically selected and returned stream thunk.
+with both `Int` and `Char`, including a dynamically selected and returned stream thunk.
 Low mutation tests reject an incompatible payload after the first recursive observation.
 The [growing-family regression](../../lib/tests/core/growing-protocols.zy) checks
 that conservative extraction still permits successive observations with larger product types on all backends.
@@ -2174,9 +2174,8 @@ for executables; subsequent SPS, representation, and native-frame passes are sha
 Each `CExportEntry` adds a SysV adapter around its prepared native root.
 It saves the caller's callee-saved registers and raw arguments outside the traced stack range,
 acquires the unit guard, creates the instance, and pushes a typed external return delimiter.
-Arguments are converted in reverse stack order; already encoded arguments remain rooted
-while later wide integers allocate opaque boxes.
-Scalar encoders truncate unspecified upper argument bits to the declared width.
+Arguments are converted in reverse stack order without integer allocation.
+Scalar encoders truncate unspecified upper argument bits to the C carrier width and check the source payload range.
 The residual root receives the ordinary argument stack and `Ret` completion, without an artificial `OS` exit.
 On return, the adapter decodes the result before teardown and restores the C stack and preserved registers.
 
@@ -2299,11 +2298,12 @@ so mismatched compiler/runtime source bundles fail to link.
 This is artifact pairing, not verification of handwritten instruction selection.
 
 Odd words are immediate. Even words are pointer-shaped.
-Narrow integers, `Float32`, characters, tags, and the immediate portions of 64-bit integers fit in a word;
-full-width integer overflow of that encoding and all `Float64` payloads use opaque scalar boxes.
+All supported integers, `Float32`, characters, and tags fit in an immediate word.
+`Float64` payloads use opaque scalar boxes. Integer arithmetic narrows to the source payload width before tagging,
+including operations left as builtin calls after optional normalization.
 Products and closures occupy scanned blocks.
-Source numeric domains and immediate ranges are specified in [L13](language.md#13-primitive-values-and-capabilities)
-and [the representation account](../../DESIGN.md#numeric-representations).
+Source numeric domains and immediate ranges are specified in [L13](language.md#13-primitive-values-and-capabilities);
+storage and C carriers are specified in [L14](language.md#storage-and-foreign-transport).
 Aligned host-owned objects outside the managed spaces remain unchanged by tracing.
 
 ### Runtime instances
@@ -2473,7 +2473,8 @@ Array whole-value reads explicitly build managed logical contents; direct initia
 
 Scalar `store_le` takes an address, value, and completion; `load_le` takes an address and result successor.
 Native loads and stores use byte copies or unaligned pointer-slot accesses without runtime access validation.
-Continuation-selecting loads have a trailing spare box for `Int64`, `UInt64`, and `Float64`; narrow loads need none.
+Integer loads have no spare-box argument and reject carrier bits outside the source range.
+`Float64` loads receive an allocated spare box; `Float32` receives an unused zero spare.
 Float adapters preserve raw payload bits, including NaNs, on every backend.
 The [source codecs](../../lib/std/memory/codec.zy) write products directly into destination fields.
 Padding contributes no load or store. Fixed realization requires statically evaluable size and alignment;
@@ -2492,7 +2493,7 @@ The [source argument library](../../lib/std/system/arguments.zy) supplies traver
 These use the ordinary closure, activation, and collection protocols, including reuse and abandonment.
 The former native host closure and fixed host-root table have been removed.
 [Argument regressions](../../lib/tests/builtin/argument-contract.zy) exercise repeated forcing across collection,
-live captured wide integers, discarded tails, and invalid indices on all four backends.
+live captured `Float64` values, discarded tails, and invalid indices on all four backends.
 Source observations belong to [L13](language.md#13-primitive-values-and-capabilities).
 
 Host resource tables allocate monotonically increasing handle IDs and validate reader and writer operations.
@@ -2508,9 +2509,9 @@ Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resou
 ### Foreign calls
 
 [ForeignSignature](../../lang/statics/src/foreign.rs) is a checked call plan for a returning C thunk.
-Arguments are fixed-width integers or `Addr`. An address contributes one raw pointer.
+Arguments are supported integers or `Addr`. An address contributes one raw pointer.
 Bindings supply any length or capacity as a separate integer.
-At most six C arguments are accepted. Results are fixed-width integers or `Unit` (C `void`).
+At most six C arguments are accepted. Results are supported integers or `Unit` (C `void`).
 Its constructor enforces the flattened bound, and the validated fields remain private.
 Expansion yields ordered `ForeignArgument` entries identifying the source parameter and its integer,
 or pointer component; both execution paths consume that plan.
@@ -2520,14 +2521,15 @@ The trust and borrowing obligations belong to [L14](language.md#14-foreign-inter
 The Unix [interpreter adapter](../../lang/dynamics/src/foreign.rs) lazily loads libraries and symbols,
 caches call interfaces by target and signature, and calls through libffi while borrowing scalar argument storage.
 Missing libraries and symbols are runtime errors; generated native programs do not depend on libffi.
-AMD64 marshals the retained source arguments into a temporary raw C frame, loads the SysV argument registers,
-and discards that frame before encoding a result that may allocate.
-The full-width result survives collection in a preserved register and resumes the ordinary return continuation.
-Integer components retain their width and signedness through the call plan.
-Native encoders truncate C return registers to that width before constructing the Zydeco value;
+AMD64 marshals the retained source arguments into a temporary raw C frame,
+loads the SysV argument registers, and discards that frame before encoding the result.
+A valid result resumes the ordinary return continuation; an invalid `Int` or `UInt` result reports a range error.
+Integer components retain their source type and signedness through the call plan.
+`IntegerType::bits` describes arithmetic width; `storage_bits` describes the byte and C carrier width.
+Native encoders truncate C return registers to the carrier width before checking the source range;
 the [SysV ABI clarification](https://gitlab.com/x86-psABIs/x86-64-ABI/-/merge_requests/61)
 leaves excess integer register bits unspecified.
-Only 64-bit integer results need a spare opaque box; narrow integers and unit fit immediate words.
+Integer results and unit fit immediate words and require no spare box.
 The libffi adapter uses exact scalar storage and return types for integers,
 and its explicit void-return operation avoids reading nonexistent result storage.
 Native address marshalling moves the pointer word directly, with no host conversion call.
@@ -2690,7 +2692,7 @@ source -> lexer and parser -> textual arenas and spans
 Punning belongs to canonical syntax rather than intention.
 If a named term or pattern contains the same-named variable, the printer always chooses its concise form.
 An annotation with a hole payload prints in its parenthesized `@(meta)` form;
-`@[intrinsic(i64)] _` and `@(intrinsic(i64))` therefore converge.
+`@[intrinsic(int)] _` and `@(intrinsic(int))` therefore converge.
 Line comments use `--` or `--|`; nested block comments retain their delimiters and relative indentation.
 Raw whitespace is not retained except under an explicit `@[format(verbatim)]` directive.
 

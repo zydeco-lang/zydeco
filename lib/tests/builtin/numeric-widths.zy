@@ -5,11 +5,11 @@ begin
     /Int8;
     /Int16;
     /Int32;
-    /Int64;
+    /Int;
     /UInt8;
     /UInt16;
     /UInt32;
-    /UInt64;
+    /UInt;
     /Float32;
     /Float64;
     /numeric;
@@ -19,11 +19,11 @@ begin
   let int8 = numeric/int8 that
   let int16 = numeric/int16 that
   let int32 = numeric/int32 that
-  let int64 = numeric/int64 that
+  let int = numeric/int that
   let uint8 = numeric/uint8 that
   let uint16 = numeric/uint16 that
   let uint32 = numeric/uint32 that
-  let uint64 = numeric/uint64 that
+  let uint = numeric/uint that
   let float32 = numeric/float32 that
   let float64 = numeric/float64 that
   let string = text/string that
@@ -33,26 +33,26 @@ begin
     ! int16/eq OS int16_value 32767 {
       do int32_value <- ! int32/add 2147483647 1;
       ! int32/eq OS int32_value -2147483648 {
-        do int64_value <- ! int64/add 9223372036854775807 1;
-        ! int64/eq OS int64_value -9223372036854775808 {
+        do int_value <- ! int/add 4611686018427387903 1;
+        ! int/eq OS int_value -4611686018427387904 {
           do uint8_value <- ! uint8/add 255 1;
           ! uint8/eq OS uint8_value 0 {
             do uint16_value <- ! uint16/add 65535 1;
             ! uint16/eq OS uint16_value 0 {
               do uint32_value <- ! uint32/add 4294967295 1;
               ! uint32/eq OS uint32_value 0 {
-                do uint64_value <- ! uint64/add 18446744073709551615 1;
-                ! uint64/eq OS uint64_value 0 {
-                  ! uint64/gt OS 18446744073709551615 0 {
+                do uint_value <- ! uint/add 9223372036854775807 1;
+                ! uint/eq OS uint_value 0 {
+                  ! uint/gt OS 9223372036854775807 0 {
                     do float32_value <- ! float32/add 1.5 2.25;
                     ! float32/eq OS float32_value 3.75 {
                       do float64_value <- ! float64/div 7.5 2.5;
                       ! float64/eq OS float64_value 3.0 {
-                        do rendered <- ! uint64/to_string 18446744073709551615;
+                        do rendered <- ! uint/to_string 9223372036854775807;
                         ! string/eq
                           OS
                           rendered
-                          "18446744073709551615"
+                          "9223372036854775807"
                           { ! process/exit 0 }
                           { ! process/exit 1 }
                       } { ! process/exit 1 }

@@ -1,10 +1,10 @@
 @[package(test(of(std)))]
 begin
   let make_std = @(import(std)) that
-  param (/VType; /CType; /Thk; /Ret; /Int64; builtin) : @(import(std/builtin)) that
+  param (/VType; /CType; /Thk; /Ret; /Int; builtin) : @(import(std/builtin)) that
 
-  let (/int64; /process) = builtin |> make_std in
-  do one <- ! int64/increment 0;
-  do status <- ! int64/sub one 1;
+  let (/int; /process) = builtin |> make_std in
+  do one <- ! int/increment 0;
+  do status <- ! int/sub one 1;
   ! process/exit status
 end

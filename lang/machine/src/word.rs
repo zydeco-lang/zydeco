@@ -11,6 +11,7 @@ pub enum EncodedScalar {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WordError {
     UnresolvedInteger,
+    IntegerRange,
     TagIndex(usize),
 }
 
@@ -20,6 +21,7 @@ impl core::fmt::Display for WordError {
             | Self::UnresolvedInteger => {
                 formatter.write_str("unresolved integer literal reached runtime-word encoding")
             }
+            | Self::IntegerRange => formatter.write_str("integer exceeds the tagged payload range"),
             | Self::TagIndex(value) => {
                 write!(formatter, "runtime tag index {value} does not fit an immediate")
             }
@@ -34,9 +36,19 @@ pub struct RuntimeWord;
 
 impl RuntimeWord {
     pub const TAG: u64 = 1;
+    pub const INTEGER_BITS: u8 = 63;
     pub const UNSIGNED_MAX: u64 = 0x7fff_ffff_ffff_ffff;
     pub const SIGNED_MIN: i64 = -0x4000_0000_0000_0000;
     pub const SIGNED_MAX: i64 = 0x3fff_ffff_ffff_ffff;
+
+    /// Arithmetic on source machine integers wraps within the tagged payload.
+    pub const fn wrap_signed(value: i64) -> i64 {
+        value.wrapping_shl(1) >> 1
+    }
+
+    pub const fn wrap_unsigned(value: u64) -> u64 {
+        value & Self::UNSIGNED_MAX
+    }
 
     pub fn unsigned(value: u64) -> Option<u64> {
         (value <= Self::UNSIGNED_MAX).then_some((value << 1) | Self::TAG)

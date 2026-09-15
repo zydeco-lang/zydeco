@@ -107,11 +107,11 @@ impl MemoryRuntime {
         })
     }
     pub(crate) fn int_value(value: i64) -> SemValue {
-        Literal::Integer(IntegerLiteral::Int64(value)).into()
+        Literal::Integer(IntegerLiteral::Int(value)).into()
     }
     fn integer(value: &SemValue) -> i64 {
-        let SemValue::Literal(Literal::Integer(IntegerLiteral::Int64(value))) = value else {
-            unreachable!("typed Int64")
+        let SemValue::Literal(Literal::Integer(IntegerLiteral::Int(value))) = value else {
+            unreachable!("typed Int")
         };
         *value
     }

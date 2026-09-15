@@ -60,7 +60,7 @@ impl ForeignFixture {
     }
 }
 
-const U64: PrimitiveType = PrimitiveType::Integer(IntegerType::UInt64);
+const U64: PrimitiveType = PrimitiveType::Integer(IntegerType::UInt);
 const F32: PrimitiveType = PrimitiveType::Float(FloatType::Float32);
 const U: Parameter = Parameter::Scalar(U64);
 const W: Parameter = Parameter::Address;
@@ -79,12 +79,12 @@ fn derives_signatures_compositionally_in_source_order() {
                 .iter()
                 .map(|parameter| match parameter {
                     | Parameter::Address => ForeignParameter::Address,
-                    | Parameter::Scalar(U64) => ForeignParameter::Integer(IntegerType::UInt64),
+                    | Parameter::Scalar(U64) => ForeignParameter::Integer(IntegerType::UInt),
                     | _ => unreachable!(),
                 })
                 .collect::<Vec<_>>();
             assert_eq!(import.signature.parameters(), expected);
-            assert_eq!(import.signature.result(), ForeignResult::Integer(IntegerType::UInt64));
+            assert_eq!(import.signature.result(), ForeignResult::Integer(IntegerType::UInt));
         });
     }
 }
@@ -93,11 +93,11 @@ fn derives_signatures_compositionally_in_source_order() {
 fn an_address_supplies_one_pointer_and_length_remains_an_explicit_argument() {
     let signature = ForeignSignature::new(
         vec![
-            ForeignParameter::Integer(IntegerType::UInt64),
+            ForeignParameter::Integer(IntegerType::UInt),
             ForeignParameter::Address,
-            ForeignParameter::Integer(IntegerType::UInt64),
+            ForeignParameter::Integer(IntegerType::UInt),
         ],
-        ForeignResult::Integer(IntegerType::UInt64),
+        ForeignResult::Integer(IntegerType::UInt),
     )
     .unwrap();
     assert_eq!(
@@ -105,12 +105,12 @@ fn an_address_supplies_one_pointer_and_length_remains_an_explicit_argument() {
         [
             ForeignArgument {
                 parameter: 0,
-                component: ForeignComponent::Integer(IntegerType::UInt64)
+                component: ForeignComponent::Integer(IntegerType::UInt)
             },
             ForeignArgument { parameter: 1, component: ForeignComponent::MemoryPointer },
             ForeignArgument {
                 parameter: 2,
-                component: ForeignComponent::Integer(IntegerType::UInt64)
+                component: ForeignComponent::Integer(IntegerType::UInt)
             },
         ]
     );

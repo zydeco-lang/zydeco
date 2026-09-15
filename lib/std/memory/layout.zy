@@ -1,6 +1,6 @@
 begin
   param val (/Addr; /VType; /CType; /Thk; /Ret; /Unit;
-    /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64;
+    /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt;
     /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) that
   param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr that
   let Result = @(import("../data/result.zy")) in
@@ -13,15 +13,15 @@ begin
   let codec = (builtin |> make_codec) types in
   let Plan (A : VType) = (#shape :: Shape) * (#codec :: Descriptor A) in
   let Layout (A : VType) = Result (Plan A) Error in
-  let val scalar (A : VType) (count : Int64)
+  let val scalar (A : VType) (count : Int)
     (write : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
     (read : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
   : Layout A =
       +Ok(#shape = (#size = count, #alignment = count, #form = +Scalar(#width = count)),
         #codec = codec/scalar A count count write read)
   in
-  let val padding (count : Int64) : Layout Unit =
-    size/bind Int64 (Plan Unit) (size/size count) (
+  let val padding (count : Int) : Layout Unit =
+    size/bind Int (Plan Unit) (size/size count) (
       val count =>
         +Ok(#shape = (#size = count, #alignment = 1, #form = +Padding()),
           #codec = codec/padding count)
@@ -33,13 +33,13 @@ begin
         val left =>
           size/bind (Plan B) (Plan (A * B)) right (
             val right =>
-              size/bind Int64 (Plan (A * B))
+              size/bind Int (Plan (A * B))
                 (size/round_up left/shape/size right/shape/alignment) (
                 val offset =>
-                  size/bind Int64 (Plan (A * B)) (size/add offset right/shape/size) (
+                  size/bind Int (Plan (A * B)) (size/add offset right/shape/size) (
                     val field_end =>
                       let alignment = size/maximum left/shape/alignment right/shape/alignment in
-                      size/bind Int64 (Plan (A * B)) (size/round_up field_end alignment) (
+                      size/bind Int (Plan (A * B)) (size/round_up field_end alignment) (
                         val count =>
                           +Ok(
                             #shape = (#size = count, = alignment,
@@ -53,13 +53,13 @@ begin
           )
       )
   in
-  let val align (A : VType) (boundary : Int64) (layout : Layout A) : Layout A =
-    size/bind Int64 (Plan A) (size/alignment boundary) (
+  let val align (A : VType) (boundary : Int) (layout : Layout A) : Layout A =
+    size/bind Int (Plan A) (size/alignment boundary) (
       val boundary =>
         size/bind (Plan A) (Plan A) layout (
           val layout =>
             let alignment = size/maximum boundary layout/shape/alignment in
-            size/bind Int64 (Plan A) (size/round_up layout/shape/size alignment) (
+            size/bind Int (Plan A) (size/round_up layout/shape/size alignment) (
               val count =>
                 +Ok(#shape = (#size = count, = alignment, #form = layout/shape/form),
                   #codec = codec/align A layout/codec count alignment)
@@ -69,8 +69,8 @@ begin
   in
   let val inspect (A : VType) (plan : Plan A) : Shape = plan/shape in
   let val realize (A : VType) (plan : Plan A) : Representation A =
-    let known_size = (@(intrinsic(i64_add))) plan/codec/size 0 in
-    let known_alignment = (@(intrinsic(i64_add))) plan/codec/alignment 0 in
+    let known_size = (@(intrinsic(int_add))) plan/codec/size 0 in
+    let known_alignment = (@(intrinsic(int_add))) plan/codec/alignment 0 in
     codec/realize A (#size = known_size, #alignment = known_alignment,
       #write = plan/codec/write, #read = plan/codec/read)
   in
@@ -82,11 +82,11 @@ begin
         #int8 = scalar Int8 1 numeric/int8/store_le numeric/int8/load_le,
         #int16 = scalar Int16 2 numeric/int16/store_le numeric/int16/load_le,
         #int32 = scalar Int32 4 numeric/int32/store_le numeric/int32/load_le,
-        #int64 = scalar Int64 8 numeric/int64/store_le numeric/int64/load_le,
+        #int = scalar Int 8 numeric/int/store_le numeric/int/load_le,
         #uint8 = scalar UInt8 1 numeric/uint8/store_le numeric/uint8/load_le,
         #uint16 = scalar UInt16 2 numeric/uint16/store_le numeric/uint16/load_le,
         #uint32 = scalar UInt32 4 numeric/uint32/store_le numeric/uint32/load_le,
-        #uint64 = scalar UInt64 8 numeric/uint64/store_le numeric/uint64/load_le,
+        #uint = scalar UInt 8 numeric/uint/store_le numeric/uint/load_le,
         #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le,
         #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le,
         #addr = scalar Addr 8 memory/store_addr memory/load_addr)

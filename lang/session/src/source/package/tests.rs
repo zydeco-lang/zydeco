@@ -324,7 +324,7 @@ fn any_file_is_a_library_and_root_annotations_supply_roles_without_names() {
             "@[package(library)] 42",
             PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
         ),
-        ("(@[doc] (@[package(test)] 42) : @(intrinsic(i64)))", PackageRole::Test),
+        ("(@[doc] (@[package(test)] 42) : @(intrinsic(int)))", PackageRole::Test),
     ] {
         let path = fixture.write("single.zy", source);
         let session = CompilerSession::default();
@@ -418,7 +418,7 @@ fn repeated_named_imports_share_roots_and_file_snapshot_inputs() {
 fn file_packages_retain_companions_and_registration_imports_share_the_file_root() {
     let fixture = Fixture::new();
     fixture.write("lib.zy", "@[package(library)] 1");
-    fixture.write("lib.zyi", "@(intrinsic(i64))");
+    fixture.write("lib.zyi", "@(intrinsic(int))");
     fixture.write("workspace.zy", r#"(#lib = @[package(library, name(lib))] @(import("lib.zy")))"#);
     fixture.write("main.zy", r#"(@(import(lib)), @(import("lib.zy")))"#);
     let mut session = CompilerSession::default();
@@ -470,7 +470,7 @@ fn explicit_parameters_and_nested_packages_are_ordinary_code_components() {
     fixture.write(
         "workspace.zy",
         r#"@[package(library)]
-        (#inner = @[package(library, name(inner))] val (x : @(intrinsic(i64))) => x)"#,
+        (#inner = @[package(library, name(inner))] val (x : @(intrinsic(int))) => x)"#,
     );
     let session = CompilerSession::default();
     let catalog = fixture.catalog(&session, &["workspace.zy"]);
@@ -796,7 +796,7 @@ fn qualified_names_are_catalog_local_and_root_names_share_whole_file_identity() 
     let fixture = Fixture::new();
     fixture.write("catalog.zy", r#"@[discover(include("library.zy", "tests/*.zy"))] ()"#);
     fixture.write("library.zy", "@[package(library, name(std/data))] 1");
-    fixture.write("library.zyi", "@(intrinsic(i64))");
+    fixture.write("library.zyi", "@(intrinsic(int))");
     fixture.write(
         "tests/smoke.zy",
         "@[package(test(of(std/data)), name(std/data/smoke))] @(import(std/data))",
@@ -825,7 +825,7 @@ fn catalog_scopes_are_part_of_cached_analysis_and_rematerialization() {
     let fixture = Fixture::new();
     fixture.write("first.zy", "@[package(library, name(dep))] 1");
     fixture.write("second.zy", r#"@[package(library, name(dep))] "different type""#);
-    fixture.write("main.zy", "(@(import(dep)) : @(intrinsic(i64)))");
+    fixture.write("main.zy", "(@(import(dep)) : @(intrinsic(int)))");
     let session = CompilerSession::default();
     let first = fixture.catalog(&session, &["first.zy"]);
     let second = fixture.catalog(&session, &["second.zy"]);

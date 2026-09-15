@@ -10,7 +10,7 @@ fn nominal_type_mismatches_identify_their_distinct_source_bindings() {
             "opened here",
         ),
         (
-            "let A = (def X : VType = Int64 in X) in let B = (def X : VType = Int64 in X) in fn (x : A) => (ret x : Ret B)",
+            "let A = (def X : VType = Int in X) in let B = (def X : VType = Int in X) in fn (x : A) => (ret x : Ret B)",
             "sealed here",
         ),
     ] {
@@ -37,7 +37,7 @@ fn nominal_type_mismatches_identify_their_distinct_source_bindings() {
     }
     for body in [
         "let Package = exists (X : VType) . X in fn (p : Package) => let (X, x) = p in do _ <- (ret x : Ret X); ret ()",
-        "let A = (def X : VType = Int64 in X) in let B = A in fn (x : A) => (ret x : Ret B)",
+        "let A = (def X : VType = Int in X) in let B = A in fn (x : A) => (ret x : Ret B)",
     ] {
         SourceCase::assert_accepted(SourceCase::check_linted(body));
     }
@@ -46,7 +46,7 @@ fn nominal_type_mismatches_identify_their_distinct_source_bindings() {
 #[test]
 fn incomplete_type_diagnostics_keep_independent_holes_without_cascades() {
     for (body, primary) in [
-        ("let x : Int64 = { _ } in ret x", TyckDiagnosticCode::TypeMismatch),
+        ("let x : Int = { _ } in ret x", TyckDiagnosticCode::TypeMismatch),
         ("fn x => ret x", TyckDiagnosticCode::UnconstrainedInference),
         ("ret _", TyckDiagnosticCode::SortMismatch),
         ("let x = { ret _ } in ret x", TyckDiagnosticCode::SortMismatch),
@@ -65,7 +65,7 @@ fn incomplete_type_diagnostics_keep_independent_holes_without_cascades() {
             assert!(error.message.contains("Thk _"), "{}", error.message);
         }
     }
-    let body = "let waiting = { ! _ } in let wrong : Int64 = { _ } in ret 0";
+    let body = "let waiting = { ! _ } in let wrong : Int = { _ } in ret 0";
     let result = SourceCase::check(body);
     let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
         panic!("expected a type error for {body}: {result:?}");
@@ -80,7 +80,7 @@ fn incomplete_type_diagnostics_keep_independent_holes_without_cascades() {
     assert_eq!(&file.source()[range], "_");
     assert!(missing.related.is_empty(), "the failed expression's hole must be omitted");
     SourceCase::assert_rejected(SourceCase::check("! _"), TyckDiagnosticCode::MissingSolution);
-    SourceCase::assert_accepted(SourceCase::check("let x : Int64 = 0 in ret x"));
+    SourceCase::assert_accepted(SourceCase::check("let x : Int = 0 in ret x"));
 }
 
 #[test]
@@ -103,9 +103,9 @@ fn malformed_monadic_operation_contracts_are_diagnosed() {
 fn binding_cycles_fail_before_dependent_annotations_are_checked() {
     for body in [
         "begin def ! (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",
-        "begin let x : Int64 = y that let y : Int64 = x that ! exit 0 end",
+        "begin let x : Int = y that let y : Int = x that ! exit 0 end",
         "begin let x = y that let y = x that ! exit 0 end",
-        "begin def ! loop (x : Int64) : Ret Int64 = ! loop x that ! exit 0 end",
+        "begin def ! loop (x : Int) : Ret Int = ! loop x that ! exit 0 end",
     ] {
         let result = SourceCase::check(body);
         SourceCase::assert_rejected(result, TyckDiagnosticCode::InvalidBindingCycle);
@@ -113,7 +113,7 @@ fn binding_cycles_fail_before_dependent_annotations_are_checked() {
     for body in [
         "begin def ! identity (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",
         "begin def ! _ (M : VType) (x : M) : Ret M = ret x that ! exit 0 end",
-        "begin def fix loop (x : Int64) : Ret Int64 = ! loop x that ! exit 0 end",
+        "begin def fix loop (x : Int) : Ret Int = ! loop x that ! exit 0 end",
     ] {
         SourceCase::assert_accepted(SourceCase::check_linted(body));
     }
@@ -122,22 +122,14 @@ fn binding_cycles_fail_before_dependent_annotations_are_checked() {
 #[test]
 fn type_mismatches_preserve_expected_and_found_direction() {
     for (body, expected, found) in [
-        ("let x : Int64 = \"s\" in ret x", "Int64", "String"),
-        ("let s = \"s\" in let x : Int64 = s in ret x", "Int64", "String"),
-        ("let x : Int64 = (\"s\" : String) in ret x", "Int64", "String"),
-        ("let x : Int64 * Unit = (\"s\", ()) in ret x", "Int64", "String"),
-        ("let x = (#field = \"s\") in let y : Int64 = x/field in ret y", "Int64", "String"),
-        (
-            "let f : Thk (Int64 -> Ret Int64) = {fn x => ret x} in (! f 0 : Ret String)",
-            "String",
-            "Int64",
-        ),
-        (
-            "let f : Thk (String -> Ret Int64) = {fn (x : Int64) => ret x} in ! exit 0",
-            "String",
-            "Int64",
-        ),
-        ("let x : Int64 = () in ret x", "Int64", "Unit"),
+        ("let x : Int = \"s\" in ret x", "Int", "String"),
+        ("let s = \"s\" in let x : Int = s in ret x", "Int", "String"),
+        ("let x : Int = (\"s\" : String) in ret x", "Int", "String"),
+        ("let x : Int * Unit = (\"s\", ()) in ret x", "Int", "String"),
+        ("let x = (#field = \"s\") in let y : Int = x/field in ret y", "Int", "String"),
+        ("let f : Thk (Int -> Ret Int) = {fn x => ret x} in (! f 0 : Ret String)", "String", "Int"),
+        ("let f : Thk (String -> Ret Int) = {fn (x : Int) => ret x} in ! exit 0", "String", "Int"),
+        ("let x : Int = () in ret x", "Int", "Unit"),
     ] {
         let result = SourceCase::check(body);
         let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
@@ -166,38 +158,38 @@ fn type_mismatches_preserve_expected_and_found_direction() {
 fn independent_components_and_arms_report_all_type_errors() {
     use TyckDiagnosticCode::{KindMismatch, TypeMismatch};
     for (rejected, accepted, code) in [
-        (r#"(("left" : Int64), ("right" : Int64))"#, "((1 : Int64), (2 : Int64))", TypeMismatch),
-        (r#"(("left", "right") : Int64 * Int64)"#, "((1, 2) : Int64 * Int64)", TypeMismatch),
+        (r#"(("left" : Int), ("right" : Int))"#, "((1 : Int), (2 : Int))", TypeMismatch),
+        (r#"(("left", "right") : Int * Int)"#, "((1, 2) : Int * Int)", TypeMismatch),
         (
-            r#"((Int64, "left", "right") : exists (A : VType) . A * A)"#,
-            "((Int64, 1, 2) : exists (A : VType) . A * A)",
+            r#"((Int, "left", "right") : exists (A : VType) . A * A)"#,
+            "((Int, 1, 2) : exists (A : VType) . A * A)",
             TypeMismatch,
         ),
-        ("(Ret Unit, Ret Unit, Int64)", "(Unit, Unit, Int64)", KindMismatch),
+        ("(Ret Unit, Ret Unit, Int)", "(Unit, Unit, Int)", KindMismatch),
         (
             r#"match 0 | 0 => 1 | 1 => "left" | _ => "right" end"#,
             "match 0 | 0 => 1 | 1 => 2 | _ => 3 end",
             TypeMismatch,
         ),
         (
-            "data | +Left : Ret Unit | +Right : Ret Int64 end",
-            "data | +Left : Unit | +Right : Int64 end",
+            "data | +Left : Ret Unit | +Right : Ret Int end",
+            "data | +Left : Unit | +Right : Int end",
             KindMismatch,
         ),
         (
-            "codata | .left : Unit | .right : Int64 end",
-            "codata | .left : Ret Unit | .right : Ret Int64 end",
+            "codata | .left : Unit | .right : Int end",
+            "codata | .left : Ret Unit | .right : Ret Int end",
             KindMismatch,
         ),
         (
-            r#"match 0 | 0 => ("left" : Int64) | _ => ("right" : Int64) end"#,
-            "match 0 | 0 => (1 : Int64) | _ => (2 : Int64) end",
+            r#"match 0 | 0 => ("left" : Int) | _ => ("right" : Int) end"#,
+            "match 0 | 0 => (1 : Int) | _ => (2 : Int) end",
             TypeMismatch,
         ),
         (
-            r#"let C = codata | .left : Ret Int64 | .right : Ret Int64 end in
+            r#"let C = codata | .left : Ret Int | .right : Ret Int end in
             (comatch | .left => ret "left" | .right => ret "right" end : C)"#,
-            "let C = codata | .left : Ret Int64 | .right : Ret Int64 end in
+            "let C = codata | .left : Ret Int | .right : Ret Int end in
             (comatch | .left => ret 1 | .right => ret 2 end : C)",
             TypeMismatch,
         ),
@@ -226,7 +218,7 @@ fn independent_components_and_arms_report_all_type_errors() {
 
 #[test]
 fn failed_patterns_do_not_invent_bindings_for_their_bodies() {
-    let source = "match 0 | +Bad(x) => (x : String) | _ => (() : Int64) end";
+    let source = "match 0 | +Bad(x) => (x : String) | _ => (() : Int) end";
     let result = SourceCase::check(source);
     let Err(CaseError::Compile(CompileError::Rejected(analysis))) = result else {
         panic!("expected checking rejection: {result:?}");
@@ -245,10 +237,10 @@ fn failed_patterns_do_not_invent_bindings_for_their_bodies() {
 #[test]
 fn an_oversized_package_payload_is_rejected_before_indexing_its_expected_components() {
     SourceCase::assert_rejected(
-        SourceCase::check_value("((Int64, 1, 2, 3, 4) : exists (A : VType) . A * A)"),
+        SourceCase::check_value("((Int, 1, 2, 3, 4) : exists (A : VType) . A * A)"),
         TyckDiagnosticCode::TypeExpected,
     );
     SourceCase::assert_accepted(SourceCase::check_value(
-        "((Int64, 1, 2) : exists (A : VType) . A * A)",
+        "((Int, 1, 2) : exists (A : VType) . A * A)",
     ));
 }
