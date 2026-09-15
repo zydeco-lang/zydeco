@@ -2,13 +2,17 @@
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
-  )) that
+  )) in
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  param val (/Storage; /DynamicStorage; /constant; /runtime) : @(import("storage.type.zy")) in
   let Cps (A : VType) = forall (R : CType) . Thk (A -> R) -> R in
   let Checked (E : VType) (A : VType) = forall (R : CType) . Thk (E -> R) -> Thk (A -> R) -> R in
   let View (P : VType -> CType) (H : VType) (A : VType) = val pi (handle : H) . Thk (P A) in
   let Dynamic (P : VType -> CType) (H : VType) (A : VType) = Thk (H -> P A) in
-  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
+  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
+  let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
+  let size = @(import("size.zy")) in
+  let dynamic_size = builtin |> (@(import("dynamic-size.zy"))) in
   let val identity (A : VType) : View Ret A A = val value => { ret value } in
   let val as_cps (H : VType) (A : VType) (view : View Ret H A) : View Cps H A =
     val handle =>
@@ -74,7 +78,7 @@ begin
       )
   in
   let val header (M : VType) (Metadata : VType) (Payload : VType)
-    (metadata : Operations Metadata M) (metadata_offset : Int) (payload_offset : Int)
+    (metadata : Codec Metadata M) (metadata_offset : Int) (payload_offset : Int)
   : Header M Payload =
       let metadata_offset = (@(intrinsic(int_add))) metadata_offset 0 in
       let payload_offset = (@(intrinsic(int_add))) payload_offset 0 in
@@ -86,7 +90,7 @@ begin
           {
             fn R yes =>
               do location <- ! memory/offset handle metadata_offset;
-              ! metadata/unsafe/read R (unsafe/from_address Metadata Init location) {
+              ! (metadata/read (unsafe/from_address Metadata Init location)) R {
                 fn value =>
                   do payload <- ! memory/offset handle payload_offset;
                   ! yes (unsafe/from_address Payload S payload, value)
@@ -96,22 +100,22 @@ begin
       ((= H, #unsafe = (= from_address, = address, = open)) : Header M Payload)
   in
   let val inline (M : VType) (Metadata : VType) (Payload : VType)
-    (metadata : Operations Metadata M) (payload_offset : Int)
+    (metadata : Codec Metadata M) (payload_offset : Int)
   : Header M Payload =
       header M Metadata Payload metadata 0 payload_offset
   in
   let val prefix (M : VType) (Metadata : VType) (Payload : VType)
-    (metadata : Operations Metadata M) (metadata_offset : Int)
+    (metadata : Codec Metadata M) (metadata_offset : Int)
   : Header M Payload =
       header M Metadata Payload metadata metadata_offset 0
   in
   let dynamic_header : Thk (
     forall (M : VType) (Metadata : VType) (Payload : VType) (S : VType) .
-      Operations Metadata M -> Int -> Int -> Addr -> Cps (Ptr Payload S * M)
+      DynamicCodec Metadata M -> Int -> Int -> Addr -> Cps (Ptr Payload S * M)
   ) = {
     fn M Metadata Payload S metadata metadata_offset payload_offset handle R yes =>
       do location <- ! memory/offset handle metadata_offset;
-      ! metadata/unsafe/read R (unsafe/from_address Metadata Init location) {
+      ! metadata/read (unsafe/from_address Metadata Init location) R {
         fn value =>
           do payload <- ! memory/offset handle payload_offset;
           ! yes (unsafe/from_address Payload S payload, value)
@@ -152,23 +156,51 @@ begin
             }
         }
   in
-  let val counted_checked (L : VType) (A : VType) (S : VType) (H : VType)
-    (layout : Operations L A) (view : View (Checked Fault) H (Ptr L S * Int))
+  let val counted_checked (L : VType) (S : VType) (H : VType)
+    (layout : Storage L) (view : View (Checked Fault) H (Ptr L S * Int))
   : View (Checked Fault) (H * Int) (Ptr L S) =
-      val input =>
+      let geometry = constant/query L layout in
+      let stride = size/round_up geometry/size geometry/alignment in
+      val (handle, index) =>
         {
           fn R no yes =>
-            let (handle, index) = input in
-            ! (view handle) R no {
-              fn (pointer, count) =>
-                ! indexed/at L S R layout/size pointer count index no yes
-            }
+            match stride
+            | +Err(_) => ! no +Overflow()
+            | +Ok(stride) =>
+              ! (view handle) R no {
+                fn (pointer, count) =>
+                  ! indexed/at L S R stride pointer count index no yes
+              }
+            end
         }
   in
-  let val counted (L : VType) (A : VType) (S : VType) (H : VType)
-    (layout : Operations L A) (view : View Cps H (Ptr L S * Int))
+  let val dynamic_counted_checked (L : VType) (S : VType) (H : VType)
+    (layout : DynamicStorage L) (view : View (Checked Fault) H (Ptr L S * Int))
   : View (Checked Fault) (H * Int) (Ptr L S) =
-      counted_checked L A S H layout (as_checked Fault H (Ptr L S * Int) view)
+      let geometry = runtime/query L layout in
+      val (handle, index) =>
+        {
+          fn R no yes =>
+            do stride <- ! dynamic_size/round_up geometry/size geometry/alignment;
+            match stride
+            | +Err(_) => ! no +Overflow()
+            | +Ok(stride) =>
+              ! (view handle) R no {
+                fn (pointer, count) =>
+                  ! indexed/at L S R stride pointer count index no yes
+              }
+            end
+        }
+  in
+  let val dynamic_counted (L : VType) (S : VType) (H : VType)
+    (layout : DynamicStorage L) (view : View Cps H (Ptr L S * Int))
+  : View (Checked Fault) (H * Int) (Ptr L S) =
+      dynamic_counted_checked L S H layout (as_checked Fault H (Ptr L S * Int) view)
+  in
+  let val counted (L : VType) (S : VType) (H : VType)
+    (layout : Storage L) (view : View Cps H (Ptr L S * Int))
+  : View (Checked Fault) (H * Int) (Ptr L S) =
+      counted_checked L S H layout (as_checked Fault H (Ptr L S * Int) view)
   in
   pack (= Header as Header : VType -> VType -> VType)
       (= Cps as Cps : VType -> CType)
@@ -188,6 +220,8 @@ begin
       = thin,
       = fat,
       = counted,
+      = dynamic_counted,
+      = dynamic_counted_checked,
       = as_checked,
       = compose_checked,
       = map_checked,

@@ -1,9 +1,6 @@
 begin
   let VType = @(intrinsic(vtype)) in
-  param Addr : VType in
-  param Uninit : VType in
-  param Init : VType in
-  param Ptr : VType -> VType -> VType in
-  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
-  fn (A : VType) => exists (= L : VType) . Operations L A
+  param Storage : VType -> VType in
+  param Codec : VType -> VType -> VType in
+  fn (A : VType) => exists (= L : VType) . (#storage :: Storage L) * (#codec :: Codec L A)
 end

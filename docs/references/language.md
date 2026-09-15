@@ -1021,7 +1021,7 @@ The library supplies the other types:
 | `Field P C`, `DynamicField P C` | A parent/child layout path | Fixed recipe erases; dynamic path carries one offset |
 | `views/View P H A`, `views/DynamicView P H A` | Handle interpretation | Fixed recipe erases; dynamic operation is an ordinary thunk |
 | `fixed/Layout A` | A static `Result (Plan A) LayoutError` | Construction evidence eliminates before fixed realization |
-| `Representation A` | An existential layout witness with its allocation and typed access operations | Selected operations; dynamic layouts also capture placement |
+| `Representation A` | An existential layout witness with separate storage and codec components | Fixed recipes erase; dynamic counterparts carry geometry and operation thunks |
 | `dynamic/Layout A` | Runtime layout computation | Captured dynamic inputs and operations |
 | `Storage L`, `DynamicStorage L` | Validated geometry independent of logical values | Fixed recipe erases; dynamic geometry carries size/alignment |
 | `Codec L A`, `DynamicCodec L A` | Initialization and observation recipes | Fixed recipes erase; dynamic codecs carry ordinary thunks/context |
@@ -1085,8 +1085,11 @@ with explicit `Context`, byte size, and alignment; its `free` also takes the ori
 `unsafe/release` requires matching geometry, provider/context, and an uninitialized pointer.
 `dynamic_reserve` and `unsafe/dynamic_release` use `Alloc` and `DynamicStorage` at runtime.
 The [executable example](../../lib/tests/std/storage-codecs.zy) covers both forms and state transitions.
-The [factory migration](../proposals/memory-compilation.md#compose-storage-before-selecting-a-logical-codec) is still
-in progress; the existing convenience factories below retain their current interfaces until migrated.
+Fixed and dynamic layout conveniences expose these components separately under the same layout witness.
+Record and array factories compose storage; callers select logical conversion only when needed.
+`codecs/product` combines child codecs through matching field paths.
+Its lower-level `unsafe/product_at` and `unsafe/relabel` recipes require the caller
+to establish valid nonoverlapping offsets and a compatible parent layout; they perform no geometry validation.
 
 ### Allocation and release
 
@@ -1114,20 +1117,12 @@ There is no runtime initialization check and no implicit initialization of paddi
 
 ### Typed pointers and slices
 
-Selecting a representation introduces an abstract layout witness `L` shared by its pointers and operations.
-`Representation A` packages `exists L. Operations L A`;
-[Operations](../../lib/std/memory/operations.type.zy) names the interface after that witness has been opened.
+Selecting a fixed representation produces `exists L. (#storage :: Storage L) * (#codec :: Codec L A)`.
+Its dynamic counterpart substitutes `DynamicStorage` and `DynamicCodec` in that same package shape.
+The [representation alias](../../lib/std/memory/representation.type.zy) is parameterized by these component families.
 [Ptr](../../lib/std/memory/types.zy) privately aliases `Addr` and has no runtime wrapper.
-After opening a representation for logical type `A`, its operations have the following schematic shapes,
-with `R` universally quantified:
-
-```text
-allocate    : Alloc -> Thk (Fault -> R) -> Thk (Ptr L Uninit -> R) -> R
-unsafe/init : Ptr L Uninit -> A -> Thk (Ptr L Init -> R) -> R
-unsafe/read : Ptr L Init -> Thk (A -> R) -> R
-unsafe/take : Ptr L Init -> Thk (Ptr L Uninit -> A -> R) -> R
-unsafe/free : Alloc -> Ptr L Uninit -> Thk (Fault -> R) -> Thk R -> R
-```
+Allocate and release using the selected storage and provider; initialize, observe, or take using the selected codec.
+The [independent interfaces](#independent-storage-and-codecs) give the exact call order and protocols.
 
 `init` writes directly into the supplied destination.
 `read` copies a logical value without changing its state.
@@ -1144,9 +1139,10 @@ No typed field-path or partial-record tracker is implied by an integer offset.
 
 The [slice operations](../../lib/std/memory/slice.zy) share these pointer and state types.
 `from_parts` checks a nonnegative count and wraps a caller-validated pointer and extent.
-`slices/for_layout L A operations` selects a matching element layout and supplies `unsafe/at`.
-It derives stride from those operations, checks the index against the count, and rejects multiplication overflow
-before offsetting, using the shared [counted-view access](#memory-views) implementation.
+`slices/for_layout L storage` selects fixed geometry; `for_dynamic_layout L storage` selects dynamic geometry.
+Each supplies `unsafe/at`, derives stride by rounding size up to alignment,
+checks the index against the count, and rejects rounding or multiplication overflow before offsetting,
+using the shared [counted-view access](#memory-views) implementation.
 Zero-sized elements have zero stride. The resulting pointer keeps the same `L` and `S`.
 The caller supplies an allocation covering the elements; bounds checks do not verify that assertion.
 A raw slice does not retain its allocation.
@@ -1199,22 +1195,21 @@ for example with `raw/unsafe/fill` before field initialization.
 The [dynamic builder](../../lib/std/memory/dynamic-layout.zy) supports the same layout combinators
 when their inputs are runtime values.
 Its `realize A R layout no yes` validates sizes, alignment, and overflow at execution,
-then supplies a `Representation A` with the corresponding witness and operations.
+then supplies a `Representation A` with a witness, `storage : DynamicStorage L`, and `codec : DynamicCodec L A`.
 Invalid placement selects `no` before allocation or writes.
 Dynamic size, alignment, and offsets remain captured where needed; they are not appended to each typed pointer.
 The [runtime-layout example](../../lib/tests/std/representation.zy) exercises this distinction.
 
 ### Typed records and field paths
 
-The [record factories](../../lib/std/memory/record.zy) compose opened child operations
-while preserving their layout witnesses.
-`records/product Left Right A B left right` calculates ordinary product placement;
+The [record factories](../../lib/std/memory/record.zy) compose child storage geometry while preserving its witnesses.
+`records/product Left Right left_storage right_storage` calculates ordinary product placement;
 `records/at` additionally accepts the left and right byte offsets, total size, and alignment.
-Both produce a static `Result (Record Left Right A B) LayoutError`.
+Both produce a static `Result (Record Left Right) LayoutError`; neither takes a logical type or codec.
 Explicit placement checks nonnegative extents, alignment, field overlap, and the enclosing size before construction.
 Zero-sized fields occupy no bytes; padding remains uninterpreted.
 
-Opening the result yields a fresh parent `L`, its `value : Operations L (A * B)`,
+Opening the result yields a fresh parent `L`, its `storage : Storage L`,
 `left` and `right` field groups, and state conversions.
 Names come from ordinary source packages: a record module may expose `#length = left` and `#payload = right`.
 Nested records require neither reflection nor a compiler row system.
@@ -1235,14 +1230,18 @@ The `runtime_fields` operations query, compose, and project these paths through 
 Neither path form appends a descriptor to its resulting pointer.
 
 Records track partial construction with the erased `Fields LeftState RightState` constructor.
-For a left field containing `A`, the operations have these schematic shapes, with `S` and `R` quantified:
+A field's accessors select a logical type and matching codec when used.
+After supplying `A`, `Codec Left A`, and sibling state `S` to a left accessor,
+its remaining value-function arguments produce these suspended protocols:
 
 ```text
-left/unsafe/init : Ptr L (Fields Uninit S) -> A -> Thk (Ptr L (Fields Init S) -> R) -> R
-left/unsafe/read : Ptr L (Fields Init S) -> Thk (A -> R) -> R
-left/unsafe/take : Ptr L (Fields Init S) -> Thk (Ptr L (Fields Uninit S) -> A -> R) -> R
+left/init pointer value : Thk (Cps (Ptr L (Fields Init S)))  -- pointer has Fields Uninit S
+left/read pointer       : Thk (Cps A)                      -- pointer has Fields Init S
+left/take pointer       : Thk (forall R. Thk (Ptr L (Fields Uninit S) -> A -> R) -> R)
 ```
 
+These accessors live under `unsafe`, which slash projection can omit when unambiguous.
+For example, `! (left/init A codec S pointer value) R yes` initializes the left field.
 The right field preserves the left state analogously.
 `states/empty` opens `Uninit` as `Fields Uninit Uninit`, and `states/full` opens `Init` as `Fields Init Init`.
 `states/finish` and `states/vacate` perform the inverse conversions for completely initialized or vacant records.
@@ -1258,16 +1257,23 @@ The [record and view example](../../lib/tests/std/general-views.zy) exercises di
 
 ### Array storage and element builders
 
-The [array factory](../../lib/std/memory/array.zy) receives an opened element layout.
-`arrays/make Element A element capacity alignment` requires static placement inputs and returns a checked result.
-`arrays/realize Element A R element capacity alignment no yes` validates runtime inputs before exposing operations.
-Both check extent multiplication and alignment rounding before allocation; fixed multiplication is composed
-from the existing integer value intrinsics in [size.zy](../../lib/std/memory/size.zy).
-No integer-dependent type or new static arithmetic intrinsic is required.
+The [array factory](../../lib/std/memory/array.zy) composes element storage without selecting a logical value type.
+`arrays/make Element storage capacity boundary` takes `Storage Element` and static inputs,
+returning `Result (Array Element) LayoutError`.
+`arrays/realize Element R storage capacity boundary no yes` takes `DynamicStorage Element`,
+validates runtime inputs, and supplies `DynamicArray Element`.
+Both calculate `stride = round_up(element_size, element_alignment)`
+and `size = round_up(stride * capacity, max(element_alignment, boundary))`, checking all arithmetic before allocation.
+An eight-byte element aligned to 64 therefore has stride 64; a codec still touches only its meaningful bytes.
+Fixed arithmetic uses [size.zy](../../lib/std/memory/size.zy),
+dynamic arithmetic uses [dynamic-size.zy](../../lib/std/memory/dynamic-size.zy).
+No integer-dependent type is required.
 
-Opening `Array Element A` introduces an array-layout witness `L`, a construction handle `Build`, and `Values`.
-`Ptr L S` is one address; a fixed capacity and stride specialize the operations.
-A dynamic description retains its capacity and placement where its operations need them.
+Opening either package introduces an array-layout witness `L`, construction handle `Build`, and family `Values A`.
+The package supplies `storage`, `capacity`, `stride`, and element/builder operations.
+`Ptr L S` is one address.
+Fixed recipes specialize their geometry; dynamic packages retain the geometry and ordinary operation thunks.
+Dynamic packages contain no static value-function fields.
 `elements/unsafe/at` checks an index against capacity and produces `Ptr Element S`;
 zero-sized elements have zero stride and require no backing bytes.
 `elements/unsafe/base` is a pure address interpretation and supplies no dereference bounds.
@@ -1283,18 +1289,31 @@ Abandoning a continuation produces neither cleanup nor failure notification.
 The `buffer/unsafe` group manages this prefix explicitly.
 `start` begins with zero initialized elements; `resume` reopens a fully initialized array at capacity.
 `length` and `prefix` expose the current count and a counted initialized element pointer.
-`push` checks capacity before writing; `pop` takes the last element and decreases the count.
+`push` checks capacity before writing; `pop` reads the last element and decreases the count.
+Fixed calls select `A` and `Codec Element A` as value arguments: `! (buffer/push A codec build value) R no yes`
+and `! (buffer/pop A codec build) R no yes`.
+Dynamic calls explicitly dispatch through `DynamicCodec Element A`:
+`! buffer/push A R codec build value no yes` and `! buffer/pop A R codec build no yes`.
 `finish` requires a complete prefix, while `free` requires an empty one and the original allocator.
 A rejected operation preserves the supplied handle and storage.
 Copying handles still permits stale aliases.
 
-The optional `contents : Operations L Values` interface makes an array usable as a child of a typed record.
-`values/generate` builds exactly its capacity of logical elements through a pure callback;
-`values/at` observes those logical values with a checked index.
-Whole-value reads and takes explicitly copy elements into a managed list behind `Values`.
-Direct element access, prefix building, and `init_each` do not create that intermediate list.
-[Array construction](../../lib/tests/std/array-memory.zy)
-and [runtime selection](../../lib/tests/std/runtime-memory.zy) exercise success, partial failure, and explicit release.
+Whole-value conversion is optional.
+For a fixed array, `array/codecs A element_codec` produces `Codec L (Values A)`.
+A dynamic array uses `! array/codecs A dynamic_element_codec`,
+returning a materialized `DynamicCodec L (Values A)` through `Ret`.
+`values/generate A` builds exactly the capacity of logical elements through a pure callback;
+`values/at A` observes them with a checked index.
+`Values` is sealed, preserving that length contract.
+Whole-value reads and takes construct a managed list behind `Values A`.
+Direct access, prefix building, and `init_each` need no such list.
+Embedding array storage in a record requires only the array's `storage` component.
+[Array construction](../../lib/tests/std/array-memory.zy),
+[storage-only padded stride](../../lib/tests/std/storage-arrays.zy),
+and [runtime selection](../../lib/tests/std/runtime-memory.zy) exercise these choices.
+A typed no-read discard operation remains
+[proposed](../proposals/memory.md#independently-selectable-storage-operations);
+manual address reinterpretation remains available under its existing obligations.
 
 ### Memory views
 
@@ -1345,7 +1364,7 @@ The supplied constructors support these handle forms:
 | --- | --- | --- |
 | `thin` | `Ptr L S` | Same pointer and `Unit`, through `Ret` |
 | `fat` | `Ptr L S * M` | Carried pointer and arbitrary runtime metadata, through `Ret` |
-| `unsafe/header` | Abstract `H S`, backed by `Addr` | Read a metadata layout at a fixed signed displacement; calculate payload address through CPS |
+| `unsafe/header` | Abstract `H S`, backed by `Addr` | Read through a metadata codec at a fixed signed displacement; calculate payload address through CPS |
 | `unsafe/inline` | Header address in `H S` | Metadata at the handle; payload at a fixed displacement |
 | `unsafe/prefix` | Payload address in `H S` | Metadata at a signed displacement; preserve payload address |
 | `unsafe/indirect` | Address of an unmanaged pointer slot | Load its pointer, then run another CPS view |
@@ -1354,7 +1373,9 @@ A `Header M Payload` package supplies the handle family `H S` and its unsafe wra
 The caller establishes initialized metadata fields and payload state `S` independently;
 finding an uninitialized destination does not require a fully initialized enclosing object.
 For a counted initialized element interpretation, the obligation covers the stated extent, not spare capacity.
-`unsafe/dynamic_header` accepts explicit runtime displacements and a raw address under these same obligations.
+The fixed header constructors receive `Codec Metadata M` without requiring its allocation geometry.
+`unsafe/dynamic_header` receives `DynamicCodec Metadata M`, runtime displacements,
+and a raw address under these same obligations.
 A header containing a vtable address is supported as data; calling code pointers has its separate FFI boundary.
 
 [headers/from_fields](../../lib/std/memory/header.zy) derives inline and prefix recipes
@@ -1366,8 +1387,9 @@ The inline handle is the allocation base; the prefix handle is `base + 16`.
 The [complete example](../../lib/tests/std/header-array.zy) constructs that layout and uses both interpretations.
 
 `bounded` wraps a counted CPS view with checks for nonnegative capacity and `0 <= length <= capacity`.
-`counted` and `counted_checked` derive element stride from selected layout operations,
+`counted` and `counted_checked` receive `Storage L`, derive rounded element stride,
 validate index and multiplication bounds, and produce an element pointer.
+`dynamic_counted` and `dynamic_counted_checked` use `DynamicStorage L` and compute checked stride at runtime.
 These checks cannot establish allocation validity or initialized contents from an arbitrary header.
 A fixed array can instead use a thin interpretation, keeping its bound in the recipe without a carried length.
 

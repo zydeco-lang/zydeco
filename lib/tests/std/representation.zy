@@ -2,7 +2,21 @@
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /UInt32; /Addr; /OS;
     /numeric; /process; builtin) : @(import(std/builtin)) that
-  let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
+  let (
+    /storage;
+    /codecs;
+    /Uninit;
+    /Init;
+    /Ptr;
+    /Slice;
+    /slices;
+    /fixed;
+    /dynamic;
+    /allocation;
+    /pointer;
+    /raw
+  )
+  =
     builtin |> (@(import(std/memory)))
   in
   let (= Plan, = Layout, layout) = fixed in
@@ -21,16 +35,18 @@ begin
       )
       fail {
       fn (= L, repr) =>
-        ! numeric/int/eq OS repr/alignment alignment {
-          ! repr/allocate OS heap no {
+        ! numeric/int/eq OS (storage/runtime/query L repr/storage)/alignment alignment {
+          ! allocation/dynamic_reserve L OS heap repr/storage no {
             fn pointer =>
-              ! repr/unsafe/init OS pointer (7 : UInt8, 42 : UInt32) {
+              ! repr/codec/init pointer (7 : UInt8, 42 : UInt32) OS {
                 fn value =>
-                  ! repr/unsafe/take OS value {
+                  ! codecs/unsafe/dynamic_take L (UInt8 * UInt32) repr/codec value OS {
                     fn vacant (tag, payload) =>
                       ! numeric/uint8/eq OS tag 7 {
                         ! numeric/uint32/eq OS payload 42 {
-                          ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+                          ! allocation/unsafe/dynamic_release L OS heap repr/storage vacant no {
+                            ! process/exit 0
+                          }
                         } fail
                       } fail
                   }

@@ -14,7 +14,7 @@ begin
     /process;
     builtin
   ) : @(import(std/builtin)) that
-  let (
+  let (/storage; /codecs;
     /Uninit;
     /Init;
     /Fields;
@@ -48,12 +48,17 @@ begin
       | +Err(_) => fail
       | +Ok(value_plan) =>
         let (#L = Value, value) = layout/realize UInt32 value_plan in
-        match records/at Length Value Int UInt32 length value 0 16 32 16
+        match records/at Length Value length/storage value/storage 0 16 32 16
         | +Err(_) => fail
         | +Ok(record) =>
-          let (/L; /value = object; /states; /left; /right) = record in
+          let (/L; /storage = object_storage; /states; /left; /right) = record in
+          let object = (
+            #storage = object_storage,
+            #codec = codecs/product L Length Value Int UInt32 left/path right/path length/codec
+              value/codec
+          ) in
           let named = (#length = left, #payload = right) in
-          let forms = headers/from_fields L Length Value Int length named/length/path
+          let forms = headers/from_fields L Length Value Int length/codec named/length/path
             named/payload/path in
           let (/H; /unsafe = inline) = forms/inline in
           let (/H = Prefix; /unsafe = prefix) = forms/prefix in
@@ -65,9 +70,12 @@ begin
               ! numeric/uint/load_le OS gap {
                 fn padding =>
                   ! numeric/uint/eq OS padding 6148914691236517205 {
-                    ! object/unsafe/take OS live {
+                    ! (codecs/unsafe/take L (Int * UInt32) object/codec live) OS {
                       fn vacant _ =>
-                        ! object/unsafe/free OS heap vacant no { ! process/exit 0 }
+                        ! (
+                          allocation/unsafe/release L Unit allocation/static_heap () object/storage
+                            vacant
+                        ) OS no { ! process/exit 0 }
                     }
                   } fail
               }
@@ -96,7 +104,7 @@ begin
                   ! raw/unsafe/store_addr OS slot base {
                     ! (view_unsafe/indirect (Ptr Value Init * Int) open_address slot) OS {
                       fn (restored, _) =>
-                        ! value/unsafe/read OS restored {
+                        ! (value/codec/read restored) OS {
                           fn read =>
                             ! numeric/uint32/eq OS read 41 { ! check_dynamic live slot } fail
                         }
@@ -108,7 +116,7 @@ begin
             fn live =>
               let base = pointer/unsafe/address L Init live in
               do payload <- ! (initialized L Value named/payload/path live);
-              ! value/unsafe/read OS payload {
+              ! (value/codec/read payload) OS {
                 fn read =>
                   ! numeric/uint32/eq OS read 41 {
                     ! (inline/open Init (inline/from_address Init base)) OS {
@@ -117,7 +125,7 @@ begin
                         ! (prefix/open Init (prefix/from_address Init payload_address)) OS {
                           fn (payload, count) =>
                             ! numeric/int/eq OS first_count count {
-                              ! value/unsafe/read OS payload {
+                              ! (value/codec/read payload) OS {
                                 fn read =>
                                   ! numeric/uint32/eq OS read 41 { ! check_indirect live } fail
                               }
@@ -128,13 +136,13 @@ begin
               }
           } in
           {
-            ! object/allocate OS heap no {
+            ! (allocation/reserve L Unit allocation/static_heap () object/storage) OS no {
               fn vacant =>
                 let base = pointer/unsafe/address L Uninit vacant in
                 ! raw/unsafe/fill OS base 32 85 {
-                  ! named/length/init Uninit OS (states/empty vacant) 1 {
+                  ! (named/length/init Int length/codec Uninit (states/empty vacant) 1) OS {
                     fn partial =>
-                      ! named/payload/init Init OS partial 41 {
+                      ! (named/payload/init UInt32 value/codec Init partial 41) OS {
                         fn complete =>
                           ! check_headers (states/finish complete)
                       }

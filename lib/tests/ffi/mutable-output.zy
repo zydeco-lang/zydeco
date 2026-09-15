@@ -1,7 +1,7 @@
 begin
   param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt; /Int32;
-    /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
-  let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = builtin |> (
+    /numeric; /process; /Unit; builtin) : @(import("../../std/builtin.zy")) in
+  let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = builtin |> (
     @(import("../../std/memory/package.zy"))
   ) in
   let (= Plan, = Layout, layouts) = fixed in
@@ -28,15 +28,17 @@ begin
           } fail
         } fail
     } in
-    ! repr/allocate OS heap no {
+    ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no {
       fn vacant =>
         ! initialize vacant {
           fn value =>
-            ! repr/unsafe/take OS value {
+            ! (codecs/unsafe/take L (UInt8 * UInt32) repr/codec value) OS {
               fn vacant (tag, payload) =>
                 ! numeric/uint8/eq OS tag 7 {
                   ! numeric/uint32/eq OS payload 42 {
-                    ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+                    ! (
+                      allocation/unsafe/release L Unit allocation/static_heap () repr/storage vacant
+                    ) OS no { ! process/exit 0 }
                   } fail
                 } fail
             }

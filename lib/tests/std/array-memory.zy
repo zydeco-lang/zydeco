@@ -1,9 +1,12 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int; /UInt32; /OS; /numeric; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Int; /UInt32; /OS; /numeric; /process; /Unit; builtin) :
+  @(import(
     std/builtin
   )) that
-  let (/Uninit; /Init; /Ptr; /arrays; /fixed; /allocation) = builtin |> (@(import(std/memory))) in
+  let (/storage; /codecs; /Uninit; /Init; /Ptr; /arrays; /fixed; /allocation) = builtin |> (
+    @(import(std/memory))
+  ) in
   let (= Plan, = Layout, layout) = fixed in
   let (/heap) = allocation in
   let Fault = @(import("../../std/memory/fault.zy")) in
@@ -14,38 +17,57 @@ begin
     | +Err(_) => fail
     | +Ok(plan) =>
       let (#L = Element, element) = layout/realize UInt32 plan in
-      match arrays/make Element UInt32 element 4 16
+      match arrays/make Element element/storage 4 16
       | +Err(_) => fail
       | +Ok(array) =>
-        let (/L; /Build; /Values; /contents; /values; /capacity; /elements; /buffer) = array in
+        let (
+          /L;
+          /Build;
+          /Values = Sequence;
+          /storage = array_storage;
+          /values;
+          /capacity;
+          /elements;
+          /buffer;
+          /codecs = array_codecs;
+          /dynamic_codecs = array_dynamic_codecs
+        )
+        =
+          array
+        in
+        let Values = Sequence UInt32 in
+        let contents = (#storage = array_storage, #codec = array_codecs UInt32 element/codec) in
         let complete =
           {
             -- The second allocation reaches whole-array Init without intermediate values.
-            ! contents/allocate OS heap no
+            ! (allocation/reserve L Unit allocation/static_heap () contents/storage) OS no
               {
                 fn vacant =>
                   ! elements/init_each OS vacant {
                     fn _ pointer _ yes =>
-                      ! element/unsafe/init OS pointer 19 yes
+                      ! (element/codec/init pointer 19) OS yes
                   } { fn _ _ => ! fail }
                     {
                       fn live =>
                         ! elements/at Init OS live 3 no
                           {
                             fn last =>
-                              ! element/unsafe/read OS last
+                              ! (element/codec/read last) OS
                                 {
                                   fn item =>
                                     ! numeric/uint32/eq OS item 19
                                       {
                                         -- Whole-value taking explicitly copies the elements into a logical value.
-                                        ! contents/unsafe/take OS live {
+                                        ! (codecs/unsafe/take L Values contents/codec live) OS {
                                           fn vacant copied =>
-                                            do last <- ! values/at copied 3;
+                                            do last <- ! values/at UInt32 copied 3;
                                             match last
                                             | +Err(_) => ! fail
                                             | +Ok(item) => ! numeric/uint32/eq OS item 19 {
-                                              ! contents/unsafe/free OS heap vacant no {
+                                              ! (
+                                                allocation/unsafe/release L Unit
+                                                  allocation/static_heap () contents/storage vacant
+                                              ) OS no {
                                                 ! process/exit 0
                                               }
                                             } fail
@@ -59,12 +81,12 @@ begin
           }
         in
         {
-          ! contents/allocate OS heap no {
+          ! (allocation/reserve L Unit allocation/static_heap () contents/storage) OS no {
             fn vacant =>
               ! elements/init_each OS vacant {
                 fn index pointer error yes =>
                   ! numeric/int/eq OS index 2 { ! error +Bounds() pointer } {
-                    ! element/unsafe/init OS pointer 7 yes
+                    ! (element/codec/init pointer 7) OS yes
                   }
               } {
                 fn fault progress =>
@@ -76,10 +98,10 @@ begin
                         fn fault =>
                           match fault
                           | +Bounds() =>
-                            ! buffer/pop OS progress no {
+                            ! (buffer/pop UInt32 element/codec progress) OS no {
                               fn progress item =>
                                 ! numeric/uint32/eq OS item 7 {
-                                  ! buffer/pop OS progress no {
+                                  ! (buffer/pop UInt32 element/codec progress) OS no {
                                     fn empty _ =>
                                       ! buffer/free OS heap empty no {
                                         ! complete

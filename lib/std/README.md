@@ -134,12 +134,11 @@ memory/layout.zy           static layout plans and typed destination operations
 memory/dynamic-layout.zy   explicitly dynamic placement and realization
 memory/size.zy             checked static size and alignment calculations
 memory/shape.zy            inspectable scalar widths and product placement
-memory/codec.zy            direct destination scalar/product recipes
 memory/buffer.zy           incremental byte construction, snapshots, retention, release
 memory/allocation.zy       explicit allocator services
 memory/slice.zy            counted typed pointers and checked index arithmetic
 memory/native.zy           raw memory adapter and source fault values
-memory/representation.type.zy  layout witness and typed CPS access interface
+memory/representation.type.zy  witness with separate storage and codec components
 
 system/package.zy          system data types and capability-preserving assembly
 
@@ -339,8 +338,8 @@ layout laws, unsafe obligations, and retention.
 The package introduces no lifetimes or borrow checker.
 
 ```zydeco check
-param (/VType; /CType; /Thk; /OS; /UInt8; /process; builtin) : @(import("builtin.zy")) in
-let (/Uninit; /Init; /Ptr; /fixed; /allocation) = builtin |> (@(import("memory/package.zy"))) in
+param (/VType; /CType; /Thk; /OS; /UInt8; /Unit; /process; builtin) : @(import("builtin.zy")) in
+let (/Uninit; /Init; /Ptr; /fixed; /allocation; /codecs) = builtin |> (@(import("memory/package.zy"))) in
 let (= Plan, = Layout, layouts) = fixed in
 let (/Alloc; /heap) = allocation in
 let Fault = @(import("memory/fault.zy")) in
@@ -350,10 +349,10 @@ match layouts/uint8
 | +Err(_) => ! fail
 | +Ok(plan) =>
   let (= L, repr) = layouts/realize UInt8 plan in
-  ! repr/allocate OS heap no { fn vacant =>
-    ! repr/unsafe/init OS vacant 7 { fn live =>
-      ! repr/unsafe/take OS live { fn vacant value =>
-        ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+  ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no { fn vacant =>
+    ! (repr/codec/init vacant 7) OS { fn live =>
+      ! (codecs/unsafe/take L UInt8 repr/codec live) OS { fn vacant value =>
+        ! (allocation/unsafe/release L Unit allocation/static_heap () repr/storage vacant) OS no { ! process/exit 0 }
       }
     }
   }
@@ -365,7 +364,8 @@ The types guide transitions, while the caller remains responsible for stale alia
 allocation lifetime, initialization, and matching release.
 `unsafe` is an ordinary library namespace documenting those obligations.
 
-Typed records compose opened element operations and expose field paths plus partial-initialization accessors.
+Typed records compose storage geometry independently of logical codecs
+and expose field paths plus partial-initialization accessors.
 Arrays supply direct element access and an explicit initialized-prefix builder.
 General views interpret thin, fat, header, or indirect handles independently of the storage layout.
 Fixed recipes specialize through value functions; `DynamicView` and `DynamicField` make runtime selection explicit.
@@ -374,6 +374,7 @@ costs, and caller obligations.
 
 | Need | API or example |
 | --- | --- |
+| Independent geometry and codecs | [storage.zy](memory/storage.zy), [codecs.zy](memory/codecs.zy), [static and runtime example](../tests/std/storage-codecs.zy) |
 | Fixed placement, padding, and alignment | [layout.zy](memory/layout.zy), [aligned record](../tests/std/static-layout.zy) |
 | Typed fields and partial record initialization | [record.zy](memory/record.zy), [field.zy](memory/field.zy), [example](../tests/std/general-views.zy) |
 | Fixed arrays and element builders | [array.zy](memory/array.zy), [construction and cleanup](../tests/std/array-memory.zy) |
@@ -388,7 +389,7 @@ costs, and caller obligations.
 | Share a pointer with another source module | [CPS worker](../tests/std/represented-call/main.zy) |
 | C input and mutable output | [aligned input](../tests/ffi/static-layout.zy), [output](../tests/ffi/mutable-output.zy) |
 
-An array's optional `contents` operations copy whole logical values through an abstract managed list.
+An explicitly selected array codec copies whole logical values through the abstract `Values A` managed list.
 Use `elements/unsafe/init_each` and the prefix builder to construct storage directly without that intermediate value.
 These costs are separate from the compiler's ordinary product, thunk, and frame representation.
 

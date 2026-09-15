@@ -2,7 +2,21 @@
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /UInt32; /Addr; /OS;
     /numeric; /process; builtin) : @(import(std/builtin)) that
-  let (/Uninit; /Init; /Ptr; /Slice; /slices; /fixed; /dynamic; /allocation; /pointer; /raw) =
+  let (
+    /storage;
+    /codecs;
+    /Uninit;
+    /Init;
+    /Ptr;
+    /Slice;
+    /slices;
+    /fixed;
+    /dynamic;
+    /allocation;
+    /pointer;
+    /raw
+  )
+  =
     builtin |> (@(import(std/memory)))
   in
   let (= Plan, = Layout, layout) = fixed in
@@ -15,14 +29,14 @@ begin
   | +Err(_) => ! fail
   | +Ok(plan) =>
     let (= L, repr) = layout/realize Int plan in
-    let access = slices/for_layout L Int repr in
+    let access = slices/for_layout L repr/storage in
     ! raw/allocate OS 24 8 no {
       fn base =>
         do second <- ! raw/unsafe/offset base 8;
         do slot <- ! raw/unsafe/offset base 16;
-        ! repr/unsafe/init OS (pointer/unsafe/from_address L Uninit base) 11 {
+        ! (repr/codec/init (pointer/unsafe/from_address L Uninit base) 11) OS {
           fn first =>
-            ! repr/unsafe/init OS (pointer/unsafe/from_address L Uninit second) 22 {
+            ! (repr/codec/init (pointer/unsafe/from_address L Uninit second) 22) OS {
               fn _ =>
                 ! raw/unsafe/store_addr OS slot base {
                   ! raw/unsafe/load_addr OS slot {
@@ -37,7 +51,7 @@ begin
                               | +Bounds() =>
                                 ! access/unsafe/at Init OS slice 1 no {
                                   fn pointer =>
-                                    ! repr/unsafe/read OS pointer {
+                                    ! (repr/codec/read pointer) OS {
                                       fn value =>
                                         ! numeric/int/eq OS value 22 {
                                           ! raw/unsafe/free OS base 24 8 no { ! process/exit 0 }

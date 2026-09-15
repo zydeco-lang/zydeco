@@ -8,6 +8,8 @@ e2e_sources!({
     array_memory => "tests/std/array-memory.zy",
     header_array => "tests/std/header-array.zy",
     runtime_memory => "tests/std/runtime-memory.zy",
+    storage_arrays => "tests/std/storage-arrays.zy",
+    typed_memory_kernel => "tests/std/typed-memory-kernel.zy",
 });
 
 struct LayoutCase;
@@ -23,9 +25,10 @@ impl LayoutCase {
 
     fn record(body: &str) -> String {
         Self::source(&format!(
-            "let run = match records/product Left Right Int Int left right \
+            "let run = match records/product Left Right left/storage right/storage \
              | +Err(_) => fail | +Ok(record) => \
-             let (/L; /value; /states; /left = first; /right = second) = record in \
+             let (/L; /storage = object_storage; /states; /left = first; /right = second) = record in
+             let value = (#storage = object_storage, #codec = codecs/product L Left Right Int Int first/path second/path left/codec right/codec) in \
              {{ {body} }} end in ! run"
         ))
     }
@@ -51,8 +54,7 @@ fn explicit_record_placement_checks_alignment_overlap_and_extent() {
         ),
     ] {
         let body = format!(
-            "let code = match records/at Left Right Int Int left right \
-             {first} {second} {count} {alignment} | {pattern} => 0 | _ => 1 end in ! exit code"
+            "let code = match records/at Left Right left/storage right/storage {first} {second} {count} {alignment} | {pattern} => 0 | _ => 1 end in ! exit code"
         );
         SourceCase::assert_accepted(SourceCase::run(&LayoutCase::source(&body)));
     }
@@ -82,14 +84,14 @@ fn checked_static_multiplication_handles_overflow_without_runtime_primitives() {
 #[test]
 fn partial_field_states_reject_uninitialized_reads_and_incomplete_finish() {
     for body in [
-        "! value/allocate OS heap no { fn p => \
-         ! first/read Uninit OS (states/empty p) { fn _ => ! exit 0 } }",
-        "! value/allocate OS heap no { fn p => \
+        "! (allocation/reserve L Unit allocation/static_heap () value/storage) OS no { fn p => \
+         ! (first/read Int left/codec Uninit (states/empty p)) OS { fn _ => ! exit 0 } }",
+        "! (allocation/reserve L Unit allocation/static_heap () value/storage) OS no { fn p => \
          let live = states/finish (states/empty p) in ! exit 0 }",
-        "! value/allocate OS heap no { fn p => \
-         ! first/init Uninit OS (states/empty p) 7 { fn partial => \
-         ! first/init Uninit OS partial 8 { fn _ => ! exit 0 } } }",
-        "! value/allocate OS heap no { fn p => \
+        "! (allocation/reserve L Unit allocation/static_heap () value/storage) OS no { fn p => \
+         ! (first/init Int left/codec Uninit (states/empty p) 7) OS { fn partial => \
+         ! (first/init Int left/codec Uninit partial 8) OS { fn _ => ! exit 0 } } }",
+        "! (allocation/reserve L Unit allocation/static_heap () value/storage) OS no { fn p => \
          do child <- ! (fields/uninitialized L Right first/path p); ! exit 0 }",
     ] {
         SourceCase::assert_rejected(
@@ -107,10 +109,10 @@ fn fixed_views_and_geometry_cannot_be_unknown_runtime_arguments() {
          { fn view value => ! (view value) } in \
          do value <- ! use (val value => { ret value }) 1; ! exit 0",
         "let use : Thk (Int -> OS) = { fn count => \
-         match arrays/make Left Int left count 8 \
+         match arrays/make Left left/storage count 8 \
          | +Err(_) => ! fail | +Ok(_) => ! exit 0 end } in ! use 4",
         "let use : Thk (Int -> OS) = { fn offset => \
-         match records/at Left Right Int Int left right 0 offset 16 8 \
+         match records/at Left Right left/storage right/storage 0 offset 16 8 \
          | +Err(_) => ! fail | +Ok(_) => ! exit 0 end } in ! use 8",
     ] {
         SourceCase::assert_rejected(
@@ -133,13 +135,17 @@ do view <- ! choose 1;
 do answer <- ! view 7;
 ! int/eq OS answer 8 {
   let make : Thk (Int -> OS) = { fn count =>
-    ! arrays/realize Left Int OS left count 16 no { fn array =>
-      let (/L; /contents; /elements; /buffer) = array in
-      ! contents/allocate OS heap no { fn p =>
-        ! elements/init_each OS p { fn _ slot _ yes => ! left/unsafe/init OS slot 9 yes }
+    ! arrays/realize Left OS (storage/constant/materialize Left left/storage) count 16 no { fn array =>
+      let (/L; /storage = array_storage; /elements; /buffer; /Values = Sequence; /codecs = array_codecs) = array in
+let Values = Sequence Int in
+      let element_codec = codecs/materialize Left Int left/codec in
+      do contents_codec <- ! array_codecs Int element_codec;
+      let contents = (#storage = array_storage, #codec = contents_codec) in
+      ! allocation/dynamic_reserve L OS heap contents/storage no { fn p =>
+        ! elements/init_each OS p { fn _ slot _ yes => ! (left/codec/init slot 9) OS yes }
           { fn _ _ => ! fail } { fn initialized =>
-            ! contents/unsafe/take OS initialized { fn vacant _ =>
-              ! contents/unsafe/free OS heap vacant no { ! exit 0 }
+            ! codecs/unsafe/dynamic_take L Values contents/codec initialized OS { fn vacant _ =>
+              ! allocation/unsafe/dynamic_release L OS heap contents/storage vacant no { ! exit 0 }
             }
           }
       }
@@ -158,7 +164,7 @@ fn dynamic_array_rejection_precedes_allocation() {
         (zydeco_machine::word::RuntimeWord::SIGNED_MAX, 8, "+Overflow()"),
     ] {
         let body = format!(
-            "! arrays/realize Left Int OS left {count} {alignment} \
+            "! arrays/realize Left OS (storage/constant/materialize Left left/storage) {count} {alignment} \
              {{ fn fault => match fault | {fault} => ! exit 0 | _ => ! fail end }} \
              {{ fn _ => ! fail }}"
         );
@@ -173,16 +179,16 @@ let retained = fields/materialize L Right second/path in
 let use : Thk (DynamicField L Right -> Ptr L Init -> Thk (Int -> OS) -> OS) = {
   fn path live yes =>
     do member <- ! runtime_fields/initialized L Right path live;
-    ! right/unsafe/read OS member yes
+    ! (right/codec/read member) OS yes
 } in
-! value/allocate OS heap no { fn p =>
-  ! value/unsafe/init OS p (11, 22) { fn live =>
+! (allocation/reserve L Unit allocation/static_heap () value/storage) OS no { fn p =>
+  ! (value/codec/init p (11, 22)) OS { fn live =>
     -- The read occurs before releasing the allocation.
     do path_offset <- ! runtime_fields/offset L Right retained;
     ! int/eq OS path_offset 8 {
       ! use retained live { fn read =>
         ! int/eq OS read 22 {
-          ! value/unsafe/take OS live { fn p _ => ! value/unsafe/free OS heap p no { ! exit 0 } }
+          ! (codecs/unsafe/take L (Int * Int) value/codec live) OS { fn p _ => ! (allocation/unsafe/release L Unit allocation/static_heap () value/storage p) OS no { ! exit 0 } }
         } fail
       }
     } fail
@@ -193,7 +199,7 @@ let use : Thk (DynamicField L Right -> Ptr L Init -> Thk (Int -> OS) -> OS) = {
     SourceCase::assert_rejected(
         SourceCase::check(&LayoutCase::record(
             "let retained = fields/materialize L Right second/path in \
-             ! value/allocate OS heap no { fn p => \
+             ! (allocation/reserve L Unit allocation/static_heap () value/storage) OS no { fn p => \
              do member <- ! runtime_fields/initialized L Right retained p; ! exit 0 }",
         )),
         TyckDiagnosticCode::TypeMismatch,
@@ -207,14 +213,18 @@ match memory/unit
 | +Err(_) => ! fail
 | +Ok(plan) =>
   let (#L = Element, element) = memory/realize Unit plan in
-  ! arrays/realize Element Unit OS element 3 16 no { fn array =>
-    let (/L; /contents; /elements; /buffer) = array in
-    ! contents/allocate OS heap no { fn p =>
-      ! elements/init_each OS p { fn _ slot _ yes => ! element/unsafe/init OS slot () yes }
+  ! arrays/realize Element OS (storage/constant/materialize Element element/storage) 3 16 no { fn array =>
+    let (/L; /storage = array_storage; /elements; /buffer; /Values = Sequence; /codecs = array_codecs) = array in
+let Values = Sequence Unit in
+      let element_codec = codecs/materialize Element Unit element/codec in
+      do contents_codec <- ! array_codecs Unit element_codec;
+      let contents = (#storage = array_storage, #codec = contents_codec) in
+    ! allocation/dynamic_reserve L OS heap contents/storage no { fn p =>
+      ! elements/init_each OS p { fn _ slot _ yes => ! (element/codec/init slot ()) OS yes }
         { fn _ _ => ! fail } { fn live =>
           ! elements/at Init OS live 2 no { fn last =>
-            ! element/unsafe/read OS last { fn _ =>
-              ! contents/unsafe/take OS live { fn p _ => ! contents/unsafe/free OS heap p no { ! exit 0 } }
+            ! (element/codec/read last) OS { fn _ =>
+              ! codecs/unsafe/dynamic_take L Values contents/codec live OS { fn p _ => ! allocation/unsafe/dynamic_release L OS heap contents/storage p no { ! exit 0 } }
             }
           }
         }
@@ -228,18 +238,22 @@ end
 #[test]
 fn builder_capacity_failures_preserve_the_prefix_and_storage() {
     let body = r#"
-! arrays/realize Left Int OS left 1 8 no { fn array =>
-  let (/L; /contents; /buffer) = array in
-  ! contents/allocate OS heap no { fn p =>
+! arrays/realize Left OS (storage/constant/materialize Left left/storage) 1 8 no { fn array =>
+  let (/L; /storage = array_storage; /buffer; /Values = Sequence; /codecs = array_codecs) = array in
+let Values = Sequence Int in
+      let element_codec = codecs/materialize Left Int left/codec in
+      do contents_codec <- ! array_codecs Int element_codec;
+      let contents = (#storage = array_storage, #codec = contents_codec) in
+  ! allocation/dynamic_reserve L OS heap contents/storage no { fn p =>
     do empty <- ! buffer/start p;
     ! buffer/finish OS empty { fn fault =>
       match fault | +Bounds() =>
-        ! buffer/push OS empty 17 no { fn full =>
-          ! buffer/push OS full 99 { fn fault =>
+        ! buffer/push Int OS element_codec empty 17 no { fn full =>
+          ! buffer/push Int OS element_codec full 99 { fn fault =>
             match fault | +Bounds() =>
               do count <- ! buffer/length full;
               ! int/eq OS count 1 {
-                ! buffer/pop OS full no { fn empty value =>
+                ! buffer/pop Int OS element_codec full no { fn empty value =>
                   ! int/eq OS value 17 {
                     ! buffer/free OS heap empty no { ! exit 0 }
                   } fail
@@ -292,18 +306,18 @@ let bad = compose_checked Fault Int Int Int first second in
 #[test]
 fn header_metadata_can_be_opened_before_payload_initialization() {
     let body = r#"
-let forms = headers/from_fields L Left Right Int left first/path second/path in
+let forms = headers/from_fields L Left Right Int left/codec first/path second/path in
 let (/H; /unsafe = view) = forms/inline in
-! value/allocate OS heap no { fn vacant =>
-  ! first/init Uninit OS (states/empty vacant) 1 { fn partial =>
+! (allocation/reserve L Unit allocation/static_heap () value/storage) OS no { fn vacant =>
+  ! (first/init Int left/codec Uninit (states/empty vacant) 1) OS { fn partial =>
     let base = pointer/unsafe/address L (Fields Init Uninit) partial in
     ! (view/open Uninit (view/from_address Uninit base)) OS { fn (destination, count) =>
       ! int/eq OS count 1 {
-        ! right/unsafe/init OS destination 7 { fn initialized =>
+        ! (right/codec/init destination 7) OS { fn initialized =>
           let completed = second/replace Uninit Init Init partial initialized in
-          ! value/unsafe/take OS (states/finish completed) { fn vacant (_, item) =>
+          ! (codecs/unsafe/take L (Int * Int) value/codec (states/finish completed)) OS { fn vacant (_, item) =>
             ! int/eq OS item 7 {
-              ! value/unsafe/free OS heap vacant no { ! exit 0 }
+              ! (allocation/unsafe/release L Unit allocation/static_heap () value/storage vacant) OS no { ! exit 0 }
             } fail
           }
         }
@@ -315,7 +329,7 @@ let (/H; /unsafe = view) = forms/inline in
     SourceCase::assert_accepted(SourceCase::run(&LayoutCase::record(body)));
     SourceCase::assert_rejected(
         SourceCase::check(&LayoutCase::record(
-            "let forms = headers/from_fields L Left Right Int left first/path second/path in \
+            "let forms = headers/from_fields L Left Right Int left/codec first/path second/path in \
              let (/H; /unsafe = view) = forms/inline in \
              let read : Thk (H Uninit -> OS) = { fn handle => \
              ! (view/open Init handle) OS { fn _ => ! exit 0 } } in ! exit 0",
@@ -327,25 +341,26 @@ let (/H; /unsafe = view) = forms/inline in
 #[test]
 fn nested_field_paths_and_partial_updates_preserve_sibling_states() {
     let body = r#"
-let next = match records/product Left L Int (Int * Int) left value
+let next = match records/product Left L left/storage value/storage
 | +Err(_) => fail
 | +Ok(outer) =>
-  let (/L = Outer; /value = outer_value; /states = outer_states; /left = head; /right = tail) = outer in
+  let (/L = Outer; /storage = outer_storage; /states = outer_states; /left = head; /right = tail) = outer in
+  let outer_value = (#storage = outer_storage, #codec = codecs/product Outer Left L Int (Int * Int) head/path tail/path left/codec value/codec) in
   let path = fields/compose Outer L Right tail/path second/path in
-  { ! outer_value/allocate OS heap no { fn p =>
+  { ! (allocation/reserve Outer Unit allocation/static_heap () outer_value/storage) OS no { fn p =>
     let building = outer_states/empty p in
     do child <- ! (tail/project Uninit Uninit building);
-    ! first/init Uninit OS (states/empty child) 11 { fn partial =>
-      ! second/init Init OS partial 22 { fn complete =>
+    ! (first/init Int left/codec Uninit (states/empty child) 11) OS { fn partial =>
+      ! (second/init Int right/codec Init partial 22) OS { fn complete =>
         let child = states/finish complete in
         let building = tail/replace Uninit Uninit Init building child in
-        ! head/init Init OS building 7 { fn complete =>
+        ! (head/init Int left/codec Init building 7) OS { fn complete =>
           let live = outer_states/finish complete in
           do member <- ! (fields/initialized Outer Right path live);
-          ! right/unsafe/read OS member { fn observed =>
+          ! (right/codec/read member) OS { fn observed =>
             ! int/eq OS observed 22 {
-              ! outer_value/unsafe/take OS live { fn p _ =>
-                ! outer_value/unsafe/free OS heap p no { ! exit 0 }
+              ! (codecs/unsafe/take Outer (Int * (Int * Int)) outer_value/codec live) OS { fn p _ =>
+                ! (allocation/unsafe/release Outer Unit allocation/static_heap () outer_value/storage p) OS no { ! exit 0 }
               }
             } fail
           }
@@ -356,4 +371,27 @@ let next = match records/product Left L Int (Int * Int) left value
 end in ! next
 "#;
     SourceCase::assert_accepted(SourceCase::run(&LayoutCase::record(body)));
+}
+
+#[test]
+fn storage_only_array_stride_is_checked_before_reservation() {
+    for (count, alignment, capacity, expected) in [
+        (8_i64, 64_i64, 2_i64, "+Ok(_)"),
+        (0, 64, 0, "+Ok(_)"),
+        (8, 64, -1, "+Err(+NegativeSize())"),
+        (4611686018427387903, 8, 1, "+Err(+SizeOverflow())"),
+    ] {
+        let source = memory::source(&format!(
+            r#"
+match storage/constant/create {count} {alignment}
+| +Err(_) => ! fail
+| +Ok(#L = Element, element) =>
+  match arrays/make Element element {capacity} 1
+  | {expected} => ! exit 0 | _ => ! fail end
+end
+"#
+        ));
+        SourceCase::assert_accepted(SourceCase::check_linted(&source));
+        SourceCase::assert_accepted(SourceCase::run(&source));
+    }
 }

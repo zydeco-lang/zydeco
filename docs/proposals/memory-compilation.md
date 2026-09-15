@@ -13,15 +13,14 @@ The proposal retains the gaps identified on 2026-09-14 and gives them concrete i
 
 The implemented foundation remains [L13](../references/language.md#manual-memory).
 [`Storage`, `DynamicStorage`, `Codec`, `DynamicCodec`, and `StaticAlloc`](../references/language.md#independent-storage-and-codecs)
-are implemented; migration of the convenience factories to these interfaces is next.
+and the geometry-only record/array factories are implemented. Their contracts now live in L13.
 [Pure address calculations](../references/compiler.md#address-calculations) and
 [ordered scalar accesses](../references/compiler.md#ordered-scalar-memory-accesses) are implemented.
 [Bounded raw memory kernels](../references/compiler.md#raw-memory-kernels) connect wide scalar accesses to arithmetic;
 raw component transport across calls remains proposed compiler work. The
-[interface sketch](../examples/memory-compilation/interfaces.zy) checks with the current kinds and value functions. It
-checks the shapes only: its aliases expose candidate representations and supply no validated constructors, new std
-implementation, or code-generation guarantee. No source lifetimes, linearity rules, or new universe of layout types is
-required.
+[interface example](../examples/memory-compilation/interfaces.zy) imports the implemented sealed std interfaces and
+demonstrates geometry queries and explicit codec materialization. No source lifetimes, linearity rules, or new universe
+of layout types is required.
 
 ## 1. Start with the bytes
 
@@ -119,69 +118,40 @@ Lifetime, alias, and synchronization obligations remain those of the selected op
 
 ### Keep geometry static until runtime data is requested
 
-The implemented constructors seal geometry as specified
-by the [storage contract](../references/language.md#independent-storage-and-codecs).
-A fixed constructor forces its size/alignment through the existing total static arithmetic;
-a runtime-dependent argument cannot silently turn it into a runtime descriptor.
-Its dynamic counterpart performs the same validation through a computation and exposes `DynamicStorage L` on success.
-`materialize_storage` and `materialize_codec` explicitly select runtime carriers when needed.
-A value-function type alone does not prove that all captured integers are static: the constructor establishes that fact.
-
-Geometry and indexing use the current `Int` domain and checked arithmetic;
-static results erase until explicitly queried.
-The [integer and storage contracts](../references/language.md#storage-and-foreign-transport) distinguish its range
-from that of `Int64`, even though both currently use eight-byte storage.
-Choose a numeric type for its required domain, independently of temporary boxing costs.
-The current size interface is bounded by nonnegative `Int`; a full pointer-width size/offset interface remains part
-of the [target and pointer work](memory.md#additional-control-and-storage-boundaries).
-
-A constructor introduces `L` through a package, as current representations do.
-The witness connects a pointer, geometry, paths, and optional codecs; it does not identify a particular allocation.
-Equal logical types or equal sizes do not equate independently opened layout witnesses.
-For dynamic instances, the caller must retain the matching geometry through release;
-`Ptr L S` cannot recover an allocation's extent from its type.
+The [storage contract](../references/language.md#independent-storage-and-codecs) owns validated construction,
+explicit materialization, layout identity, and retention of runtime geometry.
+Fixed constructors enforce static operands; a value-function type alone does not prove its captured integers static.
+Geometry remains bounded by nonnegative `Int`.
+A full pointer-width size/offset interface and compiler-supplied target facts remain part
+of the [memory extension](memory.md#additional-control-and-storage-boundaries).
+The [integer and storage contracts](../references/language.md#storage-and-foreign-transport) determine
+numeric domains independently of temporary boxing costs.
 
 ### Compose storage before selecting a logical codec
 
-Proposed constructor contracts, with schematic package notation:
+[Records](../references/language.md#typed-records-and-field-paths) compose `Storage Left` and `Storage Right`;
+[arrays](../references/language.md#array-storage-and-element-builders) take element storage, capacity, and alignment.
+Both expose geometry without requiring a whole-value codec.
+Optional `codecs/product` and array codec selection supply logical conversion afterward.
+Fixed and dynamic `Plan`/`Representation` conveniences use the same split.
+The former combined `Operations L A` interface has been removed together with its callers.
 
-```text
-records.product : Storage Left -> Storage Right
-  -> Result (exists Parent. Storage Parent * Field Parent Left * Field Parent Right * state_operations) Error
-arrays.fixed : Storage Element -> capacity:Int -> boundary:Int
-  -> Result (exists Array. Storage Array * element_operations * builder_operations) Error
-codecs.product : Field Parent Left -> Field Parent Right -> Codec Left A -> Codec Right B
-  -> Codec Parent (A * B)
-```
+For the example, storage construction fixes offsets 0 and 16, size 32, and alignment 16.
+Its header view needs only the length codec. Whole-array reads are an explicit choice to construct `Values A`,
+whose current representation is a managed list; direct element access and `init_each` avoid that work.
+The [header-array fixture](../../lib/tests/std/header-array.zy) selects no array codec.
+A requested logical list remains useful work and must be counted separately in comparisons.
 
-The first two are value functions: placement inputs must be static and validated.
-For the example they compute offsets 0 and 16, extent 32, and alignment 16 before execution.
-Array construction no longer takes a logical element type or requires an array `Values` codec.
-Scalar factories can still supply both `Storage L` and `Codec L A` under the same `L`.
-Runtime record/array factories must expose matching dynamic geometry and paths
-after validating their inputs; checked dynamic field-path construction remains part
-of the [memory extension](memory.md#additional-control-and-storage-boundaries).
-
-The present `Plan A`/`Representation A` convenience factories can be rebuilt over this split.
-Implement the replacement together with their callers in `record.zy`, `array.zy`, `header.zy`,
-and `view.zy`; remove the coupled `Operations L A` implementation in that migration.
-This proposal does not introduce a permanent compatibility interface.
-
-### Optional whole-value operations
-
-The current `Operations L A` couples storage geometry and allocation with whole-value codecs.
-Array `Values` uses a managed list, so whole-array reads/takes construct that logical representation;
-direct element access and `init_each` already avoid it.
-A requested list is useful work, but embedding array storage in a record should not require selecting list conversion.
-
-The [memory interface obligations](memory.md#independently-selectable-storage-operations)
-govern storage-only composition, optional codecs, typed checked/unchecked indexing, and no-read state discard.
-These choices must expose distinct obligations and behavior.
-Omitting required checks from only one side of a benchmark does not establish zero-cost abstraction.
+Runtime arrays expose ordinary thunk interfaces and `DynamicStorage`; returning static value-function fields
+through their success continuation would violate static elimination. Runtime record paths still need the
+[checked dynamic field factory](memory.md#additional-control-and-storage-boundaries).
+Typed unchecked indexing and no-read discard also remain
+in the [memory interface extension](memory.md#independently-selectable-storage-operations).
+Removing checks from only one benchmark path does not establish zero-cost abstraction.
 
 ## 3. Allocate and change state explicitly
 
-The library adapter `allocate(storage, allocator, context)` obtains geometry,
+The implemented `allocation/reserve` adapter obtains fixed geometry and explicit provider context,
 asks the selected allocator for bytes, and passes `Ptr L Uninit` to its success continuation.
 Initialization invokes the chosen codec at that address.
 The codec interface does not require an allocator; the standard scalar/product codecs write
@@ -488,7 +458,7 @@ Treat each successful target as a scoped guarantee before expanding its domain.
 
 | Slice | Files/boundary to change | Required evidence |
 | --- | --- | --- |
-| Source interface split | `lib/std/memory/{operations.type,codec,record,array,header,view}.zy` and their callers | Shared witnesses; storage-only array composition; optional logical conversion |
+| Source interfaces (implemented) | [L13](../references/language.md#independent-storage-and-codecs), std factories and callers | Shared witnesses; storage-only array composition; explicit logical conversion; fixed/runtime carrier rejection |
 | Static target facts | Layout factory inputs and compiler target/profile identity | Pointer width/alignment and geometry bounds known before static layout reduction; runtime inputs rejected on the fixed path |
 | Memory operations | `lang/stackir/src/high/lower/builtin.rs`, high/low syntax and conversion, assembly, AMD64, interpreter/Wasm adapters | Source-domain validation and exact access width/endian/alignment; wrapping addresses; ordered effects; no zero-offset host call |
 | Known workers and contification | High SPS use analysis and normalization before closure conversion | Shared/recursive calls, stack compatibility, unknown/escaping/repeated callbacks |

@@ -1,0 +1,14 @@
+begin
+  param val (/VType; /Addr; builtin) : @(import("../builtin.zy")) in
+  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr in
+  param val Field : VType -> VType -> VType in
+  param val DynamicField : VType -> VType -> VType in
+  param val (/constant) : (@(import("field-operations.type.zy"))) Uninit Init Ptr Field DynamicField in
+  let (/Codec; /unsafe) = (builtin |> (@(import("codecs.zy")))) types in
+  val (Parent : VType) (Left : VType) (Right : VType) (A : VType) (B : VType)
+    (left : Field Parent Left) (right : Field Parent Right)
+    (left_codec : Codec Left A) (right_codec : Codec Right B)
+  =>
+    unsafe/product_at Parent Left Right A B left_codec right_codec
+      (constant/offset Parent Left left) (constant/offset Parent Right right)
+end

@@ -2644,7 +2644,7 @@ Scalar `store_le` takes an address, value, and completion; `load_le` takes an ad
 These roles use [ordered scalar memory accesses](#ordered-scalar-memory-accesses),
 which own their instruction selection, representation adapters, and carrier validation.
 They have no CPS host-call or hidden spare-box ABI.
-The [source codecs](../../lib/std/memory/codec.zy) write products directly into destination fields.
+The [source codecs](../../lib/std/memory/codecs.zy) write products directly into destination fields.
 Padding contributes no load or store. Fixed realization requires statically evaluable size and alignment;
 dynamic realization captures the required placement in its source operations.
 Types and state witnesses erase, while explicit queries may materialize constants and ordinary closures may allocate.

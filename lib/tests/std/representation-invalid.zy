@@ -3,7 +3,7 @@ begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int;
     /UInt8; /numeric; /process; builtin) : @(import(std/builtin)) that
   let (/Bytes; /bytes) = builtin |> (@(import("../../std/text/bytes.zy"))) in
-  let (/dynamic) = builtin |> (@(import(std/memory))) in
+  let (/storage; /codecs; /allocation; /dynamic) = builtin |> (@(import(std/memory))) in
   let (= Layout, = Representation, memory) = dynamic in
   let fail = { ! process/exit 1 } in
   let ! rejected (A : VType) (layout : Layout A) (next : Thk OS) : OS =
@@ -45,7 +45,9 @@ begin
                                           ) fail
                                             {
                                               fn (= L, repr) =>
-                                                ! numeric/int/eq OS repr/size 4611686018427387903
+                                                ! numeric/int/eq OS (
+                                                  storage/runtime/query L repr/storage
+                                                )/size 4611686018427387903
                                                   {
                                                     -- Validation did not modify an aliased input buffer.
                                                     do expected <- ! bytes/from_string "test";

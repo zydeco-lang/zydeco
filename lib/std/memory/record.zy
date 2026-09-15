@@ -2,24 +2,23 @@
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /memory; builtin) : @(import(
     "../builtin.zy"
-  )) that
-  param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr that
-  param val Field : VType -> VType -> VType that
-  param val DynamicField : VType -> VType -> VType that
+  )) in
+  param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  param val Field : VType -> VType -> VType in
+  param val DynamicField : VType -> VType -> VType in
   param val (/constant = /unsafe = field_unsafe) : (@(import("field-operations.type.zy"))) Uninit
     Init Ptr Field DynamicField in
-  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
+  param val (/Storage; /constant) : @(import("storage.type.zy")) in
+  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
   let Result = @(import("../data/result.zy")) in
   let Error = @(import("layout-error.zy")) in
   let size = @(import("size.zy")) in
   let compare = @(intrinsic(int_compare)) in
   let bits = @(intrinsic(int_and)) in
   let sub = @(intrinsic(int_sub)) in
-  let Descriptor = (@(import("descriptor.type.zy"))) Addr in
-  let codec = (builtin |> (@(import("codec.zy")))) types in
-  let Record (Left : VType) (Right : VType) (A : VType) (B : VType) =
+  let Record (Left : VType) (Right : VType) =
     exists (= L : VType) .
-        (#value :: Operations L (A * B))
+        (#storage :: Storage L)
       * (
           #states ::
             (#empty :: val pi (pointer : Ptr L Uninit) . Ptr L (Fields Uninit Uninit))
@@ -28,116 +27,81 @@ begin
           * (#vacate :: val pi (pointer : Ptr L (Fields Uninit Uninit)) . Ptr L Uninit)
         )
       * (
-          #left ::
-            (#path :: Field L Left)
-          * (
-              #unsafe ::
-                (
-                  #project :: val pi (T : VType) (S : VType) (pointer : Ptr L (Fields T S)) .
-                    Thk (Ret (Ptr Left T))
-                )
-              * (
-                  #init :: Thk (
-                    forall (S : VType) (R : CType) .
-                      Ptr L (Fields Uninit S) -> A -> Thk (Ptr L (Fields Init S) -> R) -> R
-                  )
-                )
-              * (
-                  #read :: Thk (
-                    forall (S : VType) (R : CType) . Ptr L (Fields Init S) -> Thk (A -> R) -> R
-                  )
-                )
-              * (
-                  #take :: Thk (
-                    forall (S : VType) (R : CType) .
-                      Ptr L (Fields Init S) -> Thk (Ptr L (Fields Uninit S) -> A -> R) -> R
-                  )
-                )
-              * (
-                  #replace :: val pi (T : VType) (S : VType) (U : VType) (
-                      pointer : Ptr L (Fields T S)
-                    )
-                    (child : Ptr Left U)
-                  .
-                    Ptr L (Fields U S)
-                )
-            )
+          #left :: (#path :: Field L Left) * (
+            #unsafe ::
+              (
+                #project :: val pi (T : VType) (S : VType) (pointer : Ptr L (Fields T S)) .
+                  Thk (Ret (Ptr Left T))
+              )
+            * (
+                #replace :: val pi (T : VType) (S : VType) (U : VType)
+                  (pointer : Ptr L (Fields T S)) (child : Ptr Left U)
+                .
+                  Ptr L (Fields U S)
+              )
+            * (
+                #init :: val pi (A : VType) (codec : Codec Left A) (S : VType)
+                  (pointer : Ptr L (Fields Uninit S)) (value : A)
+                .
+                  Thk (forall (R : CType) . Thk (Ptr L (Fields Init S) -> R) -> R)
+              )
+            * (
+                #read :: val pi (A : VType) (codec : Codec Left A) (S : VType)
+                  (pointer : Ptr L (Fields Init S))
+                .
+                  Thk (forall (R : CType) . Thk (A -> R) -> R)
+              )
+            * (
+                #take :: val pi (A : VType) (codec : Codec Left A) (S : VType)
+                  (pointer : Ptr L (Fields Init S))
+                .
+                  Thk (forall (R : CType) . Thk (Ptr L (Fields Uninit S) -> A -> R) -> R)
+              )
+          )
         )
       * (
-          #right ::
-            (#path :: Field L Right)
-          * (
-              #unsafe ::
-                (
-                  #project :: val pi (T : VType) (S : VType) (pointer : Ptr L (Fields S T)) .
-                    Thk (Ret (Ptr Right T))
-                )
-              * (
-                  #init :: Thk (
-                    forall (S : VType) (R : CType) .
-                      Ptr L (Fields S Uninit) -> B -> Thk (Ptr L (Fields S Init) -> R) -> R
-                  )
-                )
-              * (
-                  #read :: Thk (
-                    forall (S : VType) (R : CType) . Ptr L (Fields S Init) -> Thk (B -> R) -> R
-                  )
-                )
-              * (
-                  #take :: Thk (
-                    forall (S : VType) (R : CType) .
-                      Ptr L (Fields S Init) -> Thk (Ptr L (Fields S Uninit) -> B -> R) -> R
-                  )
-                )
-              * (
-                  #replace :: val pi (T : VType) (S : VType) (U : VType) (
-                      pointer : Ptr L (Fields S T)
-                    )
-                    (child : Ptr Right U)
-                  .
-                    Ptr L (Fields S U)
-                )
-            )
+          #right :: (#path :: Field L Right) * (
+            #unsafe ::
+              (
+                #project :: val pi (T : VType) (S : VType) (pointer : Ptr L (Fields S T)) .
+                  Thk (Ret (Ptr Right T))
+              )
+            * (
+                #replace :: val pi (T : VType) (S : VType) (U : VType)
+                  (pointer : Ptr L (Fields S T)) (child : Ptr Right U)
+                .
+                  Ptr L (Fields S U)
+              )
+            * (
+                #init :: val pi (A : VType) (codec : Codec Right A) (S : VType)
+                  (pointer : Ptr L (Fields S Uninit)) (value : A)
+                .
+                  Thk (forall (R : CType) . Thk (Ptr L (Fields S Init) -> R) -> R)
+              )
+            * (
+                #read :: val pi (A : VType) (codec : Codec Right A) (S : VType)
+                  (pointer : Ptr L (Fields S Init))
+                .
+                  Thk (forall (R : CType) . Thk (A -> R) -> R)
+              )
+            * (
+                #take :: val pi (A : VType) (codec : Codec Right A) (S : VType)
+                  (pointer : Ptr L (Fields S Init))
+                .
+                  Thk (forall (R : CType) . Thk (Ptr L (Fields S Uninit) -> A -> R) -> R)
+              )
+          )
         )
   in
-  let val make (Left : VType) (Right : VType) (A : VType) (B : VType)
-    (left : Operations Left A) (right : Operations Right B)
-    (left_offset : Int) (right_offset : Int) (count : Int) (alignment : Int)
-  :
-    Record Left Right A B
+  let val make (Left : VType) (Right : VType) (left_offset : Int) (right_offset : Int)
+    (storage : Storage Unit)
+  : Record Left Right
   =
-    let descriptor : Descriptor (A * B) =
-      (
-        #size = count,
-        = alignment,
-        #write = {
-          fn R (a, b) base done =>
-            do first <- ! memory/offset base left_offset;
-            ! left/unsafe/init R (unsafe/from_address Left Uninit first) a {
-              fn _ =>
-                do second <- ! memory/offset base right_offset;
-                ! right/unsafe/init R (unsafe/from_address Right Uninit second) b { fn _ => ! done }
-            }
-        },
-        #read = {
-          fn R base yes =>
-            do first <- ! memory/offset base left_offset;
-            ! left/unsafe/read R (unsafe/from_address Left Init first) {
-              fn a =>
-                do second <- ! memory/offset base right_offset;
-                ! right/unsafe/read R (unsafe/from_address Right Init second) {
-                  fn b => ! yes (a, b)
-                }
-            }
-        }
-      )
-    in
     let L = Unit in
-    let value = codec/operations L (A * B) descriptor in
     (
       (
         = L,
-        = value,
+        = storage,
         #states = (
           #empty = val pointer =>
             unsafe/from_address L (Fields Uninit Uninit) (unsafe/address L Uninit pointer),
@@ -148,42 +112,39 @@ begin
           #vacate = val pointer =>
             unsafe/from_address L Uninit (unsafe/address L (Fields Uninit Uninit) pointer)
         ),
-        #left =
-        (
+        #left = (
           #path = field_unsafe/from_offset L Left left_offset,
-          #unsafe =
-          (
+          #unsafe = (
             #project = val T S pointer =>
               {
                 do address <- ! memory/offset (unsafe/address L (Fields T S) pointer) left_offset;
                 ret (unsafe/from_address Left T address)
               },
-            #init = {
-              fn S R pointer item yes =>
-                let base = unsafe/address L (Fields Uninit S) pointer in
-                do address <- ! memory/offset base left_offset;
-                ! left/unsafe/init R (unsafe/from_address Left Uninit address) item {
-                  fn _ =>
-                    ! yes (unsafe/from_address L (Fields Init S) base)
-                }
-            },
-            #read =
-            {
-              fn S R pointer yes =>
-                do address <- ! memory/offset (unsafe/address L (Fields Init S) pointer) left_offset;
-                ! left/unsafe/read R (unsafe/from_address Left Init address) yes
-            },
-            #take = {
-              fn S R pointer yes =>
-                let base = unsafe/address L (Fields Init S) pointer in
-                do address <- ! memory/offset base left_offset;
-                ! left/unsafe/take R (unsafe/from_address Left Init address) {
-                  fn _ item =>
-                    ! yes (unsafe/from_address L (Fields Uninit S) base) item
-                }
-            },
             #replace = val T S U pointer child =>
-              unsafe/from_address L (Fields U S) (unsafe/address L (Fields T S) pointer)
+              unsafe/from_address L (Fields U S) (unsafe/address L (Fields T S) pointer),
+            #init = val A codec S pointer value =>
+              {
+                fn R yes =>
+                  let base = unsafe/address L (Fields Uninit S) pointer in
+                  do address <- ! memory/offset base left_offset;
+                  ! (codec/init (unsafe/from_address Left Uninit address) value) R {
+                    fn _ => ! yes (unsafe/from_address L (Fields Init S) base) }
+              },
+            #read = val A codec S pointer =>
+              {
+                fn R yes =>
+                  do address <- ! memory/offset (unsafe/address L (Fields Init S) pointer)
+                    left_offset;
+                  ! (codec/read (unsafe/from_address Left Init address)) R yes
+              },
+            #take = val A codec S pointer =>
+              {
+                fn R yes =>
+                  let base = unsafe/address L (Fields Init S) pointer in
+                  do address <- ! memory/offset base left_offset;
+                  ! (codec/read (unsafe/from_address Left Init address)) R {
+                    fn value => ! yes (unsafe/from_address L (Fields Uninit S) base) value }
+              }
           )
         ),
         #right = (
@@ -194,66 +155,70 @@ begin
                 do address <- ! memory/offset (unsafe/address L (Fields S T) pointer) right_offset;
                 ret (unsafe/from_address Right T address)
               },
-            #init = {
-              fn S R pointer item yes =>
-                let base = unsafe/address L (Fields S Uninit) pointer in
-                do address <- ! memory/offset base right_offset;
-                ! right/unsafe/init R (unsafe/from_address Right Uninit address) item {
-                  fn _ =>
-                    ! yes (unsafe/from_address L (Fields S Init) base)
-                }
-            },
-            #read = {
-              fn S R pointer yes =>
-                do address <- ! memory/offset (unsafe/address L (Fields S Init) pointer)
-                  right_offset;
-                ! right/unsafe/read R (unsafe/from_address Right Init address) yes
-            },
-            #take = {
-              fn S R pointer yes =>
-                let base = unsafe/address L (Fields S Init) pointer in
-                do address <- ! memory/offset base right_offset;
-                ! right/unsafe/take R (unsafe/from_address Right Init address) {
-                  fn _ item =>
-                    ! yes (unsafe/from_address L (Fields S Uninit) base) item
-                }
-            },
             #replace = val T S U pointer child =>
-              unsafe/from_address L (Fields S U) (unsafe/address L (Fields S T) pointer)
+              unsafe/from_address L (Fields S U) (unsafe/address L (Fields S T) pointer),
+            #init = val A codec S pointer value =>
+              {
+                fn R yes =>
+                  let base = unsafe/address L (Fields S Uninit) pointer in
+                  do address <- ! memory/offset base right_offset;
+                  ! (codec/init (unsafe/from_address Right Uninit address) value) R {
+                    fn _ => ! yes (unsafe/from_address L (Fields S Init) base) }
+              },
+            #read = val A codec S pointer =>
+              {
+                fn R yes =>
+                  do address <- ! memory/offset (unsafe/address L (Fields S Init) pointer)
+                    right_offset;
+                  ! (codec/read (unsafe/from_address Right Init address)) R yes
+              },
+            #take = val A codec S pointer =>
+              {
+                fn R yes =>
+                  let base = unsafe/address L (Fields S Init) pointer in
+                  do address <- ! memory/offset base right_offset;
+                  ! (codec/read (unsafe/from_address Right Init address)) R {
+                    fn value => ! yes (unsafe/from_address L (Fields S Uninit) base) value }
+              }
           )
         )
-      ) : Record Left Right A B
+      ) : Record Left Right
     )
   in
-  let val at (Left : VType) (Right : VType) (A : VType) (B : VType)
-    (left : Operations Left A) (right : Operations Right B)
+  let val at (Left : VType) (Right : VType)
+    (left : Storage Left) (right : Storage Right)
     (left_offset : Int) (right_offset : Int) (count : Int) (alignment : Int)
-  : Result (Record Left Right A B) Error =
-      let Out = Record Left Right A B in
+  : Result (Record Left Right) Error =
+      let Out = Record Left Right in
+      let lg = constant/query Left left in
+      let rg = constant/query Right right in
       size/bind Int Out (size/alignment alignment) (
         val alignment =>
-          size/bind Int Out (size/alignment left/alignment) (
+          size/bind Int Out (size/alignment lg/alignment) (
             val la =>
-              size/bind Int Out (size/alignment right/alignment) (
+              size/bind Int Out (size/alignment rg/alignment) (
                 val ra =>
-                  size/bind Int Out (size/add left_offset left/size) (
+                  size/bind Int Out (size/add left_offset lg/size) (
                     val le =>
-                      size/bind Int Out (size/add right_offset right/size) (
+                      size/bind Int Out (size/add right_offset rg/size) (
                         val re =>
                           size/bind Int Out (size/size count) (
                             val count =>
                               let val valid () : Result Out Error =
-                                +Ok(
-                                  make Left Right A B left right left_offset right_offset count
-                                    alignment
+                                size/bind (Storage Unit) Out (
+                                  constant/unsafe/for_layout Unit count alignment
                                 )
+                                  (
+                                    val storage =>
+                                      +Ok(make Left Right left_offset right_offset storage)
+                                  )
                               in
                               let val disjoint () : Result Out Error =
                                 match compare le right_offset
                                 | 1 =>
                                   match compare re left_offset
                                   | 1 =>
-                                    match (compare left/size 0, compare right/size 0)
+                                    match (compare lg/size 0, compare rg/size 0)
                                     | (0, _) => valid ()
                                     | (_, 0) => valid ()
                                     | _ => +Err(+OverlappingFields())
@@ -287,23 +252,25 @@ begin
           )
       )
   in
-  let val product (Left : VType) (Right : VType) (A : VType) (B : VType)
-    (left : Operations Left A) (right : Operations Right B)
-  : Result (Record Left Right A B) Error =
-      let Out = Record Left Right A B in
-      size/bind Int Out (size/round_up left/size right/alignment) (
+  let val product (Left : VType) (Right : VType)
+    (left : Storage Left) (right : Storage Right)
+  : Result (Record Left Right) Error =
+      let Out = Record Left Right in
+      let lg = constant/query Left left in
+      let rg = constant/query Right right in
+      size/bind Int Out (size/round_up lg/size rg/alignment) (
         val offset =>
-          size/bind Int Out (size/add offset right/size) (
+          size/bind Int Out (size/add offset rg/size) (
             val field_end =>
-              let alignment = size/maximum left/alignment right/alignment in
+              let alignment = size/maximum lg/alignment rg/alignment in
               size/bind Int Out (size/round_up field_end alignment) (
                 val count =>
-                  at Left Right A B left right 0 offset count alignment
+                  at Left Right left right 0 offset count alignment
               )
           )
       )
   in
-  pack (= Record as Record : VType -> VType -> VType -> VType -> VType)
+  pack (= Record as Record : VType -> VType -> VType)
   where
     (= at, = product) end
 end

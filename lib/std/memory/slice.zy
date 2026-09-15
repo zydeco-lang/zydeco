@@ -3,8 +3,9 @@
 begin
   param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
-  )) that
+  )) in
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  param val (/Storage; /DynamicStorage; storage) : @(import("storage.type.zy")) in
   let Fault = @(import("fault.zy")) in
   let int = numeric/int in
   let Slice (L : VType) (S : VType) = Ptr L S * Int in
@@ -16,22 +17,32 @@ begin
     fn L S R pointer count no yes =>
       ! int/lt R count 0 { ! no +Bounds() } { ! yes (pointer, count) }
   } in
-  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
-  let (/Cps; /View; /fat; /as_cps; /counted) =
-    (builtin |> (@(import("view.zy")))) types
+  let (/Cps; /View; /fat; /as_cps; /counted; /dynamic_counted) =
+    (builtin |> (@(import("view.zy")))) types storage
   in
-  let val for_layout (L : VType) (A : VType) (layout : Operations L A) =
+  let val for_layout (L : VType) (layout : Storage L) =
     let at : Thk (
       forall (S : VType) (R : CType) .
         Slice L S -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
     ) = {
       fn S R slice index no yes =>
         let view = as_cps (Ptr L S * Int) (Ptr L S * Int) (fat L S Int) in
-        ! (counted L A S (Ptr L S * Int) layout view (slice, index)) R no yes
+        ! (counted L S (Ptr L S * Int) layout view (slice, index)) R no yes
+    } in
+    (#unsafe = = at)
+  in
+  let val for_dynamic_layout (L : VType) (layout : DynamicStorage L) =
+    let at : Thk (
+      forall (S : VType) (R : CType) .
+        Slice L S -> Int -> Thk (Fault -> R) -> Thk (Ptr L S -> R) -> R
+    ) = {
+      fn S R slice index no yes =>
+        let view = as_cps (Ptr L S * Int) (Ptr L S * Int) (fat L S Int) in
+        ! (dynamic_counted L S (Ptr L S * Int) layout view (slice, index)) R no yes
     } in
     (#unsafe = = at)
   in
   pack (= Slice : VType -> VType -> VType) is Slice
   where
-    (= length, = for_layout, #unsafe = = from_parts) end
+    (= length, = for_layout, = for_dynamic_layout, #unsafe = = from_parts) end
 end

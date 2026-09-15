@@ -1,7 +1,7 @@
 begin
   param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt; /Int;
-    /numeric; /process; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
+    /numeric; /process; /Unit; builtin) : @(import("../../std/builtin.zy")) that
+  let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
     @(import("../../std/memory/package.zy"))
   ) in
   let (= Plan, = Layout, layouts) = fixed in
@@ -18,18 +18,22 @@ begin
   | +Err(_) => ! fail
   | +Ok(plan) =>
     let (= L, repr) = layouts/realize (UInt8 * UInt32) plan in
-    ! repr/allocate OS heap no {
+    ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no {
       fn vacant =>
         let address = pointer/unsafe/address L Uninit vacant in
         -- This C function inspects all bytes, including padding; initialize them explicitly.
-        ! raw/unsafe/fill OS address repr/size 0 {
-          ! repr/unsafe/init OS vacant (7 : UInt8, 16909060 : UInt32) {
+        ! raw/unsafe/fill OS address (storage/constant/query L repr/storage)/size 0 {
+          ! (repr/codec/init vacant (7 : UInt8, 16909060 : UInt32)) OS {
             fn value =>
-              do result <- ! inspect (pointer/unsafe/address L Init value) repr/size;
+              do result <- ! inspect (pointer/unsafe/address L Init value) (
+                storage/constant/query L repr/storage
+              )/size;
               ! numeric/uint/eq OS result 1 {
-                ! repr/unsafe/take OS value {
+                ! (codecs/unsafe/take L (UInt8 * UInt32) repr/codec value) OS {
                   fn vacant _ =>
-                    ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+                    ! (
+                      allocation/unsafe/release L Unit allocation/static_heap () repr/storage vacant
+                    ) OS no { ! process/exit 0 }
                 }
               } fail
           }

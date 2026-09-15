@@ -1,6 +1,7 @@
 -- Logical conversion is independent of allocation geometry and provider selection.
 begin
-  param val (/VType; /CType; /Thk; /Addr; builtin) : @(import("../builtin.zy")) that
+  param val (/VType; /CType; /Thk; /Unit; /Int; /Addr; /memory; builtin) :
+  @(import("../builtin.zy")) that
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
   let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
   let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
@@ -36,9 +37,112 @@ begin
         fn value => ! yes (unsafe/from_address L Uninit (unsafe/address L Init pointer)) value
       }
   in
+  let val padding (L : VType) : Codec L Unit = (
+    #init = val pointer () =>
+      {
+        fn R yes =>
+          ! yes (unsafe/from_address L Init (unsafe/address L Uninit pointer))
+      },
+    #read = val pointer => { fn R yes => ! yes () }
+  ) in
+  let val relabel (L : VType) (Old : VType) (A : VType) (codec : Codec Old A) : Codec L A = (
+    #init = val pointer value =>
+      {
+        fn R yes =>
+          let address = unsafe/address L Uninit pointer in
+          ! (codec/init (unsafe/from_address Old Uninit address) value) R {
+            fn _ => ! yes (unsafe/from_address L Init address) }
+      },
+    #read = val pointer => codec/read (unsafe/from_address Old Init (unsafe/address L Init pointer))
+  ) in
+  let val product_at (L : VType) (Left : VType) (Right : VType) (A : VType) (B : VType)
+    (left : Codec Left A) (right : Codec Right B) (left_offset : Int) (right_offset : Int)
+  : Codec L (A * B) =
+      let left_offset = (@(intrinsic(int_add))) left_offset 0 in
+      let right_offset = (@(intrinsic(int_add))) right_offset 0 in
+      (
+        #init = val pointer (a, b) =>
+          {
+            fn R yes =>
+              let base = unsafe/address L Uninit pointer in
+              do first <- ! memory/offset base left_offset;
+              ! (left/init (unsafe/from_address Left Uninit first) a) R {
+                fn _ =>
+                  do second <- ! memory/offset base right_offset;
+                  ! (right/init (unsafe/from_address Right Uninit second) b) R {
+                    fn _ => ! yes (unsafe/from_address L Init base) }
+              }
+          },
+        #read = val pointer =>
+          {
+            fn R yes =>
+              let base = unsafe/address L Init pointer in
+              do first <- ! memory/offset base left_offset;
+              ! (left/read (unsafe/from_address Left Init first)) R {
+                fn a =>
+                  do second <- ! memory/offset base right_offset;
+                  ! (right/read (unsafe/from_address Right Init second)) R { fn b => ! yes (a, b) }
+              }
+          }
+      )
+  in
+  let val dynamic_relabel (L : VType) (Old : VType) (A : VType)
+    (codec : DynamicCodec Old A)
+  : DynamicCodec L A = (
+      #init = {
+        fn pointer value R yes =>
+          let address = unsafe/address L Uninit pointer in
+          ! codec/init (unsafe/from_address Old Uninit address) value R {
+            fn _ => ! yes (unsafe/from_address L Init address) }
+      },
+      #read = {
+        fn pointer R yes =>
+          ! codec/read (unsafe/from_address Old Init (unsafe/address L Init pointer)) R yes
+      }
+    )
+  in
+  let val dynamic_product_at (L : VType) (Left : VType) (Right : VType) (A : VType) (B : VType)
+    (left : DynamicCodec Left A) (right : DynamicCodec Right B)
+    (left_offset : Int) (right_offset : Int)
+  : DynamicCodec L (A * B) = (
+      #init = {
+        fn pointer (a, b) R yes =>
+          let base = unsafe/address L Uninit pointer in
+          do first <- ! memory/offset base left_offset;
+          ! left/init (unsafe/from_address Left Uninit first) a R {
+            fn _ =>
+              do second <- ! memory/offset base right_offset;
+              ! right/init (unsafe/from_address Right Uninit second) b R {
+                fn _ => ! yes (unsafe/from_address L Init base) }
+          }
+      },
+      #read = {
+        fn pointer R yes =>
+          let base = unsafe/address L Init pointer in
+          do first <- ! memory/offset base left_offset;
+          ! left/read (unsafe/from_address Left Init first) R {
+            fn a =>
+              do second <- ! memory/offset base right_offset;
+              ! right/read (unsafe/from_address Right Init second) R { fn b => ! yes (a, b) }
+          }
+      }
+    )
+  in
   pack (= Codec as Codec : VType -> VType -> VType)
       (= DynamicCodec as DynamicCodec : VType -> VType -> VType)
   where
-    (= materialize, #unsafe = (= scalar, = take, = dynamic_take))
+    (
+      = materialize,
+      #unsafe = (
+        = scalar,
+        = take,
+        = dynamic_take,
+        = padding,
+        = relabel,
+        = product_at,
+        = dynamic_relabel,
+        = dynamic_product_at
+      )
+    )
   end
 end

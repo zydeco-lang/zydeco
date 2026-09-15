@@ -1,9 +1,10 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int; /Addr; /OS; /numeric; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Int; /Addr; /OS; /numeric; /process; /Unit; builtin) :
+  @(import(
     std/builtin
   )) that
-  let (
+  let (/storage; /codecs;
     /Uninit;
     /Init;
     /Ptr;
@@ -33,33 +34,51 @@ begin
       let (#L = Element, element) = layout/realize Int plan in
       let allocate : Thk (Int -> OS) = {
         fn count =>
-          ! arrays/realize Element Int OS element count 16 no {
+          ! arrays/realize Element OS (storage/constant/materialize Element element/storage) count
+            16 no {
             fn array =>
-              let (/L = Array; /Values; /contents; /values; /elements; /buffer) = array in
-              do generated <- ! values/generate { fn index => ret index };
-              ! contents/allocate OS heap no {
+              let (
+                /L = Array;
+                /Values = Sequence;
+                /storage = array_storage;
+                /values;
+                /elements;
+                /buffer;
+                /codecs = array_codecs
+              )
+              =
+                array
+              in
+              let Values = Sequence Int in
+              let element_codec = codecs/materialize Element Int element/codec in
+              do contents_codec <- ! array_codecs Int element_codec;
+              let contents = (#storage = array_storage, #codec = contents_codec) in
+              do generated <- ! values/generate Int { fn index => ret index };
+              ! allocation/dynamic_reserve Array OS heap contents/storage no {
                 fn vacant =>
-                  ! contents/unsafe/init OS vacant generated {
+                  ! contents/codec/init vacant generated OS {
                     fn live =>
                       ! elements/at Init OS live 2 no {
                         fn third =>
-                          ! element/unsafe/read OS third {
+                          ! (element/codec/read third) OS {
                             fn value =>
                               ! int/eq OS value 2 {
                                 do progress <- ! buffer/resume live;
-                                ! buffer/pop OS progress no {
+                                ! buffer/pop Int OS element_codec progress no {
                                   fn progress _ =>
-                                    ! buffer/push OS progress 17 no {
+                                    ! buffer/push Int OS element_codec progress 17 no {
                                       fn progress =>
                                         ! buffer/finish OS progress no {
                                           fn live =>
-                                            ! contents/unsafe/take OS live {
+                                            ! codecs/unsafe/dynamic_take Array Values contents/codec
+                                              live OS {
                                               fn vacant copied =>
-                                                do last <- ! values/at copied 2;
+                                                do last <- ! values/at Int copied 2;
                                                 match last
                                                 | +Err(_) => ! fail
                                                 | +Ok(value) => ! int/eq OS value 17 {
-                                                  ! contents/unsafe/free OS heap vacant no {
+                                                  ! allocation/unsafe/dynamic_release Array OS heap
+                                                    contents/storage vacant no {
                                                     ! process/exit 0
                                                   }
                                                 } fail
@@ -75,35 +94,44 @@ begin
               }
           }
       } in
-      match records/product Element Element Int Int element element
+      match records/product Element Element element/storage element/storage
       | +Err(_) => fail
       | +Ok(record) =>
-        let (/L; /value = object) = record in
+        let (/L; /storage = object_storage; /left; /right) = record in
+        let object = (
+          #storage = object_storage,
+          #codec = codecs/product L Element Element Int Int left/path right/path element/codec
+            element/codec
+        ) in
         {
-          ! object/allocate OS heap no {
+          ! (allocation/reserve L Unit allocation/static_heap () object/storage) OS no {
             fn vacant =>
-              ! object/unsafe/init OS vacant (1, 99) {
+              ! (object/codec/init vacant (1, 99)) OS {
                 fn live =>
                   do displacement <- ! int/add 4 4;
                   do path <- ! runtime_fields/unsafe/from_offset L Element displacement;
                   do member <- ! runtime_fields/initialized L Element path live;
-                  ! element/unsafe/read OS member {
+                  ! (element/codec/read member) OS {
                     fn value =>
                       ! int/eq OS value 99 {
                         let view : DynamicView Cps Addr (Ptr Element Init * Int) = {
                           fn handle =>
-                            ! view_unsafe/dynamic_header Int Element Element Init element 0
-                              displacement handle
+                            ! view_unsafe/dynamic_header Int Element Element Init (
+                              codecs/materialize Element Int element/codec
+                            ) 0 displacement handle
                         } in
                         ! view (pointer/unsafe/address L Init live) OS {
                           fn (member, length) =>
                             ! int/eq OS length 1 {
-                              ! element/unsafe/read OS member {
+                              ! (element/codec/read member) OS {
                                 fn value =>
                                   ! int/eq OS value 99 {
-                                    ! object/unsafe/take OS live {
+                                    ! (codecs/unsafe/take L (Int * Int) object/codec live) OS {
                                       fn vacant _ =>
-                                        ! object/unsafe/free OS heap vacant no {
+                                        ! (
+                                          allocation/unsafe/release L Unit allocation/static_heap ()
+                                            object/storage vacant
+                                        ) OS no {
                                           ! allocate 3
                                         }
                                     }

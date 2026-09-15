@@ -12,17 +12,16 @@ Its opening states the division between ordinary values and programmer-selected 
 the [codec boundary](memory-compilation.md#cross-between-ordinary-values-and-explicit-storage) explains how reads
 and initialization connect them.
 It now follows a [32-byte header and array](memory-compilation.md#1-start-with-the-bytes)
-through proposed [source interfaces](memory-compilation.md#2-give-each-source-type-one-job), initialization,
+through the [source interfaces](memory-compilation.md#2-give-each-source-type-one-job), initialization,
 memory IR, and target instructions.
 
 ## Independently selectable storage operations
 
-`Operations L A` currently combines storage size/alignment and allocation/release with a logical codec for `A`.
-Separate storage geometry and placement from optional whole-value codecs so a record can contain array storage
-without selecting its managed-list `Values` representation.
-Preserve shared layout identity across the components;
-the [existing direct-element and builder interfaces](../references/language.md#array-storage-and-element-builders)
-already avoid whole-array conversion.
+Storage-only record/array composition and optional codecs are implemented
+in [L13](../references/language.md#independent-storage-and-codecs).
+The [header-array example](../../lib/tests/std/header-array.zy) composes only geometry and selected field access;
+[array conversion](../../lib/tests/std/array-memory.zy) requests logical `Values A` explicitly.
+The remaining choices are independent indexing and discard contracts.
 
 Provide explicit typed checked and unchecked indexing choices.
 The current `elements/unsafe/at` still checks bounds and displacement overflow;
@@ -37,8 +36,8 @@ A dedicated operation should express the transition without invoking a codec, cl
 The caller must settle owned contents and aliases before forgetting them;
 this operation must not imply ownership checking or automatic destruction.
 
-Validate storage-only composition without intermediate logical containers,
-and pair checked indexing successes with bounds/overflow failures that preserve storage.
+Retain the storage-only and checked-indexing regressions while adding these interfaces;
+pair new indexing successes with bounds/overflow failures that preserve storage.
 Verify that discard performs no read or write; unchecked tests must supply valid caller-established bounds.
 
 ## Additional control and storage boundaries

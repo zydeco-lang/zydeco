@@ -1,0 +1,256 @@
+-- Internal array operations after geometry validation. The caller supplies matching extent and stride.
+begin
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+    "../builtin.zy"
+  )) that
+  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  param val Geometry : VType -> VType in
+  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
+  let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
+  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let Fault = @(import("fault.zy")) in
+  let Result = @(import("../data/result.zy")) in
+  let indexed = (builtin |> (@(import("indexed.zy")))) types in
+  let int = numeric/int in
+  def Contents (A : VType) : VType =
+    data
+    | +Nil : Unit
+    | +Cons : A * Contents A
+    end
+  that
+  let Array (Element : VType) =
+    exists (= L : VType) (= Build : VType) (= Values : VType -> VType) .
+        (#capacity :: Int) * (#stride :: Int) * (#storage :: Geometry L)
+      * (#codecs :: val pi (A : VType) (element : Codec Element A) . Codec L (Values A))
+      * (
+          #dynamic_codecs :: val pi (A : VType) (element : DynamicCodec Element A) .
+            DynamicCodec L (Values A)
+        )
+      * (
+          #values ::
+            (#generate :: Thk (forall (A : VType) . Thk (Int -> Ret A) -> Ret (Values A)))
+          * (#at :: Thk (forall (A : VType) . Values A -> Int -> Ret (Result A Fault)))
+        )
+      * (
+          #elements :: (
+            #unsafe ::
+              (#base :: Thk (forall (S : VType) . Ptr L S -> Ret (Ptr Element S)))
+            * (
+                #at :: Thk (
+                  forall (S : VType) (R : CType) .
+                    Ptr L S -> Int -> Thk (Fault -> R) -> Thk (Ptr Element S -> R) -> R
+                )
+              )
+            * (
+                #init_each :: Thk (
+                  forall (R : CType) .
+                       Ptr L Uninit
+                    -> Thk (
+                            Int -> Ptr Element Uninit -> Thk (Fault -> Ptr Element Uninit -> R)
+                         -> Thk (Ptr Element Init -> R) -> R
+                       )
+                    -> Thk (Fault -> Build -> R) -> Thk (Ptr L Init -> R) -> R
+                )
+              )
+          )
+        )
+      * (
+          #buffer :: (
+            #unsafe ::
+              (#start :: Thk (Ptr L Uninit -> Ret Build))
+            * (#resume :: Thk (Ptr L Init -> Ret Build))
+            * (#length :: Thk (Build -> Ret Int))
+            * (#prefix :: Thk (Build -> Ret (Ptr Element Init * Int)))
+            * (
+                #push :: val pi (A : VType) (codec : Codec Element A) (build : Build) (value : A) .
+                  Thk (forall (R : CType) . Thk (Fault -> R) -> Thk (Build -> R) -> R)
+              )
+            * (
+                #pop :: val pi (A : VType) (codec : Codec Element A) (build : Build) .
+                  Thk (forall (R : CType) . Thk (Fault -> R) -> Thk (Build -> A -> R) -> R)
+              )
+            * (
+                #finish :: Thk (
+                  forall (R : CType) . Build -> Thk (Fault -> R) -> Thk (Ptr L Init -> R) -> R
+                )
+              )
+            * (#free :: Thk (forall (R : CType) . Alloc -> Build -> Thk (Fault -> R) -> Thk R -> R))
+          )
+        )
+  in
+  let val make (Element : VType) (storage : Geometry Unit)
+    (capacity : Int) (stride : Int) (count : Int) (alignment : Int)
+  : Array Element =
+      let Build = Addr * Int in
+      let Values (A : VType) = Contents A in
+      let val codecs (A : VType) (element : Codec Element A) : Codec Unit (Values A) =
+        let fix write (R : CType) (base : Addr) (index : Int) (values : Values A) (done : Thk R) : R
+        =
+          match values
+          | +Nil(_) => ! done
+          | +Cons(head, tail) =>
+            do displacement <- ! int/mul index stride;
+            do address <- ! memory/offset base displacement;
+            ! (element/init (unsafe/from_address Element Uninit address) head) R {
+              fn _ =>
+                do next <- ! int/add index 1;
+                ! write R base next tail done
+            }
+          end
+        in
+        let fix read (R : CType) (base : Addr) (index : Int) (yes : Thk (Values A -> R)) : R =
+          ! int/eq R index capacity { ! yes +Nil() } {
+            do displacement <- ! int/mul index stride;
+            do address <- ! memory/offset base displacement;
+            ! (element/read (unsafe/from_address Element Init address)) R {
+              fn head =>
+                do next <- ! int/add index 1;
+                ! read R base next { fn tail => ! yes +Cons(head, tail) }
+            }
+          }
+        in
+        (
+          #init = val pointer values =>
+            {
+              fn R yes =>
+                let base = unsafe/address Unit Uninit pointer in
+                ! write R base 0 values { ! yes (unsafe/from_address Unit Init base) }
+            },
+          #read = val pointer => { fn R yes => ! read R (unsafe/address Unit Init pointer) 0 yes }
+        )
+      in
+      let val dynamic_codecs (A : VType) (element : DynamicCodec Element A) : DynamicCodec Unit (
+        Values A
+      ) =
+        let codec = codecs A
+          (
+            #init = val pointer value => { fn R yes => ! element/init pointer value R yes },
+            #read = val pointer => { fn R yes => ! element/read pointer R yes }
+          ) in
+        (#init = { fn pointer value R yes => ! (codec/init pointer value) R yes },
+          #read = { fn pointer R yes => ! (codec/read pointer) R yes })
+      in
+      (
+        (
+          #L = Unit,
+          = Build,
+          = Values,
+          = capacity,
+          = stride,
+          = storage,
+          = codecs,
+          = dynamic_codecs,
+          #values = (
+            #generate = {
+              fn A generate =>
+                let fix loop (index : Int) : Ret (Values A) =
+                  ! int/eq (Ret (Values A)) index capacity { ret +Nil() } {
+                    do head <- ! generate index;
+                    do next <- ! int/add index 1;
+                    do tail <- ! loop next;
+                    ret +Cons(head, tail)
+                  }
+                in
+                ! loop 0
+            },
+            #at = {
+              fn A values index =>
+                let fix loop (values : Values A) (index : Int) : Ret (Result A Fault) =
+                  match values
+                  | +Nil(_) => ret +Err(+Bounds())
+                  | +Cons(head, tail) =>
+                    ! int/eq (Ret (Result A Fault)) index 0 { ret +Ok(head) } {
+                      do previous <- ! int/sub index 1;
+                      ! loop tail previous
+                    }
+                  end
+                in
+                ! int/lt (Ret (Result A Fault)) index 0 { ret +Err(+Bounds()) } {
+                  ! loop values index
+                }
+            }
+          ),
+          #elements = (
+            #unsafe = (
+              #base = {
+                fn S pointer => ret (unsafe/from_address Element S (unsafe/address Unit S pointer))
+              },
+              #at = {
+                fn S R pointer index no yes =>
+                  ! indexed/at Element S R stride
+                    (unsafe/from_address Element S (unsafe/address Unit S pointer)) capacity index
+                    no yes
+              },
+              #init_each = {
+                fn R pointer fill no yes =>
+                  let base = unsafe/address Unit Uninit pointer in
+                  let fix loop (index : Int) : R =
+                    ! int/eq R index capacity { ! yes (unsafe/from_address Unit Init base) } {
+                      do displacement <- ! int/mul index stride;
+                      do address <- ! memory/offset base displacement;
+                      ! fill index (unsafe/from_address Element Uninit address)
+                        { fn fault _ => ! no fault (base, index) }
+                        {
+                          fn _ =>
+                            do next <- ! int/add index 1;
+                            ! loop next
+                        }
+                    }
+                  in
+                  ! loop 0
+              }
+            )
+          ),
+          #buffer = (
+            #unsafe = (
+              #start = { fn pointer => ret (unsafe/address Unit Uninit pointer, 0) },
+              #resume = { fn pointer => ret (unsafe/address Unit Init pointer, capacity) },
+              #length = { fn (_, length) => ret length },
+              #prefix = {
+                fn (base, length) => ret (unsafe/from_address Element Init base, length)
+              },
+              #push = val A codec (base, length) value =>
+                {
+                  fn R no yes =>
+                    ! int/lt R length capacity {
+                      do displacement <- ! int/mul length stride;
+                      do address <- ! memory/offset base displacement;
+                      ! (codec/init (unsafe/from_address Element Uninit address) value) R {
+                        fn _ =>
+                          do next <- ! int/add length 1;
+                          ! yes (base, next)
+                      }
+                    } { ! no +Bounds() }
+                },
+              #pop = val A codec (base, length) =>
+                {
+                  fn R no yes =>
+                    ! int/eq R length 0 { ! no +Bounds() } {
+                      do previous <- ! int/sub length 1;
+                      do displacement <- ! int/mul previous stride;
+                      do address <- ! memory/offset base displacement;
+                      ! (codec/read (unsafe/from_address Element Init address)) R {
+                        fn value => ! yes (base, previous) value }
+                    }
+                },
+              #finish = {
+                fn R (base, length) no yes =>
+                  ! int/eq R length capacity { ! yes (unsafe/from_address Unit Init base) } {
+                    ! no +Bounds()
+                  }
+              },
+              #free = {
+                fn R allocator (base, length) no done =>
+                  ! int/eq R length 0 { ! allocator/free R base count alignment no done } {
+                    ! no +Bounds()
+                  }
+              }
+            )
+          )
+        ) : Array Element
+      )
+  in
+  pack (= Array as Array : VType -> VType)
+  where
+    = make end
+end

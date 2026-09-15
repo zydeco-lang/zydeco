@@ -1,0 +1,64 @@
+@[package(test(of(std)))]
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Int64; /OS; /numeric; /process; builtin) :
+  @(import(std/builtin)) that
+  let (/Uninit; /Init; /Fields; /Ptr; /records; /fields; /views; /codecs; /fixed; /allocation) =
+    builtin |> (@(import(std/memory)))
+  in
+  let (/heap) = allocation in
+  let (= Plan, = Layout, layout) = fixed in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  match layout/int64
+  | +Err(_) => ! fail
+  | +Ok(plan) =>
+    let (#L = Scalar, scalar) = layout/realize Int64 plan in
+    match records/product Scalar Scalar scalar/storage scalar/storage
+    | +Err(_) => ! fail
+    | +Ok(record) =>
+      let (/L; /storage; /states; /left; /right) = record in
+      ! (allocation/reserve L Unit allocation/static_heap () storage) OS no {
+        fn vacant =>
+          ! (left/init Int64 scalar/codec Uninit (states/empty vacant) (17 : Int64)) OS {
+            fn building =>
+              ! (right/init Int64 scalar/codec Init building (9223372036854775807 : Int64)) OS {
+                fn full =>
+                  -- The two state transitions erase; the successful update is load/add/store.
+                  ! (right/take Int64 scalar/codec Init full) OS {
+                    fn vacant saved =>
+                      do updated <- ! numeric/int64/add saved (1 : Int64);
+                      ! (right/init Int64 scalar/codec Init vacant updated) OS {
+                        fn full =>
+                          let read = views/compose_cps (Ptr L Init) (Ptr Scalar Init) Int64
+                            (
+                              views/as_cps (Ptr L Init) (Ptr Scalar Init)
+                                (val pointer => fields/initialized L Scalar right/path pointer)
+                            )
+                            scalar/codec/read in
+                          ! (read (states/finish full)) OS {
+                            fn observed =>
+                              ! numeric/int64/eq OS observed (-9223372036854775808 : Int64) {
+                                ! (right/take Int64 scalar/codec Init full) OS {
+                                  fn partial _ =>
+                                    ! (left/take Int64 scalar/codec Uninit partial) OS {
+                                      fn empty sibling =>
+                                        ! numeric/int64/eq OS sibling (17 : Int64) {
+                                          ! (
+                                            allocation/unsafe/release L Unit allocation/static_heap
+                                              () storage
+                                              (states/vacate empty)
+                                          ) OS no { ! process/exit 0 }
+                                        } fail
+                                    }
+                                }
+                              } fail
+                          }
+                      }
+                  }
+              }
+          }
+      }
+    end
+  end
+end

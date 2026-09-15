@@ -1,31 +1,33 @@
--- Array handles contain one address. Builders additionally retain the initialized-prefix count.
+-- Geometry-only array construction; whole-value codecs are selected explicitly afterward.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; builtin) : @(import(
     "../builtin.zy"
-  )) that
-  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
-  let Operations = (@(import("operations.type.zy"))) Addr Uninit Init Ptr in
-  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  )) in
+  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr in
+  param val (/Storage; /DynamicStorage; /constant; /runtime) : @(import("storage.type.zy")) in
   let Fault = @(import("fault.zy")) in
   let Error = @(import("layout-error.zy")) in
   let Result = @(import("../data/result.zy")) in
   let size = @(import("size.zy")) in
-  let indexed = (builtin |> (@(import("indexed.zy")))) types in
-  let int = numeric/int in
-  def Contents (A : VType) : VType =
-    data
-    | +Nil : Unit
-    | +Cons : A * Contents A
-    end
-  that
-  let Array (Element : VType) (A : VType) =
-    exists (= L : VType) (= Build : VType) (= Values : VType) .
-        (#capacity :: Int)
-      * (#contents :: Operations L Values)
+  let dynamic_size = builtin |> (@(import("dynamic-size.zy"))) in
+  let (/Array; /make = fixed_core) = (builtin |> (@(import("array-core.zy")))) types Storage in
+  let (/Array = RuntimeParts; /make = dynamic_core) = (builtin |> (@(import("array-core.zy"))))
+    types DynamicStorage in
+  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
+  let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
+  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let DynamicArray (Element : VType) =
+    exists (= L : VType) (= Build : VType) (= Values : VType -> VType) .
+        (#capacity :: Int) * (#stride :: Int) * (#storage :: DynamicStorage L)
+      * (
+          #codecs :: Thk (
+            forall (A : VType) . DynamicCodec Element A -> Ret (DynamicCodec L (Values A))
+          )
+        )
       * (
           #values ::
-            (#generate :: Thk (Thk (Int -> Ret A) -> Ret Values))
-          * (#at :: Thk (Values -> Int -> Ret (Result A Fault)))
+            (#generate :: Thk (forall (A : VType) . Thk (Int -> Ret A) -> Ret (Values A)))
+          * (#at :: Thk (forall (A : VType) . Values A -> Int -> Ret (Result A Fault)))
         )
       * (
           #elements :: (
@@ -38,18 +40,12 @@ begin
                 )
               )
             * (
-                #free :: Thk (
-                  forall (R : CType) . Alloc -> Ptr L Uninit -> Thk (Fault -> R) -> Thk R -> R
-                )
-              )
-            * (
                 #init_each :: Thk (
                   forall (R : CType) .
                        Ptr L Uninit
                     -> Thk (
-                         Int -> Ptr Element Uninit -> Thk (
-                           Fault -> Ptr Element Uninit -> R
-                         ) -> Thk (Ptr Element Init -> R) -> R
+                            Int -> Ptr Element Uninit -> Thk (Fault -> Ptr Element Uninit -> R)
+                         -> Thk (Ptr Element Init -> R) -> R
                        )
                     -> Thk (Fault -> Build -> R) -> Thk (Ptr L Init -> R) -> R
                 )
@@ -65,12 +61,16 @@ begin
             * (#prefix :: Thk (Build -> Ret (Ptr Element Init * Int)))
             * (
                 #push :: Thk (
-                  forall (R : CType) . Build -> A -> Thk (Fault -> R) -> Thk (Build -> R) -> R
+                  forall (A : VType) (R : CType) .
+                       DynamicCodec Element A -> Build -> A
+                    -> Thk (Fault -> R) -> Thk (Build -> R) -> R
                 )
               )
             * (
                 #pop :: Thk (
-                  forall (R : CType) . Build -> Thk (Fault -> R) -> Thk (Build -> A -> R) -> R
+                  forall (A : VType) (R : CType) .
+                       DynamicCodec Element A -> Build
+                    -> Thk (Fault -> R) -> Thk (Build -> A -> R) -> R
                 )
               )
             * (
@@ -82,252 +82,128 @@ begin
           )
         )
   in
-  let val make (Element : VType) (A : VType) (element : Operations Element A)
-    (capacity : Int) (count : Int) (alignment : Int)
-  : Array Element A =
-      let Build = Addr * Int in
-      let Values = Contents A in
-      let fix write (R : CType) (base : Addr) (index : Int) (values : Values) (done : Thk R) : R =
-        match values
-        | +Nil(_) => ! done
-        | +Cons(head, tail) =>
-          do displacement <- ! int/mul index element/size;
-          do address <- ! memory/offset base displacement;
-          ! element/unsafe/init R (unsafe/from_address Element Uninit address) head {
-            fn _ =>
-              do next <- ! int/add index 1;
-              ! write R base next tail done
-          }
-        end
-      in
-      let fix read (R : CType) (base : Addr) (index : Int) (yes : Thk (Values -> R)) : R =
-        ! int/eq R index capacity { ! yes +Nil() } {
-          do displacement <- ! int/mul index element/size;
-          do address <- ! memory/offset base displacement;
-          ! element/unsafe/read R (unsafe/from_address Element Init address) {
-            fn head =>
-              do next <- ! int/add index 1;
-              ! read R base next { fn tail => ! yes +Cons(head, tail) }
-          }
-        }
-      in
+  let val materialize_parts (Element : VType) (parts : RuntimeParts Element) : DynamicArray Element
+  =
+    let (
+      /L;
+      /Build;
+      /Values;
+      /capacity;
+      /stride;
+      /storage;
+      /dynamic_codecs;
+      /values;
+      /elements;
+      /buffer
+    )
+    =
+      parts
+    in
+    let val adapt (A : VType) (codec : DynamicCodec Element A) : Codec Element A =
+      (#init = val pointer value => { fn R yes => ! codec/init pointer value R yes },
+        #read = val pointer => { fn R yes => ! codec/read pointer R yes })
+    in
+    (
       (
-        (
-          #L = Unit,
-          = Build,
-          = Values,
-          = capacity,
-          #contents = (
-            #size = count,
-            = alignment,
-            #allocate = {
-              fn R allocator no yes =>
-                ! allocator/allocate R count alignment no {
-                  fn base => ! yes (unsafe/from_address Unit Uninit base)
-                }
+        = L,
+        = Build,
+        = Values,
+        = capacity,
+        = stride,
+        = storage,
+        #codecs = { fn A codec => ret (dynamic_codecs A codec) },
+        = values,
+        = elements,
+        #buffer = (
+          #unsafe = (
+            #start = buffer/start,
+            #resume = buffer/resume,
+            #length = buffer/length,
+            #prefix = buffer/prefix,
+            #push = {
+              fn A R codec progress value no yes =>
+                ! (buffer/push A (adapt A codec) progress value) R no yes
             },
-            #unsafe = (
-              #init = {
-                fn R pointer values yes =>
-                  let base = unsafe/address Unit Uninit pointer in
-                  ! write R base 0 values { ! yes (unsafe/from_address Unit Init base) }
-              },
-              #read = { fn R pointer yes => ! read R (unsafe/address Unit Init pointer) 0 yes },
-              #take = {
-                fn R pointer yes =>
-                  let base = unsafe/address Unit Init pointer in
-                  ! read R base 0 {
-                    fn values => ! yes (unsafe/from_address Unit Uninit base) values
-                  }
-              },
-              #free = {
-                fn R allocator pointer no done =>
-                  ! allocator/free R (unsafe/address Unit Uninit pointer) count alignment no done
-              }
-            )
-          ),
-          #values = (
-            #generate = {
-              fn generate =>
-                let fix loop (index : Int) : Ret Values =
-                  ! int/eq (Ret Values) index capacity { ret +Nil() } {
-                    do head <- ! generate index;
-                    do next <- ! int/add index 1;
-                    do tail <- ! loop next;
-                    ret +Cons(head, tail)
-                  }
-                in
-                ! loop 0
+            #pop = {
+              fn A R codec progress no yes => ! (buffer/pop A (adapt A codec) progress) R no yes
             },
-            #at = {
-              fn values index =>
-                let fix loop (values : Values) (index : Int) : Ret (Result A Fault) =
-                  match values
-                  | +Nil(_) => ret +Err(+Bounds())
-                  | +Cons(head, tail) =>
-                    ! int/eq (Ret (Result A Fault)) index 0 { ret +Ok(head) } {
-                      do previous <- ! int/sub index 1;
-                      ! loop tail previous
-                    }
-                  end
-                in
-                ! int/lt (Ret (Result A Fault)) index 0 { ret +Err(+Bounds()) } {
-                  ! loop values index
-                }
-            }
-          ),
-          #elements = (
-            #unsafe = (
-              #base = {
-                fn S pointer => ret (unsafe/from_address Element S (unsafe/address Unit S pointer))
-              },
-              #at = {
-                fn S R pointer index no yes =>
-                  ! indexed/at Element S R element/size
-                    (unsafe/from_address Element S (unsafe/address Unit S pointer)) capacity index
-                    no yes
-              },
-              #free = {
-                fn R allocator pointer no done =>
-                  ! allocator/free R (unsafe/address Unit Uninit pointer) count alignment no done
-              },
-              #init_each = {
-                fn R pointer fill no yes =>
-                  let base = unsafe/address Unit Uninit pointer in
-                  let fix loop (index : Int) : R =
-                    ! int/eq R index capacity { ! yes (unsafe/from_address Unit Init base) } {
-                      do displacement <- ! int/mul index element/size;
-                      do address <- ! memory/offset base displacement;
-                      ! fill index (unsafe/from_address Element Uninit address)
-                        { fn fault _ => ! no fault (base, index) }
-                        {
-                          fn _ =>
-                            do next <- ! int/add index 1;
-                            ! loop next
-                        }
-                    }
-                  in
-                  ! loop 0
-              }
-            )
-          ),
-          #buffer = (
-            #unsafe = (
-              #start = { fn pointer => ret (unsafe/address Unit Uninit pointer, 0) },
-              #resume = { fn pointer => ret (unsafe/address Unit Init pointer, capacity) },
-              #length = { fn (_, length) => ret length },
-              #prefix = {
-                fn (base, length) => ret (unsafe/from_address Element Init base, length)
-              },
-              #push = {
-                fn R (base, length) value no yes =>
-                  ! int/lt R length capacity {
-                    do displacement <- ! int/mul length element/size;
-                    do address <- ! memory/offset base displacement;
-                    ! element/unsafe/init R (unsafe/from_address Element Uninit address) value {
-                      fn _ =>
-                        do next <- ! int/add length 1;
-                        ! yes (base, next)
-                    }
-                  } { ! no +Bounds() }
-              },
-              #pop = {
-                fn R (base, length) no yes =>
-                  ! int/eq R length 0 { ! no +Bounds() } {
-                    do previous <- ! int/sub length 1;
-                    do displacement <- ! int/mul previous element/size;
-                    do address <- ! memory/offset base displacement;
-                    ! element/unsafe/take R (unsafe/from_address Element Init address) {
-                      fn _ value =>
-                        ! yes (base, previous) value
-                    }
-                  }
-              },
-              #finish = {
-                fn R (base, length) no yes =>
-                  ! int/eq R length capacity { ! yes (unsafe/from_address Unit Init base) } {
-                    ! no +Bounds()
-                  }
-              },
-              #free = {
-                fn R allocator (base, length) no done =>
-                  ! int/eq R length 0 { ! allocator/free R base count alignment no done } {
-                    ! no +Bounds()
-                  }
-              }
-            )
+            #finish = buffer/finish,
+            #free = buffer/free
           )
-        ) : Array Element A
-      )
+        )
+      ) : DynamicArray Element
+    )
   in
-  let val make_fixed (Element : VType) (A : VType) (element : Operations Element A)
-    (capacity : Int) (boundary : Int)
-  : Result (Array Element A) Error =
-      size/bind Int (Array Element A) (size/alignment element/alignment) (
-        val natural =>
-          size/bind Int (Array Element A) (size/alignment boundary) (
-            val boundary =>
-              size/bind Int (Array Element A) (size/multiply element/size capacity) (
+  let val make (Element : VType) (element : Storage Element) (capacity : Int) (boundary : Int) :
+    Result (Array Element) Error =
+      let geometry = constant/query Element element in
+      size/bind Int (Array Element) (size/alignment boundary) (
+        val boundary =>
+          size/bind Int (Array Element) (size/round_up geometry/size geometry/alignment) (
+            val stride =>
+              size/bind Int (Array Element) (size/multiply stride capacity) (
                 val bytes =>
-                  let alignment = size/maximum natural boundary in
-                  size/bind Int (Array Element A) (size/round_up bytes alignment) (
+                  let alignment = size/maximum geometry/alignment boundary in
+                  size/bind Int (Array Element) (size/round_up bytes alignment) (
                     val count =>
-                      +Ok(make Element A element capacity count alignment)
+                      size/bind (Storage Unit) (Array Element) (
+                        constant/unsafe/for_layout Unit count alignment
+                      )
+                        (
+                          val storage =>
+                            +Ok(fixed_core Element storage capacity stride count alignment)
+                        )
                   )
               )
           )
       )
   in
-  let fix power_of_two (R : CType) (value : Int) (no : Thk R) (yes : Thk R) : R =
-    ! int/lt R value 1 no {
-      ! int/eq R value 1 yes {
-        do remainder <- ! int/mod value 2;
-        ! int/eq R remainder 0 {
-          do half <- ! int/div value 2;
-          ! power_of_two R half no yes
-        } no
-      }
-    }
-  in
-  let dynamic : Thk (
-    forall (Element : VType) (A : VType) (R : CType) .
-      Operations Element A -> Int -> Int -> Thk (Fault -> R) -> Thk (Array Element A -> R) -> R
+  let realize : Thk (
+    forall (Element : VType) (R : CType) .
+         DynamicStorage Element -> Int -> Int
+      -> Thk (Fault -> R) -> Thk (DynamicArray Element -> R) -> R
   ) = {
-    fn Element A R element capacity boundary no yes =>
-      let invalid = { ! no +InvalidLayout() } in
-      ! int/lt R capacity 0 invalid {
-        ! int/lt R element/size 0 invalid {
-          ! power_of_two R element/alignment invalid {
-            ! power_of_two R boundary invalid {
-              do alignment <- ! int/gt (Ret Int) boundary element/alignment { ret boundary } {
-                ret element/alignment
-              };
-              let bytes = {
-                fn (count : Int) =>
-                  do remainder <- ! int/mod count alignment;
-                  ! int/eq R remainder 0 { ! yes (make Element A element capacity count alignment) }
-                    {
-                      do padding <- ! int/sub alignment remainder;
-                      do limit <- ! int/sub 4611686018427387903 padding;
-                      ! int/gt R count limit { ! no +Overflow() } {
-                        do rounded <- ! int/add count padding;
-                        ! yes (make Element A element capacity rounded alignment)
-                      }
-                    }
-              } in
-              ! int/eq R element/size 0 { ! bytes 0 } {
-                do maximum <- ! int/div 4611686018427387903 element/size;
-                ! int/gt R capacity maximum { ! no +Overflow() } {
-                  do count <- ! int/mul capacity element/size;
-                  ! bytes count
-                }
-              }
-            }
-          }
-        }
-      }
+    fn Element R element capacity boundary no yes =>
+      let geometry = runtime/query Element element in
+      let ! invalid (error : Error) : R =
+        match error
+        | +SizeOverflow() => ! no +Overflow()
+        | _ => ! no +InvalidLayout()
+        end
+      in
+      do aligned <- ! dynamic_size/alignment boundary;
+      match aligned
+      | +Err(error) => ! invalid error
+      | +Ok(boundary) =>
+        do rounded <- ! dynamic_size/round_up geometry/size geometry/alignment;
+        match rounded
+        | +Err(error) => ! invalid error
+        | +Ok(stride) =>
+          do multiplied <- ! dynamic_size/multiply stride capacity;
+          match multiplied
+          | +Err(error) => ! invalid error
+          | +Ok(bytes) =>
+            do alignment <- ! numeric/int/gt (Ret Int) geometry/alignment boundary
+              { ret geometry/alignment } { ret boundary };
+            do extent <- ! dynamic_size/round_up bytes alignment;
+            match extent
+            | +Err(error) => ! invalid error
+            | +Ok(count) =>
+              do checked <- ! runtime/unsafe/for_layout Unit count alignment;
+              match checked
+              | +Err(error) => ! invalid error
+              | +Ok(storage) => ! yes (
+                materialize_parts Element (
+                  dynamic_core Element storage capacity stride count alignment
+                )
+              )
+              end
+            end
+          end
+        end
+      end
   } in
-  pack (= Array as Array : VType -> VType -> VType)
+  pack (= Array as Array : VType -> VType) (= DynamicArray as DynamicArray : VType -> VType)
   where
-    (#make = make_fixed, #realize = dynamic) end
+    (= make, = realize) end
 end

@@ -1,0 +1,70 @@
+@[package(test(of(std)))]
+begin
+  param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /OS; /numeric; /process; builtin) : @(import(
+    std/builtin
+  )) that
+  let (/Uninit; /Init; /Ptr; /storage; /arrays; /allocation; /pointer; /raw) =
+    builtin |> (@(import(std/memory)))
+  in
+  let Fault = @(import("../../std/memory/fault.zy")) in
+  let fail = { ! process/exit 1 } in
+  let no = { fn (_ : Fault) => ! fail } in
+  -- The element has eight data bytes and a 64-byte boundary. No logical value or codec is selected.
+  match storage/constant/create 8 64
+  | +Err(_) => ! fail
+  | +Ok(#L = Element, element) =>
+    match arrays/make Element element 2 1
+    | +Err(_) => ! fail
+    | +Ok(array) =>
+      let (/L; /storage = extent; /stride; /elements) = array in
+      let geometry = storage/constant/query L extent in
+      ! numeric/int/eq OS geometry/size 128 {
+        ! numeric/int/eq OS stride 64 {
+          ! (allocation/reserve L Unit allocation/static_heap () extent) OS no {
+            fn vacant =>
+              let base = pointer/unsafe/address L Uninit vacant in
+              -- Octets have no owned resources; discard their logical state explicitly.
+              let finish = {
+                let vacant = pointer/unsafe/from_address L Uninit base in
+                ! (allocation/unsafe/release L Unit allocation/static_heap () extent vacant)
+                  OS no { ! process/exit 0 }
+              } in
+              ! raw/unsafe/fill OS base 128 99 {
+                ! elements/init_each OS vacant {
+                  fn _ slot _ yes =>
+                    let address = pointer/unsafe/address Element Uninit slot in
+                    ! raw/unsafe/fill OS address 8 7 {
+                      ! yes (pointer/unsafe/from_address Element Init address) }
+                } { fn _ _ => ! fail } {
+                  fn live =>
+                    ! elements/at Init OS live 1 no {
+                      fn second =>
+                        ! raw/unsafe/fill OS (pointer/unsafe/address Element Init second) 8 9 {
+                          do gap <- ! raw/unsafe/offset base 63;
+                          do next <- ! raw/unsafe/offset base 64;
+                          ! raw/unsafe/load_u8 OS base {
+                            fn first =>
+                              ! raw/unsafe/load_u8 OS gap {
+                                fn padding =>
+                                  ! raw/unsafe/load_u8 OS next {
+                                    fn second =>
+                                      ! numeric/uint8/eq OS first 7 {
+                                        ! numeric/uint8/eq OS padding 99 {
+                                          ! numeric/uint8/eq OS second 9 {
+                                            ! finish
+                                          } fail
+                                        } fail
+                                      } fail
+                                  }
+                              }
+                          }
+                        }
+                    }
+                }
+              }
+          }
+        } fail
+      } fail
+    end
+  end
+end

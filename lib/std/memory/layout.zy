@@ -1,57 +1,61 @@
 begin
   param val (/Addr; /VType; /CType; /Thk; /Ret; /Unit;
     /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
-    /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) that
-  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr that
+    /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) in
+  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr in
+  param val (/Storage; /constant; storage_api) : @(import("storage.type.zy")) in
   let Result = @(import("../data/result.zy")) in
   let Error = @(import("layout-error.zy")) in
   let Shape = @(import("shape.zy")) in
-  let Descriptor = (@(import("descriptor.type.zy"))) Addr in
-  let Representation = (@(import("representation.type.zy"))) Addr Uninit Init Ptr in
+  let (/Codec; codecs) = (builtin |> (@(import("codecs.zy")))) types in
+  let Representation = (@(import("representation.type.zy"))) Storage Codec in
   let size = @(import("size.zy")) in
-  let make_codec = @(import("codec.zy")) in
-  let codec = (builtin |> make_codec) types in
-  let Plan (A : VType) = (#shape :: Shape) * (#codec :: Descriptor A) in
+  let Plan (A : VType) = (#shape :: Shape) * (#representation :: Representation A) in
   let Layout (A : VType) = Result (Plan A) Error in
+  let val make (A : VType) (shape : Shape) (recipe : val pi (L : VType) . Codec L A) : Layout A =
+    size/bind (exists (= L : VType) . Storage L) (Plan A)
+      (constant/create shape/size shape/alignment) (
+      val package =>
+        let (= L, storage) = package in
+        +Ok(= shape, #representation = (= L, = storage, #codec = recipe L) : Representation A)
+    )
+  in
   let val scalar (A : VType) (count : Int)
     (write : Thk (forall (R : CType) . Addr -> A -> Thk R -> R))
     (read : Thk (forall (R : CType) . Addr -> Thk (A -> R) -> R))
   : Layout A =
-      +Ok(#shape = (#size = count, #alignment = count, #form = +Scalar(#width = count)),
-        #codec = codec/scalar A count count write read)
+      make A (#size = count, #alignment = count, #form = +Scalar(#width = count))
+        (val L => codecs/unsafe/scalar L A write read)
   in
   let val padding (count : Int) : Layout Unit =
-    size/bind Int (Plan Unit) (size/size count) (
-      val count =>
-        +Ok(#shape = (#size = count, #alignment = 1, #form = +Padding()),
-          #codec = codec/padding count)
-    )
+    make Unit (#size = count, #alignment = 1, #form = +Padding()) (val L => codecs/unsafe/padding L)
   in
-  let val product (A : VType) (B : VType) (left : Layout A) (right : Layout B) :
-    Layout (A * B) =
-      size/bind (Plan A) (Plan (A * B)) left (
-        val left =>
-          size/bind (Plan B) (Plan (A * B)) right (
-            val right =>
-              size/bind Int (Plan (A * B))
-                (size/round_up left/shape/size right/shape/alignment) (
-                val offset =>
-                  size/bind Int (Plan (A * B)) (size/add offset right/shape/size) (
-                    val field_end =>
-                      let alignment = size/maximum left/shape/alignment right/shape/alignment in
-                      size/bind Int (Plan (A * B)) (size/round_up field_end alignment) (
-                        val count =>
-                          +Ok(
-                            #shape = (#size = count, = alignment,
-                              #form = +Product(= offset, #left = left/shape, #right = right/shape)),
-                            #codec = codec/product A B left/codec right/codec offset count alignment
-
+  let val product (A : VType) (B : VType) (left : Layout A) (right : Layout B) : Layout (A * B) =
+    size/bind (Plan A) (Plan (A * B)) left (
+      val left =>
+        size/bind (Plan B) (Plan (A * B)) right (
+          val right =>
+            size/bind Int (Plan (A * B)) (size/round_up left/shape/size right/shape/alignment) (
+              val offset =>
+                size/bind Int (Plan (A * B)) (size/add offset right/shape/size) (
+                  val field_end =>
+                    let alignment = size/maximum left/shape/alignment right/shape/alignment in
+                    size/bind Int (Plan (A * B)) (size/round_up field_end alignment) (
+                      val count =>
+                        let (#L = Left, left_repr) = left/representation in
+                        let (#L = Right, right_repr) = right/representation in
+                        make (A * B) (#size = count, = alignment,
+                          #form = +Product(= offset, #left = left/shape, #right = right/shape))
+                          (
+                            val L =>
+                              codecs/unsafe/product_at L Left Right A B left_repr/codec
+                                right_repr/codec 0 offset
                           )
-                      )
-                  )
-              )
-          )
-      )
+                    )
+                )
+            )
+        )
+    )
   in
   let val align (A : VType) (boundary : Int) (layout : Layout A) : Layout A =
     size/bind Int (Plan A) (size/alignment boundary) (
@@ -61,18 +65,18 @@ begin
             let alignment = size/maximum boundary layout/shape/alignment in
             size/bind Int (Plan A) (size/round_up layout/shape/size alignment) (
               val count =>
-                +Ok(#shape = (#size = count, = alignment, #form = layout/shape/form),
-                  #codec = codec/align A layout/codec count alignment)
+                let (#L = Old, repr) = layout/representation in
+                make A (#size = count, = alignment, #form = layout/shape/form)
+                  (val L => codecs/unsafe/relabel L Old A repr/codec)
             )
         )
     )
   in
   let val inspect (A : VType) (plan : Plan A) : Shape = plan/shape in
   let val realize (A : VType) (plan : Plan A) : Representation A =
-    let known_size = (@(intrinsic(int_add))) plan/codec/size 0 in
-    let known_alignment = (@(intrinsic(int_add))) plan/codec/alignment 0 in
-    codec/realize A (#size = known_size, #alignment = known_alignment,
-      #write = plan/codec/write, #read = plan/codec/read)
+    let known_size = (@(intrinsic(int_add))) plan/shape/size 0 in
+    let known_alignment = (@(intrinsic(int_add))) plan/shape/alignment 0 in
+    plan/representation
   in
   (
     (
@@ -92,6 +96,6 @@ begin
         #float32 = scalar Float32 4 numeric/float32/store_le numeric/float32/load_le,
         #float64 = scalar Float64 8 numeric/float64/store_le numeric/float64/load_le,
         #addr = scalar Addr 8 memory/store_addr memory/load_addr)
-    ) : (@(import("layout.type.zy"))) Addr Uninit Init Ptr
+    ) : (@(import("layout.type.zy"))) Addr Storage Codec
   )
 end

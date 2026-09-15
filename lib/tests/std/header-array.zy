@@ -1,9 +1,10 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int; /UInt32; /OS; /numeric; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Int; /UInt32; /OS; /numeric; /process; /Unit; builtin) :
+  @(import(
     std/builtin
   )) that
-  let (
+  let (/storage; /codecs;
     /Uninit;
     /Init;
     /Fields;
@@ -33,78 +34,91 @@ begin
       | +Err(_) => fail
       | +Ok(plan) =>
         let (#L = Element, element) = layout/realize UInt32 plan in
-        match arrays/make Element UInt32 element 4 16
+        match arrays/make Element element/storage 4 16
         | +Err(_) => fail
         | +Ok(array) =>
-          let (/L = Array; /Values; /contents; /elements) = array in
-          match records/product Length Array Int Values length contents
+          let (/L = Array; /storage = array_storage; /elements) = array in
+          match records/product Length Array length/storage array_storage
           | +Err(_) => fail
           | +Ok(record) =>
-            let (/L; /value = object; /states; /left; /right) = record in
-            let forms = headers/from_fields L Length Array Int length left/path right/path in
+            let (/L; /storage = object_storage; /states; /left; /right) = record in
+            let forms = headers/from_fields L Length Array Int length/codec left/path right/path in
             let (/H; /unsafe = inline) = forms/inline in
             let (/H = Prefix; /unsafe = prefix) = forms/prefix in
             let checked = views/bounded Array Init (H Init) 4 (inline/open Init) in
             {
-              ! object/allocate OS heap no {
-                fn vacant =>
-                  ! left/init Uninit OS (states/empty vacant) 4 {
-                    fn building =>
-                      do destination <- ! (right/project Uninit Init building);
-                      ! elements/init_each OS destination {
-                        fn _ slot _ yes =>
-                          ! element/unsafe/init OS slot 73 yes
-                      } { fn _ _ => ! fail } {
-                        fn initialized =>
-                          let completed = right/replace Uninit Init Init building initialized in
-                          let live = states/finish completed in
-                          let base = pointer/unsafe/address L Init live in
-                          ! (checked (inline/from_address Init base)) OS no {
-                            fn (payload, count) =>
-                              ! numeric/int/eq OS count 4 {
-                                let payload_address = pointer/unsafe/address Array Init payload in
-                                ! (prefix/open Init (prefix/from_address Init payload_address)) OS {
-                                  fn (payload, saved_count) =>
-                                    ! elements/at Init OS payload 3 no {
-                                      fn last =>
-                                        ! element/unsafe/read OS last {
-                                          fn item =>
-                                            ! numeric/uint32/eq OS item 73 {
-                                              ! numeric/int/store_le OS base 0 {
-                                                ! (inline/open Init (inline/from_address Init base))
-                                                  OS {
-                                                  fn (_, current_count) =>
-                                                    ! numeric/int/eq OS saved_count 4 {
-                                                      ! numeric/int/eq OS current_count 0 {
-                                                        ! numeric/int/store_le OS base 9 {
-                                                          ! (
-                                                            checked (inline/from_address Init base)
-                                                          ) OS {
-                                                            fn fault =>
-                                                              match fault
-                                                              | +Bounds() => ! object/unsafe/take OS
-                                                                live {
-                                                                fn vacant _ =>
-                                                                  ! object/unsafe/free OS heap
-                                                                    vacant no { ! process/exit 0 }
-                                                              }
-                                                              | _ => ! fail
-                                                              end
-                                                          } { fn _ => ! fail }
-                                                        }
-                                                      } fail
-                                                    } fail
-                                                }
-                                              }
-                                            } fail
+              ! (allocation/reserve L Unit allocation/static_heap () object_storage) OS no
+                {
+                  fn vacant =>
+                    let base = pointer/unsafe/address L Uninit vacant in
+                    -- Stored scalars own no resources. Discard their values before releasing the base.
+                    let finish = {
+                      let vacant = pointer/unsafe/from_address L Uninit base in
+                      ! (
+                        allocation/unsafe/release L Unit allocation/static_heap () object_storage
+                          vacant
+                      )
+                        OS no { ! process/exit 0 }
+                    } in
+                    ! (left/init Int length/codec Uninit (states/empty vacant) 4) OS {
+                      fn building =>
+                        do destination <- ! (right/project Uninit Init building);
+                        ! elements/init_each OS destination {
+                          fn _ slot _ yes =>
+                            ! (element/codec/init slot 73) OS yes
+                        } { fn _ _ => ! fail } {
+                          fn initialized =>
+                            let completed = right/replace Uninit Init Init building initialized in
+                            let live = states/finish completed in
+                            let base = pointer/unsafe/address L Init live in
+                            ! (checked (inline/from_address Init base)) OS no {
+                              fn (payload, count) =>
+                                ! numeric/int/eq OS count 4 {
+                                  let payload_address = pointer/unsafe/address Array Init payload in
+                                  ! (prefix/open Init (prefix/from_address Init payload_address)) OS
+                                    {
+                                      fn (payload, saved_count) =>
+                                        ! elements/at Init OS payload 3 no {
+                                          fn last =>
+                                            ! (element/codec/read last) OS {
+                                              fn item =>
+                                                ! numeric/uint32/eq OS item 73 {
+                                                  ! numeric/int/store_le OS base 0 {
+                                                    ! (
+                                                      inline/open Init (
+                                                        inline/from_address Init base
+                                                      )
+                                                    )
+                                                      OS {
+                                                      fn (_, current_count) =>
+                                                        ! numeric/int/eq OS saved_count 4 {
+                                                          ! numeric/int/eq OS current_count 0 {
+                                                            ! numeric/int/store_le OS base 9 {
+                                                              ! (
+                                                                checked (
+                                                                  inline/from_address Init base
+                                                                )
+                                                              ) OS {
+                                                                fn fault =>
+                                                                  match fault
+                                                                  | +Bounds() => ! finish
+                                                                  | _ => ! fail
+                                                                  end
+                                                              } { fn _ => ! fail }
+                                                            }
+                                                          } fail
+                                                        } fail
+                                                    }
+                                                  }
+                                                } fail
+                                            }
                                         }
                                     }
-                                }
-                              } fail
-                          }
-                      }
-                  }
-              }
+                                } fail
+                            }
+                        }
+                    }
+                }
             }
           end
         end

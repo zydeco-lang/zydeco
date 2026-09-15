@@ -1,9 +1,11 @@
 @[package(test(of(std)))]
 begin
-  param (/VType; /CType; /Thk; /OS; /UInt8; /UInt32; /numeric; /process; builtin) : @(import(
+  param (/VType; /CType; /Thk; /OS; /UInt8; /UInt32; /numeric; /process; /Unit; builtin) : @(import(
     std/builtin
   )) in
-  let (/Uninit; /Init; /Ptr; /fixed; /allocation) = builtin |> (@(import(std/memory))) in
+  let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation) = builtin |> (
+    @(import(std/memory))
+  ) in
   let (= Plan, = Layout, layouts) = fixed in
   let (/Alloc; /heap) = allocation in
   let Fault = @(import("../../../std/memory/fault.zy")) in
@@ -14,18 +16,23 @@ begin
   | +Err(_) => ! fail
   | +Ok(plan) =>
     let (= L, repr) = layouts/realize (UInt8 * UInt32) plan in
-    let worker = make_worker (Ptr L Init) (Ptr L Uninit) repr/unsafe/take repr/unsafe/init in
-    ! repr/allocate OS heap no {
+    let worker = make_worker (Ptr L Init) (Ptr L Uninit) {
+      fn R pointer yes => ! (codecs/unsafe/take L (UInt8 * UInt32) repr/codec pointer) R yes
+    } { fn R pointer value yes => ! (repr/codec/init pointer value) R yes } in
+    ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no {
       fn vacant =>
-        ! repr/unsafe/init OS vacant (7 : UInt8, 41 : UInt32) {
+        ! (repr/codec/init vacant (7 : UInt8, 41 : UInt32)) OS {
           fn live =>
             ! worker OS live {
               fn updated =>
-                ! repr/unsafe/take OS updated {
+                ! (codecs/unsafe/take L (UInt8 * UInt32) repr/codec updated) OS {
                   fn vacant (tag, payload) =>
                     ! numeric/uint8/eq OS tag 7 {
                       ! numeric/uint32/eq OS payload 42 {
-                        ! repr/unsafe/free OS heap vacant no { ! process/exit 0 }
+                        ! (
+                          allocation/unsafe/release L Unit allocation/static_heap () repr/storage
+                            vacant
+                        ) OS no { ! process/exit 0 }
                       } fail
                     } fail
                 }
