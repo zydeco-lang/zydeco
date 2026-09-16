@@ -703,7 +703,10 @@ Semantic documentation belongs with the term's analysis and provenance.
 Documentation operations query those facts, verify selected links and examples,
 and assemble reference pages, explicit guides, anchors, and rendered output.
 The [source-documentation rules](#source-documentation) describe authoring;
-the compiler reference maps these abstractions to their [implementation carriers](compiler.md#abstraction-carriers).
+the compiler reference maps these abstractions
+to their [implementation representations](compiler.md#implementation-representations).
+The [namespace and resolution proposal](../proposals/package-resolution.md) develops the next package-resolution model:
+opaque roots, source instantiation, and merging equivalent resolved packages before semantic analysis.
 
 ### Source Boundaries
 

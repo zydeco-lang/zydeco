@@ -544,12 +544,12 @@ This checks traversal work, not end-to-end compilation speed.
 
 ## C3. Source Loading, Sessions, Queries, and Memory Retention
 
-### Abstraction Carriers
+### Implementation Representations
 
 The language reference defines the [abstraction levels](language.md#abstraction-levels) and their responsibilities.
-Their current implementation carriers are:
+Their current implementation representations are:
 
-| Abstraction | Current carrier |
+| Abstraction | Current representation |
 | --- | --- |
 | Project | `PackageBindings`; shared project preparation is being rebuilt |
 | Package | `Package` / `PackageId` |
@@ -558,8 +558,10 @@ Their current implementation carriers are:
 
 `CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
 Reusing semantic analysis requires matching source inputs and resolution context.
-The [package proposal](../proposals/package-management.md#carrier-implementation) records the pending carrier
-consolidation; the [documentation proposal](../proposals/documentation.md) records the remaining query and output work.
+The [namespace and resolution proposal](../proposals/package-resolution.md) develops source instantiation
+and merging before semantic analysis.
+The [package implementation plan](../proposals/package-management.md#implementation-representations) integrates
+that model; the [documentation proposal](../proposals/documentation.md) records the remaining query and output work.
 
 ### Source Loading and Package Selection
 
@@ -2267,7 +2269,7 @@ for consumers of its distributed artifacts.
 
 The checked [entry representations](../../lang/session/src/source/query.rs) describe a process program,
 a collection of C exports, or a [native unit initializer](#native-unit-artifacts).
-The [carrier implementation plan](../proposals/package-management.md#carrier-implementation) rebuilds their association
+The [implementation plan](../proposals/package-management.md#implementation-representations) rebuilds their association
 with a selected package as `CompilationUnit`.
 The source roles and legality rules belong to [L14](language.md#compiled-libraries-and-c-exports).
 [Library checking](../../lang/statics/src/check/library.rs) reuses the source judgment query, Builtin domain validator,

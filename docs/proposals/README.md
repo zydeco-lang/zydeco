@@ -1,4 +1,4 @@
-# Ongoing design proposals
+# Ongoing Design Proposals
 
 These documents contain unimplemented extensions or unresolved choices
 with concrete alternatives and validation criteria.
@@ -20,7 +20,8 @@ as current behavior.
 | [Rust hosts](rust-host.md) | Rust consumption of C exports and native Zydeco interfaces, binding scope, and workload | [C exports](../references/language.md#compiled-libraries-and-c-exports) and [native units](../references/language.md#native-zydeco-units) |
 | [Zydeco ABI](zydeco-abi.md) | Richer unit interfaces, shared initialization, and host bindings including optional UniFFI integration | [Native units](../references/language.md#native-zydeco-units) and [unit artifacts](../references/compiler.md#native-unit-artifacts) |
 | [Completion](completion.md) | Structural candidates, snippets, and optional last-successful revision state | [Recovery](../references/compiler.md#recovering-parsing) and [completion](../references/compiler.md#completion-and-documentation) |
-| [Source packages](package-management.md) | Project, semantic-unit, and compilation-unit carriers; entry identity, frontend integration, and relationship policy | [Abstraction levels](../references/language.md#abstraction-levels), [source packages](../references/language.md#source-packages), and [carriers](../references/compiler.md#abstraction-carriers) |
+| [Package Namespaces and Resolution](package-resolution.md) | Namespace paths, opaque roots, source instantiation, merging, and shared semantic selection | [Abstraction levels](../references/language.md#abstraction-levels) and [source boundaries](../references/language.md#source-boundaries) |
+| [Source Packages](package-management.md) | Project, semantic-unit, and compilation-unit representations; entry identity, frontend integration, and relationship policy | [Abstraction levels](../references/language.md#abstraction-levels), [source packages](../references/language.md#source-packages), and [implementation representations](../references/compiler.md#implementation-representations) |
 | [Documentation](documentation.md) | Package-aware selection, public-subject routes, independent verification, standard-library coverage, and later authoring/client extensions | [Subjects](../references/compiler.md#documentation-subjects-and-provenance) and [publication](../references/compiler.md#documentation-publication-and-verification) |
 | [Escape and representation](escape-unboxing.md) | Contification, interprocedural constraints, frame cells, allocation reuse, and layout-directed calls | [Local policies](../references/compiler.md#policy-selection) and [source stored calls](../references/language.md#stored-call-interfaces) |
 | [Coverage](exhaustiveness.md) | Usefulness, refutable conjunctions/projections, and dependent copattern matrices | [Coverage checking](../references/compiler.md#coverage) |
