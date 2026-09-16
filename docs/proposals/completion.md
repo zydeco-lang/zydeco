@@ -2,7 +2,7 @@
 
 [Recovering parsing](../references/compiler.md#recovering-parsing) owns the implemented grammar,
 strict/recovering boundary, typed expectations, and exact cursor identity.
-[Completion queries](../references/compiler.md#completion-and-documentation) own current scope,
+[Completion queries](../references/compiler.md#completion) own current scope,
 type compatibility, ranking, and source-path behavior.
 This proposal extends those facts with structural candidates, richer snippets, and optional last-successful state.
 

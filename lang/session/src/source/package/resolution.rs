@@ -16,7 +16,6 @@ pub struct PackageInstance {
     pub contexts: HashMap<t::TermId, PackageContext>,
     pub imports: Vec<(t::TermId, PackageInstanceId)>,
     pub signature: Option<PackageInstanceId>,
-    pub canonical: HashMap<t::EntityId, t::EntityId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -293,45 +292,21 @@ impl SourceGraph {
         self.instances = self
             .sources
             .iter()
-            .map(|(id, file)| {
-                let target = &sources[&merged[&id]];
-                let import_terms = file
+            .map(|(id, file)| PackageInstance {
+                source: merged[&id],
+                template: file.template.clone(),
+                root: file.root,
+                context: file.context.clone(),
+                contexts: file.contexts.clone(),
+                imports: file
                     .imports
                     .iter()
-                    .map(|id| self.imports[id].term)
-                    .collect::<std::collections::HashSet<_>>();
-                let mut pairs = vec![(file.root.into(), target.root.into())];
-                let mut canonical = HashMap::new();
-                while let Some((original, copied)) = pairs.pop() {
-                    if canonical.insert(original, copied).is_some() {
-                        continue;
-                    }
-                    if matches!(original, t::EntityId::Term(term) if import_terms.contains(&term)) {
-                        continue;
-                    }
-                    pairs.extend(
-                        super::shape::Shapes::children(file, original)
-                            .into_iter()
-                            .zip(super::shape::Shapes::children(target, copied)),
-                    );
-                }
-                PackageInstance {
-                    source: merged[&id],
-                    template: file.template.clone(),
-                    root: file.root,
-                    context: file.context.clone(),
-                    contexts: file.contexts.clone(),
-                    imports: file
-                        .imports
-                        .iter()
-                        .map(|id| {
-                            let edge = &self.imports[id];
-                            (edge.term, instance_ids[&edge.imported])
-                        })
-                        .collect(),
-                    signature: file.signature.map(|id| instance_ids[&id]),
-                    canonical,
-                }
+                    .map(|id| {
+                        let edge = &self.imports[id];
+                        (edge.term, instance_ids[&edge.imported])
+                    })
+                    .collect(),
+                signature: file.signature.map(|id| instance_ids[&id]),
             })
             .collect();
         self.root_instance = instance_ids[&self.root];

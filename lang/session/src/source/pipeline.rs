@@ -34,7 +34,7 @@ pub(crate) struct ScopedProgram {
 
 impl TextualProgram {
     pub(crate) fn desugar(self) -> Result<BitterProgram, DesugarFailure> {
-        let TextualProgram { spans, arena: textual, unit, .. } = self;
+        let TextualProgram { spans, arena: textual, unit } = self;
         match (SourceUnitDesugarer { spans: &spans, textual: &textual }).run(unit) {
             | Ok(SourceDesugarOut { arena, root }) => Ok(BitterProgram { spans, arena, root }),
             | Err(error) => Err(DesugarFailure { error: Box::new(error), spans }),

@@ -76,7 +76,7 @@ Checked-root lowering, SPSLow conversion, and assembly lowering compose through 
 
 Consider this executable, which exits successfully:
 
-```zydeco check
+```zydeco
 param (/Int; /process) : @(import("../../lib/std/builtin.zy")) in
 let api = (#run = { fn (n : Int) => ret n }, #spare = 7) in
 do code <- ! api/run 0;
@@ -92,9 +92,10 @@ into `code`, and removes unused fields.
 Any remaining closure crosses C9 as a closure record with explicit captures.
 The selected backend then realizes the remaining host exit; the interpreter executes the checked residual term directly.
 
-A source error stops before that fork:
+A source error stops before that fork.
+This term is rejected with `tyck.unconstrained-inference`:
 
-```zydeco reject=tyck.unconstrained-inference at=1:4
+```zydeco
 fn x => ret x
 ```
 
@@ -559,7 +560,7 @@ Their current implementation representations are:
 `CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
 Package instance and analysis identity follow the [package namespace rules](language.md#copy-resolve-merge-analyze).
 The [package implementation plan](../proposals/package-management.md#implementation-representations) integrates
-that model; the [documentation proposal](../proposals/documentation.md) records the remaining query and output work.
+that model; future documentation consumers remain [under design](../proposals/documentation.md).
 
 ### Source Loading and Package Selection
 
@@ -568,7 +569,7 @@ including editor overlays.
 `CompilerSession::project` expands explicit discovery into source inputs;
 `Project::with_registration` places another project's root at a package path.
 `CompilerSession::load_package` exposes the resolved graph, and `analyze_package` gives its selected root semantics.
-The CLI, REPL, editor, and documentation consumers share these interfaces.
+The CLI, REPL, and editor share these interfaces.
 The [package plan](../proposals/package-management.md#shared-project-context) develops operation policy
 and configuration syntax.
 
@@ -597,18 +598,12 @@ original templates, and import edges.
 Namespace equality and structural equality are compared directly through domain types.
 
 [Source assembly](../../lang/session/src/source/program.rs) allocates semantic input identities from the merged graph.
-`ProgramOrigins` maps each node's syntax to the assembled textual identities,
-and instance correspondence maps connect original source occurrences to their representative nodes.
-`ProgramAnalysis::entities_in_instance` and `DocumentationIndex::in_instance` follow those maps.
-Documentation links use their exact assembled authoring scope.
-Example workers pin source inputs and replay the originating resolution routes before checking their example
-in its package context, including opaque contexts and substituted roots.
+Its source map preserves original file spans for diagnostics and editor queries.
 
 Source graph and analysis queries include the project and selected entry in their keys.
 Every read template remains a tracked source input, including declarations used to establish availability.
 A retained analysis preserves its request, graph, and provenance for later materialization.
 `CompilerSession::complete_in` accepts the same project and entry package context for recovered completion queries.
-`SemanticSelector` supplies shared field and result selection; documentation commands consume those subjects.
 
 Loading collects independent read, parse, directive, and cycle failures in `SourceLoadErrors`.
 It publishes a complete source graph after the required inputs have been accepted.
@@ -686,8 +681,7 @@ C5 defines the publication boundary after that state stops changing.
 
 ### Analysis Facts and Materialization
 
-`analyze_source` builds documentation while the complete arena is available,
-then retains `StaticsArena::clone_keyed_indexes()` in `ProgramAnalysis`.
+`analyze_source` retains `StaticsArena::clone_keyed_indexes()` in `ProgramAnalysis`.
 That analysis is a source and fact snapshot, not a complete typed tree.
 
 | Retained keyed information | Transient occurrence payload |
@@ -893,7 +887,7 @@ Existential parameter annotations use their own allowed-role validation and reta
 while preserving source identities.
 A scoped builder materializes resolved nodes and issues new identities only for context elaboration.
 The folder owns the diagnostic collector, required dependency analyzer, and a statically composed observer product.
-Its standard profile always includes reference indexing and documentation; `with_observer` adds passive consumers.
+Its standard profile always includes reference indexing; `with_observer` adds passive consumers.
 The [scope module](../../lang/surface/src/scoped/scope.rs) supplies the same shadowing rules for lookup and enumeration.
 
 The inherited `ResolveEnv` is explicit.
@@ -915,7 +909,6 @@ It becomes a hole only inside the resolving computation so other names can be ch
 and scope events without access to mutation, pruning, or rejection.
 Pairs forward events and pair their final outputs.
 Reference indexing constructs the definition-to-use relation.
-Documentation captures the scope before an annotated payload.
 Hole events retain their exact textual origins; completion captures only the requested origin
 and keeps its last actual visit.
 Holes synthesized from failed name lookup do not emit further scope events.
@@ -1090,7 +1083,7 @@ Binder pattern IDs, witness identities, and witness projections are preserved by
 
 `TypeRebuilder` returns the original ID when children and kind are unchanged.
 Changed paths allocate through `Tycker` with the caller's environment and classifier;
-rebuilt labels transfer Builtin roles and member provenance.
+rebuilt labels transfer Builtin roles.
 Nominal data and codata definitions receive fresh IDs only when their arms change.
 Filled normalization keeps nominal definition IDs and finalizes their arm classifiers through the arena-wide loop.
 This preserves the normalized lookup view attached to the existing arm IDs.
@@ -3135,7 +3128,7 @@ Interactive type links require semantic anchors from the renderer, never reparsi
 Remaining questions concern [round-trip source generation](../ideas/typed-source-generation.md)
 and [telescope layouts](../ideas/type-rendering-layout.md).
 
-### Completion and Documentation
+### Completion
 
 [Completion queries](../../lang/session/src/source/query/completion.rs) track the exact cursor hole
 through recovery, resolution, and checking.
@@ -3172,127 +3165,13 @@ Numbered imports, unrelated strings, comments, and unfinished escape sequences r
 [Recovering parsing](#recovering-parsing) owns syntax recovery and cursor identity;
 the [completion proposal](../proposals/completion.md) retains further candidate families and stale-state policy.
 
-#### Documentation Workflow
+### Source Documentation Annotations
 
-[Source documentation](language.md#source-documentation) specifies `@[doc]` attachments and semantic links.
-Cajun uses the first top-level prose paragraph as a hover summary and shows full prose in name completion.
-Semantic links and invalid-link diagnostics use standard LSP; the persistent panel is a VS Code client feature.
-
-##### Reading Documentation in the Editor
-
-Place the cursor on a name or expression and run **Zydeco: Show Documentation**
-from the VS Code command palette or editor context menu.
-The panel displays complete Markdown and offers these actions:
-
-| Action | Behavior |
-| --- | --- |
-| Follow and Pin | Follow the cursor, or retain the selected source occurrence. Edits before a pin move its position; overlapping edits invalidate it and require a new selection. |
-| Type views | Switch between the type at the cursor and the documented declaration when both are available. |
-| Source and Back | Open the explanation's source and navigate through related documentation. Entries in edited files are discarded rather than reusing old positions. |
-| Check and Open scratch | Verify an opted-in example or open a complete editable copy in a temporary file. Ordinary hover, completion, and diagnostics work on the copy; Save As keeps it. |
-
-The panel requires Cajun's version 1 documentation capability.
-It refreshes after source changes and discards results from older revisions, including example checks.
-During incomplete edits, available semantic facts still provide documentation;
-where resolution fails, surviving comments can be read without an inferred type.
-The panel links to the selected documentation origin; separate contract/implementation tabs, clickable subterms
-of panel types, signature help, and expected-type search remain [proposed features](../proposals/documentation.md).
-
-##### Building a Project Reference
-
-Reference commands and output follow the [documentation proposal](../proposals/documentation.md). Package paths
-and semantic selectors follow the [shared selection model](language.md#shared-selection-and-documentation).
-The [counter example](../examples/documentation/counter.zy) supplies source documentation, a companion interface,
-and a guide for that work.
-
-#### Documentation Subjects and Provenance
-
-[Documentation analysis](../../lang/session/src/source/documentation.rs) connects authored attachment,
-typed subject, origin, contract, and use context.
-An authored origin identifies the prose, source location, and lexical scope of its links.
-A use context identifies the selected occurrence, exposed interface, current classifier, and established instantiation.
-One explanation can appear with several instantiated signatures; same-spelled fields
-in unrelated interfaces have no such relationship.
-Two existential openings can share documentation while retaining distinct witnesses.
-Documentation identity participates in neither type equality nor runtime representation.
-
-Resolved variables, simple aliases, imports, and transparent wrappers follow recorded origin edges.
-Field projections and projection patterns use the owning interface and resolved member provenance,
-which survives substitution and opening of a packed value.
-A field label or similar printed type is insufficient evidence.
-Arbitrary computations constructing a packed value do not establish origin relationships for every value they use.
-When those relationships are unavailable, views show the known type and directly attached prose.
-
-Direct prose appears as local context before inherited content, without rewriting the provider's explanation.
-An explicit annotation selects documented interface prose in preference to its implementation;
-at a binding with an established implementation edge, a docless annotation can fall back along that edge.
-A projected field with an explicit contract instead follows that contract's member provenance:
-the implementation relationship needed to recover a docless field's body is not generally available.
-Imported type terms and `.zyi` companions establish the same kind of public contract;
-paired filenames alone cannot associate every nested field with an implementation definition.
-Contract/implementation navigation
-and broader field fallback remain [proposed extensions](../proposals/documentation.md).
-
-[Semantic links](language.md#semantic-documentation-links) retain typed lexical
-or member targets and exact authored ranges for diagnostics and navigation.
-An unresolved lexical name does not become an ownerless field search.
-Frontends render compiler-resolved targets without reconstructing identities from display text.
-This shared semantic index supports generated references, search, hover, and the editor panel;
-an editor-owned index or a Markdown-only extractor could not establish the same typed relationships.
-
-Attachments can remain useful after an unrelated failure when the actual annotation and payload survive recovery.
-Recovery cannot attach detached prose to a guessed subject, a same-spelled field, or a coincident old source range.
-Transient subject IDs and editor actions are checked against their source revision.
-[Semantic regressions](../../lang/session/src/source/documentation/semantic/tests.rs) pair preserved origins
-with shadowing, unrelated fields, contract boundaries, recovery, and stale IDs.
-
-#### Documentation Publication and Verification
-
-Publication scope, subject presentation, anchors, and reference output follow the
-[documentation proposal](../proposals/documentation.md#subjects-selectors-and-published-anchors).
-Queries, links, and example workers use the [shared selection model](language.md#shared-selection-and-documentation).
-
-##### Verifying Documentation Examples
-
-A plain `zydeco` fence displays code.
-Add `check` to require a complete source term that checks successfully.
-For a guide in this reference directory:
-
-````markdown
-```zydeco check
-let counter = @(import("../examples/documentation/counter.zy")) in counter/value
-```
-````
-
-An expected-rejection example declares both a compiler diagnostic code and a position:
-
-````markdown
-```zydeco reject=tyck.missing-named-field at=1:15
-(#value = 42)/missing
-```
-````
-
-Positions are one-based line and UTF-16 column within the displayed example.
-Every reported type diagnostic must match the expected code and contain that position.
-A successful program, a different error, a missing import, a compiler crash,
-or a timeout cannot satisfy an expected rejection.
-
-[Example checking](../../lang/session/src/source/documentation/examples.rs) verifies complete source
-with explicit imports in top-level, unindented Markdown fences.
-Worker inputs, verification identity,
-and scratch context follow the [shared resolution model](language.md#shared-selection-and-documentation).
-
-The [verification plan](../proposals/documentation.md#targeted-lookup-and-independent-verification) develops selection
-of links and examples for documentation operations.
-Example diagnostics retain their locations in the authored comments or guide.
-The panel checks selected examples with the editor's current overlays.
-The isolated compiler worker has a 30-second timeout, 64 KiB example limit,
-16 MiB request limit, and 1 MiB response limit.
-These are time and data limits, not an operating-system memory sandbox.
-The checker does not execute examples and rejects `run` fences.
-[Example regressions](../../lang/session/src/source/documentation/examples/tests.rs) check isolated outcomes
-and locations.
-Runtime examples and composed setup remain in the [documentation proposal](../proposals/documentation.md).
+[Source documentation](language.md#source-documentation) consists of `@[doc]` and adjacent text attachment.
+The [shared source scan](#shared-source-analysis) retains these annotations and reports detached text;
+formatting preserves their attachment.
+Semantic documentation analysis, publication, editor presentation,
+and example verification remain [under design](../proposals/documentation.md).
 
 ### Interactive Engine
 

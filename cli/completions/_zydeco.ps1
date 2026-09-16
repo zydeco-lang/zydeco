@@ -28,8 +28,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'List the project''s packages and relationships without checking or executing code')
             [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected high-SPS plan')
-            [CompletionResult]::new('__doc-example-worker', '__doc-example-worker', [CompletionResultType]::ParameterValue, '__doc-example-worker')
-            [CompletionResult]::new('doc', 'doc', [CompletionResultType]::ParameterValue, 'Read, search, generate, or verify project documentation')
             [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a source package and its code dependencies, including its declared executable role')
@@ -53,75 +51,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            break
-        }
-        'zydeco;__doc-example-worker' {
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            break
-        }
-        'zydeco;doc' {
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show a public subject''s classifier and complete documentation')
-            [CompletionResult]::new('search', 'search', [CompletionResultType]::ParameterValue, 'Search exposed names and documentation prose')
-            [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'Generate a self-contained searchable HTML reference without executing examples')
-            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check links and explicitly verified examples in the entry and its dependencies')
-            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
-            break
-        }
-        'zydeco;doc;show' {
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            break
-        }
-        'zydeco;doc;search' {
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            break
-        }
-        'zydeco;doc;build' {
-            [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'o')
-            [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'output')
-            [CompletionResult]::new('--title', '--title', [CompletionResultType]::ParameterName, 'title')
-            [CompletionResult]::new('--guide', '--guide', [CompletionResultType]::ParameterName, 'Explicit guide pages; public links use `zydeco:member:./field`')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            break
-        }
-        'zydeco;doc;check' {
-            [CompletionResult]::new('--guide', '--guide', [CompletionResultType]::ParameterName, 'guide')
-            [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            break
-        }
-        'zydeco;doc;help' {
-            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show a public subject''s classifier and complete documentation')
-            [CompletionResult]::new('search', 'search', [CompletionResultType]::ParameterValue, 'Search exposed names and documentation prose')
-            [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'Generate a self-contained searchable HTML reference without executing examples')
-            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check links and explicitly verified examples in the entry and its dependencies')
-            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
-            break
-        }
-        'zydeco;doc;help;show' {
-            break
-        }
-        'zydeco;doc;help;search' {
-            break
-        }
-        'zydeco;doc;help;build' {
-            break
-        }
-        'zydeco;doc;help;check' {
-            break
-        }
-        'zydeco;doc;help;help' {
             break
         }
         'zydeco;fmt' {
@@ -203,8 +132,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
         'zydeco;help' {
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'List the project''s packages and relationships without checking or executing code')
             [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected high-SPS plan')
-            [CompletionResult]::new('__doc-example-worker', '__doc-example-worker', [CompletionResultType]::ParameterValue, '__doc-example-worker')
-            [CompletionResult]::new('doc', 'doc', [CompletionResultType]::ParameterValue, 'Read, search, generate, or verify project documentation')
             [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a source package and its code dependencies, including its declared executable role')
@@ -218,28 +145,6 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;help;passes' {
-            break
-        }
-        'zydeco;help;__doc-example-worker' {
-            break
-        }
-        'zydeco;help;doc' {
-            [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'Show a public subject''s classifier and complete documentation')
-            [CompletionResult]::new('search', 'search', [CompletionResultType]::ParameterValue, 'Search exposed names and documentation prose')
-            [CompletionResult]::new('build', 'build', [CompletionResultType]::ParameterValue, 'Generate a self-contained searchable HTML reference without executing examples')
-            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check links and explicitly verified examples in the entry and its dependencies')
-            break
-        }
-        'zydeco;help;doc;show' {
-            break
-        }
-        'zydeco;help;doc;search' {
-            break
-        }
-        'zydeco;help;doc;build' {
-            break
-        }
-        'zydeco;help;doc;check' {
             break
         }
         'zydeco;help;fmt' {

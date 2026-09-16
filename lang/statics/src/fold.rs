@@ -102,7 +102,6 @@ impl TypeRebuilder {
                 .builtin_roles
                 .transfer_value(source, target)
                 .expect("a fresh rebuilt label cannot have a conflicting role");
-            tycker.statics.member_provenance.transfer(source.into(), target.into());
         }
         target
     }

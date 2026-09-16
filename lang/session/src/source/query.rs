@@ -23,7 +23,6 @@ use zydeco_surface::{
 use zydeco_utils::arena::ArenaAccess;
 
 mod completion;
-mod documentation;
 pub use completion::{CompletionAnalysis, CompletionError, CompletionSemantics};
 mod paths;
 pub use paths::{SourcePathCandidate, SourcePathCandidateKind};
@@ -60,65 +59,12 @@ pub struct ProgramAnalysis {
     statics: StaticsArena,
     outcome: AnalysisOutcome,
     observations: Vec<TyckObservation>,
-    documentation: crate::source::DocumentationIndex,
-    scoped_root: zydeco_surface::scoped::syntax::TermId,
     input_path: PathBuf,
-    origins: Arc<super::ProgramOrigins>,
     package: Option<super::PackagePath>,
     project: Arc<super::Project>,
 }
 
 impl ProgramAnalysis {
-    pub fn project(&self) -> &super::Project {
-        &self.project
-    }
-
-    /// Resolve an original occurrence through its candidate, merged node, and scoped origins.
-    pub fn entities_in_instance(
-        &self, instance: super::PackageInstanceId,
-        entity: zydeco_surface::textual::syntax::EntityId,
-    ) -> Vec<zydeco_surface::scoped::syntax::EntityId> {
-        use zydeco_surface::scoped::syntax::EntityId;
-        let Some(instance) = self.graph.instances.get(instance.0) else {
-            return Vec::new();
-        };
-        let Some(canonical) = instance.canonical.get(&entity) else {
-            return Vec::new();
-        };
-        let Some(copied) = self.origins.0.get(&(instance.source, *canonical)) else {
-            return Vec::new();
-        };
-        self.scoped
-            .defs
-            .iter()
-            .map(|(id, _)| EntityId::Def(*id))
-            .chain(self.scoped.terms.iter().map(|(id, _)| EntityId::Term(id)))
-            .filter(|entity| self.scoped.origins.source(entity).as_ref() == Some(copied))
-            .collect()
-    }
-
-    pub fn replay(&self) -> super::ResolutionReplay {
-        super::ResolutionReplay {
-            selection: super::PackageId {
-                path: self.root_path().to_path_buf(),
-                name: self.package.clone(),
-            },
-            context: self
-                .project
-                .entry_context
-                .clone()
-                .unwrap_or_else(|| super::PackageContext::at_root(self.project.root)),
-        }
-    }
-
-    pub fn scoped_root(&self) -> zydeco_surface::scoped::syntax::TermId {
-        self.scoped_root
-    }
-
-    pub fn documentation(&self) -> &crate::source::DocumentationIndex {
-        &self.documentation
-    }
-
     pub fn graph(&self) -> &SourceGraph {
         &self.graph
     }
@@ -605,9 +551,8 @@ impl CompilerSession {
         let input = self
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
-        let (data, _) =
-            resolved_data(self, input, analysis.package.clone(), analysis.project.clone())
-                .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
+        let data = resolved_data(self, input, analysis.package.clone(), analysis.project.clone())
+            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
         let library = zydeco_statics::query::check_library(self, data, contract.clone())?;
         Ok(LibraryProgram {
             spans: data.spans(self).clone(),
@@ -622,9 +567,8 @@ impl CompilerSession {
         let input = self
             .source_input(analysis.root_path().to_path_buf())
             .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
-        let (data, _) =
-            resolved_data(self, input, analysis.package.clone(), analysis.project.clone())
-                .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
+        let data = resolved_data(self, input, analysis.package.clone(), analysis.project.clone())
+            .map_err(|_| zydeco_statics::LibraryCheckError::Root)?;
         let unit = zydeco_statics::query::check_unit(self, data)?;
         Ok(UnitProgram { spans: data.spans(self).clone(), scoped: data.scoped(self).clone(), unit })
     }
@@ -799,11 +743,10 @@ fn source_graph(
 fn resolved_data<'db>(
     db: &'db dyn SourceQueryDb, root: SourceInput, package: Option<super::PackagePath>,
     project: Arc<super::Project>,
-) -> Result<(zydeco_statics::query::ScopedData<'db>, Arc<super::ProgramOrigins>), AnalysisError> {
+) -> Result<zydeco_statics::query::ScopedData<'db>, AnalysisError> {
     let graph = source_graph(db, root, package, project)
         .map_err(|error| AnalysisError::Source { error })?;
     let program = graph.parse().map_err(|error| AnalysisError::TextualProgram { error })?;
-    let origins = program.origins.clone();
     let bitter = program.desugar().map_err(|failure| AnalysisError::Desugar {
         error: failure.error,
         spans: Arc::new(failure.spans.into_inner()),
@@ -814,14 +757,11 @@ fn resolved_data<'db>(
             graph,
             spans: std::sync::Arc::new(failure.spans.into_inner()),
         })?;
-    Ok((
-        zydeco_statics::query::ScopedData::new(
-            db,
-            Arc::new(spans.into_inner()),
-            Arc::new(arena.into_inner()),
-            root,
-        ),
-        origins,
+    Ok(zydeco_statics::query::ScopedData::new(
+        db,
+        Arc::new(spans.into_inner()),
+        Arc::new(arena.into_inner()),
+        root,
     ))
 }
 
@@ -832,7 +772,7 @@ fn rechecked(
     db: &dyn SourceQueryDb, root: SourceInput, package: Option<super::PackagePath>,
     project: Arc<super::Project>,
 ) -> Result<(Arc<SpanArena>, zydeco_statics::query::TyckOutput), AnalysisError> {
-    let (data, _) = resolved_data(db, root, package, project)?;
+    let data = resolved_data(db, root, package, project)?;
     let spans = Arc::clone(data.spans(db));
     Ok((spans, zydeco_statics::query::check_source(db, data)))
 }
@@ -846,14 +786,6 @@ fn analyze_source(
         .map_err(|error| AnalysisError::Source { error })?;
     let (spans, zydeco_statics::query::TyckOutput { scoped, outcome: checked }) =
         rechecked(db, root, package.clone(), project.clone())?;
-    let (data, origins) = resolved_data(db, root, package.clone(), project.clone())?;
-    let documentation = crate::source::DocumentationIndex::new(
-        &graph,
-        &spans,
-        &scoped,
-        &checked.statics_arc(),
-        &origins,
-    );
     let (statics, outcome, observations) = match checked {
         | zydeco_statics::SourceCheckOutcome::Checked(CheckedSource {
             statics,
@@ -868,7 +800,6 @@ fn analyze_source(
             (statics.clone_keyed_indexes(), AnalysisOutcome::Rejected { diagnostics }, observations)
         }
     };
-    let scoped_root = data.root(db);
     Ok(Arc::new(ProgramAnalysis {
         graph,
         spans,
@@ -876,10 +807,7 @@ fn analyze_source(
         statics,
         outcome,
         observations,
-        documentation,
-        scoped_root,
         input_path: root.path(db),
-        origins,
         package,
         project,
     }))

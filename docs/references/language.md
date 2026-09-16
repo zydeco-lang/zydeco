@@ -45,8 +45,8 @@ An arrow `A -> B` expects an `A` argument above a residual `B` stack.
 `Ret A` expects a continuation receiving an `A`; `Thk B` is a value suspending a computation with protocol `B`.
 These protocols do not prescribe physical stack layout or linear use.
 
-Examples marked `zydeco check` are complete source terms.
-Other code blocks use the displayed metavariables or an explicitly described context.
+Examples use complete source terms or the displayed metavariables and an explicitly described context.
+The surrounding prose identifies intentional rejection cases.
 A checked term need not be a standalone executable.
 
 ### Term-Oriented Composition
@@ -133,7 +133,7 @@ reordering must preserve capture, shadowing, and nominal identity.
 A dependency on a lexical binder must still be available at the block boundary;
 a nested `begin` provides a nearer boundary.
 
-```zydeco check
+```zydeco
 begin
   let answer = seed that
   param (seed : @(intrinsic(int))) that
@@ -176,16 +176,17 @@ Inference is order-independent within the region and closes at a block or source
 where every flexible classifier introduced by that region must be solved.
 There is no automatic let-polymorphic generalization.
 
-```zydeco check
+```zydeco
 begin
   let identity = { fn x => ret x } that
   ! identity ()
 end
 ```
 
-Without a constraining use or annotation, the parameter is unconstrained:
+Without a constraining use or annotation, the parameter is unconstrained, so this term is rejected
+with `tyck.unconstrained-inference`:
 
-```zydeco reject=tyck.unconstrained-inference at=1:4
+```zydeco
 fn x => ret x
 ```
 
@@ -222,11 +223,13 @@ Its imports remain source dependencies (§12).
 Value-let staging still applies: the complete value may be queried,
 while a runtime value binding cannot have a static body.
 
-```zydeco check
+```zydeco
 @[typeof] (let value = 1 in value)
 ```
 
-```zydeco reject=tyck.sort-mismatch at=1:1
+This term is rejected with `tyck.sort-mismatch`:
+
+```zydeco
 let value = 1 in @[typeof] value
 ```
 
@@ -246,7 +249,7 @@ under an expected existential type, a witness-prefixed value.
 Named types work analogously: `(#item = T) : (#item :: K)`.
 Named computations have no introduction form; store one as a thunk.
 
-```zydeco check
+```zydeco
 let point = (#x = 3, #y = 4) in
 ret (point/x, point/y)
 ```
@@ -256,7 +259,7 @@ where `vi : Ai`. Each constructor has one payload, which may itself be a product
 Names are interpreted against the expected data type.
 Name and parameterize a data type with an ordinary definition.
 
-```zydeco check
+```zydeco
 let Unit = @(intrinsic(unit)) in
 def Flag = data | +On : Unit | +Off : Unit end in
 match (+On() : Flag)
@@ -286,7 +289,7 @@ A computation type `codata | .d1 : B1 ... | .dn : Bn end` describes alternative 
 An observation can expose an arrow or another codata protocol, so copatterns may interleave argument patterns
 and destructor names, as in `.route argument .result`.
 
-```zydeco check
+```zydeco
 let Ret = @(intrinsic(ret)) in
 let Int = @(intrinsic(int)) in
 def Probe = codata | .read : Ret Int end in
@@ -355,11 +358,13 @@ Float, string, and character literal patterns are rejected.
 Ordinary parameters and `let`, `def`, `do`, and `param` binders require irrefutable patterns.
 `@[partial]` permits failure in the annotated computation binding or function header:
 
-```zydeco check
+```zydeco
 @[partial] let 0 = 0 in ret ()
 ```
 
-```zydeco reject=tyck.refutable-binding at=1:5
+This term is rejected with `tyck.refutable-binding`:
+
+```zydeco
 let 0 = 0 in ret ()
 ```
 
@@ -375,11 +380,13 @@ General aliases require an expected value type and irrefutable members, even und
 Type and kind pattern aliases are rejected.
 Direct field-projection groups additionally support the shared opening of a packed value in §9.
 
-```zydeco check
+```zydeco
 let ((left, right); whole) = (1, 2) in ret whole
 ```
 
-```zydeco reject=tyck.refutable-pattern-alias at=1:16
+This term is rejected with `tyck.refutable-pattern-alias`:
+
+```zydeco
 @[partial] let (0; whole) = 0 in ret whole
 ```
 
@@ -397,7 +404,7 @@ If `v : A'`, its classifier is `val pi (x : A) . A'`.
 Type parameters express polymorphism within this value-function space.
 Value binders may also open type witnesses used in the result type; arbitrary runtime values cannot index types.
 
-```zydeco check
+```zydeco
 let val duplicate (x : @(intrinsic(int))) = (x, x) in
 ret (4 |> duplicate)
 ```
@@ -420,7 +427,7 @@ where `Int` denotes `@(intrinsic(int))`:
 | `int_and` | Bitwise conjunction |
 | `int_compare` | Signed comparison: −1, 0, or 1 |
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let add = @(intrinsic(int_add)) in
 let compare = @(intrinsic(int_compare)) in
@@ -438,7 +445,7 @@ Only `p` introduces bindings.
 The source head is a variable, optionally with bracketed type arguments, as in `f[T] ~> p`.
 Its result pattern may be refutable in a match or partial computation binding.
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let val first ((x, _) : Int * Int) = x in
 let (first ~> x; whole) = (3, 4) in
@@ -506,7 +513,7 @@ An explicit classifier checks that same definition.
 Against an expected existential, `(T, v)` supplies the witness and payload.
 `pack` synthesizes an existential type from explicit evidence:
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let package =
   pack (= Item as Int : @(intrinsic(vtype)))
@@ -547,7 +554,9 @@ Missing and ambiguous names are different errors, and an explicit path performs 
 Selection can traverse manifest entries directly; crossing an abstract witness requires a projection pattern.
 Fields behind an abstract witness still count when checking ambiguity.
 
-```zydeco reject=tyck.missing-named-field at=1:15
+This term is rejected with `tyck.missing-named-field`:
+
+```zydeco
 (#value = 42)/missing
 ```
 
@@ -611,11 +620,13 @@ Ordinary computation matches can still inspect runtime data.
 A library may export an unapplied value function.
 A residual runtime value cannot contain one:
 
-```zydeco check
+```zydeco
 val (x : @(intrinsic(unit))) => x
 ```
 
-```zydeco reject=tyck.static-elimination at=1:6
+This term is rejected with `tyck.static-elimination`:
+
+```zydeco
 ret (val (x : @(intrinsic(unit))) => x)
 ```
 
@@ -647,7 +658,7 @@ Source `Ret`, `ret`, and `do` are reinterpreted through that carrier and its ope
 Parameters outside the annotation remain outside; translated parameters inside follow the carrier and instance.
 Polymorphic translation may require additional structure arguments describing how a type supports the translation.
 
-```zydeco check
+```zydeco
 param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
 let basis = @(import("../../lib/std/control/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> basis in
@@ -682,7 +693,7 @@ The following abstractions connect that semantic structure to source reuse and i
 | Project | Available packages, discovery roots, and package-name bindings |
 | Package | A term selected for distribution and reuse, with identity, role, and relationships |
 | Compilation unit — optional at package level | Establish a complete external contract for independent compilation |
-| Semantic unit | Establish a term's meaning in context: resolved names, classifier, provenance, and semantic documentation |
+| Semantic unit | Establish a term's meaning in context: resolved names, classifier, and provenance |
 
 A semantic unit is a term considered with its analysis context.
 Processing source into its semantic form includes lexing, parsing, name resolution, and type checking.
@@ -695,13 +706,11 @@ to the consuming compilation.
 A compilation unit supplies the external contract needed to emit a selected package independently.
 The [source-package roles](#source-packages) describe these optional contracts.
 
-Semantic documentation belongs with the term's analysis and provenance.
-Documentation operations query those facts, verify selected links and examples,
-and assemble reference pages, explicit guides, anchors, and rendered output.
-The [source-documentation rules](#source-documentation) describe authoring;
-the compiler reference maps these abstractions
+The compiler reference maps these abstractions
 to their [implementation representations](compiler.md#implementation-representations).
 Package context, source selection, and import identity follow the [package namespace rules](#package-hierarchy).
+Source text can retain [documentation annotations](#source-documentation);
+higher-level documentation operations remain [under design](../proposals/documentation.md).
 
 ### Source Boundaries
 
@@ -730,7 +739,7 @@ when its contract should remain stable across implementation changes.
 `run` and executable builds require a computation accepting the host Builtin packed value
 and ending in its `OS` protocol:
 
-```zydeco check
+```zydeco
 param (/stdio; /process) : @(import("../../lib/std/builtin.zy")) in
 ! stdio/write_line "hello, world!" { ! process/exit 0 }
 ```
@@ -948,23 +957,11 @@ Namespace bindings record which merged packages their paths select.
 Merged nodes retain import routes and source locations as provenance.
 
 Resolved contents include the term's companion signature and relevant meta annotations.
-Consumers use the retained roles, relationships, documentation, names, and origins.
+Consumers use the retained roles, relationships, attached text, names, and origins.
 Copies that merge can share a binding; conflicting resolved definitions produce a diagnostic with both origins.
 
 An imported computation executes at each dynamic occurrence.
 A semantic unit supports several compilations through the package's declared external contract.
-
-### Shared Selection and Documentation
-
-Package operations and documentation use the same package resolution and semantic-unit queries.
-A package path selects a package in the resolved graph.
-A semantic selector addresses a subject within its checked interface, such as a field or a function result.
-The [documentation work](../proposals/documentation.md#subjects-selectors-and-published-anchors) develops presentation
-and stable links from the selected semantic subjects.
-
-Documentation queries, links, and example workers use the analyzed instance's resolution context and provenance.
-They reproduce its meaning and identify the declaration or imported copy being inspected.
-Reference output chooses pages and anchors from the selected semantic subjects.
 
 ## 13. Primitive Values and Capabilities
 
@@ -1412,7 +1409,7 @@ For runtime selection, `materialize` explicitly produces `DynamicView` with its 
 Different handle types can be paired with their matching operations in an existential value.
 Neither form inserts a view dictionary into each handle.
 
-```zydeco check
+```zydeco
 param (/VType; /CType; /Thk; /Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let (/views) = builtin |> (@(import("../../lib/std/memory/package.zy"))) in
 let (/Cps; /View; /identity; /as_cps) = views in
@@ -1531,7 +1528,7 @@ These calls use the existing source word convention; managed logical values and 
 
 A foreign implementation is an annotated hole:
 
-```zydeco check
+```zydeco
 param val (/Thk; /Ret; /Addr; /Int; /UInt32) : @(import("../../lib/std/builtin.zy")) in
 (@(ffi(c, library("xxhash"), symbol("XXH64"))) : Thk (Addr -> Int -> UInt64 -> Ret UInt64))
 ```
@@ -1616,7 +1613,7 @@ follows the
 [shared design of compilation units, FFI, and package management](compiler.md#compilation-unit-preparation-and-artifacts).
 A compiled library declares a source implementation and its complete public C interface:
 
-```zydeco check
+```zydeco
 @[package(
   library(c,
     export(field(add), symbol("example_add")),
@@ -1829,61 +1826,31 @@ and [CONTRIBUTING](../../CONTRIBUTING.md#format-and-lint) gives the workflow.
 
 ### Source Documentation
 
-Zydeco documentation combines Markdown attached to source terms with the compiler's information
-about bindings, imports, and named fields.
-Compiler provenance connects those explanations to hover, completion, and the VS Code documentation panel.
-The [documentation workflow](compiler.md#documentation-workflow) describes editor use;
-the [documentation proposal](../proposals/documentation.md) develops reference generation and lookup.
+`@[doc]` retains an optional adjacent text block on its payload term.
+It leaves the payload's typing and execution unchanged. The retained syntax supports authored explanations
+while the higher-level [documentation design](../proposals/documentation.md) remains open.
 
 #### Attaching Documentation
 
 Write an uninterrupted `--|` block immediately above `@[doc]`:
 
-```zydeco check
+```zydeco
 --| The current counter value.
 --|
 --| Read this field to inspect progress.
-@[doc] let counter = 42 in counter
+@[doc] (#value = 42)
 ```
 
 Use `--|` for blank lines within the block; a genuinely blank source line or an ordinary `--` comment breaks attachment.
-Unattached text blocks produce warnings.
-Use ordinary comments for implementation notes.
+Unattached text blocks produce warnings. Use ordinary comments for implementation notes.
+The parser retains the annotation, its arguments, the attached text, and the payload's source location.
+The formatter preserves the text and its effective attachment.
 
-On a simple `let` or `def`, the explanation describes its binding.
-Documentation immediately on a binding's right-hand side also follows its resolved uses.
-An annotation on `#field = value` or `#field :: Type` describes that member.
-An annotation on a block describes the block itself; nested definitions acquire prose from their own annotations.
-Arbitrary expressions can have explanations too.
-The [provenance contract](compiler.md#documentation-subjects-and-provenance) determines
-which explanations follow aliases, imports, explicit interfaces, and projected fields.
-
-Additional `doc(...)` arguments are retained as meta annotation values;
-section and grouping options have no implemented presentation contract.
-Parameter and constructor-arm documentation remain unsupported extensions,
-tracked in the [documentation proposal](../proposals/documentation.md).
-
-#### Semantic Documentation Links
-
-Ordinary Markdown links work alongside two explicit semantic destinations.
-For names already in the annotation's lexical scope:
-
-```markdown
-[integer type](zydeco:name:Integer)
-[current value](zydeco:member:Counter/value)
-```
-
-`zydeco:name:Integer` resolves a lexical name in the scope where the annotation was written.
-`zydeco:member:Counter/value` names an owner and a public field path.
-The owner must already be in scope; an annotation before a nonrecursive binding cannot link
-to the binding it introduces.
-Imported prose keeps its original scope even when a consumer shadows a name.
-
-Use inline Markdown links for semantic destinations.
-Reference-style semantic links and unresolved destinations are diagnosed.
-Editors navigate to the resolved source target.
-Package and subject selection follow the [shared selection model](#shared-selection-and-documentation).
-Guide contexts and published links follow the [documentation proposal](../proposals/documentation.md).
+The payload can be any term, including a binding, named field, or block.
+Additional `doc(...)` arguments remain ordinary meta annotation values without a defined option schema.
+Attached Markdown is retained as text; its links and code fences have no compiler-defined interpretation.
+Documentation inheritance, semantic links, lookup, editor presentation, reference generation,
+and example verification are deferred.
 
 ## Diagnostic Index
 
@@ -1897,5 +1864,5 @@ Guide contexts and published links follow the [documentation proposal](../propos
 | Static elimination | Residual representation and reduction limits (§10) |
 | Integer/float literal range errors | Primitive representation (§13) |
 
-Rejection examples name stable `tyck.*` codes and a source position.
+Rejection examples identify the intended `tyck.*` diagnostic where relevant.
 Diagnostic wording and rendering are implementation details.

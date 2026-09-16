@@ -1,5 +1,4 @@
 //! Scoped syntax construction without name lookup or analysis side effects.
-use super::ScopeSnapshot;
 use super::syntax::*;
 use zydeco_utils::prelude::IdAllocator;
 
@@ -39,10 +38,7 @@ impl ScopedBuilder {
         self.origins.insert_new(textual, id.into());
         id
     }
-    pub fn finish(
-        self, bitter: BitterArena, users: ArenaForth<DefId, TermId>,
-        documentation_scopes: ArenaAssoc<TermId, ScopeSnapshot>,
-    ) -> ScopedArena {
+    pub fn finish(self, bitter: BitterArena, users: ArenaForth<DefId, TermId>) -> ScopedArena {
         ScopedArena {
             defs: self.defs,
             pats: self.pats,
@@ -50,7 +46,6 @@ impl ScopedBuilder {
             blocks: self.blocks,
             origins: self.origins,
             users,
-            documentation_scopes,
             partial_binders: bitter.partial_binders,
         }
     }

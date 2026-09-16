@@ -7,7 +7,7 @@ and graph construction follow the [package namespace rules](../references/langua
 This plan covers frontend integration, compilation-unit validation, and operation policy.
 
 The [source-package reference](../references/language.md#source-packages) describes the existing implementation.
-The [documentation proposal](documentation.md) develops consumers of the resulting semantic units.
+The [documentation design questions](documentation.md) concern possible future consumers of these semantic units.
 
 ## Motivation and Starting Point
 
@@ -15,8 +15,8 @@ Project preparation connects source selection, code dependencies, and operation 
 It exposes each selected term's identity, classifier, lexical scope, and any declared external contract consistently
 across frontends.
 
-The implementation supplies project preparation, source instantiation and merging, compiler analysis,
-documentation provenance, external-contract checks, and regression coverage.
+The implementation supplies project preparation, source instantiation and merging,
+compiler analysis, external-contract checks and regression coverage.
 Build operation interfaces on these components.
 
 ## Implementation Representations
@@ -33,12 +33,11 @@ The planned Rust interfaces are:
   Keep target-specific preparation downstream so one semantic result can support several compilations.
 
 Replace affected callers together; `CompilerSession` continues to manage the implementation's inputs and caches.
-Documentation queries consume semantic results, with their remaining work tracked
-in the [documentation proposal](documentation.md#targeted-lookup-and-independent-verification).
+Future documentation consumers remain subject to the [documentation design questions](documentation.md).
 
 ## Shared Project Context
 
-CLI, REPL, editor, and documentation consumers share project preparation
+CLI, REPL, and editor consumers share project preparation
 through the [resolution model](../references/language.md#copy-resolve-merge-analyze).
 
 - [ ] Expose project registrations and root selection through frontend configuration.
@@ -71,7 +70,7 @@ Specify both requested and unrelated cases, with diagnostics for misspelled kind
 ## Sequence and Completion Criteria
 
 1. Expose `CompilationUnit` validation and settle relationship-validation scope.
-2. Apply these boundaries to the [documentation milestone](documentation.md#first-standard-library-milestone).
+2. Validate the shared context through CLI and editor operations before adding future consumers.
 
 Extend the existing [package regressions](../../lang/session/src/source/package/tests.rs),
 [discovery regressions](../../lang/session/src/source/package/discovery/tests.rs),

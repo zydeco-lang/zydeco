@@ -17,7 +17,7 @@ textual -> bitter -> scoped -> statics
 | [`resolver`](resolver.rs) | Semantic scheduling, structural rebuilding, recovery, and publication. |
 | [`scope`](scope.rs) | Shared name lookup and lexical scope enumeration. |
 | [`alloc`](alloc.rs) | Scoped syntax construction and provenance. |
-| [`observers`](observers.rs) | Reference indexing, documentation scopes, and exact cursor capture. |
+| [`observers`](observers.rs) | Reference indexing and exact cursor capture. |
 | [`dependencies`](dependencies.rs) | Required block graphs with begin, finish, and abort boundaries. |
 | [`binders`](binders.rs), [`blocks`](blocks.rs) | Mobile binding discovery and dependency-directed elaboration. |
 | [`completion`](completion.rs) | Recovered resolution results for completion. |

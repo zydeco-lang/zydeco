@@ -1,19 +1,15 @@
 mod cache;
-mod documentation;
 mod err;
 mod graph;
 mod loader;
 mod package;
 mod program;
 mod query;
-mod selector;
-pub use selector::*;
 mod pipeline;
 mod report;
 mod warning;
 
 pub use cache::*;
-pub use documentation::*;
 pub use err::*;
 pub use graph::*;
 pub use package::*;

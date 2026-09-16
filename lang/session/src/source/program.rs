@@ -16,12 +16,7 @@ pub struct TextualProgram {
     pub spans: FrozenArena<t::SpanArena>,
     pub arena: FrozenArena<t::TextArena>,
     pub unit: t::SourceUnit,
-    pub origins: Arc<ProgramOrigins>,
 }
-
-/// Source-instance syntax mapped to the textual identities used by semantic analysis.
-#[derive(Clone, Debug, Default)]
-pub struct ProgramOrigins(pub HashMap<(SourceId, t::EntityId), t::EntityId>);
 
 impl SourceGraph {
     pub fn parse(&self) -> Result<TextualProgram, TextualProgramError> {
@@ -44,7 +39,6 @@ struct TextualProgramBuilder<'graph> {
     /// Final root of every source already copied into the program DAG.
     roots: HashMap<SourceId, t::TermId>,
     completion: Option<CompletionCopy>,
-    origins: ProgramOrigins,
 }
 
 struct CompletionCopy {
@@ -60,7 +54,6 @@ impl<'graph> TextualProgramBuilder<'graph> {
             bases: Self::assign_bases(graph),
             roots: HashMap::new(),
             completion: None,
-            origins: ProgramOrigins::default(),
         }
     }
 
@@ -101,7 +94,6 @@ impl<'graph> TextualProgramBuilder<'graph> {
             spans: FrozenArena::new(spans),
             arena: FrozenArena::new(arena),
             unit: t::SourceUnit { root },
-            origins: Arc::new(self.origins),
         };
         Ok((program, completion))
     }
@@ -163,9 +155,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
     fn definition(&mut self, source: SourceId, definition: t::DefId) -> t::DefId {
         let file = &self.graph.sources[&source];
         let name = file.arena.defs[&definition].clone();
-        let copied = self.parser.def(self.span(source, definition.into()).make(name));
-        self.origins.0.insert((source, definition.into()), copied.into());
-        copied
+        self.parser.def(self.span(source, definition.into()).make(name))
     }
 
     fn metadata(&mut self, source: SourceId, metadata: t::MetaId) -> t::MetaId {
@@ -183,14 +173,6 @@ impl<'graph> TextualProgramBuilder<'graph> {
     }
 
     fn pattern(
-        &mut self, source: SourceId, original: t::PatId,
-    ) -> Result<t::PatId, TextualProgramError> {
-        let copied = self.pattern_inner(source, original)?;
-        self.origins.0.insert((source, original.into()), copied.into());
-        Ok(copied)
-    }
-
-    fn pattern_inner(
         &mut self, source: SourceId, pattern: t::PatId,
     ) -> Result<t::PatId, TextualProgramError> {
         let syntax = self.graph.sources[&source].arena.pats[&pattern].clone();
@@ -241,14 +223,6 @@ impl<'graph> TextualProgramBuilder<'graph> {
     }
 
     fn copattern(
-        &mut self, source: SourceId, original: t::CoPatId,
-    ) -> Result<t::CoPatId, TextualProgramError> {
-        let copied = self.copattern_inner(source, original)?;
-        self.origins.0.insert((source, original.into()), copied.into());
-        Ok(copied)
-    }
-
-    fn copattern_inner(
         &mut self, source: SourceId, pattern: t::CoPatId,
     ) -> Result<t::CoPatId, TextualProgramError> {
         let syntax = self.graph.sources[&source].arena.copats[&pattern].clone();
@@ -305,14 +279,6 @@ impl<'graph> TextualProgramBuilder<'graph> {
     }
 
     fn term(
-        &mut self, source: SourceId, original: t::TermId,
-    ) -> Result<t::TermId, TextualProgramError> {
-        let copied = self.term_inner(source, original)?;
-        self.origins.0.insert((source, original.into()), copied.into());
-        Ok(copied)
-    }
-
-    fn term_inner(
         &mut self, source: SourceId, term: t::TermId,
     ) -> Result<t::TermId, TextualProgramError> {
         let file = &self.graph.sources[&source];

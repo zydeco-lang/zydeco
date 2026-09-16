@@ -10,16 +10,9 @@ pub struct ResolvedReference<'a> {
     pub active_bindings: &'a rpds::VectorSync<BindingSite>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ScopeKind {
-    Documentation,
-    Hole,
-}
-
 pub struct ScopeEvent<'a> {
     pub occurrence: TermId,
     pub origin: Option<t::EntityId>,
-    pub kind: ScopeKind,
     pub scope: NameScope<'a>,
 }
 
@@ -65,22 +58,6 @@ impl ResolutionObserver for ReferenceIndex {
     }
 }
 
-#[derive(Default)]
-pub struct DocumentationObserver {
-    scopes: ArenaAssoc<TermId, ScopeSnapshot>,
-}
-impl ResolutionObserver for DocumentationObserver {
-    type Output = ArenaAssoc<TermId, ScopeSnapshot>;
-    fn scope(&mut self, event: &ScopeEvent<'_>) {
-        if event.kind == ScopeKind::Documentation {
-            self.scopes.insert_new(event.occurrence, event.scope.snapshot());
-        }
-    }
-    fn finish(self) -> Self::Output {
-        self.scopes
-    }
-}
-
 pub struct CompletionObserver {
     target: t::TermId,
     site: Option<CompletionSite>,
@@ -93,7 +70,7 @@ impl CompletionObserver {
 impl ResolutionObserver for CompletionObserver {
     type Output = Option<CompletionSite>;
     fn scope(&mut self, event: &ScopeEvent<'_>) {
-        if event.kind == ScopeKind::Hole && event.origin == Some(self.target.into()) {
+        if event.origin == Some(self.target.into()) {
             self.site =
                 Some(CompletionSite { target: event.occurrence, scope: event.scope.snapshot() });
         }

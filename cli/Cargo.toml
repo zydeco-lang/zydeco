@@ -30,9 +30,7 @@ zydeco-wasm-sps = { workspace = true }
 zydeco-utils = { workspace = true }
 ariadne = { workspace = true }
 thiserror = { workspace = true }
-pulldown-cmark = { workspace = true }
 sha3 = { workspace = true }
-url = { workspace = true }
 tempfile = { workspace = true }
 
 [dev-dependencies]

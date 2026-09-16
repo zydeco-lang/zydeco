@@ -505,11 +505,6 @@ impl TermChecker<'_> {
             match checked {
                 | TermAnnId::Type(head, head_kind) => {
                     let candidate = FieldProjectionResolver::r#type(tycker, head_kind, &name)?;
-                    FieldProjectionResolver::record_type_origin(
-                        tycker,
-                        self.inner.into(),
-                        &candidate,
-                    );
                     let payload_kind = match switch {
                         | Switch::Syn => candidate.projected,
                         | Switch::Ana(AnnId::Kind(expected)) => {
@@ -530,11 +525,6 @@ impl TermChecker<'_> {
                 | TermAnnId::Value(head, head_ty) => {
                     let candidate =
                         FieldProjectionResolver::value_term_k(tycker, &self.info, head_ty, &name)?;
-                    FieldProjectionResolver::record_value_origin(
-                        tycker,
-                        self.inner.into(),
-                        &candidate,
-                    );
                     let target = FieldProjectionResolver::value_target(&candidate);
                     let projected_ty = candidate.projected;
                     let projected_ty = match switch {

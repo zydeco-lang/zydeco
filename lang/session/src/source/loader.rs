@@ -168,16 +168,6 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
         {
             self.report(error);
         }
-        for replay in &project.replays {
-            if let Err(error) = self.load_selection(
-                &replay.selection.path,
-                replay.selection.name.as_ref(),
-                replay.context.clone(),
-            ) {
-                self.report(error);
-            }
-            self.complete_definitions();
-        }
         let canonical = SourcePath::identity(root).map_err(|source| SourceLoadError::RootPath {
             path: root.to_path_buf(),
             source: source.into(),

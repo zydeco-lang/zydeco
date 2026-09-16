@@ -4,10 +4,10 @@ use thiserror::Error;
 use zydeco_cli::library::{LibraryArtifactKind, LibraryBuilder, LibraryError, LinkedLibraries};
 use zydeco_cli::{
     BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
-    DocumentationCommand, Executable, ExecutionError, ExecutionRunner, ExecutionTarget,
-    HighSpsInspection, HighSpsPass, HighSpsPlan, HighSpsPlanError, NativeError,
-    RepresentationStrategy, SourceFormatError, SourceFormatOutcome, SourceFormatter,
-    SourceSelection, TargetArchitecture, TargetOs, TestTarget, WasmBackendKind,
+    Executable, ExecutionError, ExecutionRunner, ExecutionTarget, HighSpsInspection, HighSpsPass,
+    HighSpsPlan, HighSpsPlanError, NativeError, RepresentationStrategy, SourceFormatError,
+    SourceFormatOutcome, SourceFormatter, SourceSelection, TargetArchitecture, TargetOs,
+    TestTarget, WasmBackendKind,
 };
 use zydeco_session::source::{
     Package, PackageId, PackagePath, PackageRole, SourceLoadError, SourceReference,
@@ -34,10 +34,7 @@ struct Application {
 
 impl Application {
     fn run(mut self, command: Commands) -> Result<i32, ApplicationError> {
-        if !matches!(
-            command,
-            Commands::Fmt { .. } | Commands::Passes { .. } | Commands::DocumentationExampleWorker
-        ) {
+        if !matches!(command, Commands::Fmt { .. } | Commands::Passes { .. }) {
             let roots = ["package.zy", "workspace.zy"]
                 .into_iter()
                 .map(PathBuf::from)
@@ -70,12 +67,6 @@ impl Application {
                 }
                 Ok(0)
             }
-            | Commands::DocumentationExampleWorker => {
-                zydeco_session::source::DocumentationExampleWorker::serve()
-                    .map_err(ApplicationError::DocumentationWorker)?;
-                Ok(0)
-            }
-            | Commands::Doc { command } => self.documentation(command),
             | Commands::Fmt { files, check } => self.format_sources(&files, check),
             | Commands::Run { selection, target, execution, dry, args } => {
                 let sources = self.sources(selection)?;
@@ -300,11 +291,6 @@ impl Application {
         }
         println!("{} passed; {failed} failed.", count - failed);
         Ok(i32::from(failed != 0))
-    }
-
-    fn documentation(&self, command: DocumentationCommand) -> Result<i32, ApplicationError> {
-        zydeco_cli::documentation::run(&self.compiler, command)
-            .map_err(ApplicationError::Documentation)
     }
 
     fn format_sources(&self, paths: &[PathBuf], check: bool) -> Result<i32, ApplicationError> {
@@ -594,10 +580,6 @@ enum ApplicationError {
         "--representation applies to zasm, asm, exe, wasm-am, wasm-sps, object, staticlib, and sharedlib; this target does not select physical representations"
     )]
     RepresentationTarget,
-    #[error("documentation worker failed: {0}")]
-    DocumentationWorker(std::io::Error),
-    #[error(transparent)]
-    Documentation(#[from] zydeco_cli::documentation::DocumentationError),
     #[error(transparent)]
     Format(#[from] SourceFormatError),
     #[error(transparent)]

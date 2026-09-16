@@ -2,7 +2,6 @@ mod analysis;
 mod completion;
 mod configuration;
 mod document_links;
-pub mod documentation;
 mod format;
 mod hover;
 mod progress;
@@ -14,7 +13,6 @@ use analysis::{ProjectFailure, ProjectState};
 use completion::Completer;
 use configuration::Configuration;
 use document_links::ImportDocumentLinks;
-use documentation::SourceDocumentationHover;
 use format::{DocumentFormatter, FormattingOutcome};
 use progress::{AnalysisProgressReporter, AnalysisProgressSession};
 use rename::RenameRejection;
@@ -158,7 +156,6 @@ pub struct Cajun {
     completion_label_details: AtomicBool,
     configuration: Configuration,
     next_progress_sequence: AtomicU64,
-    documentation_checks: tokio::sync::Semaphore,
 }
 
 impl Cajun {
@@ -173,7 +170,6 @@ impl Cajun {
             completion_label_details: AtomicBool::new(false),
             configuration: Configuration::default(),
             next_progress_sequence: AtomicU64::new(1),
-            documentation_checks: tokio::sync::Semaphore::new(1),
         }
     }
 
@@ -351,31 +347,6 @@ impl Cajun {
         source.or_else(|| std::fs::read_to_string(path).ok())
     }
 
-    async fn source_documentation_hover(
-        &self, target: TextDocumentPositionParams,
-    ) -> Option<Hover> {
-        let path = Self::path(&target.text_document.uri).ok()?;
-        let (revision, snapshot) = {
-            let session = self.session.lock().await;
-            (session.revision(), session.compiler.snapshot())
-        };
-        let source_path = path.clone();
-        let hover = tokio::task::spawn_blocking(move || {
-            AnalysisTask::run(move || {
-                SourceDocumentationHover::at(&snapshot, &source_path, target.position)
-            })
-        })
-        .await
-        .ok()?;
-        if self.session.lock().await.revision() != revision {
-            return None;
-        }
-        match hover {
-            | AnalysisTask::Completed(hover) => hover,
-            | AnalysisTask::Cancelled => None,
-        }
-    }
-
     fn path(uri: &Url) -> std::result::Result<PathBuf, String> {
         uri.to_file_path()
             .map(|path| Self::normalize_path(&path))
@@ -424,9 +395,6 @@ impl LanguageServer for Cajun {
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
             capabilities: ServerCapabilities {
-                experimental: Some(serde_json::json!({
-                    "zydecoDocumentation": { "version": 1, "checkExamples": true }
-                })),
                 position_encoding: Some(PositionEncodingKind::UTF16),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
                     TextDocumentSyncOptions {
@@ -647,10 +615,7 @@ impl LanguageServer for Cajun {
         }
         let path = match self.refresh(&target.text_document.uri).await {
             | RefreshOutcome::Updated(path) => path,
-            | RefreshOutcome::Failed(_) => {
-                return Ok(self.source_documentation_hover(target).await);
-            }
-            | RefreshOutcome::Superseded => return Ok(None),
+            | RefreshOutcome::Failed(_) | RefreshOutcome::Superseded => return Ok(None),
         };
         let options = self.configuration.snapshot().await.hover;
         let session = self.session.lock().await;

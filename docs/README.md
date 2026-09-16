@@ -34,9 +34,9 @@ Choose the corresponding reference section or design record below.
 
 | Task | Home |
 | --- | --- |
-| Write `@[doc]` prose, semantic links, and examples; use the panel or `zydeco doc` | [Source documentation](references/language.md#source-documentation), [tooling workflow](references/compiler.md#documentation-workflow), and [a complete example](examples/documentation/guide.md) |
-| Understand implemented attachment, provenance, publication, and verification | [C4: source analysis](references/compiler.md#shared-source-analysis), [C15: documentation](references/compiler.md#documentation-subjects-and-provenance) |
-| Design new documentation features | [Documentation proposal](proposals/documentation.md) |
+| Attach prose to `@[doc]` | [Source documentation](references/language.md#source-documentation) |
+| Understand annotation and text attachment | [Shared source analysis](references/compiler.md#shared-source-analysis) |
+| Reconsider documentation tooling | [Documentation design questions](proposals/documentation.md) |
 | Improve completion or generated type/source text | [Completion proposal](proposals/completion.md), [type-layout ideas](ideas/type-rendering-layout.md), [source-generation ideas](ideas/typed-source-generation.md) |
 | Review, consolidate, format, and verify repository documentation | [Contribution workflow](../CONTRIBUTING.md#maintain-documentation) |
 | Repair an observed disagreement or duplicated account | [Reference drift](todos/reference-drift.md) |

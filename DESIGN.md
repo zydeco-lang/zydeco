@@ -615,7 +615,7 @@ Compatibility checks use a disposable recovered analysis; they do not solve hole
 Cajun renders optional kind or type details and inserts only the selected name.
 Missing type information does not itself hide a candidate.
 The compiler reference owns [recovery](docs/references/compiler.md#recovering-parsing),
-[completion filtering, and edit ranges](docs/references/compiler.md#completion-and-documentation).
+[completion filtering, and edit ranges](docs/references/compiler.md#completion).
 
 Compiler annotations have one typed catalog in `lang/surface/src/metadata.rs`.
 Metadata decoding and editor suggestions share argument shapes and enum spellings, including nested options.
@@ -623,13 +623,10 @@ Unknown metadata stays structurally valid without compiler-defined suggestions.
 Import-path completion uses the importer's canonical parent, merges filesystem entries with active overlays,
 and offers directories and supported source files while excluding the importing file and its symlink aliases.
 
-The session's `DocumentationIndex` supplies shared semantic subjects to hover,
-completion, and the VS Code documentation panel.
-The compiler reference owns [identity and provenance](docs/references/compiler.md#documentation-subjects-and-provenance)
-and [example verification](docs/references/compiler.md#verifying-documentation-examples).
-The [language reference](docs/references/language.md#source-documentation) describes source authoring,
-and the [tooling workflow](docs/references/compiler.md#documentation-workflow) covers editor use;
-the [documentation proposal](docs/proposals/documentation.md) develops reference output and commands.
+Source documentation currently consists of `@[doc]` annotations and adjacent `--|` text blocks.
+The [language reference](docs/references/language.md#source-documentation) defines their attachment rules.
+Lookup, semantic links, example verification, and publication are deferred
+while the [documentation design](docs/proposals/documentation.md) is reconsidered.
 
 Each parsed entity, including nested metadata, has its own source span.
 The assembled program uses a shared `SourceMap` to associate byte offsets with their files;

@@ -7,15 +7,7 @@ Remove resolved entries once their repair and durable rationale have reached the
 
 - [Reference drift](reference-drift.md): remaining formal-calculus disagreements and duplicate documentation accounts.
 - [Compiler boundaries](compiler-boundaries.md): product inference, computation-witness diagnostics,
-  source-load error locations, unsupported ZASM execution, and documentation exposure collisions.
-
-## Documentation follow-up, reviewed 2026-09-15
-
-- [ ] Repair [documentation exposure collisions](compiler-boundaries.md#documentation-exposure-collisions):
-  valid `std` interfaces fail all four documentation commands with duplicate `()/()` paths.
-  The [documentation proposal](../proposals/documentation.md) owns the publication redesign; shared selection
-  follows the [package resolution reference](../references/language.md#shared-selection-and-documentation),
-  with frontend integration in the [package plan](../proposals/package-management.md).
+  source-load error locations, and unsupported ZASM execution.
 
 ## Next pass, reviewed 2026-09-14
 

@@ -299,7 +299,6 @@ impl ExistentialProjectionPattern {
                 }
                 | ([], [candidate], []) => {
                     let candidate = candidate.clone().materialize_k(tycker)?;
-                    FieldProjectionResolver::record_value_origin(tycker, source.into(), &candidate);
                     let checked = TyEnvT::new(opening.env.clone(), payload).tyck_k(
                         tycker,
                         PatternAction::ana(candidate.projected.into())
@@ -481,10 +480,6 @@ impl ExistentialProjectionPattern {
                     }
                     *env = checked.info;
                     opened.extend(checked.inner.opened);
-                    tycker
-                        .statics
-                        .member_provenance
-                        .record_projection(selection.source.into(), node.into());
                     members.push(payload_pattern);
                 }
                 if !passing.is_empty() {

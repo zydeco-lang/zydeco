@@ -594,8 +594,10 @@ make -C docs/spell build
 ```
 
 The script builds the release CLI and writes chapter Markdown beside the sources under `docs/spell/`.
-The [documentation proposal](docs/proposals/documentation.md) develops reference commands;
-[source documentation](docs/references/language.md#source-documentation) explains attachments and semantic links.
+Source `@[doc]` annotations retain attached prose as described
+by the [language reference](docs/references/language.md#source-documentation).
+Documentation lookup, generation, and example verification are deferred;
+[the design record](docs/proposals/documentation.md) tracks the open questions.
 
 ## Maintain Documentation
 
@@ -635,19 +637,11 @@ Maintain one mathematical companion instead of copying another set of formal rul
 Performance evidence needs a workload, revision, build profile, and target; old measurements remain dated evidence.
 
 Use complete source terms with explicit imports for examples.
-The [example contract](docs/references/compiler.md#verifying-documentation-examples) defines opted-in static checks
-and rejections; runtime behavior uses the existing integration harness.
-Check the reference and library examples from the repository root:
-
-```sh
-cargo run --quiet --bin zydeco -- doc check docs/examples/documentation/counter.zy \
-  --guide docs/references/language.md --guide docs/references/compiler.md --guide lib/std/README.md
-```
-
-The counter supplies the documentation command's required source root.
-Guide examples are independent terms with paths relative to their guide.
-The checker verifies acceptance and specified rejections without executing them;
-`doc build` alone does not verify examples.
+Check a source example by saving it beside the document so relative imports retain their meaning,
+then running `zydeco check` on that file.
+Keep behavior regressions, including intended rejection cases, in the existing Rust or source fixture harness;
+Markdown fences are displayed examples and have no automatic verification contract.
+Runtime behavior uses the existing integration harness.
 Run focused implementation tests when changing their rules or examples;
 prose-only organization does not require the full Rust suite.
 Validate local links and anchors, then read each edited document in sequence.

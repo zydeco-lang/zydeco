@@ -38,10 +38,6 @@ use crate::{
     type_links::TypeReferenceCollector,
 };
 
-#[cfg(test)]
-mod documentation_tests;
-mod documentation;
-
 /// Compiler analysis state for one editor root.
 pub(crate) struct ProjectState {
     analysis: Arc<ProgramAnalysis>,
@@ -306,36 +302,14 @@ impl ProjectState {
         self.symbol_at(file_path, position, options.range_end)
             .and_then(|occurrence| self.symbol_hover(session, &occurrence, options.line_width))
             .or_else(|| self.term_hover(file_path, position, options))
-            .or_else(|| {
-                let path = Self::normalize_path(file_path);
-                let offset = self.offset(&path, position)?;
-                let docs = self.analysis.documentation().at(&path, offset);
-                (!docs.is_empty()).then(|| Hover {
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: docs.markdown(),
-                    }),
-                    range: None,
-                })
-            })
     }
 
     fn symbol_hover(
         &self, session: &CompilerSession, occurrence: &SymbolOccurrence, line_width: HoverLineWidth,
     ) -> Option<Hover> {
         let name = &self.scoped().defs[&occurrence.definition];
-        let documentation = self.analysis.documentation().for_definition(occurrence.definition);
         let annotation =
-            session.annotation_of_def(&self.root, occurrence.definition).ok().flatten();
-        let Some(annotation) = annotation else {
-            return (!documentation.is_empty()).then(|| Hover {
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: documentation.summary(),
-                }),
-                range: Some(occurrence.range),
-            });
-        };
+            session.annotation_of_def(&self.root, occurrence.definition).ok().flatten()?;
         let formatter = Formatter::new(self.scoped(), self.statics());
         let definition_type =
             session.type_definition_of_def(&self.root, occurrence.definition).ok().flatten();
@@ -372,7 +346,7 @@ impl ProjectState {
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: self.documented_signature(signature, documentation),
+                value: signature,
             }),
             range: Some(occurrence.range),
         })
@@ -448,8 +422,7 @@ impl ProjectState {
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: self
-                    .documented_signature(signature, self.analysis.documentation().for_term(term)),
+                value: signature,
             }),
             range: Some(range),
         })
@@ -457,23 +430,6 @@ impl ProjectState {
 
     /// The columns a term label leaves for the annotation it introduces.
     const MIN_ANNOTATION_COLUMNS: usize = 20;
-
-    fn documented_signature(
-        &self, signature: String, documentation: zydeco_session::DocumentationContent<'_>,
-    ) -> String {
-        let links = crate::documentation::DocumentationLinks {
-            scoped: self.scoped(),
-            spans: self.analysis.spans(),
-        };
-        if documentation.is_empty() {
-            signature
-        } else {
-            format!(
-                "{signature}\n\n{}",
-                documentation.markdown_with_links(true, |target| links.url(target).map(Into::into))
-            )
-        }
-    }
 
     /// Label a hovered term by its rendered form, eliding to `…` when the
     /// rendering spans lines or crowds out the annotation. The editor already
@@ -535,25 +491,6 @@ impl ProjectState {
                 })
             })
             .collect::<Vec<_>>();
-        diagnostics.extend(
-            self.analysis
-                .documentation()
-                .entries()
-                .iter()
-                .filter(|entry| entry.path == file_path)
-                .flat_map(|entry| &entry.links)
-                .filter_map(|link| {
-                    let error = link.target.as_ref().err()?;
-                    Some(Diagnostic {
-                        range: self.byte_range(&file_path, link.source.clone())?,
-                        severity: Some(DiagnosticSeverity::WARNING),
-                        code: Some(NumberOrString::String(error.code().to_owned())),
-                        source: Some("zydeco".to_owned()),
-                        message: error.to_string(),
-                        ..Diagnostic::default()
-                    })
-                }),
-        );
         if let Some(type_diagnostics) = self.analysis.outcome().diagnostics() {
             diagnostics.extend(type_diagnostics.iter().filter_map(|diagnostic| {
                 // LSP diagnostics require a real per-file range. An internal failure without a
@@ -602,29 +539,7 @@ impl ProjectState {
         &self, file_path: &Path,
     ) -> Vec<tower_lsp::lsp_types::DocumentLink> {
         let file_path = Self::normalize_path(file_path);
-        let mut links = crate::document_links::ImportDocumentLinks::new(self.analysis.graph())
-            .for_file(&file_path);
-        let targets = crate::documentation::DocumentationLinks {
-            scoped: self.scoped(),
-            spans: self.analysis.spans(),
-        };
-        links.extend(
-            self.analysis
-                .documentation()
-                .entries()
-                .iter()
-                .filter(|entry| entry.path == file_path)
-                .flat_map(|entry| &entry.links)
-                .filter_map(|link| {
-                    Some(tower_lsp::lsp_types::DocumentLink {
-                        range: self.byte_range(&file_path, link.source.clone())?,
-                        target: Some(targets.url(link.target.as_ref().ok()?)?),
-                        tooltip: Some("Open documentation target".to_owned()),
-                        data: None,
-                    })
-                }),
-        );
-        links
+        crate::document_links::ImportDocumentLinks::new(self.analysis.graph()).for_file(&file_path)
     }
 
     fn symbol_at(
@@ -1003,11 +918,21 @@ mod tests {
         ProjectState::load_with_progress(&root, &HashMap::new(), |update| progress.push(update))
             .unwrap();
 
+        let [
+            AnalysisProgress::Loading(SourceDiscovery { path: first, discovered: 1 }),
+            AnalysisProgress::Loading(SourceDiscovery { path: second, discovered: 2 }),
+            phases @ ..,
+        ] = progress.as_slice()
+        else {
+            panic!("expected two source discoveries before compiler phases: {progress:?}")
+        };
         assert_eq!(
-            progress,
+            std::collections::HashSet::from([first, second]),
+            std::collections::HashSet::from([&root, &library]),
+        );
+        assert_eq!(
+            phases,
             vec![
-                AnalysisProgress::Loading(SourceDiscovery { path: root.clone(), discovered: 1 }),
-                AnalysisProgress::Loading(SourceDiscovery { path: library, discovered: 2 }),
                 AnalysisProgress::Parsing { source_count: 2 },
                 AnalysisProgress::Desugaring { source_count: 2 },
                 AnalysisProgress::Resolving { source_count: 2 },

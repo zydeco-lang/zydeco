@@ -356,7 +356,7 @@ This restriction leaves ordinary reusable `Thk B` values fully usable.
 
 Consider this complete source factory, accepted by the current language:
 
-```zydeco check
+```zydeco
 param val (/Thk; /Ret; /Int; /numeric) : @(import("../../lib/std/builtin.zy")) in
 (
   #make_adder = ({
@@ -809,7 +809,7 @@ cargo test -p zydeco-machine --lib
 cargo test -p zydeco-tests --test stack_protocols -- --skip every_backend
 ```
 
-The source factory above can be verified by the documentation checker.
+The source factory above can be saved as a complete term and checked with `zydeco check`.
 The extended package selection syntax and host APIs are schematic.
 New interoperability tests are required as those boundaries are implemented;
 passing current internal protocol tests alone does not establish a public ABI.

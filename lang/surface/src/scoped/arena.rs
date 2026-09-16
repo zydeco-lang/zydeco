@@ -175,8 +175,6 @@ pub struct ScopedArena {
     pub users: ArenaForth<DefId, TermId>,
     /// Context DAGs retained for nested `begin` terms.
     pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
-    /// Authoring scopes of documentation annotations, before entering their payload.
-    pub documentation_scopes: ArenaAssoc<TermId, super::ScopeSnapshot>,
 }
 
 impl ScopedArena {

@@ -1,2 +1,0 @@
---| The implementation initializes the stored value to 42.
-@[doc] (#value = 42)

@@ -211,21 +211,6 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Tm::Lit(lit) => checker.check_lit_k(tycker, lit, switch)?,
         };
 
-        let member_classifier = match (&tycker.scoped.terms[&self.inner], out_ann) {
-            | (Tm::Label(_), TermAnnId::Kind(kind)) => Some(AnnId::Kind(kind)),
-            | (Tm::Label(_), TermAnnId::Type(ty, _)) => Some(AnnId::Type(ty)),
-            | (Tm::Named(_), TermAnnId::Type(_, kind)) if matches!(switch, Switch::Syn) => {
-                Some(AnnId::Kind(kind))
-            }
-            | (Tm::Named(_), TermAnnId::Value(_, ty)) if matches!(switch, Switch::Syn) => {
-                Some(AnnId::Type(ty))
-            }
-            | _ => None,
-        };
-        if let Some(classifier) = member_classifier {
-            tycker.statics.member_provenance.record(classifier, self.inner);
-        }
-
         if let Some(out) = out_ann.as_term() {
             // Maintain one canonical back mapping for the materialized term.
             // Import boundaries are reference sites, so they retain their own

@@ -258,69 +258,6 @@ fn overlays_and_project_contexts_participate_in_analysis_and_rematerialization()
 }
 
 #[test]
-fn instance_queries_and_documentation_links_distinguish_copies_of_one_file() {
-    let f = Fixture::new();
-    f.write(
-        "copy.zy",
-        "let value = @(import(data)) in\n--| [value](zydeco:name:value)\n@[doc] value",
-    );
-    f.write(
-        "main.zy",
-        r#"(
-        @[package(library, name(a))] (@[package(library, name(data))] 41, @(import("copy.zy"))),
-        @[package(library, name(b))] (@[package(library, name(data))] 42, @(import("copy.zy")))
-    )"#,
-    );
-    let analysis = CompilerSession::default().analyze(f.path("main.zy")).unwrap();
-    let documents = analysis.documentation().entries();
-    assert_eq!(documents.len(), 2);
-    let targets = documents
-        .iter()
-        .map(|document| match document.links[0].target.as_ref().unwrap() {
-            | crate::source::DocumentationLinkTarget::Definition(id) => *id,
-            | _ => panic!("definition link"),
-        })
-        .collect::<std::collections::HashSet<_>>();
-    assert_eq!(targets.len(), 2);
-    for (index, instance) in analysis
-        .graph()
-        .instances
-        .iter()
-        .enumerate()
-        .filter(|(_, i)| i.template.path.ends_with("copy.zy"))
-    {
-        let definition =
-            *instance.template.arena.defs.iter().find(|(_, name)| name.0 == "value").unwrap().0;
-        let subjects = analysis.entities_in_instance(PackageInstanceId(index), definition.into());
-        assert_eq!(subjects.len(), 1);
-        let zydeco_surface::scoped::syntax::EntityId::Def(definition) = subjects[0] else {
-            panic!()
-        };
-        assert!(targets.contains(&definition));
-    }
-}
-
-#[test]
-fn documentation_workers_replay_an_opaque_package_context_with_pinned_sources() {
-    let f = Fixture::new();
-    let root = f.write("main.zy", "@[package(library)] (\n@[package(library, name(data))] 42,\n--| ```zydeco check\n--| @(import(data))\n--| ```\n@[doc] ())");
-    let session = CompilerSession::default();
-    let analysis = session.analyze(&root).unwrap();
-    let document = &analysis.documentation().entries()[0];
-    let example = crate::source::DocumentationExample::from_documentation(
-        document,
-        analysis.source(&root).unwrap(),
-    )
-    .remove(0);
-    let request = example.request_in_instance(&analysis, analysis.graph().root_instance).unwrap();
-    f.write("main.zy", "absent");
-    let request: crate::source::DocumentationExampleRequest =
-        serde_json::from_str(&serde_json::to_string(&request).unwrap()).unwrap();
-    let result = request.check();
-    assert!(result.status.is_passed(), "{:?}", result.diagnostics);
-}
-
-#[test]
 fn package_availability_follows_transitive_file_routes_independently_of_source_order() {
     let f = Fixture::new();
     f.write("definitions.zy", "@[package(library, name(data))] 42");
@@ -420,38 +357,6 @@ fn package_selection_and_inspection_follow_nested_project_registrations() {
                 .is_some()
         );
     }
-}
-
-#[test]
-fn merged_documentation_preserves_locations_and_examples_in_each_original_file() {
-    let f = Fixture::new();
-    f.write("a.zy", "--| ```zydeco check\n--| @(import(data))\n--| ```\n@[doc] ()");
-    f.write("b.zy", "\n\n--| ```zydeco check\n--| @(import(data))\n--| ```\n@[doc] ()");
-    let root = f.write("main.zy", "(@[package(library, name(left))] (@[package(library, name(data))] 42, @(import(\"a.zy\"))), @[package(library, name(right))] (@[package(library, name(data))] 42, @(import(\"b.zy\"))))");
-    let session = CompilerSession::default();
-    let analysis = session.analyze(&root).unwrap();
-    assert_eq!(analysis.documentation().entries().len(), 1);
-    let mut origins = std::collections::HashSet::new();
-    for (index, instance) in
-        analysis.graph().instances.iter().enumerate().filter(|(_, instance)| {
-            instance.template.path.ends_with("a.zy") || instance.template.path.ends_with("b.zy")
-        })
-    {
-        let id = PackageInstanceId(index);
-        let documents = analysis.documentation().in_instance(analysis.graph(), id);
-        assert_eq!(documents.len(), 1);
-        let document = &documents[0];
-        assert_eq!(document.path, instance.template.path);
-        origins.insert(document.path.clone());
-        let examples = crate::source::DocumentationExample::from_documentation(
-            document,
-            &instance.template.source,
-        );
-        assert_eq!(examples.len(), 1);
-        let checked = examples[0].request_in_instance(&analysis, id).unwrap().check();
-        assert!(checked.status.is_passed(), "{:?}", checked.diagnostics);
-    }
-    assert_eq!(origins.len(), 2);
 }
 
 #[test]

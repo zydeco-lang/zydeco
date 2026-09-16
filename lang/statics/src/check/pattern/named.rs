@@ -204,7 +204,6 @@ impl PatternChecker<'_> {
             }
             | Switch::Ana(AnnId::Kind(expected)) => {
                 let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
-                FieldProjectionResolver::record_type_origin(tycker, self.inner.into(), &candidate);
                 let checked = self.mk(inner).tyck_k(
                     tycker,
                     PatternAction::ana(candidate.projected.into()).with_skolems(skolems.clone()),

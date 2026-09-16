@@ -39,7 +39,7 @@ impl Fixture {
 #[derive(Default, Debug, PartialEq, Eq)]
 struct Audit {
     references: Vec<(TermId, DefId)>,
-    scopes: Vec<(TermId, ScopeKind, ScopeSnapshot)>,
+    scopes: Vec<(TermId, ScopeSnapshot)>,
 }
 impl ResolutionObserver for Audit {
     type Output = Self;
@@ -47,7 +47,7 @@ impl ResolutionObserver for Audit {
         self.references.push((event.occurrence, event.definition));
     }
     fn scope(&mut self, event: &ScopeEvent<'_>) {
-        self.scopes.push((event.occurrence, event.kind, event.scope.snapshot()));
+        self.scopes.push((event.occurrence, event.scope.snapshot()));
     }
     fn finish(self) -> Self {
         self
@@ -55,8 +55,8 @@ impl ResolutionObserver for Audit {
 }
 
 #[test]
-fn composed_observers_share_visits_and_preserve_documentation_timing() {
-    let fixture = Fixture::parse("let outer = 1 in @[doc] fn outer => (outer, _)");
+fn composed_observers_share_visits_and_preserve_scope_timing() {
+    let fixture = Fixture::parse("let outer = 1 in fn outer => (outer, _)");
     let root = fixture.bitter.root;
     let arena = &fixture.bitter.arena;
     let copy = FrozenArena::new(BitterArena {
@@ -76,23 +76,19 @@ fn composed_observers_share_visits_and_preserve_documentation_timing() {
     assert_eq!(combined.observations.0, combined.observations.1);
     let audit = combined.observations.0;
     assert_eq!(audit.references.len(), 1);
-    assert_eq!(audit.scopes.len(), 3, "includes the inferred classifier hole");
+    assert_eq!(audit.scopes.len(), 2, "includes the inferred classifier hole");
     let program = combined.program.unwrap();
-    let (doc, _, scope) =
-        audit.scopes.iter().find(|(_, kind, _)| *kind == ScopeKind::Documentation).unwrap();
-    assert_eq!(&program.arena.documentation_scopes[doc], scope);
-    assert_ne!(scope.definitions[0].definition, audit.references[0].1);
-    assert_eq!(audit.scopes.last().unwrap().2.definitions[0].definition, audit.references[0].1);
+    assert!(audit.scopes[0].1.definitions.is_empty(), "the inferred classifier precedes bindings");
+    assert_eq!(audit.scopes.last().unwrap().1.definitions[0].definition, audit.references[0].1);
     assert_eq!(program.arena.users.forth(&audit.references[0].1).iter().count(), 1);
 }
 
 #[test]
 fn shared_providers_emit_events_and_diagnostics_once() {
-    let output =
-        Fixture::parse("((fn x => @[doc] (x, _)), (), ())").with_shared_provider().observe();
+    let output = Fixture::parse("((fn x => (x, _)), (), ())").with_shared_provider().observe();
     assert!(output.program.is_ok());
     assert_eq!(output.observations.references.len(), 1);
-    assert_eq!(output.observations.scopes.len(), 2);
+    assert_eq!(output.observations.scopes.len(), 1);
     let output = Fixture::parse("((missing, absent), (), ())").with_shared_provider().observe();
     assert!(output.program.is_err());
     assert_eq!(output.diagnostics.len(), 2);
@@ -130,10 +126,8 @@ fn independent_children_continue_after_errors_without_valid_replacements() {
 
 #[test]
 fn duplicate_names_reject_the_ambiguous_scope_and_resume_outside_it() {
-    let output = Fixture::parse(
-        "(begin let x = 1 that let x = 2 that let x = 3 that @[doc] _ end, @[doc] _)",
-    )
-    .observe();
+    let output =
+        Fixture::parse("(begin let x = 1 that let x = 2 that let x = 3 that _ end, _)").observe();
     assert!(output.program.is_err());
     assert_eq!(output.diagnostics.len(), 2);
     assert!(
@@ -142,16 +136,8 @@ fn duplicate_names_reject_the_ambiguous_scope_and_resume_outside_it() {
             .iter()
             .all(|error| matches!(error, ResolveError::DuplicateDefinition(_, _)))
     );
-    assert_eq!(
-        output
-            .observations
-            .scopes
-            .iter()
-            .filter(|(_, kind, _)| *kind == ScopeKind::Documentation)
-            .count(),
-        1
-    );
-    assert!(output.observations.scopes.iter().all(|(_, _, scope)| scope.definitions.is_empty()));
+    assert_eq!(output.observations.scopes.len(), 1);
+    assert!(output.observations.scopes.iter().all(|(_, scope)| scope.definitions.is_empty()));
     assert!(
         Fixture::parse("(begin let x = 1 that let y = 2 that (x, y) end, _)")
             .observe()

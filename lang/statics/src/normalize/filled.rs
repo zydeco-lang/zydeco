@@ -79,9 +79,7 @@ impl KindId {
                     if inner_norm == inner {
                         self
                     } else {
-                        let target: KindId = Alloc::alloc(tycker, Label(name, inner_norm), (), &());
-                        tycker.statics.member_provenance.transfer(self.into(), target.into());
-                        target
+                        Alloc::alloc(tycker, Label(name, inner_norm), (), &())
                     }
                 }
             },

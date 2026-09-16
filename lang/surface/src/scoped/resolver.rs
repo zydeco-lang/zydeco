@@ -16,7 +16,7 @@ pub struct ResolveFolder<'a, O = ()> {
     pub bitter: FrozenArena<BitterArena>,
     pub(super) builder: ScopedBuilder,
     pub(super) dependencies: DependencyAnalyzer,
-    observers: ((ReferenceIndex, DocumentationObserver), O),
+    observers: (ReferenceIndex, O),
     diagnostics: Vec<ResolveError>,
     failed_providers: HashSet<TermId>,
 }
@@ -49,7 +49,7 @@ impl<'a> ResolveFolder<'a> {
             bitter: FrozenArena::new(bitter),
             builder,
             dependencies: DependencyAnalyzer::default(),
-            observers: ((ReferenceIndex::default(), DocumentationObserver::default()), ()),
+            observers: (ReferenceIndex::default(), ()),
             diagnostics: Vec::new(),
             failed_providers: HashSet::new(),
         }
@@ -93,7 +93,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
         let resolved =
             self.term(root, ResolveEnv { local: Local::for_body(), global: &Global::default() });
         self.dependencies.assert_closed();
-        let ((users, documentation), observations) = self.observers.finish();
+        let (users, observations) = self.observers.finish();
         let rejected = resolved.is_err()
             || matches!(policy, Publication::Strict) && !self.diagnostics.is_empty();
         let program = if rejected {
@@ -103,11 +103,7 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
             ))
         } else {
             Ok(ResolveSourceOut {
-                arena: FrozenArena::new(self.builder.finish(
-                    self.bitter.into_inner(),
-                    users,
-                    documentation,
-                )),
+                arena: FrozenArena::new(self.builder.finish(self.bitter.into_inner(), users)),
                 root,
             })
         };
@@ -119,11 +115,10 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
         ReportedError
     }
 
-    fn scope_event(&mut self, id: TermId, kind: ScopeKind, env: &ResolveEnv<'_>) {
+    fn scope_event(&mut self, id: TermId, env: &ResolveEnv<'_>) {
         self.observers.scope(&ScopeEvent {
             occurrence: id,
             origin: self.builder.origins.source(&id.into()),
-            kind,
             scope: env.scope(),
         });
     }
@@ -203,14 +198,11 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
         // This classification is exhaustive: new constructors require a scope review.
         let term = match term {
             | Term::Meta(term) => {
-                if term.0.is(crate::metadata::MetadataKind::Doc.name()) {
-                    self.scope_event(id, ScopeKind::Documentation, &env);
-                }
                 self.term(term.1, env)?;
                 term.into()
             }
             | Term::Hole(hole) => {
-                self.scope_event(id, ScopeKind::Hole, &env);
+                self.scope_event(id, &env);
                 hole.into()
             }
             | Term::SourceBoundary(SourceBoundary(inner)) => {

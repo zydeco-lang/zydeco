@@ -1,117 +1,37 @@
-# Documentation Publication and Extensions
+# Documentation Design
 
-This proposal develops package-aware documentation: presentation, lookup, verification, and reference output.
-The [abstraction levels](../references/language.md#abstraction-levels) place semantic documentation with semantic units.
-The [package namespace rules](../references/language.md#package-hierarchy) supply package paths, source instantiation,
-merging, and shared semantic selectors; the [package-management plan](package-management.md) integrates them
-across frontends.
+Documentation tooling is deferred while its design is reconsidered.
+Only [`@[doc]` and adjacent text attachment](../references/language.md#source-documentation) remain implemented.
+The previous semantic indexes, selectors, publication commands, example workers,
+editor integrations, and their tests have been removed.
+This document records open questions, not an adopted replacement design.
 
-[C15](../references/compiler.md#documentation-subjects-and-provenance) describes documentation identity,
-contract selection, provenance, and revision recovery.
-[Example verification](../references/compiler.md#verifying-documentation-examples) describes the retained static checks.
-The [language reference](../references/language.md#source-documentation) provides authoring syntax;
-the [compiler reference](../references/compiler.md#documentation-workflow) covers editor use.
-Repository writing and review follow [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation).
+## Questions to Settle
 
-## Motivation and Retained Foundation
+- What is a documentation subject in a term-oriented language, including anonymous interface branches,
+  type members, bindings, and arbitrary expressions?
+- Which compiler-recorded relationships justify sharing prose across aliases,
+  imported terms, public contracts, and instantiated uses?
+  How should missing provenance be presented?
+- How do subject identity, a public selector, and a published URL relate without requiring every subject
+  to have a unique name?
+- Which source and package context belongs to each link, example, and editor action?
+  How should imports, source copies, overlays, and revisions affect that context?
+- Which facts should lookup, verification, CLI output, and editor presentation share?
+  How can verification remain independent of publication layout?
+- What should a useful standard-library reference display, and how will readers navigate large signatures,
+  anonymous branches, generic types, and authored explanations?
 
-A searchable standard-library reference provides the first milestone.
-Build on the retained attachment, provenance, contract selection, instantiated types, and example-worker machinery.
-Commands query those facts to identify subjects, retrieve explanations, and verify examples.
-The [exposure record](../todos/compiler-boundaries.md#documentation-exposure-collisions) supplies the `std` reproducer
-and repair criteria.
+## Evidence for a Future Design
 
-## Package-Aware Selection
+Before adopting an implementation, specify accepted and rejected behavior across its public consumers.
+Use representative standard-library interfaces alongside small examples with named and anonymous members,
+public contracts, imports, shadowing, and generic uses.
+If example checking returns, require source comments and guides to use the same verification rules,
+and test that CLI and editor requests preserve the same package context.
+If publication returns, check both semantic targets and ordinary relative links at their authored origins.
+Keep runtime examples, additional annotation options, and client-specific interaction open until their semantics
+and required scope are established.
 
-Use the [shared selection model](../references/language.md#shared-selection-and-documentation) for package paths,
-semantic selectors, and the selected instance's resolution context and provenance.
-
-- [ ] Add explicit package selection to documentation commands, using the existing shared project and analysis inputs.
-- [ ] Let explicitly selected packages and guides determine the publication scope.
-
-## Subjects, Selectors, and Published Anchors
-
-The [shared semantic queries](../references/language.md#shared-selection-and-documentation) supply subjects
-and selector resolution.
-Documentation presents the results and assigns stable output anchors.
-
-- [ ] Render each interface occurrence, including anonymous branches, within its containing signature or section.
-- [ ] Render named type members using compiler-recorded binder structure and projection evidence.
-- [ ] Present selector diagnostics at their authored paths and derive stable URLs from resolved public routes.
-- [ ] Preserve stable named routes through formatting and unrelated implementation edits.
-  Decide any anonymous-anchor extension separately from compiler subject identity.
-
-## Targeted Lookup and Independent Verification
-
-Targeted lookup resolves a requested semantic subject directly.
-Verification consumes source analysis, while reference generation assembles presentation and anchors.
-
-- [ ] Use the same targeted subject query for source links and command lookup.
-- [ ] Extend targeted example verification and guide diagnostics to the remaining interface subjects.
-- [ ] Build output from validated links and established exposure routes.
-  Offer example verification as an explicit operation, with diagnostics at the authored example or guide.
-
-## First Standard-Library Milestone
-
-Produce a searchable, compiler-grounded standard-library reference with authored explanations and checked examples.
-Integrate package selection, subject queries, and prose for representative interfaces.
-
-- [ ] Exercise `show`, `search`, `build`, and `check` on the full `std` entry and its data, memory, text,
-  numeric, and system entry points.
-- [ ] Document representative generic types, named fields, and a packed value with abstract witnesses;
-  verify that public contracts preserve abstraction and that selected member queries reach their explanations.
-- [ ] Retain the anonymous-branch collision reproducer alongside a named counterpart.
-  Add missing and ambiguous selector cases, shadowed names, unrelated same-labeled members, and recursive interfaces.
-- [ ] Pair valid examples and links with expected compiler rejections, wrong diagnostic codes or positions,
-  missing imports, invalid links, worker failures, and timeouts.
-  Replace output after a successful build.
-- [ ] Check formatting-stable named anchors and consistent semantic targets across CLI, HTML, and editor consumers.
-
-The following extensions build on this milestone.
-
-## Richer Subjects and Interfaces
-
-- Specify a typed schema for annotation options and attachment to parameters and arms.
-  New attachment sites need exact provenance through desugaring and checking.
-- Recover implementation prose beneath a docless explicit field contract through a bounded value-origin relation.
-  Use projection provenance for the contract and a recorded implementation edge for binding and alias fallback.
-- Add separate contract/implementation navigation, clickable type subterms, and expected-type discovery
-  through semantic subjects.
-
-## Publication and Client Extensions
-
-- Extend publication to multiple packages through concrete page layouts, anchors, cross-package links,
-  guide ownership, and validation cases.
-- Define release-version URLs, authored stable anchors for anonymous sections,
-  and an explicit internal publication mode.
-  Preserve current named routes and distinguish local inspection from published exposure.
-- Decide guide-discovery configuration and declared lexical source contexts for guide links.
-- Support panel clients beyond VS Code and investigate signature help for Zydeco application forms.
-  Negotiate client capabilities and retain source-revision checks for every action.
-- For editable source generation, establish the required consumer
-  and use the [rendering design questions](../ideas/typed-source-generation.md).
-  Specify parsing and typing round trips for generated annotations.
-
-## Composed and Executed Examples
-
-Present composed setup as visible, copyable source and attribute setup and example diagnostics
-to their authored locations.
-Verification identity includes imported inputs; edited scratch examples receive their own verification identities.
-Example workers use the [shared resolution context](../references/language.md#shared-selection-and-documentation).
-
-Reference generation uses static analysis.
-Runtime examples use an explicit runner with declared capabilities, isolated fixtures,
-cancellation, resource bounds, and dependency preparation.
-Specify typed value comparisons or declared input/output expectations,
-together with failure, timeout, and partial-effect reports.
-Programmable widgets have their own execution and portability design.
-
-## Validation Criteria
-
-Pair every new origin relationship with shadowed names, unrelated same-labeled fields,
-nested versus immediate RHS prose, distinct existential openings, docless contracts, and stale revisions.
-Retain Unicode locations and stable named routes.
-Compare semantic targets across renderers while allowing their presentation to differ.
-For execution, pair successful examples with missing capabilities, cancellation, exhaustion, and unexpected effects.
-These checks extend the existing [semantic](../../lang/session/src/source/documentation/semantic/tests.rs)
-and [example](../../lang/session/src/source/documentation/examples/tests.rs) regressions.
+[Package resolution](../references/language.md#package-hierarchy) supplies the existing source-context model.
+Repository documentation maintenance remains in [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation).

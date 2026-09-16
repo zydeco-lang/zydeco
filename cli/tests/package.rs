@@ -566,7 +566,6 @@ fn invalid_catalogs_block_source_commands_but_not_independent_tools() {
         &["test", "plain.zy"],
         &["run", "plain.zy"],
         &["build", "plain.zy", "--target", "wasm-sps"],
-        &["doc", "show", "plain.zy"],
         &["repl"],
     ] {
         let output = fixture.command(arguments);
@@ -578,7 +577,6 @@ fn invalid_catalogs_block_source_commands_but_not_independent_tools() {
     fixture.success(&["--help"]);
     fixture.success(&["passes"]);
     fixture.success(&["fmt", "--check", "plain.zy"]);
-    fixture.success(&["__doc-example-worker"]);
 }
 
 #[test]

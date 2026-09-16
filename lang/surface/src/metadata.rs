@@ -614,7 +614,7 @@ impl FormatOption {
 
 /// The typed meaning of a `@[doc]` or `@[doc(...)]` annotation.
 ///
-/// Arguments remain ordinary metadata values so documentation renderers can
+/// Arguments remain ordinary metadata values; a future documentation design can
 /// define presentation policies without extending the surface parser.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DocMeta {

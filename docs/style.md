@@ -352,7 +352,7 @@ Align the arms of `match`, `comatch`, `data`, and `codata`, then indent an arm b
 Multiline tuples and packed values align their closing delimiter with the opener and keep separators between items.
 
 `--|` writes Markdown documentation prose.
-A contiguous block becomes part of the repository documentation when it appears immediately above a `@[doc]` annotation:
+A contiguous block attaches to the following term when it appears immediately above a `@[doc]` annotation:
 
 ```zydeco
 --| Maps a function over every element of a list.
@@ -362,8 +362,7 @@ A contiguous block becomes part of the repository documentation when it appears 
 def map = _ in map
 ```
 
-The [documentation reference](references/language.md#attaching-documentation) explains attachment,
-semantic links, and checked examples.
+The [documentation reference](references/language.md#attaching-documentation) explains attachment and text preservation.
 Use the supported `@[doc]` form; section options have no implemented presentation contract.
 
 `--` introduces a local implementation note.

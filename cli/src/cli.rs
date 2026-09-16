@@ -143,13 +143,6 @@ pub enum Commands {
         #[arg(long, value_name = "PLAN")]
         sps_passes: Option<String>,
     },
-    #[command(name = "__doc-example-worker", hide = true)]
-    DocumentationExampleWorker,
-    /// Read, search, generate, or verify project documentation
-    Doc {
-        #[command(subcommand)]
-        command: DocumentationCommand,
-    },
     /// Format Zydeco source files in place
     Fmt {
         /// Paths to the files to format
@@ -253,41 +246,4 @@ pub struct PipelineOptions {
     /// Print high-SPS IR before and after each selected pass on stderr
     #[arg(long)]
     pub dump_passes: bool,
-}
-
-#[derive(Subcommand)]
-pub enum DocumentationCommand {
-    /// Show a public subject's classifier and complete documentation
-    Show {
-        #[arg(value_name = "ROOT")]
-        file: PathBuf,
-        /// Field path; use `()` for a function/computation result and `.` for the entry
-        #[arg(default_value = ".")]
-        subject: String,
-    },
-    /// Search exposed names and documentation prose
-    Search {
-        #[arg(value_name = "ROOT")]
-        file: PathBuf,
-        query: String,
-    },
-    /// Generate a self-contained searchable HTML reference without executing examples
-    Build {
-        #[arg(value_name = "ROOT")]
-        file: PathBuf,
-        #[arg(short, long, value_name = "HTML")]
-        output: PathBuf,
-        #[arg(long)]
-        title: Option<String>,
-        /// Explicit guide pages; public links use `zydeco:member:./field`
-        #[arg(long, value_name = "MARKDOWN")]
-        guide: Vec<PathBuf>,
-    },
-    /// Check links and explicitly verified examples in the entry and its dependencies
-    Check {
-        #[arg(value_name = "ROOT")]
-        file: PathBuf,
-        #[arg(long, value_name = "MARKDOWN")]
-        guide: Vec<PathBuf>,
-    },
 }

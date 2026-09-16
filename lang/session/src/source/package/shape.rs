@@ -117,7 +117,7 @@ impl Shapes {
         })
     }
 
-    pub(super) fn children(source: &SourceFile, entity: t::EntityId) -> Vec<t::EntityId> {
+    fn children(source: &SourceFile, entity: t::EntityId) -> Vec<t::EntityId> {
         if Self::package(source, entity).is_some() {
             Vec::new()
         } else {

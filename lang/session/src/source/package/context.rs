@@ -158,10 +158,8 @@ pub struct Project {
     pub root: PackageRoot,
     pub sources: Vec<PathBuf>,
     pub registrations: Vec<ProjectRegistration>,
-    /// Entry context retained by imported-source tools and documentation examples.
+    /// Optional context for the selected entry, including recovered completion requests.
     pub entry_context: Option<PackageContext>,
-    /// Resolution routes retained for instance-aware tools, replayed before their new root.
-    pub replays: Vec<ResolutionReplay>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -170,21 +168,9 @@ pub struct ProjectRegistration {
     pub project: Project,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct ResolutionReplay {
-    pub selection: super::PackageId,
-    pub context: PackageContext,
-}
-
 impl Project {
     pub fn new(sources: Vec<PathBuf>) -> Self {
-        Self {
-            root: PackageRoot::fresh(),
-            sources,
-            registrations: Vec::new(),
-            entry_context: None,
-            replays: Vec::new(),
-        }
+        Self { root: PackageRoot::fresh(), sources, registrations: Vec::new(), entry_context: None }
     }
 
     pub fn with_source(mut self, source: PathBuf) -> Self {

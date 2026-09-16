@@ -185,7 +185,7 @@ so their classifiers read as ordinary type expressions.
 Select related types and operations in one projection group so they share one abstract opening.
 A whole-value alias passes that same dependency to a factory:
 
-```zydeco check
+```zydeco
 param (/Reader; /io; builtin) : @(import("builtin.zy")) in
 let make_std = @(import("std.zy")) in
 let (/Bytes; /bytes; /fs) = builtin |> make_std in
@@ -207,7 +207,7 @@ Named product values also synthesize their types, so naming fields alone does no
 
 Kind fields currently need an annotated packed value introduction rather than `pack`:
 
-```zydeco check
+```zydeco
 let VType = @(intrinsic(vtype)) in
 let CType = @(intrinsic(ctype)) in
 let types =
@@ -234,7 +234,7 @@ and `forall (X : K) . A X -> C X`: they group or separate the same type witness 
 The result may depend on `X`, not on the arbitrary runtime value `x`.
 For example, both interfaces can expose codata methods:
 
-```zydeco check
+```zydeco
 param (/VType; /Thk; /Ret; /Unit) : @(import("builtin.zy")) in
 let Box = exists (X : VType) . X in
 let Methods (X : VType) = codata
@@ -266,7 +266,7 @@ Moving it changes where payloads and witnesses are shared.
 
 When the provider chooses a hidden type, a polymorphic callback can give the consumer one scoped opening:
 
-```zydeco check
+```zydeco
 param (/VType; /CType; /Thk; /Ret; /Int) : @(import("builtin.zy")) in
 let Entry = exists (X : VType) . X * Thk (X -> Ret Int) in
 let Hidden = codata
@@ -340,7 +340,7 @@ The [language reference](../../docs/references/language.md#manual-memory) owns m
 layout laws, unsafe obligations, and retention.
 The library introduces no lifetimes or borrow checker.
 
-```zydeco check
+```zydeco
 param (/VType; /CType; /Thk; /OS; /UInt8; /Unit; /process; builtin) : @(import("builtin.zy")) in
 let (/Uninit; /Init; /Ptr; /fixed; /allocation; /codecs) = builtin |> (@(import("memory/package.zy"))) in
 let (= Plan, = Layout, layouts) = fixed in
@@ -500,7 +500,7 @@ The `dictionaries` module contains one dictionary per numeric representation,
 from `int8_dictionary` through `float64_dictionary`.
 Generic code explicitly selects and passes one:
 
-```zydeco check
+```zydeco
 param (/VType; /Ret; /Int; builtin) : @(import("builtin.zy")) in
 let make_std = @(import("std.zy")) in
 let (/Additive; /dictionaries) = builtin |> make_std in
@@ -520,7 +520,7 @@ A library can also expose the selected carrier together with its dictionary in a
 The following complete example names the disclosed type `Int`, renames it to `Carrier` when opening,
 and checks that the operations use that same carrier:
 
-```zydeco check
+```zydeco
 param (/VType; builtin) : @(import("builtin.zy")) in
 let make_std = @(import("std.zy")) in
 let (/Bool; /Numeric; /dictionaries) = builtin |> make_std in

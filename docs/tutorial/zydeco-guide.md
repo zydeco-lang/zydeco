@@ -5,7 +5,7 @@ It assumes familiarity with typed functional programming.
 The [language reference](../references/language.md) gives the precise rules; implementation details belong
 to the [compiler reference](../references/compiler.md).
 
-Each `zydeco check` example is a complete, independently checked source term.
+Examples use complete source terms except where the surrounding prose describes an intentional rejection.
 Imports are relative to this guide's directory, `docs/tutorial/`; adjust them when copying an example elsewhere.
 There is no implicit prelude. Blocks marked `text` describe syntax or signatures with schematic names.
 
@@ -37,7 +37,7 @@ Forcing it again runs that code again.
 
 A runnable file accepts the host's Builtin value and ends in that provider's `OS` protocol:
 
-```zydeco check
+```zydeco
 param (/stdio; /process) : @(import("../../lib/std/builtin.zy")) in
 ! stdio/write_line "hello" { ! process/exit 0 }
 ```
@@ -87,7 +87,7 @@ Bindings use either a local syntactic scope or an enclosing block:
 its name is visible throughout the nearest block, and dependency order determines its placement.
 Source order breaks ties between independent bindings.
 
-```zydeco check
+```zydeco
 begin
   let result = answer that
   let answer = 42 that
@@ -107,7 +107,7 @@ A binding header describes how its name is eliminated at a use site.
 `def ! identity (x : Int) : Ret Int = ret x in ...` binds a thunk that is forced and then applied.
 The explicit thunk spelling puts the parameter inside the suspended computation:
 
-```zydeco check
+```zydeco
 param (/Int; /Thk; /Ret) : @(import("../../lib/std/builtin.zy")) in
 def ! identity (x : Int) : Ret Int = ret x in
 let explicit : Thk (Int -> Ret Int) = { fn (x : Int) => ret x } in
@@ -121,7 +121,7 @@ A packed value uses plain `let` or `def`; adding `!` would require its body to b
 
 Documentation uses `--|` Markdown blocks attached to a following `@[doc]` annotation.
 Use `--` for ordinary comments; see [the documentation reference](../references/language.md#source-documentation)
-for checked examples and links.
+for attachment and text preservation.
 
 ## 3. Kinds, types, and type-level terms
 
@@ -129,7 +129,7 @@ Kinds classify type-level terms.
 Their base forms are `VType` and `CType`; `Set`, which classifies kinds in the metatheory, has no source term spelling.
 Type constructors use kind arrows, and type-level functions use `fn` and application:
 
-```zydeco check
+```zydeco
 param (/VType; /Int; /Char) : @(import("../../lib/std/builtin.zy")) in
 let Pair = fn (A : VType) (B : VType) => A * B in
 ret ((1, 'x') : Pair Int Char)
@@ -149,7 +149,7 @@ Integer arithmetic wraps at the selected width; floating-point arithmetic uses I
 `@[typeof] expression` yields its type without executing it; applied to a type, it yields its kind.
 The result can name a signature or appear in an annotation:
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let identity = { fn (value : Int) => ret value } in
 let Signature = @[typeof] identity in
@@ -165,7 +165,7 @@ Queries preserve abstract identities and cannot extract `Set` from a kind.
 
 `forall` introduces computation-level polymorphism:
 
-```zydeco check
+```zydeco
 param (/VType; /Thk; /Ret; /Int) : @(import("../../lib/std/builtin.zy")) in
 let identity : Thk (forall (A : VType) . A -> Ret A) = {
   fn (A : VType) (value : A) => ret value
@@ -191,7 +191,7 @@ An existential may also disclose a kind equation, with its inferred classifier o
 `pi` abstracts over a parameter whose pattern may open type witnesses used in the result type.
 It supports dependency on those static witnesses, not arbitrary runtime values:
 
-```zydeco check
+```zydeco
 param (/VType; /Thk; /Ret; /Int) : @(import("../../lib/std/builtin.zy")) in
 let Box = exists (T : VType) . T in
 let reveal : Thk (pi ((T, value) : Box) . Ret T) = {
@@ -208,7 +208,7 @@ Parentheses preserve nesting: `A * (B * C)` is a two-component product with a pr
 Tuple introductions and product patterns must have the same arity and nesting as their product type.
 `()` inhabits `Unit`; `(value)` is grouping, not a unary product.
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let flat : Int * Int * Int = (1, 2, 3) in
 let nested : Int * (Int * Int) = (1, (2, 3)) in
@@ -217,16 +217,17 @@ let (x, (y, z)) = nested in
 ret ((a, b, c), (x, (y, z)))
 ```
 
-The flat value cannot check against the nested type:
+The flat value cannot check against the nested type; this term is rejected with `tyck.type-expected`:
 
-```zydeco reject=tyck.type-expected at=2:2
+```zydeco
 let Int = @(intrinsic(int)) in
 ((1, 2, 3) : Int * (Int * Int))
 ```
 
-A two-component pattern likewise cannot bind a suffix of a three-component product:
+A two-component pattern likewise cannot bind a suffix of a three-component product;
+this term is rejected with `tyck.type-expected`:
 
-```zydeco reject=tyck.type-expected at=3:5
+```zydeco
 let Int = @(intrinsic(int)) in
 let flat : Int * Int * Int = (1, 2, 3) in
 let (first, rest) = flat in
@@ -242,7 +243,7 @@ This classifier-directed opening of a packed value does not make ordinary produc
 `#field :: A` classifies a named payload; `#field = value` introduces it.
 Use `term/field` to select a public field, or a projection-pattern group to open several fields together:
 
-```zydeco check
+```zydeco
 let record = (#initial = 7, #read = { ret 7 }) in
 let (/initial = seed; /read) = record in
 do value <- ! read;
@@ -262,7 +263,7 @@ This is why module examples retain `builtin` and forward it to their builders.
 
 `pack` introduces explicit type witnesses and synthesizes the existential type from its payload:
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let package = pack (= Item as Int : @(intrinsic(vtype))) where #value = 42 end in
 let (/Item; /value) = package in
@@ -290,7 +291,7 @@ ret cap/initial        = ret (cap/initial)
 
 To project from a record returned by a computation, bind the returned value first:
 
-```zydeco check
+```zydeco
 let thunk = { ret (#value = 42) } in
 do record <- ! thunk;
 ret record/value
@@ -303,7 +304,7 @@ Its irrefutable parameter may contain a product or open a packed value.
 `f value`, `value |> f`, and `f <| value` are the same application.
 A view pattern `f ~> pattern` applies such a function before matching its result:
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let val first ((x, _) : Int * Int) = x in
 let (first ~> value; whole) = (3, 4) in
@@ -317,7 +318,7 @@ a runtime-selectable callable should have an explicit thunked computation type.
 `match` may produce a value when its arms produce values of the same type.
 The total integer intrinsics `int_add`, `int_sub`, `int_and`, and `int_compare` support static calculations:
 
-```zydeco check
+```zydeco
 let Int = @(intrinsic(int)) in
 let add = @(intrinsic(int_add)) in
 let compare = @(intrinsic(int_compare)) in
@@ -337,7 +338,7 @@ A value function may still forward an unknown runtime value through an irrefutab
 A `data` term forms a value type. Each constructor has one payload; a nullary constructor takes `Unit`.
 `match` eliminates the value with exhaustive alternatives:
 
-```zydeco check
+```zydeco
 let Unit = @(intrinsic(unit)) in
 def Bool = data | +False : Unit | +True : Unit end in
 let condition : Bool = +True() in
@@ -357,7 +358,7 @@ A `codata` term forms a computation type, describing observable residual protoco
 `comatch` implements its destructors, and `M .field` selects one.
 A recursive observation can continue directly at the same codata protocol:
 
-```zydeco check
+```zydeco
 param (/CType; /Ret; /Int) : @(import("../../lib/std/builtin.zy")) in
 begin
   def Counter : CType = codata
@@ -393,7 +394,7 @@ Open it once and retain the value to pass the same capabilities into library bui
 
 Recursive field selection reaches these public names from the whole packed value:
 
-```zydeco check
+```zydeco
 param (/numeric) : @(import("../../lib/std/builtin.zy")) in
 do answer <- ! numeric/int/add 20 22;
 ret answer
@@ -435,7 +436,7 @@ An algebra continues at the chosen computation protocol `R`.
 These are library interfaces; their types do not enforce the monad laws.
 The `Ret` instance implements the operations with ordinary `ret` and `do`:
 
-```zydeco check
+```zydeco
 param (/Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_monad = @(import("../../lib/std/control/monad.zy")) in
 let (/Monad) = builtin |> make_monad in
@@ -457,7 +458,7 @@ force it when invoking an observation.
 `Ret A` becomes the ambient `M A`; `ret` and `do` use the supplied dictionary's `.return` and `.bind`.
 Open the basis in the annotation's scope:
 
-```zydeco check
+```zydeco
 param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_monad = @(import("../../lib/std/control/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> make_monad in
@@ -510,7 +511,7 @@ The control modules are ordinary value-function builders from Builtin to packed 
 
 Apply a builder and open the selected fields directly:
 
-```zydeco check
+```zydeco
 param (/Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_state = @(import("../../lib/std/control/state.zy")) in
 let (/State; /get; /eval_state) = builtin |> make_state in
@@ -526,7 +527,7 @@ The runners provide convenient interfaces; their necessity depends on the expose
 `Exception` and `StateExn` disclose carriers containing a private nominal `Either` type;
 the handler operations expose its alternatives to clients.
 
-```zydeco check
+```zydeco
 param (/String; /Int; /Ret; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_exception = @(import("../../lib/std/control/exception.zy")) in
 let (/raise; /handle_exception) = builtin |> make_exception in
@@ -547,7 +548,7 @@ Group the operations required by generic user code as named fields with `Ret` si
 Monadic translation lifts the fields together, and the caller chooses the concrete operations and carrier.
 This complete example reads the old state, replaces it, and returns both the old and final state:
 
-```zydeco check
+```zydeco
 param (/VType; /Thk; /Ret; /Unit; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_monad = @(import("../../lib/std/control/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> make_monad in

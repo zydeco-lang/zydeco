@@ -3,22 +3,6 @@
 use super::*;
 
 impl FieldProjectionResolver {
-    pub(in crate::check) fn record_value_origin(
-        tycker: &mut Tycker<'_>, source: su::EntityId, candidate: &ValueFieldCandidate,
-    ) {
-        if let Some(ValueFieldStep::Named { whole, .. }) = candidate.route.last() {
-            tycker.statics.member_provenance.record_projection(source, (*whole).into());
-        }
-    }
-
-    pub(in crate::check) fn record_type_origin(
-        tycker: &mut Tycker<'_>, source: su::EntityId, candidate: &TypeFieldCandidate,
-    ) {
-        if let Some(step) = candidate.path.last() {
-            tycker.statics.member_provenance.record_projection(source, step.whole.into());
-        }
-    }
-
     pub(super) fn value_candidates_k(
         tycker: &mut Tycker<'_>, current: DeferredEnvType, field: &FieldName,
         route: &[DeferredValueFieldStep],
