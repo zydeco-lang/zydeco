@@ -13,8 +13,9 @@ Remove resolved entries once their repair and durable rationale have reached the
 
 - [ ] Repair [documentation exposure collisions](compiler-boundaries.md#documentation-exposure-collisions):
   valid `std` interfaces fail all four documentation commands with duplicate `()/()` paths.
-  The [documentation proposal](../proposals/documentation.md) owns the publication redesign;
-  the [package proposal](../proposals/package-management.md) owns the prerequisite project and selection boundaries.
+  The [documentation proposal](../proposals/documentation.md) owns the publication redesign; shared selection
+  follows the [resolution proposal](../proposals/package-resolution.md#shared-selection-and-documentation),
+  with frontend integration in the [package plan](../proposals/package-management.md).
 
 ## Next pass, reviewed 2026-09-14
 

@@ -7,10 +7,9 @@ and shared semantic selectors; the [package-management plan](package-management.
 
 [C15](../references/compiler.md#documentation-subjects-and-provenance) describes documentation identity,
 contract selection, provenance, and revision recovery.
-Its [publication and verification section](../references/compiler.md#documentation-publication-and-verification)
-describes exposure routes and static examples.
+[Example verification](../references/compiler.md#verifying-documentation-examples) describes the retained static checks.
 The [language reference](../references/language.md#source-documentation) provides authoring syntax;
-the [compiler reference](../references/compiler.md#documentation-workflow) covers editor use and commands.
+the [compiler reference](../references/compiler.md#documentation-workflow) covers editor use.
 Repository writing and review follow [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation).
 
 ## Motivation and Retained Foundation
@@ -23,53 +22,24 @@ and repair criteria.
 
 ## Package-Aware Selection
 
-- [ ] Route documentation commands through shared package selection and semantic-unit analysis.
-  Reuse source selection, resolved package bindings, merged identity, and exact term selection;
-  consume the shared project context developed in the [package proposal](package-management.md#shared-project-context).
-- [ ] Support one selected source package through either its name or its file path first.
-  Preserve selected-term documentation boundaries, companion behavior, and the requesting instance's resolution context
-  and provenance for example workers.
-- [ ] Extend publication to multiple packages through concrete page layouts, anchors, cross-package links,
-  guide ownership, and validation cases.
+Use the [shared selection model](package-resolution.md#shared-selection-and-documentation) for package paths,
+semantic selectors, and the selected instance's resolution context and provenance.
 
-The intended command forms extend file-path selection with package names:
-
-```text
-zydeco doc show -p std
-zydeco doc search -p std int
-zydeco doc build -p std --output std.html
-zydeco doc check -p std
-```
-
-Explicit selection should determine the publication scope.
-The resolved graph makes packages available, and the documentation operation chooses which entries to present.
-Shared analysis retains the source and import origins needed for that presentation.
-Use the [shared selection model](package-resolution.md#shared-selection-and-documentation) for package paths
-and semantic selectors, with explicit guide selection for the first milestone.
+- [ ] Route documentation commands through shared project preparation and semantic-unit queries,
+  as developed in the [package proposal](package-management.md#shared-project-context).
+- [ ] Let explicitly selected packages and guides determine the publication scope.
 
 ## Subjects, Selectors, and Published Anchors
 
-Shared compiler queries identify semantic subjects and resolve selectors.
-Documentation presents those subjects and assigns stable output anchors.
+The [shared semantic queries](package-resolution.md#shared-selection-and-documentation) supply subjects
+and selector resolution.
+Documentation presents the results and assigns stable output anchors.
 
-| Responsibility | Question |
-| --- | --- |
-| Subject identity | Which checked interface occurrence is described, including distinct anonymous branches? |
-| Public selector | Does this authored field/result path identify one subject? |
-| Presentation | How are signatures, named members, binders, and anonymous structure displayed? |
-| Published anchor | Which addressable section receives a stable link? |
-
-- [ ] Give each anonymous interface occurrence an identity and render it within its containing signature or section.
-  Provide routes for uniquely selectable subjects, including result selectors.
-- [ ] Expose named type members through compiler-recorded binder structure and projection evidence.
-- [ ] Report missing and ambiguous selectors at their authored paths.
-  Preserve each subject's identity and derive stable URLs from public routes.
+- [ ] Render each interface occurrence, including anonymous branches, within its containing signature or section.
+- [ ] Render named type members using compiler-recorded binder structure and projection evidence.
+- [ ] Present selector diagnostics at their authored paths and derive stable URLs from resolved public routes.
 - [ ] Preserve stable named routes through formatting and unrelated implementation edits.
   Decide any anonymous-anchor extension separately from compiler subject identity.
-
-Specify the subject representation and selector syntax using products, existential interfaces,
-named type components, generic results, and recursion.
-Inspect their checked interfaces structurally.
 
 ## Targeted Lookup and Independent Verification
 
@@ -87,9 +57,8 @@ Verification consumes source analysis, while reference generation assembles pres
 Produce a searchable, compiler-grounded standard-library reference with authored explanations and checked examples.
 Integrate package selection, subject queries, and prose for representative interfaces.
 
-- [ ] Exercise `show`, `search`, `build`, and `check` on the full `std` entry and its data,
-  memory, text, numeric, and system entry points.
-  Use file paths now and package selection when implemented.
+- [ ] Exercise `show`, `search`, `build`, and `check` on the full `std` entry and its data, memory, text,
+  numeric, and system entry points.
 - [ ] Document representative generic types, named fields, and a packed value with abstract witnesses;
   verify that public contracts preserve abstraction and that selected member queries reach their explanations.
 - [ ] Retain the anonymous-branch collision reproducer alongside a named counterpart.
@@ -112,6 +81,8 @@ The following extensions build on this milestone.
 
 ## Publication and Client Extensions
 
+- Extend publication to multiple packages through concrete page layouts, anchors, cross-package links,
+  guide ownership, and validation cases.
 - Define release-version URLs, authored stable anchors for anonymous sections,
   and an explicit internal publication mode.
   Preserve current named routes and distinguish local inspection from published exposure.
@@ -127,8 +98,7 @@ The following extensions build on this milestone.
 Present composed setup as visible, copyable source and attribute setup and example diagnostics
 to their authored locations.
 Verification identity includes imported inputs; edited scratch examples receive their own verification identities.
-Example workers capture the originating instance's root, package context, and resolved inputs.
-Checking and scratch editing then reproduce the requesting run's package-path meaning.
+Example workers use the [shared resolution context](package-resolution.md#shared-selection-and-documentation).
 
 Reference generation uses static analysis.
 Runtime examples use an explicit runner with declared capabilities, isolated fixtures,

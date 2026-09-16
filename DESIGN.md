@@ -624,12 +624,12 @@ Import-path completion uses the importer's canonical parent, merges filesystem e
 and offers directories and supported source files while excluding the importing file and its symlink aliases.
 
 The session's `DocumentationIndex` supplies shared semantic subjects to hover,
-completion, reference generation, and the VS Code documentation panel.
+completion, and the VS Code documentation panel.
 The compiler reference owns [identity and provenance](docs/references/compiler.md#documentation-subjects-and-provenance)
-and [publication and verification](docs/references/compiler.md#documentation-publication-and-verification).
+and [example verification](docs/references/compiler.md#verifying-documentation-examples).
 The [language reference](docs/references/language.md#source-documentation) describes source authoring,
-and the [tooling workflow](docs/references/compiler.md#documentation-workflow) covers commands and editor use;
-the [documentation proposal](docs/proposals/documentation.md) contains extensions to that feature.
+and the [tooling workflow](docs/references/compiler.md#documentation-workflow) covers editor use;
+the [documentation proposal](docs/proposals/documentation.md) develops reference output and commands.
 
 Each parsed entity, including nested metadata, has its own source span.
 The assembled program uses a shared `SourceMap` to associate byte offsets with their files;

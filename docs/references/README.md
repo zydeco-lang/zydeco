@@ -43,6 +43,9 @@ Chapter contents provide the detailed topic indexes.
 | Optional residual optimization | [L10: phase boundary](language.md#10-static-elimination) | [C8: normalization and demand](compiler.md#c8-high-sps-lowering-normalization-and-demand) |
 | Formatting and documentation | [Meta annotation syntax](language.md#meta-annotations-compile-time-metadata), [source documentation](language.md#source-documentation) | [C4: source analysis](compiler.md#shared-source-analysis), [C15: tooling](compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling) |
 
+Package paths, source instantiation, import identity,
+and shared semantic selection follow the [namespace and resolution proposal](../proposals/package-resolution.md).
+
 The [formal calculus](../../lang/statics/type-system.typ) is a mathematical companion;
 its [remaining disagreements](../todos/reference-drift.md#formal-calculus) are tracked explicitly.
 Use the [tutorial](../tutorial/zydeco-guide.md) for an introduction and the [library guide](../../lib/std/README.md)

@@ -167,7 +167,8 @@ Products retain order, arity, and explicit nesting; labels retain their names.
 A nominal `def` keeps its identity distinct from its implementation and other definitions.
 Typing may expose a sealed data or codata shape to introduce or eliminate it without equating distinct seals.
 Repeated uses of one definition share its identity; copying a term freshens its bound nominal definitions.
-Import sharing is specified in §12.
+Identity across imported source copies follows the
+[package-resolution model](../proposals/package-resolution.md#copy-resolve-merge-analyze).
 
 Checking is bidirectional. Annotations supply expected classifiers; synthesis determines them from a term.
 A bare unannotated variable in a synthesizing binder position defaults to a value binder with a flexible value type.
@@ -692,12 +693,8 @@ One semantic unit can participate in several compositions and supported compilat
 Its meaning depends on its source inputs and resolution context; target and optimization choices belong
 to the consuming compilation.
 
-A project supplies package-name bindings to source loading.
-Reference resolution uses the appropriate context: project bindings for package names,
-the referencing source for relative paths, lexical scope for variables, and typed interfaces for members.
-A compilation unit adds the external contract needed to emit a selected package independently;
-source reuse alone requires no such contract.
-The [source-package rules](#source-packages) specify selection, roles, and entry contracts.
+A compilation unit supplies the external contract needed to emit a selected package independently.
+The [source-package roles](#source-packages) describe these optional contracts.
 
 Semantic documentation belongs with the term's analysis and provenance.
 Documentation operations query those facts, verify selected links and examples,
@@ -705,29 +702,25 @@ and assemble reference pages, explicit guides, anchors, and rendered output.
 The [source-documentation rules](#source-documentation) describe authoring;
 the compiler reference maps these abstractions
 to their [implementation representations](compiler.md#implementation-representations).
-The [namespace and resolution proposal](../proposals/package-resolution.md) develops the next package-resolution model:
-opaque roots, source instantiation, and merging equivalent resolved packages before semantic analysis.
+Package context, source selection,
+and import identity follow the [namespace and resolution proposal](../proposals/package-resolution.md).
 
 ### Source Boundaries
 
-A source file contains one complete term and contributes no surrounding context.
-`@(import("path"))` imports a term, with relative paths resolved from the importing file.
-After imports and any companion annotation are assembled, each source synthesizes its classifier in an empty context.
-An importer's expected type is compared afterward and cannot solve inference variables inside the provider.
+A source file contains one complete term. After imports and any companion annotation are assembled,
+each source synthesizes its classifier from its own ordinary lexical bindings and explicit imports.
+Provider inference closes before comparison with import-site expectations.
+An independently selected term follows the same binding and inference boundary.
 
-Repeated imports share the checked source root and its nominal identities.
-Imported computations still execute at every dynamic occurrence.
-Free names and mobile bindings cannot cross a source boundary.
-Import cycles are rejected. A source is a complete term, rather than an implicit namespace around its contents.
-Sharing one imported root preserves its declarations; distinct authored definitions keep distinct identities.
-Closing provider inference before comparing import-site expectations prevents importer order
-from choosing the meaning of a shared library.
+Imports and companion signatures form an acyclic graph.
+Imported computations execute at every dynamic occurrence. Package context
+and sharing follow the [resolution model](../proposals/package-resolution.md#copy-resolve-merge-analyze).
 
 A `foo.zy` implementation may have an independently checked `foo.zyi` type companion.
 The pair behaves as an annotation of the implementation by that type.
-Companions can import other sources and be imported themselves; discovery does not apply to `.zydeco` roots.
-There is no implicit prelude, distinguished `main`, or separate-compilation interface.
-A whole file is already a source package; annotations can also register named terms as described below.
+Companions can import other sources and be imported themselves.
+Source terms supply their imports and parameters explicitly;
+[package roles](#source-packages) describe optional compilation contracts.
 
 `@[typeof] @(import("library.zy"))` extracts the provider's complete classifier.
 For a builder, querying a particular result requires applying the builder in the operand.
@@ -753,13 +746,11 @@ REPL evaluation captures output and uses empty stdin and arguments.
 
 ### Source Packages
 
-A package is a term chosen as a unit of code distribution and reuse.
+A package is a term selected for distribution and reuse.
 It may be supplied as source or, when its external contract supports independent emission, as compiled artifacts.
-Package management names, locates, and selects these terms; a package need not be separately compiled.
 This distribution role is independent of the term's language-level structure:
 a source package can supply a type term, a packed value (§9), or a function that constructs one.
-Prefer complete files as library and binary entry points.
-A file is already an unnamed library package; a root meta annotation can give it a name and role:
+A package-definition meta annotation selects a term and records its role:
 
 ```zydeco
 -- library.zy
@@ -785,204 +776,32 @@ Naming makes the term selectable by name; independent emission additionally requ
 The [compiler reference](compiler.md#compilation-unit-preparation-and-artifacts) explains how the designs
 of compilation units, FFI, and package management evolve together.
 
-A test is itself a package: `test(of(example/math))` optionally identifies its subjects,
-while plain `test` needs no subject.
-Subsequent arguments are an optional `name(id)` and typed relationships, such as `test(example/smoke)`.
+A test is itself a package: `test(of(...))` records its subjects, and plain `test` describes an independent test.
+Subsequent arguments supply an optional `name(...)` and typed relationships.
 Source libraries may expose any source classifier.
-`check` additionally validates the declared compiled-library interface and the executable Builtin/OS contract
-for binaries and tests.
+Compilation-unit validation checks the declared compiled-library interface or the executable Builtin/OS contract.
 
-#### Names and Project Catalogs
+#### Package Resolution
 
-Package names are unquoted identifiers, optionally qualified with `/`: `std`, `std/data`, `std/data/smoke`.
-Each segment begins with an ASCII letter or underscore and continues with ASCII letters,
-digits, underscores, or hyphens; a lone underscore is not a name.
-Qualification organizes names without implying term projection, a directory, inheritance, or a code dependency.
-Names are unique across all declarations in one selected catalog, regardless of role or nesting.
-
-A catalog is the declarations in root files plus their declared discovery matches.
-Before a source operation, the CLI detects `package.zy` and `workspace.zy` in the current working directory.
-Both files contribute when present; neither overrides the other.
-Prefer `package.zy` for a complete package entry point and `workspace.zy` for shared declarations and discovery.
-Both are ordinary source files; `workspace.zy` introduces no additional package kind.
-These are two exact filename checks, with no ancestor search, search beside a source argument,
-or implicit traversal into subdirectories.
-Each root's discovery patterns are relative to that root file.
-All selected declarations are indexed before resolving names, so file order does not affect lookup.
-Duplicate names are errors with both declaration locations; repeated selection of the same file is harmless.
-If no roots are selected, the catalog is empty and file paths remain usable.
-There is no built-in registry or filesystem fallback for unknown names.
-An invalid root or discovery match fails preparation before checking, output, or execution.
-Formatting, compiler-pass inspection, help, and documentation workers do not prepare catalogs;
-workers use the bindings captured by their requesting operation.
-
-Names and paths have distinct source spellings:
-
-```zydeco
-@(import(example/math))
-@(import("library.zy"))
-```
-
-A bare identifier resolves in the selected catalog.
-A quoted nonempty path selects the complete file, relative to the referencing file.
-It never selects an inner field or annotation; `#` and NUL are rejected in paths.
-The earlier `file#name` address spelling is removed.
-A name declared on the file root and a direct path to that file identify the same source entry.
-Code imports accept any package role, subject to ordinary typing, and never automatically apply a factory.
-
-CLI source arguments use the same distinction without depending on which files exist:
-absolute paths, spellings beginning with `.`, and paths ending in `.zy`, `.zyi`,
-or `.zydeco` are files; other spellings are package names.
-Use `./file` for an extensionless file. For example:
-
-```sh
-zydeco check -p example/math
-zydeco run -p example/hello
-zydeco check library.zy
-```
-
-The repeatable option `-p NAME`, also spelled `--pkg NAME` or `--package NAME`, selects declared packages by name.
-Place it after `show`, `check`, `test`, `run`, or `build`.
-It accepts exact package names, not file paths or globs, and never adds discovery roots.
-The source commands require either one positional source or one or more package options; the forms cannot be mixed.
-`check`, `test`, and `build` support multiple selected packages, with repeated entries deduplicated
-by source identity in first-selection order.
-`run` and `build --execute` require exactly one distinct entry.
-All requested names resolve before an operation begins; an unknown name is an error, never a file fallback.
-`show` without package options lists all declarations; with them, it lists only the selected entries.
-
-#### Concluding Files and Exact Term Selection
-
-Declarations can remain on their implementation files or be collected in one or a few concluding files.
-For example, a file can register imported terms without changing the implementations:
-
-```zydeco
-(
-  @[package(library, name(example/math))] @(import("math.zy")),
-  { @[package(binary, name(example/hello))] @(import("main.zy")) },
-  { @[package(test(of(example/math)), name(example/smoke))] @(import("smoke.zy")) }
-)
-```
-
-The tuple and thunks have their ordinary meanings.
-Package names come exclusively from meta annotations; renaming fields or local bindings leaves them unchanged.
-A nested declaration requires a name; a file-root declaration does not.
-The name option occurs at most once and is not a relationship.
-Registering an import describes that annotated term, not the imported file:
-the registration and the implementation remain distinct entries and test subjects.
-
-A named entry selects exactly the annotated term, including its payload.
-Required imports, parameters, types, and other meta annotations must be inside that term.
-Selection parses the containing file but checks only the selected term and its code dependencies.
-Unrelated terms need not check; syntax and malformed package annotations still reject the file.
-A file-root annotation retains the complete file term, including transparent surrounding wrappers.
-
-In ordinary compilation, package annotations preserve lexical scope, inference, and runtime structure.
-They do not create source boundaries or defer execution.
-Selecting an annotated term independently requires it to synthesize under an empty context, just like a file import.
-A term using enclosing bindings can therefore be valid locally but invalid as an independent entry.
-Prefer a complete file when it supplies that context.
-
-Graph identity is the canonical path and selected root term.
-Repeated imports of that root share checking and source inputs; imported computations still execute at each dynamic use.
-A `.zyi` companion applies to the complete file only, never to an arbitrary nested entry.
-
-#### Bounded Discovery
-
-Test-side associations let tests join a suite without editing the library.
-A file-root `discover` annotation declares the candidate files explicitly:
-
-```zydeco
--- workspace.zy
-@[discover(include("library.zy", "main.zy", "tests/**/*.zy"), exclude("tests/fixtures/**"))]
-()
-```
-
-A matching test can declare its subject entirely from its own file:
-
-```zydeco
-@[package(test(of(example/math)))]
-param (/process) : @(import("builtin.zy")) in
-let math = @(import(example/math)) in
-! process/exit 0
-```
-
-The association selects a suite; the import supplies code.
-Neither implies the other.
-Plain `@[package(test)]` remains independently runnable and is not assigned to every library in the catalog.
-
-Include and exclude calls each accept one or more quoted globs.
-Rules run in source order, with the last matching rule winning; they never remove the root file's declarations.
-Patterns are relative to their declaring file: `*` matches within a component,
-`?` matches one character, and whole-component `**` matches zero or more components.
-Literal filenames are valid. Leading `../` steps choose a fixed ancestor before matching.
-Parent steps elsewhere, absolute patterns, backslashes, `#`, brackets, and braces are rejected.
-Only `.zy`, `.zyi`, and `.zydeco` files are candidates; missing matches select nothing.
-
-Catalog preparation expands only the roots' rules, never rules in matched files or code dependencies.
-In the CLI, those roots are `package.zy` and `workspace.zy` in the working directory;
-passing another file to `check`, `test`, `run`, `build`, or `doc` does not make it a discovery root.
-Each include starts at its literal directory prefix; traversal depth is bounded unless it uses `**`.
-Exact filenames require no enumeration, excludes never initiate scans,
-and subtree excludes ending in `/**` prune directories before enumeration.
-Symbolic links are not followed. Resolving leading parent steps does not enumerate ancestors.
-Broad recursive patterns explicitly opt into broad traversal.
-
-Each catalog preparation reads directory membership afresh, including matching editor overlays.
-Source text follows the compiler-session snapshot and disk-refresh contract.
-Unreadable directories or invalid matched sources reject preparation.
-The prepared catalog is reused for name resolution, test planning, checking, and later materialization.
-Compilation validates annotations but never expands discovery.
+Package paths, source instantiation, shared identity,
+and name conflicts follow the [namespace and resolution proposal](../proposals/package-resolution.md).
+The [package implementation plan](../proposals/package-management.md#shared-project-context) covers project preparation,
+discovery integration, and frontend selection.
 
 #### Relationships and Operations
 
-Relationships are typed associations, kept separate from the code graph:
+Relationships associate packages with tests and other subjects:
 
-| Kind | Meaning |
+| Relationship | Meaning |
 | --- | --- |
-| `code` | Inferred from ordinary imports; needed to check or use the term |
-| `test(target)` | Select a companion test when testing the declaring package |
-| `of(subject, ...)` under `test(...)` | Select this test when testing an exact subject in the catalog |
-| Other valid names | Preserve for inspection; no behavior is guessed |
+| `test(target)` | A companion test associated with the declaring package |
+| `of(subject, ...)` under `test(...)` | The packages tested by this test |
 
-Targets are package names or quoted whole-file paths.
-Trailing relationship calls take exactly one target; `of` accepts one or more subjects.
-`test()` also means plain `test`.
-`of` is allowed only under the test role, and identical repeated relationships are errors.
-Explicit `code(...)` is rejected because imports already determine code dependencies.
-A library's test association and a test's import of the library do not form a code cycle:
-only imports and companion signatures participate in cycle checking.
-
-`test SOURCE` selects forward test targets and catalog tests whose `of` names that exact source entry.
-A requested test also selects itself. Every selected target must have the test role.
-Planning resolves all catalog test subjects and rejects unknown names;
-unknown relationship kinds on the requested package also fail before execution.
-It does not recursively activate associations on code dependencies or selected tests.
-Within each selected package, targets are deduplicated by source identity and ordered by source/name.
-With repeated `-p` selections, suites are combined in selection order and each test runs once per backend,
-even when several selected packages share it.
-All requested packages and selected executables are checked before any test runs.
-Tests use empty stdin and arguments.
-[Execution selection](#selecting-an-execution-backend) defines backend preparation, ordering, and results.
-
-`show` lists the project catalog's declarations, locations, roles, direct imports,
-and relationships without checking code or loading relationship targets.
-A file without declarations appears as one library.
-`check SOURCE` checks the selected package and its code dependencies, without following test associations;
-compiled libraries, binaries, and tests also require their declared boundary, for names and file paths alike.
-`show`, `check`, `test`, `run`, `build`, `doc`, and `repl` use the same automatically prepared project catalog.
-Named `run` targets require the binary role.
-`build` accepts binaries, tests, and compiled libraries, with a target appropriate to their boundary.
-Direct file execution retains the executable-script convention;
-a named source library alone is not an independent build target.
-Named build artifacts replace namespace separators with dots, so `tools/hello` produces `tools.hello.sps.wasm`;
-distinct valid names remain distinct filenames.
-See the [package workflow](../../CONTRIBUTING.md#use-source-packages) for commands.
-
-Local checkouts and copied sources provide distribution without an additional hosted service.
-Remote fetching, source dependency lockfiles, package versions and source compatibility policies,
-and programmable relationship handlers remain deferred.
-Compiled artifacts already have [manifest compatibility checks](compiler.md#compilation-unit-preparation-and-artifacts).
+Relationship targets follow the shared
+[package-path rules](../proposals/package-resolution.md#paths-and-package-context).
+The [operation plan](../proposals/package-management.md#validation-and-operation-planning) develops validation scope,
+test selection, and frontend integration.
+The [execution contract](#selecting-an-execution-backend) governs backend preparation and test results.
 
 ## 13. Primitive Values and Capabilities
 
@@ -1632,7 +1451,7 @@ Canonical serialization, when required, is a separate codec contract.
 A [compiled library package](#source-packages) exposes selected functions through an FFI entry profile. Its evolution
 follows the
 [shared design of compilation units, FFI, and package management](compiler.md#compilation-unit-preparation-and-artifacts).
-A compiled library declares a named source implementation and its complete public C interface:
+A compiled library declares a source implementation and its complete public C interface:
 
 ```zydeco check
 @[package(
@@ -1648,15 +1467,15 @@ param val (/Thk; /Ret; /Int; /numeric) : @(import("../../lib/std/builtin.zy")) i
 ```
 
 `library(c, ...)` marks source intended to produce a compiled C library.
-It requires an explicit package name and at least one `export(selector, symbol("c_name"))`.
+It requires at least one `export(selector, symbol("c_name"))`.
 `root` selects the prepared value itself; `field(api/add)` follows ordinary named projections through that value.
 Selectors and symbols must be distinct, and a root export cannot coexist with field exports.
 Each symbol is an unmangled ASCII C identifier; the `zydeco_` prefix is reserved for runtime support.
 Only the selected symbols are public.
 Export a constant through a zero-argument returning thunk; global data exports have no contract in this profile.
 
-Independent selection checks the whole source term under an empty lexical context, including its code imports.
-A declaration cannot capture a binding outside its selected term.
+Independent selection follows the ordinary lexical binding and inference rules
+at [source boundaries](#source-boundaries).
 Preparation accepts a closed value or exactly one leading `param val` over a validated Builtin value contract.
 Aliases and source imports may supply that factory; preparation uses ordinary static application.
 Builtin validation examines its typed roles, independently of the process-only `OS` codomain requirement.
@@ -1708,7 +1527,6 @@ The interpreter accepts only shared libraries matching its own host; Wasm has no
 
 `@[package(library(zydeco), name(example/math))]` selects a native library
 whose initializer returns the complete prepared source value.
-It requires an explicit name and takes no export-selector arguments.
 Select the intended public value in source; all its fields participate in the interface.
 Preparation accepts a closed value or one leading value function over a validated Builtin contract,
 applies that provider statically, and checks the resulting value, captures, and reachable computations for readiness.
@@ -1825,9 +1643,9 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 
 | Meta annotation | Meaning and valid use |
 | --- | --- |
-| `import(source)` | Replace a hole with an independently checked source term; select a catalog name, quoted file path, or positive input number (§12) |
-| `package(role, ...)` | Register the annotated term with a role, metadata name, and typed relationships (§12); compiled libraries require a name |
-| `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare ordered file-root discovery rules for an explicit package catalog (§12) |
+| `import(source)` | Import an independently checked term (§12); source selection follows [package resolution](../proposals/package-resolution.md) |
+| `package(role, ...)` | Define a package's role and relationships (§12); names and package context follow [package resolution](../proposals/package-resolution.md#package-hierarchy) |
+| `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare candidate source files; project integration follows the [package plan](../proposals/package-management.md#shared-project-context) |
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed Builtin interface (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
@@ -1850,8 +1668,9 @@ and [CONTRIBUTING](../../CONTRIBUTING.md#format-and-lint) gives the workflow.
 
 Zydeco documentation combines Markdown attached to source terms with the compiler's information
 about bindings, imports, and named fields.
-The same explanation appears in hover, completion, the VS Code documentation panel, and generated project references.
-The [documentation workflow](compiler.md#documentation-workflow) describes those tools and their commands.
+Compiler provenance connects those explanations to hover, completion, and the VS Code documentation panel.
+The [documentation workflow](compiler.md#documentation-workflow) describes editor use;
+the [documentation proposal](../proposals/documentation.md) develops reference generation and lookup.
 
 #### Attaching Documentation
 
@@ -1899,11 +1718,9 @@ Imported prose keeps its original scope even when a consumer shadows a name.
 
 Use inline Markdown links for semantic destinations.
 Reference-style semantic links and unresolved destinations are diagnosed.
-Editors navigate to source; generated HTML uses a local API anchor when a unique exposed page is known,
-and otherwise a source link.
-Source links in a copied reference require access to the original source paths.
-Standalone guide pages use the [selected public root](compiler.md#documentation-publication-and-verification) instead
-of an implicit lexical source scope.
+Editors navigate to the resolved source target. Package and subject selection follow the
+[shared selection model](../proposals/package-resolution.md#shared-selection-and-documentation).
+Guide contexts and published links follow the [documentation proposal](../proposals/documentation.md).
 
 ## Diagnostic Index
 

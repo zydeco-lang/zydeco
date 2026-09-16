@@ -557,61 +557,31 @@ Their current implementation representations are:
 | Semantic unit | Partly represented by `ProgramAnalysis` / `CheckedProgram` |
 
 `CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
-Reusing semantic analysis requires matching source inputs and resolution context.
-The [namespace and resolution proposal](../proposals/package-resolution.md) develops source instantiation
-and merging before semantic analysis.
+Package instance and analysis identity follow the
+[namespace and resolution proposal](../proposals/package-resolution.md#copy-resolve-merge-analyze).
 The [package implementation plan](../proposals/package-management.md#implementation-representations) integrates
 that model; the [documentation proposal](../proposals/documentation.md) records the remaining query and output work.
 
 ### Source Loading and Package Selection
 
-The [source graph](../../lang/session/src/source/graph.rs) identifies canonical paths,
-numbered inputs, imports, and type companions.
 The [loader](../../lang/session/src/source/loader.rs) obtains source text through session inputs,
-including editor overlays; [assembly](../../lang/session/src/source/program.rs) combines providers
-with explicit source and signature boundaries.
-Loading visits every independently available import and companion signature before returning.
-A template cache records accepted, missing optional, and rejected files by canonical path;
-the first request reports a provider failure, and subsequent requests do not replay it.
-A graph-node cache distinguishes active, completed, and rejected source roots.
-Active roots permit recording cyclic edges, while rejected roots retain only temporary edges for diagnostics.
-The loader visits those edges to collect DFS back-edge cycles, including independent cycles in rejected sources;
-it does not enumerate every possible path around a cycle.
-Read, parse, directive, and cycle failures leave through the nonempty `SourceLoadErrors` collection.
-The graph and assembly boundary is strict: no partially loaded graph is published or cached as successful.
-Session revisions invalidate rejected results when their source inputs change.
-The [loader regressions](../../lang/session/src/source/tests.rs) cover shared rejected providers,
-independent imports and signatures, multiple cycles, and correction through overlays.
-The independence of provider inference and source scope is specified in [L12](language.md#12-sources-imports-and-entry).
+including editor overlays.
+[Assembly](../../lang/session/src/source/program.rs) preserves the ordinary lexical binding
+and inference rules at [source boundaries](language.md#source-boundaries).
+Package selection, graph identity,
+and query inputs follow the [resolution proposal](../proposals/package-resolution.md#implementation-work);
+frontend preparation follows the [package plan](../proposals/package-management.md#shared-project-context).
 
-[Package selection](../../lang/session/src/source/package.rs) separates authored references (`SourceReference::Package`
-or `SourceReference::Path`) from resolved source entries (`PackageId`).
-The surface decoder indexes explicit meta annotation names and retains their term identities, roles, and relationships.
-Compiler queries consume immutable `PackageBindings` supplied by project preparation.
-The [project-context rules](language.md#names-and-project-catalogs) specify root selection,
-bounded discovery, and conflicting-name rejection;
-the [shared preparation implementation](../proposals/package-management.md#shared-project-context) is being rebuilt.
-Those bindings are part of every dependent query key and are retained with analyses
-and documentation-worker requests; changing bindings changes the dependent analysis identity.
-Source loading does not expand discovery.
-
-Inspection shares each parsed file and extracts direct code edges
-without materializing a compiler graph per declaration.
-The loader keys roots by canonical path and textual term, following ordinary imports and companion signatures only.
-Each graph node shares its containing template; only the selected term's code, documentation, and warnings participate.
-Several roots can share one file, and merged source inputs and spans deduplicate that file.
-Typed relationships remain separate from code dependencies;
-[test planning](../proposals/package-management.md#validation-and-operation-planning) is being rebuilt
-around the selected project's forward and reverse associations.
-The [source-package section](language.md#source-packages) owns selection, discovery, and operation rules.
-Extensions to package resolution follow the
-[shared design of compilation units, FFI, and package management](#compilation-unit-preparation-and-artifacts).
+Loading collects independent read, parse, directive, and cycle failures in `SourceLoadErrors`.
+It publishes a complete source graph after the required inputs have been accepted.
+The [loader regressions](../../lang/session/src/source/tests.rs) cover independent imports and signatures,
+multiple cycles, and correction through overlays.
 
 The CLI's [execution runner](../../cli/src/execution.rs) consumes checked `ExecutableProgram` snapshots,
 sharing their immutable arenas across targets and lowering once for compiled backends.
 It prepares temporary artifacts before execution and owns their cleanup.
-CLI `run`, package `test`, and the Rust source fixture harness use this runner;
-[L15](language.md#selecting-an-execution-backend) owns selection and execution policy.
+The [operation plan](../proposals/package-management.md#validation-and-operation-planning) integrates frontend callers;
+[L15](language.md#selecting-an-execution-backend) owns backend execution policy.
 
 `CompilerSession` is the Salsa database and revision owner.
 [ScopedData](../../lang/statics/src/query/input.rs) connects the resolved root, scoped arena and spans to `TyckDb`.
@@ -646,10 +616,7 @@ Package selection remains downstream of this complete-file inventory.
 
 `SourceAnalysis` retains valid facts and diagnostics from independent sites.
 Malformed arguments block only checks that require their decoded values; other sites still run.
-Package duplicate checks retain the first valid declaration in source order.
-Discovery validates each site's arguments and checks duplicates over the complete annotation set;
-placement is checked when there is one unambiguous declaration.
-Successful query ordering remains source order, with packages ordered by name.
+Package-name resolution and conflicts follow the [resolution proposal](../proposals/package-resolution.md).
 The inventory is keyed by file-local textual identities.
 Assembly and desugaring consume syntax at later identity and span boundaries;
 reusing decoded inventory facts there would require an explicit remapping
@@ -899,8 +866,8 @@ Match arms receive independent environments. Monadic blocks resolve their basis 
 An exhaustive constructor classification delegates ordinary reconstruction to the shared structural folder;
 constructors with binding, boundary, or scheduling effects have explicit semantic handlers.
 
-Source and signature boundaries start with isolated environments.
-A shared provider is resolved once; cached success and rejection do not replay its events or diagnostics.
+Ordinary lexical bindings follow the [source-boundary rules](language.md#source-boundaries). Reuse between imported
+instances follows the [package-resolution model](../proposals/package-resolution.md#copy-resolve-merge-analyze).
 Successful lookup emits a borrowed `ResolvedReference` containing the occurrence,
 selected definition, optional owning `BindingSite`, and active enclosing bindings.
 Failed lookup records its diagnostic and emits no successful-reference event.
@@ -1029,7 +996,7 @@ Dependent telescope witnesses, sequential local bindings, and malformed shared c
 recovery does not invent their environments or annotations.
 The [diagnostic contract](#diagnostic-collection) owns collection, deduplication, and frontend reporting.
 
-Imports provide a further independent boundary because each provider checks in its own empty source environment.
+Imported providers follow the [source binding and inference boundaries](language.md#source-boundaries).
 If root judgments reject, `IndependentSources` uses the [scoped visitor](#scoped-structural-traversal)
 to collect reachable source and signature boundaries in postorder.
 The checker then synthesizes boundaries that ordinary checking did not reach, visiting dependencies before importers.
@@ -2309,7 +2276,8 @@ AMD64 target and manifest compatibility are checked before linking or interprete
 
 The versioned manifest records package identity, target, entry profile, compiler/model/runtime fingerprints,
 artifact and interface content hashes, selected export paths and C signatures, imports, and dependency manifests.
-Logical library names replace package namespace separators with dots.
+Its association with resolved packages follows the
+[resolution implementation plan](../proposals/package-resolution.md#implementation-work).
 The generated header spells fixed-width C types and `void`;
 the generated `.imports.zy` preserves the selected field structure using typed `ffi` declarations
 and canonical type intrinsics.
@@ -3194,26 +3162,11 @@ of panel types, signature help, and expected-type search remain [proposed featur
 
 ##### Building a Project Reference
 
-Build the CLI with `cargo build --bin zydeco` or install it with `cargo install --path cli`.
-The [counter example](../examples/documentation/counter.zy) has a companion interface and a guide.
-From the repository root:
-
-```sh
-zydeco doc show docs/examples/documentation/counter.zy value
-zydeco doc search docs/examples/documentation/counter.zy counter
-zydeco doc build docs/examples/documentation/counter.zy \
-  --guide docs/examples/documentation/guide.md --output /tmp/counter-docs.html
-zydeco doc check docs/examples/documentation/counter.zy \
-  --guide docs/examples/documentation/guide.md
-```
-
-Use `target/debug/zydeco` if you built without installing.
-`doc show` defaults to the entry subject, `.`.
-Field paths use `/`; `()` selects a function or computation's result interface,
-so a selector such as `'()/value'` describes a field of a generic result.
-These are documentation paths, not executable Zydeco expressions.
-Search covers public names and prose; HTML search also includes the selected guides.
-The publication and verification contracts below define what each command includes and checks.
+Reference commands and output follow the [documentation proposal](../proposals/documentation.md).
+Package paths and semantic selectors follow the
+[shared selection model](../proposals/package-resolution.md#shared-selection-and-documentation).
+The [counter example](../examples/documentation/counter.zy) supplies source documentation, a companion interface,
+and a guide for that work.
 
 #### Documentation Subjects and Provenance
 
@@ -3258,28 +3211,10 @@ with shadowing, unrelated fields, contract boundaries, recovery, and stale IDs.
 
 #### Documentation Publication and Verification
 
-The public graph follows the selected entry's exposed classifier, named fields,
-and generic result interfaces without executing arbitrary runtime terms.
-Recursive paths link back to established subjects.
-Exposed signatures preserve abstraction; local inspection of a private binding does not publish it.
-Published anchors start with `api`, use UTF-8 hexadecimal `-f-...` field segments
-and `-result` result segments, and reject duplicate public paths.
-They contain no arena IDs or source offsets.
-Formatting-only changes therefore preserve named routes.
-Stable anonymous anchors, internal publication, and release-version URLs remain future work.
-
-Only explicitly supplied `--guide` pages join the reference's search and link index.
-Repeat the flag to include more pages; guide filenames must have distinct stems.
-Guides use `[value](zydeco:member:./value)` to refer to the selected public root.
-They have no implicit lexical source scope.
-
-The output is one self-contained HTML file with local search, source links, stable public anchors,
-the compiler version, and SHA3-256 hashes of exact source and guide inputs.
-Dependency documentation describes the sources actually analyzed and remains usable offline.
-Raw author HTML is rendered as text and images are represented by their alt text.
-An older published build remains a distinct snapshot.
-`doc build` validates semantic links but does not check or execute examples, and the page claims no verification result.
-Use `doc check` separately in CI.
+Publication scope, subject presentation, anchors, and reference output follow the
+[documentation proposal](../proposals/documentation.md#subjects-selectors-and-published-anchors).
+Queries, links, and example workers use the
+[shared selection model](../proposals/package-resolution.md#shared-selection-and-documentation).
 
 ##### Verifying Documentation Examples
 
@@ -3306,19 +3241,16 @@ Every reported type diagnostic must match the expected code and contain that pos
 A successful program, a different error, a missing import, a compiler crash,
 or a timeout cannot satisfy an expected rejection.
 
-[Example checking](../../lang/session/src/source/documentation/examples.rs) constructs isolated source requests
-with paths relative to the owning document.
-Verified fences must be top-level, unindented Markdown blocks containing complete source with explicit imports.
-There is no implicit surrounding lexical context or hidden setup.
-Imported inputs participate in verification identity.
-**Open scratch** rewrites compiler-recognized file imports to absolute paths so the temporary copy keeps its context;
-numbered REPL imports cannot be copied this way.
-Scratch edits have their own source identity and do not verify the original published text.
+[Example checking](../../lang/session/src/source/documentation/examples.rs) verifies complete source
+with explicit imports in top-level, unindented Markdown fences.
+Worker inputs, verification identity, and scratch context follow the
+[shared resolution model](../proposals/package-resolution.md#shared-selection-and-documentation).
 
-`doc check` validates links and opted-in examples from the analyzed dependency graph and selected guides.
-It fails for invalid options or failed checks and reports diagnostic locations in the authored comments or guide.
-The panel checks a selected example with the editor's current overlays.
-Both use the same isolated compiler worker with a 30-second timeout, 64 KiB example limit,
+The [verification plan](../proposals/documentation.md#targeted-lookup-and-independent-verification) develops selection
+of links and examples for documentation operations.
+Example diagnostics retain their locations in the authored comments or guide.
+The panel checks selected examples with the editor's current overlays.
+The isolated compiler worker has a 30-second timeout, 64 KiB example limit,
 16 MiB request limit, and 1 MiB response limit.
 These are time and data limits, not an operating-system memory sandbox.
 The checker does not execute examples and rejects `run` fences.

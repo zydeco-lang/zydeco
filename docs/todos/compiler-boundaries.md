@@ -108,8 +108,8 @@ check that unsupported execution neither panics nor performs earlier program eff
 
 ## Documentation exposure collisions
 
-The [publication contract](../references/compiler.md#documentation-publication-and-verification) exposes a
-selected entry's public classifier, named fields, and generic result interfaces, with unique stable public paths.
+The [provenance contract](../references/compiler.md#documentation-subjects-and-provenance) tracks documentation subjects
+and their origins.
 At `d6f8939f`, reviewed on 2026-09-15, valid interfaces can fail reference construction
 because distinct anonymous branches receive the same generated path.
 This failure also blocks targeted lookup and example checking.
@@ -155,6 +155,8 @@ Reference-construction success alone does not verify documentation prose or exam
 - [ ] Verify all four commands on the full standard-library entry, including targeted lookup and example checks.
   Reject invalid links without replacing an existing output artifact.
 
+Shared selection follows the
+[package resolution proposal](../proposals/package-resolution.md#shared-selection-and-documentation).
 The [documentation proposal](../proposals/documentation.md#subjects-selectors-and-published-anchors)
-owns the subject/selector separation and later publication choices.
+develops presentation and stable links.
 This failure record does not choose new selector syntax or authorize silently dropping colliding subjects.

@@ -116,7 +116,8 @@ A primary library can use `package.zy` as both its entry point and discovery bou
 
 For a collection without a main entry, use `workspace.zy` with a discovery annotation and `()` as its body.
 Reserve discovered directories for entry files and keep helpers or fixtures outside those patterns.
-The [source-package rules](docs/references/language.md#names-and-project-catalogs) specify the discovery boundary.
+The [package plan](docs/proposals/package-management.md#shared-project-context) tracks discovery integration
+with the [resolution model](docs/proposals/package-resolution.md).
 
 From this repository's root, [workspace.zy](workspace.zy) is selected automatically:
 
@@ -590,8 +591,8 @@ make -C docs/spell build
 ```
 
 The script builds the release CLI and writes chapter Markdown beside the sources under `docs/spell/`.
-Use the [documentation reference](docs/references/compiler.md#building-a-project-reference) for `zydeco doc` commands,
-and [source documentation](docs/references/language.md#source-documentation) for attachments and semantic links.
+The [documentation proposal](docs/proposals/documentation.md) develops reference commands;
+[source documentation](docs/references/language.md#source-documentation) explains attachments and semantic links.
 
 ## Maintain Documentation
 
