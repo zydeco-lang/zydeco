@@ -1,43 +1,48 @@
 # Documentation publication and extensions
 
-[C15](../references/compiler.md#documentation-subjects-and-provenance) owns implemented documentation identity,
+[C15](../references/compiler.md#documentation-subjects-and-provenance) owns documentation identity,
 contract selection, member provenance, and revision recovery;
 its [publication and verification contract](../references/compiler.md#documentation-publication-and-verification)
 owns exposure routes and isolated static examples.
 The [language reference](../references/language.md#source-documentation) provides authoring syntax;
 the [compiler reference](../references/compiler.md#documentation-workflow) covers editor use and commands.
-This proposal contains the additional compiler relationships, authoring mechanisms, and client work still needed.
+This proposal contains the command and output reconstruction, additional compiler relationships,
+authoring mechanisms, and client work still needed.
 The immediate direction is package-aware documentation with a public-interface model that handles the standard library.
-The [package-management proposal](package-management.md) owns source selection, project context,
-and operation policy; this document owns documentation subjects, lookup, verification, and publication.
+The language reference's [abstraction levels](../references/language.md#abstraction-levels) place semantic documentation
+with semantic units and package selection with projects.
+The [package-management proposal](package-management.md) implements those carriers and develops operation policy;
+this document develops documentation subjects, lookup, verification, and output.
 Repository writing and review belong to [CONTRIBUTING](../../CONTRIBUTING.md#maintain-documentation),
 and observed implementation failures
 to the [documentation exposure todo](../todos/compiler-boundaries.md#documentation-exposure-collisions).
 
 ## Motivation and retained foundation
 
-The 2026-09-15 review found that the bundled counter example supports all four documentation commands,
-but the full `std` entry fails during public-interface expansion.
+Before the implementation reset, the 2026-09-15 review found
+that the bundled counter example supported all four documentation commands,
+but the full `std` entry failed during public-interface expansion.
 The [failure record](../todos/compiler-boundaries.md#documentation-exposure-collisions) owns the reproducer,
 affected entries, and bounded repair criteria.
 A usable standard-library reference is the next concrete consumer.
 
 Retain the compiler's attachment, provenance, contract selection, instantiated types, and example-worker machinery.
-Those relationships explain why documentation belongs with semantic analysis: package catalogs identify entries,
-but do not identify their fields or establish which explanation follows an instantiated use.
+Those relationships supply the semantic-unit evidence needed to identify fields
+and establish which explanation follows an instantiated use.
+The replacement commands query that evidence for lookup and verification, then assemble output when requested.
 The required redesign concerns selection, public exposure, and operation dependencies.
 
 ## Package-aware selection
 
-- [ ] Route documentation commands through the existing source-selection and package-analysis interfaces.
-  Reuse `SourceReference`, catalog bindings, normalized entry identity, and exact term selection;
+- [ ] Route documentation commands through shared package selection and semantic-unit analysis.
+  Reuse `SourceReference`, package bindings, normalized entry identity, and exact term selection;
   consume the shared project context developed in the [package proposal](package-management.md#shared-project-context).
 - [ ] Support one selected source package through either its name or its file path first.
   Preserve selected-term documentation boundaries, companion behavior, and captured bindings for example workers.
 - [ ] Define multiple-package publication only when its page organization, anchors, cross-package links,
   and guide ownership have concrete consumers and validation cases.
 
-The intended command forms below are proposed additions; current `doc` subcommands accept a root file path:
+The intended command forms extend file-path selection with package names:
 
 ```text
 zydeco doc show -p std
@@ -47,15 +52,15 @@ zydeco doc check -p std
 ```
 
 Explicit selection should determine the publication scope.
-Catalog membership makes a package available; it does not require publishing that package.
+Project membership makes a package available; it does not require publishing that package.
 Dependency analysis likewise does not require a separate API page for every imported entry.
 Keep source-package names distinct from member selectors and preserve explicit guide selection for the first milestone.
 A new package role or documentation relationship is not required for this integration.
 
 ## Subjects, selectors, and published anchors
 
-The current exposure traversal combines structural enumeration, public-route assignment, and duplicate rejection.
-Unnamed components can share a parent path and independently append result steps, creating collisions such as `()/()`.
+The removed exposure traversal combined structural enumeration, public-route assignment, and duplicate rejection.
+Unnamed components could share a parent path and independently append result steps, creating collisions such as `()/()`.
 The shared rule motivating the change is that a semantic subject can exist without a unique public route.
 
 Separate these responsibilities:
@@ -84,10 +89,9 @@ generic results, and recursion without executing computations that construct pac
 
 ## Targeted lookup and independent verification
 
-The [CLI dispatcher](../../cli/src/main.rs) currently constructs the whole reference before every subcommand.
-The [semantic member-link resolver](../../lang/session/src/source/documentation/semantic/links.rs)
-also enumerates all exposure routes before selecting a target.
-An unrelated collision can therefore block a specific lookup or source-example check.
+The removed implementation constructed the whole reference before every subcommand
+and enumerated all exposure routes before selecting a member-link target.
+An unrelated collision could therefore block a specific lookup or source-example check.
 
 - [ ] Introduce a targeted subject query that resolves the requested selector
   without requiring all other routes to have independently publishable anchors.

@@ -544,6 +544,25 @@ This checks traversal work, not end-to-end compilation speed.
 
 ## C3. Source Loading, Sessions, Queries, and Memory Retention
 
+### Abstraction Carriers
+
+The language reference defines the [abstraction levels](language.md#abstraction-levels) and their responsibilities.
+Their current implementation carriers are:
+
+| Abstraction | Current carrier |
+| --- | --- |
+| Project | `PackageBindings`; shared project preparation is being rebuilt |
+| Package | `Package` / `PackageId` |
+| Compilation unit | `ExecutableProgram`, `LibraryProgram`, and `UnitProgram` |
+| Semantic unit | Partly represented by `ProgramAnalysis` / `CheckedProgram` |
+
+`CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
+Reusing semantic analysis requires matching source inputs and resolution context.
+The [package proposal](../proposals/package-management.md#carrier-implementation) records the pending carrier
+consolidation; the [documentation proposal](../proposals/documentation.md) records the remaining query and output work.
+
+### Source Loading and Package Selection
+
 The [source graph](../../lang/session/src/source/graph.rs) identifies canonical paths,
 numbered inputs, imports, and type companions.
 The [loader](../../lang/session/src/source/loader.rs) obtains source text through session inputs,
@@ -566,12 +585,12 @@ The independence of provider inference and source scope is specified in [L12](la
 [Package selection](../../lang/session/src/source/package.rs) separates authored references (`SourceReference::Package`
 or `SourceReference::Path`) from resolved source entries (`PackageId`).
 The surface decoder indexes explicit meta annotation names and retains their term identities, roles, and relationships.
-A session prepares a `PackageCatalog` from caller-supplied roots and ordered discovery rules,
-rejects conflicting names, and shares immutable `PackageBindings` with compiler queries.
-The CLI combines conventional and explicitly requested roots at command startup
-under the [project-catalog rules](language.md#names-and-project-catalogs); the session API remains explicit.
+Compiler queries consume immutable `PackageBindings` supplied by project preparation.
+The [project-context rules](language.md#names-and-project-catalogs) specify root selection,
+bounded discovery, and conflicting-name rejection;
+the [shared preparation implementation](../proposals/package-management.md#shared-project-context) is being rebuilt.
 Those bindings are part of every dependent query key and are retained with analyses
-and documentation-worker requests; different catalogs cannot reuse each other's name resolution.
+and documentation-worker requests; changing bindings changes the dependent analysis identity.
 Source loading does not expand discovery.
 
 Inspection shares each parsed file and extracts direct code edges
@@ -579,8 +598,9 @@ without materializing a compiler graph per declaration.
 The loader keys roots by canonical path and textual term, following ordinary imports and companion signatures only.
 Each graph node shares its containing template; only the selected term's code, documentation, and warnings participate.
 Several roots can share one file, and merged source inputs and spans deduplicate that file.
-Typed relationships remain separate; test planning combines direct forward
-and reverse associations in the prepared catalog.
+Typed relationships remain separate from code dependencies;
+[test planning](../proposals/package-management.md#validation-and-operation-planning) is being rebuilt
+around the selected project's forward and reverse associations.
 The [source-package section](language.md#source-packages) owns selection, discovery, and operation rules.
 Extensions to package resolution follow the
 [shared design of compilation units, FFI, and package management](#compilation-unit-preparation-and-artifacts).
@@ -2245,8 +2265,10 @@ Conversely, changes to unit boundaries or package resolution can require new for
 For example, retained callbacks would require a unit lifetime and reentry protocol and compatibility information
 for consumers of its distributed artifacts.
 
-[CompilationUnit](../../cli/src/compile.rs) pairs a selected source identity with a checked `CompilationBoundary`:
-a process program, a collection of C exports, or a [native unit initializer](#native-unit-artifacts).
+The checked [entry representations](../../lang/session/src/source/query.rs) describe a process program,
+a collection of C exports, or a [native unit initializer](#native-unit-artifacts).
+The [carrier implementation plan](../proposals/package-management.md#carrier-implementation) rebuilds their association
+with a selected package as `CompilationUnit`.
 The source roles and legality rules belong to [L14](language.md#compiled-libraries-and-c-exports).
 [Library checking](../../lang/statics/src/check/library.rs) reuses the source judgment query, Builtin domain validator,
 ordinary field resolver, directional foreign classifier, static elaborator, and readiness checker.

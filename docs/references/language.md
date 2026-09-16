@@ -671,6 +671,42 @@ Library-encoded delimited control does not imply primitive capture or duplicatio
 
 ## 12. Sources, Imports, and Entry
 
+### Abstraction Levels
+
+Zydeco's [term-oriented composition](#term-oriented-composition) gives each term static semantics
+in a context and composes terms through ordinary language constructs.
+The following abstractions connect that semantic structure to source reuse and independent compilation.
+
+| Abstraction | Responsibility |
+| --- | --- |
+| Project | Available packages, discovery roots, and package-name bindings |
+| Package | A term selected for distribution and reuse, with identity, role, and relationships |
+| Compilation unit — optional at package level | Establish a complete external contract for independent compilation |
+| Semantic unit | Establish a term's meaning in context: resolved names, classifier, provenance, and semantic documentation |
+
+A semantic unit is a term considered with its analysis context.
+Processing source into its semantic form includes lexing, parsing, name resolution, and type checking.
+Semantic units compose through the language's binding, abstraction, application, and import rules;
+independent source selection retains the [source-boundary requirements](#source-boundaries).
+One semantic unit can participate in several compositions and supported compilations.
+Its meaning depends on its source inputs and resolution context; target and optimization choices belong
+to the consuming compilation.
+
+A project supplies package-name bindings to source loading.
+Reference resolution uses the appropriate context: project bindings for package names,
+the referencing source for relative paths, lexical scope for variables, and typed interfaces for members.
+A compilation unit adds the external contract needed to emit a selected package independently;
+source reuse alone requires no such contract.
+The [source-package rules](#source-packages) specify selection, roles, and entry contracts.
+
+Semantic documentation belongs with the term's analysis and provenance.
+Documentation operations query those facts, verify selected links and examples,
+and assemble reference pages, explicit guides, anchors, and rendered output.
+The [source-documentation rules](#source-documentation) describe authoring;
+the compiler reference maps these abstractions to their [implementation carriers](compiler.md#abstraction-carriers).
+
+### Source Boundaries
+
 A source file contains one complete term and contributes no surrounding context.
 `@(import("path"))` imports a term, with relative paths resolved from the importing file.
 After imports and any companion annotation are assembled, each source synthesizes its classifier in an empty context.

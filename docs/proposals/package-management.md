@@ -1,38 +1,49 @@
 # Source-package structure and project context
 
-The source-package system has a coherent core, but its identity, project context,
-and operation boundaries need clearer ownership before more frontends depend on it.
-This proposal records the directions from the 2026-09-15 review.
-It contains implementation work and unresolved choices; the existing references remain the authority
-for current behavior.
+This proposal implements the [abstraction levels](../references/language.md#abstraction-levels) agreed
+during the 2026-09-15 review: project, package, compilation unit, and semantic unit.
+It contains pending carrier changes, frontend integration, and unresolved operation policies.
+The references own the conceptual model and source rules.
 
 [Source packages](../references/language.md#source-packages) own names,
 exact term selection, discovery, roles, and relationships.
 [Source loading and sessions](../references/compiler.md#c3-source-loading-sessions-queries-and-memory-retention)
-own graph construction and catalog-dependent analysis.
-The [documentation proposal](documentation.md) is a consumer of these boundaries and owns its own subject
-and publication model.
+own graph construction and analysis under explicit package bindings.
+The [documentation proposal](documentation.md) develops semantic-unit queries and their documentation consumers.
 
 ## Motivation and starting point
 
-The review found useful separation between catalog preparation, source selection, code dependencies, and test planning.
+The review found useful separation between project preparation, source selection, code dependencies, and test planning.
 Imports already supply code edges; discovery is bounded by explicit roots; selected terms retain source provenance;
-catalog bindings participate in analysis cache identity.
+package bindings participate in analysis cache identity.
 The direction is to consolidate these boundaries into reusable interfaces.
 
 Under the [source-package contract](../references/language.md#source-packages), the selected provider is a term.
 Project preparation needs to preserve its identity, classifier, and lexical boundary across frontends.
 Independent emission also needs the declared external entry contract.
 
-The review ran the focused package and discovery regressions successfully: 41 tests passed.
-Reproduce that coverage with:
+The implementation reset retained source selection, immutable bindings, compiler analysis,
+documentation provenance, and external-contract checks.
+Project preparation, operation orchestration, and documentation output are being rebuilt.
+The retained regressions constrain the replacement; the relationship policies below remain open.
 
-```sh
-cargo test -p zydeco-session --lib source::package::
-```
+## Carrier implementation
 
-Those tests establish the current behavior, including several deliberate choices whose costs are discussed below.
-They do not establish frontend consistency or settle the proposed changes.
+The compiler reference's [carrier map](../references/compiler.md#abstraction-carriers) identifies the existing carriers.
+The planned Rust interfaces are:
+
+- [ ] Introduce `Project` for shared preparation and inspection, retaining immutable `PackageBindings`.
+- [ ] Introduce `SemanticUnit` around the selected term, its explicit analysis context, and its semantic results.
+  Reuse the facts and checked representations currently exposed by `ProgramAnalysis` and `CheckedProgram`.
+  Preserve rejected analyses and useful diagnostics for editor consumers.
+- [ ] Rebuild `CompilationUnit` from the selected package and its checked external contract,
+  reusing `ExecutableProgram`, `LibraryProgram`, and `UnitProgram` validation.
+  Keep target-specific preparation downstream so one semantic result can support several compilations.
+
+Retain `Package` and `PackageId` with the identity refinements below.
+Replace affected callers together; `CompilerSession` continues to manage the implementation's inputs and caches.
+Documentation queries consume semantic results, with their remaining work tracked
+in the [documentation proposal](documentation.md#targeted-lookup-and-independent-verification).
 
 ## Entry identity and terminology
 
@@ -63,14 +74,14 @@ specify that relationship explicitly before changing wrapper identity.
 
 ## Shared project context
 
-The session accepts explicit catalogs, while the [CLI](../../cli/src/main.rs) prepares them
-from conventional files in its working directory.
-The REPL receives those bindings; Cajun's standalone analysis does not yet prepare the same context.
-The [editor limitation](../../CONTRIBUTING.md#use-source-packages) is a concrete reason
-to share project preparation before extending other consumers.
+Compiler queries accept explicit package bindings.
+The removed CLI orchestration prepared those bindings from conventional files in its working directory
+and passed them to the REPL; Cajun's standalone analysis did not prepare the same context.
+The replacement must share preparation across frontends,
+addressing the [editor limitation](../../CONTRIBUTING.md#use-source-packages).
 
-- [ ] Provide a reusable preparation boundary for selected roots, discovery, catalog bindings, and snapshot ownership.
-  Frontends should supply their chosen context and consume the resulting catalog consistently.
+- [ ] Provide reusable project preparation for selected roots, discovery, package bindings, and snapshot ownership.
+  Frontends should supply their chosen roots and consume the resulting package environment consistently.
 - [ ] Make the active context inspectable: selected roots, entry declaration locations, discovery origins,
   and name bindings should be available to diagnostics and project inspection.
 - [ ] Define refresh responsibilities for directory membership, disk changes, overlays, and root changes.
@@ -85,7 +96,8 @@ or different precedence between `package.zy` and `workspace.zy`.
 
 New callers need to know whether they have merely selected a source, checked its term,
 validated its declared external contract, or prepared an operation.
-Today `analyze_package` checks the term, while CLI logic adds executable and compiled-library validation.
+`analyze_package` checks the term; existing executable and library checks establish external contracts.
+Shared package operations must connect these results through the carriers above.
 
 - [ ] Expose reusable package validation that combines source checking with the declared entry contract.
   Return a domain result identifying the established contract; retain source analysis for compiler and editor queries.
@@ -96,29 +108,28 @@ Today `analyze_package` checks the term, while CLI logic adds executable and com
   State which phase owns each diagnostic and which work must be withheld on failure.
 
 Relationship policy needs an explicit decision before adding new kinds.
-The current [`PackageTestPlan`](../../lang/session/src/source/package.rs) rejects unknown relationship kinds
-on its requested package and resolves every catalog test's `of` subjects, including unrelated tests.
-These are documented behaviors, not implementation drift.
+The removed test planner rejected unknown relationship kinds on its requested package
+and resolved every available test's `of` subjects, including unrelated tests.
+The replacement's failure scope remains an explicit policy decision.
 
 The preferred direction is to validate relationship kinds and targets through an explicit boundary,
 then let each operation follow the relationships it owns.
 Two choices remain open:
 
-- Should an unsupported kind prevent catalog validation, fail only an affected operation,
+- Should an unsupported kind prevent project validation, fail only an affected operation,
   or produce an inspection diagnostic until a strict validation step is requested?
   Preserve useful inspection and actionable errors for misspelled relationship names.
-- Should an invalid test subject elsewhere in the catalog block a targeted test operation?
-  Compare whole-catalog consistency with targeted-operation isolation and specify both requested and unrelated cases.
+- Should an invalid test subject elsewhere in the project block a targeted test operation?
+  Compare project-wide consistency with targeted-operation isolation and specify both requested and unrelated cases.
 
 Resolve these choices together.
-Silently ignoring unknown kinds would lose the mistake detection supplied by today's stricter planning;
-copying the current test behavior to every new relationship would couple otherwise independent operations.
+Preserve mistake detection for unsupported kinds and make each operation's failure scope explicit.
 
 ## Sequence and completion criteria
 
-1. Clarify terminology and entry identity, updating consumers and removing superseded representations together.
-2. Share project-context preparation and inspection across frontends.
-3. Expose package validation and settle relationship-validation scope.
+1. Refine entry identity and expose semantic-unit analysis, updating affected consumers together.
+2. Share `Project` preparation and inspection across frontends.
+3. Expose `CompilationUnit` validation and settle relationship-validation scope.
 4. Apply these boundaries to the [documentation milestone](documentation.md#first-standard-library-milestone).
 
 Extend the existing [package regressions](../../lang/session/src/source/package/tests.rs),
@@ -129,7 +140,9 @@ and [CLI coverage](../../cli/tests/package.rs):
   Pair valid independent entries with entries that incorrectly capture surrounding bindings.
 - [ ] Preserve bounded discovery and fresh overlays; pair included files with exclusions, missing matches,
   conflicting names, and unreadable or malformed inputs.
-- [ ] Show that changing catalogs or revisions changes analysis where required and never reuses stale bindings.
+- [ ] Show that changing project bindings or revisions changes analysis where required and never reuses stale bindings.
+- [ ] Reuse semantic results across supported compilation configurations, with invalid external contracts rejected
+  before target-specific preparation.
 - [ ] Pair valid role contracts with rejected executable and library boundaries across public callers.
 - [ ] Test requested and unrelated relationship failures under the selected policy,
   with diagnostic locations and the invariant that failed preparation performs no execution or artifact replacement.
