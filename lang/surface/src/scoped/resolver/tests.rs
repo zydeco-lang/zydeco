@@ -189,6 +189,20 @@ fn failed_nested_blocks_close_their_graphs_before_visiting_siblings() {
 }
 
 #[test]
+fn mobile_bindings_reject_lexical_dependencies_unavailable_at_the_block_boundary() {
+    let output = Fixture::parse("begin let x = 1 in let y = x that y end").observe();
+    assert!(output.program.is_err(), "an invalid block must not publish a resolved program");
+    assert!(matches!(
+        output.diagnostics.as_slice(),
+        [ResolveError::UnboundVar(name)] if name.inner.0 == "x"
+    ));
+
+    let output = Fixture::parse("begin let x = 1 in begin let y = x that y end end").observe();
+    assert!(output.program.is_ok(), "a nested block keeps the lexical dependency in scope");
+    assert!(output.diagnostics.is_empty());
+}
+
+#[test]
 fn forward_and_nested_dependencies_remain_owned_by_their_blocks() {
     let fixture = Fixture::parse(
         "begin let a = begin let inner = b that inner end that let b = 1 that a end",
