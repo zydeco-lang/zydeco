@@ -1,9 +1,9 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
   param (/Thk; /Ret; /Int; /UInt; /Int64; /UInt64; /OS; /numeric; /process; builtin) : @(import(
     std/builtin
   )) that
-  let (/int64; /uint64; /bytes) = builtin |> (@(import(std))) in
+  let (/int64; /uint64; /bytes) = builtin |> (@(import(/std))) in
   let fail = { ! process/exit 1 } in
   let ! check_int64_bytes (value : Int64) (next : Thk OS) : OS =
     do encoded <- ! int64/to_le_bytes value;

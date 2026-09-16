@@ -16,8 +16,10 @@ impl Fixture {
         Self { _directory: directory, root, session }
     }
 
-    fn reference(&self) -> DocumentationReference {
-        self.session.documentation_reference(self.session.analyze(&self.root).unwrap()).unwrap()
+    fn reference(&self) -> DocumentationView {
+        let analysis = self.session.analyze(&self.root).unwrap();
+        let program = self.session.checked_program(&analysis).unwrap();
+        DocumentationView { analysis, program }
     }
 }
 
@@ -27,15 +29,15 @@ fn public_reference_shows_and_searches_documented_fields() {
         "let private = 0 in (\n--| Current counter.\n--|\n--| Read it to inspect progress.\n@[doc] (#value = 42))",
     );
     let reference = fixture.reference();
-    let renderer = DocumentationRenderer { reference: &reference };
-    let show = renderer.show(&DocumentationPath::parse("value")).unwrap();
+    let renderer = &reference;
+    let show = renderer.show(&SemanticSelector::parse("value")).unwrap();
     assert!(show.starts_with("value : Int"), "{show}");
     assert!(show.contains("Read it to inspect progress."));
     assert!(renderer.search("counter progress").contains("value : Int"));
     assert!(renderer.search("private").is_empty());
     assert!(matches!(
-        renderer.show(&DocumentationPath::parse("private")),
-        Err(DocumentationRenderError::UnknownSubject(_))
+        renderer.show(&SemanticSelector::parse("private")),
+        Err(DocumentationError::UnknownSubject(_))
     ));
 }
 
@@ -45,7 +47,7 @@ fn semantic_links_reach_exposed_fields_without_prose() {
         "let Interface = (#value :: @(intrinsic(int))) in\n--| Read [value](zydeco:member:Interface/value).\n@[doc] ((#value = 42) : Interface)",
     );
     let reference = fixture.reference();
-    let html = DocumentationRenderer { reference: &reference }.html("Value", &[]).unwrap();
+    let html = reference.html("Value", &[]).unwrap();
     assert!(html.contains("href=\"#api-f-76616c7565\">value</a>"), "{html}");
 }
 
@@ -53,12 +55,9 @@ fn semantic_links_reach_exposed_fields_without_prose() {
 fn offline_reference_includes_guides_and_exact_input_fingerprints() {
     let fixture = Fixture::new("--| A counter.\n@[doc] (#value = 42)");
     let reference = fixture.reference();
-    let renderer = DocumentationRenderer { reference: &reference };
-    let guide = DocumentationGuide::new(
-        PathBuf::from("getting-started.md"),
-        "Read [value](zydeco:member:./value).".to_owned(),
-        &reference,
-    );
+    let renderer = &reference;
+    let guide =
+        (PathBuf::from("getting-started.md"), "Read [value](zydeco:member:./value).".to_owned());
     let html = renderer.html("Counter", &[guide]).unwrap();
     assert!(html.contains("<title>Counter</title>"));
     assert!(html.contains("href=\"#api-f-76616c7565\">value</a>"));
@@ -72,13 +71,12 @@ fn offline_reference_includes_guides_and_exact_input_fingerprints() {
 fn guide_links_require_an_explicit_public_root_and_reject_missing_members() {
     let fixture = Fixture::new("(#value = 42)");
     let reference = fixture.reference();
-    let renderer = DocumentationRenderer { reference: &reference };
+    let renderer = &reference;
     for markdown in ["[private](zydeco:name:private)", "[missing](zydeco:member:./missing)"] {
-        let guide =
-            DocumentationGuide::new(PathBuf::from("guide.md"), markdown.to_owned(), &reference);
+        let guide = (PathBuf::from("guide.md"), markdown.to_owned());
         assert!(matches!(
             renderer.html("Counter", &[guide]),
-            Err(DocumentationRenderError::InvalidLinks(_))
+            Err(DocumentationError::Verification(_) | DocumentationError::UnknownSubject(_))
         ));
     }
 }
@@ -87,12 +85,9 @@ fn guide_links_require_an_explicit_public_root_and_reject_missing_members() {
 fn rejected_links_prevent_a_build_without_rejecting_the_program() {
     let fixture = Fixture::new("--| [Missing](zydeco:name:missing)\n@[doc] (#value = 42)");
     let reference = fixture.reference();
-    let renderer = DocumentationRenderer { reference: &reference };
+    let renderer = &reference;
     assert!(reference.analysis.outcome().root().is_some());
-    assert!(matches!(
-        renderer.html("Counter", &[]),
-        Err(DocumentationRenderError::InvalidLinks(_))
-    ));
+    assert!(matches!(renderer.html("Counter", &[]), Err(DocumentationError::Verification(_))));
 }
 
 #[test]
@@ -129,7 +124,7 @@ fn public_companion_contract_excludes_private_implementation_docs() {
         )
         .unwrap();
     let reference = fixture.reference();
-    let html = DocumentationRenderer { reference: &reference }.html("Counter", &[]).unwrap();
+    let html = reference.html("Counter", &[]).unwrap();
     assert!(html.contains("Public counter."));
     assert!(!html.contains("Implementation algorithm."));
 }
@@ -140,9 +135,6 @@ fn generic_reference_exposes_its_result_without_evaluation() {
         Fixture::new("param I : @(intrinsic(vtype)) in\n--| Generic field.\n@[doc] (#value :: I)");
     let reference = fixture.reference();
     assert!(
-        DocumentationRenderer { reference: &reference }
-            .show(&DocumentationPath::parse("()/value"))
-            .unwrap()
-            .contains("Generic field.")
+        reference.show(&SemanticSelector::parse("()/value")).unwrap().contains("Generic field.")
     );
 }

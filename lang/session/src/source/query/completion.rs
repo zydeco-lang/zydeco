@@ -65,10 +65,17 @@ impl CompilerSession {
     pub fn complete(
         &self, root: impl AsRef<Path>, offset: usize,
     ) -> Result<Option<Arc<CompletionAnalysis>>, CompletionError> {
+        self.complete_in(root, offset, Arc::default())
+    }
+
+    /// Complete in the project's selected package context, using the same resolution inputs as analysis.
+    pub fn complete_in(
+        &self, root: impl AsRef<Path>, offset: usize, project: Arc<crate::source::Project>,
+    ) -> Result<Option<Arc<CompletionAnalysis>>, CompletionError> {
         let root = self
             .source_input(root.as_ref().to_path_buf())
             .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
-        complete_source(self, root, offset)
+        complete_source(self, root, offset, project)
     }
 }
 
@@ -99,7 +106,7 @@ impl SourceProvider for CompletionSourceProvider<'_> {
 // leaving strict parsing and analysis query identities untouched.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values), lru = 1)]
 fn complete_source(
-    db: &dyn SourceQueryDb, root: SourceInput, offset: usize,
+    db: &dyn SourceQueryDb, root: SourceInput, offset: usize, project: Arc<crate::source::Project>,
 ) -> Result<Option<Arc<CompletionAnalysis>>, CompletionError> {
     let Some(source) = source_text(db, root) else {
         return Ok(None);
@@ -140,13 +147,14 @@ fn complete_source(
     let provider =
         CompletionSourceProvider { root: Arc::new(template), ordinary: QuerySourceProvider { db } };
     let graph = SourceGraphLoader::with_provider(provider)
-        .load_root(&path, None, Arc::default())
+        .load_root(&path, None, project)
         .map_err(|error| AnalysisError::Source { error: Arc::new(error) })?;
     let (program, target) =
         graph.parse_completion(target).map_err(|error| AnalysisError::TextualProgram { error })?;
     let Some(target) = target else {
         return Ok(None);
     };
+    let origins = program.origins.clone();
     let BitterProgram { spans, arena, root } = program.desugar().map_err(|failure| {
         AnalysisError::Desugar { error: failure.error, spans: Arc::new(failure.spans.into_inner()) }
     })?;
@@ -180,6 +188,7 @@ fn complete_source(
             data.spans(db),
             &source.scoped,
             &statics,
+            &origins,
         );
         CompletionSemantics {
             spans: Arc::clone(data.spans(db)),

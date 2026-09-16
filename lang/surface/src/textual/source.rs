@@ -56,7 +56,7 @@ pub struct LiteralSite {
 /// The provider named by an `@[import(...)]` term splice.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImportTarget {
-    /// A source addressed by a catalog name or quoted path.
+    /// A source addressed by a package path or quoted file path.
     Source(SourceReference),
     /// A numbered source retained by an interactive compiler session.
     Input(SourceNumber),

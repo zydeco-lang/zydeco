@@ -163,9 +163,12 @@ fn metadata_names_register_exact_terms_and_roles_are_separate_from_relationships
     let packages = fixture.packages().unwrap();
     assert_eq!(
         packages.iter().map(|site| site.name.as_ref().unwrap().to_string()).collect::<Vec<_>>(),
-        ["a", "z"]
+        ["z", "a"]
     );
-    let library = &packages[0];
+    let library = packages
+        .iter()
+        .find(|site| site.name.as_ref().is_some_and(|name| name.to_string() == "a"))
+        .unwrap();
     assert_eq!(library.role, PackageRole::Library(crate::metadata::LibraryRole::Source));
     let Term::Meta(MetaTerm(_, payload)) = fixture.parser.arena.terms[&library.term] else {
         panic!("exact annotated term")
@@ -197,7 +200,7 @@ fn root_annotations_need_no_name_and_preserve_transparent_wrappers() {
 }
 
 #[test]
-fn annotations_require_a_role_and_package_names_are_unique_across_roles() {
+fn annotations_require_a_role_and_retain_names_for_resolution() {
     for source in [
         "@[package] ()",
         r#"@[package(unknown)] ()"#,
@@ -216,18 +219,14 @@ fn annotations_require_a_role_and_package_names_are_unique_across_roles() {
         Fixture::parse(r#"@[package(library, binary)] ()"#).packages(),
         Err(PackageDirectiveError::Annotation { source: PackageAnnotationError::Relation, .. })
     ));
-    assert!(matches!(
-        Fixture::parse(r#"(#same = @[package(library, name(same))] (), #different = @[package(test, name(same))] ())"#).packages(),
-        Err(PackageDirectiveError::DuplicateName { name, span, first }) if name.to_string() == "same" && span != first
-    ));
-    assert!(matches!(
-        Fixture::parse("let x = @[package(library)] 1 in x").packages(),
-        Err(PackageDirectiveError::Unnamed { .. })
-    ));
+    let sites = Fixture::parse(r#"(#same = @[package(library, name(same))] (), #different = @[package(test, name(same))] ())"#).packages().unwrap();
+    assert_eq!(sites.len(), 2);
+    assert_ne!(sites[0].span, sites[1].span);
+    assert_eq!(Fixture::parse("let x = @[package(library)] 1 in x").packages().unwrap().len(), 1);
 }
 
 #[test]
-fn names_are_optional_at_file_roots_and_required_only_for_nested_entries() {
+fn names_are_optional_at_every_definition_site() {
     for source in [
         r#"@[package(library, name(api))] 1"#,
         r#"let x = @[package(library, name(api))] 1 in x"#,
@@ -238,10 +237,7 @@ fn names_are_optional_at_file_roots_and_required_only_for_nested_entries() {
         assert!(packages[0].relations.is_empty(), "name is not a relationship");
     }
     for source in [r#"let x = @[package(library)] 1 in x"#, r#"(#field = @[package(library)] 1)"#] {
-        assert!(matches!(
-            Fixture::parse(source).packages(),
-            Err(PackageDirectiveError::Unnamed { .. })
-        ));
+        assert_eq!(Fixture::parse(source).packages().unwrap()[0].name, None);
     }
 }
 
@@ -302,7 +298,7 @@ fn malformed_relationships_and_redundant_code_declarations_are_rejected() {
 }
 
 #[test]
-fn source_references_distinguish_catalog_names_from_explicit_whole_files() {
+fn source_references_distinguish_package_paths_from_explicit_whole_files() {
     use crate::metadata::{PackageName, SourceReference};
     for (written, expected) in [
         (r#""math.zy""#, SourceReference::Path("math.zy".into())),

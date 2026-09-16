@@ -23,6 +23,7 @@ use zydeco_utils::{pass::CompilerPass, pipeline};
 #[derive(Default)]
 pub struct CommandCompiler {
     session: CompilerSession,
+    project: Arc<zydeco_session::source::Project>,
     lint_types: bool,
     representation: RepresentationStrategy,
     sps_passes: HighSpsPlan,
@@ -38,6 +39,33 @@ pub struct TestInteraction {
 }
 
 impl CommandCompiler {
+    pub fn session(&self) -> &CompilerSession {
+        &self.session
+    }
+    pub fn project(&self) -> &Arc<zydeco_session::source::Project> {
+        &self.project
+    }
+    pub fn with_project(mut self, project: zydeco_session::source::Project) -> Self {
+        self.project = Arc::new(project);
+        self
+    }
+    pub fn analyze_package(
+        &self, id: &zydeco_session::source::PackageId,
+    ) -> Result<Arc<ProgramAnalysis>, CompileError> {
+        let analysis = self
+            .session
+            .analyze_package(id, self.project.clone())
+            .map_err(CompileError::Analysis)?;
+        self.accept_analysis(analysis)
+    }
+    pub fn package(
+        &self, id: &zydeco_session::source::PackageId,
+    ) -> Result<zydeco_session::source::Package, CompileError> {
+        self.session
+            .package_in(id, self.project.clone())
+            .map_err(|error| CompileError::Analysis(AnalysisError::Source { error }))
+    }
+
     /// Select optional high-SPS transformations for subsequent compilations.
     pub fn with_sps_passes(mut self, plan: HighSpsPlan) -> Self {
         self.sps_passes = plan;
@@ -66,7 +94,13 @@ impl CommandCompiler {
     }
 
     pub fn analyze(&self, path: &Path) -> Result<Arc<ProgramAnalysis>, CompileError> {
-        let analysis = self.session.analyze(path).map_err(CompileError::Analysis)?;
+        let analysis = self
+            .session
+            .analyze_package(
+                &zydeco_session::source::PackageId { path: path.to_owned(), name: None },
+                self.project.clone(),
+            )
+            .map_err(CompileError::Analysis)?;
         self.accept_analysis(analysis)
     }
 

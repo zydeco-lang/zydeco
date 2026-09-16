@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use tower_lsp::lsp_types::{DocumentLink, Position, Range, Url};
 use zydeco_session::{
     SourceGraph,
-    source::{SourceFile, SourceId},
+    source::{PackageInstance, PackageInstanceId, SourceTemplate},
 };
 use zydeco_surface::textual::{
     ImportSite, ImportTarget, LexicalTokenKind, LexicalTokens, syntax as t,
@@ -24,10 +24,11 @@ impl<'graph> ImportDocumentLinks<'graph> {
         let path = Self::normalize_path(path);
         let mut links = self
             .graph
-            .sources
+            .instances
             .iter()
-            .filter(|(_, file)| Self::normalize_path(&file.path) == path)
-            .flat_map(|(source, file)| self.source_links(source, file))
+            .enumerate()
+            .filter(|(_, instance)| Self::normalize_path(&instance.template.path) == path)
+            .flat_map(|(id, _)| self.for_instance(PackageInstanceId(id)))
             .collect::<Vec<_>>();
         links.sort_by_key(|link| {
             (
@@ -37,44 +38,74 @@ impl<'graph> ImportDocumentLinks<'graph> {
                 link.range.end.character,
             )
         });
-        links.dedup_by(|left, right| left.range == right.range);
+        links.dedup_by(|left, right| {
+            if left.range != right.range {
+                return false;
+            }
+            if left.target != right.target {
+                right.target = None;
+                right.tooltip =
+                    Some("This import has different targets in its package instances.".into());
+            }
+            true
+        });
         links
     }
 
-    fn source_links(&self, source: SourceId, file: &SourceFile) -> Vec<DocumentLink> {
+    fn for_instance(&self, id: PackageInstanceId) -> Vec<DocumentLink> {
+        let Some(instance) = self.graph.instances.get(id.0) else {
+            return Vec::new();
+        };
+        self.source_links(instance)
+    }
+
+    fn source_links(&self, instance: &PackageInstance) -> Vec<DocumentLink> {
+        let file = &instance.template;
         let strings = LexicalTokens::new(&file.source)
             .filter(|token| token.kind == LexicalTokenKind::String)
             .collect::<Vec<_>>();
 
-        let imports = file.imports.iter().filter_map(|import| {
-            let edge = &self.graph.imports[import];
-            debug_assert_eq!(edge.importer, source);
-            let site = file.import_sites.iter().find(|site| site.term == edge.term)?;
+        let imports = instance.imports.iter().filter_map(|(term, imported)| {
+            let site = file.import_sites.iter().find(|site| site.term == *term)?;
             let target = match &site.directive.target {
-                | ImportTarget::Source(_) => self.graph.sources[&edge.imported].path.clone(),
+                | ImportTarget::Source(_) => self.graph.instances[imported.0].template.path.clone(),
                 | ImportTarget::Input(_) => return None,
             };
             let range = Self::argument_range(file, site)?;
             let target = Url::from_file_path(target).ok()?;
             Some(DocumentLink { range, target: Some(target), tooltip: None, data: None })
         });
+        let reachable = file.arena.reachable_from(instance.root.into());
         let relationships = file
             .package_sites
             .iter()
-            .filter(|site| file.contains_range(&site.span.range()))
+            .filter(|site| reachable.contains(&site.annotation.into()))
             .flat_map(|site| &site.relations)
             .filter_map(|relation| {
                 let span = relation.info.range();
-                // Each relationship has one source-reference string.
-                let literal = strings
-                    .iter()
-                    .find(|token| span.start <= token.range.start && token.range.end <= span.end)?;
-                let range =
-                    Self::byte_range(&file.file, literal.range.start + 1..literal.range.end - 1)?;
-                let zydeco_surface::metadata::SourceReference::Path(path) = &relation.target else {
-                    return None;
+                let (range, path) = match &relation.target {
+                    | zydeco_surface::metadata::SourceReference::Path(path) => {
+                        let literal = strings.iter().find(|token| {
+                            span.start <= token.range.start && token.range.end <= span.end
+                        })?;
+                        (
+                            Self::byte_range(
+                                &file.file,
+                                literal.range.start + 1..literal.range.end - 1,
+                            )?,
+                            Self::normalize_path(&file.path.parent()?.join(path)),
+                        )
+                    }
+                    | zydeco_surface::metadata::SourceReference::Package(path) => {
+                        let site = file.package_sites.iter().find(|site| {
+                            site.relations.iter().any(|candidate| candidate.info == relation.info)
+                        })?;
+                        let context = instance.contexts.get(&site.annotation)?;
+                        let namespace = context.resolve(path).ok()?;
+                        let package = self.graph.package_at(&namespace)?;
+                        (Self::byte_range(&file.file, span)?, package.origin.path().to_owned())
+                    }
                 };
-                let path = Self::normalize_path(&file.path.parent()?.join(path));
                 Some(DocumentLink {
                     range,
                     target: Some(Url::from_file_path(path).ok()?),
@@ -85,7 +116,7 @@ impl<'graph> ImportDocumentLinks<'graph> {
         imports.chain(relationships).collect()
     }
 
-    fn argument_range(file: &SourceFile, site: &ImportSite) -> Option<Range> {
+    fn argument_range(file: &SourceTemplate, site: &ImportSite) -> Option<Range> {
         let t::Term::Meta(t::MetaTerm(meta, _)) = file.arena.terms[&site.term] else {
             unreachable!("validated import site")
         };
@@ -119,6 +150,7 @@ impl<'graph> ImportDocumentLinks<'graph> {
 #[cfg(test)]
 mod tests {
     use super::ImportDocumentLinks;
+    use std::sync::Arc;
     use tower_lsp::lsp_types::{Position, Range, Url};
     use zydeco_session::CompilerSession;
     use zydeco_surface::textual::SourceNumber;
@@ -180,11 +212,11 @@ mod tests {
         std::fs::write(&packages, r#"(#main = @[package(library, name(main))] 1)"#).unwrap();
         std::fs::write(&root, source).unwrap();
         let session = CompilerSession::default();
-        let catalog = session.package_catalog(std::slice::from_ref(&packages)).unwrap();
+        let catalog = session.project(std::slice::from_ref(&packages)).unwrap();
         let analysis = session
             .analyze_package(
                 &zydeco_session::source::PackageId { path: root.clone(), name: None },
-                catalog.bindings,
+                Arc::new(catalog),
             )
             .unwrap();
         let links = ImportDocumentLinks::new(analysis.graph()).for_file(&root);
@@ -220,11 +252,11 @@ mod tests {
         let main = directory.path().join("main.zy");
         std::fs::write(&main, r#"@(import(one))"#).unwrap();
         let session = CompilerSession::default();
-        let catalog = session.package_catalog(std::slice::from_ref(&root)).unwrap();
+        let catalog = session.project(std::slice::from_ref(&root)).unwrap();
         let analysis = session
             .analyze_package(
                 &zydeco_session::source::PackageId { path: main, name: None },
-                catalog.bindings,
+                Arc::new(catalog),
             )
             .unwrap();
         let links = ImportDocumentLinks::new(analysis.graph()).for_file(&root);

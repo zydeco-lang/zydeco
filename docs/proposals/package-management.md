@@ -3,7 +3,7 @@
 This plan implements the [abstraction levels](../references/language.md#abstraction-levels):
 project, package, compilation unit, and semantic unit.
 Package paths, source selection, instance identity,
-and graph construction follow the [namespace and resolution proposal](package-resolution.md).
+and graph construction follow the [package namespace rules](../references/language.md#package-hierarchy).
 This plan covers frontend integration, compilation-unit validation, and operation policy.
 
 The [source-package reference](../references/language.md#source-packages) describes the existing implementation.
@@ -15,9 +15,9 @@ Project preparation connects source selection, code dependencies, and operation 
 It exposes each selected term's identity, classifier, lexical scope, and any declared external contract consistently
 across frontends.
 
-The retained implementation supplies source selection, immutable bindings, compiler analysis,
+The implementation supplies project preparation, source instantiation and merging, compiler analysis,
 documentation provenance, external-contract checks, and regression coverage.
-Build shared preparation and operation interfaces on these components using the new resolution model.
+Build operation interfaces on these components.
 
 ## Implementation Representations
 
@@ -25,8 +25,6 @@ The compiler reference's [implementation map](../references/compiler.md#implemen
 identifies the existing representations.
 The planned Rust interfaces are:
 
-- [ ] Introduce `Project` for shared preparation and inspection.
-  Follow the [resolution implementation plan](package-resolution.md#implementation-work).
 - [ ] Introduce `SemanticUnit` around a resolved, merged term, its analysis inputs, and its semantic results.
   Reuse the facts and checked representations currently exposed by `ProgramAnalysis` and `CheckedProgram`.
   Preserve rejected analyses and useful diagnostics for editor consumers.
@@ -41,20 +39,19 @@ in the [documentation proposal](documentation.md#targeted-lookup-and-independent
 ## Shared Project Context
 
 CLI, REPL, editor, and documentation consumers share project preparation
-through the [resolution model](package-resolution.md#copy-resolve-merge-analyze).
+through the [resolution model](../references/language.md#copy-resolve-merge-analyze).
 
-- [ ] Let frontends supply their chosen entry points and consume the resulting resolution graph consistently.
+- [ ] Expose project registrations and root selection through frontend configuration.
 - [ ] Make the active context inspectable: selected roots, entry declaration locations,
   discovery origins, namespace substitutions, import routes, and resulting bindings should be available
   to diagnostics and project inspection.
 - [ ] Define refresh responsibilities for directory membership, disk changes, overlays, and root changes.
   Follow the resolution graph's inputs when defining revision and cache identity.
-- [ ] Exercise the same named import through CLI, REPL, editor, and documentation entry points with the same context.
 
 ## Validation and Operation Planning
 
 Build contract validation and operation preparation on semantic-unit analysis.
-Use [package resolution](package-resolution.md#paths-and-package-context) for relationship targets;
+Use [package resolution](../references/language.md#paths-and-package-context) for relationship targets;
 operation policy determines which resolved relationships an operation follows.
 
 - [ ] Expose reusable package validation that combines source checking with the declared entry contract.
@@ -73,17 +70,15 @@ Specify both requested and unrelated cases, with diagnostics for misspelled kind
 
 ## Sequence and Completion Criteria
 
-1. Integrate the [resolution model](package-resolution.md) into shared `Project` preparation.
-2. Expose semantic-unit analysis and inspection across frontends, updating affected consumers together.
-3. Expose `CompilationUnit` validation and settle relationship-validation scope.
-4. Apply these boundaries to the [documentation milestone](documentation.md#first-standard-library-milestone).
+1. Expose `CompilationUnit` validation and settle relationship-validation scope.
+2. Apply these boundaries to the [documentation milestone](documentation.md#first-standard-library-milestone).
 
 Extend the existing [package regressions](../../lang/session/src/source/package/tests.rs),
 [discovery regressions](../../lang/session/src/source/package/discovery/tests.rs),
 and [CLI coverage](../../cli/tests/package.rs):
 
-- [ ] Exercise the [resolution cases](package-resolution.md#implementation-work) through public entry points,
-  including refresh after source, directory, overlay, or root changes.
+- [ ] Exercise the [resolution cases](../references/compiler.md#package-resolution-implementation)
+  through public entry points, including refresh after source, directory, overlay, or root changes.
 - [ ] Reuse semantic results across supported compilation configurations, with invalid external contracts rejected
   before target-specific preparation.
 - [ ] Pair valid role contracts with rejected executable and library boundaries across public callers.
@@ -92,3 +87,9 @@ and [CLI coverage](../../cli/tests/package.rs):
 
 Future dependency acquisition, version resolution, and source lockfiles build on this local context and identity model.
 The [package roadmap](../../DESIGN.md#current-limitations) records that scope.
+
+## Project Registration Configuration
+
+`Project::with_registration` implements opaque-root substitution in the shared Rust interface.
+Define its user-facing configuration syntax and entry-point conventions.
+Document how tools refresh discovered inputs and retain selected import instances across project edits.

@@ -369,3 +369,9 @@ impl Display for SourceCycle {
         )
     }
 }
+
+impl From<super::PackageContextError> for SourceLoadError {
+    fn from(error: super::PackageContextError) -> Self {
+        super::PackageError::Context(error).into()
+    }
+}

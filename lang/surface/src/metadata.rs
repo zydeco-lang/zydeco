@@ -9,7 +9,9 @@ use zydeco_syntax::{
 use crate::textual::fmt::{IndentWidth, LayoutIntentions, Parentheses};
 
 mod package;
+mod path;
 pub use package::*;
+pub use path::*;
 mod discovery;
 pub use discovery::*;
 

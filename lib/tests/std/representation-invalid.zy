@@ -1,9 +1,9 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int;
-    /UInt8; /numeric; /process; builtin) : @(import(std/builtin)) that
+    /UInt8; /numeric; /process; builtin) : @(import(/std/builtin)) that
   let (/Bytes; /bytes) = builtin |> (@(import("../../std/text/bytes.zy"))) in
-  let (/storage; /codecs; /allocation; /dynamic) = builtin |> (@(import(std/memory))) in
+  let (/storage; /codecs; /allocation; /dynamic) = builtin |> (@(import(/std/memory))) in
   let (= Layout, = Representation, memory) = dynamic in
   let fail = { ! process/exit 1 } in
   let ! rejected (A : VType) (layout : Layout A) (next : Thk OS) : OS =

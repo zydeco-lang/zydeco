@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Arc;
 
 struct Fixture {
     _directory: tempfile::TempDir,
@@ -153,37 +154,31 @@ fn scratch_source_preserves_import_context_without_changing_other_strings() {
 }
 
 #[test]
-fn package_examples_and_scratch_imports_retain_the_selected_catalog() {
+fn package_examples_and_scratch_imports_retain_the_selected_project() {
     let mut fixture = Fixture::new("```zydeco check\n@(import(example/main))\n```");
     let library = fixture.path.with_file_name("package.zy");
     fixture
         .session
         .set_overlay(&library, "@[package(library, name(example/main))] 42".into())
         .unwrap();
-    let catalog = fixture.session.package_catalog(&[library]).unwrap();
+    let catalog = fixture.session.project(&[library]).unwrap();
     let example = &fixture.examples()[0];
-    let request = example.request(&fixture.session, &catalog.bindings).unwrap();
+    let request = example.request(&fixture.session, &catalog).unwrap();
     let encoded = serde_json::to_string(&request).unwrap();
     let decoded: DocumentationExampleRequest = serde_json::from_str(&encoded).unwrap();
     assert!(decoded.check().status.is_passed());
     assert!(
         !example.request(&fixture.session, &Default::default()).unwrap().check().status.is_passed()
     );
-    assert!(
-        serde_json::from_str::<DocumentationExampleRequest>(
-            &encoded.replace("example/main", "example//main")
-        )
-        .is_err()
-    );
     let scratch = example.scratch_source().unwrap();
-    assert_eq!(scratch, example.code, "catalog names are independent of source directories");
+    assert_eq!(scratch, example.code, "package paths are independent of source directories");
     let other = tempfile::tempdir().unwrap();
     let path = other.path().join("scratch.zydeco");
     fixture.session.set_overlay(&path, scratch).unwrap();
     assert!(
         fixture
             .session
-            .analyze_package(&PackageId { path, name: None }, catalog.bindings)
+            .analyze_package(&PackageId { path, name: None }, Arc::new(catalog))
             .unwrap()
             .outcome()
             .root()

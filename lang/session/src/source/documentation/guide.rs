@@ -1,4 +1,5 @@
-use super::{DocumentationLinkError, DocumentationPath};
+use super::DocumentationLinkError;
+use crate::source::SemanticSelector;
 use std::{ops::Range, path::PathBuf};
 
 /// An explicitly selected guide. Public links use the selected entry root (`.`);
@@ -11,5 +12,5 @@ pub struct DocumentationGuide {
 
 pub struct DocumentationGuideLink {
     pub range: Range<usize>,
-    pub target: Result<DocumentationPath, DocumentationLinkError>,
+    pub target: Result<SemanticSelector, DocumentationLinkError>,
 }

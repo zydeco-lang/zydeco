@@ -1,6 +1,5 @@
 use super::*;
-use crate::source::{AnalysisError, CompilerSession, SourceParseError};
-use zydeco_surface::{scoped::ResolveError, textual::PackageDirectiveError};
+use crate::source::{CompilerSession, SourceGraph, SourceLoadErrors};
 
 pub(super) struct Fixture {
     pub(super) directory: tempfile::TempDir,
@@ -18,867 +17,462 @@ impl Fixture {
         std::fs::write(&path, source).unwrap();
         path
     }
-    fn id(&self, path: &str) -> PackageId {
-        PackageId { path: self.path(path), name: None }
+    fn project(&self, sources: &[&str]) -> Arc<Project> {
+        Arc::new(Project::new(sources.iter().map(|source| self.path(source)).collect()))
     }
-    fn named(&self, path: &str, name: &str) -> PackageId {
-        PackageId { path: self.path(path), name: Some(name.parse().unwrap()) }
-    }
-    fn catalog(&self, session: &CompilerSession, files: &[&str]) -> PackageCatalog {
-        session
-            .package_catalog(&files.iter().map(|file| self.path(file)).collect::<Vec<_>>())
-            .unwrap()
+    fn load(
+        &self, root: &str, project: Arc<Project>,
+    ) -> Result<Arc<SourceGraph>, Arc<SourceLoadErrors>> {
+        CompilerSession::default()
+            .load_package(&PackageId { path: self.path(root), name: None }, project)
     }
 }
 
 #[test]
-fn test_side_associations_work_locally_without_discovery_or_forward_edges() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
+fn package_paths_resolve_lexically_and_siblings_keep_their_context() {
+    let f = Fixture::new();
+    f.write(
+        "packages.zy",
+        r#"@[package(library, name(std))] (
+        @[package(library, name(data))] 1,
+        @[package(test(of(../data)), name(text))] @(import(../data))
+    )"#,
+    );
+    f.write("main.zy", "(@(import(/std/data)), @(import(std/./data)), @(import(std/data/../data)), @(import(std/text)))");
+    let p = f.project(&["packages.zy"]);
+    let g = f.load("main.zy", p.clone()).unwrap();
+    let root = PackageContext::at_root(p.root);
+    let data = g.select_package(&"std/data".parse().unwrap(), &root).unwrap();
+    let text = g.select_package(&"std/text".parse().unwrap(), &root).unwrap();
+    assert_eq!(text.relations.len(), 1);
+    assert_eq!(text.relations[0].target, ResolvedPackageReference::Package(data.namespace.clone()));
+    let targets =
+        g.sources[&g.root].imports.iter().map(|id| g.imports[id].imported).collect::<Vec<_>>();
+    assert_eq!(targets[..3], vec![data.source; 3]);
+    assert_eq!(g.sources[&text.source].imports.len(), 1);
+    assert_eq!(g.imports[&g.sources[&text.source].imports[0]].imported, data.source);
+    assert!(g.select_package(&"std/data/text".parse().unwrap(), &root).is_err());
+}
+
+#[test]
+fn prefixes_need_no_definition_and_parent_steps_above_root_are_diagnosed() {
+    let f = Fixture::new();
+    f.write("packages.zy", "@[package(library, name(std/data))] 42");
+    f.write("main.zy", "@(import(/std/data))");
+    let p = f.project(&["packages.zy"]);
+    let g = f.load("main.zy", p.clone()).unwrap();
+    let root = PackageContext::at_root(p.root);
+    assert!(g.select_package(&"std".parse().unwrap(), &root).is_err());
+    assert!(g.select_package(&"std/data".parse().unwrap(), &root).is_ok());
+    f.write("main.zy", "@(import(../std/data))");
+    let errors = f.load("main.zy", p).unwrap_err();
+    assert!(errors.to_string().contains("above the namespace root"));
+    assert!(errors.diagnostic_site().unwrap().path().ends_with("main.zy"));
+}
+
+#[test]
+fn unnamed_packages_establish_opaque_contexts_and_named_children() {
+    let f = Fixture::new();
+    f.write("main.zy", "(@[package(library)] (@[package(library, name(data))] 42, @(import(data))), @[package(library)] ())");
+    let g = f.load("main.zy", f.project(&[])).unwrap();
+    let data = g.packages.iter().find(|p| p.namespace.to_string().ends_with("/data")).unwrap();
+    assert!(matches!(data.namespace.components[0], NamespaceComponent::Opaque(_)));
+    let parent = data.namespace.parent().unwrap();
+    assert_eq!(data.context.resolve(&"..".parse().unwrap()).unwrap(), parent);
+    assert_eq!(g.sources[&g.root].imports.len(), 1);
+    assert_eq!(g.imports[&g.sources[&g.root].imports[0]].imported, data.source);
+    let anonymous = g
+        .packages
+        .iter()
+        .filter(|p| p.namespace.components.len() == 1)
+        .map(|p| &p.namespace)
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(anonymous.len(), 2);
+}
+
+#[test]
+fn registration_substitutes_the_root_of_absolute_and_relative_paths() {
+    let f = Fixture::new();
+    let sources = f.write(
+        "vendor.zy",
+        "(@[package(library, name(data))] 7, @[package(library, name(client))] @(import(/data)))",
+    );
+    f.write("main.zy", "@(import(/vendor/b/client))");
+    let project = Project::new(Vec::new())
+        .with_registration("vendor/b".parse().unwrap(), Project::new(vec![sources]));
+    let g = f.load("main.zy", Arc::new(project.clone())).unwrap();
+    let root = PackageContext::at_root(project.root);
+    let client = g.select_package(&"vendor/b/client".parse().unwrap(), &root).unwrap();
+    let data = g.select_package(&"vendor/b/data".parse().unwrap(), &root).unwrap();
+    assert_eq!(client.context.resolve(&"/data".parse().unwrap()).unwrap(), data.namespace);
+    assert_eq!(g.imports[&g.sources[&client.source].imports[0]].imported, data.source);
+    assert!(g.select_package(&"data".parse().unwrap(), &root).is_err());
+}
+
+#[test]
+fn copies_merge_after_resolving_dependencies_and_preserve_each_route() {
+    let f = Fixture::new();
+    f.write("copy.zy", "let value = @(import(data)) in value");
+    f.write(
+        "main.zy",
         r#"(
-        #lib = @[package(library, name(lib))] 1,
-        #other = @[package(library, name(other))] 2,
-        #smoke = @[package(test(of(lib, other)), name(smoke))] @(import(lib)),
-        #plain = @[package(test, name(plain))] absent
+        @[package(library, name(a))] (@[package(library, name(data))] 42, @(import("copy.zy"))),
+        @[package(library, name(b))] (@[package(library, name(data))] 42, @(import("copy.zy")))
     )"#,
     );
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    for name in ["lib", "other"] {
-        let plan = session.package_tests(&fixture.named("workspace.zy", name), &catalog).unwrap();
-        assert_eq!(plan.tests.len(), 1);
-        assert_eq!(plan.tests[0].id.name.as_ref().unwrap().to_string(), "smoke");
-        assert!(
-            session
-                .analyze_package(&plan.tests[0].id, catalog.bindings.clone())
-                .unwrap()
-                .outcome()
-                .root()
-                .is_some()
-        );
-    }
-    let plain = session.package_tests(&fixture.named("workspace.zy", "plain"), &catalog).unwrap();
-    assert_eq!(plain.tests.len(), 1, "plain tests remain directly selectable");
-    assert_eq!(plain.tests[0].id, plain.root.id);
+    let analysis = session.analyze(f.path("main.zy")).unwrap();
+    assert!(analysis.outcome().root().is_some(), "{:?}", analysis.outcome());
+    let graph = analysis.graph();
+    let instances =
+        graph.instances.iter().filter(|i| i.template.path.ends_with("copy.zy")).collect::<Vec<_>>();
+    assert!(instances.len() >= 2);
+    assert!(instances.windows(2).all(|pair| pair[0].source == pair[1].source));
+    assert!(instances.iter().any(|i| i.context.package.to_string() == "/a"));
+    assert!(instances.iter().any(|i| i.context.package.to_string() == "/b"));
+    let declarations = analysis.scoped().defs.iter().filter(|(_, name)| name.0 == "value").count();
+    assert_eq!(declarations, 1, "merged copies receive semantics once");
 }
 
 #[test]
-fn explicit_discovery_finds_reverse_tests_and_deduplicates_forward_edges() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
-        r#"@[discover(include("tests/**/*.zy"), exclude("tests/fixtures/**"))]
-        (#lib = @[package(library, test("tests/smoke.zy"), name(lib))] @(import("lib.zy")))"#,
-    );
-    fixture.write("lib.zy", "1");
-    fixture.write("tests/smoke.zy", r#"@[package(test(of(lib)))] @(import(lib))"#);
-    fixture.write("tests/unit/second.zy", r#"@[package(test(of(lib)))] 2"#);
-    fixture.write("tests/plain.zy", "@[package(test)] absent");
-    fixture.write("tests/unrelated.zy", r#"@[package(test(of("../missing.zy")))] absent"#);
-    fixture.write("tests/fixtures/broken.zy", "(");
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let plan = session.package_tests(&fixture.named("workspace.zy", "lib"), &catalog).unwrap();
-    assert_eq!(plan.tests.len(), 2);
-    assert!(plan.tests.iter().all(|package| package.id.name.is_none()));
-    for test in plan.tests {
-        assert!(
-            session
-                .analyze_package(&test.id, catalog.bindings.clone())
-                .unwrap()
-                .outcome()
-                .root()
-                .is_some()
-        );
-    }
-    assert_eq!(session.package_catalog(&[fixture.path("workspace.zy")]).unwrap().packages.len(), 5);
-    assert!(
-        session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.is_empty(),
-        "an implementation does not inherit its registration's scope or identity"
-    );
-}
-
-#[test]
-fn discovery_is_not_expanded_by_checks_imports_or_matched_files() {
-    let fixture = Fixture::new();
-    let root = fixture.write("lib.zy", r#"@[discover(include("tests/*.zy"))] 1"#);
-    fixture.write(
-        "tests/smoke.zy",
-        r#"@[discover(include("fixtures/*.zy"))]
-        @[package(test(of("../lib.zy")))] @(import("../lib.zy"))"#,
-    );
-    fixture.write("tests/fixtures/broken.zy", "(");
-    let main = fixture.write("main.zy", r#"@(import("lib.zy"))"#);
-    let mut session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["lib.zy"]);
-    assert_eq!(session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.len(), 1);
-    fixture.write("tests/broken.zy", "(");
-    assert_eq!(
-        session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.len(),
-        1,
-        "prepared scope does not rescan"
-    );
-    assert!(session.analyze(&root).unwrap().outcome().root().is_some());
-    assert!(session.analyze(main).unwrap().outcome().root().is_some());
-    assert!(session.package(&fixture.id("lib.zy")).is_ok());
-    let error = session.package_catalog(std::slice::from_ref(&root)).unwrap_err();
-    assert!(
-        matches!(error, SourceLoadError::Package(error) if matches!(*error, PackageError::DiscoveredSource { .. }))
-    );
-    session
-        .set_overlay(
-            &root,
-            r#"@[discover(include("tests/*.zy"), exclude("tests/broken.zy"))] 1"#.into(),
-        )
-        .unwrap();
-    let catalog = fixture.catalog(&session, &["lib.zy"]);
-    assert_eq!(session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.len(), 1);
-}
-
-#[test]
-fn discovery_membership_is_fresh_and_includes_overlay_only_sources() {
-    let fixture = Fixture::new();
-    fixture
-        .write("lib.zy", r#"@[discover(include("tests/**/*.zy"), exclude("tests/ignored.zy"))] 1"#);
-    let mut session = CompilerSession::default();
-    let id = fixture.id("lib.zy");
-    assert!(
-        session
-            .package_tests(&id, &fixture.catalog(&session, &["lib.zy"]))
-            .unwrap()
-            .tests
-            .is_empty()
-    );
-    let test = fixture.write("tests/disk.zy", r#"@[package(test(of("../lib.zy")))] 1"#);
-    assert_eq!(
-        session.package_tests(&id, &fixture.catalog(&session, &["lib.zy"])).unwrap().tests.len(),
-        1
-    );
-    std::fs::remove_file(test).unwrap();
-    assert!(
-        session
-            .package_tests(&id, &fixture.catalog(&session, &["lib.zy"]))
-            .unwrap()
-            .tests
-            .is_empty(),
-        "cached text must not keep a removed match alive"
-    );
-    let overlay = fixture.path("tests/new/overlay.zy");
-    session.set_overlay(&overlay, r#"@[package(test(of("../../lib.zy")))] 1"#.into()).unwrap();
-    session.set_overlay(fixture.path("tests/ignored.zy"), "(".into()).unwrap();
-    assert_eq!(
-        session.package_tests(&id, &fixture.catalog(&session, &["lib.zy"])).unwrap().tests.len(),
-        1
-    );
-    session.clear_overlay(overlay).unwrap();
-    assert!(
-        session
-            .package_tests(&id, &fixture.catalog(&session, &["lib.zy"]))
-            .unwrap()
-            .tests
-            .is_empty()
-    );
-}
-
-#[test]
-fn discovered_file_packages_need_no_role_and_plain_tests_need_no_subject() {
-    let fixture = Fixture::new();
-    let root = fixture.write("lib.zy", r#"@[discover(include("tests/*.zy"))] 1"#);
-    fixture.write("tests/helper.zy", "1");
-    fixture.write("tests/plain.zy", "@[package(test)] 2");
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["lib.zy"]);
-    let packages = session.package_catalog(&[root]).unwrap().packages;
-    assert_eq!(
-        packages.iter().map(|package| package.role.clone()).collect::<Vec<_>>(),
-        [
-            PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
-            PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
-            PackageRole::Test
-        ]
-    );
-    assert!(session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.is_empty());
-    assert_eq!(
-        session.package_tests(&fixture.id("tests/plain.zy"), &catalog).unwrap().tests.len(),
-        1
-    );
-}
-
-#[test]
-fn sibling_test_associations_share_canonical_ids_and_include_editor_overlays() {
-    let fixture = Fixture::new();
-    let root = fixture.write("lib/std/std.zy", r#"@[discover(include("../tests/*.zy", "../../lib/tests/*.zy"), exclude("../tests/ignored.zy"))] 1"#);
-    fixture.write(
-        "lib/tests/disk.zy",
-        r#"@[package(test(of("../std/std.zy")))] @(import("../std/std.zy"))"#,
-    );
-    fixture.write("lib/tests/ignored.zy", "(");
-    let mut session = CompilerSession::default();
-    session
-        .set_overlay(
-            fixture.path("lib/tests/new.zy"),
-            r#"@[package(test(of("../std/std.zy")))] 2"#.into(),
-        )
-        .unwrap();
-    let catalog = fixture.catalog(&session, &["lib/std/std.zy"]);
-    let plan = session.package_tests(&fixture.id("lib/std/std.zy"), &catalog).unwrap();
-    assert_eq!(plan.tests.len(), 2, "overlapping parent prefixes identify one test each");
-    for test in plan.tests {
-        assert_eq!(test.id, session.package(&test.id).unwrap().id);
-        assert!(
-            session
-                .analyze_package(&test.id, catalog.bindings.clone())
-                .unwrap()
-                .outcome()
-                .root()
-                .is_some()
-        );
-    }
-    fixture.write("lib/tests/broken.zy", "(");
-    assert!(
-        session.analyze(&root).unwrap().outcome().root().is_some(),
-        "ordinary imports and checking never expand discovery"
-    );
-    let error = session.package_catalog(std::slice::from_ref(&root)).unwrap_err();
-    assert!(
-        matches!(error, SourceLoadError::Package(error) if matches!(*error, PackageError::DiscoveredSource { .. }))
-    );
-}
-
-#[test]
-fn selected_roots_only_report_their_own_documentation_and_warnings() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
+fn different_resolved_dependencies_keep_copies_and_semantic_identities_distinct() {
+    let f = Fixture::new();
+    f.write("copy.zy", "let value = @(import(data)) in value");
+    f.write(
+        "main.zy",
         r#"(
-        #one = @[package(library, name(one))] (
-            --| one documentation
-            @[doc] 1,
-            --| one warning
-            2),
-        #two = @[package(library, name(two))] (
-            --| two documentation
-            @[doc] 3,
-            --| two warning
-            4))"#,
+        @[package(library, name(a))] (@[package(library, name(data))] 41, @(import("copy.zy"))),
+        @[package(library, name(b))] (@[package(library, name(data))] 42, @(import("copy.zy")))
+    )"#,
     );
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    for name in ["one", "two"] {
-        let analysis = session
-            .analyze_package(&fixture.named("workspace.zy", name), catalog.bindings.clone())
-            .unwrap();
-        let graph = analysis.graph();
-        let documentation = graph.documentation();
-        let warnings = graph.warnings();
-        assert_eq!(documentation.len(), 1);
-        assert_eq!(warnings.len(), 1);
-        assert_eq!(
-            documentation[0].site.directive.comment.as_ref().unwrap().text.as_ref(),
-            format!("{name} documentation")
-        );
-        assert_eq!(warnings[0].warning_source().trim(), format!("--| {name} warning"));
+    let analysis = session.analyze(f.path("main.zy")).unwrap();
+    assert!(analysis.outcome().root().is_some());
+    let graph = analysis.graph();
+    let sources = graph
+        .instances
+        .iter()
+        .filter(|i| i.template.path.ends_with("copy.zy"))
+        .map(|i| i.source)
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(sources.len(), 2);
+    assert_eq!(analysis.scoped().defs.iter().filter(|(_, name)| name.0 == "value").count(), 2);
+}
+
+#[test]
+fn equal_definitions_share_a_binding_and_conflicts_retain_both_origins() {
+    let f = Fixture::new();
+    f.write("first.zy", "@[package(library, name(value))] 42");
+    f.write("second.zy", "@[package(library, name(/./value))]  42 -- layout changes\n");
+    f.write("main.zy", "@(import(value))");
+    let p = f.project(&["first.zy", "second.zy"]);
+    let g = f.load("main.zy", p.clone()).unwrap();
+    assert_eq!(g.packages[0].source, g.packages[1].source);
+    assert_eq!(g.source_inputs().count(), 3, "both physical origins remain query inputs");
+    f.write("second.zy", "@[package(library, name(value))] 43");
+    let error = f.load("main.zy", p).unwrap_err();
+    assert!(error.iter().any(|error| matches!(error, SourceLoadError::Package(error) if matches!(error.as_ref(), PackageError::Conflict { site, first, .. } if site.path().ends_with("second.zy") && first.path().ends_with("first.zy")))));
+}
+
+#[test]
+fn signatures_metadata_and_literals_participate_in_structural_equality() {
+    let f = Fixture::new();
+    f.write("a.zy", "42");
+    f.write("b.zy", "42");
+    f.write("a.zyi", "@(intrinsic(int))");
+    f.write("main.zy", "(@(import(\"a.zy\")), @(import(\"b.zy\")))");
+    let g = f.load("main.zy", f.project(&[])).unwrap();
+    let imports = &g.sources[&g.root].imports;
+    assert_ne!(g.imports[&imports[0]].imported, g.imports[&imports[1]].imported);
+    f.write("b.zyi", "@(intrinsic(int))");
+    let g = f.load("main.zy", f.project(&[])).unwrap();
+    let imports = &g.sources[&g.root].imports;
+    assert_eq!(g.imports[&imports[0]].imported, g.imports[&imports[1]].imported);
+    f.write("b.zy", "--| Different documentation.\n@[doc] 42");
+    let g = f.load("main.zy", f.project(&[])).unwrap();
+    let imports = &g.sources[&g.root].imports;
+    assert_ne!(g.imports[&imports[0]].imported, g.imports[&imports[1]].imported);
+}
+
+#[test]
+fn imports_preserve_lexical_context_and_report_missing_targets_and_cycles() {
+    let f = Fixture::new();
+    f.write("inside.zy", "@[package(library, name(inner))] 1");
+    f.write("main.zy", "(@(import(\"inside.zy\")), @[package(library, name(sibling))] 2)");
+    let p = f.project(&[]);
+    let g = f.load("main.zy", p.clone()).unwrap();
+    let root = PackageContext::at_root(p.root);
+    assert!(g.select_package(&"sibling".parse().unwrap(), &root).is_ok());
+    assert!(g.select_package(&"inner/sibling".parse().unwrap(), &root).is_err());
+    for source in ["@(import(missing))", "@(import(\"missing.zy\"))", "@(import(\"main.zy\"))"] {
+        f.write("main.zy", source);
+        let errors = f.load("main.zy", p.clone()).unwrap_err();
+        assert!(errors.diagnostic_site().unwrap().path().ends_with("main.zy"));
+        if source.contains("main.zy") {
+            assert!(errors.iter().any(|error| matches!(error, SourceLoadError::Cycle(_))));
+        }
     }
 }
 
 #[test]
-fn concluding_files_register_imports_without_loading_implementation_or_relationship_targets() {
-    let fixture = Fixture::new();
-    let path = fixture.write("workspace.zy", r#"(
-        #library = @[package(library, test(smoke), documentation("docs.zy"), name(library))] @(import("math.zy")),
-        #binary = @[package(binary, name(binary))] @(import("tool.zy"))
-    )"#);
-    let packages = CompilerSession::default().package_catalog(&[path]).unwrap().packages;
-    assert!(
-        Arc::ptr_eq(&packages[0].source, &packages[1].source),
-        "inspection shares the containing file instead of cloning a template per registration"
-    );
-    assert_eq!(
-        packages
-            .iter()
-            .map(|p| (p.id.name.as_ref().unwrap().to_string(), p.role.clone()))
-            .collect::<Vec<_>>(),
-        [
-            ("binary".into(), PackageRole::Binary),
-            ("library".into(), PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source))
-        ]
-    );
-    let library = &packages[1];
-    assert_eq!(packages[0].imports.len(), 1, "each package reports only its own code");
-    assert_eq!(library.imports.len(), 1);
-    assert_eq!(library.relations.len(), 2);
-    assert_eq!(library.relations[0].kind, PackageRelationKind::Test);
-    assert!(
-        matches!(&library.relations[1].kind, PackageRelationKind::Custom(name) if name.to_string() == "documentation")
-    );
-    assert!(library.source.source[library.origin.range().clone()].starts_with("package("));
-}
-
-#[test]
-fn any_file_is_a_library_and_root_annotations_supply_roles_without_names() {
-    let fixture = Fixture::new();
-    for (source, role) in [
-        ("42", PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source)),
-        (
-            "@[package(library)] 42",
-            PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
-        ),
-        ("(@[doc] (@[package(test)] 42) : @(intrinsic(int)))", PackageRole::Test),
-    ] {
-        let path = fixture.write("single.zy", source);
-        let session = CompilerSession::default();
-        let catalog = fixture.catalog(&session, &["single.zy"]);
-        let packages = session.package_catalog(std::slice::from_ref(&path)).unwrap().packages;
-        assert_eq!(packages.len(), 1);
-        assert_eq!(packages[0].id.name, None);
-        assert_eq!(packages[0].role, role);
-        let analysis =
-            session.analyze_package(&fixture.id("single.zy"), catalog.bindings.clone()).unwrap();
-        assert!(analysis.outcome().root().is_some());
-        assert_eq!(analysis.graph().sources.len(), 1);
-    }
-}
-
-#[test]
-fn package_selection_ignores_surrounding_terms_and_unrelated_imports() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
-        r#"let unused = @(import("missing.zy")) in
-        (#one = @[package(library, name(one))] 1, #two = @[package(library, name(two))] "two", #broken = unknown)"#,
-    );
+fn selected_packages_keep_file_spans_and_do_not_inherit_file_companions() {
+    let f = Fixture::new();
+    let path = f.write("packages.zy", "let outer = 42 in (@[package(library, name(good))] 1, @[package(library, name(bad))] outer)");
+    f.write("packages.zyi", "@(intrinsic(int))");
     let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let one = session
-        .analyze_package(&fixture.named("workspace.zy", "one"), catalog.bindings.clone())
-        .unwrap();
-    let two = session
-        .analyze_package(&fixture.named("workspace.zy", "two"), catalog.bindings.clone())
-        .unwrap();
-    assert!(one.outcome().root().is_some() && two.outcome().root().is_some());
-    assert_eq!(one.graph().imports.len(), 0);
-    assert_eq!(two.graph().imports.len(), 0);
-    assert_ne!(
-        one.graph().sources[&one.graph().root].root,
-        two.graph().sources[&two.graph().root].root
-    );
-    assert!(Arc::ptr_eq(
-        &one.graph().sources[&one.graph().root].template,
-        &two.graph().sources[&two.graph().root].template,
-    ));
-    assert!(session.checked_program(&one).is_some(), "rematerialization retains the selection");
-    assert!(session.checked_program(&two).is_some());
-    assert!(session.analyze(fixture.path("workspace.zy")).is_err());
-}
-
-#[test]
-fn annotations_preserve_local_scope_but_separate_entries_require_self_contained_terms() {
-    let fixture = Fixture::new();
-    let source = "let outer = 1 in (#open = @[package(library, name(open))] outer)";
-    let path = fixture.write("workspace.zy", source);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let local = session.analyze(&path).unwrap();
-    assert!(local.outcome().root().is_some());
-    assert_eq!(local.graph().imports.len(), 0, "annotations do not create source boundaries");
-    let error = session
-        .analyze_package(&fixture.named("workspace.zy", "open"), catalog.bindings.clone())
-        .unwrap_err();
-    assert!(
-        matches!(&error, AnalysisError::Resolve { error, .. } if error.iter().any(|error| matches!(error, ResolveError::UnboundVar(name) if name.inner.0 == "outer")))
-    );
-    let site = error.diagnostic_site().unwrap();
-    assert_eq!(site.path(), path.canonicalize().unwrap());
-    assert_eq!(&source[site.range().clone()], "outer");
-}
-
-#[test]
-fn repeated_named_imports_share_roots_and_file_snapshot_inputs() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
-        "(#one = @[package(library, name(one))] 1, #two = @[package(library, name(two))] 2)",
-    );
-    fixture.write("main.zy", r#"(@(import(one)), @(import(one)), @(import(two)))"#);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let analysis =
-        session.analyze_package(&fixture.id("main.zy"), catalog.bindings.clone()).unwrap();
-    assert!(analysis.outcome().root().is_some());
-    let graph = analysis.graph();
-    let edges = &graph.sources[&graph.root].imports;
-    assert_eq!(graph.imports[&edges[0]].imported, graph.imports[&edges[1]].imported);
-    assert_ne!(graph.imports[&edges[0]].imported, graph.imports[&edges[2]].imported);
-    assert_eq!(graph.sources.len(), 3);
-    assert_eq!(analysis.sources().count(), 2);
-}
-
-#[test]
-fn file_packages_retain_companions_and_registration_imports_share_the_file_root() {
-    let fixture = Fixture::new();
-    fixture.write("lib.zy", "@[package(library)] 1");
-    fixture.write("lib.zyi", "@(intrinsic(int))");
-    fixture.write("workspace.zy", r#"(#lib = @[package(library, name(lib))] @(import("lib.zy")))"#);
-    fixture.write("main.zy", r#"(@(import(lib)), @(import("lib.zy")))"#);
-    let mut session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let analysis =
-        session.analyze_package(&fixture.id("main.zy"), catalog.bindings.clone()).unwrap();
-    assert!(analysis.outcome().root().is_some());
-    let graph = analysis.graph();
-    let edges = &graph.sources[&graph.root].imports;
-    let registration = graph.imports[&edges[0]].imported;
-    let direct = graph.imports[&edges[1]].imported;
-    assert_eq!(graph.imports[&graph.sources[&registration].imports[0]].imported, direct);
-    assert!(graph.sources[&direct].signature.is_some());
-    session.set_overlay(fixture.path("lib.zyi"), "@(intrinsic(string))".into()).unwrap();
-    assert!(
-        session
-            .analyze_package(&fixture.id("main.zy"), catalog.bindings.clone())
-            .unwrap()
-            .outcome()
-            .root()
-            .is_none()
-    );
-}
-
-#[test]
-fn local_annotated_terms_remain_local_and_only_explicit_imports_create_edges() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
-        r#"(#lib = @[doc] (@[package(library, name(lib))] 1),
-        #again = @(import(lib)))"#,
-    );
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let analysis =
-        session.analyze_package(&fixture.id("workspace.zy"), catalog.bindings.clone()).unwrap();
-    assert!(analysis.outcome().root().is_some());
-    let graph = analysis.graph();
-    let edges = &graph.sources[&graph.root].imports;
-    assert_eq!(edges.len(), 1);
-    assert_ne!(graph.imports[&edges[0]].imported, graph.root);
-    assert_eq!(graph.sources.len(), 2);
-    assert_eq!(analysis.sources().count(), 1);
-}
-
-#[test]
-fn explicit_parameters_and_nested_packages_are_ordinary_code_components() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
-        r#"@[package(library)]
-        (#inner = @[package(library, name(inner))] val (x : @(intrinsic(int))) => x)"#,
-    );
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let package = session.package(&fixture.id("workspace.zy")).unwrap();
-    assert!(package.imports.is_empty());
-    assert!(package.relations.is_empty());
-    let analysis = session.analyze_package(&package.id, catalog.bindings.clone()).unwrap();
-    assert!(analysis.outcome().root().is_some());
-    assert_eq!(analysis.graph().sources.len(), 1);
-    assert!(
-        session
-            .analyze_package(&fixture.named("workspace.zy", "inner"), catalog.bindings.clone())
-            .unwrap()
-            .outcome()
-            .root()
-            .is_some()
-    );
-}
-
-#[test]
-fn errors_in_multiple_selected_packages_keep_original_file_offsets() {
-    let fixture = Fixture::new();
-    let source =
-        "(#one = @[package(library, name(one))] 1, #bad = @[package(library, name(bad))] absent)";
-    let path = fixture.write("workspace.zy", source);
-    let error = CompilerSession::default().analyze(&path).unwrap_err();
-    let site = error.diagnostic_site().unwrap();
-    assert_eq!(site.path(), path.canonicalize().unwrap());
-    assert_eq!(&source[site.range().clone()], "absent");
-}
-
-#[test]
-fn nested_package_does_not_inherit_the_whole_files_companion() {
-    let fixture = Fixture::new();
-    fixture.write("lib.zy", "(#lib = @[package(library, name(lib))] 1)");
-    fixture.write("lib.zyi", "@(intrinsic(string))");
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["lib.zy"]);
-    let analysis =
-        session.analyze_package(&fixture.named("lib.zy", "lib"), catalog.bindings.clone()).unwrap();
-    assert!(analysis.outcome().root().is_some());
-    assert!(analysis.graph().sources[&analysis.graph().root].signature.is_none());
-    assert!(session.analyze(fixture.path("lib.zy")).unwrap().outcome().root().is_none());
-}
-
-#[test]
-fn test_associations_and_returning_code_dependencies_are_not_code_cycles() {
-    let fixture = Fixture::new();
-    fixture.write("lib.zy", r#"@[package(library, test("tests.zy"))] 1"#);
-    fixture.write("tests.zy", r#"@[package(test)] @(import("lib.zy"))"#);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["lib.zy"]);
-    let id = fixture.id("lib.zy");
-    assert_eq!(
-        session.analyze_package(&id, catalog.bindings.clone()).unwrap().graph().sources.len(),
-        1
-    );
-    let plan = session.package_tests(&id, &catalog).unwrap();
-    assert_eq!(plan.tests.len(), 1);
-    let test = session.analyze_package(&plan.tests[0].id, catalog.bindings.clone()).unwrap();
-    assert!(test.outcome().root().is_some());
-    assert_eq!(test.graph().sources.len(), 2);
-}
-
-#[test]
-fn concluding_files_can_register_unannotated_implementations_and_be_split() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "workspace.zy",
-        r#"(#lib = @[package(library, test(smoke), name(lib))] @(import("lib.zy")),
-        #missing = @[package(binary, name(missing))] @(import("missing.zy")))"#,
-    );
-    fixture
-        .write("testing.zy", r#"(#smoke = @[package(test, name(smoke))] @(import("tests.zy")))"#);
-    fixture.write("lib.zy", "1");
-    fixture.write("tests.zy", r#"@(import(lib))"#);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy", "testing.zy"]);
-    let id = fixture.named("workspace.zy", "lib");
-    assert!(
-        session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap().tests.is_empty(),
-        "registration does not mutate the imported file"
-    );
-    let library = session.analyze_package(&id, catalog.bindings.clone()).unwrap();
-    assert_eq!(library.graph().sources.len(), 2, "no test or unrelated entry is loaded");
-    let plan = session.package_tests(&id, &catalog).unwrap();
-    assert_eq!(plan.tests.len(), 1);
-    let analysis = session.analyze_package(&plan.tests[0].id, catalog.bindings.clone()).unwrap();
-    assert!(analysis.outcome().root().is_some());
-    assert_eq!(analysis.sources().count(), 4);
-}
-
-#[test]
-fn same_file_test_associations_work_but_real_code_cycles_are_rejected() {
-    let fixture = Fixture::new();
-    let path = fixture.write(
-        "workspace.zy",
-        r#"(#lib = @[package(library, test(smoke), name(lib))] 1,
-        #smoke = @[package(test, name(smoke))] @(import(lib)))"#,
-    );
-    let mut session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy"]);
-    let plan = session.package_tests(&fixture.named("workspace.zy", "lib"), &catalog).unwrap();
-    assert!(
-        session
-            .analyze_package(&plan.tests[0].id, catalog.bindings.clone())
-            .unwrap()
-            .outcome()
-            .root()
-            .is_some()
-    );
-    session
-        .set_overlay(
-            path,
-            r#"(#lib = @[package(library, name(lib))] @(import(smoke)),
-        #smoke = @[package(test, name(smoke))] @(import(lib)))"#
-                .into(),
+    let project = f.project(&["packages.zy"]);
+    let good = session
+        .analyze_package(
+            &PackageId { path: path.clone(), name: Some("good".parse().unwrap()) },
+            project.clone(),
         )
         .unwrap();
+    assert!(good.outcome().root().is_some());
+    assert!(good.graph().sources[&good.graph().root].signature.is_none());
     let error = session
-        .analyze_package(&fixture.named("workspace.zy", "lib"), catalog.bindings.clone())
+        .analyze_package(&PackageId { path, name: Some("bad".parse().unwrap()) }, project)
         .unwrap_err();
     assert!(
-        matches!(error, AnalysisError::Source { error } if matches!(error.iter().next(), Some(SourceLoadError::Cycle(cycle)) if cycle.steps.len() == 2))
+        error.diagnostics().iter().any(|d| d.site.as_ref().is_some_and(|s| s.range().start > 60))
     );
 }
 
 #[test]
-fn missing_tests_do_not_break_code_use_but_fail_test_planning() {
-    let fixture = Fixture::new();
-    let path = fixture.write("lib.zy", r#"@[package(library, test("absent.zy"))] 1"#);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["lib.zy"]);
-    let id = fixture.id("lib.zy");
-    assert!(
-        session.analyze_package(&id, catalog.bindings.clone()).unwrap().outcome().root().is_some()
-    );
-    let error = session.package_tests(&id, &catalog).unwrap_err();
-    let SourceLoadError::Package(inner) = &error else { panic!("package error") };
-    assert!(
-        matches!(&**inner, PackageError::Relation { error, .. } if matches!(**error, SourceLoadError::Read { .. }))
-    );
-    assert_eq!(error.diagnostic_site().unwrap().path(), path.canonicalize().unwrap());
-}
-
-#[test]
-fn test_planning_is_direct_and_deduplicates_canonical_targets() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "lib.zy",
-        r#"@[package(library, test("tests.zy"), test("./tests.zy"))] @(import("dependency.zy"))"#,
-    );
-    fixture.write("dependency.zy", r#"@[package(library, test("absent.zy"))] 1"#);
-    fixture.write("tests.zy", r#"@[package(test, test("absent.zy"))] @(import("lib.zy"))"#);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["lib.zy"]);
-    let plan = session.package_tests(&fixture.id("lib.zy"), &catalog).unwrap();
-    assert_eq!(plan.tests.len(), 1);
-    assert!(
-        session
-            .analyze_package(&plan.tests[0].id, catalog.bindings.clone())
-            .unwrap()
-            .outcome()
-            .root()
-            .is_some()
-    );
-}
-
-#[test]
-fn test_targets_require_test_role_while_ordinary_imports_accept_any_role() {
-    let fixture = Fixture::new();
-    fixture.write("lib.zy", r#"@[package(library, test("tool.zy"))] 1"#);
-    for source in ["()", "@[package(binary)] ()"] {
-        fixture.write("tool.zy", source);
-        let session = CompilerSession::default();
-        let catalog = fixture.catalog(&session, &["lib.zy"]);
-        assert!(matches!(session.package_tests(&fixture.id("lib.zy"), &catalog),
-            Err(SourceLoadError::Package(error)) if matches!(*error, PackageError::WrongRole { expected: PackageRole::Test, .. })));
-    }
-    fixture.write("tool.zy", "@[package(test)] 1");
-    let path = fixture.write("main.zy", r#"@(import("tool.zy"))"#);
-    assert!(CompilerSession::default().analyze(path).unwrap().outcome().root().is_some());
-}
-
-#[test]
-fn selection_and_planning_track_overlays_and_removed_registrations() {
-    let fixture = Fixture::new();
-    fixture.write("workspace.zy", r#"(#lib = @[package(library, test(old), name(lib))] 1)"#);
+fn overlays_and_project_contexts_participate_in_analysis_and_rematerialization() {
+    let f = Fixture::new();
+    let a = f.write("a.zy", "@[package(library, name(data))] 42");
+    let b = f.write("b.zy", "@[package(library, name(data))] absent");
+    let root = f.write("main.zy", "@(import(data))");
     let mut session = CompilerSession::default();
-    session
-        .set_overlay(
-            fixture.path("tests.zy"),
-            "(#old = @[package(test, name(old))] (), #new = @[package(test, name(new))] ())".into(),
-        )
-        .unwrap();
-    let catalog = fixture.catalog(&session, &["workspace.zy", "tests.zy"]);
-    let id = fixture.named("workspace.zy", "lib");
-    let first = session.analyze_package(&id, catalog.bindings.clone()).unwrap();
-    assert!(Arc::ptr_eq(&first, &session.analyze_package(&id, catalog.bindings.clone()).unwrap()));
-    assert_eq!(
-        session.package_tests(&id, &catalog).unwrap().tests[0]
-            .id
-            .name
-            .as_ref()
-            .unwrap()
-            .to_string(),
-        "old"
+    let id = PackageId { path: root, name: None };
+    let project = Arc::new(Project::new(vec![a.clone()]));
+    let analysis = session.analyze_package(&id, project.clone()).unwrap();
+    assert!(session.checked_program(&analysis).is_some());
+    assert!(session.analyze_package(&id, Arc::new(Project::new(vec![b]))).is_err());
+    assert!(session.checked_program(&analysis).is_some());
+    session.set_overlay(&a, "@[package(library, name(data))] 43".into()).unwrap();
+    let updated = session.analyze_package(&id, project).unwrap();
+    assert!(!Arc::ptr_eq(&analysis, &updated));
+    assert!(analysis.source(&a).unwrap().contains("42"));
+    assert!(updated.source(&a).unwrap().contains("43"));
+}
+
+#[test]
+fn instance_queries_and_documentation_links_distinguish_copies_of_one_file() {
+    let f = Fixture::new();
+    f.write(
+        "copy.zy",
+        "let value = @(import(data)) in\n--| [value](zydeco:name:value)\n@[doc] value",
     );
-    session
-        .set_overlay(&id.path, r#"(#lib = @[package(library, test(new), name(lib))] 2)"#.into())
-        .unwrap();
-    let second = session.analyze_package(&id, catalog.bindings.clone()).unwrap();
-    assert!(!Arc::ptr_eq(&first, &second));
-    assert_eq!(
-        session.package_tests(&id, &catalog).unwrap().tests[0]
-            .id
-            .name
-            .as_ref()
-            .unwrap()
-            .to_string(),
-        "new"
+    f.write(
+        "main.zy",
+        r#"(
+        @[package(library, name(a))] (@[package(library, name(data))] 41, @(import("copy.zy"))),
+        @[package(library, name(b))] (@[package(library, name(data))] 42, @(import("copy.zy")))
+    )"#,
     );
-    let canonical_id = session.package(&id).unwrap().id;
-    for source in [
-        r#"(#renamed = @[package(library, name(lib))] 2)"#,
-        r#"let different = @[package(library, name(lib))] 2 in different"#,
-        r#"(@[package(library, name(lib))] 2, #lib = 99)"#,
+    let analysis = CompilerSession::default().analyze(f.path("main.zy")).unwrap();
+    let documents = analysis.documentation().entries();
+    assert_eq!(documents.len(), 2);
+    let targets = documents
+        .iter()
+        .map(|document| match document.links[0].target.as_ref().unwrap() {
+            | crate::source::DocumentationLinkTarget::Definition(id) => *id,
+            | _ => panic!("definition link"),
+        })
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(targets.len(), 2);
+    for (index, instance) in analysis
+        .graph()
+        .instances
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| i.template.path.ends_with("copy.zy"))
+    {
+        let definition =
+            *instance.template.arena.defs.iter().find(|(_, name)| name.0 == "value").unwrap().0;
+        let subjects = analysis.entities_in_instance(PackageInstanceId(index), definition.into());
+        assert_eq!(subjects.len(), 1);
+        let zydeco_surface::scoped::syntax::EntityId::Def(definition) = subjects[0] else {
+            panic!()
+        };
+        assert!(targets.contains(&definition));
+    }
+}
+
+#[test]
+fn documentation_workers_replay_an_opaque_package_context_with_pinned_sources() {
+    let f = Fixture::new();
+    let root = f.write("main.zy", "@[package(library)] (\n@[package(library, name(data))] 42,\n--| ```zydeco check\n--| @(import(data))\n--| ```\n@[doc] ())");
+    let session = CompilerSession::default();
+    let analysis = session.analyze(&root).unwrap();
+    let document = &analysis.documentation().entries()[0];
+    let example = crate::source::DocumentationExample::from_documentation(
+        document,
+        analysis.source(&root).unwrap(),
+    )
+    .remove(0);
+    let request = example.request_in_instance(&analysis, analysis.graph().root_instance).unwrap();
+    f.write("main.zy", "absent");
+    let request: crate::source::DocumentationExampleRequest =
+        serde_json::from_str(&serde_json::to_string(&request).unwrap()).unwrap();
+    let result = request.check();
+    assert!(result.status.is_passed(), "{:?}", result.diagnostics);
+}
+
+#[test]
+fn package_availability_follows_transitive_file_routes_independently_of_source_order() {
+    let f = Fixture::new();
+    f.write("definitions.zy", "@[package(library, name(data))] 42");
+    f.write("bridge.zy", "@(import(\"definitions.zy\"))");
+    for main in [
+        "(@(import(data)), @(import(\"bridge.zy\")))",
+        "(@(import(\"bridge.zy\")), @(import(data)))",
+        "@[package(library)] (@(import(data)), @(import(\"bridge.zy\")))",
     ] {
-        session.set_overlay(&id.path, source.into()).unwrap();
+        f.write("main.zy", main);
         assert!(
-            session
-                .analyze_package(&id, catalog.bindings.clone())
+            CompilerSession::default()
+                .analyze(f.path("main.zy"))
                 .unwrap()
                 .outcome()
                 .root()
                 .is_some()
         );
-        assert_eq!(session.package(&id).unwrap().id, canonical_id);
     }
-    session
-        .set_overlay(&id.path, "(#renamed = @[package(library, name(renamed))] 2)".into())
+    let project = f.project(&["bridge.zy"]);
+    let id = PackageId { path: f.path("bridge.zy"), name: Some("/data".parse().unwrap()) };
+    assert!(
+        CompilerSession::default()
+            .analyze_package(&id, project)
+            .unwrap()
+            .outcome()
+            .root()
+            .is_some()
+    );
+}
+
+#[test]
+fn shared_imported_computations_execute_at_each_dynamic_occurrence() {
+    let f = Fixture::new();
+    let builtin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../lib/std/builtin.zy")
+        .canonicalize()
         .unwrap();
-    assert!(
-        matches!(session.analyze_package(&id, catalog.bindings.clone()), Err(AnalysisError::Source { error }) if matches!(error.iter().next(), Some(SourceLoadError::Package(error)) if matches!(**error, PackageError::Missing { .. })))
-    );
-}
-
-#[test]
-fn duplicate_names_old_annotations_and_missing_names_have_specific_errors() {
-    let fixture = Fixture::new();
-    let duplicate = fixture.write(
-        "duplicates.zy",
-        "(#main = @[package(library, name(main))] 1, #main = @[package(test, name(main))] 2)",
-    );
-    assert!(matches!(CompilerSession::default().package_catalog(&[duplicate]),
-        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && errors.iter().any(|error| matches!(error, SourceParseError::PackageDirective { error, .. } if matches!(**error, PackageDirectiveError::DuplicateName { .. })))));
-    let old = fixture.write("old.zy", r#"@[package(library("main"))] ()"#);
-    assert!(matches!(CompilerSession::default().package_catalog(&[old]),
-        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && errors.iter().any(|error| matches!(error, SourceParseError::PackageDirective { error, .. } if matches!(**error, PackageDirectiveError::Annotation { .. })))));
-    fixture.write("plain.zy", "()");
-    assert!(matches!(CompilerSession::default().package(&fixture.named("plain.zy", "missing")),
-        Err(SourceLoadError::Package(error)) if matches!(*error, PackageError::Missing { .. })));
-}
-
-#[test]
-fn invalid_source_paths_and_syntax_are_reported_without_panicking() {
-    let fixture = Fixture::new();
+    f.write("effect.zy", &format!("param (/Thk; /OS; /stdio) : @(import({:?})) in fn (next : Thk OS) => ! stdio/write_line \"tick\" next", builtin.to_string_lossy()));
+    let root = f.write("main.zy", &format!("param (/process; builtin) : @(import({:?})) in (@(import(\"effect.zy\"))) builtin {{ (@(import(\"effect.zy\"))) builtin {{ ! process/exit 0 }} }}", builtin.to_string_lossy()));
     let session = CompilerSession::default();
-    let root = fixture.directory.path().ancestors().last().unwrap().to_path_buf();
-    for path in [fixture.path("missing.zy"), fixture.directory.path().to_path_buf(), root] {
-        assert!(matches!(session.package_catalog(&[path]), Err(SourceLoadError::Read { .. })));
+    let analysis = session.analyze(&root).unwrap();
+    let executable = session.executable_program(&analysis).unwrap();
+    let dynamic = zydeco_dynamics::BuiltinRootLinker {
+        scoped: executable.scoped,
+        statics: executable.statics,
+        root: executable.root,
+        signature: executable.signature,
     }
-    fixture.write("broken.zy", "@[package(library)] let x = in x");
-    assert!(matches!(
-        session.package_catalog(&[fixture.path("broken.zy")]),
-        Err(SourceLoadError::Parse(errors)) if errors.len() == 1 && matches!(errors.iter().next(), Some(SourceParseError::Parse { .. }))
-    ));
-}
-
-#[cfg(unix)]
-#[test]
-fn symlinked_sources_share_canonical_identity() {
-    let fixture = Fixture::new();
-    let source = fixture.write("workspace.zy", "(#lib = @[package(library, name(lib))] 1)");
-    std::os::unix::fs::symlink(source, fixture.path("alias.zy")).unwrap();
-    fixture.write("main.zy", r#"(@(import(lib)), @(import(lib)))"#);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["workspace.zy", "alias.zy"]);
-    let analysis =
-        session.analyze_package(&fixture.id("main.zy"), catalog.bindings.clone()).unwrap();
-    let graph = analysis.graph();
-    let imports = &graph.sources[&graph.root].imports;
-    assert_eq!(graph.imports[&imports[0]].imported, graph.imports[&imports[1]].imported);
+    .run()
+    .unwrap();
+    let mut input = std::io::Cursor::new(Vec::<u8>::new());
+    let mut output = Vec::new();
+    let outcome =
+        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamic).run();
+    assert!(matches!(outcome, zydeco_dynamics::ProgKont::ExitCode(0)));
+    assert_eq!(String::from_utf8(output).unwrap(), "tick\ntick\n");
+    let instances = analysis
+        .graph()
+        .instances
+        .iter()
+        .filter(|instance| instance.template.path.ends_with("effect.zy"))
+        .collect::<Vec<_>>();
+    assert_eq!(instances.len(), 2);
+    assert_eq!(instances[0].source, instances[1].source);
 }
 
 #[test]
-fn missing_named_import_reports_the_consumer_site() {
-    let fixture = Fixture::new();
-    fixture.write("workspace.zy", "(#one = @[package(library, name(one))] 1)");
-    let source = r#"@(import(missing))"#;
-    let path = fixture.write("main.zy", source);
-    let error = CompilerSession::default().analyze(&path).unwrap_err();
-    assert!(matches!(&error, AnalysisError::Source { error } if matches!(error.iter().next(),
-        Some(SourceLoadError::PackageImport { error, .. }) if matches!(&**error, SourceLoadError::Package(error) if matches!(&**error, PackageError::Unknown { .. })))));
-    let site = error.diagnostic_site().unwrap();
-    assert_eq!(site.path(), path.canonicalize().unwrap());
-    assert_eq!(&source[site.range().clone()], source);
-}
-
-#[test]
-fn qualified_names_are_catalog_local_and_root_names_share_whole_file_identity() {
-    let fixture = Fixture::new();
-    fixture.write("catalog.zy", r#"@[discover(include("library.zy", "tests/*.zy"))] ()"#);
-    fixture.write("library.zy", "@[package(library, name(std/data))] 1");
-    fixture.write("library.zyi", "@(intrinsic(int))");
-    fixture.write(
-        "tests/smoke.zy",
-        "@[package(test(of(std/data)), name(std/data/smoke))] @(import(std/data))",
+fn package_selection_and_inspection_follow_nested_project_registrations() {
+    let f = Fixture::new();
+    let source = f.write(
+        "vendor.zy",
+        "(@[package(library, name(data))] 42, @[package(library, name(client))] @(import(/data)))",
     );
-    fixture.write("main.zy", r#"(@(import(std/data)), @(import("library.zy")))"#);
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["catalog.zy"]);
-    let id =
-        catalog.bindings.resolve(&"std/data".parse().unwrap(), fixture.directory.path()).unwrap();
-    assert_eq!(id, session.package(&fixture.id("library.zy")).unwrap().id);
-    assert_eq!(id.name, None, "a root name is not an inner-term selection");
-    let analysis =
-        session.analyze_package(&fixture.id("main.zy"), catalog.bindings.clone()).unwrap();
-    let graph = analysis.graph();
-    let imports = &graph.sources[&graph.root].imports;
-    assert_eq!(graph.imports[&imports[0]].imported, graph.imports[&imports[1]].imported);
-    assert!(graph.sources[&graph.imports[&imports[0]].imported].signature.is_some());
-    let plan = session.package_tests(&id, &catalog).unwrap();
-    assert_eq!(plan.tests.len(), 1);
-    assert_eq!(plan.tests[0].name.as_ref().unwrap().to_string(), "std/data/smoke");
-    assert!(session.analyze(fixture.path("main.zy")).is_err(), "no implicit catalog search");
-}
-
-#[test]
-fn catalog_scopes_are_part_of_cached_analysis_and_rematerialization() {
-    let fixture = Fixture::new();
-    fixture.write("first.zy", "@[package(library, name(dep))] 1");
-    fixture.write("second.zy", r#"@[package(library, name(dep))] "different type""#);
-    fixture.write("main.zy", "(@(import(dep)) : @(intrinsic(int)))");
-    let session = CompilerSession::default();
-    let first = fixture.catalog(&session, &["first.zy"]);
-    let second = fixture.catalog(&session, &["second.zy"]);
-    let root = fixture.id("main.zy");
-    let accepted = session.analyze_package(&root, first.bindings.clone()).unwrap();
-    let rejected = session.analyze_package(&root, second.bindings).unwrap();
-    assert!(accepted.outcome().root().is_some());
-    assert!(rejected.outcome().root().is_none());
-    assert!(!Arc::ptr_eq(&accepted, &rejected));
-    assert!(Arc::ptr_eq(&accepted, &session.analyze_package(&root, first.bindings).unwrap()));
-    assert!(
-        session.checked_program(&accepted).is_some(),
-        "later analysis cannot change the retained catalog"
+    let project = Arc::new(
+        Project::new(Vec::new()).with_registration(
+            "vendor".parse().unwrap(),
+            Project::new(Vec::new())
+                .with_registration("nested".parse().unwrap(), Project::new(vec![source])),
+        ),
     );
-    assert!(session.checked_program(&rejected).is_none());
-    assert!(session.documentation_reference(accepted).is_ok());
-}
-
-#[test]
-fn catalogs_deduplicate_files_and_reject_conflicting_names_with_both_locations() {
-    let fixture = Fixture::new();
-    let first = fixture.write("first.zy", "@[package(library, name(api))] 1");
-    let second = fixture.write("second.zy", "(#unrelated = @[package(binary, name(api))] absent)");
     let session = CompilerSession::default();
-    assert_eq!(fixture.catalog(&session, &["first.zy", "./first.zy"]).packages.len(), 1);
-    let error = session.package_catalog(&[first.clone(), second.clone()]).unwrap_err();
-    assert!(matches!(&error, SourceLoadError::Package(error) if matches!(&**error,
-        PackageError::DuplicateName { name, first: origin, site } if
-            name.to_string() == "api" && origin.path() == first.canonicalize().unwrap()
-                && site.path() == second.canonicalize().unwrap())));
-    assert!(
-        fixture
-            .catalog(&session, &["second.zy"])
-            .bindings
-            .resolve(&"api".parse().unwrap(), fixture.directory.path())
-            .is_ok(),
-        "different scopes can reuse a name"
-    );
-}
-
-#[test]
-fn unknown_names_never_fall_back_to_files_and_relationship_errors_keep_authored_spans() {
-    let fixture = Fixture::new();
-    fixture.write("missing", "1");
-    fixture.write("library.zy", "@[package(library, name(api))] 1");
-    let session = CompilerSession::default();
-    let catalog = fixture.catalog(&session, &["library.zy"]);
-    assert!(
-        matches!(catalog.bindings.resolve(&"missing".parse().unwrap(), fixture.directory.path()),
-        Err(SourceLoadError::Package(error)) if matches!(*error, PackageError::Unknown { .. }))
-    );
-    fixture.write("main.zy", r#"@(import("./missing"))"#);
-    assert!(session.analyze(fixture.path("main.zy")).unwrap().outcome().root().is_some());
-    for source in ["@[package(library, test(missing))] 1", "@[package(test(of(api, missing)))] 1"] {
-        let path = fixture.write("relation.zy", source);
-        let session = CompilerSession::default();
-        let catalog = fixture.catalog(&session, &["library.zy", "relation.zy"]);
-        let root = if source.contains("test(of") { "library.zy" } else { "relation.zy" };
-        let error = session.package_tests(&fixture.id(root), &catalog).unwrap_err();
-        assert!(matches!(&error, SourceLoadError::Package(error) if matches!(&**error,
-            PackageError::Relation { error, .. } if matches!(&**error, SourceLoadError::Package(error)
-                if matches!(**error, PackageError::Unknown { .. })))));
-        let site = error.diagnostic_site().unwrap();
-        assert_eq!(site.path(), path.canonicalize().unwrap());
-        assert!(source[site.range().clone()].contains("missing"));
+    let id = session
+        .selection(&SourceReference::Package("/vendor/nested/client".parse().unwrap()), &project)
+        .unwrap();
+    let analysis = session.analyze_package(&id, project.clone()).unwrap();
+    assert!(analysis.outcome().root().is_some());
+    let root = PackageContext::at_root(project.root);
+    assert!(analysis.graph().select_package(&"/data".parse().unwrap(), &root).is_err());
+    for (_, package) in session.declarations(&project).unwrap() {
+        assert!(
+            session
+                .analyze_package(&package.id, project.clone())
+                .unwrap()
+                .outcome()
+                .root()
+                .is_some()
+        );
     }
+}
+
+#[test]
+fn merged_documentation_preserves_locations_and_examples_in_each_original_file() {
+    let f = Fixture::new();
+    f.write("a.zy", "--| ```zydeco check\n--| @(import(data))\n--| ```\n@[doc] ()");
+    f.write("b.zy", "\n\n--| ```zydeco check\n--| @(import(data))\n--| ```\n@[doc] ()");
+    let root = f.write("main.zy", "(@[package(library, name(left))] (@[package(library, name(data))] 42, @(import(\"a.zy\"))), @[package(library, name(right))] (@[package(library, name(data))] 42, @(import(\"b.zy\"))))");
+    let session = CompilerSession::default();
+    let analysis = session.analyze(&root).unwrap();
+    assert_eq!(analysis.documentation().entries().len(), 1);
+    let mut origins = std::collections::HashSet::new();
+    for (index, instance) in
+        analysis.graph().instances.iter().enumerate().filter(|(_, instance)| {
+            instance.template.path.ends_with("a.zy") || instance.template.path.ends_with("b.zy")
+        })
+    {
+        let id = PackageInstanceId(index);
+        let documents = analysis.documentation().in_instance(analysis.graph(), id);
+        assert_eq!(documents.len(), 1);
+        let document = &documents[0];
+        assert_eq!(document.path, instance.template.path);
+        origins.insert(document.path.clone());
+        let examples = crate::source::DocumentationExample::from_documentation(
+            document,
+            &instance.template.source,
+        );
+        assert_eq!(examples.len(), 1);
+        let checked = examples[0].request_in_instance(&analysis, id).unwrap().check();
+        assert!(checked.status.is_passed(), "{:?}", checked.diagnostics);
+    }
+    assert_eq!(origins.len(), 2);
+}
+
+#[test]
+fn package_relationships_compare_resolved_targets_and_retain_each_origin() {
+    let f = Fixture::new();
+    f.write("a.zy", "@[package(test(of(../subject)), name(check))] 42");
+    f.write("b.zy", "@[package(test(of(/subject)), name(/check))] 42");
+    let project = f.project(&["a.zy", "b.zy"]);
+    let id = PackageId { path: f.path("a.zy"), name: Some("check".parse().unwrap()) };
+    let graph = CompilerSession::default().load_package(&id, project.clone()).unwrap();
+    let declarations = graph
+        .packages
+        .iter()
+        .filter(|package| package.namespace.to_string() == "/check")
+        .collect::<Vec<_>>();
+    assert_eq!(declarations.len(), 2);
+    assert_eq!(declarations[0].source, declarations[1].source);
+    assert_eq!(declarations[0].relations[0].target, declarations[1].relations[0].target);
+    assert_ne!(declarations[0].origin, declarations[1].origin);
+    f.write("b.zy", "@[package(test(of(/other)), name(/check))] 42");
+    let error = CompilerSession::default().load_package(&id, project).unwrap_err();
+    assert!(error.to_string().contains("conflict"));
+    assert!(error.to_string().contains("a.zy") && error.to_string().contains("b.zy"));
 }

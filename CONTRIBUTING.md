@@ -97,8 +97,8 @@ and use `@[typeof]` to reuse the remaining existential type.
 ## Use Source Packages
 
 Prefer complete files as library and binary entry points.
-Name a file with `@[package(library, name(example/math))]` and refer to it as `@(import(example/math))`.
-A test can declare `@[package(test(of(example/math)))]`; plain `@[package(test)]` is also valid.
+Name a file with `@[package(library, name(example/math))]` and refer to it as `@(import(/example/math))`.
+A test can declare `@[package(test(of(/example/math)))]`; plain `@[package(test)]` is also valid.
 Use `name(example/smoke)` if the test also needs a public name.
 Names are independent of term fields and file layout.
 The [language reference](docs/references/language.md#source-packages) owns the rules.
@@ -116,55 +116,58 @@ A primary library can use `package.zy` as both its entry point and discovery bou
 
 For a collection without a main entry, use `workspace.zy` with a discovery annotation and `()` as its body.
 Reserve discovered directories for entry files and keep helpers or fixtures outside those patterns.
-The [package plan](docs/proposals/package-management.md#shared-project-context) tracks discovery integration
-with the [resolution model](docs/proposals/package-resolution.md).
+The [resolution reference](docs/references/language.md#package-hierarchy) explains package paths and source copies.
+The [package plan](docs/proposals/package-management.md#shared-project-context) develops frontend configuration.
 
 From this repository's root, [workspace.zy](workspace.zy) is selected automatically:
 
 ```sh
 zydeco show
-zydeco check -p std
-zydeco test -p std
-zydeco test -p std -t all
+zydeco check -p /std
+zydeco test lib/tests/std/bool.zy
+zydeco test lib/tests/std/bool.zy -t all
 zydeco check lib/tests/std/bool.zy
 ```
 
 Select declared packages with repeatable `-p NAME` options, also spelled `--pkg` or `--package`:
 
 ```sh
-zydeco check -p std -p std/memory
+zydeco check -p /std -p /std/memory
 ```
 
 Use either a positional source or package options, not both.
 `check`, `test`, and `build` accept multiple packages; `run` and `build --execute` select one.
 The options select existing names, never declaration files; use top-level `discover` to register more files.
-Preparation indexes names once; imports and compilation reuse that catalog without scanning.
-`show` lists declarations and relationships without checking their code.
+Preparation supplies source inputs; resolution instantiates their declarations in lexical package contexts.
+Use `-p /example/math` for an absolute package path and a positional path for a source file.
+`show` lists declarations and relationships. `test` runs explicitly selected test packages;
+[relationship-based suite selection](docs/proposals/package-management.md#validation-and-operation-planning)
+remains planned.
 `test` accepts the same targets and runtime directory as `run`, with repeatable `-t` options or `-t all`.
 The [execution selection rules](docs/references/language.md#selecting-an-execution-backend) specify defaults,
 ordering, preparation, and failure handling.
 It uses empty stdin and arguments; each test/backend result is labeled, and nonzero exits report captured output.
 See the [std guide](lib/std/README.md#source-packages-and-tests) for fixture-dependent and multi-backend coverage.
 
-Quoted imports such as `@(import("library.zy"))` and CLI paths still select complete files without a catalog.
+Quoted imports such as `@(import("library.zy"))` and positional CLI paths select complete files directly.
 For the [small file-based example](docs/examples/packages/workspace.zy), run from its root:
 
 ```sh
 cd docs/examples/packages
 zydeco show
-zydeco test library.zy
+zydeco test tests/smoke.zy
 zydeco run main.zy
 zydeco build main.zy --target wasm-sps --build-dir build
 ```
 
-For a named binary, use `zydeco run example/hello` or the corresponding `build` command.
+For a named binary, use `zydeco run -p /example/hello` or the corresponding `build` command.
 Named artifacts use dots for namespace separators (`example.hello.sps.wasm`); path builds use the file stem.
 Concluding files can register imported or inline terms with explicit names.
 Selecting an inline term independently requires all of its imports and parameters inside that term.
 
-`zydeco repl` uses the same detected catalog.
-Cajun recognizes the notation, but does not yet detect or expose project catalogs;
-its standalone analyses still require explicit file imports.
+`zydeco repl` uses the same detected project.
+Cajun consumes package-instance provenance through the shared analysis interface.
+Its standalone analysis uses file imports; automatic project detection remains frontend configuration work.
 
 ## Compile Programs
 

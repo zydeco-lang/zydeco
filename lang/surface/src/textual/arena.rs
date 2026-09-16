@@ -46,7 +46,7 @@ pub struct TextArena {
 impl TextArena {
     /// Direct AST edges, in stable structural order, excluding trivia and allocation bookkeeping.
     /// Keep the exhaustive cases here so reachability has one structural definition.
-    pub(crate) fn children(&self, entity: EntityId) -> Vec<EntityId> {
+    pub fn children(&self, entity: EntityId) -> Vec<EntityId> {
         match entity {
             | EntityId::Def(_) => Vec::new(),
             | EntityId::Meta(meta) => {

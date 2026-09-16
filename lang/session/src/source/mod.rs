@@ -6,6 +6,8 @@ mod loader;
 mod package;
 mod program;
 mod query;
+mod selector;
+pub use selector::*;
 mod pipeline;
 mod report;
 mod warning;

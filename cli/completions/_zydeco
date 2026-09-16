@@ -339,7 +339,7 @@ _zydeco_commands() {
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a source package and its code dependencies, including its declared executable role' \
-'test:Run a test package or the selected package'\''s direct test companions with empty stdin' \
+'test:Run explicitly selected test packages with empty stdin' \
 'repl:Start the declaration-free terminal REPL' \
 'build:Build a Zydeco program for the selected target' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -443,7 +443,7 @@ _zydeco__subcmd__help_commands() {
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a source package and its code dependencies, including its declared executable role' \
-'test:Run a test package or the selected package'\''s direct test companions with empty stdin' \
+'test:Run explicitly selected test packages with empty stdin' \
 'repl:Start the declaration-free terminal REPL' \
 'build:Build a Zydeco program for the selected target' \
 'help:Print this message or the help of the given subcommand(s)' \

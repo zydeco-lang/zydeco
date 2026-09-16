@@ -1,24 +1,30 @@
-use super::{SourceDiagnosticSite, SourceLoadError, SourcePath, SourceTemplate};
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use super::{SourceDiagnosticSite, SourceLoadError, SourceTemplate};
+use std::{path::PathBuf, sync::Arc};
 use thiserror::Error;
 mod discovery;
-pub use zydeco_surface::metadata::{
-    PackageName, PackageRelation, PackageRelationKind, PackageRole, SourceReference,
+pub(crate) use discovery::PackageDiscovery;
+mod context;
+mod shape;
+mod resolution;
+pub use context::*;
+pub(crate) use resolution::{Definition, PackageScope};
+pub use resolution::{
+    PackageInstance, PackageInstanceId, ResolvedPackage, ResolvedPackageReference,
+    ResolvedPackageRelation,
 };
-use zydeco_surface::textual::{ImportSite, PackageSite, syntax as t};
+pub use zydeco_surface::metadata::{
+    PackageName, PackagePath, PackageRelation, PackageRelationKind, PackageRole, SourceReference,
+};
+use zydeco_surface::textual::{ImportSite, syntax as t};
 use zydeco_utils::span::Sp;
 
-/// A resolved source entry. The selector is compiler-internal, not path syntax.
+/// A file entry and optional package path for a resolution request.
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub struct PackageId {
     pub path: PathBuf,
-    pub name: Option<PackageName>,
+    pub name: Option<PackagePath>,
 }
 
 impl std::fmt::Display for PackageId {
@@ -31,37 +37,10 @@ impl std::fmt::Display for PackageId {
     }
 }
 
-/// Immutable name resolution, retained as part of the compiler query key.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct PackageBindings {
-    entries: BTreeMap<PackageName, PackageId>,
-}
-
-impl PackageBindings {
-    pub fn resolve(
-        &self, reference: &SourceReference, directory: &Path,
-    ) -> Result<PackageId, SourceLoadError> {
-        match reference {
-            | SourceReference::Package(name) => self
-                .entries
-                .get(name)
-                .cloned()
-                .ok_or_else(|| PackageError::Unknown { name: name.clone() }.into()),
-            | SourceReference::Path(path) => {
-                let requested = directory.join(path);
-                let path = SourcePath::identity(&requested).map_err(|source| {
-                    SourceLoadError::Read { path: requested, source: source.into() }
-                })?;
-                Ok(PackageId { path, name: None })
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Package {
     pub id: PackageId,
-    pub name: Option<PackageName>,
+    pub name: Option<PackagePath>,
     pub role: PackageRole,
     pub origin: SourceDiagnosticSite,
     pub imports: Vec<ImportSite>,
@@ -71,16 +50,12 @@ pub struct Package {
 }
 
 impl Package {
-    pub(crate) fn select(
-        source: &Arc<SourceTemplate>, name: Option<&PackageName>,
-    ) -> Result<Self, PackageError> {
-        let site = source.package_site(name)?;
-        let term = site.map_or(source.unit.root, |site| site.term);
-        Ok(Self {
-            id: PackageId {
-                path: source.path.clone(),
-                name: if term == source.unit.root { None } else { name.cloned() },
-            },
+    pub(crate) fn from_graph(id: &PackageId, graph: &super::SourceGraph) -> Self {
+        let instance = &graph.instances[graph.root_instance.0];
+        let source = &instance.template;
+        let site = source.package_sites.iter().find(|site| site.term == instance.root);
+        Self {
+            id: id.clone(),
             name: site.and_then(|site| site.name.clone()),
             role: site.map_or(
                 PackageRole::Library(zydeco_surface::metadata::LibraryRole::Source),
@@ -88,15 +63,12 @@ impl Package {
             ),
             origin: SourceDiagnosticSite::new(
                 source.path.clone(),
-                site.map_or_else(
-                    || source.spans[&t::EntityId::Term(source.unit.root)].range(),
-                    |site| site.span.range(),
-                ),
+                site.map_or(source.spans[&instance.root.into()].range(), |site| site.span.range()),
             ),
-            imports: source.code_sites(term),
+            imports: source.code_sites(instance.root),
             relations: site.map_or_else(Vec::new, |site| site.relations.clone()),
             source: source.clone(),
-        })
+        }
     }
 
     pub fn require_role(&self, expected: PackageRole) -> Result<(), PackageError> {
@@ -115,20 +87,22 @@ impl Package {
 
 #[derive(Clone, Debug, Error)]
 pub enum PackageError {
-    #[error("unknown package `{name}` in the selected catalog")]
-    Unknown { name: PackageName },
-    #[error("duplicate package name `{name}` at {site}; first declared at {first}")]
-    DuplicateName { name: PackageName, site: SourceDiagnosticSite, first: SourceDiagnosticSite },
+    #[error("unknown package `{name}` in this resolution run")]
+    Unknown { name: PackagePath },
+    #[error("invalid package path at {site}: {error}")]
+    Path { site: SourceDiagnosticSite, error: PackageContextError },
+    #[error(transparent)]
+    Context(#[from] PackageContextError),
+    #[error(
+        "conflicting resolved definitions for package `{namespace}` at {site}; first declared at {first}"
+    )]
+    Conflict {
+        namespace: PackageNamespace,
+        site: SourceDiagnosticSite,
+        first: SourceDiagnosticSite,
+    },
     #[error("package discovery at {site} cannot read `{}`: {source}", path.display())]
     Discovery { path: PathBuf, site: SourceDiagnosticSite, source: Arc<std::io::Error> },
-    #[error("package discovery at {site}: {error}")]
-    DiscoveredSource {
-        site: SourceDiagnosticSite,
-        #[source]
-        error: Box<SourceLoadError>,
-    },
-    #[error("source `{}` has no package named `{name}`", path.display())]
-    Missing { path: PathBuf, name: PackageName },
     #[error("package `{package}` at {site} has role {found}; expected {expected}")]
     WrongRole {
         package: PackageId,
@@ -136,30 +110,22 @@ pub enum PackageError {
         found: Box<PackageRole>,
         site: SourceDiagnosticSite,
     },
-    #[error("package relationship at {site}: {error}")]
-    Relation {
-        site: SourceDiagnosticSite,
-        #[source]
-        error: Box<SourceLoadError>,
-    },
 }
 
 impl PackageError {
     pub fn diagnostic_site(&self) -> Option<SourceDiagnosticSite> {
         match self {
-            | Self::Missing { .. } | Self::Unknown { .. } => None,
-            | Self::DuplicateName { site, .. }
+            | Self::Unknown { .. } | Self::Context(_) => None,
+            | Self::Path { site, .. }
+            | Self::Conflict { site, .. }
             | Self::WrongRole { site, .. }
             | Self::Discovery { site, .. } => Some(site.clone()),
-            | Self::Relation { site, error } | Self::DiscoveredSource { site, error } => {
-                error.diagnostic_site().or_else(|| Some(site.clone()))
-            }
         }
     }
 }
 
 impl SourceTemplate {
-    /// Only ordinary imports are code edges; package annotations do not partition the term.
+    /// Import sites reachable from the selected term are its code dependencies.
     pub(crate) fn code_sites(&self, root: t::TermId) -> Vec<ImportSite> {
         let reachable = self.arena.reachable_from(root.into());
         self.import_sites
@@ -167,21 +133,6 @@ impl SourceTemplate {
             .filter(|site| reachable.contains(&site.term.into()))
             .cloned()
             .collect()
-    }
-
-    pub(crate) fn package_site(
-        &self, name: Option<&PackageName>,
-    ) -> Result<Option<&PackageSite>, PackageError> {
-        let site = self.package_sites.iter().find(|site| match name {
-            | Some(name) => site.name.as_ref() == Some(name),
-            | None => site.term == self.unit.root,
-        });
-        match (name, site) {
-            | (Some(name), None) => {
-                Err(PackageError::Missing { path: self.path.clone(), name: name.clone() })
-            }
-            | _ => Ok(site),
-        }
     }
 }
 

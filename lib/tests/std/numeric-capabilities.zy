@@ -1,7 +1,7 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
-  let make_std = @(import(std)) that
-  param (/VType; /Ret; /OS; /Int; /Float64; /numeric; builtin) : @(import(std/builtin)) that
+  let make_std = @(import(/std)) that
+  param (/VType; /Ret; /OS; /Int; /Float64; /numeric; builtin) : @(import(/std/builtin)) that
   let (/Bool; /Numeric; /bool; /int; /float64; /process; dictionaries) = builtin |> make_std in
   let int_raw = numeric/int in
   let ! multiply_add_equal (A : VType)

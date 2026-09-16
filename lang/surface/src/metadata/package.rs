@@ -1,3 +1,4 @@
+use super::{PackagePath, PackagePathError};
 use std::{collections::BTreeMap, fmt, path::PathBuf, str::FromStr};
 use thiserror::Error;
 use zydeco_syntax::{ForeignAbi, ForeignSymbolName, Meta};
@@ -141,7 +142,7 @@ impl LibraryContract {
     }
 }
 
-/// A package name, qualified by `/` and unique within a selected catalog.
+/// A sequence of named interface fields or an artifact's logical name.
 #[derive(
     Clone,
     Debug,
@@ -221,11 +222,11 @@ impl fmt::Display for PackageRelationKind {
     }
 }
 
-/// Names are resolved in an explicit catalog; quoted source paths select complete files.
+/// Package paths use the resolution context; quoted paths select source files.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SourceReference {
     Path(PathBuf),
-    Package(PackageName),
+    Package(PackagePath),
 }
 
 impl SourceReference {
@@ -279,14 +280,12 @@ impl fmt::Display for SourceReference {
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SourceReferenceError {
-    #[error(
-        "source path must be nonempty and contain no NUL or # characters; select named packages through a catalog"
-    )]
+    #[error("source path must be nonempty and contain no NUL or # characters")]
     Path,
     #[error("expected a package name or quoted source path")]
     Shape,
     #[error(transparent)]
-    Name(#[from] PackageNameError),
+    Name(#[from] PackagePathError),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -300,7 +299,7 @@ pub struct PackageRelation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PackageAnnotation {
     pub role: PackageRole,
-    pub name: Option<PackageName>,
+    pub name: Option<PackagePath>,
     pub relations: Vec<(Vec<usize>, PackageRelation)>,
 }
 
@@ -353,7 +352,7 @@ impl PackageAnnotation {
                     let [Meta::Ident(written)] = args.as_slice() else {
                         return Err((path, Error::NameShape));
                     };
-                    name = Some(written.parse().map_err(|error| (path, Error::Name(error)))?);
+                    name = Some(written.parse().map_err(|error| (path, Error::Path(error)))?);
                     continue;
                 }
                 | "code" => return Err((path, Error::Code)),
@@ -365,11 +364,6 @@ impl PackageAnnotation {
                 return Err((path, Error::Relation));
             };
             add(kind, reference, path)?;
-        }
-        if matches!(role, PackageRole::Library(LibraryRole::Compiled(_) | LibraryRole::Zydeco))
-            && name.is_none()
-        {
-            return Err((vec![0], Error::LibraryName));
         }
         Ok(Self { role, name, relations })
     }
@@ -391,14 +385,14 @@ pub enum PackageAnnotationError {
     DuplicateExport,
     #[error("root export cannot be combined with field exports")]
     MixedRootExport,
-    #[error("compiled library requires an explicit package name")]
-    LibraryName,
     #[error("package expects library, binary, or test as its first argument")]
     Role,
     #[error("name expects one unquoted package identifier")]
     NameShape,
     #[error(transparent)]
     Name(PackageNameError),
+    #[error(transparent)]
+    Path(PackagePathError),
     #[error("duplicate package name option")]
     DuplicateName,
     #[error("test options must be of(package, ...), with at least one subject")]

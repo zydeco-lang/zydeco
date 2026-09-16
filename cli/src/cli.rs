@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
-use zydeco_surface::metadata::{PackageName, SourceReference};
+use zydeco_surface::metadata::{PackagePath, SourceReference};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
 pub enum BuildTarget {
@@ -135,7 +135,7 @@ pub enum Commands {
     Show {
         /// Select declared packages by name; omit to list all packages
         #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "NAME")]
-        packages: Vec<PackageName>,
+        packages: Vec<PackagePath>,
     },
     /// List optional compiler passes or explain a selected high-SPS plan
     Passes {
@@ -181,7 +181,7 @@ pub enum Commands {
         #[command(flatten)]
         selection: SourceSelection,
     },
-    /// Run a test package or the selected package's direct test companions with empty stdin
+    /// Run explicitly selected test packages with empty stdin
     Test {
         #[command(flatten)]
         selection: SourceSelection,
@@ -235,7 +235,7 @@ pub struct SourceSelection {
     pub file: Option<SourceReference>,
     /// Select declared packages by name; repeat for multiple packages
     #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "NAME")]
-    pub packages: Vec<PackageName>,
+    pub packages: Vec<PackagePath>,
 }
 
 /// External text is parsed into phase-owned plan types before source loading.

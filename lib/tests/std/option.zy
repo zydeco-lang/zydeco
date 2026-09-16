@@ -1,7 +1,7 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
-  let make_std = @(import(std)) that
-  param (/system; /OS; /Int; builtin) : @(import(std/builtin)) that
+  let make_std = @(import(/std)) that
+  param (/system; /OS; /Int; builtin) : @(import(/std/builtin)) that
   let (/Option; /option; /process) = builtin |> make_std in
   do value <- ! option/map
     Int

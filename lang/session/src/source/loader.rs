@@ -31,12 +31,16 @@ pub(crate) trait SourceProvider {
 pub(crate) struct SourceGraphLoader<Provider> {
     sources: ArenaDense<SourceGraphScope, SourceId>,
     imports: ArenaDense<SourceGraphScope, SourceImportId>,
-    seen: HashMap<(PathBuf, t::TermId), SourceState>,
+    active: HashMap<(PathBuf, t::TermId, super::PackageContext), SourceId>,
+    file_routes: Vec<(PathBuf, t::TermId, SourceId)>,
     root: Option<SourceId>,
     errors: Vec<SourceLoadError>,
     provider: Provider,
     templates: HashMap<PathBuf, TemplateState>,
-    bindings: Arc<super::PackageBindings>,
+    definitions: Vec<super::Definition>,
+    indexed: std::collections::HashSet<(PathBuf, super::PackageContext)>,
+    indexing: std::collections::HashSet<PathBuf>,
+    next_opaque: u64,
 }
 
 impl SourceTemplate {
@@ -115,23 +119,6 @@ impl SourceTemplate {
     }
 }
 
-/// Active nodes can be referenced to represent cycles; rejected nodes never become providers.
-#[derive(Clone, Copy)]
-enum SourceState {
-    Loading(SourceId),
-    Complete(SourceId),
-    Rejected(SourceId),
-}
-
-impl SourceState {
-    fn source(self) -> (SourceId, bool) {
-        match self {
-            | Self::Loading(id) | Self::Complete(id) => (id, true),
-            | Self::Rejected(id) => (id, false),
-        }
-    }
-}
-
 #[derive(Clone)]
 enum TemplateState {
     Complete(Arc<SourceTemplate>),
@@ -152,29 +139,74 @@ impl From<SourceLoadError> for LoadFailure {
 }
 
 impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
+    pub(crate) fn with_provider(provider: Provider) -> Self {
+        Self {
+            sources: ArenaDense::new(),
+            imports: ArenaDense::new(),
+            active: HashMap::new(),
+            file_routes: Vec::new(),
+            root: None,
+            errors: Vec::new(),
+            provider,
+            templates: HashMap::new(),
+            definitions: Vec::new(),
+            indexed: Default::default(),
+            indexing: Default::default(),
+            next_opaque: 0,
+        }
+    }
+
     pub(crate) fn load_root(
-        mut self, root: &Path, package: Option<&super::PackageName>,
-        bindings: Arc<super::PackageBindings>,
+        mut self, root: &Path, package: Option<&super::PackagePath>, project: Arc<super::Project>,
     ) -> Result<SourceGraph, SourceLoadErrors> {
-        self.bindings = bindings;
+        let context = project
+            .entry_context
+            .clone()
+            .unwrap_or_else(|| super::PackageContext::at_root(project.root));
+        if let Err(error) =
+            self.prepare_project(&project, super::PackageContext::at_root(project.root))
+        {
+            self.report(error);
+        }
+        for replay in &project.replays {
+            if let Err(error) = self.load_selection(
+                &replay.selection.path,
+                replay.selection.name.as_ref(),
+                replay.context.clone(),
+            ) {
+                self.report(error);
+            }
+            self.complete_definitions();
+        }
         let canonical = SourcePath::identity(root).map_err(|source| SourceLoadError::RootPath {
             path: root.to_path_buf(),
             source: source.into(),
         })?;
-        if let Err(error) = self.load_canonical(canonical, package) {
-            self.report(match error {
-                | LoadFailure::Unreported(SourceLoadError::Read { source, .. }) => {
-                    SourceLoadError::RootPath { path: root.to_path_buf(), source }.into()
-                }
-                | error => error,
-            });
+        let result = self.load_selection(&canonical, package, context);
+        match result {
+            | Ok(root) => self.root = Some(root),
+            | Err(error) => self.report(error),
         }
-        // The temporary graph also retains valid edges in rejected sources, so independent
-        // cycles can be diagnosed alongside read and parse errors. It is never published on error.
+        self.complete_definitions();
         let graph = self.root.map(|root| SourceGraph {
             root,
+            root_instance: super::PackageInstanceId(0),
             sources: FrozenArena::new(self.sources),
             imports: FrozenArena::new(self.imports),
+            inputs: {
+                let mut inputs = self
+                    .templates
+                    .values()
+                    .filter_map(|state| match state {
+                        | TemplateState::Complete(template) => Some(template.clone()),
+                        | _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                inputs.sort_by(|a, b| a.path.cmp(&b.path));
+                inputs
+            },
+            packages: Vec::new(),
+            instances: Vec::new(),
         });
         if let Some(graph) = &graph {
             self.errors.extend(graph.cycles().into_iter().map(SourceLoadError::Cycle));
@@ -182,20 +214,90 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
         if let Some(errors) = SourceLoadErrors::with_errors(self.errors) {
             return Err(errors);
         }
-        Ok(graph.expect("a successful load allocated its root"))
+        graph.expect("successful load has a root").merge(self.definitions)
     }
 
-    pub(crate) fn with_provider(provider: Provider) -> Self {
-        Self {
-            sources: ArenaDense::new(),
-            imports: ArenaDense::new(),
-            seen: HashMap::new(),
-            root: None,
-            errors: Vec::new(),
-            provider,
-            templates: HashMap::new(),
-            bindings: Arc::default(),
+    fn load_selection(
+        &mut self, path: &Path, package: Option<&super::PackagePath>,
+        context: super::PackageContext,
+    ) -> Result<SourceId, LoadFailure> {
+        let path = Self::canonical(path)?;
+        let template = self.template(&path, false)?.expect("required root");
+        if package.is_none() || !self.indexed.iter().any(|(path, _)| path == &template.path) {
+            self.index(template.clone(), context.clone())?;
         }
+        match package {
+            | Some(path) => {
+                let namespace = context
+                    .resolve(path)
+                    .map_err(super::PackageError::from)
+                    .map_err(SourceLoadError::from)?;
+                let definition = self
+                    .definition(&namespace)
+                    .ok_or_else(|| super::PackageError::Unknown { name: path.clone() })
+                    .map_err(SourceLoadError::from)?;
+                self.load_definition(definition)
+            }
+            | None => self.load_template(template.clone(), template.unit.root, context, None, true),
+        }
+    }
+
+    fn complete_definitions(&mut self) {
+        // Complete reached declarations and every competing claim to their names.
+        // Project inputs supply available definitions; selecting a term determines code reachability.
+        let mut attempted = std::collections::HashSet::new();
+        loop {
+            let namespaces = self
+                .definitions
+                .iter()
+                .filter(|definition| definition.reachable)
+                .map(|definition| definition.namespace.clone())
+                .collect::<std::collections::HashSet<_>>();
+            let Some(index) =
+                self.definitions.iter().enumerate().find_map(|(index, definition)| {
+                    (definition.source.is_none()
+                        && !attempted.contains(&index)
+                        && namespaces.contains(&definition.namespace))
+                    .then_some(index)
+                })
+            else {
+                break;
+            };
+            attempted.insert(index);
+            let definition = self.definitions[index].clone();
+            match self.load_definition(definition) {
+                | Ok(source) => self.definitions[index].source = Some(source),
+                | Err(error) => self.report(error),
+            }
+        }
+    }
+
+    fn prepare_project(
+        &mut self, project: &super::Project, context: super::PackageContext,
+    ) -> Result<(), LoadFailure> {
+        for path in &project.sources {
+            let path = Self::canonical(path)?;
+            let template = self.template(&path, false)?.expect("project source");
+            self.index(template, context.clone())?;
+        }
+        for registration in &project.registrations {
+            let namespace = context
+                .resolve(&registration.namespace)
+                .map_err(super::PackageError::from)
+                .map_err(SourceLoadError::from)?;
+            self.prepare_project(
+                &registration.project,
+                super::PackageContext { root: namespace.clone(), package: namespace },
+            )?;
+        }
+        Ok(())
+    }
+
+    fn canonical(path: &Path) -> Result<PathBuf, SourceLoadError> {
+        SourcePath::identity(path).map_err(|source| SourceLoadError::Read {
+            path: path.to_path_buf(),
+            source: source.into(),
+        })
     }
 
     fn report(&mut self, error: LoadFailure) {
@@ -227,104 +329,232 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
         result.map_err(Into::into)
     }
 
-    fn load_canonical(
-        &mut self, path: PathBuf, package: Option<&super::PackageName>,
-    ) -> Result<SourceState, LoadFailure> {
-        let template = self.template(&path, false)?.expect("required source");
-        self.load_template(template, package)
+    fn index(
+        &mut self, template: Arc<SourceTemplate>, context: super::PackageContext,
+    ) -> Result<(), LoadFailure> {
+        if self.indexing.contains(&template.path)
+            || !self.indexed.insert((template.path.clone(), context.clone()))
+        {
+            return Ok(());
+        }
+        self.indexing.insert(template.path.clone());
+        let known_opaque = context
+            .package
+            .components
+            .iter()
+            .chain(&context.root.components)
+            .filter_map(|component| match component {
+                | super::NamespaceComponent::Opaque(name) => Some(*name),
+                | super::NamespaceComponent::Name(_) => None,
+            })
+            .collect::<std::collections::HashSet<_>>();
+        let scope = super::PackageScope::scan(
+            &template,
+            template.unit.root,
+            context,
+            None,
+            &mut self.next_opaque,
+        )
+        .map_err(SourceLoadError::from)?;
+        self.register(
+            scope
+                .definitions
+                .into_iter()
+                .map(|mut definition| {
+                    definition.reachable = false;
+                    definition
+                })
+                .filter(|definition| {
+                    definition.namespace.components.iter().all(|component| match component {
+                        | super::NamespaceComponent::Name(_) => true,
+                        | super::NamespaceComponent::Opaque(name) => known_opaque.contains(name),
+                    })
+                })
+                .collect(),
+            None,
+        );
+        // Discover definitions through quoted-file routes before selecting package imports.
+        // Required loading attaches provider failures to the original import occurrence.
+        for site in &template.import_sites {
+            let ImportTarget::Source(super::SourceReference::Path(path)) = &site.directive.target
+            else {
+                continue;
+            };
+            let Some(context) = scope.contexts.get(&site.term) else {
+                continue;
+            };
+            if context.package.components.iter().any(|component| matches!(component, super::NamespaceComponent::Opaque(name) if !known_opaque.contains(name))) { continue; }
+            let path = Self::canonical(&template.path.parent().unwrap().join(path))?;
+            if let Ok(imported) = self.provider.load(&path) {
+                self.templates.insert(path, TemplateState::Complete(imported.clone()));
+                self.index(imported, context.clone())?;
+            }
+        }
+        self.indexing.remove(&template.path);
+        Ok(())
+    }
+
+    fn register(
+        &mut self, definitions: Vec<super::Definition>, source: Option<(t::TermId, SourceId)>,
+    ) {
+        for mut definition in definitions {
+            if let Some((root, id)) = source
+                && root == definition.site.term
+            {
+                definition.source = Some(id);
+            }
+            let existing = self.definitions.iter_mut().find(|existing| {
+                existing.namespace == definition.namespace
+                    && existing.template.path == definition.template.path
+                    && existing.site.annotation == definition.site.annotation
+                    && existing.enclosing == definition.enclosing
+            });
+            if let Some(existing) = existing {
+                existing.reachable |= definition.reachable;
+                if existing.source.is_none() {
+                    existing.source = definition.source;
+                }
+            } else {
+                self.definitions.push(definition);
+            }
+        }
+    }
+
+    fn definition(&self, namespace: &super::PackageNamespace) -> Option<super::Definition> {
+        self.definitions.iter().find(|definition| &definition.namespace == namespace).cloned()
+    }
+
+    fn load_definition(&mut self, definition: super::Definition) -> Result<SourceId, LoadFailure> {
+        // The selected declaration keeps its lexical name; each import receives a fresh candidate.
+        self.load_template(
+            definition.template,
+            definition.site.term,
+            definition.enclosing,
+            Some((definition.site.annotation, definition.namespace)),
+            false,
+        )
     }
 
     fn load_template(
-        &mut self, template: Arc<SourceTemplate>, package: Option<&super::PackageName>,
-    ) -> Result<SourceState, LoadFailure> {
-        let root = template
-            .package_site(package)
-            .map_err(SourceLoadError::from)?
-            .map_or(template.unit.root, |site| site.term);
-        let path = template.path.clone();
-        let key = (path.clone(), root);
-        if let Some(state) = self.seen.get(&key) {
-            return Ok(*state);
+        &mut self, template: Arc<SourceTemplate>, root: t::TermId, context: super::PackageContext,
+        selected: Option<(t::TermId, super::PackageNamespace)>, file_route: bool,
+    ) -> Result<SourceId, LoadFailure> {
+        let key = (template.path.clone(), root, context.clone());
+        if let Some(source) = self.active.get(&key) {
+            return Ok(*source);
         }
-        // A file companion describes the complete file term, never an arbitrary nested package.
-        let companion = root == template.unit.root;
-        let import_sites = template.code_sites(root);
-        let source_id =
-            self.sources.alloc(SourceFile { template, root, imports: Vec::new(), signature: None });
-        self.root.get_or_insert(source_id);
-        self.seen.insert(key.clone(), SourceState::Loading(source_id));
-        let mut rejected = false;
-        let imports = import_sites
-            .into_iter()
-            .filter_map(|site| match self.load_import(source_id, &path, site) {
-                | Ok((import, valid)) => {
-                    rejected |= !valid;
-                    Some(import)
-                }
-                | Err(error) => {
-                    rejected = true;
-                    self.report(error);
-                    None
-                }
-            })
-            .collect();
-        let signature = if companion {
-            match self.load_signature(&path) {
-                | Ok((signature, valid)) => {
-                    rejected |= !valid;
-                    signature
-                }
-                | Err(error) => {
-                    rejected = true;
-                    self.report(error);
-                    None
+        if file_route
+            && let Some((_, _, source)) = self
+                .file_routes
+                .iter()
+                .find(|(path, term, _)| *path == template.path && *term == root)
+        {
+            return Ok(*source);
+        }
+        let scope = super::PackageScope::scan(
+            &template,
+            root,
+            context.clone(),
+            selected,
+            &mut self.next_opaque,
+        )
+        .map_err(SourceLoadError::from)?;
+        let sites = template.code_sites(root);
+        let source = self.sources.alloc(SourceFile {
+            template: template.clone(),
+            root,
+            imports: Vec::new(),
+            signature: None,
+            context,
+            contexts: scope.contexts,
+            instances: Vec::new(),
+        });
+        self.register(scope.definitions, Some((root, source)));
+        self.active.insert(key.clone(), source);
+        let previous_routes =
+            if file_route { None } else { Some(std::mem::take(&mut self.file_routes)) };
+        self.file_routes.push((template.path.clone(), root, source));
+        // Make sibling file declarations available before choosing any named import.
+        for site in &sites {
+            if let ImportTarget::Source(super::SourceReference::Path(path)) = &site.directive.target
+            {
+                let context = self.sources[&source].contexts[&site.term].clone();
+                let path = Self::canonical(&template.path.parent().unwrap().join(path))?;
+                // Loading reports failures at the import occurrence below.
+                if let Ok(imported) = self.provider.load(&path) {
+                    self.templates.insert(path.clone(), TemplateState::Complete(imported.clone()));
+                    if let Err(error) = self.index(imported, context) {
+                        self.report(error);
+                    }
                 }
             }
-        } else {
-            None
-        };
-        self.sources[&source_id].imports = imports;
-        self.sources[&source_id].signature = signature;
-        let state = if rejected {
-            SourceState::Rejected(source_id)
-        } else {
-            SourceState::Complete(source_id)
-        };
-        self.seen.insert(key, state);
-        Ok(state)
-    }
-
-    fn load_signature(
-        &mut self, implementation: &Path,
-    ) -> Result<(Option<SourceId>, bool), LoadFailure> {
-        let Some(requested) = SourceKind::companion(implementation) else {
-            return Ok((None, true));
-        };
-        let signature = SourcePath::identity(&requested)
-            .map_err(|source| SourceLoadError::Read { path: requested, source: source.into() })?;
-        let Some(template) = self.template(&signature, true)? else { return Ok((None, true)) };
-        self.load_template(template, None).map(|state| {
-            let (source, valid) = state.source();
-            (Some(source), valid)
-        })
+        }
+        for site in sites {
+            match self.load_import(source, &template.path, site) {
+                | Ok(import) => self.sources[&source].imports.push(import),
+                | Err(error) => self.report(error),
+            }
+        }
+        if root == template.unit.root
+            && let Some(path) = SourceKind::companion(&template.path)
+        {
+            let result = (|| {
+                let path = Self::canonical(&path)?;
+                let Some(signature) = self.template(&path, true)? else {
+                    return Ok(None);
+                };
+                self.load_template(
+                    signature.clone(),
+                    signature.unit.root,
+                    self.sources[&source].context.clone(),
+                    None,
+                    true,
+                )
+                .map(Some)
+            })();
+            match result {
+                | Ok(signature) => self.sources[&source].signature = signature,
+                | Err(error) => self.report(error),
+            }
+        }
+        self.file_routes.pop();
+        if let Some(previous) = previous_routes {
+            self.file_routes = previous;
+        }
+        self.active.remove(&key);
+        Ok(source)
     }
 
     fn load_import(
         &mut self, importer: SourceId, importer_path: &Path, site: ImportSite,
-    ) -> Result<(SourceImportId, bool), LoadFailure> {
-        let parent = importer_path.parent().expect("a source file has a parent");
+    ) -> Result<SourceImportId, LoadFailure> {
+        let parent = importer_path.parent().expect("source parent");
+        let context = self.sources[&importer].contexts[&site.term].clone();
         let target = site.directive.target;
-        let imported = (|| {
-            let id = match &target {
-                | ImportTarget::Input(number) => {
-                    super::PackageId { path: number.overlay_path(parent), name: None }
+        let result = (|| {
+            let path = match &target {
+                | ImportTarget::Source(super::SourceReference::Package(path)) => {
+                    let namespace = context
+                        .resolve(path)
+                        .map_err(super::PackageError::from)
+                        .map_err(SourceLoadError::from)?;
+                    let definition = self
+                        .definition(&namespace)
+                        .ok_or_else(|| super::PackageError::Unknown { name: path.clone() })
+                        .map_err(SourceLoadError::from)?;
+                    return self.load_definition(definition);
                 }
-                | ImportTarget::Source(reference) => self.bindings.resolve(reference, parent)?,
+                | ImportTarget::Source(super::SourceReference::Path(path)) => parent.join(path),
+                | ImportTarget::Input(number) => number.overlay_path(parent),
             };
-            self.load_canonical(id.path, id.name.as_ref())
-        })()
-        .map_err(|error| {
-            let LoadFailure::Unreported(error) = error else { return error };
+            let path = Self::canonical(&path)?;
+            let template = self.template(&path, false)?.expect("required import");
+            self.load_template(template.clone(), template.unit.root, context, None, true)
+        })();
+        let imported = result.map_err(|error| {
+            let LoadFailure::Unreported(error) = error else {
+                return error;
+            };
             LoadFailure::Unreported(match (&target, error) {
                 | (
                     ImportTarget::Source(super::SourceReference::Path(path)),
@@ -353,15 +583,11 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
                 | (_, error) => error,
             })
         })?;
-        let (imported, valid) = imported.source();
-        Ok((
-            self.imports.alloc(SourceImport {
-                importer,
-                imported,
-                term: site.term,
-                span: site.directive.span,
-            }),
-            valid,
-        ))
+        Ok(self.imports.alloc(SourceImport {
+            importer,
+            imported,
+            term: site.term,
+            span: site.directive.span,
+        }))
     }
 }

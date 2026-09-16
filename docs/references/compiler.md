@@ -551,14 +551,13 @@ Their current implementation representations are:
 
 | Abstraction | Current representation |
 | --- | --- |
-| Project | `PackageBindings`; shared project preparation is being rebuilt |
-| Package | `Package` / `PackageId` |
+| Project | `Project`, `PackageContext`, and project registrations |
+| Package | `Package` / `PackageId`, `PackageInstance`, and `ResolvedPackage` |
 | Compilation unit | `ExecutableProgram`, `LibraryProgram`, and `UnitProgram` |
-| Semantic unit | Partly represented by `ProgramAnalysis` / `CheckedProgram` |
+| Semantic unit | Merged `SourceId`, `ProgramAnalysis` / `CheckedProgram` |
 
 `CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
-Package instance and analysis identity follow the
-[namespace and resolution proposal](../proposals/package-resolution.md#copy-resolve-merge-analyze).
+Package instance and analysis identity follow the [package namespace rules](language.md#copy-resolve-merge-analyze).
 The [package implementation plan](../proposals/package-management.md#implementation-representations) integrates
 that model; the [documentation proposal](../proposals/documentation.md) records the remaining query and output work.
 
@@ -566,11 +565,50 @@ that model; the [documentation proposal](../proposals/documentation.md) records 
 
 The [loader](../../lang/session/src/source/loader.rs) obtains source text through session inputs,
 including editor overlays.
-[Assembly](../../lang/session/src/source/program.rs) preserves the ordinary lexical binding
-and inference rules at [source boundaries](language.md#source-boundaries).
-Package selection, graph identity,
-and query inputs follow the [resolution proposal](../proposals/package-resolution.md#implementation-work);
-frontend preparation follows the [package plan](../proposals/package-management.md#shared-project-context).
+`CompilerSession::project` expands explicit discovery into source inputs;
+`Project::with_registration` places another project's root at a package path.
+`CompilerSession::load_package` exposes the resolved graph, and `analyze_package` gives its selected root semantics.
+The CLI, REPL, editor, and documentation consumers share these interfaces.
+The [package plan](../proposals/package-management.md#shared-project-context) develops operation policy
+and configuration syntax.
+
+#### Package Resolution Implementation
+
+[Language-level package resolution](language.md#copy-resolve-merge-analyze) governs sharing and identity.
+Its [acceptance tests](../../lang/session/src/source/package/tests.rs) cover paths, lexical scope,
+opaque names, root substitution, equal and distinct copies, conflicting definitions, and retained provenance.
+
+`SourceTemplate` stores a parsed file and its source-analyzer results.
+`PackageScope` follows the textual arena's shared child relation with an explicit work stack;
+each child receives its lexical package context.
+This traversal records definition and import contexts.
+Source loading creates candidate `SourceFile` nodes for import routes and resolves their dependencies.
+Available project declarations supply names; the selected term establishes code reachability.
+Competing claims to a reached name are resolved before that binding is accepted.
+
+The merge pass visits providers before consumers and interns structural syntax shapes.
+Shapes retain syntax variants, scalar data, attached text, relevant meta annotations,
+companion signatures, and merged import targets.
+Package annotations contribute their typed roles and normalized relationship targets;
+names are retained with the namespace bindings and provenance.
+`SourceGraph.sources` stores the resulting nodes; `SourceGraph.instances` retains candidate contexts,
+original templates, and import edges.
+`ResolvedPackage` records names, roles, relationship targets, and declaration origins for these nodes.
+Namespace equality and structural equality are compared directly through domain types.
+
+[Source assembly](../../lang/session/src/source/program.rs) allocates semantic input identities from the merged graph.
+`ProgramOrigins` maps each node's syntax to the assembled textual identities,
+and instance correspondence maps connect original source occurrences to their representative nodes.
+`ProgramAnalysis::entities_in_instance` and `DocumentationIndex::in_instance` follow those maps.
+Documentation links use their exact assembled authoring scope.
+Example workers pin source inputs and replay the originating resolution routes before checking their example
+in its package context, including opaque contexts and substituted roots.
+
+Source graph and analysis queries include the project and selected entry in their keys.
+Every read template remains a tracked source input, including declarations used to establish availability.
+A retained analysis preserves its request, graph, and provenance for later materialization.
+`CompilerSession::complete_in` accepts the same project and entry package context for recovered completion queries.
+`SemanticSelector` supplies shared field and result selection; documentation commands consume those subjects.
 
 Loading collects independent read, parse, directive, and cycle failures in `SourceLoadErrors`.
 It publishes a complete source graph after the required inputs have been accepted.
@@ -616,7 +654,7 @@ Package selection remains downstream of this complete-file inventory.
 
 `SourceAnalysis` retains valid facts and diagnostics from independent sites.
 Malformed arguments block only checks that require their decoded values; other sites still run.
-Package-name resolution and conflicts follow the [resolution proposal](../proposals/package-resolution.md).
+Package-name resolution and conflicts follow the [package resolution reference](language.md#package-hierarchy).
 The inventory is keyed by file-local textual identities.
 Assembly and desugaring consume syntax at later identity and span boundaries;
 reusing decoded inventory facts there would require an explicit remapping
@@ -866,8 +904,8 @@ Match arms receive independent environments. Monadic blocks resolve their basis 
 An exhaustive constructor classification delegates ordinary reconstruction to the shared structural folder;
 constructors with binding, boundary, or scheduling effects have explicit semantic handlers.
 
-Ordinary lexical bindings follow the [source-boundary rules](language.md#source-boundaries). Reuse between imported
-instances follows the [package-resolution model](../proposals/package-resolution.md#copy-resolve-merge-analyze).
+Ordinary lexical bindings follow the [source-boundary rules](language.md#source-boundaries).
+Reuse between imported instances follows the [package-resolution model](language.md#copy-resolve-merge-analyze).
 Successful lookup emits a borrowed `ResolvedReference` containing the occurrence,
 selected definition, optional owning `BindingSite`, and active enclosing bindings.
 Failed lookup records its diagnostic and emits no successful-reference event.
@@ -2276,8 +2314,8 @@ AMD64 target and manifest compatibility are checked before linking or interprete
 
 The versioned manifest records package identity, target, entry profile, compiler/model/runtime fingerprints,
 artifact and interface content hashes, selected export paths and C signatures, imports, and dependency manifests.
-Its association with resolved packages follows the
-[resolution implementation plan](../proposals/package-resolution.md#implementation-work).
+Its association
+with resolved packages follows the [package resolution implementation](#package-resolution-implementation).
 The generated header spells fixed-width C types and `void`;
 the generated `.imports.zy` preserves the selected field structure using typed `ffi` declarations
 and canonical type intrinsics.
@@ -3162,9 +3200,8 @@ of panel types, signature help, and expected-type search remain [proposed featur
 
 ##### Building a Project Reference
 
-Reference commands and output follow the [documentation proposal](../proposals/documentation.md).
-Package paths and semantic selectors follow the
-[shared selection model](../proposals/package-resolution.md#shared-selection-and-documentation).
+Reference commands and output follow the [documentation proposal](../proposals/documentation.md). Package paths
+and semantic selectors follow the [shared selection model](language.md#shared-selection-and-documentation).
 The [counter example](../examples/documentation/counter.zy) supplies source documentation, a companion interface,
 and a guide for that work.
 
@@ -3213,8 +3250,7 @@ with shadowing, unrelated fields, contract boundaries, recovery, and stale IDs.
 
 Publication scope, subject presentation, anchors, and reference output follow the
 [documentation proposal](../proposals/documentation.md#subjects-selectors-and-published-anchors).
-Queries, links, and example workers use the
-[shared selection model](../proposals/package-resolution.md#shared-selection-and-documentation).
+Queries, links, and example workers use the [shared selection model](language.md#shared-selection-and-documentation).
 
 ##### Verifying Documentation Examples
 
@@ -3243,8 +3279,8 @@ or a timeout cannot satisfy an expected rejection.
 
 [Example checking](../../lang/session/src/source/documentation/examples.rs) verifies complete source
 with explicit imports in top-level, unindented Markdown fences.
-Worker inputs, verification identity, and scratch context follow the
-[shared resolution model](../proposals/package-resolution.md#shared-selection-and-documentation).
+Worker inputs, verification identity,
+and scratch context follow the [shared resolution model](language.md#shared-selection-and-documentation).
 
 The [verification plan](../proposals/documentation.md#targeted-lookup-and-independent-verification) develops selection
 of links and examples for documentation operations.

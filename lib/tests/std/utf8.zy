@@ -1,7 +1,7 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
-  let make_std = @(import(std)) that
-  param (/Ret; /Int; /Char; /String; builtin) : @(import(std/builtin)) that
+  let make_std = @(import(/std)) that
+  param (/Ret; /Int; /Char; /String; builtin) : @(import(/std/builtin)) that
   let (/Bool; /bool; /option; /int; /char; /string; /process) = builtin |> make_std in
   let ! status (condition : Bool) : Ret Int = ! bool/if
     (Ret Int)

@@ -220,14 +220,11 @@ impl TestPipeline {
     ) -> Result<CheckedProgram, TestPipelineError> {
         let mut pool = SHARED_SESSION.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let session = pool.session();
-        let catalog = session.package_catalog(roots).map_err(|error| {
+        let project = Arc::new(session.project(roots).map_err(|error| {
             TestPipelineError::Analysis(AnalysisError::Source { error: Arc::new(error.into()) })
-        })?;
+        })?);
         let analysis = session
-            .analyze_package(
-                &PackageId { path: path.as_ref().to_path_buf(), name: None },
-                catalog.bindings,
-            )
+            .analyze_package(&PackageId { path: path.as_ref().to_path_buf(), name: None }, project)
             .map_err(TestPipelineError::Analysis)?;
         session.checked_program(&analysis).ok_or(TestPipelineError::Rejected)
     }
@@ -298,7 +295,7 @@ impl SourceGraph {
         path: impl AsRef<Path>, mut progress: impl FnMut(TestSourceDiscovery),
     ) -> Result<Self, SourceLoadErrors> {
         let graph = Self::load(path)?;
-        graph.sources.iter().enumerate().for_each(|(index, (_, source))| {
+        graph.source_inputs().enumerate().for_each(|(index, source)| {
             progress(TestSourceDiscovery { path: source.path.clone(), discovered: index + 1 })
         });
         Ok(graph)
@@ -584,9 +581,9 @@ fn source_graph_reports_unique_sources_as_they_are_discovered() {
     assert_eq!(
         progress,
         [
-            (std::ffi::OsString::from("main.zy"), 1),
-            (std::ffi::OsString::from("library.zy"), 2),
-            (std::ffi::OsString::from("leaf.zy"), 3),
+            (std::ffi::OsString::from("leaf.zy"), 1),
+            (std::ffi::OsString::from("main.zy"), 2),
+            (std::ffi::OsString::from("library.zy"), 3),
         ]
     );
 }
@@ -609,13 +606,16 @@ fn source_graph_orders_a_diamond_after_its_shared_provider() {
         })
         .collect::<std::collections::HashMap<_, _>>();
 
-    assert_eq!(graph.sources.len(), 4);
-    assert_eq!(graph.imports.len(), 4);
+    assert_eq!(graph.sources.len(), 3);
+    assert_eq!(graph.source_inputs().count(), 4);
+    assert_eq!(graph.imports.len(), 3);
     let position = |name| order[std::ffi::OsStr::new(name)];
-    assert!(position("leaf.zy") < position("left.zy"));
-    assert!(position("leaf.zy") < position("right.zy"));
-    assert!(position("left.zy") < position("main.zy"));
-    assert!(position("right.zy") < position("main.zy"));
+    let shared = graph.imports[&graph.sources[&graph.root].imports[0]].imported;
+    let shared_name = graph.sources[&shared].path.file_name().unwrap().to_str().unwrap();
+    assert!(position("leaf.zy") < position(shared_name));
+    assert!(position(shared_name) < position("main.zy"));
+    let edges = &graph.sources[&graph.root].imports;
+    assert_eq!(graph.imports[&edges[0]].imported, graph.imports[&edges[1]].imported);
 }
 
 #[test]
@@ -2838,7 +2838,8 @@ fn source_graph_collects_independent_imports_and_signatures_without_replaying_re
         session.set_overlay(path, "()".into()).unwrap();
     }
     let graph = session.graph(&root).unwrap();
-    assert_eq!(graph.sources.len(), 7);
+    assert_eq!(graph.source_inputs().count(), 7);
+    assert_eq!(graph.sources.len(), 4);
     assert_eq!(graph.provider_order().last(), Some(&graph.root));
     session.set_overlay(&bad, "@(import(0))".into()).unwrap();
     assert_eq!(session.graph(&root).unwrap_err().diagnostics().len(), 1);

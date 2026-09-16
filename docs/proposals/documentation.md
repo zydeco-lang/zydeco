@@ -2,8 +2,9 @@
 
 This proposal develops package-aware documentation: presentation, lookup, verification, and reference output.
 The [abstraction levels](../references/language.md#abstraction-levels) place semantic documentation with semantic units.
-The [namespace and resolution proposal](package-resolution.md) supplies package paths, source instantiation, merging,
-and shared semantic selectors; the [package-management plan](package-management.md) integrates them across frontends.
+The [package namespace rules](../references/language.md#package-hierarchy) supply package paths, source instantiation,
+merging, and shared semantic selectors; the [package-management plan](package-management.md) integrates them
+across frontends.
 
 [C15](../references/compiler.md#documentation-subjects-and-provenance) describes documentation identity,
 contract selection, provenance, and revision recovery.
@@ -22,16 +23,15 @@ and repair criteria.
 
 ## Package-Aware Selection
 
-Use the [shared selection model](package-resolution.md#shared-selection-and-documentation) for package paths,
+Use the [shared selection model](../references/language.md#shared-selection-and-documentation) for package paths,
 semantic selectors, and the selected instance's resolution context and provenance.
 
-- [ ] Route documentation commands through shared project preparation and semantic-unit queries,
-  as developed in the [package proposal](package-management.md#shared-project-context).
+- [ ] Add explicit package selection to documentation commands, using the existing shared project and analysis inputs.
 - [ ] Let explicitly selected packages and guides determine the publication scope.
 
 ## Subjects, Selectors, and Published Anchors
 
-The [shared semantic queries](package-resolution.md#shared-selection-and-documentation) supply subjects
+The [shared semantic queries](../references/language.md#shared-selection-and-documentation) supply subjects
 and selector resolution.
 Documentation presents the results and assigns stable output anchors.
 
@@ -47,8 +47,7 @@ Targeted lookup resolves a requested semantic subject directly.
 Verification consumes source analysis, while reference generation assembles presentation and anchors.
 
 - [ ] Use the same targeted subject query for source links and command lookup.
-- [ ] Verify source links and opted-in examples from the selected analysis.
-  Resolve guide member links through the selected public interface.
+- [ ] Extend targeted example verification and guide diagnostics to the remaining interface subjects.
 - [ ] Build output from validated links and established exposure routes.
   Offer example verification as an explicit operation, with diagnostics at the authored example or guide.
 
@@ -98,7 +97,7 @@ The following extensions build on this milestone.
 Present composed setup as visible, copyable source and attribute setup and example diagnostics
 to their authored locations.
 Verification identity includes imported inputs; edited scratch examples receive their own verification identities.
-Example workers use the [shared resolution context](package-resolution.md#shared-selection-and-documentation).
+Example workers use the [shared resolution context](../references/language.md#shared-selection-and-documentation).
 
 Reference generation uses static analysis.
 Runtime examples use an explicit runner with declared capabilities, isolated fixtures,

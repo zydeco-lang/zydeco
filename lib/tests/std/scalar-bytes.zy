@@ -1,8 +1,8 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /OS;
     /Int8; /Int16; /Int32; /Int; /UInt8; /UInt16; /UInt32; /UInt;
-    /Float32; /Float64; /numeric; /process; builtin) : @(import(std/builtin)) that
+    /Float32; /Float64; /numeric; /process; builtin) : @(import(/std/builtin)) that
   let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
   let codecs = (builtin |> (@(import("../../std/numeric/codecs.zy")))) byte_package in
   let fail = { ! process/exit 1 } in

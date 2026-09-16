@@ -428,3 +428,24 @@ fn current_overlay_and_dependency_changes_invalidate_completion_results() {
         .unwrap();
     assert_eq!(fixture.annotation("imported").as_deref(), Some("String"));
 }
+
+#[test]
+fn completion_uses_the_selected_project_and_package_context() {
+    use crate::source::{PackageContext, Project};
+    let fixture = Fixture::new("let value = @(import(data)) in val¦")
+        .with_dependency("packages.zy", "@[package(library, name(std/data))] 42");
+    let mut project = Project::new(vec![fixture.directory.path().join("packages.zy")]);
+    let root = PackageContext::at_root(project.root);
+    project.entry_context = Some(root.with_package(root.resolve(&"std".parse().unwrap()).unwrap()));
+    let completion = fixture
+        .session
+        .complete_in(&fixture.path, fixture.offset, Arc::new(project))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        completion.candidates.iter().map(|candidate| candidate.name.0.as_str()).collect::<Vec<_>>(),
+        ["value"]
+    );
+    assert!(completion.semantics.is_some());
+    assert!(fixture.session.complete(&fixture.path, fixture.offset).is_err());
+}

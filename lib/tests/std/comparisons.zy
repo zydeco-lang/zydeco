@@ -1,7 +1,7 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
-  let make_std = @(import(std)) that
-  param (/Ret; /Int; builtin) : @(import(std/builtin)) that
+  let make_std = @(import(/std)) that
+  param (/Ret; /Int; builtin) : @(import(/std/builtin)) that
   let (/bool; /int; /string; /process) = builtin |> make_std in
   do equal <- ! int/eq 3 3;
   do equal_status <- ! bool/if

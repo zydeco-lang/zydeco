@@ -1,9 +1,9 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /Int64; /OS; /numeric; /process; builtin) :
-  @(import(std/builtin)) that
+  @(import(/std/builtin)) that
   let (/Storage; /DynamicStorage; /Uninit; /Init; /Ptr; /storage; /codecs; /allocation) =
-    builtin |> (@(import(std/memory)))
+    builtin |> (@(import(/std/memory)))
   in
   let Fault = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in

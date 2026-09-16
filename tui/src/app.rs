@@ -15,7 +15,7 @@ use ratatui::{
 };
 use std::{io, path::PathBuf, sync::Arc};
 use thiserror::Error;
-use zydeco_session::source::PackageBindings;
+use zydeco_session::source::Project;
 use zydeco_surface::textual::SourceNumber;
 
 const HELP: &str = concat!(
@@ -46,14 +46,14 @@ pub struct Repl {
 }
 
 impl Repl {
-    pub fn launch(bindings: Arc<PackageBindings>) -> Result<i32, ReplError> {
+    pub fn launch(bindings: Arc<Project>) -> Result<i32, ReplError> {
         let directory = std::env::current_dir()?;
         let mut repl = Self::new(directory, bindings);
         ratatui::run(|terminal| repl.run(terminal))?;
         Ok(0)
     }
 
-    fn new(directory: PathBuf, bindings: Arc<PackageBindings>) -> Self {
+    fn new(directory: PathBuf, bindings: Arc<Project>) -> Self {
         Self {
             engine: ReplEngine::new(directory.clone(), bindings),
             directory,

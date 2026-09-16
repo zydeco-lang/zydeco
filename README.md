@@ -67,17 +67,20 @@ The [standard library guide](lib/std/README.md) describes the Builtin interface,
 and available operations.
 
 Prefer complete files as package entry points.
-Name one with `@[package(library, name(example/math))]` and reuse it with `@(import(example/math))`.
-Binary and test roles use the same annotation; `@[package(test(of(example/math)))]` associates a test
+Name one with `@[package(library, name(example/math))]` and reuse it with `@(import(/example/math))`.
+Binary and test roles use the same annotation; `@[package(test(of(/example/math)))]` associates a test
 from the test side alone.
 The CLI detects `package.zy` and `workspace.zy` in the working directory;
 their include/exclude globs collect additional package declarations.
 Use `-p NAME` (`--pkg` or `--package`) after the command to select a declared package.
 Repeat it to check, build, or test multiple packages; it does not load additional declaration files.
-From this repository's root, `zydeco test -p std` runs std's standalone suite and `zydeco show` lists packages.
+From this repository's root, `zydeco show` lists declarations and `zydeco check -p /std` checks std.
+Select a test explicitly, for example `zydeco test lib/tests/std/bool.zy`.
+[Suite selection from relationships](docs/proposals/package-management.md#validation-and-operation-planning)
+remains planned.
 Both `run` and `test` default to the interpreter; `-t` (`--target`) selects a backend.
-Repeat it for a test matrix: `zydeco test std -t interpreter -t wasm-am -t wasm-sps`.
-Use `zydeco test std -t all` to include every backend, including native `exe`.
+Repeat it for a test matrix: `zydeco test lib/tests/std/bool.zy -t interpreter -t wasm-am -t wasm-sps`.
+Use `zydeco test lib/tests/std/bool.zy -t all` to include every backend, including native `exe`.
 Quoted file imports and direct CLI paths also work without named package declarations.
 See the [package workflow](CONTRIBUTING.md#use-source-packages) for checking, building, and tests.
 

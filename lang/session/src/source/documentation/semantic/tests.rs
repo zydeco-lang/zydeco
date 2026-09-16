@@ -112,22 +112,20 @@ fn generic_field_docs_survive_type_substitution() {
     let source = "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(int)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in\ncounter/¦value";
     assert_eq!(Fixture::new(source).markdown(), "Generic value.");
     let fixture = Fixture::new(source);
-    let reference = fixture
-        .session
-        .documentation_reference(fixture.session.analyze(&fixture.root).unwrap())
-        .unwrap();
-    assert!(reference.get(&crate::source::DocumentationPath::default()).is_some());
+    assert!(
+        fixture.analyze().select_subject(&crate::source::SemanticSelector::default()).is_some()
+    );
     let package = Fixture::new(
         "let VType = @(intrinsic(vtype)) in\nlet I = @(intrinsic(int)) in\nlet Module = param Integer : VType in\n--| Generic value.\n@[doc] (#value :: Integer) in\nlet counter : Module I = (#value = 3) in ¦counter",
     );
-    let reference = package
-        .session
-        .documentation_reference(package.session.analyze(&package.root).unwrap())
-        .unwrap();
-    let member = reference
-        .get(&crate::source::DocumentationPath::parse("value"))
+    let analysis = package.analyze();
+    let member = analysis
+        .select_subject(&crate::source::SemanticSelector::parse("value"))
         .expect("instantiated public field");
-    assert_eq!(reference.content(member).markdown(), "Generic value.");
+    assert_eq!(
+        analysis.documentation().for_term(member.declaration.unwrap()).markdown(),
+        "Generic value."
+    );
 }
 
 #[test]
@@ -290,7 +288,7 @@ fn imported_links_cannot_capture_the_consumer_scope() {
 
 #[test]
 fn public_exposure_has_stable_paths_and_hides_implementation_bindings() {
-    use crate::source::DocumentationExposureQuery;
+    use crate::source::SemanticSelector;
     for source in [
         "let private = 0 in (#value = 42, #other = 1)",
         "let private = 0 in (\n #value = 42,\n #other = 1\n)",
@@ -301,12 +299,11 @@ fn public_exposure_has_stable_paths_and_hides_implementation_bindings() {
         let zydeco_statics::syntax::TermAnnId::Value(_, classifier) = program.root else {
             panic!()
         };
-        let members =
-            DocumentationExposureQuery::new(&program.statics).collect(classifier.into()).unwrap();
+        let members = SemanticSelector::fields(&program.statics, classifier.into());
         assert_eq!(
-            members.iter().map(|member| member.path.to_string()).collect::<Vec<_>>(),
+            members.iter().map(|member| member.to_string()).collect::<Vec<_>>(),
             ["value", "other"]
         );
-        assert_eq!(members[0].path.anchor(), "api-f-76616c7565");
+        assert_eq!(members[0].anchor(), "api-f-76616c7565");
     }
 }

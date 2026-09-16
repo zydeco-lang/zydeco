@@ -1,4 +1,4 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /Int; /Addr; /OS; /numeric; /process; /Unit; builtin) :
   @(import(
@@ -18,7 +18,7 @@ begin
     /pointer
   )
   =
-    builtin |> (@(import(std/memory)))
+    builtin |> (@(import(/std/memory)))
   in
   let (= Plan, = Layout, layout) = fixed in
   let (/Cps; /DynamicView; /unsafe = view_unsafe) = views in

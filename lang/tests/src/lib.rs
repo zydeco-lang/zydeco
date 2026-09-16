@@ -63,9 +63,12 @@ pub mod utils {
 
     impl SourceProgram {
         fn compiler() -> CommandCompiler {
-            CommandCompiler::default()
-                .with_packages(&[Self::resolve("../workspace.zy".into())])
-                .expect("repository package catalog")
+            let compiler = CommandCompiler::default();
+            let project = compiler
+                .session()
+                .project(&[Self::resolve("../workspace.zy".into())])
+                .expect("repository project");
+            compiler.with_project(project)
         }
 
         pub fn setup(relative: impl Into<PathBuf>) -> Self {

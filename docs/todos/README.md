@@ -14,7 +14,7 @@ Remove resolved entries once their repair and durable rationale have reached the
 - [ ] Repair [documentation exposure collisions](compiler-boundaries.md#documentation-exposure-collisions):
   valid `std` interfaces fail all four documentation commands with duplicate `()/()` paths.
   The [documentation proposal](../proposals/documentation.md) owns the publication redesign; shared selection
-  follows the [resolution proposal](../proposals/package-resolution.md#shared-selection-and-documentation),
+  follows the [package resolution reference](../references/language.md#shared-selection-and-documentation),
   with frontend integration in the [package plan](../proposals/package-management.md).
 
 ## Next pass, reviewed 2026-09-14
@@ -29,7 +29,7 @@ they do not change the references.
 | 1 | [Repair product-shape inference](compiler-boundaries.md#n-ary-product-inference-refinement) | Inferred triples reject while pairs and explicitly typed triples pass. Infer the source arity and retain all three cases. |
 | 2 | [Bound unsupported ZASM execution](compiler-boundaries.md#zasm-execution-panics) | A valid exit-only program panics under `build -t zasm -x`. Return a deliberate unsupported-operation error before execution, or complete the advertised execution boundary. |
 | 3 | [Repair witness diagnostics](compiler-boundaries.md#nested-witness-diagnostic) and [load locations](compiler-boundaries.md#source-load-diagnostic-locations) | Explain the unsupported witness route; render imports and cycles against their owning source. Preserve the supported counterparts and independent failures. |
-| 4 | [Finish package diagnostic collection](../proposals/traversals.md#diagnostic-collection-and-recovery) | Two malformed discovered files currently require two correction cycles. Report both while withholding the catalog and execution. |
+| 4 | [Finish package diagnostic collection](../proposals/traversals.md#diagnostic-collection-and-recovery) | Two malformed discovered files currently require two correction cycles. Report both while withholding the project and execution. |
 | 5 | [Complete SPSLow recovery](../proposals/traversals.md#diagnostic-collection-and-recovery) | Structural, free-variable, entry, and protocol checks still stop at the first failure. Collect independent failures only where prerequisite structure remains valid. |
 | 6 | [Repair reference drift](reference-drift.md) | Reconcile the formal calculus with supported source cases and retire obsolete accounts after preserving their evidence. |
 

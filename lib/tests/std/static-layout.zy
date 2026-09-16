@@ -1,4 +1,4 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
   param (
     /VType;
@@ -13,9 +13,9 @@ begin
     /process;
     /Unit;
     builtin
-  ) : @(import(std/builtin)) that
+  ) : @(import(/std/builtin)) that
   let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
-    @(import(std/memory))
+    @(import(/std/memory))
   ) in
   let (= Plan, = Layout, layout) = fixed in
   let (/Alloc; /heap) = allocation in

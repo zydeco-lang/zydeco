@@ -7,7 +7,7 @@ use zydeco_dynamics::{
 };
 use zydeco_session::{
     AnalysisOutcome, CheckedProgram, CompilerSession, ProgramAnalysis, SourceLoadError,
-    source::{PackageBindings, PackageId},
+    source::{PackageId, Project},
 };
 use zydeco_statics::{
     TyckObservation,
@@ -34,13 +34,13 @@ pub(crate) struct ReplEngine {
     directory: PathBuf,
     builtin: PathBuf,
     session: CompilerSession,
-    bindings: Arc<PackageBindings>,
+    bindings: Arc<Project>,
 }
 
 impl ReplEngine {
     const INPUT_OBSERVATION: &'static str = "zydeco-tui-input";
 
-    pub(crate) fn new(directory: PathBuf, bindings: Arc<PackageBindings>) -> Self {
+    pub(crate) fn new(directory: PathBuf, bindings: Arc<Project>) -> Self {
         let builtin = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/std/builtin.zy");
         Self { directory, builtin, session: CompilerSession::default(), bindings }
     }
@@ -405,8 +405,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let library = directory.path().join("library.zy");
         std::fs::write(&library, "@[package(library, name(example/value))] 42").unwrap();
-        let catalog = CompilerSession::default().package_catalog(&[library]).unwrap();
-        for (bindings, accepted) in [(catalog.bindings, true), (Arc::default(), false)] {
+        let catalog = CompilerSession::default().project(&[library]).unwrap();
+        for (bindings, accepted) in [(Arc::new(catalog), true), (Arc::default(), false)] {
             let mut engine = ReplEngine::new(directory.path().to_path_buf(), bindings);
             let input = engine
                 .install(SourceNumber::new(1).unwrap(), "@(import(example/value))".into())

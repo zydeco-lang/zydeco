@@ -6,8 +6,7 @@ use zydeco_surface::textual::{DocumentationSite, syntax as t};
 
 mod semantic;
 pub use semantic::*;
-mod path;
-pub use path::*;
+
 mod guide;
 pub use guide::*;
 mod examples;

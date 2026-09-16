@@ -121,6 +121,9 @@ pub struct SourceFile {
     /// The selected term; syntax and meta annotations remain shared with the containing file.
     pub root: t::TermId,
     pub imports: Vec<SourceImportId>,
+    pub context: super::PackageContext,
+    pub contexts: HashMap<t::TermId, super::PackageContext>,
+    pub instances: Vec<super::PackageInstanceId>,
     /// The optional `.zyi` type annotation paired with this `.zy` implementation.
     pub signature: Option<SourceId>,
 }
@@ -151,6 +154,10 @@ pub struct SourceImport {
 #[derive(Clone, Debug)]
 pub struct SourceGraph {
     pub root: SourceId,
+    pub root_instance: super::PackageInstanceId,
+    pub inputs: Vec<Arc<SourceTemplate>>,
+    pub packages: Vec<super::ResolvedPackage>,
+    pub instances: Vec<super::PackageInstance>,
     pub sources: FrozenArena<ArenaDense<SourceGraphScope, SourceId>>,
     pub imports: FrozenArena<ArenaDense<SourceGraphScope, SourceImportId>>,
 }
@@ -158,10 +165,10 @@ pub struct SourceGraph {
 impl SourceGraph {
     pub fn source_inputs(&self) -> impl Iterator<Item = &SourceTemplate> {
         let mut seen = HashSet::new();
-        self.sources
+        self.inputs
             .iter()
-            .map(|(_, source)| source.template.as_ref())
-            .filter(move |source| seen.insert(source.path.as_path()))
+            .map(AsRef::as_ref)
+            .filter(move |source: &&SourceTemplate| seen.insert(source.path.as_path()))
     }
     pub fn provider_order(&self) -> Vec<SourceId> {
         ProviderOrder::new(self).run()

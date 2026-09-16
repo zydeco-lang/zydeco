@@ -1,12 +1,12 @@
 use super::*;
-use crate::source::DocumentationPath;
+use crate::source::SemanticSelector;
 use pulldown_cmark::{LinkType, TagEnd};
 use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub enum DocumentationLinkTarget {
     Definition(s::DefId),
-    Member { owner: s::DefId, path: DocumentationPath, declaration: Option<s::TermId> },
+    Member { owner: s::DefId, path: SemanticSelector, declaration: Option<s::TermId> },
 }
 
 impl DocumentationLinkTarget {
@@ -35,7 +35,7 @@ pub enum DocumentationLinkError {
     UnknownName(String),
     #[error("documentation member `{owner}/{path}` is not exposed by that owner")]
     #[strum(serialize = "doc.link.member")]
-    UnknownMember { owner: String, path: DocumentationPath },
+    UnknownMember { owner: String, path: SemanticSelector },
 }
 
 impl DocumentationLinkError {
@@ -56,7 +56,7 @@ pub struct DocumentationLink {
 #[derive(Clone, Debug)]
 pub enum DocumentationDestination {
     Name(s::VarName),
-    Member { owner: s::VarName, path: DocumentationPath },
+    Member { owner: s::VarName, path: SemanticSelector },
 }
 
 impl DocumentationDestination {
@@ -72,7 +72,7 @@ impl DocumentationDestination {
                 .ok_or(DocumentationLinkError::Syntax)?;
             return Ok(Self::Member {
                 owner: s::VarName(owner.to_owned()),
-                path: DocumentationPath::parse(selector),
+                path: SemanticSelector::parse(selector),
             });
         }
         Err(DocumentationLinkError::Syntax)
@@ -125,16 +125,13 @@ impl DocumentationLinkSyntax {
 
 impl DocumentationIndex {
     pub(super) fn resolve_links(
-        &mut self, graph: &SourceGraph, spans: &t::SpanArena, scoped: &ScopedArena,
+        &mut self, graph: &SourceGraph, _spans: &t::SpanArena, scoped: &ScopedArena,
+        statics: &StaticsArena,
     ) {
         let scopes = scoped
             .documentation_scopes
             .iter()
-            .filter_map(|(term, scope)| {
-                let origin = scoped.origins.source(&(*term).into())?;
-                let (file, range) = spans.source_map()?.range(spans[&origin])?;
-                Some((SourceAnchor { path: file.path(), range }, scope))
-            })
+            .filter_map(|(term, scope)| Some((scoped.origins.source(&(*term).into())?, scope)))
             .collect::<HashMap<_, _>>();
         self.entries.iter_mut().for_each(|entry| {
             let Some(file) = graph
@@ -144,10 +141,8 @@ impl DocumentationIndex {
             else {
                 return;
             };
-            let scope = scopes
-                .get(&SourceAnchor { path: entry.path.clone(), range: entry.annotation.clone() })
-                .copied();
-            let resolver = DocumentationLinkResolver { scope };
+            let scope = entry.authoring_term.and_then(|term| scopes.get(&term).copied());
+            let resolver = DocumentationLinkResolver { scope, statics };
             entry.links = DocumentationLinkSyntax::collect(&entry.markdown)
                 .into_iter()
                 .map(|syntax| {
@@ -165,6 +160,7 @@ impl DocumentationIndex {
 
 struct DocumentationLinkResolver<'arena> {
     scope: Option<&'arena zydeco_surface::scoped::ScopeSnapshot>,
+    statics: &'arena StaticsArena,
 }
 
 impl DocumentationLinkResolver<'_> {
@@ -184,6 +180,27 @@ impl DocumentationLinkResolver<'_> {
         match destination {
             | DocumentationDestination::Name(name) => {
                 self.definition(&name.0).map(DocumentationLinkTarget::Definition)
+            }
+            | DocumentationDestination::Member { owner, path } => {
+                let definition = self.definition(&owner.0)?;
+                let classifier = self
+                    .statics
+                    .type_definitions
+                    .get(&definition)
+                    .copied()
+                    .map(Into::into)
+                    .or_else(|| self.statics.annotations_var.get(&definition).copied());
+                let selected = classifier
+                    .and_then(|classifier| path.select(self.statics, classifier))
+                    .ok_or_else(|| DocumentationLinkError::UnknownMember {
+                        owner: owner.0,
+                        path: path.clone(),
+                    })?;
+                Ok(DocumentationLinkTarget::Member {
+                    owner: definition,
+                    path,
+                    declaration: selected.declaration,
+                })
             }
         }
     }

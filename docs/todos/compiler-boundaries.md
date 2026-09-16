@@ -120,7 +120,7 @@ Save this complete source as `/tmp/zydeco-doc-collision.zy`:
 param val (x : @(intrinsic(int))) in ({ ret 1 }, { ret 2 })
 ```
 
-With a debug CLI built from the checkout, the ordinary check succeeds and documentation lookup fails:
+At that revision, the ordinary check succeeded and documentation lookup failed:
 
 ```sh
 target/debug/zydeco check /tmp/zydeco-doc-collision.zy
@@ -137,18 +137,21 @@ The named counterpart passes reference construction:
 param val (x : @(intrinsic(int))) in (#first = { ret 1 }, #second = { ret 2 })
 ```
 
-The same failure occurs for all four `doc` commands on `lib/std/std.zy`, while ordinary source checking succeeds.
-Additional reference-construction probes gave these results:
+Before the exposure implementation was removed, the same failure affected all four `doc` commands
+on `lib/std/std.zy`, while ordinary source checking succeeded.
+The original reference-construction probes gave these results:
 
 | Entry | Result |
 | --- | --- |
 | `lib/std/std.zy`, `lib/std/data/package.zy`, `lib/std/memory/package.zy` | Duplicate `()/()` path |
 | `lib/std/text/package.zy`, `lib/std/numeric/package.zy`, `lib/std/system/package.zy`, `lib/std/data/option.zy` | Reference construction succeeds |
 
-The [exposure traversal](../../lang/session/src/source/documentation/exposure.rs) visits product components
-at a shared parent path and appends result steps independently before checking uniqueness.
-The [command dispatcher](../../cli/src/main.rs) requires the complete reference even for `show` and `check`.
-Reference-construction success alone does not verify documentation prose or examples.
+The former exposure traversal has been replaced
+by [shared semantic selectors](../../lang/session/src/source/selector.rs)
+and [command presentation](../../cli/src/documentation.rs).
+The retained reproducer specifies the remaining presentation work: anonymous branches need explanations
+within their containing interface, while named selectors continue to address unique public subjects.
+The current renderer includes those branches in the containing classifier; separate branch prose remains planned.
 
 - [ ] Preserve distinct anonymous subjects while allowing valid standard-library interfaces to be documented.
   Retain the reproducer and named counterpart as regressions; preserve errors for ambiguous requested selectors.
@@ -156,7 +159,7 @@ Reference-construction success alone does not verify documentation prose or exam
   Reject invalid links without replacing an existing output artifact.
 
 Shared selection follows the
-[package resolution proposal](../proposals/package-resolution.md#shared-selection-and-documentation).
+[package resolution reference](../references/language.md#shared-selection-and-documentation).
 The [documentation proposal](../proposals/documentation.md#subjects-selectors-and-published-anchors)
 develops presentation and stable links.
 This failure record does not choose new selector syntax or authorize silently dropping colliding subjects.

@@ -1,7 +1,7 @@
 use super::{Documentation, DocumentationGuide};
 use crate::{
     CompilerSession, SourceDiagnosticSite,
-    source::{PackageBindings, PackageId},
+    source::{PackageId, Project},
 };
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,8 @@ pub enum DocumentationExampleMode {
 
 #[derive(Clone, Debug, Error)]
 pub enum DocumentationExampleError {
+    #[error("the selected example occurrence is unavailable in this analysis")]
+    Instance,
     #[error("verified fences require `zydeco check` or `zydeco reject=tyck.code at=line:column`")]
     Options,
     #[error("unknown diagnostic code `{0}`")]
@@ -247,8 +249,53 @@ impl DocumentationExample {
         Some(locate(code.start)?..locate(code.end)?)
     }
 
+    /// Pin the analyzed input texts and replay its routes before checking an example in its lexical context.
+    pub fn request_in_instance(
+        &self, analysis: &crate::source::ProgramAnalysis,
+        instance: crate::source::PackageInstanceId,
+    ) -> Result<DocumentationExampleRequest, DocumentationExampleError> {
+        let instance = analysis
+            .graph()
+            .instances
+            .get(instance.0)
+            .ok_or(DocumentationExampleError::Instance)?;
+        if instance.template.path != self.path {
+            return Err(DocumentationExampleError::Instance);
+        }
+        let site = instance.template.documentation.iter().find(|site| {
+            site.directive.comment.as_ref().is_some_and(|comment| {
+                comment.range.start <= self.range.start && self.range.end <= comment.range.end
+            })
+        });
+        let context = site
+            .and_then(|site| instance.contexts.get(&site.term))
+            .cloned()
+            .ok_or(DocumentationExampleError::Instance)?;
+        let mut project = analysis.project().clone();
+        project.replays.push(analysis.replay());
+        project.entry_context = Some(context);
+        Ok(DocumentationExampleRequest {
+            path: self.path.with_extension("doc-example.zydeco"),
+            code: self.code.clone(),
+            inputs: analysis
+                .sources()
+                .map(|(path, source)| DocumentationExampleInput {
+                    path: path.to_owned(),
+                    source: source.to_owned(),
+                })
+                .collect(),
+            bindings: project,
+            expectation: match self.mode.clone()? {
+                | DocumentationExampleMode::Check => DocumentationExampleExpectation::Check,
+                | DocumentationExampleMode::Reject { code, offset } => {
+                    DocumentationExampleExpectation::Reject { code: code.to_string(), offset }
+                }
+            },
+        })
+    }
+
     pub fn request(
-        &self, session: &CompilerSession, bindings: &PackageBindings,
+        &self, session: &CompilerSession, bindings: &Project,
     ) -> Result<DocumentationExampleRequest, DocumentationExampleError> {
         let expectation = match self.mode.clone()? {
             | DocumentationExampleMode::Check => DocumentationExampleExpectation::Check,
@@ -279,7 +326,7 @@ pub struct DocumentationExampleRequest {
     pub path: PathBuf,
     pub code: String,
     pub inputs: Vec<DocumentationExampleInput>,
-    pub bindings: PackageBindings,
+    pub bindings: Project,
     pub expectation: DocumentationExampleExpectation,
 }
 

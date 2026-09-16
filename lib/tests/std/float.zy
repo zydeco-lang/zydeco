@@ -1,7 +1,7 @@
-@[package(test(of(std)))]
+@[package(test(of(/std)))]
 begin
-  let make_std = @(import(std)) that
-  param (/system; /Ret; /OS; /Int; /Float64; builtin) : @(import(std/builtin)) that
+  let make_std = @(import(/std)) that
+  param (/system; /Ret; /OS; /Int; /Float64; builtin) : @(import(/std/builtin)) that
   let (/bool; /float64; /int; /string; /process) = builtin |> make_std in
   do sum <- ! float64/add 1.25 2.75;
   do difference <- ! float64/sub sum 1.5;

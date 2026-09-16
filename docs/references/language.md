@@ -167,8 +167,7 @@ Products retain order, arity, and explicit nesting; labels retain their names.
 A nominal `def` keeps its identity distinct from its implementation and other definitions.
 Typing may expose a sealed data or codata shape to introduce or eliminate it without equating distinct seals.
 Repeated uses of one definition share its identity; copying a term freshens its bound nominal definitions.
-Identity across imported source copies follows the
-[package-resolution model](../proposals/package-resolution.md#copy-resolve-merge-analyze).
+Identity across imported source copies follows the [package-resolution model](#copy-resolve-merge-analyze).
 
 Checking is bidirectional. Annotations supply expected classifiers; synthesis determines them from a term.
 A bare unannotated variable in a synthesizing binder position defaults to a value binder with a flexible value type.
@@ -702,8 +701,7 @@ and assemble reference pages, explicit guides, anchors, and rendered output.
 The [source-documentation rules](#source-documentation) describe authoring;
 the compiler reference maps these abstractions
 to their [implementation representations](compiler.md#implementation-representations).
-Package context, source selection,
-and import identity follow the [namespace and resolution proposal](../proposals/package-resolution.md).
+Package context, source selection, and import identity follow the [package namespace rules](#package-hierarchy).
 
 ### Source Boundaries
 
@@ -713,8 +711,8 @@ Provider inference closes before comparison with import-site expectations.
 An independently selected term follows the same binding and inference boundary.
 
 Imports and companion signatures form an acyclic graph.
-Imported computations execute at every dynamic occurrence. Package context
-and sharing follow the [resolution model](../proposals/package-resolution.md#copy-resolve-merge-analyze).
+Imported computations execute at every dynamic occurrence.
+Package context and sharing follow the [resolution model](#copy-resolve-merge-analyze).
 
 A `foo.zy` implementation may have an independently checked `foo.zyi` type companion.
 The pair behaves as an annotation of the implementation by that type.
@@ -781,13 +779,6 @@ Subsequent arguments supply an optional `name(...)` and typed relationships.
 Source libraries may expose any source classifier.
 Compilation-unit validation checks the declared compiled-library interface or the executable Builtin/OS contract.
 
-#### Package Resolution
-
-Package paths, source instantiation, shared identity,
-and name conflicts follow the [namespace and resolution proposal](../proposals/package-resolution.md).
-The [package implementation plan](../proposals/package-management.md#shared-project-context) covers project preparation,
-discovery integration, and frontend selection.
-
 #### Relationships and Operations
 
 Relationships associate packages with tests and other subjects:
@@ -797,11 +788,183 @@ Relationships associate packages with tests and other subjects:
 | `test(target)` | A companion test associated with the declaring package |
 | `of(subject, ...)` under `test(...)` | The packages tested by this test |
 
-Relationship targets follow the shared
-[package-path rules](../proposals/package-resolution.md#paths-and-package-context).
+Relationship targets follow the shared [package-path rules](#paths-and-package-context).
 The [operation plan](../proposals/package-management.md#validation-and-operation-planning) develops validation scope,
 test selection, and frontend integration.
 The [execution contract](#selecting-an-execution-backend) governs backend preparation and test results.
+
+### Package Hierarchy
+
+A package definition is a meta annotation on a term, so it establishes a package context
+for the lexical extent of that term.
+Package resolution instantiates source in that context, merges identical resolved copies,
+and gives each resulting term semantics once.
+
+The package hierarchy is a tree of naming contexts.
+A point in the tree can serve as a namespace prefix, a package definition site, or both.
+The resolution run supplies each source instance's entry package context;
+enclosing package-definition annotations establish their annotated terms' package contexts.
+For example:
+
+```text
+<root>
+└── std
+    ├── data
+    │   └── smoke
+    └── text
+```
+
+Defining `data` in the lexical scope of `std` associates its term with `/std/data`.
+The prefix records the naming context at the definition site.
+
+#### Paths and Package Context
+
+Package namespace paths are inspired by filesystem paths.
+The package context is the namespace from which relative package paths are resolved.
+An ordinary path starts from the package context, `.` denotes that context,
+`..` denotes its parent, and a leading `/` starts from the root.
+All package paths follow this same rule, including paths in definitions, imports, and relationships.
+
+| Package Context | Package Path | Target |
+| --- | --- | --- |
+| `/std` | `data` | `/std/data` |
+| `/std/data` | `.` | `/std/data` |
+| `/std/data/smoke` | `..` | `/std/data` |
+| `/app` | `../std/data` | `/std/data` |
+| Any package context under the same root | `/std/data` | `/std/data` |
+
+Relative and absolute spellings identify the same declaration.
+Normalizing redundant steps such as `./data` and `data/../data` gives one canonical relative path
+from a given package context to a target, and one canonical absolute path from the root.
+
+Package paths use the lexical package context; quoted file paths use the referencing file's location.
+Thus `@(import(/std/data))` uses a package path, while `@(import("data.zy"))` uses a file path.
+Both select source for the same instantiation process.
+
+#### Lexical Scope of Package Context
+
+A package-definition meta annotation resolves its name in the enclosing package context.
+That name establishes the package context for its relationship arguments and annotated body.
+Sibling terms retain the enclosing package context.
+
+```zydeco
+@[package(library, name(std))]
+(
+  @[package(library, name(data))] (),
+  @[package(library, name(text))] ()
+)
+```
+
+At a project's source root, `std` resolves to `/std`.
+Both `data` and `text` are defined in the lexical scope of that annotation,
+so their names resolve to `/std/data` and `/std/text`.
+Their annotated bodies have package contexts `/std/data` and `/std/text`, respectively.
+
+Relationship arguments use the same package-path rules in their lexical package context.
+For example, a test named `/std/data/smoke` can use `of(..)` to identify `/std/data`.
+
+An imported copy starts in the package context supplied by its route through the resolution run.
+Package definitions inside that copy establish lexical scope for their annotated terms in the same way.
+The importer's surrounding terms retain their enclosing package context.
+
+#### The Opaque Root
+
+The root is an opaque name: `/std/data` denotes `<root>/std/data`.
+The leading slash supplies that root.
+
+Two components describe package-path resolution:
+
+| Component | Meaning |
+| --- | --- |
+| Root `ρ` | The opaque namespace denoted by leading `/` |
+| Package Context `ν` | The namespace used by relative paths, including `.` |
+
+At a project's initial source root, `ν = ρ`.
+Package definitions establish an inner `ν`; resolution supplies the context for each imported instance.
+
+Giving the root a name makes registering one project inside another a namespace substitution.
+Registering project B under A's `/vendor/b` substitutes:
+
+```text
+ρB ↦ ρA/vendor/b
+```
+
+B's authored `/std/data` then denotes `ρA/vendor/b/std/data`.
+This substitution supplies the semantics of project registration and renaming.
+The [package-management plan](../proposals/package-management.md#project-registration-configuration)
+develops its configuration syntax.
+
+#### Unnamed Packages Have Opaque Names
+
+An unnamed package receives an opaque name for its declaration within an instantiation.
+For example, `@[package(test)]` in package context `/std` establishes the package context `/std/α`,
+where `α` is explanatory notation for that name.
+
+Inside the package, `.` refers to `/std/α`.
+Declaring `data` produces `/std/α/data`, addressed as `data` from that package context.
+
+Every namespace point has an absolute semantic path.
+Package paths obtain opaque components from their resolution context: absolute paths use the root,
+and relative paths use the package context.
+Parent steps follow the namespace tree from that context.
+
+### Resolution Runs and Source Copies
+
+A package context depends on how the package was reached in this resolution run.
+Each import route produces a copy of the file or package on the resolution graph, with its entry package context.
+Within the copy, package annotations determine lexical scope through the term structure.
+The rule applies uniformly to source files, named and unnamed packages, libraries, tests, and programs.
+Several importers can supply the same context, and different contexts can lead to identical resolved contents.
+
+Each copy participates in a composition as a semantic unit. Package resolution supplies its package context;
+the [source-boundary rules](#source-boundaries) govern ordinary lexical bindings and inference.
+
+### Copy, Resolve, Merge, Analyze
+
+Compiler sharing follows resolved file and package imports:
+
+**Copy → resolve imports for this run → merge identical resolved packages → analyze once per merged node.**
+
+1. **Instantiate.** Each route to a file or package produces a separate candidate instance.
+   Its import route supplies the entry package context.
+2. **Resolve.** Resolve each instance's package definitions and imports in their lexical package context.
+3. **Merge.** Once dependencies are resolved and themselves merged, merge candidates with identical contents
+   and dependency targets.
+4. **Analyze.** Give each resulting node semantics once.
+
+For example, two copies of a file containing `@(import(data))` can merge
+if their respective `data` targets ultimately become the same resolved package and their remaining contents agree.
+Different resolved dependencies produce distinct package nodes.
+
+The comparison is structural equality of resolved inputs.
+Source loading reads the syntax needed to identify definitions and imports.
+The acyclic import graph orders merging from providers toward consumers: compare dependency targets
+through their merged nodes, then compare the remaining contents.
+Semantic-unit analysis processes the resulting graph.
+
+Local semantic declaration identities are created after merging.
+Merged copies share those identities; distinct resolved instances receive their own.
+Namespace bindings record which merged packages their paths select.
+Merged nodes retain import routes and source locations as provenance.
+
+Resolved contents include the term's companion signature and relevant meta annotations.
+Consumers use the retained roles, relationships, documentation, names, and origins.
+Copies that merge can share a binding; conflicting resolved definitions produce a diagnostic with both origins.
+
+An imported computation executes at each dynamic occurrence.
+A semantic unit supports several compilations through the package's declared external contract.
+
+### Shared Selection and Documentation
+
+Package operations and documentation use the same package resolution and semantic-unit queries.
+A package path selects a package in the resolved graph.
+A semantic selector addresses a subject within its checked interface, such as a field or a function result.
+The [documentation work](../proposals/documentation.md#subjects-selectors-and-published-anchors) develops presentation
+and stable links from the selected semantic subjects.
+
+Documentation queries, links, and example workers use the analyzed instance's resolution context and provenance.
+They reproduce its meaning and identify the declaration or imported copy being inspected.
+Reference output chooses pages and anchors from the selected semantic subjects.
 
 ## 13. Primitive Values and Capabilities
 
@@ -1643,8 +1806,8 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 
 | Meta annotation | Meaning and valid use |
 | --- | --- |
-| `import(source)` | Import an independently checked term (§12); source selection follows [package resolution](../proposals/package-resolution.md) |
-| `package(role, ...)` | Define a package's role and relationships (§12); names and package context follow [package resolution](../proposals/package-resolution.md#package-hierarchy) |
+| `import(source)` | Import an independently checked term (§12); source selection follows [package resolution](#package-hierarchy) |
+| `package(role, ...)` | Define a package's role and relationships (§12); names and package context follow [package resolution](#package-hierarchy) |
 | `discover(include("glob", ...), exclude("glob", ...), ...)` | Declare candidate source files; project integration follows the [package plan](../proposals/package-management.md#shared-project-context) |
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed Builtin interface (§13) |
@@ -1718,8 +1881,8 @@ Imported prose keeps its original scope even when a consumer shadows a name.
 
 Use inline Markdown links for semantic destinations.
 Reference-style semantic links and unresolved destinations are diagnosed.
-Editors navigate to the resolved source target. Package and subject selection follow the
-[shared selection model](../proposals/package-resolution.md#shared-selection-and-documentation).
+Editors navigate to the resolved source target.
+Package and subject selection follow the [shared selection model](#shared-selection-and-documentation).
 Guide contexts and published links follow the [documentation proposal](../proposals/documentation.md).
 
 ## Diagnostic Index

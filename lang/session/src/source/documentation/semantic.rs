@@ -40,6 +40,8 @@ pub struct Documentation {
     pub payload: Range<usize>,
     pub markdown: Arc<str>,
     pub links: Vec<DocumentationLink>,
+    pub source: Option<crate::source::SourceId>,
+    authoring_term: Option<t::EntityId>,
     annotation: Range<usize>,
     comment: Range<usize>,
 }
@@ -141,24 +143,65 @@ enum DocumentationRelation {
     Contract { interface: s::TermId, implementation: s::TermId },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct SourceAnchor {
-    path: PathBuf,
-    range: Range<usize>,
-}
-
 impl DocumentationIndex {
+    /// Present a merged subject's prose at the selected import route's authored location.
+    pub fn in_instance(
+        &self, graph: &SourceGraph, id: crate::source::PackageInstanceId,
+    ) -> Vec<Documentation> {
+        let Some(instance) = graph.instances.get(id.0) else {
+            return Vec::new();
+        };
+        let representative = &graph.sources[&instance.source];
+        let source = SourceDocumentation::with_template(&instance.template);
+        instance
+            .template
+            .documentation
+            .iter()
+            .filter_map(|site| {
+                let t::EntityId::Term(canonical) = instance.canonical.get(&site.term.into())?
+                else {
+                    return None;
+                };
+                let annotation = representative.spans[&(*canonical).into()].range();
+                let shared = self.entries.iter().find(|entry| {
+                    entry.source == Some(instance.source) && entry.annotation == annotation
+                })?;
+                let mut document = source.entry(shared.id, site)?;
+                document.source = shared.source;
+                document.authoring_term = shared.authoring_term;
+                document.links = shared
+                    .links
+                    .iter()
+                    .cloned()
+                    .map(|mut link| {
+                        link.source = document
+                            .source_range(&instance.template.source, link.range.clone())
+                            .unwrap_or_else(|| document.comment.clone());
+                        link
+                    })
+                    .collect();
+                Some(document)
+            })
+            .collect()
+    }
+
     pub(crate) fn new(
         graph: &SourceGraph, spans: &t::SpanArena, scoped: &ScopedArena, statics: &StaticsArena,
+        origins: &crate::source::ProgramOrigins,
     ) -> Self {
         let mut index = Self::default();
-        let mut attachments: HashMap<SourceAnchor, Vec<DocumentationId>> = HashMap::new();
+        let mut attachments: HashMap<t::EntityId, Vec<DocumentationId>> = HashMap::new();
         graph.documentation().into_iter().for_each(|entry| {
             let id = DocumentationId(index.entries.len());
             let source = SourceDocumentation::with_template(entry.file);
-            let Some(documentation) = source.entry(id, entry.site) else { return };
+            let Some(mut documentation) = source.entry(id, entry.site) else { return };
+            documentation.source = Some(entry.source);
+            documentation.authoring_term =
+                origins.0.get(&(entry.source, entry.site.term.into())).copied();
             source.targets(entry.site).into_iter().for_each(|entity| {
-                attachments.entry(source.anchor(entity)).or_default().push(id);
+                if let Some(copied) = origins.0.get(&(entry.source, entity)) {
+                    attachments.entry(*copied).or_default().push(id);
+                }
             });
             index.entries.push(documentation);
         });
@@ -172,11 +215,7 @@ impl DocumentationIndex {
             .chain(scoped.terms.iter().map(|(id, _)| s::EntityId::Term(id)));
         entities.for_each(|entity| {
             let Some(origin) = scoped.origins.source(&entity) else { return };
-            let Some((file, range)) = spans.source_map().and_then(|map| map.range(spans[&origin]))
-            else {
-                return;
-            };
-            if let Some(ids) = attachments.get(&SourceAnchor { path: file.path(), range }) {
+            if let Some(ids) = attachments.get(&origin) {
                 index.direct.insert(entity, ids.clone());
             }
         });
@@ -242,7 +281,7 @@ impl DocumentationIndex {
                     .insert(definition.into(), DocumentationRelation::Alias(origin.into()));
             }
         });
-        index.resolve_links(graph, spans, scoped);
+        index.resolve_links(graph, spans, scoped, statics);
         index
     }
 
@@ -374,13 +413,11 @@ impl<'file> SourceDocumentation<'file> {
             payload: self.spans[&site.payload.into()].range(),
             markdown: Arc::clone(&comment.text),
             links: Vec::new(),
+            source: None,
+            authoring_term: None,
             annotation: site.directive.span.range(),
             comment: comment.range.clone(),
         })
-    }
-
-    fn anchor(&self, entity: t::EntityId) -> SourceAnchor {
-        SourceAnchor { path: self.path.to_owned(), range: self.spans[&entity].range() }
     }
 
     fn transparent_terms(&self, term: t::TermId) -> Vec<t::TermId> {

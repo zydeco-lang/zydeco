@@ -92,8 +92,8 @@ fn aggregate_checks_continue_past_invalid_package_and_discovery_sites() {
         "(@[package(library, name(p))] _, @[package(library, name(p))] _, @[package(library, name(p))] _, @[package(wrong)] _, @[discover(include(1))] _, @[discover(include(2))] _)",
     );
     let inventory = SourceInventory::scan(fixture.view());
-    assert_eq!(inventory.packages.diagnostics.len(), 3);
-    assert_eq!(inventory.packages.facts.len(), 1);
+    assert_eq!(inventory.packages.diagnostics.len(), 1);
+    assert_eq!(inventory.packages.facts.len(), 3);
     assert_eq!(inventory.discovery.diagnostics.len(), 3, "two argument errors and one duplicate");
     let valid = Fixture::parse(
         "@[discover(include(\"*.zy\"))] (@[package(library, name(p))] _, @[package(library, name(q))] _)",
