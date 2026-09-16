@@ -310,16 +310,3 @@ fn public_exposure_has_stable_paths_and_hides_implementation_bindings() {
         assert_eq!(members[0].path.anchor(), "api-f-76616c7565");
     }
 }
-
-#[test]
-fn public_exposure_rejects_ambiguous_routes() {
-    use crate::source::{DocumentationExposureError, DocumentationExposureQuery};
-    let fixture = Fixture::new("¦(#value = 42, #value = 1)");
-    let analysis = fixture.analyze();
-    let program = fixture.session.checked_program(&analysis).unwrap();
-    let zydeco_statics::syntax::TermAnnId::Value(_, classifier) = program.root else { panic!() };
-    assert!(matches!(
-        DocumentationExposureQuery::new(&program.statics).collect(classifier.into()),
-        Err(DocumentationExposureError::Ambiguous(_))
-    ));
-}

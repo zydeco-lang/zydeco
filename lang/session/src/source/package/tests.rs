@@ -599,32 +599,21 @@ fn same_file_test_associations_work_but_real_code_cycles_are_rejected() {
 }
 
 #[test]
-fn missing_tests_and_custom_kinds_do_not_break_code_use_but_fail_test_planning() {
+fn missing_tests_do_not_break_code_use_but_fail_test_planning() {
     let fixture = Fixture::new();
-    for kind in ["test", "benchmark"] {
-        let path =
-            fixture.write("lib.zy", &format!(r#"@[package(library, {kind}("absent.zy"))] 1"#));
-        let session = CompilerSession::default();
-        let catalog = fixture.catalog(&session, &["lib.zy"]);
-        let id = fixture.id("lib.zy");
-        assert!(
-            session
-                .analyze_package(&id, catalog.bindings.clone())
-                .unwrap()
-                .outcome()
-                .root()
-                .is_some()
-        );
-        let error = session.package_tests(&id, &catalog).unwrap_err();
-        let SourceLoadError::Package(inner) = &error else { panic!("package error") };
-        match kind {
-            | "test" => assert!(
-                matches!(&**inner, PackageError::Relation { error, .. } if matches!(**error, SourceLoadError::Read { .. }))
-            ),
-            | _ => assert!(matches!(**inner, PackageError::UnsupportedRelation { .. })),
-        }
-        assert_eq!(error.diagnostic_site().unwrap().path(), path.canonicalize().unwrap());
-    }
+    let path = fixture.write("lib.zy", r#"@[package(library, test("absent.zy"))] 1"#);
+    let session = CompilerSession::default();
+    let catalog = fixture.catalog(&session, &["lib.zy"]);
+    let id = fixture.id("lib.zy");
+    assert!(
+        session.analyze_package(&id, catalog.bindings.clone()).unwrap().outcome().root().is_some()
+    );
+    let error = session.package_tests(&id, &catalog).unwrap_err();
+    let SourceLoadError::Package(inner) = &error else { panic!("package error") };
+    assert!(
+        matches!(&**inner, PackageError::Relation { error, .. } if matches!(**error, SourceLoadError::Read { .. }))
+    );
+    assert_eq!(error.diagnostic_site().unwrap().path(), path.canonicalize().unwrap());
 }
 
 #[test]

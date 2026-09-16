@@ -1,5 +1,5 @@
 use super::*;
-use crate::source::{DocumentationExposureQuery, DocumentationPath};
+use crate::source::DocumentationPath;
 use pulldown_cmark::{LinkType, TagEnd};
 use thiserror::Error;
 
@@ -36,9 +36,6 @@ pub enum DocumentationLinkError {
     #[error("documentation member `{owner}/{path}` is not exposed by that owner")]
     #[strum(serialize = "doc.link.member")]
     UnknownMember { owner: String, path: DocumentationPath },
-    #[error(transparent)]
-    #[strum(serialize = "doc.link.exposure")]
-    Exposure(#[from] crate::source::DocumentationExposureError),
 }
 
 impl DocumentationLinkError {
@@ -129,7 +126,6 @@ impl DocumentationLinkSyntax {
 impl DocumentationIndex {
     pub(super) fn resolve_links(
         &mut self, graph: &SourceGraph, spans: &t::SpanArena, scoped: &ScopedArena,
-        statics: &StaticsArena,
     ) {
         let scopes = scoped
             .documentation_scopes
@@ -151,7 +147,7 @@ impl DocumentationIndex {
             let scope = scopes
                 .get(&SourceAnchor { path: entry.path.clone(), range: entry.annotation.clone() })
                 .copied();
-            let resolver = DocumentationLinkResolver { scope, statics };
+            let resolver = DocumentationLinkResolver { scope };
             entry.links = DocumentationLinkSyntax::collect(&entry.markdown)
                 .into_iter()
                 .map(|syntax| {
@@ -169,7 +165,6 @@ impl DocumentationIndex {
 
 struct DocumentationLinkResolver<'arena> {
     scope: Option<&'arena zydeco_surface::scoped::ScopeSnapshot>,
-    statics: &'arena StaticsArena,
 }
 
 impl DocumentationLinkResolver<'_> {
@@ -189,18 +184,6 @@ impl DocumentationLinkResolver<'_> {
         match destination {
             | DocumentationDestination::Name(name) => {
                 self.definition(&name.0).map(DocumentationLinkTarget::Definition)
-            }
-            | DocumentationDestination::Member { owner: name, path } => {
-                let owner = self.definition(&name.0)?;
-                let member = DocumentationExposureQuery::new(self.statics)
-                    .of_definition(owner)?
-                    .into_iter()
-                    .find(|member| member.path == path)
-                    .ok_or_else(|| DocumentationLinkError::UnknownMember {
-                        owner: name.0.clone(),
-                        path: path.clone(),
-                    })?;
-                Ok(DocumentationLinkTarget::Member { owner, path, declaration: member.declaration })
             }
         }
     }

@@ -321,56 +321,9 @@ impl SourceQueryDb for CompilerSession {
 }
 
 impl CompilerSession {
-    /// Prepare the explicitly requested scopes once, before name lookup or compilation.
-    pub fn package_catalog(
-        &self, paths: &[PathBuf],
-    ) -> Result<super::PackageCatalog, SourceLoadError> {
-        let mut packages = Vec::new();
-        for path in paths {
-            let source = QuerySourceProvider { db: self }.load(path)?;
-            packages.extend(Self::local_packages(&source)?);
-            let overlays = self
-                .files
-                .iter()
-                .filter_map(|entry| entry.overlay(self).as_ref().map(|_| entry.key().clone()));
-            for (path, span) in (super::PackageDiscovery { source: &source }).paths(overlays)? {
-                if path == source.path {
-                    continue;
-                }
-                let discovered = QuerySourceProvider { db: self }.load(&path).map_err(|error| {
-                    super::PackageError::DiscoveredSource {
-                        site: super::SourceDiagnosticSite::new(source.path.clone(), span.range()),
-                        error: Box::new(error),
-                    }
-                })?;
-                packages.extend(Self::local_packages(&discovered)?);
-            }
-        }
-        super::PackageCatalog::new(packages).map_err(Into::into)
-    }
-
-    fn local_packages(
-        source: &Arc<SourceTemplate>,
-    ) -> Result<Vec<super::Package>, SourceLoadError> {
-        if source.package_sites.is_empty() {
-            return Ok(vec![super::Package::select(source, None)?]);
-        }
-        source
-            .package_sites
-            .iter()
-            .map(|site| super::Package::select(source, site.name.as_ref()).map_err(Into::into))
-            .collect()
-    }
-
     pub fn package(&self, id: &super::PackageId) -> Result<super::Package, SourceLoadError> {
         let source = QuerySourceProvider { db: self }.load(&id.path)?;
         super::Package::select(&source, id.name.as_ref()).map_err(Into::into)
-    }
-
-    pub fn package_tests(
-        &self, id: &super::PackageId, catalog: &super::PackageCatalog,
-    ) -> Result<super::PackageTestPlan, SourceLoadError> {
-        super::PackageTestPlan::collect(self.package(id)?, catalog, |id| self.package(id))
     }
 
     pub fn analyze_package(

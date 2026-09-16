@@ -65,7 +65,6 @@ fn offline_reference_includes_guides_and_exact_input_fingerprints() {
     assert!(
         html.contains(&Html::digest(&fixture.session.source_text(&fixture.root).unwrap().unwrap()))
     );
-    assert!(html.contains("<script>const search"));
     assert!(!html.contains("<script src="));
 }
 
@@ -140,8 +139,6 @@ fn generic_reference_exposes_its_result_without_evaluation() {
     let fixture =
         Fixture::new("param I : @(intrinsic(vtype)) in\n--| Generic field.\n@[doc] (#value :: I)");
     let reference = fixture.reference();
-    let paths = reference.entries.iter().map(|entry| entry.path.to_string()).collect::<Vec<_>>();
-    assert_eq!(paths, [".", "()", "()/value"]);
     assert!(
         DocumentationRenderer { reference: &reference }
             .show(&DocumentationPath::parse("()/value"))

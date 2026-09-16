@@ -6,7 +6,6 @@ use std::{
 };
 use thiserror::Error;
 mod discovery;
-pub(crate) use discovery::PackageDiscovery;
 pub use zydeco_surface::metadata::{
     PackageName, PackageRelation, PackageRelationKind, PackageRole, SourceReference,
 };
@@ -56,38 +55,6 @@ impl PackageBindings {
                 Ok(PackageId { path, name: None })
             }
         }
-    }
-}
-
-/// The declarations in one explicitly selected discovery scope.
-#[derive(Clone, Debug, Default)]
-pub struct PackageCatalog {
-    pub packages: Vec<Package>,
-    pub bindings: Arc<PackageBindings>,
-}
-
-impl PackageCatalog {
-    pub(crate) fn new(packages: Vec<Package>) -> Result<Self, PackageError> {
-        let packages = packages
-            .into_iter()
-            .map(|package| (package.id.clone(), package))
-            .collect::<BTreeMap<_, _>>()
-            .into_values()
-            .collect::<Vec<_>>();
-        let mut names: BTreeMap<PackageName, &Package> = BTreeMap::new();
-        for package in &packages {
-            if let Some(name) = &package.name
-                && let Some(first) = names.insert(name.clone(), package)
-            {
-                return Err(PackageError::DuplicateName {
-                    name: name.clone(),
-                    first: first.origin.clone(),
-                    site: package.origin.clone(),
-                });
-            }
-        }
-        let entries = names.into_iter().map(|(name, package)| (name, package.id.clone())).collect();
-        Ok(Self { bindings: Arc::new(PackageBindings { entries }), packages })
     }
 }
 
@@ -146,81 +113,6 @@ impl Package {
     }
 }
 
-/// Only direct test associations of the requested package are activated.
-/// Their ordinary code dependencies are resolved later by the standard compiler pipeline.
-#[derive(Clone, Debug)]
-pub struct PackageTestPlan {
-    pub root: Package,
-    pub tests: Vec<Package>,
-}
-
-impl PackageTestPlan {
-    pub(crate) fn collect(
-        root: Package, catalog: &PackageCatalog,
-        mut load: impl FnMut(&PackageId) -> Result<Package, SourceLoadError>,
-    ) -> Result<Self, SourceLoadError> {
-        let mut tests = BTreeMap::new();
-        if root.role == PackageRole::Test {
-            tests.insert(root.id.clone(), root.clone());
-        }
-        for relation in &root.relations {
-            match &relation.kind {
-                | PackageRelationKind::TestOf => {}
-                | PackageRelationKind::Test => {
-                    let package = catalog
-                        .bindings
-                        .resolve(&relation.target, root.id.path.parent().expect("source file"))
-                        .and_then(|id| load(&id))
-                        .map_err(|error| PackageError::Relation {
-                            site: SourceDiagnosticSite::new(
-                                root.id.path.clone(),
-                                relation.info.range(),
-                            ),
-                            error: Box::new(error),
-                        })?;
-                    package.require_role(PackageRole::Test)?;
-                    tests.insert(package.id.clone(), package);
-                }
-                | kind @ PackageRelationKind::Custom(_) => {
-                    return Err(PackageError::UnsupportedRelation {
-                        kind: kind.clone(),
-                        site: SourceDiagnosticSite::new(
-                            root.id.path.clone(),
-                            relation.info.range(),
-                        ),
-                    }
-                    .into());
-                }
-            }
-        }
-        for package in &catalog.packages {
-            if package.role != PackageRole::Test {
-                continue;
-            }
-            for relation in package
-                .relations
-                .iter()
-                .filter(|relation| relation.kind == PackageRelationKind::TestOf)
-            {
-                let subject = catalog
-                    .bindings
-                    .resolve(&relation.target, package.id.path.parent().expect("source file"))
-                    .map_err(|error| PackageError::Relation {
-                        site: SourceDiagnosticSite::new(
-                            package.id.path.clone(),
-                            relation.info.range(),
-                        ),
-                        error: Box::new(error),
-                    })?;
-                if subject == root.id {
-                    tests.entry(package.id.clone()).or_insert_with(|| package.clone());
-                }
-            }
-        }
-        Ok(Self { root, tests: tests.into_values().collect() })
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 pub enum PackageError {
     #[error("unknown package `{name}` in the selected catalog")]
@@ -244,8 +136,6 @@ pub enum PackageError {
         found: Box<PackageRole>,
         site: SourceDiagnosticSite,
     },
-    #[error("cannot plan package tests with unsupported relationship kind `{kind}` at {site}")]
-    UnsupportedRelation { kind: PackageRelationKind, site: SourceDiagnosticSite },
     #[error("package relationship at {site}: {error}")]
     Relation {
         site: SourceDiagnosticSite,
@@ -260,7 +150,6 @@ impl PackageError {
             | Self::Missing { .. } | Self::Unknown { .. } => None,
             | Self::DuplicateName { site, .. }
             | Self::WrongRole { site, .. }
-            | Self::UnsupportedRelation { site, .. }
             | Self::Discovery { site, .. } => Some(site.clone()),
             | Self::Relation { site, error } | Self::DiscoveredSource { site, error } => {
                 error.diagnostic_site().or_else(|| Some(site.clone()))

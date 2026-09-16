@@ -311,26 +311,16 @@ fn inline_same_file_tests_are_not_cyclic_and_unrelated_packages_are_not_loaded()
 }
 
 #[test]
-fn missing_and_unsupported_relationships_are_visible_but_fail_test_planning() {
+fn missing_test_relationships_are_visible_but_fail_test_planning() {
     let fixture = Fixture::new().with_discovery(&["lib.zy"]);
-    for kind in ["test", "tset"] {
-        fixture.write("lib.zy", &format!(r#"@[package(library, {kind}("missing.zy"))] 42"#));
-        let show = fixture.success(&["show"]);
-        let show = String::from_utf8_lossy(&show.stdout);
-        assert!(show.contains(&format!("{kind} ->")));
-        if kind == "tset" {
-            assert!(show.contains("[unsupported]"));
-        }
-        fixture.success(&["check", "lib.zy"]);
-        let test = fixture.command(&["test", "lib.zy"]);
-        assert!(!test.status.success() && test.stdout.is_empty());
-        let stderr = String::from_utf8_lossy(&test.stderr);
-        assert!(if kind == "test" {
-            stderr.contains("cannot read source")
-        } else {
-            stderr.contains("unsupported relationship kind") && stderr.contains("tset")
-        });
-    }
+    fixture.write("lib.zy", r#"@[package(library, test("missing.zy"))] 42"#);
+    let show = fixture.success(&["show"]);
+    let show = String::from_utf8_lossy(&show.stdout);
+    assert!(show.contains("test ->"));
+    fixture.success(&["check", "lib.zy"]);
+    let test = fixture.command(&["test", "lib.zy"]);
+    assert!(!test.status.success() && test.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&test.stderr).contains("cannot read source"));
 }
 
 #[test]

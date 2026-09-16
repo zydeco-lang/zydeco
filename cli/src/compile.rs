@@ -23,7 +23,6 @@ use zydeco_utils::{pass::CompilerPass, pipeline};
 #[derive(Default)]
 pub struct CommandCompiler {
     session: CompilerSession,
-    catalog: zydeco_session::source::PackageCatalog,
     lint_types: bool,
     representation: RepresentationStrategy,
     sps_passes: HighSpsPlan,
@@ -38,82 +37,7 @@ pub struct TestInteraction {
     pub code: i32,
 }
 
-/// A selected source identity together with the checked boundary needed to emit it.
-pub struct CompilationUnit {
-    pub source: zydeco_session::source::PackageId,
-    pub boundary: CompilationBoundary,
-}
-
-pub enum CompilationBoundary {
-    Process(ExecutableProgram),
-    ZydecoUnit {
-        name: zydeco_surface::metadata::PackageName,
-        program: zydeco_session::UnitProgram,
-    },
-    CExports {
-        name: zydeco_surface::metadata::PackageName,
-        contract: zydeco_surface::metadata::LibraryContract,
-        program: zydeco_session::LibraryProgram,
-    },
-}
-
 impl CommandCompiler {
-    pub fn compilation_unit(
-        &self, package: &zydeco_session::source::Package, analysis: &ProgramAnalysis,
-        direct_script: bool,
-    ) -> Result<CompilationUnit, CompileError> {
-        use zydeco_surface::metadata::{LibraryRole, PackageRole};
-        let boundary = match &package.role {
-            | PackageRole::Library(LibraryRole::Zydeco) => CompilationBoundary::ZydecoUnit {
-                name: package.name.clone().expect("compiled role requires a name"),
-                program: self.unit_program(analysis)?,
-            },
-            | PackageRole::Library(LibraryRole::Compiled(contract)) => {
-                CompilationBoundary::CExports {
-                    name: package.name.clone().expect("compiled role requires a name"),
-                    contract: contract.as_ref().clone(),
-                    program: self.library_program(analysis, contract)?,
-                }
-            }
-            | PackageRole::Library(LibraryRole::Source) if !direct_script => {
-                return Err(CompileError::SourceLibrary);
-            }
-            | _ => {
-                let program = self.executable_program(analysis)?;
-                zydeco_statics::BuiltinPackagePlan::for_executable(
-                    &program.statics,
-                    &program.signature,
-                )
-                .map_err(CompileError::BuiltinLower)?;
-                CompilationBoundary::Process(program)
-            }
-        };
-        Ok(CompilationUnit { source: package.id.clone(), boundary })
-    }
-    pub fn with_packages(
-        mut self, files: &[std::path::PathBuf],
-    ) -> Result<Self, zydeco_session::source::SourceLoadError> {
-        self.catalog = self.session.package_catalog(files)?;
-        Ok(self)
-    }
-
-    pub fn catalog(&self) -> &zydeco_session::source::PackageCatalog {
-        &self.catalog
-    }
-
-    pub fn package(
-        &self, id: &zydeco_session::source::PackageId,
-    ) -> Result<zydeco_session::source::Package, zydeco_session::source::SourceLoadError> {
-        self.session.package(id)
-    }
-
-    pub fn package_tests(
-        &self, id: &zydeco_session::source::PackageId,
-    ) -> Result<zydeco_session::source::PackageTestPlan, zydeco_session::source::SourceLoadError>
-    {
-        self.session.package_tests(id, &self.catalog)
-    }
-
     /// Select optional high-SPS transformations for subsequent compilations.
     pub fn with_sps_passes(mut self, plan: HighSpsPlan) -> Self {
         self.sps_passes = plan;
@@ -132,24 +56,6 @@ impl CommandCompiler {
         self
     }
 
-    pub fn documentation_example_request(
-        &self, example: &zydeco_session::source::DocumentationExample,
-    ) -> Result<
-        zydeco_session::source::DocumentationExampleRequest,
-        zydeco_session::source::DocumentationExampleError,
-    > {
-        example.request(&self.session, &self.catalog.bindings)
-    }
-
-    pub fn documentation_reference(
-        &self, analysis: Arc<ProgramAnalysis>,
-    ) -> Result<
-        zydeco_session::source::DocumentationReference,
-        zydeco_session::source::DocumentationReferenceError,
-    > {
-        self.session.documentation_reference(analysis)
-    }
-
     /// Re-validate the finished arena after every successful check.
     ///
     /// Lint failures are compiler bugs, so the gated entry point aborts with an
@@ -160,19 +66,7 @@ impl CommandCompiler {
     }
 
     pub fn analyze(&self, path: &Path) -> Result<Arc<ProgramAnalysis>, CompileError> {
-        self.analyze_package(&zydeco_session::source::PackageId {
-            path: path.to_path_buf(),
-            name: None,
-        })
-    }
-
-    pub fn analyze_package(
-        &self, id: &zydeco_session::source::PackageId,
-    ) -> Result<Arc<ProgramAnalysis>, CompileError> {
-        let analysis = self
-            .session
-            .analyze_package(id, self.catalog.bindings.clone())
-            .map_err(CompileError::Analysis)?;
+        let analysis = self.session.analyze(path).map_err(CompileError::Analysis)?;
         self.accept_analysis(analysis)
     }
 
@@ -702,10 +596,6 @@ impl std::fmt::Display for AssemblyOutcome {
 
 #[derive(Debug, Error)]
 pub enum CompileError {
-    #[error(
-        "source libraries have no independent compilation boundary; declare binary, test, or library(c, export(...), ...)"
-    )]
-    SourceLibrary,
     #[error(transparent)]
     Library(zydeco_statics::LibraryCheckError),
     #[error("high-SPS pipeline: {0}")]

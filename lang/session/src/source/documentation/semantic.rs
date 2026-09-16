@@ -242,7 +242,7 @@ impl DocumentationIndex {
                     .insert(definition.into(), DocumentationRelation::Alias(origin.into()));
             }
         });
-        index.resolve_links(graph, spans, scoped, statics);
+        index.resolve_links(graph, spans, scoped);
         index
     }
 
