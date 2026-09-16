@@ -6,7 +6,7 @@ use super::variables::Variables;
 use std::collections::HashSet;
 use zydeco_utils::fold::{Driver, Explicit};
 
-/// A lexical first-order SPS tree whose joins remain attached to coproduct branches.
+/// A lexical first-order SPS tree whose joins remain attached to coproduct and scalar-comparison branches.
 #[derive(Debug)]
 pub struct SpsLowProgram {
     arena: FrozenArena<SpsLowArena>,
@@ -15,9 +15,9 @@ pub struct SpsLowProgram {
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum SpsLowError {
-    #[error("coproduct match {compu:?} is not immediately guarded by a stack let-binding")]
-    UnguardedCoprodMatch { compu: CompuId },
-    #[error("stack let-binding {compu:?} has body {body:?}, which is not a coproduct match")]
+    #[error("branch {compu:?} is not immediately guarded by a stack let-binding")]
+    UnguardedBranch { compu: CompuId },
+    #[error("stack let-binding {compu:?} has body {body:?}, which is not a branch")]
     NonBranchStackLet { compu: CompuId, body: CompuId },
     #[error("computation node {compu:?} occurs more than once in lexical SPSLow")]
     SharedComputation { compu: CompuId },
@@ -196,11 +196,11 @@ impl SpsLowValidator {
             }
             | Node::Computation(id, computation) => {
                 if let Edge::BranchJoin(compu) = edge {
-                    if !matches!(computation, Computation::CoprodMatch(_)) {
+                    if !computation.is_branch() {
                         return Err(SpsLowError::NonBranchStackLet { compu, body: id });
                     }
-                } else if matches!(computation, Computation::CoprodMatch(_)) {
-                    return Err(SpsLowError::UnguardedCoprodMatch { compu: id });
+                } else if computation.is_branch() {
+                    return Err(SpsLowError::UnguardedBranch { compu: id });
                 }
             }
         }
@@ -344,7 +344,7 @@ mod tests {
             SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch).err(),
             SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch).err(),
         ] {
-            assert_eq!(error, Some(SpsLowError::UnguardedCoprodMatch { compu: branch }));
+            assert_eq!(error, Some(SpsLowError::UnguardedBranch { compu: branch }));
         }
         let stack = Bullet.build(&mut arena, None);
         let root = LetStack { binder: Bullet, bindee: stack, tail: branch }.build(&mut arena, None);
@@ -355,6 +355,42 @@ mod tests {
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
             SpsLowError::NonBranchStackLet { compu: root, body: branch }
+        );
+    }
+
+    #[test]
+    fn comparisons_require_a_join_and_distinct_successor_occurrences() {
+        let mut arena = SpsLowArena::default();
+        let operands = [1, 2]
+            .map(|value| Literal::Integer(IntegerLiteral::Int(value)).build(&mut arena, None));
+        let [when_true, when_false] = [(); 2].map(|()| {
+            let stack = Bullet.build(&mut arena, None);
+            SHole(stack).build(&mut arena, None)
+        });
+        let branch = CompareBranch {
+            operation: ComparisonOp::Integer(IntegerType::Int, ComparisonPredicate::Lt),
+            operands,
+            when_true,
+            when_false,
+        }
+        .build(&mut arena, None);
+        for error in [
+            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch).err(),
+            SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch).err(),
+        ] {
+            assert_eq!(error, Some(SpsLowError::UnguardedBranch { compu: branch }));
+        }
+        let bindee = Bullet.build(&mut arena, None);
+        let root = LetStack { binder: Bullet, bindee, tail: branch }.build(&mut arena, None);
+        let program = Fixture::program(arena, root).unwrap();
+        let (mut arena, root) = program.into_parts();
+        let Computation::Compare(compare) = &mut arena.inner.compus[&branch] else {
+            unreachable!()
+        };
+        compare.when_false = when_true;
+        assert_eq!(
+            Fixture::program(arena, root).unwrap_err(),
+            SpsLowError::SharedComputation { compu: when_true }
         );
     }
 

@@ -68,6 +68,16 @@ pub struct Primitive<V> {
     pub operands: [V; 2],
 }
 
+/// Select one computation under a shared ambient stack. Evaluate the second
+/// operand before the first, matching argument-stack construction.
+#[derive(Clone, Debug)]
+pub struct CompareBranch<V, C> {
+    pub operation: ComparisonOp,
+    pub operands: [V; 2],
+    pub when_true: C,
+    pub when_false: C,
+}
+
 /// Pure wrapping byte displacement of an unmanaged address. Evaluate the
 /// displacement before the base, as when consuming their argument stack.
 #[derive(Clone, Debug)]

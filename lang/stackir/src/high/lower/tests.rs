@@ -346,7 +346,7 @@ fn builtin_folder_drivers_preserve_product_order_and_materialization() {
         let formatter =
             super::super::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &statics);
         (
-            value.ugly(&formatter),
+            value.ugly(&formatter).replace(&format!("[{:?}#", value.key_space()), "[output#"),
             [
                 arena.inner.vpats.len(),
                 arena.inner.values.len(),

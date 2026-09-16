@@ -98,6 +98,12 @@ impl Variables {
             | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
                 scrut.summary(self) + (body.summary(self) - binder.summary(self))
             }
+            | Computation::Compare(CompareBranch { operands, when_true, when_false, .. }) => {
+                operands[0].summary(self)
+                    + operands[1].summary(self)
+                    + when_true.summary(self)
+                    + when_false.summary(self)
+            }
             | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
                 scrut.summary(self)
                     + arms

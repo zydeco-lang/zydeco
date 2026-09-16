@@ -84,6 +84,12 @@ pub(super) enum Work {
         binder: VPatId,
         site: Option<ss::TermId>,
     },
+    ComparisonChildren {
+        source: CompuId,
+        position: usize,
+        bindee: ScopedStack,
+        site: Option<ss::TermId>,
+    },
     BranchArms {
         source: CompuId,
         position: usize,
@@ -430,8 +436,8 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
             | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => {
                 self.branch(bindee, tail, scope, site)
             }
-            | Computation::CoprodMatch(_) => {
-                unreachable!("coproduct matches are handled with their stack join")
+            | Computation::Compare(_) | Computation::CoprodMatch(_) => {
+                unreachable!("branches are handled with their stack join")
             }
             | Computation::LetArg(Let { binder: Cons(binder, Bullet), bindee, tail }) => {
                 let stack =
@@ -484,10 +490,34 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     fn branch(
         &mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<ss::TermId>,
     ) -> Step<Self> {
+        if let Computation::Compare(CompareBranch { operation, operands, when_true, when_false }) =
+            self.norm.source.inner.compus[&tail]
+        {
+            let known = operands.map(|value| self.norm.known(value, scope.values));
+            if self.norm.movable_stack(bindee)
+                && operands.iter().all(|value| self.norm.discardable(*value))
+                && let [KnownValue::Literal(first), KnownValue::Literal(second)] =
+                    known.each_ref().map(|value| value.as_ref())
+                && let Ok(condition) = operation.evaluate(&[first.clone(), second.clone()])
+            {
+                let stack =
+                    Some(self.norm.delay_stack(ScopedStack { node: bindee, scope: scope.clone() }));
+                return Step::TailCall(Work::Computation(
+                    if condition { when_true } else { when_false },
+                    Scope { stack, ..scope },
+                ));
+            }
+            return Step::TailCall(Work::ComparisonChildren {
+                source: tail,
+                position: 0,
+                bindee: ScopedStack { node: bindee, scope },
+                site,
+            });
+        }
         let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
             self.norm.source.inner.compus[&tail].clone()
         else {
-            unreachable!("branch-join input guards exactly a coproduct match")
+            unreachable!("branch-join input guards a branch")
         };
         let known = self.norm.shared(scrut, scope.values);
         if self.norm.movable_stack(bindee) {
@@ -687,6 +717,57 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         frame: Work::BindingComponents { remaining, site },
                     };
                 }
+            }
+            | Work::ComparisonChildren { source, position, bindee, site } => {
+                let Computation::Compare(CompareBranch {
+                    operation,
+                    operands,
+                    when_true,
+                    when_false,
+                }) = self.norm.source.inner.compus[&source]
+                else {
+                    unreachable!("comparison branch")
+                };
+                let env = bindee.scope.values;
+                let input = match position {
+                    | 0 => Some(Work::Computation(when_true, Scope { values: env, stack: None })),
+                    | 1 => Some(Work::Computation(when_false, Scope { values: env, stack: None })),
+                    | 2 | 3 => Some(Work::Value(operands[position - 2], env, Demand::Used)),
+                    | _ => None,
+                };
+                if let Some(input) = input {
+                    return Step::Call {
+                        input,
+                        frame: Work::ComparisonChildren {
+                            source,
+                            position: position + 1,
+                            bindee,
+                            site,
+                        },
+                    };
+                }
+                let second = self.value();
+                let first = self.value();
+                let when_false = self.computation();
+                let when_true = self.computation();
+                let branch_site =
+                    self.norm.source.admin.terms.back(&TermId::Compu(source)).copied();
+                let tail = CompareBranch {
+                    operation,
+                    operands: [first.node, second.node],
+                    when_true: when_true.node,
+                    when_false: when_false.node,
+                }
+                .build(self.norm, branch_site);
+                let demands = first
+                    .demands
+                    .join(second.demands)
+                    .join(when_true.demands)
+                    .join(when_false.demands);
+                return Step::Call {
+                    input: Work::Stack(bindee),
+                    frame: Work::BranchStack { tail, demands, site },
+                };
             }
             | Work::BranchArms { source, position, known, bindee, site } => {
                 let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =

@@ -298,6 +298,18 @@ impl<'a> EntryValidator<'a> {
                     self.bind(*binder, value, &mut context);
                     id = *body;
                 }
+                | Computation::Compare(CompareBranch {
+                    operation: _,
+                    operands,
+                    when_true,
+                    when_false,
+                }) => {
+                    for operand in operands {
+                        self.value(*operand, &context)?;
+                    }
+                    self.compu(*when_true, context.clone())?;
+                    id = *when_false;
+                }
                 | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
                     self.value(*scrut, &context)?;
                     for Matcher { binder, tail } in arms {

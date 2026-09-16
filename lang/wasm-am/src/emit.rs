@@ -512,6 +512,7 @@ impl<'a> ModuleEncoder<'a> {
                 | Terminator::Jump(_) => "jump",
                 | Terminator::PopJump(_) => "pop_jump",
                 | Terminator::PopBranch(_) => "branch",
+                | Terminator::Compare(_) => "compare",
                 | Terminator::Abort(_) => "abort",
                 | Terminator::Extern(_) => "extern",
             },
@@ -602,6 +603,20 @@ impl<'a> CaseEncoder<'a> {
                 self.function.instruction(&WasmInstruction::Call(self.plan.pop_function()));
                 self.function.instruction(&WasmInstruction::I32WrapI64);
                 self.function.instruction(&WasmInstruction::GlobalSet(PROGRAM_COUNTER_GLOBAL));
+            }
+            | Terminator::Compare(zasm::CompareBranch { operation, when_true, when_false }) => {
+                self.pop_to(WORD_LOCAL);
+                self.pop_to(FIRST_ARGUMENT_LOCAL);
+                WordEmitter::new(&mut self.function, self.plan.alloc_function()).comparison(
+                    *operation,
+                    WORD_LOCAL,
+                    FIRST_ARGUMENT_LOCAL,
+                );
+                self.function.instruction(&WasmInstruction::If(BlockType::Empty));
+                self.set_program_counter(*when_true)?;
+                self.function.instruction(&WasmInstruction::Else);
+                self.set_program_counter(*when_false)?;
+                self.function.instruction(&WasmInstruction::End);
             }
             | Terminator::PopBranch(zasm::PopBranch(arms)) => {
                 self.pop_to(TAG_LOCAL);

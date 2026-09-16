@@ -151,6 +151,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                             si.inlined[&slot_id] = true;
                         }
                     }
+                    | Terminator::Compare(_)
                     | Terminator::Jump(_)
                     | Terminator::PopBranch(_)
                     | Terminator::Abort(_)

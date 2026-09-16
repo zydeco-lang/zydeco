@@ -108,6 +108,16 @@ impl Node<'_> {
                 | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
                     [(*scrut).into(), (*binder).into(), (*body).into()].get(position).copied()
                 }
+                | Computation::Compare(CompareBranch {
+                    operands, when_true, when_false, ..
+                }) => [
+                    operands[0].into(),
+                    operands[1].into(),
+                    (*when_true).into(),
+                    (*when_false).into(),
+                ]
+                .get(position)
+                .copied(),
                 | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
                     if position == 0 {
                         Some((*scrut).into())

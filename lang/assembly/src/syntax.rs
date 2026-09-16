@@ -41,6 +41,7 @@ pub enum Terminator {
     PopJump(PopJump),
     /// A jump table.
     PopBranch(PopBranch),
+    Compare(CompareBranch),
     /// Abort.
     Abort(Abort),
     /// Call an external function.
@@ -125,6 +126,15 @@ pub struct Jump(pub ProgId);
 pub struct PopJump;
 #[derive(Clone, Debug)]
 pub struct PopBranch(pub Vec<(Tag, ProgId)>);
+
+/// Pop the first and then the second ordinary scalar operand, selecting one
+/// successor without allocating a result or invoking the host.
+#[derive(Clone, Debug)]
+pub struct CompareBranch {
+    pub operation: ComparisonOp,
+    pub when_true: ProgId,
+    pub when_false: ProgId,
+}
 #[derive(Clone, Debug)]
 pub struct Abort;
 

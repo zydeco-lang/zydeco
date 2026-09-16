@@ -31,6 +31,7 @@ pub(super) enum Work {
         captures: Captures,
     },
     Computation(high::CompuId, RenameEnvId),
+    ComparisonChildren(high::CompuId, RenameEnvId, usize),
     StoreAddress(high::CompuId, RenameEnvId),
     StoreBody(high::CompuId, RenameEnvId),
     AfterValue(high::CompuId, RenameEnvId),
@@ -190,6 +191,9 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
 
     fn visit_computation(&mut self, source: high::CompuId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.compus[&source].clone() {
+            | high::Computation::Compare(_) => {
+                Step::TailCall(Work::ComparisonChildren(source, env, 0))
+            }
             | high::Computation::Memory(high::MemoryStep::Load { address, .. }) => Step::Call {
                 input: Work::Value(address, env),
                 frame: Work::AfterValue(source, env),
@@ -252,6 +256,42 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
             | Work::Value(source, env) => return self.visit_value(source, env),
             | Work::Stack(source, env) => return self.visit_stack(source, env),
             | Work::Computation(source, env) => return self.visit_computation(source, env),
+            | Work::ComparisonChildren(source, env, position) => {
+                let high::Computation::Compare(high::CompareBranch {
+                    operation,
+                    operands,
+                    when_true,
+                    when_false,
+                }) = self.conversion.source.inner.compus[&source]
+                else {
+                    unreachable!("comparison branch")
+                };
+                let input = match position {
+                    | 0 | 1 => Some(Work::Value(operands[position], env)),
+                    | 2 => Some(Work::Computation(when_true, env)),
+                    | 3 => Some(Work::Computation(when_false, env)),
+                    | _ => None,
+                };
+                if let Some(input) = input {
+                    return Step::Call {
+                        input,
+                        frame: Work::ComparisonChildren(source, env, position + 1),
+                    };
+                }
+                let when_false = self.computation();
+                let when_true = self.computation();
+                let second = self.value();
+                let first = self.value();
+                let site = self.conversion.compu_site(source);
+                let node = low::CompareBranch {
+                    operation,
+                    operands: [first, second],
+                    when_true,
+                    when_false,
+                }
+                .build(self.conversion, site);
+                self.computations.push(node);
+            }
             | Work::StoreAddress(source, env) => {
                 let high::Computation::Memory(high::MemoryStep::Store { address, .. }) =
                     self.conversion.source.inner.compus[&source]

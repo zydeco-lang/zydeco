@@ -225,3 +225,69 @@ impl Emitter<'_> {
         ));
     }
 }
+
+impl<'a> Emit<'a> for sa::CompareBranch {
+    type Env = ProgId;
+    fn emit(&self, _id: Self::Env, em: &mut Emitter) {
+        use zydeco_syntax::{ComparisonOp, ComparisonPredicate};
+        em.asm.text.extend([
+            Instr::Comment(format!("comparison: {}", self.operation)),
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Pop(Loc::Reg(Reg::Rcx)),
+        ]);
+        em.shift_stack_parity(-2);
+        let when_true =
+            em.assembly.prog_label(&self.when_true).expect("comparison successor label");
+        let when_false =
+            em.assembly.prog_label(&self.when_false).expect("comparison successor label");
+        em.debug_assert_edge_parity(self.when_true);
+        em.debug_assert_edge_parity(self.when_false);
+        let condition = match self.operation {
+            | ComparisonOp::Integer(ty, predicate) => {
+                em.decode_integer(Reg::Rax, ty);
+                em.decode_integer(Reg::Rcx, ty);
+                em.asm.text.push(Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
+                match (predicate, ty.is_signed()) {
+                    | (ComparisonPredicate::Eq, _) => ConditionCode::E,
+                    | (ComparisonPredicate::Lt, true) => ConditionCode::L,
+                    | (ComparisonPredicate::Gt, true) => ConditionCode::G,
+                    | (ComparisonPredicate::Lt, false) => ConditionCode::B,
+                    | (ComparisonPredicate::Gt, false) => ConditionCode::A,
+                }
+            }
+            | ComparisonOp::Float(ty, predicate) => {
+                for reg in [Reg::Rax, Reg::Rcx] {
+                    em.asm.text.push(match ty {
+                        | FloatType::Float32 => Instr::Shr(ShArgs { reg, by: 1 }),
+                        | FloatType::Float64 => {
+                            Instr::Mov(MovArgs::ToReg(reg, Arg64::Mem(MemRef { reg, offset: 0 })))
+                        }
+                    });
+                }
+                em.asm.text.extend([
+                    Instr::ToXmm(Xmm::Xmm0, Reg::Rax),
+                    Instr::ToXmm(Xmm::Xmm1, Reg::Rcx),
+                    Instr::FloatBinary(
+                        match ty {
+                            | FloatType::Float32 => FloatOpcode::Ucomiss,
+                            | FloatType::Float64 => FloatOpcode::Ucomisd,
+                        },
+                        Xmm::Xmm0,
+                        Xmm::Xmm1,
+                    ),
+                    // All three predicates are false for an unordered comparison.
+                    Instr::JCC(ConditionCode::P, JmpArgs::Label(when_false.clone())),
+                ]);
+                match predicate {
+                    | ComparisonPredicate::Eq => ConditionCode::E,
+                    | ComparisonPredicate::Lt => ConditionCode::B,
+                    | ComparisonPredicate::Gt => ConditionCode::A,
+                }
+            }
+        };
+        em.asm.text.extend([
+            Instr::JCC(condition, JmpArgs::Label(when_true)),
+            Instr::Jmp(JmpArgs::Label(when_false)),
+        ]);
+    }
+}

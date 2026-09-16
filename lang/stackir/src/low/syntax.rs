@@ -23,6 +23,7 @@ pub enum TermId {
 
 pub type ValuePattern = common::ValuePattern<VPatId>;
 pub type Primitive = common::Primitive<ValueId>;
+pub type CompareBranch = common::CompareBranch<ValueId, CompuId>;
 pub type AddrOffset = common::AddrOffset<ValueId>;
 pub type MemoryStep = common::MemoryStep<ValueId, VPatId, CompuId>;
 pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
@@ -130,6 +131,7 @@ pub enum Computation {
     Jump(Jump),
     ProductMatch(SProductMatch),
     CoprodMatch(SCoprodMatch),
+    Compare(CompareBranch),
     LetValue(LetValue),
     LetStack(LetStack),
     LetArg(LetArg),
@@ -138,4 +140,10 @@ pub enum Computation {
     OpenContinuation(OpenContinuation),
     ExternCall(ExternCall),
     Memory(MemoryStep),
+}
+
+impl Computation {
+    pub fn is_branch(&self) -> bool {
+        matches!(self, Self::CoprodMatch(_) | Self::Compare(_))
+    }
 }

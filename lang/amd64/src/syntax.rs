@@ -67,6 +67,8 @@ pub enum FloatOpcode {
     Subsd,
     Mulsd,
     Divsd,
+    Ucomiss,
+    Ucomisd,
 }
 
 #[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -78,6 +80,9 @@ pub enum ConditionCode {
     LE,
     G,
     GE,
+    A,
+    B,
+    P,
     S,
     Z,
     NZ,

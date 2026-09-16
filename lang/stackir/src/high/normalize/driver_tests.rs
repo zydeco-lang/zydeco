@@ -5,6 +5,19 @@ use zydeco_utils::fold::Recursive;
 pub(super) struct Drivers;
 
 impl Drivers {
+    fn integer(arena: &mut StackirArena, value: i64) -> ValueId {
+        Literal::Integer(IntegerLiteral::Int(value)).build(arena, None)
+    }
+
+    fn trap(arena: &mut StackirArena) -> ValueId {
+        let operands = [Self::integer(arena, 1), Self::integer(arena, 0)];
+        Primitive {
+            operation: PrimitiveOp::Integer(IntegerType::Int, IntegerArithmetic::Div),
+            operands,
+        }
+        .build(arena, None)
+    }
+
     // Bounded semantic fixtures can copy immutable inputs. Each run receives a
     // fresh allocator, preserving source IDs without duplicating allocation rights.
     fn input(source: &StackirArena, root: CompuId) -> BranchJoinProgram {
@@ -41,6 +54,69 @@ impl Drivers {
             .into_program();
         assert_eq!(Snapshot::of(&explicit), Snapshot::of(&recursive));
         explicit
+    }
+}
+
+#[test]
+fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers() {
+    enum Case {
+        True,
+        False,
+        Unknown,
+        OperandTrap,
+        StackTrap,
+    }
+    for case in [Case::True, Case::False, Case::Unknown, Case::OperandTrap, Case::StackTrap] {
+        let mut arena = StackirArena::default();
+        let first = match case {
+            | Case::Unknown => Hole.build(&mut arena, None),
+            | Case::OperandTrap => Drivers::trap(&mut arena),
+            | Case::False => Drivers::integer(&mut arena, 3),
+            | _ => Drivers::integer(&mut arena, 1),
+        };
+        let second = Drivers::integer(&mut arena, 2);
+        let [when_true, when_false] = [11, 22].map(|result| {
+            let value = Drivers::integer(&mut arena, result);
+            let stack = Bullet.build(&mut arena, None);
+            SReturn { stack, value }.build(&mut arena, None)
+        });
+        let tail = CompareBranch {
+            operation: ComparisonOp::Integer(IntegerType::Int, ComparisonPredicate::Lt),
+            operands: [first, second],
+            when_true,
+            when_false,
+        }
+        .build(&mut arena, None);
+        let mut bindee = Bullet.build(&mut arena, None);
+        if matches!(case, Case::StackTrap) {
+            let value = Drivers::trap(&mut arena);
+            bindee = Cons(value, bindee).build(&mut arena, None);
+        }
+        let root = Let { binder: Bullet, bindee, tail }.build(&mut arena, None);
+        let output = Drivers::normalize(&arena, root);
+        let inner = &output.arena().inner;
+        match case {
+            | Case::True | Case::False => {
+                let Computation::Ret(SReturn { value, .. }) = inner.compus[&output.root()] else {
+                    panic!("selected successor expected")
+                };
+                let expected = if matches!(case, Case::True) { 11 } else { 22 };
+                assert!(
+                    matches!(inner.values[&value], Value::Literal(Literal::Integer(IntegerLiteral::Int(found))) if found == expected)
+                );
+            }
+            | _ => {
+                assert!(
+                    inner.compus.iter().any(|(_, node)| matches!(node, Computation::Compare(_)))
+                );
+                if matches!(case, Case::OperandTrap | Case::StackTrap) {
+                    assert!(
+                        inner.values.iter().any(|(_, node)| matches!(node, Value::Primitive(_))),
+                        "the trapping operation must remain"
+                    );
+                }
+            }
+        }
     }
 }
 

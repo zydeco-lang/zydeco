@@ -223,6 +223,33 @@ fn drivers_preserve_empty_and_wide_children() {
 }
 
 #[test]
+fn drivers_preserve_comparison_operands_successors_and_shared_stack() {
+    let mut arena = high::StackirArena::default();
+    let operands =
+        [4, 9].map(|value| Literal::Integer(IntegerLiteral::Int(value)).build(&mut arena, None));
+    let [when_true, when_false] = [(); 2].map(|()| Drivers::returning(&mut arena));
+    let tail = CompareBranch {
+        operation: ComparisonOp::Integer(IntegerType::Int, ComparisonPredicate::Lt),
+        operands,
+        when_true,
+        when_false,
+    }
+    .build(&mut arena, None);
+    let binder = Hole.build(&mut arena, None);
+    let body = Drivers::returning(&mut arena);
+    let bindee = Kont { binder, body }.build(&mut arena, None);
+    let root = Let { binder: Bullet, bindee, tail }.build(&mut arena, None);
+    let output = Drivers::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
+    let low::Computation::LetStack(low::LetStack { tail, .. }) =
+        output.arena().inner.compus[&output.root()]
+    else {
+        panic!("shared stack expected")
+    };
+    assert!(matches!(output.arena().inner.compus[&tail], low::Computation::Compare(_)));
+    assert_eq!(output.arena().inner.continuations.len(), 1);
+}
+
+#[test]
 fn drivers_preserve_origins_and_partial_protocols() {
     let mut arena = high::StackirArena::default();
     let mut origins = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();

@@ -34,6 +34,43 @@ impl Fixture {
         sk::Literal::Integer(sk::IntegerLiteral::Int(value)).build(&mut self.arena, None)
     }
 
+    fn trap(&mut self, operation: sk::IntegerArithmetic) -> sk::ValueId {
+        let operands = [self.integer(1), self.integer(0)];
+        sk::Primitive {
+            operation: sk::PrimitiveOp::Integer(sk::IntegerType::Int, operation),
+            operands,
+        }
+        .build(&mut self.arena, None)
+    }
+
+    fn comparison(first: i64, second: i64, operand_traps: bool) -> SpsLowProgram {
+        let mut fixture = Self::default();
+        let operands = if operand_traps {
+            [fixture.trap(sk::IntegerArithmetic::Div), fixture.trap(sk::IntegerArithmetic::Mod)]
+        } else {
+            [fixture.integer(first), fixture.integer(second)]
+        };
+        // Distinct failures make the chosen successor observable in the ZASM interpreter.
+        let [when_true, when_false] =
+            [sk::IntegerArithmetic::Div, sk::IntegerArithmetic::Mod].map(|operation| {
+                let value = fixture.trap(operation);
+                let ambient = sk::Bullet.build(&mut fixture.arena, None);
+                let stack = sk::Cons(value, ambient).build(&mut fixture.arena, None);
+                sk::SHole(stack).build(&mut fixture.arena, None)
+            });
+        let tail = sk::CompareBranch {
+            operation: sk::ComparisonOp::Integer(sk::IntegerType::Int, sk::ComparisonPredicate::Lt),
+            operands,
+            when_true,
+            when_false,
+        }
+        .build(&mut fixture.arena, None);
+        let bindee = sk::Bullet.build(&mut fixture.arena, None);
+        let root =
+            sk::LetStack { binder: sk::Bullet, bindee, tail }.build(&mut fixture.arena, None);
+        SpsLowProgram::try_new(fixture.arena, root).unwrap()
+    }
+
     fn block(&mut self, name: &str, body: sk::CompuId) -> sk::ValueId {
         let label = self.definition(name);
         let environment = sk::Hole.build(&mut self.arena, None);
@@ -480,6 +517,40 @@ fn drivers_preserve_observation_tables_literals_primitives_and_external_discover
             Extern::Host { role: BuiltinValueRole::Exit, .. },
         ]
     ));
+}
+
+#[test]
+fn comparisons_preserve_driver_output_operand_order_and_successor_selection() {
+    use zydeco_utils::pass::CompilerPass as _;
+    for (first, second, operand_traps, expected) in [
+        (1, 2, false, sk::PrimitiveError::DivisionByZero),
+        (3, 2, false, sk::PrimitiveError::RemainderByZero),
+        (1, 2, true, sk::PrimitiveError::RemainderByZero),
+    ] {
+        let program = Fixture::comparison(first, second, operand_traps);
+        for native in [false, true] {
+            let explicit =
+                Fixture::lower::<Explicit>(&program, native, RepresentationStrategy::Local);
+            let recursive =
+                Fixture::lower::<Recursive>(&program, native, RepresentationStrategy::Local);
+            assert_eq!(
+                Fixture::snapshot(&explicit, program.arena()),
+                Fixture::snapshot(&recursive, program.arena())
+            );
+            if !native {
+                let result = crate::interp::Interpret.run(explicit.finish());
+                assert!(
+                    matches!(result, Err(crate::interp::Error::Primitive(found)) if found == expected)
+                );
+            }
+        }
+        let explicit = Fixture::native::<Explicit>(&program, RepresentationStrategy::Local);
+        let recursive = Fixture::native::<Recursive>(&program, RepresentationStrategy::Local);
+        assert_eq!(
+            Fixture::frame_snapshot(explicit.frames()),
+            Fixture::frame_snapshot(recursive.frames())
+        );
+    }
 }
 
 #[test]

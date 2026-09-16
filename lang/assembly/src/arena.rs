@@ -115,6 +115,9 @@ impl AssemblyArena {
                     Extern::Host { .. } | Extern::Foreign(_) | Extern::Unit(_),
                 )
                 | Terminator::Abort(Abort) => {}
+                | Terminator::Compare(CompareBranch { when_true, when_false, .. }) => {
+                    self.deps.add(id, [when_true, when_false]);
+                }
                 | Terminator::PopBranch(PopBranch(branches)) => {
                     self.deps.add(id, branches.into_iter().map(|(_, target)| target));
                 }

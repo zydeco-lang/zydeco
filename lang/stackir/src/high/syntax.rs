@@ -23,6 +23,7 @@ pub enum TermId {
 
 pub type ValuePattern = common::ValuePattern<VPatId>;
 pub type Primitive = common::Primitive<ValueId>;
+pub type CompareBranch = common::CompareBranch<ValueId, CompuId>;
 pub type AddrOffset = common::AddrOffset<ValueId>;
 pub type MemoryStep = common::MemoryStep<ValueId, VPatId, CompuId>;
 pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
@@ -104,6 +105,7 @@ pub enum Computation<Join> {
     Fix(SFix),
     ProductMatch(SProductMatch),
     CoprodMatch(SCoprodMatch),
+    Compare(CompareBranch),
     #[from(ignore)]
     Join(Join),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
@@ -118,5 +120,11 @@ where
 {
     fn from(j: T) -> Self {
         Computation::Join(j.into())
+    }
+}
+
+impl<Join> Computation<Join> {
+    pub fn is_branch(&self) -> bool {
+        matches!(self, Self::CoprodMatch(_) | Self::Compare(_))
     }
 }

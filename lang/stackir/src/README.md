@@ -10,13 +10,15 @@ textual -> bitter -> scoped -> tyck -> stack
 ```
 
 The stack IR is built from one checked typed expression.
-High-level lowering is indexed by the consuming stack and constructs the paper's branch-join fragment directly:
-stack lets occur exactly around value-coproduct matches.
+High-level lowering is indexed by the consuming stack and constructs the branch-join fragment directly:
+stack lets occur exactly around value-coproduct matches and scalar comparisons.
 Normalization combines local β/η-reductions with field-sensitive demand analysis,
 resolving known calls and pruning unused bindings and package fields before allocation.
 Known arithmetic calls become typed primitive values with direct result bindings;
 [primitive call normalization](../../../docs/references/compiler.md#primitive-calls) owns the arithmetic
 and return-reduction rules.
+Numeric comparisons have intrinsic branching bodies;
+[scalar comparisons](../../../docs/references/compiler.md#scalar-comparisons) owns their control and lowering rules.
 Closure conversion then consumes that lexical tree and produces a distinct `SpsLowProgram` with blocks,
 jumps, and explicit closure and continuation packages.
 Both representations have one computation root rather than a top-level declaration collection.

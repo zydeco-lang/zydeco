@@ -101,6 +101,21 @@ impl Eval for Terminator {
                 };
                 prog.eval(interp)
             }
+            | Terminator::Compare(CompareBranch { operation, when_true, when_false }) => {
+                let operands = [0, 1].map(|_| {
+                    let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
+                    match value {
+                        | Value::Atom(Atom::Imm(Imm::Integer(value))) => {
+                            Ok(Literal::Integer(value))
+                        }
+                        | Value::Atom(Atom::Imm(Imm::Float(value))) => Ok(Literal::Float(value)),
+                        | _ => Err(Error::Primitive(PrimitiveError::OperandType)),
+                    }
+                });
+                let [first, second] = operands;
+                let condition = operation.evaluate(&[first?, second?])?;
+                if condition { when_true } else { when_false }.eval(interp)
+            }
             | Terminator::PopBranch(PopBranch(arms)) => {
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Tag(tag) = value else {

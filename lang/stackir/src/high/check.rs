@@ -9,7 +9,7 @@ use super::variables::FreeVars;
 use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
 use zydeco_surface::diagnostic::Diagnostics;
 
-/// A lexical Stack IR tree whose stack joins occur exactly at value-coproduct branches.
+/// A lexical Stack IR tree whose stack joins occur exactly at coproduct and scalar-comparison branches.
 #[derive(Debug)]
 pub struct BranchJoinProgram {
     program: StackirProgram,
@@ -17,9 +17,9 @@ pub struct BranchJoinProgram {
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum BranchJoinError {
-    #[error("coproduct match {compu:?} is not immediately guarded by a stack let-binding")]
-    UnguardedCoprodMatch { compu: CompuId },
-    #[error("stack let-binding {compu:?} has body {body:?}, which is not a coproduct match")]
+    #[error("branch {compu:?} is not immediately guarded by a stack let-binding")]
+    UnguardedBranch { compu: CompuId },
+    #[error("stack let-binding {compu:?} has body {body:?}, which is not a branch")]
     NonBranchStackLet { compu: CompuId, body: CompuId },
     #[error("computation node {compu:?} occurs more than once in lexical Stack IR")]
     SharedComputation { compu: CompuId },
@@ -102,7 +102,7 @@ impl Visitor for BranchJoinValidator {
     fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
         if let Edge::BranchJoin(parent) = edge
             && let Node::Computation(body, computation) = node
-            && !matches!(computation, Computation::CoprodMatch(_))
+            && !computation.is_branch()
         {
             self.errors.push(BranchJoinError::NonBranchStackLet { compu: parent, body });
         }
@@ -113,10 +113,11 @@ impl Visitor for BranchJoinValidator {
                 | Node::Stack(stack, _) => BranchJoinError::SharedStack { stack },
                 | Node::Computation(compu, _) => BranchJoinError::SharedComputation { compu },
             });
-        } else if let Node::Computation(compu, Computation::CoprodMatch(_)) = node
+        } else if let Node::Computation(compu, computation) = node
+            && computation.is_branch()
             && !matches!(edge, Edge::BranchJoin(_))
         {
-            self.errors.push(BranchJoinError::UnguardedCoprodMatch { compu });
+            self.errors.push(BranchJoinError::UnguardedBranch { compu });
         }
     }
 }
@@ -169,6 +170,22 @@ mod tests {
             SCoprodMatch { scrut: self.scrut, arms: vec![Matcher { binder, tail: self.branch }] }
                 .build(&mut self.arena, None)
         }
+
+        fn comparison(&mut self) -> CompuId {
+            let operands = [1, 2].map(|value| {
+                Literal::Integer(IntegerLiteral::Int(value)).build(&mut self.arena, None)
+            });
+            let stack = Bullet.build(&mut self.arena, None);
+            let value = Triv.build(&mut self.arena, None);
+            let when_false = SReturn { stack, value }.build(&mut self.arena, None);
+            CompareBranch {
+                operation: ComparisonOp::Integer(IntegerType::Int, ComparisonPredicate::Lt),
+                operands,
+                when_true: self.branch,
+                when_false,
+            }
+            .build(&mut self.arena, None)
+        }
     }
 
     #[test]
@@ -190,7 +207,33 @@ mod tests {
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
-            BranchJoinError::UnguardedCoprodMatch { compu: root }.into()
+            BranchJoinError::UnguardedBranch { compu: root }.into()
+        );
+    }
+
+    #[test]
+    fn comparisons_require_a_join_and_distinct_successor_occurrences() {
+        let mut fixture = Fixture::new();
+        let branch = fixture.comparison();
+        let mut validator = BranchJoinValidator::default();
+        Traversal { arena: &fixture.arena.inner }.run(branch.into(), &mut validator);
+        assert_eq!(
+            validator.into_result().unwrap_err(),
+            BranchJoinError::UnguardedBranch { compu: branch }.into()
+        );
+        let mut arena = fixture.arena;
+        let bindee = Bullet.build(&mut arena, None);
+        let root = Let { binder: Bullet, bindee, tail: branch }.build(&mut arena, None);
+        let mut validator = BranchJoinValidator::default();
+        Traversal { arena: &arena.inner }.run(root.into(), &mut validator);
+        validator.into_result().unwrap();
+        let Computation::Compare(compare) = &mut arena.inner.compus[&branch] else {
+            unreachable!()
+        };
+        compare.when_false = compare.when_true;
+        assert_eq!(
+            BranchJoinProgram::try_new(StackirProgram::new(arena, root)).unwrap_err(),
+            BranchJoinError::SharedComputation { compu: fixture.branch }.into()
         );
     }
 

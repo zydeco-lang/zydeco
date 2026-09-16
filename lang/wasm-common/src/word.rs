@@ -9,7 +9,8 @@ use wasm_encoder::{Function, Instruction as WasmInstruction};
 use zydeco_syntax::scalar::{ScalarProgram, ScalarStep, ScalarType};
 
 use zydeco_syntax::{
-    FloatArithmetic, FloatType, IntegerArithmetic, IntegerType, PrimitiveOp, SpareBox,
+    ComparisonOp, ComparisonPredicate, FloatArithmetic, FloatType, IntegerArithmetic, IntegerType,
+    PrimitiveOp, SpareBox,
 };
 
 pub use zydeco_syntax::word::{EncodedScalar, RuntimeWord, ScalarRepresentation, WordError};
@@ -70,6 +71,60 @@ pub struct WordEmitter<'f> {
 impl<'f> WordEmitter<'f> {
     pub fn new(function: &'f mut Function, alloc_function: u32) -> Self {
         Self { function, alloc_function }
+    }
+
+    /// Compare two ordinary value locals, leaving an i32 condition without
+    /// changing either local or constructing an ordinary result value.
+    pub fn comparison(&mut self, operation: ComparisonOp, first: u32, second: u32) {
+        for local in [first, second] {
+            self.function.instruction(&WasmInstruction::LocalGet(local));
+            match operation {
+                | ComparisonOp::Integer(ty, _) => {
+                    if ty.representation() == ScalarRepresentation::OpaqueBox {
+                        self.function.instruction(&WasmInstruction::I32WrapI64);
+                        self.function.instruction(&WasmInstruction::I64Load(WORD_MEMORY));
+                    } else {
+                        self.function.instruction(&WasmInstruction::I64Const(1));
+                        self.function.instruction(&if ty.is_signed() {
+                            WasmInstruction::I64ShrS
+                        } else {
+                            WasmInstruction::I64ShrU
+                        });
+                    }
+                }
+                | ComparisonOp::Float(FloatType::Float32, _) => {
+                    self.function.instruction(&WasmInstruction::I64Const(1));
+                    self.function.instruction(&WasmInstruction::I64ShrU);
+                    self.function.instruction(&WasmInstruction::I32WrapI64);
+                    self.function.instruction(&WasmInstruction::F32ReinterpretI32);
+                }
+                | ComparisonOp::Float(FloatType::Float64, _) => {
+                    self.function.instruction(&WasmInstruction::I32WrapI64);
+                    self.function.instruction(&WasmInstruction::I64Load(WORD_MEMORY));
+                    self.function.instruction(&WasmInstruction::F64ReinterpretI64);
+                }
+            }
+        }
+        let instruction = match operation {
+            | ComparisonOp::Integer(ty, predicate) => match (predicate, ty.is_signed()) {
+                | (ComparisonPredicate::Eq, _) => WasmInstruction::I64Eq,
+                | (ComparisonPredicate::Lt, true) => WasmInstruction::I64LtS,
+                | (ComparisonPredicate::Gt, true) => WasmInstruction::I64GtS,
+                | (ComparisonPredicate::Lt, false) => WasmInstruction::I64LtU,
+                | (ComparisonPredicate::Gt, false) => WasmInstruction::I64GtU,
+            },
+            | ComparisonOp::Float(FloatType::Float32, predicate) => match predicate {
+                | ComparisonPredicate::Eq => WasmInstruction::F32Eq,
+                | ComparisonPredicate::Lt => WasmInstruction::F32Lt,
+                | ComparisonPredicate::Gt => WasmInstruction::F32Gt,
+            },
+            | ComparisonOp::Float(FloatType::Float64, predicate) => match predicate {
+                | ComparisonPredicate::Eq => WasmInstruction::F64Eq,
+                | ComparisonPredicate::Lt => WasmInstruction::F64Lt,
+                | ComparisonPredicate::Gt => WasmInstruction::F64Gt,
+            },
+        };
+        self.function.instruction(&instruction);
     }
 
     /// Decode an ordinary store operand into raw bits in its occurrence-local home.

@@ -61,6 +61,13 @@ impl FramePlan {
         let targets = match &arena.programs[&id] {
             | Program::Instruction(_, next) => vec![*next],
             | Program::Terminator(Terminator::Jump(Jump(target))) => vec![*target],
+            | Program::Terminator(Terminator::Compare(CompareBranch {
+                when_true,
+                when_false,
+                ..
+            })) => {
+                vec![*when_true, *when_false]
+            }
             | Program::Terminator(Terminator::PopBranch(PopBranch(arms))) => {
                 arms.iter().map(|(_, target)| *target).collect()
             }

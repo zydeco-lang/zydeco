@@ -617,6 +617,28 @@ impl<'a> CaseEncoder<'a> {
                     self.emit_pattern(binder)?;
                     id = body;
                 }
+                | Computation::Compare(sps::CompareBranch {
+                    operation,
+                    operands,
+                    when_true,
+                    when_false,
+                }) => {
+                    for operand in operands.into_iter().rev() {
+                        self.emit_value(operand)?;
+                        self.function.instruction(&WasmInstruction::Drop);
+                    }
+                    WordEmitter::new(&mut self.function, self.plan.alloc_function()).comparison(
+                        operation,
+                        self.plan.locals.value(operands[0])?,
+                        self.plan.locals.value(operands[1])?,
+                    );
+                    self.function.instruction(&WasmInstruction::If(BlockType::Empty));
+                    self.emit_compu(when_true)?;
+                    self.function.instruction(&WasmInstruction::Else);
+                    self.emit_compu(when_false)?;
+                    self.function.instruction(&WasmInstruction::End);
+                    break;
+                }
                 | Computation::CoprodMatch(sps::SCoprodMatch { scrut, arms }) => {
                     self.emit_coprod_match(scrut, arms)?;
                     break;

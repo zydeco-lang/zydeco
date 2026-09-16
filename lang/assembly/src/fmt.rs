@@ -100,6 +100,14 @@ impl<'a> Pretty<'a, Formatter<'a>> for Terminator {
             | Terminator::Jump(jump) => jump.pretty(f),
             | Terminator::PopJump(pop_jump) => pop_jump.pretty(f),
             | Terminator::PopBranch(branch) => branch.pretty(f),
+            | Terminator::Compare(CompareBranch { operation, when_true, when_false }) => {
+                RcDoc::concat([
+                    RcDoc::text(format!("compare {operation} -> ")),
+                    when_true.pretty(f),
+                    RcDoc::text(" else "),
+                    when_false.pretty(f),
+                ])
+            }
             | Terminator::Extern(ext) => ext.pretty(f),
             | Terminator::Abort(panic) => panic.pretty(f),
         }

@@ -67,6 +67,7 @@ pub(super) enum Continuation {
     Next { action: Action, next: ContId },
     Sequence { sequence: Sequence, next: ContId },
     CoprodMatch(Vec<Matcher<sk::VPatId, sk::CompuId>>),
+    Compare { operation: ComparisonOp, when_true: sk::CompuId, when_false: sk::CompuId },
     CoCase(Vec<CoMatcher<Cons<sk::DtorIdx, sk::Bullet>, sk::CompuId>>),
 }
 
@@ -106,6 +107,8 @@ pub(super) enum Frame {
     Block { symbol: SymId, name: String, context: Context, next: ContId },
     ResumeEntry { label: sk::DefId, bindings: Vec<(VarId, VarId)>, context: Context, next: ContId },
     Branch { branches: Branches, tag: Tag },
+    CompareTrue { operation: ComparisonOp, when_false: sk::CompuId, context: Context },
+    CompareFalse { operation: ComparisonOp, when_true: ProgId, context: Context },
 }
 
 pub(super) struct Lowering<'lo, 'ir> {
@@ -193,6 +196,10 @@ impl<'lo, 'ir> Lowering<'lo, 'ir> {
                 let next = self.sequence(sequence, next);
                 self.action(action, context, next)
             }
+            | Continuation::Compare { operation, when_true, when_false } => Step::Call {
+                input: Work::Compu(when_true, context.clone()),
+                frame: Frame::CompareTrue { operation, when_false, context },
+            },
             | Continuation::CoprodMatch(arms) => {
                 // Empty partial-pattern fallthrough also applies to scalar scrutinees.
                 if arms.is_empty() {
@@ -334,6 +341,20 @@ impl Folder for Lowering<'_, '_> {
                     context,
                     ContextUpdate::Keep,
                     next,
+                )
+            }
+            | Frame::CompareTrue { operation, when_false, context } => {
+                let _symbol = child.build(self.lo, (Some("compare_true".to_owned()), None));
+                Step::Call {
+                    input: Work::Compu(when_false, context.clone()),
+                    frame: Frame::CompareFalse { operation, when_true: child, context },
+                }
+            }
+            | Frame::CompareFalse { operation, when_true, context } => {
+                let _symbol = child.build(self.lo, (Some("compare_false".to_owned()), None));
+                Step::Return(
+                    CompareBranch { operation, when_true, when_false: child }
+                        .build(self.lo, context),
                 )
             }
             | Frame::Branch { mut branches, tag } => {

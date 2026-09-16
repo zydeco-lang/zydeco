@@ -1,4 +1,4 @@
-//! Typed arithmetic for static value calculation and instruction selection.
+//! Typed scalar operations for static calculation and instruction selection.
 
 use crate::{
     BuiltinValueRole, FloatLiteral, FloatOperation, FloatType, IntegerLiteral, IntegerOperation,
@@ -62,6 +62,108 @@ pub enum FloatArithmetic {
 pub enum PrimitiveOp {
     Integer(IntegerType, IntegerArithmetic),
     Float(FloatType, FloatArithmetic),
+}
+
+/// Ordered scalar predicates. Unordered floating-point operands make each false.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, strum::VariantArray)]
+pub enum ComparisonPredicate {
+    Eq,
+    Lt,
+    Gt,
+}
+
+impl ComparisonPredicate {
+    fn evaluate<T: PartialOrd>(self, first: T, second: T) -> bool {
+        match self {
+            | Self::Eq => first == second,
+            | Self::Lt => first < second,
+            | Self::Gt => first > second,
+        }
+    }
+}
+
+/// A scalar comparison selects control flow without constructing a source value.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ComparisonOp {
+    Integer(IntegerType, ComparisonPredicate),
+    Float(FloatType, ComparisonPredicate),
+}
+
+impl ComparisonOp {
+    pub fn from_builtin(role: BuiltinValueRole) -> Option<Self> {
+        Some(match role {
+            | BuiltinValueRole::Integer(ty, operation) => Self::Integer(
+                ty,
+                match operation {
+                    | IntegerOperation::Eq => ComparisonPredicate::Eq,
+                    | IntegerOperation::Lt => ComparisonPredicate::Lt,
+                    | IntegerOperation::Gt => ComparisonPredicate::Gt,
+                    | _ => return None,
+                },
+            ),
+            | BuiltinValueRole::Float(ty, operation) => Self::Float(
+                ty,
+                match operation {
+                    | FloatOperation::Eq => ComparisonPredicate::Eq,
+                    | FloatOperation::Lt => ComparisonPredicate::Lt,
+                    | FloatOperation::Gt => ComparisonPredicate::Gt,
+                    | _ => return None,
+                },
+            ),
+            | _ => return None,
+        })
+    }
+
+    pub fn builtin(self) -> BuiltinValueRole {
+        match self {
+            | Self::Integer(ty, predicate) => BuiltinValueRole::Integer(
+                ty,
+                match predicate {
+                    | ComparisonPredicate::Eq => IntegerOperation::Eq,
+                    | ComparisonPredicate::Lt => IntegerOperation::Lt,
+                    | ComparisonPredicate::Gt => IntegerOperation::Gt,
+                },
+            ),
+            | Self::Float(ty, predicate) => BuiltinValueRole::Float(
+                ty,
+                match predicate {
+                    | ComparisonPredicate::Eq => FloatOperation::Eq,
+                    | ComparisonPredicate::Lt => FloatOperation::Lt,
+                    | ComparisonPredicate::Gt => FloatOperation::Gt,
+                },
+            ),
+        }
+    }
+
+    pub fn operand_type(self) -> crate::PrimitiveType {
+        match self {
+            | Self::Integer(ty, _) => crate::PrimitiveType::Integer(ty),
+            | Self::Float(ty, _) => crate::PrimitiveType::Float(ty),
+        }
+    }
+
+    pub fn evaluate(self, operands: &[Literal; 2]) -> Result<bool, PrimitiveError> {
+        match (self, operands) {
+            | (
+                Self::Integer(ty, predicate),
+                [Literal::Integer(first), Literal::Integer(second)],
+            ) if first.integer_type() == Some(ty) && second.integer_type() == Some(ty) => {
+                Ok(predicate.evaluate(first.value(), second.value()))
+            }
+            | (Self::Float(ty, predicate), [Literal::Float(first), Literal::Float(second)])
+                if first.float_type() == ty && second.float_type() == ty =>
+            {
+                Ok(predicate.evaluate(first.value(), second.value()))
+            }
+            | _ => Err(PrimitiveError::OperandType),
+        }
+    }
+}
+
+impl std::fmt::Display for ComparisonOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.builtin().fmt(f)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -215,6 +317,78 @@ impl std::fmt::Display for PrimitiveOp {
 mod tests {
     use super::*;
     use strum::VariantArray;
+
+    #[test]
+    fn comparisons_cover_integer_domains_and_reject_wrong_operands() {
+        for &ty in IntegerType::VARIANTS {
+            let literal = |value| Literal::Integer(IntegerLiteral::from_value(value, ty));
+            let bits = ty.bits();
+            let (min, max) = if ty.is_signed() {
+                (-(1_i128 << (bits - 1)), (1_i128 << (bits - 1)) - 1)
+            } else {
+                (0, (1_i128 << bits) - 1)
+            };
+            for (index, &predicate) in ComparisonPredicate::VARIANTS.iter().enumerate() {
+                let operation = ComparisonOp::Integer(ty, predicate);
+                assert_eq!(ComparisonOp::from_builtin(operation.builtin()), Some(operation));
+                let wrong =
+                    if ty == IntegerType::Int { IntegerType::UInt } else { IntegerType::Int };
+                for operands in [
+                    [literal(0), Literal::Integer(IntegerLiteral::from_value(0, wrong))],
+                    [Literal::Float(FloatLiteral::from(0.0)), literal(0)],
+                ] {
+                    assert_eq!(operation.evaluate(&operands), Err(PrimitiveError::OperandType));
+                }
+                for (first, second, expected) in [
+                    (min, min, [true, false, false]),
+                    (max, max, [true, false, false]),
+                    (min, max, [false, true, false]),
+                    (max, min, [false, false, true]),
+                ] {
+                    assert_eq!(
+                        operation.evaluate(&[literal(first), literal(second)]),
+                        Ok(expected[index]),
+                        "{operation}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn float_comparisons_use_numeric_equality_and_ordered_predicates() {
+        for &ty in FloatType::VARIANTS {
+            let literal = |value: f64| {
+                Literal::Float(match ty {
+                    | FloatType::Float32 => FloatLiteral::from_f32_bits((value as f32).to_bits()),
+                    | FloatType::Float64 => FloatLiteral::from_bits(value.to_bits()),
+                })
+            };
+            for (index, &predicate) in ComparisonPredicate::VARIANTS.iter().enumerate() {
+                let operation = ComparisonOp::Float(ty, predicate);
+                assert_eq!(ComparisonOp::from_builtin(operation.builtin()), Some(operation));
+                assert_eq!(
+                    operation.evaluate(&[literal(0.0), Literal::Integer(IntegerLiteral::Int(0))]),
+                    Err(PrimitiveError::OperandType)
+                );
+                for (first, second, expected) in [
+                    (0.0, -0.0, [true, false, false]),
+                    (f64::NEG_INFINITY, f64::INFINITY, [false, true, false]),
+                    (f64::INFINITY, f64::NEG_INFINITY, [false, false, true]),
+                    (f64::INFINITY, f64::INFINITY, [true, false, false]),
+                    (f64::NAN, 0.0, [false; 3]),
+                    (0.0, f64::NAN, [false; 3]),
+                    (f64::NAN, f64::NAN, [false; 3]),
+                ] {
+                    assert_eq!(
+                        operation.evaluate(&[literal(first), literal(second)]),
+                        Ok(expected[index]),
+                        "{operation}"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn integer_folding_wraps_at_the_selected_width() {

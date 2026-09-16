@@ -347,6 +347,11 @@ impl Lowering<'_, '_> {
                 let next = self.then(Action::Pattern(binder), next);
                 Step::TailCall(Work::Value(scrut, context, next))
             }
+            | Compu::Compare(sk::CompareBranch { operation, operands, when_true, when_false }) => {
+                let next = self.save(Continuation::Compare { operation, when_true, when_false });
+                let next = self.then(Action::Value(operands[0]), next);
+                Step::TailCall(Work::Value(operands[1], context, next))
+            }
             | Compu::CoprodMatch(sk::SCoprodMatch { scrut, arms }) => {
                 let next = self.save(Continuation::CoprodMatch(arms));
                 Step::TailCall(Work::Value(scrut, context, next))

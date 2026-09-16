@@ -200,6 +200,11 @@ impl<'e> Emitter<'e> {
                     | Terminator::Jump(sa::Jump(target)) => {
                         merge(&mut parities, &mut queue, *target, mask);
                     }
+                    | Terminator::Compare(sa::CompareBranch { when_true, when_false, .. }) => {
+                        // Two scalar operands are removed, preserving stack parity.
+                        merge(&mut parities, &mut queue, *when_true, mask);
+                        merge(&mut parities, &mut queue, *when_false, mask);
+                    }
                     | Terminator::PopBranch(sa::PopBranch(arms)) => {
                         let mask = flip_mask(mask);
                         for (_, target) in arms {
@@ -847,6 +852,7 @@ impl<'a> Emit<'a> for Terminator {
                 em.shift_stack_parity(-1);
                 em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
+            | Terminator::Compare(branch) => branch.emit(id, em),
             | Terminator::PopBranch(sa::PopBranch(arms)) => {
                 // pop tag and jump to the corresponding program
                 em.asm.text.extend([

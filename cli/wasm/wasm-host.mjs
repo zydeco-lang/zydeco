@@ -429,16 +429,6 @@ class ZydecoHost {
           encode(evaluate(decode(first), decode(second)), spare),
         );
       }
-      const comparisons = {
-        eq: (left, right) => left === right,
-        lt: (left, right) => left < right,
-        gt: (left, right) => left > right,
-      };
-      for (const [operation, predicate] of Object.entries(comparisons)) {
-        functions.set(`${name}_${operation}_branch`, (first, second, whenTrue, whenFalse) =>
-          Transfers.withoutArguments(predicate(decode(first), decode(second)) ? whenTrue : whenFalse),
-        );
-      }
       functions.set(`${name}_to_string`, (word) => this.values.string(decode(word).toString()));
       const storageWidth = width === 63 ? 64 : width;
       this.installScalarMemory(functions, name, storageWidth);
@@ -471,16 +461,6 @@ class ZydecoHost {
       for (const [operation, evaluate] of Object.entries(arithmetic)) {
         functions.set(`${name}_${operation}`, (first, second, spare) =>
           this.encodeFloat(evaluate(decode(first), decode(second)), width, spare),
-        );
-      }
-      const comparisons = {
-        eq: (left, right) => left === right,
-        lt: (left, right) => left < right,
-        gt: (left, right) => left > right,
-      };
-      for (const [operation, predicate] of Object.entries(comparisons)) {
-        functions.set(`${name}_${operation}_branch`, (first, second, whenTrue, whenFalse) =>
-          Transfers.withoutArguments(predicate(decode(first), decode(second)) ? whenTrue : whenFalse),
         );
       }
       functions.set(`${name}_to_string`, (word) => this.values.string(FloatText.render(decode(word), width)));

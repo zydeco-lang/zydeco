@@ -4,8 +4,8 @@ use crate::{
 };
 use std::io::{BufRead, Write};
 use zydeco_syntax::{
-    BuiltinValueRole, FloatOperation, IntegerOperation, IntegerType, PrimitiveError, PrimitiveOp,
-    PrimitiveType, Return,
+    BuiltinValueRole, ComparisonOp, FloatOperation, IntegerOperation, IntegerType, PrimitiveError,
+    PrimitiveOp, PrimitiveType, Return,
 };
 
 /// Typed access to host operations used to construct the Builtin package.
@@ -35,6 +35,10 @@ impl BuiltinRuntime {
             return Self::arithmetic(operation, args).map_err(BuiltinFailure::Runtime);
         }
 
+        if let Some(operation) = ComparisonOp::from_builtin(role) {
+            return Branch::scalar(operation, args).map_err(BuiltinFailure::Exit);
+        }
+
         match role {
             | Role::Integer(integer, operation) => match operation {
                 | IntegerOperation::Add
@@ -45,7 +49,7 @@ impl BuiltinRuntime {
                     unreachable!("arithmetic roles dispatch through PrimitiveOp")
                 }
                 | IntegerOperation::Eq | IntegerOperation::Lt | IntegerOperation::Gt => {
-                    integer_branch(integer, operation, args)
+                    unreachable!("comparisons dispatch through ComparisonOp")
                 }
                 | IntegerOperation::ToString => integer_to_string(integer, args),
                 | IntegerOperation::StoreLe => ScalarMemory::store(args),
@@ -62,7 +66,7 @@ impl BuiltinRuntime {
                     unreachable!("arithmetic roles dispatch through PrimitiveOp")
                 }
                 | FloatOperation::Eq | FloatOperation::Lt | FloatOperation::Gt => {
-                    float_branch(float, operation, args)
+                    unreachable!("comparisons dispatch through ComparisonOp")
                 }
                 | FloatOperation::ToString => float_to_string(float, args),
                 | FloatOperation::StoreLe => ScalarMemory::store(args),

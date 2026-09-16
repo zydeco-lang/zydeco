@@ -1322,7 +1322,7 @@ Source regressions and runtime parity tests use the interpreter as one observabl
 [High lowering](../../lang/stackir/src/high/lower.rs) is indexed by the stack consuming a residual computation.
 It builds complete user and Builtin structures into `BranchJoinProgram`.
 High SPS retains lexical values, closures, continuations, arguments, and explicit ambient stacks.
-Stack lets guard value-coproduct matches so every branch shares one supplied continuation stack.
+Stack lets guard value-coproduct matches and scalar comparisons so every branch shares one supplied stack.
 The [high verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
 and this branch-join shape.
 
@@ -1554,11 +1554,52 @@ and spare-box contracts as their corresponding primitive instructions.
 
 Escaping arithmetic retains its thunk interface, with an inline primitive in its body.
 An unknown callee remains indirect.
-Address calculation and scalar memory accesses have the intrinsic bodies described below;
+Scalar comparisons, address calculation, and scalar memory accesses have the intrinsic bodies described below;
 other known Builtin operations remain external calls.
 The typed primitive survives SPSLow;
 [scalar region lowering](#scalar-value-boundaries) then makes representation conversions explicit for ZASM
 and direct Wasm instruction selection.
+
+### Scalar Comparisons
+
+Numeric `eq`, `lt`, and `gt` choose between two computations of the same arbitrary computation type.
+Their primitive representation therefore exposes control flow directly, without constructing a source `Bool`.
+The shared [comparison domain](../../lang/syntax/src/primitive.rs) pairs a predicate with an integer or float type;
+high and low SPS use `CompareBranch { operation, operands, when_true, when_false }`.
+An immediately enclosing stack let supplies one shared ambient stack to both successors.
+The ownership checks require distinct lexical occurrences for operands and successors,
+and low protocol checking verifies known operand types and both successors against that same stack.
+The stack may include arguments or codata observations as well as a return continuation.
+
+Builtin materialization gives every numeric comparison an intrinsic body,
+including when normalization is disabled or the function escapes.
+The body consumes two scalar arguments and two thunks, then forces the selected thunk.
+Compiler provenance lets normalization expose this fixed body through aliases and field projections at several sites.
+Known local branch thunks can then reduce under the ordinary closure and stack movement rules;
+unknown callees and callbacks retain their thunk interfaces.
+
+Literal comparisons select one successor only when operand evaluation is discardable and the shared stack can move.
+Trapping operand or stack construction remains at its original position.
+The [numeric semantics](language.md#13-primitive-values-and-capabilities) apply at the declared width:
+integer ordering follows signedness, floating-point equality treats signed zeros as equal,
+and all three predicates are false when either float is NaN.
+Constant folding and both interpreters share `ComparisonOp::evaluate`.
+
+Closure conversion retains the comparison and its shared stack.
+ZASM evaluates the second operand before the first, then its comparison terminator consumes both
+and selects one successor.
+AMD64 emits signed or unsigned conditional jumps, with an explicit unordered check for floating-point comparisons.
+Both Wasm backends emit typed comparison instructions and structured branches.
+The comparison itself allocates no result and makes no host call.
+It consumes ordinary scalar values, decoding existing wide scalar boxes at that boundary;
+raw scalar regions do not yet extend through comparisons.
+Source library wrappers that return `Bool` still use the ordinary return and coproduct machinery.
+
+The [comparison regressions](../../cli/tests/comparisons.rs) cover all numeric widths, NaNs, infinities,
+signed zero, escaping functions, argument stacks, shared continuations, and generated instruction/import checks.
+Native code and both Wasm backends execute with normalization enabled and disabled.
+Folder regressions compare reconstruction under both drivers, preserve trap ordering,
+and pair valid branches with ownership and protocol errors.
 
 ### Address Calculations
 
@@ -1656,8 +1697,8 @@ That fixture establishes decision depth, not depth-independent destruction of pr
 Owned fact construction
 and demand operations remain [separate work](../proposals/traversals.md#normalization-fact-ownership).
 
-Integer literal match plans lower to the raw `BuiltinValueRole::Integer(t, Eq)` branch
-with success and failure continuations.
+Integer literal match plans use the `BuiltinValueRole::Integer(t, Eq)` intrinsic body
+and its scalar comparison with success and failure continuations.
 There is no structural literal-pattern node in SPS.
 Structural aliases survive high and low SPS; assembly saves and reloads their bindee,
 while direct SPS Wasm uses a local.
@@ -2643,8 +2684,9 @@ Named structural routes and static fields erase before backend layout.
 [L13](language.md#13-primitive-values-and-capabilities) owns source observations,
 and [module interfaces](language.md#module-interfaces-and-shared-openings) explain dependency choices.
 Returning and continuation-selecting operations have distinct host call plans.
-C8 owns arithmetic exposure and folding; C11–C13 own the resulting target words and calls.
-The dynamic and ZASM interpreters share `PrimitiveOp::evaluate` with constant folding.
+C8 owns [arithmetic exposure](#primitive-calls) and [scalar comparisons](#scalar-comparisons);
+C11–C13 own the resulting target words and calls.
+The dynamic and ZASM interpreters share scalar evaluation with constant folding.
 
 Strings are immutable UTF-8 text. `Bytes` is a source-defined abstraction
 whose [owning design](language.md#immutable-owners-and-source-bytes) specifies its representation and operations.

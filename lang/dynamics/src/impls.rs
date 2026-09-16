@@ -48,89 +48,30 @@ fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
     App(body, mk_rc(arg.into())).into()
 }
 
-struct Branch;
+pub(crate) struct Branch;
 
 impl Branch {
     fn select(condition: bool, when_true: &ZValue, when_false: &ZValue) -> Result<ZCompute, i32> {
         let selected = if condition { when_true } else { when_false };
         Ok(Force(mk_rc(selected.clone().into())).into())
     }
-}
 
-fn integer_comparison<T: PartialEq + PartialOrd>(
-    first: &T, second: &T, operation: IntegerOperation,
-) -> bool {
-    match operation {
-        | IntegerOperation::Eq => first == second,
-        | IntegerOperation::Lt => first < second,
-        | IntegerOperation::Gt => first > second,
-        | _ => unreachable!(),
+    /// Select one continuation using the same typed semantics as constant folding.
+    pub(crate) fn scalar(operation: ComparisonOp, args: Vec<ZValue>) -> Result<ZCompute, i32> {
+        let [
+            ZValue::Literal(first),
+            ZValue::Literal(second),
+            when_true @ ZValue::Thunk(_),
+            when_false @ ZValue::Thunk(_),
+        ] = args.as_slice()
+        else {
+            unreachable!("checked comparison arguments")
+        };
+        let condition = operation
+            .evaluate(&[first.clone(), second.clone()])
+            .expect("checked comparison operand types");
+        Self::select(condition, when_true, when_false)
     }
-}
-
-/// Select a continuation using comparison in the integer's Rust domain.
-pub fn integer_branch(
-    integer_type: IntegerType, operation: IntegerOperation, args: Vec<ZValue>,
-) -> Result<ZCompute, i32> {
-    let [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] =
-        args.as_slice()
-    else {
-        unreachable!("type-checked integer branch received malformed arguments")
-    };
-    let condition = match (integer_type, first, second) {
-        | (
-            IntegerType::Int8,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int8(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int8(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::Int16,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int16(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int16(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::Int32,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int32(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::Int64,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int64(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::Int,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::Int(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::UInt8,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt8(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::UInt16,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt16(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt16(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::UInt32,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt32(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::UInt64,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt64(second))),
-        ) => integer_comparison(first, second, operation),
-        | (
-            IntegerType::UInt,
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt(first))),
-            ZValue::Literal(Literal::Integer(IntegerLiteral::UInt(second))),
-        ) => integer_comparison(first, second, operation),
-        | _ => unreachable!("type-checked integer branch received mismatched values"),
-    };
-    Branch::select(condition, when_true, when_false)
 }
 
 pub fn integer_to_string(integer_type: IntegerType, args: Vec<ZValue>) -> Result<ZCompute, i32> {
@@ -142,41 +83,6 @@ pub fn integer_to_string(integer_type: IntegerType, args: Vec<ZValue>) -> Result
         }
         | _ => unreachable!("type-checked integer rendering received a mismatched value"),
     }
-}
-
-fn float_comparison<T: PartialEq + PartialOrd>(
-    first: T, second: T, operation: FloatOperation,
-) -> bool {
-    match operation {
-        | FloatOperation::Eq => first == second,
-        | FloatOperation::Lt => first < second,
-        | FloatOperation::Gt => first > second,
-        | _ => unreachable!(),
-    }
-}
-
-pub fn float_branch(
-    float_type: FloatType, operation: FloatOperation, args: Vec<ZValue>,
-) -> Result<ZCompute, i32> {
-    let [first, second, when_true @ ZValue::Thunk(_), when_false @ ZValue::Thunk(_)] =
-        args.as_slice()
-    else {
-        unreachable!("type-checked float branch received malformed arguments")
-    };
-    let condition = match (float_type, first, second) {
-        | (
-            FloatType::Float32,
-            ZValue::Literal(Literal::Float(FloatLiteral::Float32(first))),
-            ZValue::Literal(Literal::Float(FloatLiteral::Float32(second))),
-        ) => float_comparison(f32::from_bits(*first), f32::from_bits(*second), operation),
-        | (
-            FloatType::Float64,
-            ZValue::Literal(Literal::Float(FloatLiteral::Float64(first))),
-            ZValue::Literal(Literal::Float(FloatLiteral::Float64(second))),
-        ) => float_comparison(f64::from_bits(*first), f64::from_bits(*second), operation),
-        | _ => unreachable!("type-checked float branch received mismatched values"),
-    };
-    Branch::select(condition, when_true, when_false)
 }
 
 /// Convert a floating-point literal to its shortest round-trippable decimal form.

@@ -99,6 +99,13 @@ impl Node<'_> {
                     ordinary((*binder).into());
                     ordinary((*body).into());
                 }
+                | Computation::Compare(CompareBranch {
+                    operands, when_true, when_false, ..
+                }) => {
+                    operands.iter().for_each(|operand| ordinary((*operand).into()));
+                    ordinary((*when_true).into());
+                    ordinary((*when_false).into());
+                }
                 | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
                     ordinary((*scrut).into());
                     arms.iter().for_each(|Matcher { binder, tail }| {

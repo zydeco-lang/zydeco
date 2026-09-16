@@ -717,143 +717,29 @@ float_arithmetic!(HostFloat32, [], std::ptr::null_mut();
 float_arithmetic!(HostFloat64, [, spare: *mut Word], spare;
     zydeco_float64_add => +, zydeco_float64_sub => -, zydeco_float64_mul => *, zydeco_float64_div => /);
 
-macro_rules! integer_runtime {
-    (
-        $type:ty,
-        $eq:ident => $eq_symbol:literal,
-        $lt:ident => $lt_symbol:literal,
-        $gt:ident => $gt_symbol:literal,
-        $to_string:ident => $to_string_symbol:literal
-    ) => {
-        #[unsafe(export_name = $eq_symbol)]
-        extern "sysv64" fn $eq(
-            first: Word, second: Word, when_true: Word, when_false: Word,
-        ) -> Word {
-            Branch::select(<$type>::decode(first) == <$type>::decode(second), when_true, when_false)
-        }
-
-        #[unsafe(export_name = $lt_symbol)]
-        extern "sysv64" fn $lt(
-            first: Word, second: Word, when_true: Word, when_false: Word,
-        ) -> Word {
-            Branch::select(<$type>::decode(first) < <$type>::decode(second), when_true, when_false)
-        }
-
-        #[unsafe(export_name = $gt_symbol)]
-        extern "sysv64" fn $gt(
-            first: Word, second: Word, when_true: Word, when_false: Word,
-        ) -> Word {
-            Branch::select(<$type>::decode(first) > <$type>::decode(second), when_true, when_false)
-        }
-
-        #[unsafe(export_name = $to_string_symbol)]
+macro_rules! integer_render {
+    ($type:ty, $to_string:ident => $symbol:literal) => {
+        #[unsafe(export_name = $symbol)]
         extern "sysv64" fn $to_string(value: Word) -> Word {
             HostString::own(<$type>::decode(value).to_string())
         }
     };
 }
 
-integer_runtime!(
-    i8,
-    zydeco_int8_eq_branch => "\x01zydeco_int8_eq_branch",
-    zydeco_int8_lt_branch => "\x01zydeco_int8_lt_branch",
-    zydeco_int8_gt_branch => "\x01zydeco_int8_gt_branch",
-    zydeco_int8_to_string => "\x01zydeco_int8_to_string"
-);
-integer_runtime!(
-    i16,
-    zydeco_int16_eq_branch => "\x01zydeco_int16_eq_branch",
-    zydeco_int16_lt_branch => "\x01zydeco_int16_lt_branch",
-    zydeco_int16_gt_branch => "\x01zydeco_int16_gt_branch",
-    zydeco_int16_to_string => "\x01zydeco_int16_to_string"
-);
-integer_runtime!(
-    i32,
-    zydeco_int32_eq_branch => "\x01zydeco_int32_eq_branch",
-    zydeco_int32_lt_branch => "\x01zydeco_int32_lt_branch",
-    zydeco_int32_gt_branch => "\x01zydeco_int32_gt_branch",
-    zydeco_int32_to_string => "\x01zydeco_int32_to_string"
-);
-integer_runtime!(
-    HostInt64,
-    zydeco_int64_eq_branch => "\x01zydeco_int64_eq_branch",
-    zydeco_int64_lt_branch => "\x01zydeco_int64_lt_branch",
-    zydeco_int64_gt_branch => "\x01zydeco_int64_gt_branch",
-    zydeco_int64_to_string => "\x01zydeco_int64_to_string"
-);
-integer_runtime!(
-    i64,
-    zydeco_int_eq_branch => "\x01zydeco_int_eq_branch",
-    zydeco_int_lt_branch => "\x01zydeco_int_lt_branch",
-    zydeco_int_gt_branch => "\x01zydeco_int_gt_branch",
-    zydeco_int_to_string => "\x01zydeco_int_to_string"
-);
-integer_runtime!(
-    u8,
-    zydeco_uint8_eq_branch => "\x01zydeco_uint8_eq_branch",
-    zydeco_uint8_lt_branch => "\x01zydeco_uint8_lt_branch",
-    zydeco_uint8_gt_branch => "\x01zydeco_uint8_gt_branch",
-    zydeco_uint8_to_string => "\x01zydeco_uint8_to_string"
-);
-integer_runtime!(
-    u16,
-    zydeco_uint16_eq_branch => "\x01zydeco_uint16_eq_branch",
-    zydeco_uint16_lt_branch => "\x01zydeco_uint16_lt_branch",
-    zydeco_uint16_gt_branch => "\x01zydeco_uint16_gt_branch",
-    zydeco_uint16_to_string => "\x01zydeco_uint16_to_string"
-);
-integer_runtime!(
-    u32,
-    zydeco_uint32_eq_branch => "\x01zydeco_uint32_eq_branch",
-    zydeco_uint32_lt_branch => "\x01zydeco_uint32_lt_branch",
-    zydeco_uint32_gt_branch => "\x01zydeco_uint32_gt_branch",
-    zydeco_uint32_to_string => "\x01zydeco_uint32_to_string"
-);
-integer_runtime!(
-    HostUInt64,
-    zydeco_uint64_eq_branch => "\x01zydeco_uint64_eq_branch",
-    zydeco_uint64_lt_branch => "\x01zydeco_uint64_lt_branch",
-    zydeco_uint64_gt_branch => "\x01zydeco_uint64_gt_branch",
-    zydeco_uint64_to_string => "\x01zydeco_uint64_to_string"
-);
-integer_runtime!(
-    u64,
-    zydeco_uint_eq_branch => "\x01zydeco_uint_eq_branch",
-    zydeco_uint_lt_branch => "\x01zydeco_uint_lt_branch",
-    zydeco_uint_gt_branch => "\x01zydeco_uint_gt_branch",
-    zydeco_uint_to_string => "\x01zydeco_uint_to_string"
-);
+integer_render!(i8, zydeco_int8_to_string => "\x01zydeco_int8_to_string");
+integer_render!(i16, zydeco_int16_to_string => "\x01zydeco_int16_to_string");
+integer_render!(i32, zydeco_int32_to_string => "\x01zydeco_int32_to_string");
+integer_render!(HostInt64, zydeco_int64_to_string => "\x01zydeco_int64_to_string");
+integer_render!(i64, zydeco_int_to_string => "\x01zydeco_int_to_string");
+integer_render!(u8, zydeco_uint8_to_string => "\x01zydeco_uint8_to_string");
+integer_render!(u16, zydeco_uint16_to_string => "\x01zydeco_uint16_to_string");
+integer_render!(u32, zydeco_uint32_to_string => "\x01zydeco_uint32_to_string");
+integer_render!(HostUInt64, zydeco_uint64_to_string => "\x01zydeco_uint64_to_string");
+integer_render!(u64, zydeco_uint_to_string => "\x01zydeco_uint_to_string");
 
-macro_rules! float_runtime {
-    (
-        $type:ty, $codec:ident,
-        $eq:ident => $eq_symbol:literal,
-        $lt:ident => $lt_symbol:literal,
-        $gt:ident => $gt_symbol:literal,
-        $to_string:ident => $to_string_symbol:literal
-    ) => {
-        #[unsafe(export_name = $eq_symbol)]
-        extern "sysv64" fn $eq(
-            first: Word, second: Word, when_true: Word, when_false: Word,
-        ) -> Word {
-            Branch::select($codec::decode(first) == $codec::decode(second), when_true, when_false)
-        }
-
-        #[unsafe(export_name = $lt_symbol)]
-        extern "sysv64" fn $lt(
-            first: Word, second: Word, when_true: Word, when_false: Word,
-        ) -> Word {
-            Branch::select($codec::decode(first) < $codec::decode(second), when_true, when_false)
-        }
-
-        #[unsafe(export_name = $gt_symbol)]
-        extern "sysv64" fn $gt(
-            first: Word, second: Word, when_true: Word, when_false: Word,
-        ) -> Word {
-            Branch::select($codec::decode(first) > $codec::decode(second), when_true, when_false)
-        }
-
-        #[unsafe(export_name = $to_string_symbol)]
+macro_rules! float_render {
+    ($type:ty, $codec:ident, $to_string:ident => $symbol:literal) => {
+        #[unsafe(export_name = $symbol)]
         extern "sysv64" fn $to_string(value: Word) -> Word {
             let value: $type = $codec::decode(value);
             HostString::own(value.to_string())
@@ -861,20 +747,8 @@ macro_rules! float_runtime {
     };
 }
 
-float_runtime!(
-    f32, HostFloat32,
-    zydeco_float32_eq_branch => "\x01zydeco_float32_eq_branch",
-    zydeco_float32_lt_branch => "\x01zydeco_float32_lt_branch",
-    zydeco_float32_gt_branch => "\x01zydeco_float32_gt_branch",
-    zydeco_float32_to_string => "\x01zydeco_float32_to_string"
-);
-float_runtime!(
-    f64, HostFloat64,
-    zydeco_float64_eq_branch => "\x01zydeco_float64_eq_branch",
-    zydeco_float64_lt_branch => "\x01zydeco_float64_lt_branch",
-    zydeco_float64_gt_branch => "\x01zydeco_float64_gt_branch",
-    zydeco_float64_to_string => "\x01zydeco_float64_to_string"
-);
+float_render!(f32, HostFloat32, zydeco_float32_to_string => "\x01zydeco_float32_to_string");
+float_render!(f64, HostFloat64, zydeco_float64_to_string => "\x01zydeco_float64_to_string");
 
 #[unsafe(export_name = "\x01zydeco_char_to_str")]
 extern "sysv64" fn zydeco_char_to_str(character: Word) -> Word {

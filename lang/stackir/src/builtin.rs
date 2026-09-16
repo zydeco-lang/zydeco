@@ -85,6 +85,11 @@ impl ExternalFunction {
     where
         Arena: AsMut<StackirArena>,
     {
+        if let ExternalFunction::Host(role) = self
+            && let Some(operation) = ComparisonOp::from_builtin(role)
+        {
+            return CompareBranch::make_function(arena, operation);
+        }
         if matches!(self, ExternalFunction::Host(BuiltinValueRole::MemoryOffset)) {
             return AddrOffset::make_function(arena);
         }
@@ -96,6 +101,57 @@ impl ExternalFunction {
         let stack = Bullet.build(arena, None);
         let body = ExternCall { function: self, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)
+    }
+}
+
+impl CompareBranch {
+    /// Keep primitive selection in the builtin body, including at escaping uses
+    /// and when optional normalization is disabled.
+    fn make_function<Arena: AsMut<StackirArena>>(
+        arena: &mut Arena, operation: ComparisonOp,
+    ) -> ValueId {
+        use crate::protocol::ValueProtocol;
+        let [first, second, when_true, when_false] =
+            ["__compare_first__", "__compare_second__", "__compare_true__", "__compare_false__"]
+                .map(|name| {
+                    let admin = &mut arena.as_mut().admin;
+                    let def = admin.fresh();
+                    admin.insert_def(def, VarName(name.into()));
+                    def
+                });
+        let [when_true_body, when_false_body] = [when_true, when_false].map(|def| {
+            let thunk = def.build(arena, None);
+            let stack = Bullet.build(arena, None);
+            SForce { thunk, stack }.build(arena, None)
+        });
+        let operands = [first, second].map(|def| def.build(arena, None));
+        let branch = CompareBranch {
+            operation,
+            operands,
+            when_true: when_true_body,
+            when_false: when_false_body,
+        }
+        .build(arena, None);
+        let bindee = Bullet.build(arena, None);
+        let body = Let { binder: Bullet, bindee, tail: branch }.build(arena, None);
+        let scalar = ValueProtocol::Primitive(operation.operand_type());
+        let body = [
+            (first, scalar.clone()),
+            (second, scalar),
+            (when_true, ValueProtocol::Thunk(Box::default())),
+            (when_false, ValueProtocol::Thunk(Box::default())),
+        ]
+        .into_iter()
+        .rev()
+        .fold(body, |tail, (def, protocol)| {
+            let binder = def.build(arena, None);
+            arena.as_mut().inner.pattern_protocols.insert_new(binder, protocol);
+            let bindee = Bullet.build(arena, None);
+            Let { binder: Cons(binder, Bullet), bindee, tail }.build(arena, None)
+        });
+        let function = Closure { stack: Bullet, body }.build(arena, None);
+        arena.as_mut().inner.builtin_functions.insert_new(function, operation.builtin());
+        function
     }
 }
 

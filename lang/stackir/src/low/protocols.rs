@@ -404,6 +404,23 @@ impl<'a> ProtocolValidator<'a> {
                     self.bind(*binder, value, &mut context);
                     id = *body;
                 }
+                | Computation::Compare(CompareBranch {
+                    operation,
+                    operands,
+                    when_true,
+                    when_false,
+                }) => {
+                    for operand in operands {
+                        let fact = self.value(*operand, &context)?;
+                        self.check_value(
+                            *operand,
+                            &ValueProtocol::Primitive(operation.operand_type()),
+                            &fact.protocol,
+                        )?;
+                    }
+                    self.compu(*when_true, context.clone())?;
+                    id = *when_false;
+                }
                 | Computation::CoprodMatch(SCoprodMatch { scrut, arms }) => {
                     self.value(*scrut, &context)?;
                     for Matcher { binder, tail } in arms {
@@ -474,6 +491,62 @@ impl<'a> ProtocolValidator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn comparisons_check_both_operands_and_both_successor_protocols() {
+        // Vary each input independently; a true first arm must not hide a bad second arm.
+        for rejected in [None, Some(0), Some(1), Some(2), Some(3)] {
+            let mut arena = SpsLowArena::default();
+            let operands = [0, 1].map(|index| {
+                let value = if rejected == Some(index) {
+                    IntegerLiteral::UInt64(1)
+                } else {
+                    IntegerLiteral::Int64(1)
+                };
+                Literal::Integer(value).build(&mut arena, None)
+            });
+            let successors = [2, 3].map(|index| {
+                let stack = Bullet.build(&mut arena, None);
+                let tail = SHole(stack).build(&mut arena, None);
+                let binder = Hole.build(&mut arena, None);
+                let protocol = if rejected == Some(index) {
+                    ValueProtocol::Unit
+                } else {
+                    ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))
+                };
+                arena.inner.pattern_protocols.insert_new(binder, protocol);
+                let bindee = Bullet.build(&mut arena, None);
+                (
+                    LetArg { binder: Cons(binder, Bullet), bindee, tail }.build(&mut arena, None),
+                    binder,
+                )
+            });
+            let root = CompareBranch {
+                operation: ComparisonOp::Integer(IntegerType::Int64, ComparisonPredicate::Eq),
+                operands,
+                when_true: successors[0].0,
+                when_false: successors[1].0,
+            }
+            .build(&mut arena, None);
+            let context = Context {
+                stack: StackProtocol::Argument(
+                    Box::new(ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))),
+                    Box::default(),
+                ),
+                ..Context::default()
+            };
+            let checked = ProtocolValidator { arena: &arena.inner }.compu(root, context);
+            match rejected {
+                | None => checked.unwrap(),
+                | Some(index @ (0 | 1)) => assert!(
+                    matches!(checked, Err(ProtocolError::Value { value, .. }) if value == operands[index])
+                ),
+                | Some(index) => assert!(
+                    matches!(checked, Err(ProtocolError::Parameter { pattern, .. }) if pattern == successors[index - 2].1)
+                ),
+            }
+        }
+    }
 
     #[test]
     fn memory_steps_check_load_results_and_store_operands() {

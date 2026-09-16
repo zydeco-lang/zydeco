@@ -45,11 +45,11 @@ fn known_primitive_calls_do_not_allocate_thunks() {
 }
 
 #[test]
-fn dynamically_selected_primitives_keep_their_thunks() {
+fn constant_primitive_selection_eliminates_dispatch() {
     let sps = PrimitiveFixture::sps_low("primitive-selection.zy");
-    assert!(sps.contains("<extern:int_eq_branch/4>"), "the branch primitive is known:\n{sps}");
-    assert!(sps.contains("pack-closure("), "escaping primitives must remain values:\n{sps}");
-    assert!(sps.contains("open-closure "), "the selected primitive needs runtime dispatch:\n{sps}");
+    assert!(!sps.contains("<extern:int_eq_branch/4>"), "{sps}");
+    assert!(!sps.contains("pack-closure("), "constant selection must fold:\n{sps}");
+    assert!(!sps.contains("open-closure "), "the selected primitive is known:\n{sps}");
 }
 
 // `exit.zy` is driven by the CLI build test and the TUI engine; the `echo*`
