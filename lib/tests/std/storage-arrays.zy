@@ -1,7 +1,7 @@
 @[package(test(of(/std)))]
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /OS; /numeric; /process; builtin) : @(import(
-    std/builtin
+    /std/builtin
   )) that
   let (/Uninit; /Init; /Ptr; /storage; /arrays; /allocation; /pointer; /raw) =
     builtin |> (@(import(/std/memory)))

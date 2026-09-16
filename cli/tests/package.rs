@@ -56,65 +56,78 @@ impl Fixture {
 }
 
 #[test]
-fn standard_library_runs_its_standalone_suite_without_fixture_dependent_programs() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let output = Fixture::success_in(&root, &["test", "std"]);
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("29 passed; 0 failed."), "{stdout}");
-    assert!(stdout.contains("represented-call/main.zy"), "nested tests belong to the suite");
+fn standard_library_test_files_run_with_explicit_selection() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize().unwrap();
+    let session = zydeco_session::CompilerSession::default();
+    let project = session.project(&[root.join("workspace.zy")]).unwrap();
+    let tests = session
+        .declarations(&project)
+        .unwrap()
+        .into_iter()
+        .filter(|(_, package)| package.role == zydeco_session::source::PackageRole::Test)
+        .map(|(_, package)| package.id.path)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(tests.len(), 29);
+    assert!(tests.iter().any(|path| path.ends_with("represented-call/main.zy")));
     for harness_only in ["arg-list.zy", "filesystem.zy", "read-line-as-int.zy"] {
         assert!(
-            !stdout.contains(harness_only),
+            !tests.iter().any(|path| path.ends_with(harness_only)),
             "{harness_only} needs explicit test input or setup"
         );
+    }
+    for source in tests {
+        let output = Fixture::success_in(&root, &["test", source.to_str().unwrap()]);
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed."));
     }
 }
 
 #[test]
-fn declared_discovery_selects_test_side_subjects_and_keeps_plain_tests_independent() {
+fn declared_discovery_preserves_subjects_and_runs_explicit_test_files() {
     let fixture = Fixture::new();
     fixture.write("workspace.zy", r#"@[discover(include("tests/**/*.zy"), exclude("tests/fixtures/**"), include("tests/fixtures/keep.zy"))]
         (#lib = @[package(library, name(lib))] 1)"#);
     fixture.write(
         "tests/smoke.zy",
         &format!(
-            r#"@[package(test(of(lib)))]
-        let lib = @(import(lib)) in ({})"#,
+            r#"@[package(test(of(/lib)))]
+        let lib = @(import(/lib)) in ({})"#,
             Fixture::executable(0)
         ),
     );
     fixture.write(
         "tests/fixtures/keep.zy",
-        &format!(r#"@[package(test(of(lib)))] ({})"#, Fixture::executable(0)),
+        &format!(r#"@[package(test(of(/lib)))] ({})"#, Fixture::executable(0)),
     );
     fixture.write("tests/fixtures/invalid.zy", "(");
     fixture.write("tests/plain.zy", &format!("@[package(test)] ({})", Fixture::executable(7)));
     let show = fixture.success(&["show"]);
     let show = String::from_utf8_lossy(&show.stdout);
-    assert!(show.contains("of ->") && show.contains("tests/plain.zy"));
+    assert!(show.contains("of /lib") && show.contains("tests/plain.zy"));
     assert_eq!(
         show.matches("tests/smoke.zy").count(),
         1,
         "each matching package is displayed once"
     );
     assert!(!show.contains("invalid.zy") && !show.contains("unsupported"));
-    let test = fixture.success(&["test", "lib"]);
-    let stdout = String::from_utf8_lossy(&test.stdout);
-    assert!(stdout.contains("2 passed; 0 failed."));
-    assert!(!stdout.contains("plain.zy"));
+    for source in ["tests/smoke.zy", "tests/fixtures/keep.zy"] {
+        let test = fixture.success(&["test", source]);
+        let stdout = String::from_utf8_lossy(&test.stdout);
+        assert!(stdout.contains("1 passed; 0 failed."));
+        assert!(!stdout.contains("plain.zy"));
+    }
     let plain = fixture.command(&["test", "tests/plain.zy"]);
     assert_eq!(plain.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&plain.stdout).contains("plain.zy (exit 7)"));
 
     fixture.write("tests/invalid.zy", "(");
-    for arguments in [&["show"][..], &["test", "lib"], &["check", "workspace.zy"]] {
+    for arguments in [&["show"][..], &["test", "tests/smoke.zy"], &["check", "workspace.zy"]] {
         let output = fixture.command(arguments);
         assert!(!output.status.success());
         assert!(String::from_utf8_lossy(&output.stderr).contains("tests/invalid.zy"));
         assert!(output.stdout.is_empty(), "discovery must finish before output or execution");
     }
-    fixture.write("tests/invalid.zy", r#"@[package(test(of(lib)))] 1"#);
-    let output = fixture.command(&["test", "lib"]);
+    fixture.write("tests/invalid.zy", r#"@[package(test(of(/lib)))] 1"#);
+    let output = fixture.command(&["test", "tests/invalid.zy"]);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("classified as a value"));
     assert!(
@@ -132,21 +145,23 @@ fn concluding_files_register_existing_files_and_named_binaries_build_distinct_ar
     fixture.write(
         "workspace.zy",
         r#"@[discover(include("testing.zy"))]
-        let library = @[package(library, name(lib), test(smoke))] @(import("lib.zy")) in
+        let library = @[package(library, name(lib), test(/smoke))] @(import("lib.zy")) in
         let one = { @[package(binary, name(tools/first))] @(import("first.zy")) } in
         let two = { @[package(binary, name(tools-first))] @(import("second.zy")) } in
         let broken = { @[package(binary, name(broken))] @(import("missing.zy")) } in
         (library, one, two, broken)"#,
     );
     fixture.write("testing.zy", r#"{ @[package(test, name(smoke))] @(import("smoke.zy")) }"#);
-    fixture
-        .write("smoke.zy", &format!(r#"let lib = @(import(lib)) in ({})"#, Fixture::executable(0)));
+    fixture.write(
+        "smoke.zy",
+        &format!(r#"let lib = @(import(/lib)) in ({})"#, Fixture::executable(0)),
+    );
     let show = fixture.success(&["show"]);
     let show = String::from_utf8(show.stdout).unwrap();
-    assert!(show.contains("library lib (") && show.contains("test smoke ("));
-    assert!(show.contains("binary ") && show.contains("code ->"));
+    assert!(show.contains("library /lib (") && show.contains("test /smoke ("));
+    assert!(show.contains("binary ") && show.contains("import "));
     fixture.success(&["check", "lib"]);
-    let tests = fixture.success(&["test", "lib"]);
+    let tests = fixture.success(&["test", "smoke"]);
     assert!(String::from_utf8_lossy(&tests.stdout).contains("1 passed; 0 failed."));
     assert_eq!(fixture.command(&["run", "tools/first"]).status.code(), Some(3));
     assert_eq!(fixture.command(&["run", "tools-first"]).status.code(), Some(9));
@@ -162,7 +177,7 @@ fn concluding_files_register_existing_files_and_named_binaries_build_distinct_ar
         let diagnostic = if arguments.contains(&"broken") {
             "missing.zy"
         } else if arguments.contains(&"lib") {
-            "source libraries have no independent compilation boundary"
+            "classified as a value"
         } else {
             "require exactly one selected package"
         };
@@ -194,11 +209,11 @@ fn concluding_files_register_existing_files_and_named_binaries_build_distinct_ar
     assert!(String::from_utf8_lossy(&wrong.stderr).contains("has role library; expected binary"));
     let invalid = fixture.command(&["run", "missing.zy#../bad"]);
     assert!(!invalid.status.success());
-    assert!(String::from_utf8_lossy(&invalid.stderr).contains("invalid package name"));
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("invalid package path"));
 }
 
 #[test]
-fn selecting_multiple_packages_runs_each_shared_companion_once() {
+fn repeated_explicit_test_selection_runs_each_package_once() {
     let fixture = Fixture::new();
     fixture.write(
         "workspace.zy",
@@ -209,23 +224,23 @@ fn selecting_multiple_packages_runs_each_shared_companion_once() {
     fixture.write(
         "tests.zy",
         &format!(
-            "{{ @[package(test(of(example/one, example/two)), name(example/smoke))] {} }}",
+            "{{ @[package(test(of(/example/one, /example/two)), name(example/smoke))] {} }}",
             Fixture::executable(0)
         ),
     );
     for packages in [
-        vec!["-p", "example/one"],
-        vec!["-p", "example/two"],
         vec!["-p", "example/smoke"],
+        vec!["--pkg", "example/smoke"],
+        vec!["--package", "example/smoke"],
         vec![
             "-p",
-            "example/one",
+            "example/smoke",
             "--pkg",
-            "example/two",
+            "example/smoke",
             "--package",
             "example/smoke",
             "-p",
-            "example/one",
+            "example/smoke",
         ],
     ] {
         let arguments = [vec!["test"], packages].concat();
@@ -241,7 +256,7 @@ fn whole_files_need_no_names_and_library_tests_import_the_library_normally() {
     let fixture = Fixture::new().with_discovery(&["plain.zy", "lib.zy"]);
     fixture.write("plain.zy", "42");
     let plain = fixture.success(&["show"]);
-    assert!(String::from_utf8_lossy(&plain.stdout).contains("library "));
+    assert!(plain.stdout.is_empty(), "plain terms do not declare packages");
     fixture.success(&["check", "plain.zy"]);
     fixture.write("lib.zy", r#"@[package(library, test("smoke.zy"))] 42"#);
     fixture.write(
@@ -252,10 +267,15 @@ fn whole_files_need_no_names_and_library_tests_import_the_library_normally() {
         ),
     );
     fixture.success(&["check", "lib.zy"]);
-    for source in ["lib.zy", "smoke.zy"] {
+    for source in ["smoke.zy", "./smoke.zy"] {
         let tests = fixture.success(&["test", source]);
         assert!(String::from_utf8_lossy(&tests.stdout).contains("1 passed; 0 failed."));
     }
+    let library_test = fixture.command(&["test", "lib.zy"]);
+    assert!(!library_test.status.success() && library_test.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&library_test.stderr).contains("has role library; expected test")
+    );
     fixture.write("main.zy", &format!("@[package(binary)] ({})", Fixture::executable(0)));
     fixture.success(&["check", "main.zy"]);
     fixture.success(&["run", "main.zy"]);
@@ -265,7 +285,7 @@ fn whole_files_need_no_names_and_library_tests_import_the_library_normally() {
     for source in ["plain.zy#", "main.zy#"] {
         let output = fixture.command(&["check", source]);
         assert!(!output.status.success());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("invalid package name"));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("invalid package path"));
         assert!(output.stdout.is_empty());
     }
 }
@@ -275,10 +295,10 @@ fn nested_package_annotations_preserve_normal_execution_and_scope() {
     let fixture = Fixture::new().with_discovery(&["main.zy"]);
     let source = Fixture::executable(7)
         .replace("! process/exit", r#"@[package(test, name(nested))] ! process/exit"#);
-    fixture.write("main.zy", &format!("@[package(binary)] {source}"));
+    fixture.write("main.zy", &format!("@[package(binary, name(main))] {source}"));
     fixture.success(&["check", "main.zy"]);
     assert_eq!(fixture.command(&["run", "main.zy"]).status.code(), Some(7));
-    let separate = fixture.command(&["check", "nested"]);
+    let separate = fixture.command(&["check", "-p", "/main/nested"]);
     assert!(
         !separate.status.success(),
         "an independently selected term must supply its own imports"
@@ -294,8 +314,8 @@ fn inline_same_file_tests_are_not_cyclic_and_unrelated_packages_are_not_loaded()
         "workspace.zy",
         &format!(
             r#"(
-        #lib = @[package(library, test(smoke), name(lib))] 1,
-        #smoke = @[package(test, name(smoke))] let lib = @(import(lib)) in ({}),
+        #lib = @[package(library, test(/smoke), name(lib))] 1,
+        #smoke = @[package(test, name(smoke))] let lib = @(import(/lib)) in ({}),
         #unrelated = @[package(test, name(unrelated))] ({}),
         #broken = @[package(binary, name(broken))] missing
     )"#,
@@ -304,29 +324,29 @@ fn inline_same_file_tests_are_not_cyclic_and_unrelated_packages_are_not_loaded()
         ),
     );
     fixture.success(&["check", "lib"]);
-    let output = fixture.success(&["test", "lib"]);
+    let output = fixture.success(&["test", "smoke"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("smoke (") && stdout.contains("1 passed; 0 failed."));
     assert!(!stdout.contains("unrelated") && !stdout.contains("broken"));
 }
 
 #[test]
-fn missing_test_relationships_are_visible_but_fail_test_planning() {
+fn missing_test_relationships_are_visible_without_implicit_suite_selection() {
     let fixture = Fixture::new().with_discovery(&["lib.zy"]);
     fixture.write("lib.zy", r#"@[package(library, test("missing.zy"))] 42"#);
     let show = fixture.success(&["show"]);
     let show = String::from_utf8_lossy(&show.stdout);
-    assert!(show.contains("test ->"));
+    assert!(show.contains("test \"missing.zy\""));
     fixture.success(&["check", "lib.zy"]);
     let test = fixture.command(&["test", "lib.zy"]);
     assert!(!test.status.success() && test.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&test.stderr).contains("cannot read source"));
+    assert!(String::from_utf8_lossy(&test.stderr).contains("has role library; expected test"));
 }
 
 #[test]
 fn preflight_checks_every_role_and_executable_before_running_any_test() {
     let fixture = Fixture::new().with_discovery(&["lib.zy", "tests.zy"]);
-    fixture.write("lib.zy", r#"@[package(library, test(a_valid), test(z_invalid))] 42"#);
+    fixture.write("lib.zy", r#"@[package(library, test(/a_valid), test(/z_invalid))] 42"#);
     for (role, term, expected) in [
         ("test", "42", "classified as a value"),
         ("binary", "42", "has role binary; expected test"),
@@ -342,7 +362,7 @@ fn preflight_checks_every_role_and_executable_before_running_any_test() {
                 Fixture::executable(0)
             ),
         );
-        let output = fixture.command(&["test", "lib.zy"]);
+        let output = fixture.command(&["test", "-p", "a_valid", "-p", "z_invalid"]);
         assert!(!output.status.success());
         assert!(
             String::from_utf8_lossy(&output.stderr).contains(expected),
@@ -356,7 +376,7 @@ fn preflight_checks_every_role_and_executable_before_running_any_test() {
 #[test]
 fn nonzero_tests_are_reported_and_the_selected_suite_continues() {
     let fixture = Fixture::new().with_discovery(&["lib.zy", "tests.zy"]);
-    fixture.write("lib.zy", r#"@[package(library, test(fail), test(pass))] ()"#);
+    fixture.write("lib.zy", r#"@[package(library, test(/fail), test(/pass))] ()"#);
     fixture.write(
         "tests.zy",
         &format!(
@@ -368,7 +388,7 @@ fn nonzero_tests_are_reported_and_the_selected_suite_continues() {
             Fixture::executable(0)
         ),
     );
-    let output = fixture.command(&["test", "lib.zy"]);
+    let output = fixture.command(&["test", "-p", "fail", "-p", "pass"]);
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("FAIL [interpreter] fail (") && stdout.contains("(exit 7)"));
@@ -377,15 +397,11 @@ fn nonzero_tests_are_reported_and_the_selected_suite_continues() {
 }
 
 #[test]
-fn obsolete_forms_duplicate_names_and_implicit_captures_are_rejected() {
+fn obsolete_forms_conflicting_definitions_and_implicit_captures_are_rejected() {
     let fixture = Fixture::new();
     for (source, expected) in [
         (r#"@[package(library("lib", "lib.zy"))] ()"#, "compiled library requires"),
         (r#"@[package(library("lib"))] ()"#, "compiled library requires"),
-        (
-            r#"(#lib = @[package(library, name(lib))] 1, #lib = @[package(test, name(lib))] ())"#,
-            "duplicate package name",
-        ),
     ] {
         fixture.write("workspace.zy", source);
         let output = fixture.command(&["show"]);
@@ -394,6 +410,13 @@ fn obsolete_forms_duplicate_names_and_implicit_captures_are_rejected() {
         assert!(stderr.contains(expected), "{source}: expected {expected:?}, received {stderr}");
         assert!(output.stdout.is_empty());
     }
+    fixture.write(
+        "workspace.zy",
+        "(@[package(library, name(lib))] 1, @[package(test, name(lib))] ())",
+    );
+    let conflict = fixture.command(&["check", "-p", "lib"]);
+    assert!(!conflict.status.success() && conflict.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&conflict.stderr).contains("conflicting resolved definitions"));
     fixture.write(
         "workspace.zy",
         "let outside = 42 in (#lib = @[package(library, name(lib))] outside)",
@@ -414,13 +437,13 @@ fn checked_in_file_packages_check_run_and_test_without_selectors() {
     let binary = directory.join("main.zy").to_str().unwrap().to_owned();
     let show = Fixture::success_in(&directory, &["show"]);
     let show = String::from_utf8(show.stdout).unwrap();
-    assert!(show.contains("library ") && show.contains("binary "));
+    assert!(show.contains("test ") && show.contains("binary "));
     assert!(!show.contains('#'), "whole-file addresses never acquire a selector");
     Fixture::success_in(&directory, &["check", &library]);
     Fixture::success_in(&directory, &["check", &binary]);
     let run = Fixture::success_in(&directory, &["run", &binary]);
     assert_eq!(String::from_utf8(run.stdout).unwrap(), "hello from a package\n");
-    let tests = Fixture::success_in(&directory, &["test", &library]);
+    let tests = Fixture::success_in(&directory, &["test", "tests/smoke.zy"]);
     assert!(String::from_utf8_lossy(&tests.stdout).contains("tests/smoke.zy"));
 }
 
@@ -430,7 +453,7 @@ fn either_conventional_root_is_detected_and_both_are_combined_without_precedence
         let fixture = Fixture::new();
         fixture.write(root, "@[package(library, name(example))] 42");
         let show = fixture.success(&["show"]);
-        assert!(String::from_utf8_lossy(&show.stdout).contains("library example ("));
+        assert!(String::from_utf8_lossy(&show.stdout).contains("library /example ("));
         fixture.success(&["check", "example"]);
     }
 
@@ -439,18 +462,21 @@ fn either_conventional_root_is_detected_and_both_are_combined_without_precedence
     fixture.write("workspace.zy", r#"@[discover(include("package.zy", "tests/*.zy"))] ()"#);
     fixture.write(
         "tests/smoke.zy",
-        &format!(r#"@[package(test(of(example)))] ({})"#, Fixture::executable(0)),
+        &format!(r#"@[package(test(of(/example)))] ({})"#, Fixture::executable(0)),
     );
     let show = fixture.success(&["show"]);
-    assert_eq!(String::from_utf8_lossy(&show.stdout).matches("library example (").count(), 1);
-    let tests = fixture.success(&["test", "example"]);
+    assert_eq!(String::from_utf8_lossy(&show.stdout).matches("library /example (").count(), 1);
+    let tests = fixture.success(&["test", "tests/smoke.zy"]);
     assert!(String::from_utf8_lossy(&tests.stdout).contains("1 passed; 0 failed."));
 
     fixture.write("workspace.zy", "@[package(library, name(example))] 7");
     let duplicate = fixture.command(&["check", "example"]);
     assert!(!duplicate.status.success() && duplicate.stdout.is_empty());
     let error = String::from_utf8_lossy(&duplicate.stderr);
-    assert!(error.contains("duplicate package name") && error.contains("example"), "{error}");
+    assert!(
+        error.contains("conflicting resolved definitions") && error.contains("example"),
+        "{error}"
+    );
     assert!(error.contains("package.zy") && error.contains("workspace.zy"), "{error}");
 }
 
@@ -467,7 +493,7 @@ fn workspace_replaces_the_old_automatic_filename_without_reserving_other_file_na
     fixture.write("workspace.zy", "@[package(library, name(current))] 42");
     let show = fixture.success(&["show"]);
     let show = String::from_utf8_lossy(&show.stdout);
-    assert!(show.contains("library current (") && !show.contains("legacy"));
+    assert!(show.contains("library /current (") && !show.contains("legacy"));
     fixture.success(&["check", "current"]);
 
     fixture.write("packages.zy", "(");
@@ -527,8 +553,9 @@ fn only_selected_catalog_roots_expand_discovery() {
     standalone.write("library.zy", r#"@[discover(include("broken.zy"))] 42"#);
     standalone.write("broken.zy", "(");
     standalone.success(&["check", "library.zy"]);
-    let tests = standalone.success(&["test", "library.zy"]);
-    assert!(String::from_utf8_lossy(&tests.stdout).contains("0 passed; 0 failed."));
+    let tests = standalone.command(&["test", "library.zy"]);
+    assert!(!tests.status.success() && tests.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&tests.stderr).contains("has role library; expected test"));
 }
 
 #[test]
@@ -593,9 +620,9 @@ fn obsolete_catalog_flags_and_package_command_are_removed() {
 #[test]
 fn package_flags_select_existing_names_and_do_not_change_discovery() {
     let fixture = Fixture::new().with_discovery(&["vendor/library.zy", "extra.zy"]);
-    fixture.write("package.zy", "@[package(library, name(local))] @(import(shared))");
+    fixture.write("package.zy", "@[package(library, name(local))] @(import(/shared))");
     fixture.write("vendor/library.zy", "@[package(library, name(shared))] 42");
-    fixture.write("extra.zy", "@[package(library, name(extra))] @(import(shared))");
+    fixture.write("extra.zy", "@[package(library, name(extra))] @(import(/shared))");
     fixture.write("unselected.zy", "(");
     for flag in ["-p", "--pkg", "--package"] {
         fixture.success(&["check", flag, "local"]);
@@ -604,9 +631,9 @@ fn package_flags_select_existing_names_and_do_not_change_discovery() {
     let show = fixture.success(&["show", "-p", "local", "--pkg", "extra", "--package", "local"]);
     let shown = String::from_utf8_lossy(&show.stdout);
     for name in ["local", "extra"] {
-        assert_eq!(shown.matches(&format!("library {name} (")).count(), 1, "{shown}");
+        assert_eq!(shown.matches(&format!("library /{name} (")).count(), 1, "{shown}");
     }
-    assert!(!shown.contains("library shared ("), "dependencies are available but not selected");
+    assert!(!shown.contains("library /shared ("), "dependencies are available but not selected");
     let help = fixture.success(&["check", "--help"]);
     let help = String::from_utf8_lossy(&help.stdout);
     assert!(help.contains("-p") && help.contains("--pkg") && help.contains("--package"));
@@ -630,9 +657,9 @@ fn package_selectors_reject_paths_unknown_names_and_mixed_source_selection() {
             let output = fixture.command(&[command, "-p", path]);
             assert_eq!(output.status.code(), Some(2));
             assert!(output.stdout.is_empty());
-            assert!(String::from_utf8_lossy(&output.stderr).contains("invalid package name"));
+            assert!(String::from_utf8_lossy(&output.stderr).contains("invalid package path"));
         }
-        let output = fixture.command(&[command, "-p", "example", "-p", "missing"]);
+        let output = fixture.command(&[command, "-p", "missing"]);
         assert!(!output.status.success() && output.stdout.is_empty());
         let error = String::from_utf8_lossy(&output.stderr);
         assert!(error.contains("unknown package `missing`"), "{error}");
@@ -649,61 +676,61 @@ fn package_selectors_reject_paths_unknown_names_and_mixed_source_selection() {
 }
 
 #[test]
-fn name_and_file_relationships_select_the_same_test_only_once() {
+fn test_packages_accept_explicit_name_and_file_selection() {
     let fixture = Fixture::new().with_discovery(&["lib.zy", "tests/*.zy"]);
     fixture.write(
         "lib.zy",
-        r#"@[package(library, name(lib), test(smoke), test("tests/smoke.zy"))] 42"#,
+        r#"@[package(library, name(lib), test(/smoke), test("tests/smoke.zy"))] 42"#,
     );
     fixture.write(
         "tests/smoke.zy",
         &format!(
-            r#"@[package(test(of(lib, "../lib.zy")), name(smoke))] ({})"#,
+            r#"@[package(test(of(/lib, "../lib.zy")), name(smoke))] ({})"#,
             Fixture::executable(0)
         ),
     );
-    for source in ["lib", "lib.zy", "./lib.zy", "smoke", "tests/smoke.zy"] {
+    for source in ["smoke", "tests/smoke.zy", "./tests/smoke.zy"] {
         let output = fixture.success(&["test", source]);
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert_eq!(stdout.matches("PASS [interpreter] ").count(), 1, "{stdout}");
-        assert!(stdout.contains("tests/smoke.zy"), "{stdout}");
+        assert!(stdout.contains("smoke"), "{stdout}");
         assert!(stdout.contains("1 passed; 0 failed."), "{stdout}");
     }
 }
 
 #[test]
-fn registration_wrappers_and_implementation_files_have_distinct_test_subjects() {
+fn registration_wrapper_tests_keep_distinct_subjects_and_explicit_selection() {
     let fixture = Fixture::new().with_discovery(&["library.zy", "wrapper.zy", "tests/*.zy"]);
     fixture.write("library.zy", "@[package(library, name(core))] 42");
-    fixture.write("wrapper.zy", "@[package(library, name(wrapped))] @(import(core))");
+    fixture.write("wrapper.zy", "@[package(library, name(wrapped))] @(import(/core))");
     for (subject, name) in [("core", "core-test"), ("wrapped", "wrapper-test")] {
         fixture.write(
             &format!("tests/{name}.zy"),
-            &format!("@[package(test(of({subject})), name({name}))] ({})", Fixture::executable(0)),
+            &format!("@[package(test(of(/{subject})), name({name}))] ({})", Fixture::executable(0)),
         );
     }
     for (source, selected, excluded) in [
-        ("core", "core-test", "wrapper-test"),
-        ("library.zy", "core-test", "wrapper-test"),
-        ("wrapped", "wrapper-test", "core-test"),
-        ("wrapper.zy", "wrapper-test", "core-test"),
+        ("core-test", "core-test", "wrapper-test"),
+        ("tests/core-test.zy", "core-test", "wrapper-test"),
+        ("wrapper-test", "wrapper-test", "core-test"),
+        ("tests/wrapper-test.zy", "wrapper-test", "core-test"),
     ] {
         let output = fixture.success(&["test", source]);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains(&format!("tests/{selected}.zy")), "{stdout}");
+        assert!(stdout.contains(selected), "{stdout}");
         assert!(!stdout.contains(excluded), "{stdout}");
         assert!(stdout.contains("1 passed; 0 failed."), "{stdout}");
     }
 }
 
 #[test]
-fn suites_do_not_recursively_activate_dependency_or_selected_test_relationships() {
+fn explicit_tests_do_not_activate_dependency_or_test_relationships() {
     let fixture = Fixture::new().with_discovery(&["lib.zy", "dependency.zy", "tests/*.zy"]);
-    fixture.write("lib.zy", "@[package(library, name(app))] @(import(dependency))");
+    fixture.write("lib.zy", "@[package(library, name(app))] @(import(/dependency))");
     fixture
-        .write("dependency.zy", "@[package(library, name(dependency), test(dependency-test))] 42");
+        .write("dependency.zy", "@[package(library, name(dependency), test(/dependency-test))] 42");
     for (name, role, relations, code) in [
-        ("smoke", "test(of(app))", ", test(extra)", 0),
+        ("smoke", "test(of(/app))", ", test(/extra)", 0),
         ("dependency-test", "test", "", 7),
         ("extra", "test", "", 9),
     ] {
@@ -712,21 +739,21 @@ fn suites_do_not_recursively_activate_dependency_or_selected_test_relationships(
             &format!("@[package({role}, name({name}){relations})] ({})", Fixture::executable(code)),
         );
     }
-    let output = fixture.success(&["test", "app"]);
+    let output = fixture.success(&["test", "smoke"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("tests/smoke.zy"), "{stdout}");
+    assert!(stdout.contains("smoke"), "{stdout}");
     assert!(stdout.contains("1 passed; 0 failed."), "{stdout}");
     assert!(!stdout.contains("dependency-test") && !stdout.contains("extra"), "{stdout}");
 
     for (source, selected, summary) in [
-        ("dependency", "dependency-test", "0 passed; 1 failed."),
-        ("smoke", "extra", "1 passed; 1 failed."),
+        ("dependency-test", "dependency-test", "0 passed; 1 failed."),
+        ("extra", "extra", "0 passed; 1 failed."),
     ] {
         let output = fixture.command(&["test", source]);
         assert_eq!(output.status.code(), Some(1));
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("FAIL [interpreter] "), "{stdout}");
-        assert!(stdout.contains(&format!("tests/{selected}.zy")), "{stdout}");
+        assert!(stdout.contains(selected), "{stdout}");
         assert!(stdout.contains(summary), "{stdout}");
     }
 }
@@ -734,30 +761,30 @@ fn suites_do_not_recursively_activate_dependency_or_selected_test_relationships(
 #[test]
 fn code_cycles_reject_before_execution_or_replacing_existing_build_artifacts() {
     let fixture = Fixture::new().with_discovery(&["lib.zy", "smoke.zy", "main.zy"]);
-    fixture.write("lib.zy", "@[package(library, name(lib), test(smoke))] 42");
+    fixture.write("lib.zy", "@[package(library, name(lib), test(/smoke))] 42");
     fixture.write(
         "smoke.zy",
         &format!(
-            "@[package(test, name(smoke))] let lib = @(import(lib)) in ({})",
+            "@[package(test, name(smoke))] let lib = @(import(/lib)) in ({})",
             Fixture::executable(0)
         ),
     );
     fixture.write(
         "main.zy",
         &format!(
-            "@[package(binary, name(main))] let lib = @(import(lib)) in ({})",
+            "@[package(binary, name(main))] let lib = @(import(/lib)) in ({})",
             Fixture::executable(0)
         ),
     );
-    fixture.success(&["test", "lib"]);
+    fixture.success(&["test", "smoke"]);
     let build = ["build", "main", "-t", "wasm-sps", "--build-dir", "build"];
     fixture.success(&build);
     let artifact = fixture.directory.path().join("build/main.sps.wasm");
     let original = std::fs::read(&artifact).unwrap();
     wasmparser::Validator::new().validate_all(&original).unwrap();
 
-    fixture.write("lib.zy", "@[package(library, name(lib), test(smoke))] @(import(smoke))");
-    for arguments in [&["check", "lib"][..], &["test", "lib"], &["run", "main"], &build] {
+    fixture.write("lib.zy", "@[package(library, name(lib), test(/smoke))] @(import(/smoke))");
+    for arguments in [&["check", "lib"][..], &["test", "smoke"], &["run", "main"], &build] {
         let output = fixture.command(arguments);
         assert!(!output.status.success() && output.stdout.is_empty(), "{arguments:?}");
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -770,7 +797,7 @@ fn code_cycles_reject_before_execution_or_replacing_existing_build_artifacts() {
 #[test]
 fn quoted_imports_remain_relative_to_their_defining_file_through_named_registrations() {
     let fixture = Fixture::new().with_discovery(&["vendor/catalog/entries.zy"]);
-    fixture.write("package.zy", "@[package(library, name(app))] @(import(vendor/core))");
+    fixture.write("package.zy", "@[package(library, name(app))] @(import(/vendor/core))");
     fixture.write(
         "vendor/catalog/entries.zy",
         r#"@[package(library, name(vendor/core))] @(import("../src/impl.zy"))"#,
@@ -794,33 +821,35 @@ fn quoted_imports_remain_relative_to_their_defining_file_through_named_registrat
 }
 
 #[test]
-fn declaration_discovery_order_preserves_cross_file_resolution_and_suite_order() {
+fn declaration_discovery_order_preserves_resolution_and_explicit_test_order() {
     let fixture = Fixture::new();
-    fixture.write("first.zy", "@[package(library, name(consumer))] @(import(provider))");
+    fixture.write("first.zy", "@[package(library, name(consumer))] @(import(/provider))");
     fixture.write("second.zy", "@[package(library, name(provider))] 42");
     for name in ["z-last", "a-first"] {
         fixture.write(
             &format!("tests/{name}.zy"),
-            &format!("@[package(test(of(provider)), name({name}))] ({})", Fixture::executable(0)),
+            &format!("@[package(test(of(/provider)), name({name}))] ({})", Fixture::executable(0)),
         );
     }
     let patterns =
         [r#""first.zy", "second.zy", "tests/*.zy""#, r#""tests/*.zy", "second.zy", "first.zy""#];
-    for operation in [&["show"][..], &["check", "consumer"], &["test", "provider"]] {
+    for operation in
+        [&["show"][..], &["check", "consumer"], &["test", "-p", "a-first", "-p", "z-last"]]
+    {
         let outputs = patterns.map(|patterns| {
             fixture.write("workspace.zy", &format!("@[discover(include({patterns}))] ()"));
             fixture.success(operation)
         });
         assert_eq!(outputs[0].stdout, outputs[1].stdout, "{operation:?}");
     }
-    let output = fixture.success(&["test", "-p", "provider"]);
+    let output = fixture.success(&["test", "-p", "z-last", "-p", "a-first"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let names = stdout
         .lines()
         .filter_map(|line| line.strip_prefix("PASS [interpreter] "))
-        .map(|path| Path::new(path).file_stem().unwrap().to_str().unwrap())
+        .map(|result| result.split(" (").next().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(names, ["a-first", "z-last"]);
+    assert_eq!(names, ["z-last", "a-first"]);
 }
 
 #[cfg(unix)]
@@ -839,7 +868,7 @@ fn discovery_ignores_symlinked_files_and_directories_until_explicitly_selected()
     fixture.success(&["check", "valid"]);
     let shown = fixture.success(&["show"]);
     let stdout = String::from_utf8_lossy(&shown.stdout);
-    assert!(stdout.contains("library valid ("), "{stdout}");
+    assert!(stdout.contains("library /valid ("), "{stdout}");
     assert!(!stdout.contains("linked") && !stdout.contains("broken"), "{stdout}");
 
     let output = fixture.command(&["check", "tests/linked.zy"]);

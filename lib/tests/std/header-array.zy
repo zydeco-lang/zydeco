@@ -2,7 +2,7 @@
 begin
   param (/VType; /CType; /Thk; /Ret; /Int; /UInt32; /OS; /numeric; /process; /Unit; builtin) :
   @(import(
-    std/builtin
+    /std/builtin
   )) that
   let (/storage; /codecs;
     /Uninit;

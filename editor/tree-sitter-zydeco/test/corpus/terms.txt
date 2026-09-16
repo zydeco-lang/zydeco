@@ -696,3 +696,91 @@ pack (B : VType) is Bool (#Counter = C : VType) is (List Bool) where 0, end
           argument: (variable
             name: (upper_identifier)))))
     component: (integer_literal)))
+
+==================
+Absolute and relative metadata paths
+==================
+
+(@(import(/std/data)), @(import(../std/data)), @(import(./std/../data)), @(import(/)), @(import(.)), @(import(..)))
+
+---
+
+(source_file
+  (parenthesized_term
+    (metadata_expression
+      (metadata_sugar
+        (meta_application
+          (meta_identifier
+            (lower_identifier))
+          (meta_arguments
+            (meta_identifier
+              (lower_identifier)
+              (keyword_identifier))))))
+    (metadata_expression
+      (metadata_sugar
+        (meta_application
+          (meta_identifier
+            (lower_identifier))
+          (meta_arguments
+            (meta_identifier
+              (lower_identifier)
+              (keyword_identifier))))))
+    (metadata_expression
+      (metadata_sugar
+        (meta_application
+          (meta_identifier
+            (lower_identifier))
+          (meta_arguments
+            (meta_identifier
+              (lower_identifier)
+              (keyword_identifier))))))
+    (metadata_expression
+      (metadata_sugar
+        (meta_application
+          (meta_identifier
+            (lower_identifier))
+          (meta_arguments
+            (meta_identifier)))))
+    (metadata_expression
+      (metadata_sugar
+        (meta_application
+          (meta_identifier
+            (lower_identifier))
+          (meta_arguments
+            (meta_identifier)))))
+    (metadata_expression
+      (metadata_sugar
+        (meta_application
+          (meta_identifier
+            (lower_identifier))
+          (meta_arguments
+            (meta_identifier)))))))
+
+==================
+Malformed metadata paths
+==================
+
+(@(import(//std)), @(import(std/)))
+
+---
+
+(source_file
+  body: (parenthesized_term
+    (metadata_expression
+      metadata: (metadata_sugar
+        value: (meta_application
+          callee: (meta_identifier
+            (lower_identifier))
+          arguments: (meta_arguments
+            (ERROR)
+            (meta_identifier
+              (lower_identifier))))))
+    (metadata_expression
+      metadata: (metadata_sugar
+        value: (meta_application
+          callee: (meta_identifier
+            (lower_identifier))
+          arguments: (meta_arguments
+            (meta_identifier
+              (lower_identifier))
+            (ERROR)))))))

@@ -63,9 +63,15 @@ fn compiled_role_requires_an_explicit_complete_contract() {
     ] {
         fixture.checked(&Fixture::source(role, "()"), Err(error));
     }
+    fixture
+        .checked("@[package(library(c, export(root, symbol(\"f\"))))] ()", Err("requires a thunk"));
     fixture.checked(
-        "@[package(library(c, export(root, symbol(\"f\"))))] ()",
-        Err("explicit package name"),
+        &Fixture::source(
+            "library(c, export(root, symbol(\"f\")))",
+            "({ fn (x : I) => ret x } : Thk (I -> Ret I))",
+        )
+        .replace(", name(example/math)", ""),
+        Ok(()),
     );
     fixture.checked(&Fixture::source("library", "param val (x : I) in x"), Ok(()));
 }

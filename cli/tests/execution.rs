@@ -48,8 +48,8 @@ impl Fixture {
         self.write(
             "tests.zy",
             &format!(
-                "(#a = {{ @[package(test(of(suite)), name(a))] ({first}) }},
-                  #b = {{ @[package(test(of(suite)), name(b))] ({second}) }})"
+                "(#a = {{ @[package(test(of(/suite)), name(a))] ({first}) }},
+                  #b = {{ @[package(test(of(/suite)), name(b))] ({second}) }})"
             ),
         );
     }
@@ -135,7 +135,9 @@ fn test_backends_replace_the_default_and_deduplicate_in_request_order() {
     let fixture = Fixture::new();
     fixture.suite(&Fixture::program("! process/exit 7"), &Fixture::program("! process/exit 0"));
     let output = fixture
-        .command(&["test", "suite", "-t", "wasm-sps", "-t", "wasm-am", "-t", "wasm-sps"])
+        .command(&[
+            "test", "-p", "a", "-p", "b", "-t", "wasm-sps", "-t", "wasm-am", "-t", "wasm-sps",
+        ])
         .output()
         .unwrap();
     let stdout = Fixture::stdout(&output, 1);
@@ -161,7 +163,19 @@ fn runtime_failures_report_each_backend_and_do_not_stop_the_suite() {
         &Fixture::program("! process/exit 0"),
     );
     let output = fixture
-        .command(&["test", "suite", "-t", "interpreter", "-t", "wasm-am", "-t", "wasm-sps"])
+        .command(&[
+            "test",
+            "-p",
+            "a",
+            "-p",
+            "b",
+            "-t",
+            "interpreter",
+            "-t",
+            "wasm-am",
+            "-t",
+            "wasm-sps",
+        ])
         .output()
         .unwrap();
     let stdout = Fixture::stdout(&output, 1);
@@ -218,7 +232,7 @@ fn invalid_sources_and_missing_hosts_fail_before_any_test_runs() {
             &second,
         );
         let output = fixture
-            .command(&["test", "suite", "-t", "all"])
+            .command(&["test", "-p", "a", "-p", "b", "-t", "all"])
             .env("NODE", fixture.directory.path().join("missing-node"))
             .output()
             .unwrap();
@@ -237,7 +251,7 @@ fn test_preflight_failures_leave_filesystem_effects_unexecuted() {
     for (second, diagnostic) in [("42", "classified as a value"), (valid.as_str(), "cannot start")]
     {
         fixture.suite(&Fixture::file_effect(), second);
-        for selection in [&["suite"][..], &["-p", "a", "-p", "b"]] {
+        for selection in [&["-p", "a", "-p", "b"][..], &["--pkg", "a", "--package", "b"]] {
             let output = fixture
                 .command(&["test"])
                 .args(selection)
@@ -263,7 +277,19 @@ fn native_preparation_failure_does_not_execute_already_prepared_interpreter_prog
     let fixture = Fixture::new();
     fixture.suite(&Fixture::file_effect(), &Fixture::program("! process/exit 0"));
     let output = fixture
-        .command(&["test", "suite", "-t", "interpreter", "-t", "exe", "-r", "missing-runtime"])
+        .command(&[
+            "test",
+            "-p",
+            "a",
+            "-p",
+            "b",
+            "-t",
+            "interpreter",
+            "-t",
+            "exe",
+            "-r",
+            "missing-runtime",
+        ])
         .output()
         .unwrap();
     assert!(Fixture::stdout(&output, 1).is_empty());

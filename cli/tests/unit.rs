@@ -126,7 +126,7 @@ fn unit_boundary_checks_complete_closed_interfaces_and_readiness() {
         Fixture::reject(&fixture.command(&["check", "./unit.zy"]), error);
     }
     fixture.write("unit.zy", "@[package(library(zydeco))] ()");
-    Fixture::reject(&fixture.command(&["check", "./unit.zy"]), "explicit package name");
+    Fixture::success(&fixture.command(&["check", "./unit.zy"]));
     fixture.write(
         "unit.zy",
         "@[package(library(zydeco, export(root, symbol(\"unit\"))), name(example/unit))] ()",
