@@ -121,7 +121,7 @@ impl Eval for Terminator {
                 let Value::Tag(tag) = value else {
                     Err(Error::TypeError(format!("expected tag, got {:?}", value)))?
                 };
-                let arm = arms.iter().find(|(t, _)| t.idx == tag.idx).unwrap();
+                let arm = arms.iter().find(|(t, _)| t.idx == tag.idx).ok_or(Error::PatternMatch)?;
                 arm.1.eval(interp)
             }
             | Terminator::Extern(external) => {

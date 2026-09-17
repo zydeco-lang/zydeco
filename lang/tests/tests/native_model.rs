@@ -90,9 +90,7 @@ fn compact_environments_execute_the_same_generated_actions() {
     std::fs::create_dir(&runtime).unwrap();
     for entry in std::fs::read_dir(workspace.join("runtime")).unwrap() {
         let path = entry.unwrap().path();
-        if path.extension().is_some_and(|extension| extension == "rs")
-            || path.file_name().unwrap() == "Cargo.toml"
-        {
+        if path.is_file() {
             std::fs::copy(&path, runtime.join(path.file_name().unwrap())).unwrap();
         }
     }

@@ -107,7 +107,13 @@ impl Lowering<'_, '_> {
                     self.emit(Pop(var), context, ContextUpdate::Bind(var), next)
                 }
             }
-            | VPat::Ctor(_) => unreachable!("Ctor patterns should not directly appear in ZASM"),
+            | VPat::Ctor(Ctor(ctor, binder)) => Step::Call {
+                input: Work::Pattern(binder, context.clone(), next),
+                frame: Frame::Constructor {
+                    tag: Tag { idx: ctor.idx, name: Some(ctor.name.plain().to_owned()) },
+                    context,
+                },
+            },
             | VPat::Alias(Alias(patterns)) => {
                 let variable = VarName::from("__alias__").build(self.lo, None);
                 let next = self.sequence(

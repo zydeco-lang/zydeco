@@ -71,6 +71,25 @@ impl Fixture {
         SpsLowProgram::try_new(fixture.arena, root).unwrap()
     }
 
+    fn constructor_binding(matching: bool) -> SpsLowProgram {
+        let mut fixture = Self::default();
+        let value = fixture.trap(sk::IntegerArithmetic::Div);
+        let binder = sk::Hole.build(&mut fixture.arena, None);
+        let tail = fixture.terminal();
+        let tail = sk::LetValue { binder, bindee: value, tail }.build(&mut fixture.arena, None);
+        let tag = sk::CtorIdx { idx: 0, name: "+Item".into() };
+        let payload = fixture.integer(0);
+        let bindee = sk::Ctor(tag.clone(), payload).build(&mut fixture.arena, None);
+        let bindee = sk::Ctor(tag.clone(), bindee).build(&mut fixture.arena, None);
+        let binder = sk::Hole.build(&mut fixture.arena, None);
+        let expected =
+            if matching { tag.clone() } else { sk::CtorIdx { idx: 1, name: "+Other".into() } };
+        let binder = sk::Ctor(expected, binder).build(&mut fixture.arena, None);
+        let binder = sk::Ctor(tag, binder).build(&mut fixture.arena, None);
+        let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
+        SpsLowProgram::try_new(fixture.arena, root).unwrap()
+    }
+
     fn block(&mut self, name: &str, body: sk::CompuId) -> sk::ValueId {
         let label = self.definition(name);
         let environment = sk::Hole.build(&mut self.arena, None);
@@ -550,6 +569,39 @@ fn comparisons_preserve_driver_output_operand_order_and_successor_selection() {
             Fixture::frame_snapshot(explicit.frames()),
             Fixture::frame_snapshot(recursive.frames())
         );
+    }
+}
+
+#[test]
+fn constructor_bindings_check_nested_tags_before_executing_their_body() {
+    use zydeco_utils::pass::CompilerPass as _;
+
+    for matching in [true, false] {
+        let program = Fixture::constructor_binding(matching);
+        for native in [false, true] {
+            let explicit =
+                Fixture::lower::<Explicit>(&program, native, RepresentationStrategy::Local);
+            let recursive =
+                Fixture::lower::<Recursive>(&program, native, RepresentationStrategy::Local);
+            assert_eq!(
+                Fixture::snapshot(&explicit, program.arena()),
+                Fixture::snapshot(&recursive, program.arena())
+            );
+            if !native {
+                let error = crate::interp::Interpret
+                    .run(explicit.finish())
+                    .err()
+                    .expect("the constructor guard or its body must fail");
+                match (matching, error) {
+                    | (
+                        true,
+                        crate::interp::Error::Primitive(sk::PrimitiveError::DivisionByZero),
+                    )
+                    | (false, crate::interp::Error::PatternMatch) => {}
+                    | (_, error) => panic!("matching={matching}: {error}"),
+                }
+            }
+        }
     }
 }
 

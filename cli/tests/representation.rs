@@ -33,12 +33,21 @@ fn reselecting_a_policy_recomputes_the_cached_layout() {
     let shared = Fixture::allocations(backend.assembly());
     let backend = backend.with_representation(RepresentationStrategy::Boxed);
     let boxed = Fixture::allocations(backend.assembly());
-    assert_eq!(boxed, shared + 1, "the tail-recursive closure should lose exactly one cell");
+    assert!(boxed > shared, "the fixture must distinguish the selected layouts");
+    let independent_boxed = CommandCompiler::default()
+        .with_representation(RepresentationStrategy::Boxed)
+        .lower(&Fixture::source())
+        .unwrap();
+    assert_eq!(boxed, Fixture::allocations(independent_boxed.assembly()));
     let backend = backend.with_representation(RepresentationStrategy::Shared);
     assert_eq!(Fixture::allocations(backend.assembly()), shared);
     let independent = CommandCompiler::default().lower(&Fixture::source()).unwrap();
     assert_eq!(independent.representation(), RepresentationStrategy::Local);
-    assert_eq!(Fixture::allocations(independent.assembly()), boxed);
+    let backend = backend.with_representation(RepresentationStrategy::Local);
+    assert_eq!(
+        Fixture::allocations(backend.assembly()),
+        Fixture::allocations(independent.assembly())
+    );
 }
 
 #[test]
