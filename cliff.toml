@@ -24,12 +24,13 @@ split_commits = false
 commit_parsers = [
   { message = "^feat", group = "Features" },
   { message = "^incr", group = "Improvements" },
-  { message = "^fix", group = "Bug fixes" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^vibe", group = "Experiments" },
   { message = "^sisy", group = "Internal changes" },
+  { message = "^vibe", group = "Experiments" },
+  { message = "^docs", group = "Documentation" },
   { message = "^test", group = "Tests" },
   { message = "^repo", group = "Repository maintenance" },
+  { message = "^fix", group = "Bug fixes" },
+  { message = "^doc", group = "Documentation" },
   { message = "^chore", group = "Repository maintenance" },
   { message = "^revert", group = "Reverts" },
 ]
