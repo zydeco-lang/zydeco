@@ -107,7 +107,7 @@ impl UnitBuilder<'_> {
         for file in self.dependencies.units.manifest_files(&self.options.build_dir)? {
             hash.update(serde_json::to_vec(&file)?);
         }
-        let identity = format!("{:x}", hash.finalize());
+        let identity = LibraryDigest::finish(hash);
         let symbol = ForeignSymbolName::parse(format!("zydeco_unit_{identity}_init")).unwrap();
         let code = self
             .compiler
@@ -147,7 +147,7 @@ impl UnitBuilder<'_> {
         bundle.update(identity);
         bundle.update(LibraryDigest::file(&object)?);
         bundle.update(LibraryDigest::file(&directory.join(&bindings_name))?);
-        let bundle_name = format!("{stem}.unit.{:x}", bundle.finalize());
+        let bundle_name = format!("{stem}.unit.{}", LibraryDigest::finish(bundle));
         let manifest = UnitManifest {
             schema: 1,
             abi: ForeignAbi::Zydeco,

@@ -194,8 +194,12 @@ impl LibraryManifest {
 pub struct LibraryDigest;
 
 impl LibraryDigest {
+    pub(crate) fn finish(hash: Sha3_256) -> String {
+        hash.finalize().iter().map(|byte| format!("{byte:02x}")).collect()
+    }
+
     pub fn bytes(bytes: &[u8]) -> String {
-        format!("{:x}", Sha3_256::digest(bytes))
+        Self::finish(Sha3_256::new_with_prefix(bytes))
     }
 
     pub fn file(path: &Path) -> Result<String, std::io::Error> {
@@ -209,7 +213,7 @@ impl LibraryDigest {
             }
             hash.update(&buffer[..count]);
         }
-        Ok(format!("{:x}", hash.finalize()))
+        Ok(Self::finish(hash))
     }
 
     pub fn runtime(directory: &Path) -> Result<String, std::io::Error> {
@@ -230,7 +234,7 @@ impl LibraryDigest {
                 hash.update([0]);
             }
         }
-        Ok(format!("{:x}", hash.finalize()))
+        Ok(Self::finish(hash))
     }
 }
 
@@ -288,7 +292,7 @@ impl LibraryBuilder<'_> {
             hash.update(&dependency.manifest.fingerprint);
             hash.update(LibraryDigest::file(&dependency.manifest_path)?);
         }
-        let identity = format!("{:x}", hash.finalize());
+        let identity = LibraryDigest::finish(hash);
         let guard = ForeignSymbolName::parse(format!("zydeco_unit_{identity}_guard")).unwrap();
         let code = program
             .library
@@ -435,7 +439,7 @@ impl LibraryBuilder<'_> {
         }
         fingerprint.update(LibraryDigest::file(&artifact_path)?);
         fingerprint.update(LibraryDigest::file(&directory.join(&support_name))?);
-        let fingerprint = format!("{:x}", fingerprint.finalize());
+        let fingerprint = LibraryDigest::finish(fingerprint);
         let bundle_name = format!("{stem}.{}.{}", kind.name(), fingerprint);
         let dependencies =
             self.dependencies.manifest_files(&self.options.build_dir.join(&bundle_name))?;
@@ -1182,6 +1186,20 @@ mod tests {
             let mut value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
             edit(&mut value);
             std::fs::write(path, serde_json::to_vec(&value).unwrap()).unwrap();
+        }
+    }
+
+    #[test]
+    fn digests_preserve_the_manifest_hex_encoding() {
+        let fixture = Fixture::new();
+        let path = fixture.directory.path().join("content");
+        for (content, expected) in [
+            ("", "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"),
+            ("abc", "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532"),
+        ] {
+            assert_eq!(LibraryDigest::bytes(content.as_bytes()), expected);
+            std::fs::write(&path, content).unwrap();
+            assert_eq!(LibraryDigest::file(&path).unwrap(), expected);
         }
     }
 
