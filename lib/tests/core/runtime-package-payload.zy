@@ -3,6 +3,7 @@ begin
   let Entry = exists (X : VType) . X * Thk (X -> Ret Int) that
   let Holder =
     data
+    | +Empty : Unit
     | +Hold : Entry
     end
   that
@@ -21,6 +22,7 @@ begin
   do hidden <- ! choose 0;
   do stored <- ret (+Hold(hidden) : Holder);
   match stored
+  | +Empty() => ! process/exit 1
   | +Hold(entry) =>
     do status <- ! consume entry;
     ! process/exit status

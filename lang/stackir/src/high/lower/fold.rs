@@ -788,9 +788,9 @@ impl Folder for LoweringFolder<'_, '_> {
                 let tail = self.computation();
                 self.computations.push(ValuePlan { steps, value: () }.bind(self.lo, tail));
             }
-            | Work::Bind(ValueBinding { binder, bindee, site }) => {
+            | Work::Bind(binding) => {
                 let tail = self.computation();
-                self.computations.push(Let { binder, bindee, tail }.build(self.lo, site));
+                self.computations.push(binding.bind(self.lo, tail));
             }
             | Work::Abstraction { stack, site } => {
                 let binder = Cons(self.pattern(), Bullet);
@@ -855,7 +855,7 @@ impl Folder for LoweringFolder<'_, '_> {
             | Work::Let { bindee, site } => {
                 let binder = self.pattern();
                 let tail = self.computation();
-                self.computations.push(Let { binder, bindee, tail }.build(self.lo, site));
+                self.computations.push(ValueBinding { binder, bindee, site }.bind(self.lo, tail));
             }
             | Work::MatchScrutinee { arms, kind, stack, site } => {
                 let scrut = self.value();

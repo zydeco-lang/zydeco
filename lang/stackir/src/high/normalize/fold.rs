@@ -525,6 +525,16 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 match self.norm.matches::<D>(arm.binder, &known) {
                     | Some(true) => {
                         let value = ScopedValue { node: scrut, env: scope.values };
+                        // A known tag does not expose a payload stored in a variable.
+                        // Keep its match and complete tag table instead of creating
+                        // a constructor pattern in an ordinary value binding.
+                        if matches!(
+                            self.norm.source.inner.vpats[&arm.binder],
+                            ValuePattern::Ctor(_)
+                        ) && self.norm.components(arm.binder, value).is_none()
+                        {
+                            break;
+                        }
                         let stack = Some(
                             self.norm
                                 .delay_stack(ScopedStack { node: bindee, scope: scope.clone() }),

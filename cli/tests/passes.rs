@@ -230,6 +230,32 @@ fn selected_sequences_preserve_sharing_effects_and_results_across_backends() {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
+fn runtime_constructor_bindings_work_with_and_without_normalization() {
+    let fixture = Fixture::new(
+        r#"
+let Wrapped = data | +Wrap : Int end in
+let val unwrap (wrapped : Wrapped) : Int =
+  let +Wrap(value) = wrapped in value
+in
+do wrapped <- ret (+Wrap(37) : Wrapped);
+! process/exit (unwrap wrapped)
+"#,
+    );
+    for plan in ["none", "default", "normalize,normalize"] {
+        for target in ["wasm-am", "wasm-sps", "exe"] {
+            let output = fixture.execute_options(plan, target, &["--verify-passes"]);
+            assert_eq!(
+                output.status.code(),
+                Some(37),
+                "{plan}/{target}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
 fn selected_sequences_keep_unused_traps_between_effects() {
     let fixture = Fixture::new(
         r#"

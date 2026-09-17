@@ -1086,6 +1086,60 @@ mod tests {
     }
 
     #[test]
+    fn known_constructor_aliases_keep_the_match_that_extracts_the_payload() {
+        let mut fixture = Fixture::default();
+        let stored = fixture.def("stored");
+        let alias = fixture.def("alias");
+        let scrut = fixture.build(alias);
+        let arms = (0..2)
+            .map(|index| {
+                let payload = fixture.def("payload");
+                let value = fixture.build(payload);
+                let tail = fixture.ret(value);
+                let payload = fixture.build(payload);
+                let binder = fixture.build(Ctor(Fixture::ctor(index), payload));
+                Matcher { binder, tail }
+            })
+            .collect();
+        let tail = fixture.build(SCoprodMatch { scrut, arms });
+        let bindee = fixture.build(Bullet);
+        let tail = fixture.build(Let { binder: Bullet, bindee, tail });
+        let binder: VPatId = fixture.build(alias);
+        let bindee: ValueId = fixture.build(stored);
+        let tail = fixture.build(Let { binder, bindee, tail });
+        let payload = fixture.trap("payload");
+        let bindee = fixture.build(Ctor(Fixture::ctor(1), payload));
+        let binder: VPatId = fixture.build(stored);
+        let root = fixture.build(Let { binder, bindee, tail });
+
+        let program = fixture.normalize(root);
+        let arena = &program.arena().inner;
+        let branches = arena
+            .compus
+            .iter()
+            .filter_map(|(_, node)| match node {
+                | Computation::CoprodMatch(branch) => Some(branch),
+                | _ => None,
+            })
+            .collect::<Vec<_>>();
+        let [branch] = branches.as_slice() else {
+            panic!("a known tag does not expose the payload stored in a variable")
+        };
+        assert_eq!(branch.arms.len(), 2, "retain the complete constructor table");
+        assert!(arena.compus.iter().all(|(_, node)| match node {
+            | Computation::Join(LetJoin::Value(Let { binder, .. })) => {
+                !matches!(arena.vpats[binder], ValuePattern::Ctor(_))
+            }
+            | _ => true,
+        }));
+        assert_eq!(
+            arena.values.iter().filter(|(_, value)| matches!(value, Value::Primitive(_))).count(),
+            1,
+            "extracting a shared payload must not duplicate its evaluation"
+        );
+    }
+
+    #[test]
     fn tag_beta_consumes_the_selected_tag_and_argument_frames() {
         for known in [false, true] {
             let mut fixture = Fixture::default();

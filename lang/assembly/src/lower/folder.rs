@@ -107,7 +107,6 @@ pub(super) enum Frame {
     Block { symbol: SymId, name: String, context: Context, next: ContId },
     ResumeEntry { label: sk::DefId, bindings: Vec<(VarId, VarId)>, context: Context, next: ContId },
     Branch { branches: Branches, tag: Tag },
-    Constructor { tag: Tag, context: Context },
     CompareTrue { operation: ComparisonOp, when_false: sk::CompuId, context: Context },
     CompareFalse { operation: ComparisonOp, when_true: ProgId, context: Context },
 }
@@ -366,11 +365,6 @@ impl Folder for Lowering<'_, '_> {
                 let _symbol = child.build(self.lo, (Some(name.to_owned()), None));
                 branches.lowered.push((tag, child));
                 Step::TailCall(Work::Branches(branches))
-            }
-            | Frame::Constructor { tag, context } => {
-                let _symbol = child.build(self.lo, (Some("arm".to_owned()), None));
-                let next = self.save(Continuation::End(PopBranch(vec![(tag, child)]).into()));
-                self.emit(Unpack(ProductLayout::new(2, 2)), context, ContextUpdate::Keep, next)
             }
         }
     }

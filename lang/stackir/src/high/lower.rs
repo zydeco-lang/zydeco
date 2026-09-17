@@ -87,6 +87,23 @@ struct ValueBinding {
     site: Option<ss::TermId>,
 }
 
+impl ValueBinding {
+    fn bind(self, lo: &mut Lowerer, tail: CompuId) -> CompuId {
+        let Self { binder, bindee, site } = self;
+        if let ValuePattern::Ctor(Ctor(ctor, _)) = &lo.arena.inner.vpats[&binder] {
+            // Static value elimination can leave an irrefutable constructor binder.
+            // Its single-constructor match must be explicit even without normalization.
+            assert_eq!(ctor.idx, 0, "an irrefutable constructor binder must have tag zero");
+            let tail = SCoprodMatch { scrut: bindee, arms: vec![Matcher { binder, tail }] }
+                .build(lo, site);
+            let bindee = Bullet.build(lo, site);
+            Let { binder: Bullet, bindee, tail }.build(lo, site)
+        } else {
+            Let { binder, bindee, tail }.build(lo, site)
+        }
+    }
+}
+
 #[derive(Clone)]
 enum ValueStep {
     Bind(ValueBinding),
@@ -123,9 +140,7 @@ impl<T> ValuePlan<T> {
 impl<T> ValuePlan<T> {
     fn bind(self, lo: &mut Lowerer, tail: CompuId) -> CompuId {
         self.steps.into_iter().rev().fold(tail, |tail, step| match step {
-            | ValueStep::Bind(ValueBinding { binder, bindee, site }) => {
-                Let { binder, bindee, tail }.build(lo, site)
-            }
+            | ValueStep::Bind(binding) => binding.bind(lo, tail),
         })
     }
 }

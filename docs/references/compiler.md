@@ -1358,6 +1358,8 @@ Closures and coproduct branches receive fresh ambient-stack nodes.
 Definitions retain their identity, and generated patterns and terms retain their typed source sites
 and applicable protocols.
 Erased witnesses and type applications produce no runtime nodes.
+Irrefutable constructor bindings left by static value elimination become explicit coproduct matches here,
+including when optional normalization is disabled.
 
 Input sharing always expands into fresh output syntax for each occurrence.
 Memoizing lowered nodes by typed ID would violate lexical ownership and ignore inherited continuation stacks.
@@ -1465,7 +1467,9 @@ closure • => force f •           ==> f
 ```
 
 Forwarding uses a variable `f` or a plain continuation binder.
-Known destructor tags select their comatch arm; known constructors select their match arm and bind the payload.
+Known destructor tags select their comatch arm; constructor introductions select their match arm and bind the payload.
+Knowing only the tag of a stored value does not expose its payload, so normalization retains the explicit match
+and its complete constructor table in that case.
 Matching product introductions and patterns split into bindings in evaluation order.
 A selected value branch can drop its join guard; an unknown branch retains the shared stack.
 
@@ -2053,6 +2057,8 @@ while keeping syntax-depth-dependent execution on the driver.
 
 Sequence cursors preserve the stack machine's ordering: value fields and primitive operands are pushed right to left,
 patterns and alias members are consumed left to right, and a residual stack precedes its argument or tag.
+Constructor patterns are consumed at coproduct match-arm heads before ordinary payload-pattern lowering.
+A constructor encountered in an ordinary binder is an internal compiler error, not another branch to emit.
 Closure words come from the shared machine model, and block parameters follow `EntryParameters::words()`.
 Branch entries and their symbols are reserved in source order, while deferred arm bodies may finish in reverse order.
 Extern discovery therefore remains attached to visiting the computation that requests it.
