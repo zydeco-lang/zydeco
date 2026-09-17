@@ -297,7 +297,9 @@ impl<'e> Emitter<'e> {
     /// original `rsp` below the aligned stack, call, and restore it afterwards.
     fn emit_aligned_call(&mut self, target: JmpArgs) {
         let target = match (self.target_format, target) {
-            | (TargetFormat::Elf, JmpArgs::Label(label)) => {
+            // An export can import itself. NASM resolves that call within this
+            // object; a PLT relocation is only needed for an external symbol.
+            | (TargetFormat::Elf, JmpArgs::Label(label)) if label != self.entry_symbol() => {
                 JmpArgs::Label(format!("{label} wrt ..plt"))
             }
             | (_, target) => target,
@@ -444,6 +446,14 @@ impl<'e> Emitter<'e> {
         match self.target_format {
             | TargetFormat::Elf => symbol.to_string(),
             | TargetFormat::MachO => format!("_{symbol}"),
+        }
+    }
+
+    fn entry_symbol(&self) -> String {
+        match &self.entry {
+            | NativeEntry::Process => ENTRY_SYMBOL.to_string(),
+            | NativeEntry::C(entry) => self.foreign_symbol(&entry.symbol),
+            | NativeEntry::Unit(symbol) => self.foreign_symbol(symbol),
         }
     }
 
@@ -677,14 +687,8 @@ impl Emitter<'_> {
             })
             .collect::<Vec<_>>();
         externs.sort();
-        let own_symbol = match &self.entry {
-            | NativeEntry::C(entry) => Some(self.foreign_symbol(&entry.symbol)),
-            | NativeEntry::Unit(symbol) => Some(self.foreign_symbol(symbol)),
-            | NativeEntry::Process => None,
-        };
-        if let Some(own_symbol) = own_symbol {
-            externs.retain(|symbol| *symbol != own_symbol);
-        }
+        let own_symbol = self.entry_symbol();
+        externs.retain(|symbol| *symbol != own_symbol);
         self.asm.text.extend(externs.into_iter().map(Instr::Extern));
 
         match self.entry.clone() {
@@ -692,12 +696,8 @@ impl Emitter<'_> {
                 self.emit_c_adapter(&entry);
                 self.asm.text.push(Instr::Label("zydeco_export_body".into()));
             }
-            | entry => {
-                let symbol = match entry {
-                    | NativeEntry::Process => ENTRY_SYMBOL.to_string(),
-                    | NativeEntry::Unit(symbol) => self.foreign_symbol(&symbol),
-                    | NativeEntry::C(_) => unreachable!(),
-                };
+            | NativeEntry::Process | NativeEntry::Unit(_) => {
+                let symbol = self.entry_symbol();
                 self.asm.text.extend([Instr::Global(symbol.clone()), Instr::Label(symbol)]);
             }
         }

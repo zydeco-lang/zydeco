@@ -84,6 +84,13 @@ impl LibraryPlatform {
         }
         command
     }
+
+    fn relocatable_linker(self) -> Command {
+        let mut command = self.cc();
+        // The driver must see -r itself to suppress its default PIE mode.
+        command.args(["-nostdlib", "-r"]);
+        command
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -360,12 +367,7 @@ impl LibraryBuilder<'_> {
         match kind {
             | LibraryArtifactKind::Object => {
                 NativeTool::Linker.run(
-                    platform
-                        .cc()
-                        .args(["-nostdlib", "-Wl,-r"])
-                        .args(&objects)
-                        .arg("-o")
-                        .arg(&artifact_path),
+                    platform.relocatable_linker().args(&objects).arg("-o").arg(&artifact_path),
                 )?;
             }
             | LibraryArtifactKind::Staticlib => NativeTool::Archive
@@ -754,8 +756,8 @@ impl LinkedLibraries {
             | TargetOs::Macos => LibraryPlatform::Macos,
         };
         let combined = object.with_extension("units.o");
-        let mut command = platform.cc();
-        command.args(["-nostdlib", "-Wl,-r"]).arg(object);
+        let mut command = platform.relocatable_linker();
+        command.arg(object);
         command.args(self.units.objects());
         for library in raw {
             match (platform, library.manifest.kind) {

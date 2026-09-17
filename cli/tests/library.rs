@@ -492,6 +492,59 @@ do result <- ! identity -4611686018427387904;
 
 #[test]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+fn self_importing_c_exports_assemble_for_both_native_formats() {
+    use zydeco_amd64::emit::CExportEntry;
+    use zydeco_cli::{CommandCompiler, TargetOs};
+    use zydeco_session::source::PackageId;
+    use zydeco_surface::metadata::{LibraryRole, PackageRole};
+
+    let fixture = Fixture::new();
+    let source = fixture.write(
+        "library.zy",
+        &Fixture::source(
+            "library(c, export(root, symbol(\"entry\")))",
+            r#"
+let again = (@(ffi(c, library("example.math"), symbol("entry"))) : Thk (I -> Ret I)) in
+let other = (@(ffi(c, library("example.other"), symbol("imported"))) : Thk (I -> Ret I)) in
+({ fn x => do y <- ! other x; ! again y } : Thk (I -> Ret I))"#,
+        ),
+    );
+    let compiler = CommandCompiler::default();
+    let package = compiler.package(&PackageId { path: source, name: None }).unwrap();
+    let PackageRole::Library(LibraryRole::Compiled(contract)) = &package.role else {
+        panic!("expected a compiled library");
+    };
+    let analysis = compiler.analyze_package(&package.id).unwrap();
+    let program = compiler.library_program(&analysis, contract).unwrap();
+    let export = &program.library.exports[0];
+    let backend = compiler.lower_export(&program, export).unwrap();
+    for (target, format) in [(TargetOs::Linux, "elf64"), (TargetOs::Macos, "macho64")] {
+        let artifact = backend.emit_c_export(
+            target,
+            CExportEntry {
+                symbol: export.symbol.clone(),
+                signature: export.signature.clone(),
+                guard: zydeco_syntax::ForeignSymbolName::parse("zydeco_test_guard").unwrap(),
+            },
+        );
+        let source = fixture.write(&format!("entry-{format}.s"), &artifact.assembly);
+        Fixture::success(
+            &Command::new("nasm")
+                .args(["-f", format])
+                .arg(&source)
+                .arg("-o")
+                .arg(source.with_extension("o"))
+                .output()
+                .unwrap(),
+        );
+        if target == TargetOs::Linux {
+            assert!(artifact.assembly.contains("call imported wrt ..plt"));
+        }
+    }
+}
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn compiled_entry_rejects_reentry_and_concurrency_before_source_execution() {
     let fixture = Fixture::new();
     let source = fixture.write(
