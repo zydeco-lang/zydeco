@@ -189,7 +189,7 @@ do result <- ! init;
 }
 
 #[test]
-#[ignore = "requires NASM, AMD64 native tools, and builds a matching Rust runtime"]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn source_free_units_share_captures_and_continuations_across_collection() {
     for (ty, group, delta, argument, expected) in [
         ("Float64", "float64", "-1.5", "0.5", "-1.0"),

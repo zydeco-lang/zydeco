@@ -3,6 +3,9 @@ name = "zydeco-tests"
 version = { workspace = true }
 edition = { workspace = true }
 
+[features]
+system-xxhash = []
+
 [dependencies]
 zydeco-machine = { workspace = true }
 zydeco-session = { workspace = true }

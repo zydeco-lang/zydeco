@@ -173,15 +173,17 @@ and [integration fixtures](../../lang/tests/tests/ffi.rs) cover the current subs
 New boundaries need accepted and rejected shapes plus observable lifetime checks:
 argument order, full-width results, empty buffers, loader failure, collection with live captures,
 and invalid entry or release without partial runtime mutation.
-Installed-library and native-toolchain runs remain opt-in under the repository's testing workflow.
+Native-toolchain tests run on Linux and macOS; installed-library tests use explicit Cargo features
+under the repository's testing workflow.
 
 Reproduce the concrete boundary review with focused targets:
 
 ```sh
 cargo test -p zydeco-tests --test memory_views --test ffi_examples --test ffi --test represented_calls
-cargo test -p zydeco-tests --test ffi native_c_boundary_executes_the_compositional_protocol -- --ignored
+cargo test -p zydeco-tests --features system-xxhash --test ffi calls_the_installed_xxhash_library
 ```
 
 On Unix, `ffi_examples` compiles and runs its own small C specimen with the host C compiler;
 it needs no installed foreign library.
-The separate ignored target exercises existing native C imports.
+The `ffi` target also exercises native C imports on Linux and macOS.
+The `system-xxhash` feature additionally checks the installed xxHash library.

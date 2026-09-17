@@ -141,7 +141,7 @@ fn named_entries_are_closed_and_c_exports_reject_incoming_addresses() {
 }
 
 #[test]
-#[ignore = "requires NASM, AMD64 native tools, and builds the matching Rust runtime"]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn shared_library_c_harness_round_trips_integer_payloads_and_has_only_declared_exports() {
     let fixture = Fixture::new();
     let integers =
@@ -413,7 +413,7 @@ let factory = param val (/Thk; /Ret; /Int; /numeric) : @(import({builtin:?})) in
 }
 
 #[test]
-#[ignore = "requires NASM, AMD64 native tools, and builds matching Rust runtimes"]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn nested_units_preserve_gc_roots_with_shared_and_raw_runtime_support() {
     let fixture = Fixture::new();
     let inner = fixture.write(
@@ -491,7 +491,7 @@ do result <- ! identity -4611686018427387904;
 }
 
 #[test]
-#[ignore = "requires NASM, AMD64 native tools, and builds matching Rust runtimes"]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn compiled_entry_rejects_reentry_and_concurrency_before_source_execution() {
     let fixture = Fixture::new();
     let source = fixture.write(
@@ -538,7 +538,7 @@ int main(void) { pthread_t a, b; assert(!pthread_create(&a, 0, worker, 0)); asse
 }
 
 #[test]
-#[ignore = "requires NASM, AMD64 native tools, and builds matching Rust runtimes"]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn failed_late_build_preserves_the_published_library() {
     let fixture = Fixture::new();
     let source = fixture.write(

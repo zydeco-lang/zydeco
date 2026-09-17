@@ -320,12 +320,11 @@ details identity checks, dependency visibility, and publication.
 The focused native regression suite builds its own libraries and C consumers:
 
 ```sh
-cargo test -p zydeco-cli --test library
-cargo test -p zydeco-cli --test library -- --ignored --test-threads=1
+cargo test -p zydeco-cli --test library -- --test-threads=1
 ```
 
-The second command requires NASM, `cc`, `ar`, the matching AMD64 Rust target,
-and support for executing AMD64 code on the test host.
+On Linux and macOS, these tests include native execution and require NASM, `cc`, `ar`,
+the matching AMD64 Rust target, and support for executing AMD64 code on the test host.
 
 ### Compile and Consume Native Zydeco Units
 
@@ -378,10 +377,10 @@ Run the focused checks and the native regression with:
 
 ```sh
 cargo test -p zydeco-cli --test unit --test unit_manifest
-cargo test -p zydeco-cli --test unit -- --ignored
 ```
 
-The native regression requires NASM, the matching AMD64 Rust target, and a host capable of executing AMD64 code.
+The native regression runs on Linux and macOS and requires NASM, the matching AMD64 Rust target,
+and a host capable of executing AMD64 code.
 
 ### Representation Experiments
 
@@ -521,7 +520,7 @@ and output is captured on every backend, and a program that reads input declares
 asserting the exact output and exit status through `test_io`.
 A program that cannot run under a backend keeps a narrower registration that names the reason —
 nonterminating programs are only checked and lowered, `iota` exports a value rather than exiting,
-and programs needing an installed foreign library stay ignored.
+and programs needing an installed foreign library use an explicit Cargo feature.
 
 Source-level cases can also be data-driven: a `.zy` fixture under [lang/tests/cases/](lang/tests/cases) becomes one test
 with no Rust change.
@@ -548,8 +547,17 @@ cargo test -p zydeco-tests wasm_ -- --test-threads=1
 `NODE` selects the Node.js executable used by the harness.
 Native end-to-end tests invoke the assembler, linker, and a separate Cargo runtime build;
 they require the target toolchain even when the compiler itself runs on another architecture.
-Tests for installed foreign libraries or optional native FFI execution are marked ignored;
-see the [C FFI checks](docs/proposals/c-ffi.md#validation-criteria) before enabling them.
+Native library, unit, and C-boundary tests run by default on Linux and macOS.
+The installed xxHash test uses the `system-xxhash` feature and requires `libxxhash`
+on the platform's dynamic-library search path:
+
+```sh
+cargo test -p zydeco-tests --features system-xxhash --test ffi calls_the_installed_xxhash_library
+```
+
+For an offline run, set `CARGO_NET_OFFLINE=true` so nested runtime builds inherit the setting;
+Cargo's `--offline` argument applies only to the outer invocation.
+The [C FFI checks](docs/proposals/c-ffi.md#validation-criteria) describe the boundary coverage.
 
 The full CI commands are:
 

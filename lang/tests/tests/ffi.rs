@@ -3,7 +3,7 @@ use zydeco_cli::{CommandCompiler, CompileError, TargetArchitecture, TargetOs};
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{
     check_source,
-    utils::{CaseError, ExecutionTarget, SourceCase, SourceProgram},
+    utils::{CaseError, SourceCase},
 };
 
 check_source!(xxhash_binding, "ffi/xxhash.zy");
@@ -161,14 +161,15 @@ fn boundary_fixture_lowers_without_xxhash_specific_shapes() {
 }
 
 #[test]
-#[ignore = "requires libxxhash in the platform dynamic-library search path"]
+#[cfg(feature = "system-xxhash")]
 fn calls_the_installed_xxhash_library() {
+    use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
+
     SourceProgram::setup("tests/ffi/xxhash.zy").test(ExecutionTarget::Interpreter);
 }
 
 #[test]
-#[cfg(unix)]
-#[ignore = "requires a C compiler for x86-64, NASM, and the x86-64 Rust runtime target"]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn native_c_boundary_executes_the_compositional_protocol() {
     use std::process::Command;
     use zydeco_cli::BuildOptions;

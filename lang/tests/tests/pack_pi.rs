@@ -534,7 +534,6 @@ end
 }
 
 #[test]
-#[ignore = "n-ary products: the monadic translation of a package payload literal needs realignment"]
 fn runs_with_an_unopened_existential_package_in_the_payload() {
     SourceCase::assert_accepted(PackPiCase::run(
         r#"
@@ -557,8 +556,7 @@ begin
   do value <- ! translated Ret { ! mo_ret } (
     Int,
     triv,
-    41,
-    (Unit, triv, ()),
+    (41, (Unit, triv, ())),
   );
   do status <- ! api/int/sub value 41;
   ! exit status
