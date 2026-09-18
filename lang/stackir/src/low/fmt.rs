@@ -1,6 +1,11 @@
 //! Pretty-printing for first-order SPS.
 
-use super::{check::SpsLowProgram, syntax::*};
+use super::{
+    check::SpsLowProgram,
+    entry::{EntryKind, EntryProtocol},
+    syntax::*,
+    traverse::{Edge, Node, Occurrence, Traversal, Visitor},
+};
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
 
@@ -63,12 +68,69 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = f.inner.values[self].pretty(f);
-        match f.inner.entry_protocols.get(self) {
-            | Some(protocol) => RcDoc::text(format!("{protocol} ")).append(value),
-            | None => value,
+        match &f.inner.values[self] {
+            // Blocks are listed once at the top level; an occurrence names the label.
+            | Value::Block(Block { label, .. }) => label.pretty(f),
+            | value => {
+                let value = value.pretty(f);
+                match f.inner.entry_protocols.get(self) {
+                    | Some(protocol) => RcDoc::text(format!("{protocol} ")).append(value),
+                    | None => value,
+                }
+            }
         }
     }
+}
+
+/// Collect every block in first-visit order, so the listing follows the root.
+struct Blocks(Vec<ValueId>);
+
+impl Visitor for Blocks {
+    fn enter(&mut self, node: Node<'_>, _edge: Edge, occurrence: Occurrence) {
+        if let (Occurrence::First, Node::Value(id, Value::Block(_))) = (occurrence, node) {
+            self.0.push(id);
+        }
+    }
+}
+
+/// `[block:label]` with a provenance comment, then the entry words popped as ordinary
+/// arguments, then the body.
+///
+/// The comment records which record kind the block's code pointer lives in and the protocol
+/// known for it: the residual stack after the entry pops for a closure, or the accepted result
+/// for a continuation. The administrative words themselves carry no type at this level.
+fn block_definition<'a>(id: ValueId, f: &'a Formatter) -> RcDoc<'a> {
+    let Value::Block(Block { label, entry, body }) = &f.inner.values[&id] else {
+        unreachable!("only blocks are listed")
+    };
+    let kind = match entry.kind() {
+        | EntryKind::Closure => "closure",
+        | EntryKind::Continuation => "continuation",
+    };
+    let protocol = match f.inner.entry_protocols.get(&id) {
+        | Some(EntryProtocol::Closure(stack)) => {
+            RcDoc::text(format!("  -- {kind} entry; • : {stack}"))
+        }
+        | Some(EntryProtocol::Continuation(result)) => {
+            RcDoc::text(format!("  -- {kind} entry; result : {result}"))
+        }
+        | None => RcDoc::text(format!("  -- {kind} entry")),
+    };
+    let pops = RcDoc::concat(entry.words().map(|(_, pattern)| {
+        RcDoc::concat([
+            RcDoc::line(),
+            RcDoc::text("let arg("),
+            pattern.pretty(f),
+            RcDoc::text(") :: • = • in"),
+        ])
+    }));
+    RcDoc::concat([
+        RcDoc::text("[block:"),
+        label.pretty(f),
+        RcDoc::text("]"),
+        protocol,
+        RcDoc::concat([pops, RcDoc::line(), body.pretty(f)]).nest(f.indent),
+    ])
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for Value {
@@ -76,26 +138,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
         match self {
             | Value::Hole(Hole) => RcDoc::text("_"),
             | Value::Var(def) => def.pretty(f),
-            | Value::Block(Block { label, entry, body }) => RcDoc::concat([
-                RcDoc::text("block"),
-                RcDoc::space(),
-                RcDoc::text("["),
-                label.pretty(f),
-                RcDoc::text("]"),
-                RcDoc::text("("),
-                RcDoc::intersperse(
-                    entry.words().map(|(role, pattern)| {
-                        RcDoc::concat([RcDoc::text(format!("{role}: ")), pattern.pretty(f)])
-                    }),
-                    RcDoc::text(", "),
-                ),
-                RcDoc::text(")"),
-                RcDoc::space(),
-                RcDoc::text("•"),
-                RcDoc::space(),
-                RcDoc::text("->"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-            ]),
+            | Value::Block(Block { label, .. }) => label.pretty(f),
             | Value::ClosurePackage(ClosurePackage { environment, code }) => RcDoc::concat([
                 RcDoc::text("pack-closure("),
                 environment.pretty(f),
@@ -194,10 +237,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
             | Computation::Jump(Jump { target, argument, stack }) => RcDoc::concat([
                 RcDoc::text("jump "),
                 target.pretty(f),
-                RcDoc::text(format!("({}: ", argument.word().0)),
+                RcDoc::text(" ! arg("),
                 argument.word().1.pretty(f),
-                RcDoc::text(")"),
-                RcDoc::text(" ! "),
+                RcDoc::text(") :: "),
                 stack.pretty(f),
             ]),
             | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => RcDoc::concat([
@@ -206,7 +248,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::text(" as "),
                 binder.pretty(f),
                 RcDoc::text(" in"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                RcDoc::line(),
+                body.pretty(f),
             ]),
             | Computation::Compare(CompareBranch {
                 operation,
@@ -249,14 +292,16 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::text(" = "),
                 bindee.pretty(f),
                 RcDoc::text(" in"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                RcDoc::line(),
+                body.pretty(f),
             ]),
             | Computation::LetStack(LetStack { binder: Bullet, bindee, tail: body }) => {
                 RcDoc::concat([
                     RcDoc::text("let • = "),
                     bindee.pretty(f),
                     RcDoc::text(" in"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                    RcDoc::line(),
+                    body.pretty(f),
                 ])
             }
             | Computation::LetArg(LetArg { binder: Cons(binder, Bullet), bindee, tail: body }) => {
@@ -266,7 +311,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::text(") :: • = "),
                     bindee.pretty(f),
                     RcDoc::text(" in"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                    RcDoc::line(),
+                    body.pretty(f),
                 ])
             }
             | Computation::CoCase(SCoMatch { scrut, arms }) => {
@@ -296,7 +342,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::text(", "),
                     code.pretty(f),
                     RcDoc::text(") in"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                    RcDoc::line(),
+                    body.pretty(f),
                 ])
             }
             | Computation::OpenContinuation(OpenContinuation { package, code, body }) => {
@@ -306,7 +353,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::text(" as "),
                     code.pretty(f),
                     RcDoc::text(" :: • in"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                    RcDoc::line(),
+                    body.pretty(f),
                 ])
             }
             | Computation::Memory(MemoryStep::Load { scalar, address, result, next }) => {
@@ -357,6 +405,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for SpsLowProgram {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let mut blocks = Blocks(Vec::new());
+        Traversal { arena: f.inner }.run(self.root().into(), &mut blocks);
         RcDoc::concat(f.inner.protocols.parameters().map(|(id, kind)| {
             RcDoc::text(format!("[parameter:{id}] {kind}")).append(RcDoc::line())
         }))
@@ -366,5 +416,11 @@ impl<'a> Pretty<'a, Formatter<'a>> for SpsLowProgram {
         .append(RcDoc::text("[root]"))
         .append(RcDoc::concat([RcDoc::line(), self.root().pretty(f)]).nest(f.indent))
         .append(RcDoc::line())
+        .append(RcDoc::concat(
+            blocks
+                .0
+                .into_iter()
+                .map(|id| RcDoc::concat([RcDoc::line(), block_definition(id, f), RcDoc::line()])),
+        ))
     }
 }
