@@ -1,0 +1,21 @@
+-- Readable ZIR listings: source names survive to the listing, a name rebound in the
+-- same block gets a prime suffix, and a primed source name still assembles because
+-- symbol labels are sanitized. Sums 2 * i for i in 1..10, so the total is 110.
+begin
+  param (/Ret; /Int; /OS; /numeric; /process) : @(import("../../std/builtin.zy")) that
+  let num = numeric/int that
+
+  let fix loop' (i : Int) (acc : Int) : Ret Int =
+    ! num/eq (Ret Int) i 0
+      { ret acc }
+      {
+        do acc <- ! num/add acc i;
+        do acc <- ! num/add acc i;
+        do i <- ! num/sub i 1;
+        ! loop' i acc
+      }
+  that
+
+  do total <- ! loop' 10 0;
+  ! num/eq OS total 110 { ! process/exit 0 } { ! process/exit 1 }
+end

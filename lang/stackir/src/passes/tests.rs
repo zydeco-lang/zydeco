@@ -79,7 +79,12 @@ fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
         let mut observer = HighSpsObserver {
             scoped: &scoped,
             statics: &statics,
-            inspection: HighSpsInspection { trace: true, verify: true, dump: true },
+            inspection: HighSpsInspection {
+                trace: true,
+                verify: true,
+                dump: true,
+                ..Default::default()
+            },
             output: &mut output,
         };
         let observed =

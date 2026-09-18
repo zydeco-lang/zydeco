@@ -6,25 +6,99 @@ use super::{
     syntax::*,
     traverse::{Edge, Node, Occurrence, Traversal, Visitor},
 };
+pub use crate::arena::NameStyle;
+use crate::arena::NameTable;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
 
 pub use zydeco_syntax::Pretty;
+
+/// The scope a local name is unique in: a block body, or `None` for the root and labels.
+type Scope = Option<ValueId>;
 
 pub struct Formatter<'arena> {
     admin: &'arena SpsLowAdminArena,
     inner: &'arena SpsLowInnerArena,
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
+    /// Readable spellings; empty for [`NameStyle::Identified`], where every name carries its id.
+    names: NameTable<Scope>,
     pub indent: isize,
 }
 
 impl<'arena> Formatter<'arena> {
+    /// A formatter spelling every definition with its arena id.
     pub fn new(
         admin: &'arena SpsLowAdminArena, inner: &'arena SpsLowInnerArena,
         scoped: &'arena ScopedArena, statics: &'arena StaticsArena,
     ) -> Self {
-        Self { admin, inner, scoped, statics, indent: 2 }
+        Self { admin, inner, scoped, statics, names: NameTable::default(), indent: 2 }
+    }
+
+    /// Spell definitions in `style`. Readable spellings come from one traversal of `program`:
+    /// labels and the root's locals share a scope, and each block body is a scope of its
+    /// own, which suffices because blocks are closed.
+    pub fn with_name_style(mut self, program: &SpsLowProgram, style: NameStyle) -> Self {
+        let names = match style {
+            | NameStyle::Identified => NameTable::default(),
+            | NameStyle::Readable => {
+                let mut namer = Namer {
+                    admin: self.admin,
+                    scoped: self.scoped,
+                    statics: self.statics,
+                    blocks: Vec::new(),
+                    names: NameTable::default(),
+                };
+                Traversal { arena: self.inner }.run(program.root().into(), &mut namer);
+                namer.names
+            }
+        };
+        self.names = names;
+        self
+    }
+}
+
+/// Spell every binding occurrence in first-visit order: labels in the global scope, and
+/// variable patterns in the scope of the innermost block whose body contains them.
+struct Namer<'a> {
+    admin: &'a SpsLowAdminArena,
+    scoped: &'a ScopedArena,
+    statics: &'a StaticsArena,
+    blocks: Vec<ValueId>,
+    names: NameTable<Scope>,
+}
+
+impl Namer<'_> {
+    fn assign(&mut self, scope: Scope, def: DefId) {
+        let plain = self.admin.def_name(self.scoped, self.statics, &def).plain();
+        self.names.assign(scope, def, &plain);
+    }
+}
+
+impl Visitor for Namer<'_> {
+    fn enter(&mut self, node: Node<'_>, _edge: Edge, occurrence: Occurrence) {
+        if occurrence != Occurrence::First {
+            return;
+        }
+        match node {
+            | Node::Value(id, Value::Block(Block { label, .. })) => {
+                self.assign(None, *label);
+                self.blocks.push(id);
+            }
+            | Node::Pattern(_, ValuePattern::Var(def)) => {
+                let scope = self.blocks.last().copied();
+                self.assign(scope, *def);
+            }
+            | _ => {}
+        }
+    }
+
+    fn exit(&mut self, node: Node<'_>) {
+        if let Node::Value(id, Value::Block(_)) = node
+            && self.blocks.last() == Some(&id)
+        {
+            self.blocks.pop();
+        }
     }
 }
 
@@ -32,8 +106,13 @@ use pretty::RcDoc;
 
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let name = f.admin.def_name(f.scoped, f.statics, self);
-        RcDoc::text(format!("{}{}", name.plain(), self.concise()))
+        match f.names.get(self) {
+            | Some(spelling) => RcDoc::text(spelling.to_owned()),
+            | None => {
+                let name = f.admin.def_name(f.scoped, f.statics, self);
+                RcDoc::text(format!("{}{}", name.plain(), self.concise()))
+            }
+        }
     }
 }
 

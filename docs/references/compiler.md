@@ -245,6 +245,18 @@ before and after each selected pass, and `--dump-passes` to render the correspon
 Trace and dump output goes to stderr, leaving the selected target's stdout intact.
 With `none`, there are no optional occurrences to inspect; the required phase checks still run.
 
+##### Reading Listings
+
+Listings spell definitions by their source names. The normalizer names each residual binder
+after the source pattern it replaces, and `tmp` when there is none; closure conversion labels a
+block `owner/code` after the fix or `let` binder that owns the code, `owner/kont` after the `do`
+binder that receives a continuation's result, and `thunk/code` or `result/kont` when the code is
+anonymous. Openings bind `env`, `code`, and `kont`. Names are unique per scope: labels and the
+root share one, and each block body is another. Where a scope binds the same name again, later
+definitions append `'1`, `'2`, … in order of first appearance, skipping spellings the source
+already uses. Pass `--print-ids` to follow every name with its arena id instead, as in
+`acc[54#2257]`, which is the form to cross-reference with diagnostics and traces.
+
 ```sh
 zydeco build lib/tests/core/representation-policies.zy --target zir \
   --sps-passes normalize,normalize --trace-passes --verify-passes --dump-passes

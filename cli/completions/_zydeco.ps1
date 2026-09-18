@@ -122,6 +122,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--trace-passes', '--trace-passes', [CompletionResultType]::ParameterName, 'Trace each selected high-SPS pass and its execution time on stderr')
             [CompletionResult]::new('--verify-passes', '--verify-passes', [CompletionResultType]::ParameterName, 'Verify high-SPS invariants before and after each selected pass')
             [CompletionResult]::new('--dump-passes', '--dump-passes', [CompletionResultType]::ParameterName, 'Print high-SPS IR before and after each selected pass on stderr')
+            [CompletionResult]::new('--print-ids', '--print-ids', [CompletionResultType]::ParameterName, 'Follow every name in IR listings with its arena id, as `acc[54#2257]`, instead of disambiguating rebound names with a prime suffix')
             [CompletionResult]::new('-x', '-x', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--execute', '--execute', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')

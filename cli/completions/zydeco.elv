@@ -111,6 +111,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --trace-passes 'Trace each selected high-SPS pass and its execution time on stderr'
             cand --verify-passes 'Verify high-SPS invariants before and after each selected pass'
             cand --dump-passes 'Print high-SPS IR before and after each selected pass on stderr'
+            cand --print-ids 'Follow every name in IR listings with its arena id, as `acc[54#2257]`, instead of disambiguating rebound names with a prime suffix'
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'

@@ -246,4 +246,8 @@ pub struct PipelineOptions {
     /// Print high-SPS IR before and after each selected pass on stderr
     #[arg(long)]
     pub dump_passes: bool,
+    /// Follow every name in IR listings with its arena id, as `acc[54#2257]`, instead of
+    /// disambiguating rebound names with a prime suffix
+    #[arg(long)]
+    pub print_ids: bool,
 }

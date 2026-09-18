@@ -5,9 +5,9 @@ use zydeco_cli::library::{LibraryArtifactKind, LibraryBuilder, LibraryError, Lin
 use zydeco_cli::{
     BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
     Executable, ExecutionError, ExecutionRunner, ExecutionTarget, HighSpsInspection, HighSpsPass,
-    HighSpsPlan, HighSpsPlanError, NativeError, RepresentationStrategy, SourceFormatError,
-    SourceFormatOutcome, SourceFormatter, SourceSelection, TargetArchitecture, TargetOs,
-    TestTarget, WasmBackendKind,
+    HighSpsPlan, HighSpsPlanError, NameStyle, NativeError, RepresentationStrategy,
+    SourceFormatError, SourceFormatOutcome, SourceFormatter, SourceSelection, TargetArchitecture,
+    TargetOs, TestTarget, WasmBackendKind,
 };
 use zydeco_session::source::{
     Package, PackageId, PackagePath, PackageRole, SourceLoadError, SourceReference,
@@ -123,6 +123,11 @@ impl Application {
                         trace: pipeline.trace_passes,
                         verify: pipeline.verify_passes,
                         dump: pipeline.dump_passes,
+                        names: if pipeline.print_ids {
+                            NameStyle::Identified
+                        } else {
+                            NameStyle::Readable
+                        },
                     });
                 let libraries = LinkedLibraries::load(&link_libraries)?;
                 self.build_sources(

@@ -95,6 +95,7 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-library -d 
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l trace-passes -d 'Trace each selected high-SPS pass and its execution time on stderr'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l verify-passes -d 'Verify high-SPS invariants before and after each selected pass'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dump-passes -d 'Print high-SPS IR before and after each selected pass on stderr'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l print-ids -d 'Follow every name in IR listings with its arena id, as `acc[54#2257]`, instead of disambiguating rebound names with a prime suffix'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'

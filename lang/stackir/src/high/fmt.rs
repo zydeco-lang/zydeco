@@ -1,6 +1,11 @@
 //! Formatters for the Zydeco Intermediate Representation (ZIR).
 
-use super::syntax::*;
+use super::{
+    syntax::*,
+    traverse::{Edge, Node, Occurrence, Traversal, Visitor},
+};
+pub use crate::arena::NameStyle;
+use crate::arena::NameTable;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
 
@@ -13,14 +18,65 @@ pub struct Formatter<'arena> {
     inner: &'arena StackirInnerArena,
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
+    /// Readable spellings; empty for [`NameStyle::Identified`], where every name carries its id.
+    names: NameTable<()>,
     pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
+    /// A formatter spelling every definition with its arena id.
     pub fn new(
         admin: &'arena AdminArena, inner: &'arena StackirInnerArena, scoped: &'arena ScopedArena,
         statics: &'arena StaticsArena,
     ) -> Self {
-        Formatter { admin, inner, scoped, statics, indent: 2 }
+        Formatter { admin, inner, scoped, statics, names: NameTable::default(), indent: 2 }
+    }
+
+    /// Spell definitions in `style`. Readable spellings come from one traversal of `program`
+    /// in a single scope, since this IR is lexical and a listing is read top to bottom.
+    pub fn with_name_style(mut self, program: &StackirProgram, style: NameStyle) -> Self {
+        let names = match style {
+            | NameStyle::Identified => NameTable::default(),
+            | NameStyle::Readable => {
+                let mut namer = Namer {
+                    admin: self.admin,
+                    scoped: self.scoped,
+                    statics: self.statics,
+                    names: NameTable::default(),
+                };
+                Traversal { arena: self.inner }.run(program.root().into(), &mut namer);
+                namer.names
+            }
+        };
+        self.names = names;
+        self
+    }
+}
+
+/// Spell every binding occurrence in first-visit order: variable patterns and fix parameters.
+struct Namer<'a> {
+    admin: &'a AdminArena,
+    scoped: &'a ScopedArena,
+    statics: &'a StaticsArena,
+    names: NameTable<()>,
+}
+
+impl Namer<'_> {
+    fn assign(&mut self, def: DefId) {
+        let plain = self.admin.def_name(self.scoped, self.statics, &def).plain();
+        self.names.assign((), def, &plain);
+    }
+}
+
+impl Visitor for Namer<'_> {
+    fn enter(&mut self, node: Node<'_>, _edge: Edge, occurrence: Occurrence) {
+        if occurrence != Occurrence::First {
+            return;
+        }
+        match node {
+            | Node::Pattern(_, ValuePattern::Var(def)) => self.assign(*def),
+            | Node::Computation(_, Computation::Fix(SFix { param, .. })) => self.assign(*param),
+            | _ => {}
+        }
     }
 }
 
@@ -30,9 +86,14 @@ use pretty::RcDoc;
 
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let name = f.admin.def_name(f.scoped, f.statics, self);
-        let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
-        RcDoc::text(format!("{}{}", name.ugly(&statics_fmt), self.concise()))
+        match f.names.get(self) {
+            | Some(spelling) => RcDoc::text(spelling.to_owned()),
+            | None => {
+                let name = f.admin.def_name(f.scoped, f.statics, self);
+                let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
+                RcDoc::text(format!("{}{}", name.ugly(&statics_fmt), self.concise()))
+            }
+        }
     }
 }
 

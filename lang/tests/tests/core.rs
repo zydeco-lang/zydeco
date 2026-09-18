@@ -45,6 +45,7 @@ e2e_sources!({
     runtime_package_adapters => "tests/core/runtime-package-adapters.zy",
     runtime_package_callback => "tests/core/runtime-package-callback.zy",
     runtime_package_payload => "tests/core/runtime-package-payload.zy",
+    zir_names => "tests/core/zir-names.zy",
 });
 
 mod normalization {
@@ -122,5 +123,72 @@ mod gc_stress {
     #[test]
     fn wasm_sps() {
         program().test(ExecutionTarget::WasmSps);
+    }
+}
+
+mod listing_names {
+    use std::path::PathBuf;
+    use zydeco_cli::{CommandCompiler, HighSpsInspection, NameStyle, TargetOs};
+
+    fn fixture() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/tests/core/zir-names.zy")
+    }
+
+    fn sps(names: NameStyle) -> String {
+        CommandCompiler::default()
+            .with_pass_inspection(HighSpsInspection { names, ..Default::default() })
+            .lower(&fixture())
+            .expect("zir-names.zy must lower")
+            .render_sps_low()
+    }
+
+    #[test]
+    fn listings_spell_source_names_and_prime_rebindings() {
+        let sps = sps(NameStyle::Readable);
+        assert!(!sps.contains("__static_value__"), "{sps}");
+        assert!(!sps.contains("_code__"), "{sps}");
+        // The fix block and the continuation receiving its result carry their binders.
+        assert!(sps.contains("[block:loop'/code]"), "{sps}");
+        assert!(sps.contains("[block:total/kont]"), "{sps}");
+        assert!(sps.contains("let loop' = pack-closure("), "{sps}");
+        // Parameters keep their names; the two rebindings of `acc` in the loop body and
+        // the one of `i` are told apart by primes, in order of appearance.
+        assert!(sps.contains("let arg(i) :: • = • in"), "{sps}");
+        assert!(sps.contains("let arg(acc) :: • = • in"), "{sps}");
+        assert!(sps.contains("let acc'1 = <primitive:int_add>(acc, i) in"), "{sps}");
+        assert!(sps.contains("let acc'2 = <primitive:int_add>(acc'1, i) in"), "{sps}");
+        assert!(sps.contains("let i'1 = <primitive:int_sub>(i, 1) in"), "{sps}");
+        assert!(sps.contains("arg(i'1) :: arg(acc'2) :: •"), "{sps}");
+        // Openings bind `env`, `code`, and `kont`; no name carries an arena id.
+        assert!(sps.contains("open-closure loop' as (env, code) in"), "{sps}");
+        assert!(sps.contains("open-continuation • as kont :: • in"), "{sps}");
+        assert!(!sps.contains("/code["), "{sps}");
+        assert!(!sps.contains("/kont["), "{sps}");
+    }
+
+    #[test]
+    fn print_ids_keeps_arena_ids_on_every_name() {
+        let sps = sps(NameStyle::Identified);
+        assert!(sps.contains("[block:loop'/code["), "{sps}");
+        assert!(!sps.contains("acc'1"), "{sps}");
+        let identified = sps.lines().filter(|line| line.contains("arg(acc[")).count();
+        assert!(identified >= 1, "{sps}");
+    }
+
+    #[test]
+    fn primed_names_assemble_to_sanitized_symbols() {
+        let assembly = CommandCompiler::default()
+            .lower(&fixture())
+            .expect("zir-names.zy must lower")
+            .emit_amd64(TargetOs::Linux)
+            .assembly;
+        assert!(assembly.contains("loop__code_"), "{assembly}");
+        let bad_label = assembly
+            .lines()
+            .filter(|line| line.ends_with(':') && !line.starts_with(';'))
+            .find(|label| {
+                !label.trim_end_matches(':').chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            });
+        assert_eq!(bad_label, None, "{assembly}");
     }
 }

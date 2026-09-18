@@ -91,7 +91,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --link-library --execute --lint-types --help"
+            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --print-ids --build-dir --runtime-dir --link-library --execute --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

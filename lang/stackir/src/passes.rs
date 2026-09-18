@@ -4,6 +4,7 @@
 
 use crate::{
     BranchJoinError, BranchJoinProgram,
+    arena::NameStyle,
     high::{fmt::Pretty, normalize::Normalizer, syntax::DefId},
 };
 use std::{
@@ -171,12 +172,14 @@ impl HighSpsPlan {
     }
 }
 
-/// High-SPS trace, verification, and dump options.
+/// High-SPS trace, verification, and dump options, and how dumps spell definitions.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct HighSpsInspection {
     pub trace: bool,
     pub verify: bool,
     pub dump: bool,
+    /// Naming in every IR listing this compilation renders, dumps and the ZIR target alike.
+    pub names: NameStyle,
 }
 
 impl HighSpsInspection {
@@ -251,7 +254,8 @@ impl<W: Write> HighSpsObserver<'_, W> {
                 &arena.inner,
                 self.scoped,
                 self.statics,
-            );
+            )
+            .with_name_style(program, self.inspection.names);
             program.pretty(&formatter).render(100, &mut self.output)?;
             writeln!(self.output)?;
         }

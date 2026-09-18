@@ -13,6 +13,7 @@ use zydeco_session::{
 use zydeco_stackir::{
     BranchJoinProgram, BuiltinRootLowerError, RootLowerer, SpsLowPipeline, SpsLowProgram,
     SpsLowerError,
+    arena::NameStyle,
     passes::{HighSpsFailure, HighSpsInspection, HighSpsObserver, HighSpsPlan},
 };
 use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
@@ -322,6 +323,7 @@ pub struct BackendProgram {
     assembly: OnceLock<AssemblyProgram>,
     representation: RepresentationStrategy,
     sps_passes: HighSpsPlan,
+    names: NameStyle,
 }
 
 /// One source-level SPS lowering failure with the provenance its reports need.
@@ -434,6 +436,7 @@ impl BackendProgram {
             assembly: OnceLock::new(),
             representation: RepresentationStrategy::default(),
             sps_passes: plan.clone(),
+            names: inspection.names,
         })
     }
 
@@ -459,7 +462,8 @@ impl BackendProgram {
     pub fn render_sps_low(&self) -> String {
         use zydeco_stackir::low::fmt::*;
         let arena = self.sps_low.arena();
-        let formatter = Formatter::new(&arena.admin, &arena.inner, &self.scoped, &self.statics);
+        let formatter = Formatter::new(&arena.admin, &arena.inner, &self.scoped, &self.statics)
+            .with_name_style(&self.sps_low, self.names);
         let mut output = String::new();
         self.sps_low.pretty(&formatter).render_fmt(100, &mut output).unwrap();
         output

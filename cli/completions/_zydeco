@@ -127,6 +127,7 @@ _arguments "${_arguments_options[@]}" : \
 '--trace-passes[Trace each selected high-SPS pass and its execution time on stderr]' \
 '--verify-passes[Verify high-SPS invariants before and after each selected pass]' \
 '--dump-passes[Print high-SPS IR before and after each selected pass on stderr]' \
+'--print-ids[Follow every name in IR listings with its arena id, as \`acc\[54#2257\]\`, instead of disambiguating rebound names with a prime suffix]' \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
