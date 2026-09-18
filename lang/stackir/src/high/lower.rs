@@ -202,7 +202,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn alloc_projection_def(&mut self) -> DefId {
-        self.alloc_admin_def("__proj__")
+        self.alloc_admin_def("proj")
     }
 
     fn alloc_admin_def(&mut self, role: &str) -> DefId {

@@ -380,7 +380,7 @@ impl Normalization {
             .into_iter()
             .map(|original| {
                 let fresh = self.arena.admin.fresh();
-                self.arena.admin.insert_def(fresh, VarName("__memory_read__".into()));
+                self.arena.admin.insert_def(fresh, VarName("read".into()));
                 (original, fresh)
             })
             .collect();

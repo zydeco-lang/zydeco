@@ -71,6 +71,8 @@ struct ClosureConversion<'a> {
     statics: &'a StaticsArena,
     envs: Vec<RenameEnv>,
     variables: Variables,
+    /// Thunks bound by a `let` to a plain variable, so their blocks can carry that name.
+    thunk_owners: HashMap<high::ValueId, high::DefId>,
 }
 
 impl<'a> ClosureConversion<'a> {
@@ -93,6 +95,7 @@ impl<'a> ClosureConversion<'a> {
             statics,
             envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
             variables,
+            thunk_owners: HashMap::new(),
         }
     }
 
@@ -141,8 +144,22 @@ impl<'a> ClosureConversion<'a> {
         self.alloc_def(VarName(format!("{name}#cap")))
     }
 
-    fn alloc_label(&mut self, role: &str) -> high::DefId {
-        self.alloc_def(VarName(format!("__{role}_code__")))
+    /// Label a block `owner/kind`: the binder its code belongs to, or `role` when it has
+    /// none, and the kind of package the code pointer lives in.
+    fn alloc_label(&mut self, owner: Option<high::DefId>, role: &str, kind: &str) -> high::DefId {
+        let owner = match owner {
+            | Some(def) => self.arena.admin.def_name(self.scoped, self.statics, &def).plain(),
+            | None => role.to_owned(),
+        };
+        self.alloc_def(VarName(format!("{owner}/{kind}")))
+    }
+
+    /// The variable a pattern binds directly, if it is a plain variable pattern.
+    fn plain_binder(&self, pattern: low::VPatId) -> Option<high::DefId> {
+        match &self.arena.inner.vpats[&pattern] {
+            | low::ValuePattern::Var(def) => Some(*def),
+            | _ => None,
+        }
     }
 
     fn compu_site(&self, id: high::CompuId) -> Option<ss::TermId> {

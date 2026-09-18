@@ -111,14 +111,13 @@ impl CompareBranch {
         arena: &mut Arena, operation: ComparisonOp,
     ) -> ValueId {
         use crate::protocol::ValueProtocol;
-        let [first, second, when_true, when_false] =
-            ["__compare_first__", "__compare_second__", "__compare_true__", "__compare_false__"]
-                .map(|name| {
-                    let admin = &mut arena.as_mut().admin;
-                    let def = admin.fresh();
-                    admin.insert_def(def, VarName(name.into()));
-                    def
-                });
+        let [first, second, when_true, when_false] = ["first", "second", "when_true", "when_false"]
+            .map(|name| {
+                let admin = &mut arena.as_mut().admin;
+                let def = admin.fresh();
+                admin.insert_def(def, VarName(name.into()));
+                def
+            });
         let [when_true_body, when_false_body] = [when_true, when_false].map(|def| {
             let thunk = def.build(arena, None);
             let stack = Bullet.build(arena, None);

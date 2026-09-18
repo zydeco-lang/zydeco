@@ -39,7 +39,8 @@ impl StaticElaborator<'_, '_> {
                         ty: domain,
                     });
                 }
-                let (binder, value) = self.variable(None, domain);
+                let name = self.binder_name(pattern);
+                let (binder, value) = self.variable(name, None, domain);
                 let body =
                     self.match_arms(value, &[Matcher { binder: pattern, tail: body }], env, body)?;
                 let body = self.compu_bindings(bindings, body);
@@ -68,7 +69,8 @@ impl StaticElaborator<'_, '_> {
             | Computation::Do(Bind { binder: pattern, bindee, tail }) => {
                 let bindee = self.computation(bindee, env)?;
                 let domain = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
-                let (binder, value) = self.variable(None, domain);
+                let name = self.binder_name(pattern);
+                let (binder, value) = self.variable(name, None, domain);
                 let tail =
                     self.match_arms(value, &[Matcher { binder: pattern, tail }], env, tail)?;
                 let tail = self.compu_bindings(bindings, tail);
@@ -80,7 +82,8 @@ impl StaticElaborator<'_, '_> {
             }
             | Computation::Fix(Fix(pattern, body)) => {
                 let domain = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
-                let (binder, value) = self.variable(None, domain);
+                let name = self.binder_name(pattern);
+                let (binder, value) = self.variable(name, None, domain);
                 let mut local = env.clone();
                 self.bind(pattern, value, &mut local, &mut bindings)?;
                 let body = self.computation(body, &local)?;

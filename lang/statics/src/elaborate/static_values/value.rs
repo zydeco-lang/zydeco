@@ -275,7 +275,7 @@ impl StaticElaborator<'_, '_> {
                 let mut selected = None;
                 for (index, ty) in fields.into_iter().enumerate() {
                     if index == position {
-                        let (pattern, value) = self.variable(Some(source), ty);
+                        let (pattern, value) = self.variable(Self::temporary(), Some(source), ty);
                         patterns.push(pattern);
                         selected = Some(value);
                     } else {

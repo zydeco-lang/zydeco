@@ -118,7 +118,9 @@ impl StaticElaborator<'_, '_> {
                         );
                         return self.bind(tail, payload, env, bindings);
                     }
-                    let (payload_pattern, payload) = self.variable(Some(value.0.source), ty);
+                    let payload_name = self.binder_name(tail);
+                    let (payload_pattern, payload) =
+                        self.variable(payload_name, Some(value.0.source), ty);
                     let binder = self.alloc_pattern(
                         pattern,
                         ValuePattern::Ctor(Ctor(name, payload_pattern)),
@@ -170,7 +172,8 @@ impl StaticElaborator<'_, '_> {
                 ValueForm::Runtime(value.0.source),
             ));
         }
-        let (payload_pattern, payload) = self.variable(Some(value.0.source), ty);
+        let payload_name = self.binder_name(tail);
+        let (payload_pattern, payload) = self.variable(payload_name, Some(value.0.source), ty);
         let binder = self.alloc_pattern(
             pattern,
             ValuePattern::Named(Named(name, payload_pattern)),
@@ -206,7 +209,9 @@ impl StaticElaborator<'_, '_> {
                 if self.purpose == Purpose::Inspect {
                     return Ok(StaticValue::with_form(value.0.source, ty, value.0.form.clone()));
                 }
-                let (payload_pattern, payload) = self.variable(Some(value.0.source), ty);
+                let payload_name = self.binder_name(tail);
+                let (payload_pattern, payload) =
+                    self.variable(payload_name, Some(value.0.source), ty);
                 let binder = self.alloc_pattern(
                     pattern,
                     ValuePattern::SCons(ConsN(prefix, payload_pattern)),
@@ -286,7 +291,8 @@ impl StaticElaborator<'_, '_> {
         let ty = self.ty(self.tycker.statics.annotations_vpat[&pattern], env)?;
         let node = match self.tycker.statics.vpats[&pattern].clone() {
             | ValuePattern::Var(definition) => {
-                let (pattern, value) = self.variable(None, ty);
+                let name = self.tycker.def_name(&definition).clone();
+                let (pattern, value) = self.variable(name, None, ty);
                 env.values += [(definition, value)];
                 return Ok(pattern);
             }
@@ -395,8 +401,9 @@ impl StaticElaborator<'_, '_> {
                     } else {
                         let payload_ty =
                             self.ty(self.tycker.statics.annotations_vpat[&payload], &env)?;
+                        let payload_name = self.binder_name(payload);
                         let (payload_pattern, inner) =
-                            self.variable(Some(value.0.source), payload_ty);
+                            self.variable(payload_name, Some(value.0.source), payload_ty);
                         pending.push((payload, inner));
                         let success = self.match_steps(pending, tail, env, failure)?;
                         let fallback = self.match_arms(
@@ -419,7 +426,8 @@ impl StaticElaborator<'_, '_> {
                                 Value::Thunk(Thunk(fallback)),
                                 thunk_ty,
                             );
-                            let (binder, continuation) = self.variable(None, thunk_ty);
+                            let (binder, continuation) =
+                                self.variable(Self::temporary(), None, thunk_ty);
                             bindings.push(Binding { binder, bindee: thunk });
                             let continuation = self.reify(&continuation)?;
                             self.alloc_compu(

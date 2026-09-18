@@ -94,11 +94,26 @@ impl StaticElaborator<'_, '_> {
         pattern
     }
 
+    /// The name a residual binder inherits from the source pattern it replaces: the
+    /// variable's own name, or [`Self::temporary`] when the pattern binds none directly.
+    pub(super) fn binder_name(&self, pattern: VPatId) -> VarName {
+        match &self.tycker.statics.vpats[&pattern] {
+            | ValuePattern::Var(definition) => self.tycker.def_name(definition).clone(),
+            | _ => Self::temporary(),
+        }
+    }
+
+    /// The name of a residual binder that stands for no source variable, such as a shared
+    /// intermediate result. Listings disambiguate repeated names, so it can be short.
+    pub(super) fn temporary() -> VarName {
+        VarName("tmp".into())
+    }
+
+    /// A fresh runtime variable called `name`, recorded as originating from `source`.
     pub(super) fn variable(
-        &mut self, source: Option<ValueId>, ty: TypeId,
+        &mut self, name: VarName, source: Option<ValueId>, ty: TypeId,
     ) -> (VPatId, StaticValue) {
-        let definition =
-            Alloc::alloc(self.tycker, VarName("__static_value__".into()), AnnId::Type(ty), &());
+        let definition = Alloc::alloc(self.tycker, name, AnnId::Type(ty), &());
         let pattern =
             Alloc::alloc(self.tycker, ValuePattern::Var(definition), ty, &TyEnv::default());
         let value = match source {
@@ -204,7 +219,8 @@ impl StaticElaborator<'_, '_> {
         let value = StaticValue::with_form(value.0.source, value.0.ty, form);
         if value.is_runtime() && self.runtime_type(value.0.ty) {
             let bindee = self.reify(&value)?;
-            let (binder, variable) = self.variable(Some(value.0.source), value.0.ty);
+            let (binder, variable) =
+                self.variable(Self::temporary(), Some(value.0.source), value.0.ty);
             let ValueForm::Runtime(shared) = variable.0.form else { unreachable!() };
             bindings.push(Binding { binder, bindee });
             Ok(StaticValue(Arc::new(ValueInfo {

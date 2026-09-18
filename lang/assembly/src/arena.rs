@@ -89,9 +89,16 @@ impl<T> AssemblyArenaRefLike for T
 where
     T: AsRef<AssemblyArena>,
 {
+    /// The assembler-safe label of a symbol: its name with every character outside
+    /// `[A-Za-z0-9_]` replaced, made unique by the symbol's own id.
     fn sym_label(&self, sym: &SymId) -> String {
         let this = self.as_ref();
-        format!("{}_{}", this.symbols[sym].name, sym.concise_inner().replace('#', "_"))
+        let name = this.symbols[sym]
+            .name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+            .collect::<String>();
+        format!("{}_{}", name, sym.concise_inner().replace('#', "_"))
     }
     fn prog_label(&self, prog: &ProgId) -> Option<String> {
         let this = self.as_ref();

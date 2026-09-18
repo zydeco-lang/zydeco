@@ -211,10 +211,21 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                 Step::Call { input: Work::Value(thunk, env), frame: Work::AfterValue(source, env) }
             }
             | high::Computation::ProductMatch(high::SProductMatch { scrut, .. })
-            | high::Computation::CoprodMatch(high::SCoprodMatch { scrut, .. })
+            | high::Computation::CoprodMatch(high::SCoprodMatch { scrut, .. }) => {
+                Step::Call { input: Work::Value(scrut, env), frame: Work::AfterValue(source, env) }
+            }
             | high::Computation::Join(high::LetJoin::Value(high::Let {
-                bindee: scrut, ..
+                binder,
+                bindee: scrut,
+                ..
             })) => {
+                // A thunk bound to a plain variable lends the variable's name to its block.
+                if let (high::ValuePattern::Var(owner), high::Value::Closure(_)) = (
+                    &self.conversion.source.inner.vpats[&binder],
+                    &self.conversion.source.inner.values[&scrut],
+                ) {
+                    self.conversion.thunk_owners.insert(scrut, *owner);
+                }
                 Step::Call { input: Work::Value(scrut, env), frame: Work::AfterValue(source, env) }
             }
             | high::Computation::Ret(high::SReturn { stack, .. })
@@ -366,7 +377,8 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     | _ => StackProtocol::Unknown,
                 };
                 let environment = self.conversion.captured_pattern(&captures.bindings);
-                let label = self.conversion.alloc_label("closure");
+                let owner = self.conversion.thunk_owners.get(&source).copied();
+                let label = self.conversion.alloc_label(owner, "thunk", "code");
                 let entry = low::EntryParameters::Closure { environment };
                 let code = low::Block { label, entry, body }.build(self.conversion, site);
                 self.conversion
@@ -423,7 +435,8 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                         .collect(),
                 };
                 let environment = self.conversion.captured_pattern(&captures.bindings);
-                let label = self.conversion.alloc_label("continuation");
+                let owner = self.conversion.plain_binder(binder);
+                let label = self.conversion.alloc_label(owner, "result", "kont");
                 let parameters = low::EntryParameters::Continuation { result: binder, environment };
                 let code =
                     low::Block { label, entry: parameters, body }.build(self.conversion, site);
@@ -492,7 +505,7 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     | high::Computation::Fix(high::SFix { param, body, .. }) => {
                         let captures = self.captures(body, Context::singleton(param), env);
                         let recursive = self.conversion.alloc_like(param);
-                        let label = self.conversion.alloc_label("fix");
+                        let label = self.conversion.alloc_label(Some(param), "fix", "code");
                         let env = self.conversion.extend_env(
                             env,
                             captures.bindings.iter().copied().chain([(param, recursive)]),
@@ -629,10 +642,8 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     | high::Computation::Force(_) => {
                         let package = self.value();
                         let stack = self.stack();
-                        let environment_def =
-                            self.conversion.alloc_def(VarName("__environment__".into()));
-                        let code_def =
-                            self.conversion.alloc_def(VarName("__closure_code__".into()));
+                        let environment_def = self.conversion.alloc_def(VarName("env".into()));
+                        let code_def = self.conversion.alloc_def(VarName("code".into()));
                         let environment: low::VPatId = environment_def.build(self.conversion, None);
                         let code: low::VPatId = code_def.build(self.conversion, None);
                         let environment_value = environment_def.build(self.conversion, site);
@@ -646,8 +657,7 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     | high::Computation::Ret(_) => {
                         let package = self.stack();
                         let value = self.value();
-                        let code_def =
-                            self.conversion.alloc_def(VarName("__continuation_code__".into()));
+                        let code_def = self.conversion.alloc_def(VarName("kont".into()));
                         let code = code_def.build(self.conversion, None);
                         let target = code_def.build(self.conversion, site);
                         let stack = low::Bullet.build(self.conversion, site);
