@@ -82,7 +82,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_plain = "1.0"
 serde_json = "1.0"
 toml_edit = "0.25"
-wasm-encoder = { version = "0.258.0", default-features = false }
+wasm-encoder = { version = "0.259.0", default-features = false }
 wasmparser = { version = "0.259.0", default-features = false, features = [
     "prefer-btree-collections",
     "std",
