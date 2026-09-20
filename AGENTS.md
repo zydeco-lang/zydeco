@@ -128,9 +128,20 @@ Connect paragraphs with reasoning that explains the next step, especially before
 Use programming-languages terminology where precise, explaining specialized terms at first use
 with source-level intuition or a concrete example.
 
-Prefer positive explanations; use contrast when the distinction matters.
+Give each paragraph one overarching point.
+Develop it through motivation, mechanism, evidence, or consequence; split the paragraph when its question changes.
+Use lists or tables for independent inventories.
 Let paragraph and sentence lengths follow the argument, avoiding formulaic rhythms and repeated contrastive phrasing.
 Use parallel construction when it clarifies a comparison, enumeration, or invariant.
+
+Preserve the short explanations that connect technical facts when compressing prose.
+Use direct subjects and verbs, and name concrete operations.
+Connectives should express the actual logical relationship between statements.
+
+Prefer positive explanations. Retain negation that clarifies a live alternative, formal exclusion,
+or implementation limit.
+
+During prose-only revisions, preserve technical scope, equations, examples, and established terminology.
 After revising, read the document from beginning to end to check its progression and concept order.
 
 Wrap prose around 90–120 characters, breaking after sentence or clause punctuation, or before connectives.
