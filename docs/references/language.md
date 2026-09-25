@@ -753,6 +753,19 @@ Unknown value-function implementations still fail at a runtime boundary.
 An [inference discrepancy](../todos/compiler-boundaries.md#inferred-higher-order-value-function-witnesses)
 currently requires an explicit signature for some higher-order factories even without monadic translation.
 
+### Applicative Nominal Translation
+
+A nominal declaration inside a closed monadic payload has one translated type family per source declaration.
+The family takes the carrier and the declaration's free type dependencies as explicit type arguments.
+Equal arguments select the same nominal identity; distinct source declarations remain distinct.
+Choosing `Ret` does not identify a translated declaration with its untranslated source.
+
+The monad implementation is an ordinary argument to the generated algebra code.
+It can be evaluated dynamically or inlined without changing nominal type identity.
+Recursive references reuse the same translated family, including at different type arguments;
+runtime application never allocates a fresh nominal identity.
+The [implementation draft](../proposals/monadic-nominal-types.md) develops the remaining construction details.
+
 ### Translation Coverage and Deferred Roots
 
 The implemented annotation requires a computation payload.

@@ -1,6 +1,7 @@
 # Nominal and recursive types in monadic blocks
 
-Status: design draft, 2026-09-25. The translation below is proposed, not implemented or adopted.
+Status: implementation draft, 2026-09-25.
+The user approved applicative translation; construction is in progress.
 The approved scope is the [closed translation boundary](../references/language.md#closed-translation-boundary);
 [non-computation roots remain deferred](../references/language.md#translation-coverage-and-deferred-roots).
 [Polymorphic value functions](../references/language.md#polymorphic-value-functions) already use structure passing.
@@ -39,26 +40,24 @@ The relevant paths are [type and structure translation](../../lang/statics/src/e
 [seal construction](../../lang/statics/src/check/binding.rs),
 and [the checked payload handoff](../../lang/statics/src/check/monadic.rs).
 
-## Proposed semantic contract
+## Applicative translation
 
-Translate local nominal definitions as nominal definitions.
-A source seal receives one fresh target seal within its owning translation instance;
-repeated references share that target identity.
-Distinct source seals remain distinct even when their bodies are structurally equal.
+The approved identity rule lives in [L11](../references/language.md#applicative-nominal-translation).
+Implement it with a nominal family for each source declaration, parameterized
+by the carrier and any free type dependencies.
 Transparent aliases retain their existing behavior.
-No nominal equality is justified solely by choosing `Ret` as the translation carrier.
 
 Write `L_M(T)` for type translation and `N` for a local nominal definition with body `T`.
 The proposed equations describe a graph construction rather than unrestricted unfolding:
 
 ```text
-L_M(N)       = N_M
-body(N_M)    = L_M(T)
-kind(N_M)    = kind(N)
-L_M(N U)     = N_M L_M(U)
+L_M(N)          = N_alg M L_M(D1) ... L_M(Dn)
+body(N_alg)     = fn M D1 ... Dn => L_M(T)
+kind(N_alg)     = (VType -> CType) -> kind(D1) -> ... -> kind(Dn) -> kind(N)
+L_M(N U)        = (L_M(N)) L_M(U)
 ```
 
-Allocate `N_M` before translating `T`.
+Allocate `N_alg` before translating `T`; `D1 ... Dn` are its free type dependencies.
 A recursive reference therefore returns the allocated identity instead of recursively translating the body again.
 For a mutually recursive component, allocate every target identity before translating any member body.
 Parameterized recursive constructors remain constructors; translation does not specialize a new declaration
@@ -79,19 +78,13 @@ Retain declaration ownership and lexical scope with the checked payload or in a 
 include declarations introduced by an admitted closed source expansion under the existing copy-identity policy.
 An external type supplied through a payload type parameter stays abstract, even if the compiler knows its seal body.
 
-Target identities must live under the translated parameters on which their definitions depend.
-A local type inside `fn (A : VType) => ...` cannot be hoisted outside `A`,
-and its target body must refer to the translated witness.
-Nested monadic blocks have their own translation instances and their own identity maps.
-The canonical translated root retained by the checker is reused at later checking sites;
-neither repeated reference nor runtime application creates a fresh nominal type.
-
-A memo entry therefore needs the source declaration identity and its owning lexical translation instance,
-including the binder substitution that interprets the declaration's dependencies.
-A compiler-global cache keyed only by `AbstId` would incorrectly share across different translated contexts.
-Conversely, caching by a freshly instantiated application such as `List (List A)` would lose finite sharing
-at the constructor definition.
-Keep declaration identity separate from ordinary type application.
+A family's explicit parameters close its definition over the carrier and free type dependencies.
+A local type inside `fn (A : VType) => ...` supplies the translated `A` when applying the family;
+the family's body binds its own parameter instead of capturing that source witness.
+This permits caching the closed family by source declaration identity.
+Nested translation composes families, and genuinely copied source declarations retain their copy identities.
+Keep declaration identity separate from ordinary type application:
+neither `List (List A)` nor a different runtime monad dictionary creates another translated declaration.
 
 Use domain states such as `Reserved`, `Defining`, and `Complete` for target declarations.
 A recursive back-edge may reference a reserved identity; operations requiring its body must wait for completion.
