@@ -1079,10 +1079,12 @@ reducing applications or projections, and consulting normalized views remain exp
 
 A body callback receives `TypeScope`, distinguishing type abstractions, universal
 and existential telescopes, value functions, and witness-dependent functions.
-Domains precede their dependent bodies.
-The callback chooses the inherited substitution: ordered abstract substitution removes formal witnesses
-under type abstractions, `ValPi`, and `PackPi`, and applies only later assignments to a replacement.
-Universal and existential bodies retain the substitution used when opening their telescopes.
+Domains precede their dependent bodies. The callback chooses the inherited substitution:
+ordered abstract substitution removes formal witnesses under every binder, including universal
+and existential quantifiers, and applies only later assignments to a replacement.
+Telescope opening removes the selected binder before substituting its body.
+A complete quantified type embedded in an argument retains its own binding scope,
+even when a shared source type reuses the witness identity being instantiated outside it.
 Lexical substitution uses the supplied lexical environment.
 Binder pattern IDs, witness identities, and witness projections are preserved by structural rebuilding.
 

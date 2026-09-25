@@ -1,7 +1,7 @@
 mod common;
 
 use common::TestFixture;
-use zydeco_statics::{Alloc, StaticsAlloc, Tycker, environment::*, syntax::*};
+use zydeco_statics::{Alloc, Lub, StaticsAlloc, Tycker, environment::*, syntax::*};
 use zydeco_utils::prelude::ArenaAccess;
 
 impl TestFixture {
@@ -136,5 +136,60 @@ fn abstract_substitution_stops_at_type_abstraction_binders() {
             panic!("substitution through a type abstraction failed")
         };
         assert_eq!(substituted, abstraction);
+    });
+}
+
+#[test]
+fn abstract_substitution_respects_nested_quantifiers() {
+    TestFixture::run(|tycker| {
+        let env = TyEnv::new();
+        let (vtype, ctype) = TestFixture::kinds(tycker);
+        let unit = Alloc::alloc(tycker, UnitTy, vtype, &env);
+        let (witness, witness_ty) = TestFixture::abst_type(tycker, vtype);
+        let binder = TypeBinder::with_witness(tycker, witness, &env);
+        let ret_kind = Alloc::alloc(tycker, Arrow(vtype, ctype), (), &());
+        let ret = Alloc::alloc(tycker, RetTy, ret_kind, &env);
+        let returns = Alloc::alloc(tycker, App(ret, witness_ty), ctype, &env);
+        let universal = Alloc::alloc(tycker, Forall(binder.clone(), returns), ctype, &env);
+        let existential = Alloc::alloc(
+            tycker,
+            Exists { binder: binder.clone(), mode: ExistsMode::Abstract, body: witness_ty },
+            vtype,
+            &env,
+        );
+        // A shared complete type retains its binder; only an opened body
+        // receives the instantiation of that binder's witness.
+        assert_eq!(
+            universal
+                .subst_abst(tycker, (witness, unit))
+                .unwrap_or_else(|_| panic!("substitution or comparison must succeed")),
+            universal
+        );
+        assert_eq!(
+            existential
+                .subst_abst(tycker, (witness, unit))
+                .unwrap_or_else(|_| panic!("substitution or comparison must succeed")),
+            existential
+        );
+        let opened = returns
+            .subst_abst(tycker, (witness, unit))
+            .unwrap_or_else(|_| panic!("substitution or comparison must succeed"));
+        let expected = Alloc::alloc(tycker, App(ret, unit), ctype, &env);
+        Lub::lub(expected, opened, tycker)
+            .unwrap_or_else(|_| panic!("substitution or comparison must succeed"));
+
+        let (parameter, parameter_ty) = TestFixture::abst_type(tycker, ctype);
+        let instantiated = parameter_ty
+            .subst_absts(tycker, &[(parameter, universal), (witness, unit)])
+            .unwrap_or_else(|_| panic!("substitution or comparison must succeed"));
+        assert_eq!(
+            instantiated, universal,
+            "later assignments must not capture a replacement's binder"
+        );
+        let wrong = Alloc::alloc(tycker, Forall(binder, expected), ctype, &env);
+        assert!(
+            Lub::lub(universal, wrong, tycker).is_err(),
+            "a constant result is not the bound result"
+        );
     });
 }

@@ -121,20 +121,15 @@ impl TypeFolder for AbstractSubstitution<'_> {
     fn fold_body(
         &mut self, tycker: &mut Tycker<'_>, source: TypeId, scope: TypeScope<'_>,
     ) -> Result<TypeId> {
-        match scope {
-            | TypeScope::Abstraction(_)
-            | TypeScope::ValueFunction(_)
-            | TypeScope::PackageFunction(_) => {
-                let assignments = self
-                    .assignments
-                    .iter()
-                    .copied()
-                    .filter(|(witness, _)| !scope.binds(*witness))
-                    .collect::<Vec<_>>();
-                AbstractSubstitution { assignments: &assignments }.fold_type(tycker, source)
-            }
-            // Telescope opening intentionally substitutes through universal/existential bodies.
-            | TypeScope::Universal(_) | TypeScope::Existential(_) => self.fold_type(tycker, source),
-        }
+        // Opening a telescope substitutes its body after removing the binder.
+        // A complete quantified type nested in an argument still binds its
+        // own witness, even when a shared source node reuses that identity.
+        let assignments = self
+            .assignments
+            .iter()
+            .copied()
+            .filter(|(witness, _)| !scope.binds(*witness))
+            .collect::<Vec<_>>();
+        AbstractSubstitution { assignments: &assignments }.fold_type(tycker, source)
     }
 }
