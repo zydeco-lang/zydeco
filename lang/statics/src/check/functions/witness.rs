@@ -4,49 +4,57 @@ use super::*;
 
 impl PackageWitnessProjectionBuilder {
     pub(in crate::check) fn build(
-        pattern: ss::VPatId, tycker: &Tycker<'_>,
-    ) -> ss::PackageWitnessProjection {
-        match tycker.statics.vpats[&pattern].to_owned() {
-            | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::build(inner, tycker),
+        pattern: ss::VPatId, tycker: &mut Tycker<'_>,
+    ) -> ResultKont<ss::PackageWitnessProjection> {
+        use ss::PackageWitnessProjection as Route;
+        Ok(match tycker.statics.vpats[&pattern].to_owned() {
+            | ss::ValuePattern::Named(ss::Named(_, inner)) => Self::build(inner, tycker)?,
             | ss::ValuePattern::Alias(ss::Alias(patterns)) => patterns
                 .iter()
                 .map(|pattern| Self::build(*pattern, tycker))
-                .find(|projection| !matches!(projection, ss::PackageWitnessProjection::Ignore))
-                .unwrap_or(ss::PackageWitnessProjection::Ignore),
-            | ss::ValuePattern::VCons(patterns) => {
-                let projections = patterns
+                .collect::<ResultKont<Vec<_>>>()?
+                .into_iter()
+                .find(|projection| !matches!(projection, Route::Ignore))
+                .unwrap_or(Route::Ignore),
+            | ss::ValuePattern::VCons(patterns) => Route::product(
+                patterns
                     .iter()
                     .map(|pattern| Self::build(*pattern, tycker))
-                    .collect::<Vec<_>>();
-                if projections
-                    .iter()
-                    .all(|projection| matches!(projection, ss::PackageWitnessProjection::Ignore))
-                {
-                    ss::PackageWitnessProjection::Ignore
-                } else {
-                    ss::PackageWitnessProjection::Product(projections)
+                    .collect::<ResultKont<_>>()?,
+            ),
+            | ss::ValuePattern::SCons(ss::ConsN(prefix, body)) => {
+                let mut domain = tycker.statics.annotations_vpat[&pattern];
+                let mut abstracts = 0;
+                for _ in &prefix {
+                    domain = domain.unroll_k(tycker)?;
+                    domain = match tycker.type_filled_k(&domain)?.to_owned() {
+                        | ss::Type::Exists(exists) => {
+                            abstracts +=
+                                usize::from(matches!(exists.mode, ss::ExistsMode::Abstract));
+                            exists.body
+                        }
+                        | ss::Type::ManifestKind(manifest) => manifest.body,
+                        | _ => unreachable!("checked package pattern follows its static prefix"),
+                    };
                 }
+                Route::unpack(prefix.len(), abstracts, Self::build(body, tycker)?)
             }
-            | ss::ValuePattern::SCons(_) => tycker
-                .statics
-                .package_pattern_opened_arity
-                .get(&pattern)
-                .copied()
-                .map(|abstracts| ss::PackageWitnessProjection::Package { abstracts })
-                .unwrap_or(ss::PackageWitnessProjection::Ignore),
             | ss::ValuePattern::Hole(_)
             | ss::ValuePattern::Var(_)
             | ss::ValuePattern::Ctor(_)
             | ss::ValuePattern::Lit(_)
             | ss::ValuePattern::Triv(_)
-            | ss::ValuePattern::View(_) => ss::PackageWitnessProjection::Ignore,
-        }
+            | ss::ValuePattern::View(_) => Route::Ignore,
+        })
     }
 
     pub(in crate::check) fn abstract_arity(projection: &ss::PackageWitnessProjection) -> usize {
         match projection {
             | ss::PackageWitnessProjection::Ignore => 0,
             | ss::PackageWitnessProjection::Package { abstracts } => *abstracts,
+            | ss::PackageWitnessProjection::Unpack { abstracts, body, .. } => {
+                abstracts + Self::abstract_arity(body)
+            }
             | ss::PackageWitnessProjection::Product(projections) => {
                 projections.iter().map(Self::abstract_arity).sum()
             }
@@ -284,6 +292,106 @@ impl ValuePiPatternSkolems {
 
         match projection {
             | ss::PackageWitnessProjection::Ignore => Ok((PatternSkolems::default(), 0)),
+            | ss::PackageWitnessProjection::Unpack { prefix, abstracts, body } => {
+                let tail_patterns = match tycker.scoped.pats[&pattern].to_owned() {
+                    | su::Pattern::Cons(items) if items.len() > *prefix => {
+                        items[*prefix..].to_vec()
+                    }
+                    | su::Pattern::Project(_) => vec![pattern],
+                    | _ => {
+                        return tycker.err_k(
+                            TyckError::PackageWitnessArityMismatch {
+                                expected: *prefix + 1,
+                                found: 0,
+                            },
+                            std::panic::Location::caller(),
+                        );
+                    }
+                };
+                let mut tail_domain = domain;
+                let mut remaining = canonical;
+                for _ in 0..*prefix {
+                    tail_domain = tail_domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+                    tail_domain = match tycker.type_filled_k(&tail_domain)?.to_owned() {
+                        | ss::Type::Exists(exists) => {
+                            let payload = match exists.mode {
+                                | ss::ExistsMode::Abstract => {
+                                    let Some((&witness, rest)) = remaining.split_first() else {
+                                        return tycker.err_k(
+                                            TyckError::PackageWitnessArityMismatch {
+                                                expected: *abstracts,
+                                                found: canonical.len(),
+                                            },
+                                            std::panic::Location::caller(),
+                                        );
+                                    };
+                                    remaining = rest;
+                                    let kind = tycker.statics.annotations_abst[&witness];
+                                    Alloc::alloc(tycker, witness, kind, env)
+                                }
+                                | ss::ExistsMode::Manifest(definition) => definition,
+                            };
+                            exists.body.subst_abst_k(tycker, (exists.binder.witness, payload))?
+                        }
+                        | ss::Type::ManifestKind(manifest) => manifest.body,
+                        | _ => {
+                            return tycker.err_k(
+                                TyckError::TypeExpected {
+                                    expected: "a package carrying witnesses".to_string(),
+                                    found: tail_domain,
+                                },
+                                std::panic::Location::caller(),
+                            );
+                        }
+                    };
+                }
+                let prefix = if *abstracts == 0 {
+                    PatternSkolems::default()
+                } else {
+                    Self::collect_projection_k(
+                        tycker,
+                        env,
+                        pattern,
+                        domain,
+                        &ss::PackageWitnessProjection::Package { abstracts: *abstracts },
+                        canonical,
+                        codomain,
+                    )?
+                    .0
+                };
+                let (tail, consumed) = match tail_patterns.as_slice() {
+                    | [tail] => Self::collect_projection_k(
+                        tycker,
+                        env,
+                        *tail,
+                        tail_domain,
+                        body,
+                        remaining,
+                        codomain,
+                    )?,
+                    | patterns => {
+                        let ss::PackageWitnessProjection::Product(projections) = &**body else {
+                            return tycker.err_k(
+                                TyckError::PackageWitnessArityMismatch {
+                                    expected: 1,
+                                    found: patterns.len(),
+                                },
+                                std::panic::Location::caller(),
+                            );
+                        };
+                        Self::collect_product_k(
+                            tycker,
+                            env,
+                            patterns,
+                            tail_domain,
+                            projections,
+                            remaining,
+                            codomain,
+                        )?
+                    }
+                };
+                Ok((prefix.merge(tail), abstracts + consumed))
+            }
             | ss::PackageWitnessProjection::Package { abstracts } => {
                 if *abstracts == 0 || *abstracts > canonical.len() {
                     return tycker.err_k(
@@ -314,39 +422,54 @@ impl ValuePiPatternSkolems {
                         std::panic::Location::caller(),
                     );
                 };
-                let domain_view = domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
-                let ss::Type::Prod(ss::Prod(domains)) =
-                    tycker.type_filled_k(&domain_view)?.to_owned()
-                else {
-                    return tycker.err_k(
-                        TyckError::TypeExpected {
-                            expected: "a product carrying package witnesses".to_string(),
-                            found: domain_view,
-                        },
-                        std::panic::Location::caller(),
-                    );
-                };
-                if projections.len() != domains.len() || domains.len() != patterns.len() {
-                    return tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: projections.len(),
-                            found: patterns.len(),
-                        },
-                        std::panic::Location::caller(),
-                    );
-                }
-                projections.iter().zip(domains).zip(patterns).try_fold(
-                    (PatternSkolems::default(), 0usize),
-                    |(skolems, consumed), ((projection, domain), pattern)| {
-                        let remaining = canonical.get(consumed..).unwrap_or_default();
-                        let (component, component_consumed) = Self::collect_projection_k(
-                            tycker, env, pattern, domain, projection, remaining, codomain,
-                        )?;
-                        Ok((skolems.merge(component), consumed + component_consumed))
-                    },
+                Self::collect_product_k(
+                    tycker,
+                    env,
+                    &patterns,
+                    domain,
+                    projections,
+                    canonical,
+                    codomain,
                 )
             }
         }
+    }
+
+    fn collect_product_k(
+        tycker: &mut Tycker<'_>, env: &ss::TyEnv, patterns: &[su::PatId], domain: ss::TypeId,
+        projections: &[ss::PackageWitnessProjection], canonical: &[ss::AbstId],
+        codomain: ss::TypeId,
+    ) -> ResultKont<(PatternSkolems, usize)> {
+        let domain_view = domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+        let ss::Type::Prod(ss::Prod(domains)) = tycker.type_filled_k(&domain_view)?.to_owned()
+        else {
+            return tycker.err_k(
+                TyckError::TypeExpected {
+                    expected: "a product carrying package witnesses".to_string(),
+                    found: domain_view,
+                },
+                std::panic::Location::caller(),
+            );
+        };
+        if projections.len() != domains.len() || domains.len() != patterns.len() {
+            return tycker.err_k(
+                TyckError::PackageWitnessArityMismatch {
+                    expected: projections.len(),
+                    found: patterns.len(),
+                },
+                std::panic::Location::caller(),
+            );
+        }
+        projections.iter().zip(domains).zip(patterns.iter().copied()).try_fold(
+            (PatternSkolems::default(), 0usize),
+            |(skolems, consumed), ((projection, domain), pattern)| {
+                let remaining = canonical.get(consumed..).unwrap_or_default();
+                let (component, component_consumed) = Self::collect_projection_k(
+                    tycker, env, pattern, domain, projection, remaining, codomain,
+                )?;
+                Ok((skolems.merge(component), consumed + component_consumed))
+            },
+        )
     }
 }
 

@@ -1,0 +1,56 @@
+-- Static factories forward runtime State operations and their algebra evidence.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let monadic_basis = @(import("../../std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> monadic_basis in
+let int = numeric/int in
+let State (A : VType) = Int -> Ret (A * Int) in
+let mo : Thk (Monad State) = {
+  comatch
+  | .return A value => fn state => ret (value, state)
+  | .bind A B computation continuation => fn state =>
+    do (value, state) <- ! computation state;
+    ! continuation value state
+  end
+} in
+let mark : Thk (Int -> State Int) = {
+  fn digit state =>
+    do shifted <- ! int/mul state 10;
+    do next <- ! int/add shifted digit;
+    ret (digit, next)
+} in
+let program = {
+  @[monadic] fn (first : Thk (Ret Int)) (second : Thk (Ret Int)) =>
+    let make : val pi (B : CType) . Thk (Thk B -> B) =
+      val (B : CType) =>
+        {
+          fn (operation : Thk B) =>
+            do _ <- ret ();
+            ! operation
+        }
+    in
+    let val specialize (factory : val pi (B : CType) . Thk (Thk B -> B)) =
+      factory (Ret Int)
+    in
+    let val exports (B : CType) (run : Thk (Thk B -> B)) :
+      exists (Result as B : CType) . (#run :: Thk (Thk Result -> Result)) * Unit =
+        (B, (= run, ()))
+    in
+    let operations = exports (Ret Int) (specialize make) in
+    let run = operations/run in
+    do left <- ! run first;
+    do right <- ! run second;
+    ret (left, right)
+} in
+do ((left, right), trace) <- ! program State mo { ! mark 1 } { ! mark 2 } 0;
+-- The trace is 12 only when each supplied operation runs once, in source order.
+do trace_error <- ! int/sub trace 12;
+do left_error <- ! int/sub left 1;
+do right_error <- ! int/sub right 2;
+do left_square <- ! int/mul left_error left_error;
+do right_square <- ! int/mul right_error right_error;
+do trace_square <- ! int/mul trace_error trace_error;
+do payload_error <- ! int/add left_square right_square;
+do status <- ! int/add payload_error trace_square;
+! process/exit status

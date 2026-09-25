@@ -125,6 +125,57 @@ impl ValuePiInstantiation {
     ) -> ResultKont<Vec<ProjectedPackageArgument>> {
         match projection {
             | ss::PackageWitnessProjection::Ignore => Ok(Vec::new()),
+            | ss::PackageWitnessProjection::Unpack { prefix, abstracts, body } => {
+                let crate::elaborate::static_values::StaticShape::Package(witnesses, payload) =
+                    shape
+                else {
+                    return tycker.err_k(
+                        TyckError::PackageWitnessesUnavailable { package: argument },
+                        std::panic::Location::caller(),
+                    );
+                };
+                if witnesses.len() != *prefix {
+                    return tycker.err_k(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: *prefix,
+                            found: witnesses.len(),
+                        },
+                        std::panic::Location::caller(),
+                    );
+                }
+                let mut tail_domain = domain;
+                for witness in witnesses {
+                    tail_domain = tail_domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+                    tail_domain = match (tycker.type_filled_k(&tail_domain)?.to_owned(), witness) {
+                        | (ss::Type::Exists(exists), ss::StaticTermId::Type(witness)) => {
+                            let witness =
+                                exists.binder.pattern.bind_argument_k(tycker, *witness)?;
+                            if let ss::ExistsMode::Manifest(definition) = exists.mode {
+                                Lub::lub_k(definition, witness, tycker)?;
+                            }
+                            exists.body.subst_abst_k(tycker, (exists.binder.witness, witness))?
+                        }
+                        | (ss::Type::ManifestKind(manifest), ss::StaticTermId::Kind(kind)) => {
+                            Lub::lub_k(manifest.definition, *kind, tycker)?;
+                            manifest.body
+                        }
+                        | _ => {
+                            return tycker.err_k(
+                                TyckError::PackageWitnessesUnavailable { package: argument },
+                                std::panic::Location::caller(),
+                            );
+                        }
+                    };
+                }
+                let tail =
+                    Self::projected_shape_k(env, tycker, body, tail_domain, argument, payload)?;
+                let prefix = (*abstracts != 0).then(|| ProjectedPackageArgument {
+                    domain,
+                    witnesses: witnesses.clone(),
+                    abstracts: *abstracts,
+                });
+                Ok(prefix.into_iter().chain(tail).collect())
+            }
             | ss::PackageWitnessProjection::Package { abstracts } => {
                 let Some(witnesses) = shape.witnesses() else {
                     tycker.err_k(

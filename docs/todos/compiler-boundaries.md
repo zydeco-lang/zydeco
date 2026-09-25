@@ -89,8 +89,34 @@ The retained lexical witness is implementation drift, not an invitation to infer
 - [ ] Migrate examples whose type parameters precede the annotation, including the effect examples
   under `lib/tests/effects/`, to the explicit interface and update argument order and structure arguments together.
 
-The independent [nominal-type](../proposals/monadic-nominal-types.md)
-and [value-function](../proposals/monadic-value-functions.md) drafts must not depend on this permissive behavior.
+The independent [nominal-type draft](../proposals/monadic-nominal-types.md)
+and implemented [value-function translation](../references/language.md#polymorphic-value-functions) must not depend
+on this permissive behavior.
+
+## Inferred higher-order value-function witnesses
+
+[L4](../references/language.md#4-classification-and-inference) governs inferred classifiers,
+and [L8](../references/language.md#8-value-functions-and-views) permits higher-order value functions.
+Observed on 2026-09-25 while implementing monadic value functions, this ordinary program rejects
+at `specialize make` with `tyck.type-mismatch`, reporting distinct identities for the two bound `B` witnesses:
+
+```zydeco
+param (/VType; /CType; /Thk; /Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
+let val make (B : CType) = {
+  fn (operation : Thk B) => do _ <- ret (); ! operation
+} in
+let val specialize (factory : val pi (B : CType) . Thk (Thk B -> B)) =
+  factory (Ret Int)
+in
+! (specialize make) { ret 1 }
+```
+
+An explicit classifier on `make` passes:
+`let make : val pi (B : CType) . Thk (Thk B -> B) = val (B : CType) => { ... }`.
+The failure precedes algebra translation and occurs with no monadic annotation.
+Investigate inference-hole reconciliation under paired binder scopes,
+retaining both versions as regressions when repaired.
+The monadic higher-order tests currently use the explicit signature.
 
 ## Source-load diagnostic locations
 

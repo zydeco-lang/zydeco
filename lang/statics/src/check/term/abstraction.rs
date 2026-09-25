@@ -63,7 +63,7 @@ impl TermChecker<'_> {
                             )?;
                             let witnesses = binder.package_telescope_k(tycker)?;
                             let witness_projection =
-                                PackageWitnessProjectionBuilder::build(pattern, tycker);
+                                PackageWitnessProjectionBuilder::build(pattern, tycker)?;
                             let projected_arity = PackageWitnessProjectionBuilder::abstract_arity(
                                 &witness_projection,
                             );
@@ -189,7 +189,7 @@ impl TermChecker<'_> {
                             }
                             let actual_witnesses = binder.package_telescope_k(tycker)?;
                             let actual_projection =
-                                PackageWitnessProjectionBuilder::build(pattern, tycker);
+                                PackageWitnessProjectionBuilder::build(pattern, tycker)?;
                             match (&parameter.witnesses, &actual_witnesses) {
                                 | (None, None) => binder.close_scope_k(tycker, codomain)?,
                                 | (Some(expected), Some(actual))

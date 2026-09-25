@@ -324,8 +324,17 @@ pub struct ValueParameter {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PackageWitnessProjection {
     Ignore,
-    Package { abstracts: usize },
+    Package {
+        abstracts: usize,
+    },
     Product(Vec<PackageWitnessProjection>),
+    /// Open a physical static prefix, then continue through its payload.
+    /// Algebra translation inserts structure fields between package openings.
+    Unpack {
+        prefix: usize,
+        abstracts: usize,
+        body: Box<PackageWitnessProjection>,
+    },
 }
 
 /// One erased or runtime binder in a value-function classifier.
@@ -383,6 +392,24 @@ pub struct CoData {
 
 mod impls_structs {
     use super::*;
+
+    impl PackageWitnessProjection {
+        pub(crate) fn product(fields: Vec<Self>) -> Self {
+            if fields.iter().all(|field| matches!(field, Self::Ignore)) {
+                Self::Ignore
+            } else {
+                Self::Product(fields)
+            }
+        }
+
+        pub(crate) fn unpack(prefix: usize, abstracts: usize, body: Self) -> Self {
+            match body {
+                | Self::Ignore if abstracts == 0 => Self::Ignore,
+                | Self::Ignore => Self::Package { abstracts },
+                | body => Self::Unpack { prefix, abstracts, body: Box::new(body) },
+            }
+        }
+    }
 
     impl Exists {
         pub fn new(binder: TypeBinder, body: TypeId) -> Self {

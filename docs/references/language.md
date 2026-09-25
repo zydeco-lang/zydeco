@@ -697,15 +697,70 @@ Some direct uses of those types still pass checking;
 with the approved boundary.
 It is not a planned mechanism for importing external structure evidence.
 
+### Polymorphic Value Functions
+
+A value function inside a monadic computation may assemble suspended code that sequences
+into an abstract computation type.
+Translation supplies that type's algebra at the value-function binder,
+using the same structure-passing convention as computation polymorphism.
+The value function still disappears through [static elimination](#10-static-elimination).
+
+Write `L_M` for translation under carrier `M`, and `Sig_M,K(T)` for the computation type
+of the structure required by a target type `T : K`.
+The existing kind-directed signature rules are:
+
+```text
+Sig_M,VType(T)    = Top
+Sig_M,CType(T)    = Algebra M T
+Sig_M,K1->K2(F)  = forall (X : K1) . Thk (Sig_M,K1(X)) -> Sig_M,K2(F X)
+```
+
+`Top` is empty codata; named kinds use their payload projection.
+Let `Str_M(T)` construct evidence of type `Sig_M,K(L_M(T))` from the source type `T`.
+Each type parameter introduces exactly one following structure parameter, including the trivial structure at `VType`:
+
+```text
+L_M(val pi (X : K) . A)
+  = val pi (X' : K) (s_X : Thk (Sig_M,K(X'))) . L_M(A)
+L_M(val (X : K) => v)
+  = val (X' : K) (s_X : Thk (Sig_M,K(X'))) => L_M(v)
+L_M(f T)
+  = (L_M(f) L_M(T)) { Str_M(T) }
+```
+
+The body uses the renamed witness `X'` and the structure bound by `s_X`.
+Named type patterns retain their shape. Ordinary value parameters still receive one translated argument;
+parameters that open packages use the structures already carried by those packages.
+This uniform interface supports annotated, partially applied, and higher-order value functions
+without requiring source-level structure arguments at calls inside the block.
+
+For example, this local factory can sequence into `B` even before the caller instantiates it:
+
+```zydeco
+@[monadic] begin
+  let val make (B : CType) = {
+    fn (k : Thk B) => do _ <- ret (); ! k
+  } in
+  ! (make (Ret Int)) { ret 1 }
+end
+```
+
+Its translated classifier is schematically `val pi (B : CType) (alg_B : Thk (Algebra M B)) . Thk (Thk B -> B)`.
+The application supplies `M Int` and the structure for the source `Ret Int`.
+The selected monad implementation may remain runtime data:
+static specialization forwards the structure thunk without executing it.
+Unknown value-function implementations still fail at a runtime boundary.
+An [inference discrepancy](../todos/compiler-boundaries.md#inferred-higher-order-value-function-witnesses)
+currently requires an explicit signature for some higher-order factories even without monadic translation.
+
 ### Translation Coverage and Deferred Roots
 
 The implemented annotation requires a computation payload.
 Extending it to type, value, or pure module roots is deferred until their result
 and application interfaces are designed.
 That deferral does not exclude value functions or type definitions occurring inside a computation payload.
-Their outstanding translation cases have separate drafts
-for [nominal and recursive types](../proposals/monadic-nominal-types.md)
-and [polymorphic value functions](../proposals/monadic-value-functions.md).
+Polymorphic value functions follow the rules above;
+[nominal and recursive types](../proposals/monadic-nominal-types.md) remain a separate design draft.
 
 The [control library](../../lib/std/control) supplies State and Exception examples.
 Library-encoded delimited control does not imply primitive capture or duplication of the native machine stack.

@@ -66,7 +66,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
                     std::panic::Location::caller(),
                 )?;
                 let witnesses = binder.package_telescope_k(tycker)?;
-                let witness_projection = PackageWitnessProjectionBuilder::build(pattern, tycker);
+                let witness_projection = PackageWitnessProjectionBuilder::build(pattern, tycker)?;
                 let projected_arity =
                     PackageWitnessProjectionBuilder::abstract_arity(&witness_projection);
                 let witness_arity = witnesses.as_ref().map_or(0, ss::PackTelescope::len);

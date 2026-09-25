@@ -1051,6 +1051,11 @@ Source formation and opening rules live in [L9](language.md#9-polymorphism-and-p
 and substitutes caller-visible evidence at application.
 A runtime thunk's implementation can be unknown while its signature supplies the dependency.
 Value-function witness projections separately record which structured argument components supply evidence.
+Product routes select argument components; package leaves consume a static prefix.
+An `Unpack` route records a physical prefix and continues into its payload, so witnesses separated
+by ordinary fields or generated algebra structures keep their exact paths and order.
+Routes with no remaining witness demand collapse to `Ignore`; a package opening
+whose payload is ignored uses the same leaf form whether it came from source checking or translation.
 `PackPiInstantiationState` consumes the physical leading existential prefix
 and substitutes its abstract witnesses through the codomain.
 `ValPi` has a separate projection-based argument representation;
@@ -1135,8 +1140,35 @@ and type parameters for external dependencies.
 `TyEnv::monadic_new` still retains lexical type bindings;
 the remaining [closure-validation repair](../todos/compiler-boundaries.md#monadic-closure-validation)
 must distinguish closed definitions from captured witnesses before translation.
-The proposed extensions for [nominal types](../proposals/monadic-nominal-types.md)
-and [value functions](../proposals/monadic-value-functions.md) operate within that boundary.
+The proposed extension for [nominal types](../proposals/monadic-nominal-types.md) operates within that boundary.
+
+[Value-function translation](../../lang/statics/src/elaborate/monadic/value_functions.rs) implements
+[L11's structure-passing rules](language.md#polymorphic-value-functions) for `ValPi`, `ValAbs`, and `ValApp`.
+Type binders introduce fresh witnesses, preserve named-pattern shape,
+and scope witness renaming separately from structure lookup.
+An abstraction constructs its classifier and term from the same binder scope; its body
+and generated application evidence are checked against the translated classifiers.
+The child environment ends at the abstraction, so its structure associations cannot escape to siblings.
+
+Package-opening value parameters reuse the existing layout-driven package-pattern translator.
+Its layout counts physical static fields, including manifest entries,
+while its canonical telescope counts abstract witnesses.
+Ignored product components consume neither witnesses nor structures. The `Explicit` witness-route folder rebuilds routes
+across the inserted structure fields using owned continuation frames.
+[Field translation](../../lang/statics/src/elaborate/monadic/projection.rs) follows the already resolved source route
+in a loop and inserts payload-selection steps beside those structures.
+It retains translated product classifiers for residual layout without rerunning field search.
+
+These semantic cases extend the existing recursive monadic traversal and reuse its type,
+term, signature, structure, and package constructors.
+They do not introduce a second whole-term pass or change the traversal's overall depth guarantees.
+The payload is checked once, then translated, finalized, and statically eliminated.
+The static evaluator can forward opaque runtime monad dictionaries through known value closures;
+it never executes their structure thunks to recover a type witness.
+Translated terms retain source provenance so residualization failures identify the source construct.
+[Focused regressions](../../lang/tests/tests/monadic_value_functions.rs) cover signatures, witness scope, rejection,
+typed-arena lint, and lowering; the [State fixture](../../lib/tests/monadic/value-functions.zy) checks effect order
+through the interpreter and both Wasm backends.
 
 [Copattern elaboration](../../lang/statics/src/check/copattern.rs) follows the expected residual classifier:
 a codata step groups destructor clauses, an arrow step introduces a shared argument

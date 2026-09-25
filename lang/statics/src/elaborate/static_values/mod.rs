@@ -71,19 +71,19 @@ pub struct StaticElaboration {
 /// stays opaque, so inspecting a value never enters its computations.
 pub(crate) enum StaticShape {
     Opaque,
-    Package(Vec<StaticTermId>),
+    Package(Vec<StaticTermId>, Box<StaticShape>),
     Product(Vec<StaticShape>),
 }
 
 impl StaticShape {
     fn in_scope(self, tycker: &Tycker<'_>, scope: &SkolemScope) -> Self {
         match self {
-            | Self::Package(witnesses) => {
+            | Self::Package(witnesses, body) => {
                 if witnesses.iter().all(|witness| match witness {
                     | StaticTermId::Type(ty) => ty.has_visible_witnesses(tycker, scope),
                     | StaticTermId::Kind(_) => true,
                 }) {
-                    Self::Package(witnesses)
+                    Self::Package(witnesses, Box::new(body.in_scope(tycker, scope)))
                 } else {
                     Self::Opaque
                 }
@@ -97,7 +97,7 @@ impl StaticShape {
 
     pub(crate) fn witnesses(&self) -> Option<Vec<StaticTermId>> {
         match self {
-            | Self::Package(witnesses) => Some(witnesses.clone()),
+            | Self::Package(witnesses, _) => Some(witnesses.clone()),
             | Self::Product(fields) => {
                 let witnesses =
                     fields.iter().filter_map(Self::witnesses).flatten().collect::<Vec<_>>();
@@ -156,7 +156,9 @@ enum ValueForm {
 impl StaticValue {
     fn shape(&self) -> StaticShape {
         match &self.0.form {
-            | ValueForm::Package(ConsN(witnesses, _)) => StaticShape::Package(witnesses.clone()),
+            | ValueForm::Package(ConsN(witnesses, body)) => {
+                StaticShape::Package(witnesses.clone(), Box::new(body.shape()))
+            }
             | ValueForm::Product(fields) => {
                 StaticShape::Product(fields.iter().map(Self::shape).collect())
             }

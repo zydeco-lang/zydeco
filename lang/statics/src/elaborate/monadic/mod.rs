@@ -8,6 +8,10 @@ use crate::*;
 
 /// Monadic constructors used by algebra translation.
 pub mod construct;
+mod projection;
+mod value_functions;
+use projection::ValueProjectionTranslation;
+use value_functions::ValueFunctionTranslation;
 
 pub mod syntax {
     /// signature translation
@@ -665,18 +669,15 @@ impl PackPiPatternTranslation {
         Ok(Self { pattern, layout: PackPiWitnessLayout(layout) })
     }
 
-    /// Number of canonical witnesses one product component's pattern consumes.
+    /// Number of physical static fields one product component's pattern opens.
     ///
     /// A deep-selected binder distributes the arrow's witnesses across product
     /// components; each component consumes its subtree's demand in source order.
     fn pattern_witness_demand(tycker: &Tycker<'_>, pattern: VPatId) -> usize {
         match tycker.statics.vpats[&pattern].to_owned() {
-            | ValuePattern::SCons(_) => tycker
-                .statics
-                .package_pattern_opened_arity
-                .get(&pattern)
-                .copied()
-                .unwrap_or_default(),
+            | ValuePattern::SCons(ConsN(prefix, body)) => {
+                prefix.len() + Self::pattern_witness_demand(tycker, body)
+            }
             | ValuePattern::Named(Named(_, inner)) => Self::pattern_witness_demand(tycker, inner),
             | ValuePattern::VCons(patterns) => {
                 patterns.iter().map(|pattern| Self::pattern_witness_demand(tycker, *pattern)).sum()
@@ -694,6 +695,9 @@ impl PackPiPatternTranslation {
     }
 
     fn translate(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        if self.layout.0.is_empty() {
+            return cs::TermLift { tm: self.pattern }.mbuild(tycker, env);
+        }
         let (env, ty) = cs::TypeOf(self.pattern).mbuild(tycker, env)?;
         let (env, translated_ty) = cs::TypeLift { ty }.mbuild(tycker, env)?;
         match tycker.statics.vpats[&self.pattern].to_owned() {
@@ -1245,37 +1249,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         | Type::CoData(coda) => {
             cs::CoData(coda, |_dtor, ty| cs::TypeLift { ty }).mbuild(tycker, env)?
         }
-        | Type::ValPi(pi) => {
-            let ValPi { binder, codomain } = *pi;
-            let (env, binder) = match binder {
-                | ValPiBinder::Type(binder) => {
-                    let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
-                    let witness =
-                        env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
-                    (env, ValPiBinder::Type(TypeBinder { pattern, witness }))
-                }
-                | ValPiBinder::Value(parameter) => {
-                    let (env, domain) =
-                        cs::TypeLift { ty: parameter.domain }.mbuild(tycker, env)?;
-                    let witnesses = parameter.witnesses.map(|witnesses| {
-                        witnesses
-                            .map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness))
-                    });
-                    (
-                        env,
-                        ValPiBinder::Value(ValueParameter {
-                            domain,
-                            witnesses,
-                            witness_projection: parameter.witness_projection,
-                        }),
-                    )
-                }
-            };
-            let (env, codomain) = cs::TypeLift { ty: codomain }.mbuild(tycker, env)?;
-            let (env, vtype) = VType.mbuild(tycker, env)?;
-            let classifier = Alloc::alloc(tycker, ValPi { binder, codomain }, vtype, &env.ty);
-            (env, classifier)
-        }
+        | Type::ValPi(pi) => ValueFunctionTranslation { signature: *pi }.classifier(tycker, env)?,
         | Type::Arrow(ty) => {
             let Arrow(ty_1, ty_2) = ty;
             let ty_1_ = cs::TypeLift { ty: ty_1 };
@@ -1613,6 +1587,15 @@ fn value_translation(
     tycker: &mut Tycker, env: MonEnv, value: ValueId,
 ) -> Result<(MonEnv, ValueId)> {
     let (env, ty) = cs::TypeOf(value).mbuild(tycker, env)?;
+    if let Value::ValAbs(abstraction) = tycker.statics.values[&value].to_owned() {
+        let signature = ValueFunctionTranslation::signature(tycker, ty)?;
+        let (env, translated) =
+            ValueFunctionTranslation { signature }.abstraction(tycker, env, abstraction)?;
+        if let Some(origin) = tycker.statics.terms.source(&value.into()) {
+            tycker.statics.terms.record(origin, translated.into());
+        }
+        return Ok((env, translated));
+    }
     let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
     let (env, res) = match tycker.statics.values[&value].to_owned() {
         | Value::Hole(Hole) => cs::Ann(Hole, ty_).mbuild(tycker, env)?,
@@ -1677,35 +1660,9 @@ fn value_translation(
             );
             (env, value)
         }
-        | Value::ValAbs(Abs(binder, body)) => {
-            let (env, binder) = match binder {
-                | ValBinder::Type(pattern) => {
-                    let (env, pattern) = type_pattern_translation(tycker, env, pattern)?;
-                    (env, ValBinder::Type(pattern))
-                }
-                | ValBinder::Value(pattern) => {
-                    let (env, pattern) = value_pattern_translation(tycker, env, pattern)?;
-                    (env, ValBinder::Value(pattern))
-                }
-            };
-            let (env, body) = value_translation(tycker, env, body)?;
-            let abstraction = Alloc::alloc(tycker, Abs(binder, body), ty_, &env.ty);
-            (env, abstraction)
-        }
+        | Value::ValAbs(_) => unreachable!("value abstractions translate their binder scope first"),
         | Value::ValApp(App(function, argument)) => {
-            let (env, function) = value_translation(tycker, env, function)?;
-            let (env, argument) = match argument {
-                | ValArgument::Type(argument) => {
-                    let (env, argument) = cs::TypeLift { ty: argument }.mbuild(tycker, env)?;
-                    (env, ValArgument::Type(argument))
-                }
-                | ValArgument::Value(argument) => {
-                    let (env, argument) = value_translation(tycker, env, argument)?;
-                    (env, ValArgument::Value(argument))
-                }
-            };
-            let application = Alloc::alloc(tycker, App(function, argument), ty_, &env.ty);
-            (env, application)
+            ValueFunctionTranslation::application(tycker, env, function, argument, ty_)?
         }
         | Value::Thunk(value) => {
             let Thunk(body) = value;
@@ -1730,11 +1687,12 @@ fn value_translation(
         }
         | Value::Proj(value) => {
             let Proj(head, field) = value;
-            let (env, head) = value_translation(tycker, env, head)?;
-            let projected = Alloc::alloc(tycker, Proj(head, field), ty_, &env.ty);
-            (env, projected)
+            ValueProjectionTranslation { head, field, result: ty_ }.translate(tycker, env)?
         }
     };
+    if let Some(origin) = tycker.statics.terms.source(&value.into()) {
+        tycker.statics.terms.record(origin, res.into());
+    }
     Ok((env, res))
 }
 
@@ -1876,6 +1834,9 @@ fn computation_translation(
 
     if copattern_match {
         let _ = tycker.statics.copattern_matches.upsert(res, ());
+    }
+    if let Some(origin) = tycker.statics.terms.source(&compu.into()) {
+        tycker.statics.terms.record(origin, res.into());
     }
     Ok((env, res))
 }

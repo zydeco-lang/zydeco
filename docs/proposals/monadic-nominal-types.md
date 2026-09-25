@@ -3,7 +3,7 @@
 Status: design draft, 2026-09-25. The translation below is proposed, not implemented or adopted.
 The approved scope is the [closed translation boundary](../references/language.md#closed-translation-boundary);
 [non-computation roots remain deferred](../references/language.md#translation-coverage-and-deferred-roots).
-The separate [value-function draft](monadic-value-functions.md) addresses polymorphic static functions.
+[Polymorphic value functions](../references/language.md#polymorphic-value-functions) already use structure passing.
 
 ## Motivation and current failure
 
