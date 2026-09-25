@@ -528,8 +528,9 @@ It synthesizes the payload into the checker-wide checked-term repository,
 then algebra translation consumes that immutable handle.
 Each resolved monadic block retains one payload and one translated root;
 a use-site expectation is compared with the canonical synthesized classifier afterward.
-The [compiler reference](docs/references/compiler.md#monadic-and-copattern-elaboration) records the value-function
-translation, remaining closure-validation discrepancy, and nominal-type draft.
+The [compiler reference](docs/references/compiler.md#monadic-and-copattern-elaboration)
+records the value-function translation, applicative nominal families and recursive algebra dictionaries,
+and the remaining closure-validation discrepancy.
 Monad operations are supplied at runtime, and there is no general specialization pass eliminating their dispatch.
 
 ## Implementation Architecture

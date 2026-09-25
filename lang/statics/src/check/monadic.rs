@@ -68,7 +68,8 @@ impl<'a> MonadicBlockElaboration<'a> {
             TyEnvT { info: body_environment.clone(), inner: self.syntax.body }
                 .tyck_k(tycker, Action::syn())
         })?;
-        AlgebraicTranslation::new(body, body_environment, basis, self.environment).build_k(tycker)
+        AlgebraicTranslation::new(body, self.syntax.body, body_environment, basis, self.environment)
+            .build_k(tycker)
     }
 }
 
@@ -77,6 +78,7 @@ impl<'a> MonadicBlockElaboration<'a> {
 /// is newly materialized.
 struct AlgebraicTranslation<'a> {
     body: CheckedTerm,
+    source: su::TermId,
     body_environment: TyEnv,
     basis: MonadicTypeBasis,
     environment: &'a TyEnv,
@@ -84,13 +86,14 @@ struct AlgebraicTranslation<'a> {
 
 impl<'a> AlgebraicTranslation<'a> {
     fn new(
-        body: CheckedTerm, body_environment: TyEnv, basis: MonadicTypeBasis, environment: &'a TyEnv,
+        body: CheckedTerm, source: su::TermId, body_environment: TyEnv, basis: MonadicTypeBasis,
+        environment: &'a TyEnv,
     ) -> Self {
-        Self { body, body_environment, basis, environment }
+        Self { body, source, body_environment, basis, environment }
     }
 
     fn build_k(self, tycker: &mut Tycker<'_>) -> ResultKont<TermAnnId> {
-        let Self { body, body_environment, basis, environment } = self;
+        let Self { body, source, body_environment, basis, environment } = self;
         let (body, _body_ty) = body.root().try_as_compu(
             tycker,
             TyckError::SortMismatch,
@@ -111,18 +114,28 @@ impl<'a> AlgebraicTranslation<'a> {
         let monad_impl = cs::Value(monad_impl_var).build(tycker, environment);
 
         use crate::environment::*;
-        let (_menv, body_lift) = cs::TermLift { tm: body }.mbuild_k(
-            tycker,
-            MonEnv {
-                ty: body_environment,
-                subst: SubstEnv::new(),
-                subst_abst: SubstAbstEnv::new_sync(),
-                structure: StrEnv::new(),
-                basis,
-                monad_ty,
-                monad_impl,
-            },
-        )?;
+        let menv = MonEnv {
+            ty: body_environment,
+            subst: SubstEnv::new(),
+            subst_abst: SubstAbstEnv::new_sync(),
+            structure: StrEnv::new(),
+            basis,
+            monad_ty,
+            monad_impl,
+            nominals: Default::default(),
+            nominal_dictionary: None,
+        };
+        use crate::elaborate::monadic::nominal::NominalTranslation;
+        let prepared = NominalTranslation::prepare(tycker, menv, source, body);
+        let menv = tycker.err_p_to_k(prepared)?;
+        let dictionary = NominalTranslation::dictionary(tycker, menv);
+        let (menv, dictionary) = tycker.err_p_to_k(dictionary)?;
+        let (_, mut body_lift) = cs::TermLift { tm: body }.mbuild_k(tycker, menv)?;
+        if let Some((binder, bindee)) = dictionary {
+            let ty = tycker.statics.annotations_compu[&body_lift];
+            body_lift =
+                Alloc::alloc(tycker, ss::Let { binder, bindee, tail: body_lift }, ty, environment);
+        }
         let body_lift_ty = cs::TypeOf(body_lift).build(tycker, environment);
 
         // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) => Lift(body)

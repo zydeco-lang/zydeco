@@ -100,6 +100,8 @@ pub struct Tycker<'a> {
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
     pub(crate) observations: Vec<TyckObservation>,
+    pub(crate) monadic_families:
+        std::collections::BTreeMap<ss::AbstId, crate::elaborate::monadic::nominal::NominalFamily>,
     pending_foreign_imports: Vec<PendingForeignImport>,
 }
 

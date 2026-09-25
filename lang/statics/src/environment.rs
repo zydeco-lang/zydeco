@@ -320,6 +320,10 @@ pub struct MonEnv {
     pub basis: MonadicTypeBasis,
     pub monad_ty: TypeId,
     pub monad_impl: ValueId,
+    pub(crate) nominals: std::sync::Arc<
+        std::collections::BTreeMap<AbstId, crate::elaborate::monadic::nominal::NominalFamily>,
+    >,
+    pub(crate) nominal_dictionary: Option<ValueId>,
 }
 
 /* --------------------------- Environment Interning ------------------------- */

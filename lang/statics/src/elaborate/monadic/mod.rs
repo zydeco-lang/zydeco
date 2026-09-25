@@ -8,6 +8,7 @@ use crate::*;
 
 /// Monadic constructors used by algebra translation.
 pub mod construct;
+pub(crate) mod nominal;
 mod projection;
 mod value_functions;
 use projection::ValueProjectionTranslation;
@@ -330,10 +331,6 @@ impl MonConstruct<CompuId> for CoDataStructureTranslation {
         let Self { source, source_codata } = self;
         let source_arms = tycker.statics.codatas[&source_codata].clone();
         let (env, target) = cs::TypeLift { ty: source }.mbuild(tycker, env)?;
-        let target_view = target.unroll(tycker)?;
-        let Type::CoData(target_codata) = tycker.type_filled(&target_view)?.to_owned() else {
-            unreachable!("translated codata type must remain codata")
-        };
         let monad_ty = env.monad_ty;
 
         Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, carrier| {
@@ -342,7 +339,7 @@ impl MonConstruct<CompuId> for CoDataStructureTranslation {
                 let function_ty = cs::Thk(Arrow(carrier, target));
                 let source_arms = source_arms.clone();
                 Abs(cs::Pat("f", function_ty), move |function: VPatId| {
-                    cs::CoMatch(target_codata, move |dtor, _target_signature| {
+                    cs::CoMatch(target, move |dtor, _target_signature| {
                         let source_signature = source_arms
                             .get(&dtor)
                             .expect("translated codata must preserve its destructors");
@@ -908,6 +905,9 @@ fn structure_translation(
                 .copied(),
         }
         .mbuild(tycker, env)?,
+        | Type::Abst(abst) if tycker.statics.seals.get(&abst).is_some() => {
+            nominal::NominalTranslation::structure(tycker, env, abst)?
+        }
         | Type::Abst(abst) => {
             let abst = match env.subst_abst.get(&abst).cloned() {
                 | Some(new_abst) => new_abst,
@@ -1142,12 +1142,9 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             (env, alloc)
         }
         | Type::Abst(abst) => {
-            // only types that are not sealed are allowed here
             use zydeco_utils::arena::ArenaAccess;
             match tycker.statics.seals.get(&abst) {
-                | Some(_) => {
-                    tycker.err(TyckError::NotInlinableSeal(abst), std::panic::Location::caller())?
-                }
+                | Some(_) => nominal::NominalTranslation::apply(tycker, env, abst)?,
                 | None => match env.subst_abst.get(&abst).cloned() {
                     | Some(new) => {
                         let alloc = Alloc::alloc(tycker, new, kd, &env.ty);
@@ -1814,12 +1811,10 @@ fn computation_translation(
         }
         | Compu::CoMatch(compu) => {
             let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
-            let ty_ = ty_.unroll(tycker)?;
-            let Type::CoData(coda) = tycker.type_filled(&ty_)? else { unreachable!() };
             let CoMatch { arms } = compu;
             let arms: std::collections::HashMap<_, _> =
                 arms.into_iter().map(|CoMatcher { dtor, tail }| (dtor, tail)).collect();
-            cs::CoMatch(coda, |dtor, _ty| {
+            cs::CoMatch(ty_, |dtor, _ty| {
                 let tail = arms.get(&dtor).cloned().unwrap();
                 cs::TermLift { tm: tail }
             })

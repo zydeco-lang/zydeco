@@ -89,9 +89,10 @@ The retained lexical witness is implementation drift, not an invitation to infer
 - [ ] Migrate examples whose type parameters precede the annotation, including the effect examples
   under `lib/tests/effects/`, to the explicit interface and update argument order and structure arguments together.
 
-The independent [nominal-type draft](../proposals/monadic-nominal-types.md)
-and implemented [value-function translation](../references/language.md#polymorphic-value-functions) must not depend
-on this permissive behavior.
+Implemented [nominal translation](../references/language.md#applicative-nominal-translation) rejects external
+nominal declarations and free external witnesses in reachable local nominal definitions.
+It and [value-function translation](../references/language.md#polymorphic-value-functions) do not establish
+the complete closure validation still required above.
 
 ## Inferred higher-order value-function witnesses
 

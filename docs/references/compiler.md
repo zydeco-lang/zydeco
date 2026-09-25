@@ -341,6 +341,7 @@ The implemented interfaces serve different questions and therefore expose differ
 | Desugaring and lexical resolution | [Desugaring folders](#desugaring-folders) and [resolution events](#name-resolution) | Semantic handlers own telescope and scope transitions; builders and event consumers own their respective results |
 | Resolved syntax analysis | [Scoped traversal](#scoped-structural-traversal) | Borrowed nodes; choose unique identities or path occurrences; cycles reject the traversal |
 | Raw inferred classifiers | [Classifier folders](#classifier-folders) | Owned child reconstruction; preserve unchanged IDs; clients select substitution environments and reductions |
+| Raw checked terms and static evidence | [`CheckedNode` children](#nominal-algebra-construction) | Include classifier, pattern, and static-argument edges; clients select declaration expansion and use `TypeFolder` for classifiers |
 | Executable typed terms | [Residual runtime traversal](#residual-runtime-traversal) | Borrowed runtime nodes from the residual root; visit each identity once and exclude static evidence |
 | Typed terms to lexical high SPS | [Residual lowering folder](#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh output syntax for every input occurrence |
 | Lexical high SPS analysis | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
@@ -1142,7 +1143,7 @@ and type parameters for external dependencies.
 `TyEnv::monadic_new` still retains lexical type bindings;
 the remaining [closure-validation repair](../todos/compiler-boundaries.md#monadic-closure-validation)
 must distinguish closed definitions from captured witnesses before translation.
-The proposed extension for [nominal types](../proposals/monadic-nominal-types.md) operates within that boundary.
+[Nominal translation](#nominal-algebra-construction) operates within that boundary.
 
 [Value-function translation](../../lang/statics/src/elaborate/monadic/value_functions.rs) implements
 [L11's structure-passing rules](language.md#polymorphic-value-functions) for `ValPi`, `ValAbs`, and `ValApp`.
@@ -1171,6 +1172,55 @@ Translated terms retain source provenance so residualization failures identify t
 [Focused regressions](../../lang/tests/tests/monadic_value_functions.rs) cover signatures, witness scope, rejection,
 typed-arena lint, and lowering; the [State fixture](../../lib/tests/monadic/value-functions.zy) checks effect order
 through the interpreter and both Wasm backends.
+
+#### Nominal Algebra Construction
+
+[Nominal translation](../../lang/statics/src/elaborate/monadic/nominal.rs) implements
+[L11's applicative families](language.md#applicative-nominal-translation).
+Ownership comes from declaration identities bound in the resolved payload and its admitted closed source expansions.
+A declaration's recorded source identity survives in its translated family.
+An external seal or a local declaration capturing an external witness is rejected when translation reaches it;
+an external type supplied through a payload parameter stays abstract.
+
+Reachability and ownership are separate analyses.
+The raw `CheckedNode` view in [typed traversal](../../lang/statics/src/traverse.rs) exposes terms, patterns,
+classifiers, and erased type arguments without selecting executable replacements.
+Declaration discovery follows those edges and admitted closed definitions.
+The runtime graph intentionally omits the classifier evidence needed here.
+Only reachable declarations and their dependencies become translation roots;
+previously generated families do not become roots merely because their source owner is visible.
+
+A `TypeFolder` analysis gathers free witnesses and nominal edges, preserving binder scope.
+A finite fixed point propagates free dependencies through declaration edges.
+The translator reserves every reachable target family, then rebuilds every body with explicit parameters
+for the carrier, algebra constructor, and free type dependencies.
+Only completed families enter the checker-local cache keyed by source declaration identity.
+Bodies never capture the current monad implementation or an enclosing translated witness.
+Failure may leave unpublished arena allocations for diagnostics, but cannot publish an incomplete executable root.
+
+These analyses use explicit worklists over finite graphs.
+Reconstruction uses a flat reserve-then-define schedule because nominal back-edges already denote reserved families;
+there are no recursive reconstruction calls along declaration edges requiring `Explicit` continuation frames.
+Ordinary classifier reconstruction reuses the existing monadic traversal and its depth limits.
+Type applications reuse the declared constructor rather than generating specializations for recursive arguments.
+
+Structure generation reserves one private codata dictionary and builds it with the existing computation `fix`.
+Its methods quantify each declaration's free type dependencies and their structure evidence;
+higher-kinded declarations additionally quantify their ordinary type arguments and structures.
+Recursive requests select methods on the fixed dictionary instead of rebuilding their bodies.
+The translated block binds the dictionary thunk under its carrier and runtime monad arguments,
+so dynamic evaluation and inlining use the same generated code and nominal families.
+
+The `comatch` constructor accepts an expected classifier, exposes its codata shape to check each arm,
+and retains the nominal classifier on the result.
+This keeps codata introductions, observations, algebra signatures, and coverage hints consistent.
+[Nominal regressions](../../lang/tests/tests/monadic_nominal.rs) cover mutual recursion,
+growing type arguments, scoped and higher-kinded dependencies, packages, nested translation,
+applicative equality and rejection, source sharing, and bounded family counts on a 160-declaration cycle.
+The [State fixture](../../lib/tests/monadic/nominal-types.zy) checks runtime dictionary selection,
+finite protocol observations, and absence of eager effects in the interpreter, native backend, and both Wasm backends.
+
+#### Copattern Elaboration
 
 [Copattern elaboration](../../lang/statics/src/check/copattern.rs) follows the expected residual classifier:
 a codata step groups destructor clauses, an arrow step introduces a shared argument

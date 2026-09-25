@@ -1110,18 +1110,39 @@ where
 {
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let cs::CoMatch(coda_id, arm) = self;
+        let (env, ctype) = CType.mbuild(tycker, env)?;
+        let ty = Alloc::alloc(tycker, Type::from(coda_id), ctype, &env.ty);
+        cs::CoMatch(ty, arm).mbuild(tycker, env)
+    }
+}
+
+// Shape-check a comatch while retaining its nominal expected classifier.
+impl<F, R> MonConstruct<CompuId> for cs::CoMatch<TypeId, F>
+where
+    F: Clone + FnOnce(DtorName, TypeId) -> R,
+    R: MonConstruct<CompuId>,
+{
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        let cs::CoMatch(ty, arm) = self;
+        let view = ty.unroll(tycker)?;
+        let Type::CoData(coda_id) = tycker.type_filled(&view)? else {
+            return tycker.err(
+                TyckError::TypeExpected {
+                    expected: "codata for a monadic comatch".to_owned(),
+                    found: ty,
+                },
+                std::panic::Location::caller(),
+            );
+        };
         let coda = tycker.statics.codatas[&coda_id].to_owned();
         let arms = (coda.into_iter())
             .map(|(dtor, ty)| {
                 let (_, tail) = (arm.clone())(dtor.clone(), ty).mbuild(tycker, env.clone())?;
-                // let tail_ty = tycker.statics.annotations_compu[&tail];
-                // let Ok(_) = Lub::lub(ty, tail_ty, tycker) else { unreachable!() };
+                Lub::lub(ty, tycker.statics.annotations_compu[&tail], tycker)?;
                 Ok(CoMatcher { dtor, tail })
             })
             .collect::<Result<Vec<_>>>()?;
-        let (env, ctype) = CType.mbuild(tycker, env)?;
-        let ty_ = Alloc::alloc(tycker, Type::from(coda_id), ctype, &env.ty);
-        let alloc = Alloc::alloc(tycker, CoMatch { arms }, ty_, &env.ty);
+        let alloc = Alloc::alloc(tycker, CoMatch { arms }, ty, &env.ty);
         let _ = tycker.statics.codata_hints.upsert(alloc, coda_id);
         Ok((env, alloc))
     }

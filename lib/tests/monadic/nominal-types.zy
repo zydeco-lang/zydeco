@@ -1,0 +1,63 @@
+-- Nominal protocols share generated algebra code while the instance is runtime data.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let monadic_basis = @(import("../../std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> monadic_basis in
+let int = numeric/int in
+let State (A : VType) = Int -> Ret (A * Int) in
+let mo : Thk (Monad State) = {
+  comatch
+  | .return A value => fn state => ret (value, state)
+  | .bind A B computation continuation => fn state =>
+    do (value, state) <- ! computation state;
+    ! continuation value state
+  end
+} in
+let tick : Thk (State Int) = {
+  fn state =>
+    do next <- ! int/add state 1;
+    ret (next, next)
+} in
+let program = {
+  @[monadic] fn (tick : Thk (Ret Int)) =>
+    begin
+      def Box : VType =
+        data
+        | +Box : Int
+        end
+      that
+      def Stream : CType =
+        codata
+        | .head : Ret Box
+        | .next : Ret (Thk Stream)
+        end
+      that
+      let stream : Thk Stream = {
+        fix self =>
+          do value <- ! tick;
+          comatch
+          | .head => ret +Box(value)
+          | .next => ret self
+          end
+      } in
+      -- Reserving the dictionary and leaving this thunk unused must perform no tick.
+      let unused : Thk Stream = {
+        do _ <- ! tick;
+        ! stream
+      } in
+      do next <- ! stream .next;
+      do boxed <- ! next .head;
+      match boxed
+      | +Box(value) => ret value
+      end
+    end
+} in
+do runtime_mo <- ! int/eq (Ret (Thk (Monad State))) 1 1 { ret mo } { ret mo };
+do (value, trace) <- ! program State runtime_mo tick 0;
+do value_error <- ! int/sub value 2;
+do trace_error <- ! int/sub trace 2;
+do value_square <- ! int/mul value_error value_error;
+do trace_square <- ! int/mul trace_error trace_error;
+do status <- ! int/add value_square trace_square;
+! process/exit status

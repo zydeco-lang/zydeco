@@ -755,16 +755,62 @@ currently requires an explicit signature for some higher-order factories even wi
 
 ### Applicative Nominal Translation
 
-A nominal declaration inside a closed monadic payload has one translated type family per source declaration.
-The family takes the carrier and the declaration's free type dependencies as explicit type arguments.
+A closed monadic computation can define its own nominal data and codata types,
+including parameterized and mutually recursive definitions.
+Translation preserves their constructors, patterns, and observations through a nominal type family
+for each source declaration.
+Transparent aliases retain their existing behavior.
+
+The family takes the carrier, the selected `Algebra` type constructor,
+and the declaration's free type dependencies as explicit type arguments.
+The `Algebra` parameter accounts for structure fields introduced into existential packages
+and polymorphic value functions.
 Equal arguments select the same nominal identity; distinct source declarations remain distinct.
 Choosing `Ret` does not identify a translated declaration with its untranslated source.
 
+Write `L` for translation with carrier `M` and algebra constructor `G`.
+For a local nominal definition `N` with body `T` and free type dependencies `D1 ... Dn`:
+
+```text
+L(N)          = N_alg M G L(D1) ... L(Dn)
+body(N_alg)   = fn M G D1 ... Dn => L(T)
+kind(N_alg)   = (VType -> CType) -> kind(G) -> kind(D1) -> ... -> kind(Dn) -> kind(N)
+L(N U)        = L(N) L(U)
+```
+
+The parameters on the right bind the translated dependencies in `L(T)`.
+Recursive references reuse the same family, including at different type arguments.
+A shared closed definition retains its translated identity across blocks, and nested translation composes families.
+Runtime application never allocates a fresh nominal identity.
+
 The monad implementation is an ordinary argument to the generated algebra code.
 It can be evaluated dynamically or inlined without changing nominal type identity.
-Recursive references reuse the same translated family, including at different type arguments;
-runtime application never allocates a fresh nominal identity.
-The [implementation draft](../proposals/monadic-nominal-types.md) develops the remaining construction details.
+Nominal value types have the trivial structure; nominal codata algebras act through their observations.
+Recursive algebras share a suspended dictionary whose methods receive the required type and structure arguments.
+Constructing or passing that dictionary performs no source effects; observations demand its methods.
+This finite construction does not impose a new positivity or productivity rule on recursive source definitions.
+
+For example, the type parameter and recursive constructor below both belong to the annotated payload:
+
+```zydeco
+param (/VType; /Unit; builtin) : @(import("../../lib/std/builtin.zy")) in
+let basis = @(import("../../lib/std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> basis in
+@[monadic] fn (A : VType) (item : A) =>
+  begin
+    def List (X : VType) : VType =
+      data
+      | +Nil : Unit
+      | +Cons : X * List X
+      end
+    that
+    ret (+Cons(item, +Nil()) : List A)
+  end
+```
+
+External nominal types still enter through type parameters inside the annotation.
+Knowing their seal bodies does not authorize opening them or constructing an enclosing algebra implicitly.
+The [compiler reference](compiler.md#nominal-algebra-construction) describes ownership and recursive construction.
 
 ### Translation Coverage and Deferred Roots
 
@@ -772,8 +818,10 @@ The implemented annotation requires a computation payload.
 Extending it to type, value, or pure module roots is deferred until their result
 and application interfaces are designed.
 That deferral does not exclude value functions or type definitions occurring inside a computation payload.
-Polymorphic value functions follow the rules above;
-[nominal and recursive types](../proposals/monadic-nominal-types.md) remain a separate design draft.
+Polymorphic value functions and local nominal data/codata follow the rules above.
+Supported nominal definitions have a data or codata body after their type parameters.
+Other sealed heads, including nominal aliases of arrows, `Ret`, or abstract constructors,
+remain unsupported: they need their own typed introduction and algebra construction rules.
 
 The [control library](../../lib/std/control) supplies State and Exception examples.
 Library-encoded delimited control does not imply primitive capture or duplication of the native machine stack.

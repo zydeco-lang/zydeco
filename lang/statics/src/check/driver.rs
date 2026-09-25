@@ -36,6 +36,7 @@ impl<'a> Tycker<'a> {
             lub_probe: None,
             errors: Vec::new(),
             observations: Vec::new(),
+            monadic_families: Default::default(),
             pending_foreign_imports: Vec::new(),
         }
     }
