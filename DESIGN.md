@@ -513,8 +513,10 @@ See the [standard library guide](lib/std/README.md) for current entry points and
 Relative monads are defined as codata in the standard library (see `lib/std/control/monad.zy`).
 The module exports a value function from Builtin to the packed value containing `Monad` and `Algebra`,
 so importing and opening it requires neither a thunk nor a returned computation.
-Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` metadata annotation.
-The annotation may attach to any term.
+Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` meta annotation.
+The implemented payload is a computation;
+the [language reference](docs/references/language.md#11-relative-monads) owns its closed-term boundary,
+parameter-passing interface, and deferred root sorts.
 During type checking, its payload undergoes the algebra translation implemented
 in `lang/statics/src/elaborate/monadic/mod.rs` and invoked from `lang/statics/src/check/monadic.rs`.
 
@@ -526,10 +528,8 @@ It synthesizes the payload into the checker-wide checked-term repository,
 then algebra translation consumes that immutable handle.
 Each resolved monadic block retains one payload and one translated root;
 a use-site expectation is compared with the canonical synthesized classifier afterward.
-The translation retains lexical type bindings, including existential witnesses and transparent aliases.
-Bindings introduced inside the block are translated with it.
-A free term reference must have an inlinable definition that algebra translation can reinterpret;
-an arbitrary captured runtime value is rejected.
+The [compiler reference](docs/references/compiler.md#monadic-and-copattern-elaboration) records the
+remaining closure-validation discrepancy and links the independent translation drafts.
 Monad operations are supplied at runtime, and there is no general specialization pass eliminating their dispatch.
 
 ## Implementation Architecture
@@ -1005,6 +1005,6 @@ and `memory`, but the embedding must supply the imports before invoking either f
 - `pack` cannot introduce kind witnesses.
   Field-projection payload patterns and general same-bindee aliases are restricted to irrefutable forms,
   apart from the supported selective opening of a packed value.
-- Monadic translation requires inlinable free term references.
-  Lexical type bindings and terms introduced inside a block are supported; arbitrary captured runtime values
-  and automatic removal of monad dispatch remain outside it.
+- Monadic translation follows the [closed-term boundary](docs/references/language.md#closed-translation-boundary).
+  Its [coverage limits and deferred roots](docs/references/language.md#translation-coverage-and-deferred-roots)
+  have separate design records; automatic removal of monad dispatch remains outside the implementation.

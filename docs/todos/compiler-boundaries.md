@@ -55,6 +55,43 @@ A generalized computation witness route remains
 in the [computation witness-route idea](../ideas/computation-witness-routes.md).
 Improving the rejection diagnostic does not require accepting that extension.
 
+## Monadic closure validation
+
+The approved [closed translation boundary](../references/language.md#closed-translation-boundary)
+requires external types to enter through type parameters inside the monadic annotation.
+The implementation's [environment filter](../../lang/statics/src/environment.rs) retains lexical type bindings,
+and the translator starts with an empty structure environment.
+Consequently an external abstract computation type may work until an operation needs its algebra,
+at which point checking reports `tyck.missing-structure`.
+
+At `a12537a0`, this complete term passes checking even though `B` is free in the annotated payload:
+
+```zydeco
+param (/CType; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
+let basis = @(import("../../lib/std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> basis in
+fn (B : CType) => @[monadic] fn (k : Thk B) => ! k
+```
+
+Moving `fn (B : CType) =>` inside the annotation gives the intended type-parameter interface
+and causes translation to introduce its structure argument.
+The retained lexical witness is implementation drift, not an invitation to infer or register an outer algebra.
+
+- [ ] Validate closure over terms and classifiers after resolving intrinsic constants and admissible closed definitions.
+  Distinguish parameters bound in the payload from enclosing witnesses; do not reject closed intrinsic aliases just
+  because their source names were resolved outside it.
+- [ ] Diagnose a free external witness at the block boundary, with a parameter-passing suggestion,
+  before partial algebra construction.
+  Choose and retain a stable diagnostic code in the implementation change.
+- [ ] Pair the rejected outer binder above with the accepted inner binder, including `VType`,
+  `CType`, higher-kinded types, and existential witnesses.
+  Keep existing runtime-capture rejection and closed-definition cases.
+- [ ] Migrate examples whose type parameters precede the annotation, including the effect examples
+  under `lib/tests/effects/`, to the explicit interface and update argument order and structure arguments together.
+
+The independent [nominal-type](../proposals/monadic-nominal-types.md)
+and [value-function](../proposals/monadic-value-functions.md) drafts must not depend on this permissive behavior.
+
 ## Source-load diagnostic locations
 
 [C2](../references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance) keeps source coordinates

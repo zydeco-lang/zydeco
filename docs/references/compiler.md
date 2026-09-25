@@ -1130,6 +1130,13 @@ The translator constructs lifted types, structures, and terms, rebinding their s
 It translates the retained checked payload rather than rechecking its source under unrelated expectations.
 [L11](language.md#11-relative-monads) specifies the source translation and basis;
 generated code must satisfy the same finalization and residual representation boundaries as ordinary terms.
+The [closed translation boundary](language.md#closed-translation-boundary) requires explicit function
+and type parameters for external dependencies.
+`TyEnv::monadic_new` still retains lexical type bindings;
+the remaining [closure-validation repair](../todos/compiler-boundaries.md#monadic-closure-validation)
+must distinguish closed definitions from captured witnesses before translation.
+The proposed extensions for [nominal types](../proposals/monadic-nominal-types.md)
+and [value functions](../proposals/monadic-value-functions.md) operate within that boundary.
 
 [Copattern elaboration](../../lang/statics/src/check/copattern.rs) follows the expected residual classifier:
 a codata step groups destructor clauses, an arrow step introduces a shared argument

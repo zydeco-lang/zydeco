@@ -673,10 +673,40 @@ let mo : Thk (Monad Ret) = {
 (@[monadic] begin do x <- ret 1; ret x end) Ret mo
 ```
 
-Lexical type bindings, including existential witnesses, remain available.
-Bindings introduced inside the block are translated with it.
-Free term references require definitions that translation can reinterpret;
-arbitrary captured runtime values are rejected.
+### Closed Translation Boundary
+
+Algebra translation is defined on closed payloads.
+Supply external runtime values and operations through function parameters bound inside the annotation;
+supply external types and type constructors through type abstractions inside it.
+Instantiating the translated function supplies those arguments after the carrier and monad implementation,
+together with any structure arguments introduced by translation.
+This parameter-passing boundary is intentional.
+Implicit runtime capture and importing algebra evidence from the enclosing lexical environment are outside the design.
+
+Closure is measured after resolving the fixed language intrinsics and expanding available closed definitions.
+The lexically selected `Monad` and `Algebra` constructors configure the translation itself.
+A source name for a closed, inlinable definition can therefore be reinterpreted with the payload;
+an enclosing runtime variable or abstract type witness is not such a definition.
+In particular, knowing an external type's name does not supply its algebra.
+Pass that type through a type parameter of the translated function.
+
+The implementation rejects non-inlinable free term references, but currently retains lexical type bindings,
+including existential witnesses.
+Some direct uses of those types still pass checking;
+[closure validation](../todos/compiler-boundaries.md#monadic-closure-validation) tracks this discrepancy
+with the approved boundary.
+It is not a planned mechanism for importing external structure evidence.
+
+### Translation Coverage and Deferred Roots
+
+The implemented annotation requires a computation payload.
+Extending it to type, value, or pure module roots is deferred until their result
+and application interfaces are designed.
+That deferral does not exclude value functions or type definitions occurring inside a computation payload.
+Their outstanding translation cases have separate drafts
+for [nominal and recursive types](../proposals/monadic-nominal-types.md)
+and [polymorphic value functions](../proposals/monadic-value-functions.md).
+
 The [control library](../../lib/std/control) supplies State and Exception examples.
 Library-encoded delimited control does not imply primitive capture or duplication of the native machine stack.
 
