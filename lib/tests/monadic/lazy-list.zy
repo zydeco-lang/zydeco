@@ -1,0 +1,81 @@
+-- Regression for #66: nominal lazy-list tails reinterpret Ret through State.
+param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /stdio; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let monadic_basis = @(import("../../std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> monadic_basis in
+let int = numeric/int in
+let State (A : VType) = Int -> Ret (A * Int) in
+let mo : Thk (Monad State) = {
+  comatch
+  | .return A value => fn state => ret (value, state)
+  | .bind A B computation continuation => fn state =>
+    do (value, state) <- ! computation state;
+    ! continuation value state
+  end
+} in
+let mark : Thk (Int -> State Int) = {
+  fn digit state =>
+    do shifted <- ! int/mul state 10;
+    do next <- ! int/add shifted digit;
+    ret (digit, next)
+} in
+let make = {
+  @[monadic] fn (first : Thk (Ret Int)) (second : Thk (Ret Int)) =>
+    begin
+      def LazyList (A : VType) : VType =
+        data
+        | +Nil : Unit
+        | +Cons : A * Thk (Ret (LazyList A))
+        end
+      that
+      ret (
+        +Cons(
+          0,
+          {
+            do first <- ! first;
+            ret +Cons(
+              first,
+              {
+                do second <- ! second;
+                ret +Cons(second, { ret +Nil() })
+              }
+            )
+          }
+        ) : LazyList Int
+      )
+    end
+} in
+do (first, first_state) <- ! make State mo { ! mark 1 } { ! mark 2 } 0;
+do runtime_mo <- ! int/eq (Ret (Thk (Monad State))) 1 1 { ret mo } { ret mo };
+do (second, second_state) <- ! make State runtime_mo { ! mark 1 } { ! mark 2 } 0;
+-- Repeated instantiation at the same carrier preserves the nominal identity.
+let List = @[typeof] first in
+let items : List = second in
+-- Outside the annotation, each translated tail now accepts the State argument.
+def fix sum (items : List) : State Int = fn state =>
+  match items
+  | +Nil() => ret (0, state)
+  | +Cons(head, tail) =>
+    do (rest, state) <- ! tail state;
+    do (total, state) <- ! sum rest state;
+    do total <- ! int/add head total;
+    ret (total, state)
+  end in
+do (total, trace) <- ! sum items second_state;
+-- Construction is effect-free; forcing tails yields 0 + 1 + 2 and trace 12.
+! stdio/write_int first_state {
+  ! stdio/write_line "" {
+    ! stdio/write_int second_state {
+      ! stdio/write_line "" {
+        ! stdio/write_int total {
+          ! stdio/write_line "" {
+            ! stdio/write_int trace {
+              ! stdio/write_line "" { ! process/exit 0 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

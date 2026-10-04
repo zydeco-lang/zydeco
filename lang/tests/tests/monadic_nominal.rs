@@ -5,6 +5,8 @@ zydeco_tests::e2e_sources!({
     state_recursive_protocol => "tests/monadic/nominal-types.zy",
 });
 
+zydeco_tests::e2e_io_source!(state_lazy_list, "tests/monadic/lazy-list.zy", "", "0\n0\n3\n12\n");
+
 struct MonadicCase;
 
 impl MonadicCase {
