@@ -28,6 +28,8 @@ cargo install --git https://github.com/zydeco-lang/zydeco.git cajun --bin cajun 
 
 The extension finds `cajun` on `PATH`.
 You can instead set `cajun.server.path` to an explicit executable path.
+On Windows the extension resolves executables through `PATHEXT`, so both
+`cajun.server.path` and `CAJUN_SERVER_PATH` may point at a binary without the `.exe` suffix.
 If neither is available, the extension offers to run the Cargo command above.
 
 ## Hover
@@ -68,7 +70,6 @@ From this directory:
 ```sh
 pnpm install
 pnpm compile
-pnpm test
 ```
 
 Build Cajun from the repository root with `cargo build -p cajun`, then press <kbd>F5</kbd> in VS Code.
