@@ -31,7 +31,12 @@ export async function activate(context: ExtensionContext): Promise<void> {
 
   const executable: Executable = {
     command,
-    options: { env: { ...process.env } },
+    options: {
+      env: { ...process.env },
+      // Windows script shims (.cmd/.bat) cannot be spawned directly since the
+      // Node security fix for CVE-2024-27980; route them through the shell.
+      shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(command),
+    },
   };
   const serverOptions: ServerOptions = {
     run: executable,
@@ -107,21 +112,21 @@ class CajunExecutable {
   }
 
   private static async find(command: string): Promise<string | undefined> {
-    if (path.isAbsolute(command) || path.dirname(command) !== ".") {
-      return (await this.isExecutable(command)) ? command : undefined;
-    }
-
-    const directories = (process.env.PATH ?? "")
-      .split(path.delimiter)
-      .filter((directory) => directory.length > 0);
-    const suffixes = process.platform === "win32"
-      ? path.extname(command)
-        ? [""]
-        : ["", ...(process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")]
+    // Windows resolves extension-less executables through PATHEXT, both for
+    // PATH lookup and for explicit paths such as a configured server path or
+    // CAJUN_SERVER_PATH pointing at a build without the `.exe` suffix.
+    const suffixes = process.platform === "win32" && !path.extname(command)
+      ? ["", ...(process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")]
       : [""];
-    const candidates = directories.flatMap((directory) =>
-      suffixes.map((suffix) => path.join(directory, command + suffix)),
-    );
+    const explicit = path.isAbsolute(command) || path.dirname(command) !== ".";
+    const candidates = explicit
+      ? suffixes.map((suffix) => command + suffix)
+      : (process.env.PATH ?? "")
+          .split(path.delimiter)
+          .filter((directory) => directory.length > 0)
+          .flatMap((directory) =>
+            suffixes.map((suffix) => path.join(directory, command + suffix)),
+          );
     const matches = await Promise.all(
       candidates.map(async (candidate) =>
         (await this.isExecutable(candidate)) ? candidate : undefined
@@ -158,11 +163,25 @@ class CajunExecutable {
             "cajun",
             "--locked",
           ],
-          { stdio: ["ignore", "ignore", "pipe"] },
+          {
+            stdio: ["ignore", "ignore", "pipe"],
+            // Resolve cargo through the shell on Windows so `.cmd` shims and
+            // extension-less PATH entries behave like a terminal invocation.
+            shell: process.platform === "win32",
+            windowsHide: true,
+          },
         );
         const errors: Buffer[] = [];
         cargo.stderr.on("data", (chunk: Buffer) => errors.push(chunk));
-        cargo.on("error", reject);
+        cargo.on("error", (error) =>
+          reject(
+            (error as NodeJS.ErrnoException).code === "ENOENT"
+              ? new Error(
+                  "Cargo was not found on PATH. Install Rust from https://rustup.rs first.",
+                )
+              : error,
+          ),
+        );
         cargo.on("close", (code) => {
           if (code === 0) {
             resolve();

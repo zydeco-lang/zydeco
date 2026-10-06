@@ -35,6 +35,9 @@
 			"label": "cargo build",
 			"type": "shell",
 			"command": "unset ARGV0 && cargo build -p cajun",
+			"windows": {
+				"command": "cargo build -p cajun"
+			},
 			"problemMatcher": [
 				"$rustc"
 			]
