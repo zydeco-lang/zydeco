@@ -38,7 +38,7 @@ impl KeySpaceId {
         static NEXT_KEY_SPACE_ID: AtomicU64 = AtomicU64::new(0);
 
         let id = NEXT_KEY_SPACE_ID
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("key-space identity range exhausted");
         let id = id.checked_add(1).expect("key-space identity range exhausted");
         Self(NonZeroU64::new(id).expect("a fresh key-space identity is nonzero"))
