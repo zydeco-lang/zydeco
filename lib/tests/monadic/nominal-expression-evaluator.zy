@@ -5,9 +5,9 @@ param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
 let basis = @(import("../../std/control/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> basis in
 let state = @(import("../../std/control/state.zy")) in
-let (/State; /mo_state) = builtin |> state in
+let (/IState; /instance = state_instance) = builtin |> state in
 let exception = @(import("../../std/control/exception.zy")) in
-let (/Exception; /mo_exception) = builtin |> exception in
+let (/IException; /instance = exception_instance) = builtin |> exception in
 let evaluate = {
   @[monadic] fn (lookup : Thk (Int -> Ret Int)) (add : Thk (Int -> Int -> Ret Int)) =>
     begin
@@ -31,26 +31,39 @@ let evaluate = {
       ! eval +Add(+Var(1), +Add(+Lit(2), +Var(2)))
     end
 } in
-do a <- ! evaluate (State Int) { ! mo_state Int } {
-  fn x s =>
-    do s <- ! numeric/int/mul s 10;
-    do s <- ! numeric/int/add s x;
-    do x <- ! numeric/int/mul x 10;
-    ret (x, s)
-} {
-  fn x y s =>
-    do z <- ! numeric/int/add x y;
-    ret (z, s)
-} 0;
-do b <- ! evaluate (Exception Unit) { ! mo_exception Unit } {
-  fn x =>
-    ! numeric/int/eq (Exception Unit Int) x 1
-      { ret +Right(10) } { ret +Left() }
-} {
-  fn x y =>
-    do z <- ! numeric/int/add x y;
-    ret +Right(z)
-};
+let under_state : Thk (pi ((M, _) : IState Int) . M Int) = {
+  fn ((M, (/monad; /state)) : IState Int) =>
+    ! evaluate M monad {
+      fn x =>
+        ! monad .bind Int Int { ! state .get } {
+          fn s =>
+            do s <- ! numeric/int/mul s 10;
+            do s <- ! numeric/int/add s x;
+            do x <- ! numeric/int/mul x 10;
+            ! monad .bind Unit Int { ! state .put s } { fn _ => ! monad .return Int x }
+        }
+    } {
+      fn x y =>
+        do z <- ! numeric/int/add x y;
+        ! monad .return Int z
+    }
+} in
+let under_exception : Thk (pi ((M, _) : IException Unit) . M Int) = {
+  fn ((M, (/monad; /exception)) : IException Unit) =>
+    ! evaluate M monad {
+      fn x =>
+        ! numeric/int/eq (M Int) x 1
+          { ! monad .return Int 10 } { ! exception .throw Int () }
+    } {
+      fn x y =>
+        do z <- ! numeric/int/add x y;
+        ! monad .return Int z
+    }
+} in
+let (S, s) = state_instance Int in
+let (E, e) = exception_instance Unit in
+do a <- ! under_state (S, s) 0;
+do b <- ! under_exception (E, e);
 -- State records lookup order 12; Exception rejects the second variable.
 match (a, b)
 | ((32, 12), +Left()) => ! process/exit 0

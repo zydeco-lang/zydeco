@@ -5,7 +5,7 @@ param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @
 let basis = @(import("../../std/control/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> basis in
 let state = @(import("../../std/control/state.zy")) in
-let (/State; /mo_state) = builtin |> state in
+let (/IState; /instance) = builtin |> state in
 let p = {
   @[monadic] fn (A : VType) (step : Thk (Ret A)) =>
     begin
@@ -42,14 +42,21 @@ def X : VType =
   | +X : Int
   end
 in
-do (c, s0) <- ! p (State Int) { ! mo_state Int } X {
-  comatch
-  end
-} {
-  fn s =>
-    do s <- ! numeric/int/add s 1;
-    ret (+X(s), s)
-} 0;
+let make = {
+  fn ((M, (/monad; /state)) : IState Int) =>
+    ! p M monad X {
+      comatch
+      end
+    } {
+      ! monad .bind Int X { ! state .get } {
+        fn s =>
+          do s <- ! numeric/int/add s 1;
+          ! monad .bind Unit X { ! state .put s } { fn _ => ! monad .return X +X(s) }
+      }
+    }
+} in
+let (M, ops) = instance Int in
+do (c, s0) <- ! make (M, ops) 0;
 do (d, s1) <- ! c .next s0;
 match d
 | +Item(+X(x), tail) =>

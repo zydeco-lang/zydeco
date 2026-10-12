@@ -1,9 +1,11 @@
--- Failed binds skip later steps; successful binds retain nominal constructors.
-param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+-- Unlike std's StateExn, this packed instance keeps State when an exception is raised.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let basis = @(import("../../std/control/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> basis in
+let (/Monad; /Algebra) = builtin |> (@(import("../../std/control/monad.zy"))) in
+let (/MonadState) = builtin |> (@(import("../../std/control/state.zy"))) in
+let (/MonadThrow) = builtin |> (@(import("../../std/control/exception.zy"))) in
+let (/IStateExn) = builtin |> (@(import("../../std/control/state-exn.zy"))) in
 let E (A : VType) =
   data
   | +Ok : A
@@ -11,7 +13,7 @@ let E (A : VType) =
   end
 in
 let M (A : VType) = Int -> Ret (E A * Int) in
-let mo : Thk (Monad M) = {
+let monad : Thk (Monad M) = {
   comatch
   | .return A x => fn s => ret (+Ok(x), s)
   | .bind A B m k => fn s =>
@@ -22,31 +24,64 @@ let mo : Thk (Monad M) = {
     end
   end
 } in
-let step = {
-  fn (A : VType) (r : E A) (s : Int) =>
-    do s <- ! numeric/int/add s 1;
-    ret (r, s)
+let state : Thk (MonadState Int M) = {
+  comatch
+  | .get => fn s => ret (+Ok(s), s)
+  | .put s => fn _ => ret (+Ok(), s)
+  end
 } in
-let p = {
-  @[monadic] fn (m : Thk (Ret Int)) (n : Thk (Ret Int)) =>
-    begin
-      def T : VType =
-        data
-        | +T : Int * Int
-        end
-      in
-      do x <- ! m;
-      do y <- ! n;
-      ret (+T(x, y) : T)
+let exception : Thk (MonadThrow Unit M) = {
+  comatch
+  | .throw A _ => fn s => ret (+Err(), s)
+  end
+} in
+let catch : Thk (forall (A : VType) . Thk (M A) -> Thk (Unit -> M A) -> M A) = {
+  fn A m h s =>
+    do (r, s) <- ! m s;
+    match r
+    | +Ok(x) => ret (+Ok(x), s)
+    | +Err() => ! h () s
     end
 } in
-let x = { ! step Int +Ok(1) } in
-let y = { ! step Int +Ok(2) } in
-let e = { ! step Int +Err() } in
-do a <- ! p M mo x y 0;
-do b <- ! p M mo e y 0;
-do c <- ! p M mo x e 0;
-match (a, b, c)
-| ((+Ok(+T(1, 2)), 2), (+Err(), 1), (+Err(), 2)) => ! process/exit 0
+let ops = (= monad, = state, = exception, = catch) in
+let p = {
+  fn ((M, (/monad; /state; /exception)) : IStateExn Int Unit) =>
+    let step : Thk (Int -> M Int) = {
+      fn x =>
+        ! monad .bind Int Int { ! state .get } {
+          fn s =>
+            do s <- ! numeric/int/add s 1;
+            ! monad .bind Unit Int { ! state .put s } {
+              fn _ =>
+                ! numeric/int/eq (M Int) x 0
+                  { ! exception .throw Int () } { ! monad .return Int x }
+            }
+        }
+    } in
+    (
+      @[monadic] fn (step : Thk (Int -> Ret Int)) (a : Int) (b : Int) =>
+        begin
+          def T : VType =
+            data
+            | +T : Int * Int
+            end
+          in
+          do x <- ! step a;
+          do y <- ! step b;
+          ret (+T(x, y) : T)
+        end
+    ) M monad step
+} in
+do a <- ! p (M, ops) 1 2 0;
+do b <- ! p (M, ops) 0 2 0;
+do c <- ! p (M, ops) 1 0 0;
+-- Catch resumes at the failure state, not the initial state.
+do d <- ! catch Int {
+  fn s =>
+    do s <- ! numeric/int/add s 1;
+    ret (+Err(), s)
+} { fn _ => ! state .get } 3;
+match (a, b, c, d)
+| ((+Ok(+T(1, 2)), 2), (+Err(), 1), (+Err(), 2), (+Ok(4), 4)) => ! process/exit 0
 | _ => ! process/exit 1
 end

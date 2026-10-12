@@ -282,8 +282,12 @@ Neither callback type promises purity or single invocation.
 
 ## Relative monads and control examples
 
-The [control modules](control) supply `Monad`, `Algebra`, State, Exception, and their combination.
-[L11](../../docs/references/language.md#11-relative-monads) owns monadic-block translation.
+The [control modules](control) supply `Monad`, `Algebra`, and packed State, Exception, and combined instances.
+Each module's `instance` builder groups the carrier and its dictionaries; generic clients use a witness-dependent `pi`.
+[L11](../../docs/references/language.md#packed-effect-instances) owns the packed boundary
+and its connection to monadic-block translation.
+The [capability walkthrough](../../docs/tutorial/zydeco-guide.md#10-capability-dictionaries) shows how
+to open a concrete instance and pass it to a generic client.
 For delimited control, the repository explores a library encoding with `Kont R A = Thk (A -> R) -> R`,
 explicit `reset` and `shift`, and ordinary thunks.
 Working examples are [reset/shift with an explicit continuation](../tests/delimcc/reset-shift-k.zy),

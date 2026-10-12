@@ -18,11 +18,18 @@ val
         | +Right : A
         end
       that
-      let Top = @(import("top.type.zy")) that
-
-      -- State layered over Exception: each step returns an Either observation.
+      -- State layered over Exception: failure discards the state, and catch
+      -- restarts its handler from the state at entry to the protected computation.
       let StateExn (S : VType) (E : VType) (A : VType) =
         S -> Ret (Either E (A * S))
+      that
+
+      let IStateExn (S : VType) (E : VType) =
+        exists (M : VType -> CType) .
+            (#monad :: Thk (Monad M))
+          * (#state :: Thk (MonadState S M))
+          * (#exception :: Thk (MonadThrow E M))
+          * (#catch :: Thk (forall (A : VType) . Thk (M A) -> Thk (E -> M A) -> M A))
       that
 
       def ! mo_state_exn (S : VType) (E : VType) : Monad (StateExn S E) =
@@ -59,33 +66,9 @@ val
         end
       that
 
-      -- Concrete operations for direct use.
-      def ! get (S : VType) (E : VType) : StateExn S E S =
-        fn s =>
-          ret +Right(s, s)
-      that
-
-      def ! put (S : VType) (E : VType) (s' : S) : StateExn S E Unit =
-        fn _ =>
-          ret +Right((), s')
-      that
-
-      -- Monadic-block-ready operations. The Top argument carries the structure
-      -- inserted by the algebra translation for the answer type A.
-      def ! raise (S : VType)
-        (E : VType)
-        (A : VType)
-        (_ : Thk Top)
-        (e : E)
-      : StateExn S E A =
-          fn _ =>
-            ret +Left(e)
-      that
-
       def ! catch (S : VType)
         (E : VType)
         (A : VType)
-        (_ : Thk Top)
         (m : Thk (StateExn S E A))
         (h : Thk (E -> StateExn S E A))
       : StateExn S E A =
@@ -95,6 +78,16 @@ val
             | +Left(e) => ! h e s
             | +Right(a, s') => ret +Right(a, s')
             end
+      that
+
+      let val instance (S : VType) (E : VType) =
+        pack (M as StateExn S E : VType -> CType)
+        where
+          #monad = { ! mo_state_exn S E },
+          #state = { ! state_ops S E },
+          #exception = { ! throw_ops S E },
+          #catch = { ! catch S E }
+        end
       that
 
       -- Runner: observe the error or the answer and the final state.
@@ -116,14 +109,9 @@ val
 
       pack
           (= StateExn as StateExn : VType -> VType -> VType -> CType)
+          (= IStateExn as IStateExn : VType -> VType -> VType)
       where
-        = mo_state_exn,
-        = state_ops,
-        = throw_ops,
-        = get,
-        = put,
-        = raise,
-        = catch,
+        = instance,
         = run_state_exn
       end
     end

@@ -15,6 +15,12 @@ val
       -- both the answer and the final state.
       let State (S : VType) (A : VType) = S -> Ret (A * S) that
 
+      -- One opening keeps the carrier, Monad dictionary, and State operations together.
+      let IState (S : VType) =
+        exists (M : VType -> CType) .
+          (#monad :: Thk (Monad M)) * (#state :: Thk (MonadState S M))
+      that
+
       def ! mo_state (S : VType) : Monad (State S) =
         comatch
         | .return A a =>
@@ -38,25 +44,23 @@ val
         end
       that
 
-      -- Haskell-style operations for the concrete State monad. They keep
-      -- client code from projecting the dictionary when it does not need to be
-      -- polymorphic in the ambient monad.
-      def ! get (S : VType) : State S S =
-        fn s =>
-          ret (s, s)
+      let val instance (S : VType) =
+        pack (M as State S : VType -> CType)
+        where
+          #monad = { ! mo_state S },
+          #state = { ! state S }
+        end
       that
 
-      def ! put (S : VType) (s' : S) : State S Unit =
-        fn _ =>
-          ret ((), s')
-      that
-
-      def ! modify (S : VType) (f : Thk (S -> Ret S)) : State S Unit =
-        ! mo_state S .bind S Unit { ! get S } {
-          fn s =>
-            do s' <- ! f s;
-            ! put S s'
-        }
+      def ! modify (S : VType)
+        ((M, (/monad; /state)) : IState S)
+        (f : Thk (S -> Ret S))
+      : M Unit =
+          ! monad .bind S Unit { ! state .get } {
+            fn s =>
+              do s' <- ! f s;
+              ! state .put s'
+          }
       that
 
       -- Runners expose the final state to an arbitrary computation continuation,
@@ -84,11 +88,9 @@ val
       pack
           (= State as State : VType -> VType -> CType)
           (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
+          (= IState as IState : VType -> VType)
       where
-        = mo_state,
-        = state,
-        = get,
-        = put,
+        = instance,
         = modify,
         = run_state,
         = eval_state

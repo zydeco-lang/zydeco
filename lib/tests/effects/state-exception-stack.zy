@@ -1,154 +1,68 @@
--- User code over an unspecified M that supports State and Exception.
-begin
-  let monadic_basis = @(import("../../std/control/monad.zy")) that
-  let state_basis = @(import("../../std/control/state.zy")) that
-  let exception_basis = @(import("../../std/control/exception.zy")) that
-  let state_exn_basis = @(import("../../std/control/state-exn.zy")) that
-  param (
-    /numeric;
-    /system;
-    /VType;
-    /CType;
-    /Thk;
-    /Ret;
-    /Unit;
-    /OS;
-    /stdio;
-    /process;
-    /String;
-    /Int;
-    builtin
-  ) : @(import("../../std/builtin.zy")) that
-  let int = numeric/int that
-  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
-  let (/MonadState) = builtin |> state_basis in
-  let (/MonadThrow) = builtin |> exception_basis in
-  let (
-    = StateExn,
-    = mo_state_exn,
-    = state_ops,
-    = throw_ops,
-    = get,
-    = put,
-    = raise,
-    = catch,
-    = run_state_exn
-  )
-  =
-    builtin |> state_exn_basis
-  in
-  begin
-
-    -- The user-facing capability signature. Every field is written with `Ret`;
-    -- the algebra translation turns it into the ambient monad M.
-    let StateExnCapability (S : VType) (E : VType) =
-        (#get :: Thk (Ret S))
-      * (#put :: Thk (S -> Ret Unit))
-      * (#raise :: Thk (forall (A : VType) . E -> Ret A))
-      * (
-          #catch :: Thk (
-            forall (A : VType) .
-              Thk (Ret A) -> Thk (E -> Ret A) -> Ret A
-          )
-        )
-      * (#add :: Thk (S -> S -> Ret S))
-    that
-    let Top =
-      codata
-      end
-    that
-
-    -- Projection binds tighter than force, so `! cap/get` forces the selected thunk.
-    -- Projecting from the result of a force instead requires `(! cap)/get`.
-    def ! user_program (S : VType) (E : VType) =
-      @[monadic] begin
-        fn (cap : StateExnCapability S E) (one : S) (msg : E) =>
-          do n <- ! cap/get;
-          do recovered <- ! cap/catch S
-            {
-              do _ <- ! cap/raise S msg;
-              ret n
-            }
-            {
-              fn _ =>
-                do m <- ! cap/get;
-                ret m
-            };
-          do n' <- ! cap/add recovered one;
-          do _ <- ! cap/put n';
-          ret n'
-      end
-    that
-
-    -- A State-specific operation lifted into the concrete stack.
-    def ! add_state_exn (x : Int) (y : Int) : StateExn Int String Int =
-      do z <- ! int/add x y;
-      ! mo_state_exn Int String .return Int z
-    that
-
-    -- Only here do we choose M, its Monad instance, and one capability package
-    -- implementing the source signature above.
-    let capability : (
-      #get :: Thk (StateExn Int String Int)
-    ) * (
-      #put :: Thk (Int -> StateExn Int String Unit)
-    ) * (
-      #raise :: Thk (
-        forall (A : VType) .
-          Thk Top -> String -> StateExn Int String A
-      )
-    ) * (
-      #catch :: Thk (
-        forall (A : VType) .
-             Thk Top -> Thk (StateExn Int String A)
-          -> Thk (String -> StateExn Int String A)
-          -> StateExn Int String A
-      )
-    ) * (
-      #add :: Thk (Int -> Int -> StateExn Int String Int)
-    ) = (
-      #get = { ! get Int String },
-      #put = { ! put Int String },
-      #raise = { ! raise Int String },
-      #catch = { ! catch Int String },
-      #add = add_state_exn
-    ) in
-
-    let ! production : StateExn Int String Int =
-      ! user_program Int String
-        (StateExn Int String)
-        { ! mo_state_exn Int String }
-        capability
-        1
-        "boom"
-    in
-
-    ! run_state_exn Int String Int OS 7 { ! production }
-      {
-        fn msg =>
-          ! stdio/write_line msg {
-            ! process/exit 1
-          }
-      }
-      {
-        fn final_state answer =>
-          ! stdio/write_int answer {
-            ! stdio/write " " {
-              ! stdio/write_int final_state {
-                ! stdio/write "\n" {
-                  ! int/eq OS answer 8 {
-                    ! int/eq OS final_state 8 {
-                      ! process/exit 0
-                    } {
-                      ! process/exit 2
-                    }
-                  } {
-                    ! process/exit 3
-                  }
-                }
-              }
-            }
-          }
-      }
-  end
+-- A single packed carrier supports both effects; catch rolls State back on failure.
+param (
+  /VType;
+  /CType;
+  /Thk;
+  /Ret;
+  /Unit;
+  /Int;
+  /String;
+  /numeric;
+  /string;
+  /stdio;
+  /process;
+  builtin
+) : @(import("../../std/builtin.zy")) in
+let (/Monad; /Algebra) = builtin |> (@(import("../../std/control/monad.zy"))) in
+let (/raise; /catch) = builtin |> (@(import("../../std/control/exception.zy"))) in
+let (/modify) = builtin |> (@(import("../../std/control/state.zy"))) in
+let (/IStateExn; /instance; /run_state_exn) =
+  builtin |> (@(import("../../std/control/state-exn.zy")))
+in
+let p : Thk (pi ((M, _) : IStateExn Int String) . M Int) = {
+  fn ((M, (/monad; /state; /exception; /catch = recover)) : IStateExn Int String) =>
+    (
+      @[monadic] fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit))
+        (raise : Thk (forall (A : VType) . String -> Ret A))
+        (catch : Thk (forall (A : VType) . Thk (Ret A) -> Thk (String -> Ret A) -> Ret A))
+        (add : Thk (Int -> Int -> Ret Int))
+      =>
+        do n <- ! catch Int {
+          do _ <- ! put 99;
+          ! raise Int "boom"
+        } { fn _ => ! get };
+        do n <- ! add n 1;
+        do _ <- ! put n;
+        ret n
+    ) M monad { ! state .get } { ! state .put }
+      { ! raise String (M, = monad, = exception, #catch = recover) }
+      { ! catch String (M, = monad, = exception, #catch = recover) } {
+      fn x y =>
+        do z <- ! numeric/int/add x y;
+        ! monad .return Int z
+    }
+} in
+let (M, ops) = instance Int String in
+-- Repacking the State subset preserves M for the generic modify operation.
+do (answer, final_state) <- ! run_state_exn Int String Int (Ret (Int * Int)) 6 {
+  ! ops/monad .bind Unit Int {
+    ! modify Int (M, #monad = ops/monad, #state = ops/state) { fn n => ! numeric/int/add n 1 }
+  } {
+    fn _ => ! p (M, ops)
+  }
+} { fn _ => ret (-1, -1) } { fn s x => ret (x, s) };
+-- The success arm of catch retains updates; an uncaught exception skips the continuation.
+do success <- ! run_state_exn Int String Int (Ret (Int * Int)) 0 {
+  ! ops/catch Int {
+    ! ops/monad .bind Unit Int { ! ops/state .put 4 } { fn _ => ! ops/monad .return Int 3 }
+  } { fn _ => ! ops/monad .return Int -1 }
+} { fn _ => ret (-1, -1) } { fn s x => ret (x, s) };
+do failure <- ! run_state_exn Int String Int (Ret Int) 0 {
+  ! ops/monad .bind Int Int { ! ops/exception .throw Int "stop" } {
+    fn _ => ! ops/monad .return Int -1
+  }
+} { fn msg => ! string/eq (Ret Int) msg "stop" { ret 1 } { ret 0 } } { fn _ _ => ret 0 };
+match (answer, final_state, success, failure)
+| (8, 8, (3, 4), 1) => ! stdio/write_line "8 8" { ! process/exit 0 }
+| _ => ! process/exit 1
 end

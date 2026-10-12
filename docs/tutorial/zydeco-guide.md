@@ -494,7 +494,8 @@ raise : Thk (forall (A : VType) . E -> Ret A)
 ```
 
 Here `Top` is empty codata. The extra `Thk Top` supplies the structure needed for the quantified value type.
-The control library's monadic-block-ready `raise` and `catch` accept that argument already.
+The control library's `raise` and `catch` adapters accept that structure argument
+after their packed effect input, introduced below.
 More general polymorphic translation is described
 in [the relative-monad reference](../references/language.md#11-relative-monads).
 
@@ -505,17 +506,18 @@ The control modules are ordinary value-function builders from Builtin to packed 
 | Module | Exports |
 | --- | --- |
 | `monad.zy` | `Monad`, `Algebra` |
-| `state.zy` | `State`, `MonadState`, `mo_state`, `state`, `get`, `put`, `modify`, `run_state`, `eval_state` |
-| `exception.zy` | `Exception`, `MonadThrow`, `mo_exception`, `throw_ops`, `raise`, `handle_exception`, `try_exception` |
-| `state-exn.zy` | `StateExn`, `mo_state_exn`, `state_ops`, `throw_ops`, `get`, `put`, `raise`, `catch`, `run_state_exn` |
+| `state.zy` | `State`, `MonadState`, `IState`, `instance`, `modify`, `run_state`, `eval_state` |
+| `exception.zy` | `Exception`, `MonadThrow`, `IException`, `instance`, `raise`, `catch`, `handle_exception` |
+| `state-exn.zy` | `StateExn`, `IStateExn`, `instance`, `run_state_exn` |
 
 Apply a builder and open the selected fields directly:
 
 ```zydeco
 param (/Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_state = @(import("../../lib/std/control/state.zy")) in
-let (/State; /get; /eval_state) = builtin |> make_state in
-! eval_state Int Int 7 { ! get Int }
+let (/instance; /eval_state) = builtin |> make_state in
+let ops = instance Int in
+! eval_state Int Int 7 { ! ops/state .get }
 ```
 
 This evaluates the state read with initial state 7.
@@ -530,9 +532,10 @@ the handler operations expose its alternatives to clients.
 ```zydeco
 param (/String; /Int; /Ret; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_exception = @(import("../../lib/std/control/exception.zy")) in
-let (/raise; /handle_exception) = builtin |> make_exception in
+let (/instance; /raise; /handle_exception) = builtin |> make_exception in
+let (M, ops) = instance String in
 ! handle_exception String Int (Ret Int)
-  { ! raise String Int { comatch end } "stop" }
+  { ! raise String (M, ops) Int { comatch end } "stop" }
   { fn _ => ret 0 }
   { fn value => ret value }
 ```
@@ -544,37 +547,43 @@ See [packed value composition](../../lib/std/README.md#packed-value-composition)
 
 ## 10. Capability dictionaries
 
-Group the operations required by generic user code as named fields with `Ret` signatures.
-Monadic translation lifts the fields together, and the caller chooses the concrete operations and carrier.
-This complete example reads the old state, replaces it, and returns both the old and final state:
+Use a packed instance when a generic client needs a carrier, its monad dictionary, and effect operations together.
+The [packed-effect contract](../references/language.md#packed-effect-instances) specifies this boundary.
+A witness-dependent `pi` lets the client's result refer to the carrier opened from its argument.
+The client then adapts the dictionaries to the operation signatures written with `Ret` inside its monadic block.
+
+This example reads the old state, replaces it, and returns both the old and final state:
 
 ```zydeco
 param (/VType; /Thk; /Ret; /Unit; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_monad = @(import("../../lib/std/control/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> make_monad in
 let make_state = @(import("../../lib/std/control/state.zy")) in
-let (/State; /mo_state; /get; /put; /run_state) = builtin |> make_state in
-let StateCapability (S : VType) =
-  (#get :: Thk (Ret S)) * (#put :: Thk (S -> Ret Unit))
-in
-let ! program (S : VType) = @[monadic] fn (cap : StateCapability S) (next : S) =>
-  do old <- ! cap/get;
-  do _ <- ! cap/put next;
-  ret old
-in
-let capability = (#get = { ! get Int }, #put = { ! put Int }) in
+let (/IState; /instance; /run_state) = builtin |> make_state in
+let program : Thk (pi ((M, _) : IState Int) . Int -> M Int) = {
+  fn ((M, (/monad; /state)) : IState Int) =>
+    (@[monadic] fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit)) (next : Int) =>
+      do old <- ! get;
+      do _ <- ! put next;
+      ret old
+    ) M monad { ! state .get } { ! state .put }
+} in
+let (M, ops) = instance Int in
 ! run_state Int Int (Ret (Int * Int)) 7
-  { ! program Int (State Int) { ! mo_state Int } capability 9 }
+  { ! program (M, ops) 9 }
   { fn final_state old => ret (old, final_state) }
 ```
 
-The capability is a product value and is passed directly.
-`{ ! mo_state Int }` suspends the specialized dictionary computation,
-while an already-bound dictionary thunk such as `mo_ret` needs no wrapper.
-The `S` parameter precedes the annotation, so `Int` precedes the translated carrier and instance arguments.
+The concrete `instance Int` exposes `M` as `State Int`.
+Reconstructing `(M, ops)` supplies the expected abstract `IState Int` argument while retaining
+that concrete witness at the call site, so `run_state` can execute the result.
+The generic `program` body uses only the operations from its one package opening.
 
-The [State and Exception example](../../lib/tests/effects/state-exception-stack.zy) extends this pattern
-with polymorphic `raise` and `catch`, their structure arguments, and an executable `OS` runner.
+The [State and Exception example](../../lib/tests/effects/state-exception-stack.zy) consumes an `IStateExn Int String`
+and selects State-only and Exception-only subsets without changing the carrier.
+It also exercises polymorphic `raise` and `catch`, their structure arguments, and an executable `OS` runner.
+The [nominal expression evaluator](../../lib/tests/monadic/nominal-expression-evaluator.zy) uses the same boundary
+with a local recursive data type.
 
 ## 11. Pitfall checklist
 
