@@ -113,6 +113,33 @@ struct Snapshot {
 }
 
 #[test]
+fn only_structural_payloads_use_direct_constructor_arms() {
+    let mut fixture = Fixture::new();
+    let hole = fixture.pattern(Hole);
+    let product = fixture.pattern(ss::ValuePattern::VCons(vec![hole, hole]));
+    let direct = fixture.pattern(Ctor(CtorName("+Outer".into()), product));
+    let nested = fixture.pattern(Ctor(CtorName("+Outer".into()), direct));
+    let nested_product = fixture.pattern(ss::ValuePattern::VCons(vec![hole, direct]));
+    let alias = fixture.pattern(Alias(ConsN::from_vec(vec![direct, hole]).unwrap()));
+    let literal = fixture.pattern(ss::Literal::Integer(IntegerLiteral::Int(0)));
+    let literal_payload = fixture.pattern(Ctor(CtorName("+Outer".into()), literal));
+    let spans = SpanArena::default();
+    let scoped = ScopedArena::default();
+    let lowerer = Lowerer::new(&spans, &scoped, &fixture.statics);
+
+    for pattern in [hole, product] {
+        assert!(!lowerer.pattern_needs_match_plan(pattern));
+        assert!(!lowerer.match_arm_needs_match_plan(pattern));
+    }
+    assert!(lowerer.pattern_needs_match_plan(direct));
+    assert!(!lowerer.match_arm_needs_match_plan(direct));
+    for pattern in [nested, nested_product, alias, literal, literal_payload] {
+        assert!(lowerer.pattern_needs_match_plan(pattern));
+        assert!(lowerer.match_arm_needs_match_plan(pattern));
+    }
+}
+
+#[test]
 fn residual_drivers_preserve_mixed_reconstruction_and_ordered_match_plans() {
     let mut fixture = Fixture::new();
     let unit = fixture.value(Triv);

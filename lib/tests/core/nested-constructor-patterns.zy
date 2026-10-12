@@ -1,0 +1,45 @@
+-- Nested constructors require decisions, even without a monadic annotation.
+param (/VType; /Thk; /Ret; /Int; /numeric; /process) : @(import(
+  "../../std/builtin.zy"
+)) in
+def Choice : VType =
+  data
+  | +Left : Int
+  | +Right : Int
+  end
+in
+def Pair : VType =
+  data
+  | +Pair : Choice * Choice
+  end
+in
+def Box : VType =
+  data
+  | +Box : Int
+  end
+in
+def fix select (pair : Pair) : Ret Int =
+  match pair
+  | +Pair(+Left(value), _) => ret value
+  | +Pair(+Right(_), +Left(value)) => ret value
+  | +Pair(+Right(_), +Right(value)) => ret value
+  end
+in
+let sum : Thk (Box * Box -> Ret Int) = {
+  fn (+Box(left), +Box(right)) => ! numeric/int/add left right
+} in
+do left <- ! select +Pair(+Left(11), +Right(99));
+do middle <- ! select +Pair(+Right(99), +Left(22));
+do right <- ! select +Pair(+Right(99), +Right(33));
+do total <- ! sum (+Box(left), +Box(middle));
+do (+Box(extra), +Box(last)) <- ret ((+Box(total), +Box(right)) : Box * Box);
+let (+Box(first); alias) = (+Box(extra) : Box) in
+match (alias, +Box(last) : Box)
+| (+Box(first_again), +Box(last)) =>
+  do total <- ! numeric/int/add first first_again;
+  do total <- ! numeric/int/add total last;
+  match (left, middle, right, total)
+  | (11, 22, 33, 99) => ! process/exit 0
+  | _ => ! process/exit 1
+  end
+end

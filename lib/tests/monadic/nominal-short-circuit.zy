@@ -1,0 +1,52 @@
+-- Failed binds skip later steps; successful binds retain nominal constructors.
+param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let basis = @(import("../../std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> basis in
+let E (A : VType) =
+  data
+  | +Ok : A
+  | +Err : Unit
+  end
+in
+let M (A : VType) = Int -> Ret (E A * Int) in
+let mo : Thk (Monad M) = {
+  comatch
+  | .return A x => fn s => ret (+Ok(x), s)
+  | .bind A B m k => fn s =>
+    do (r, s) <- ! m s;
+    match r
+    | +Ok(x) => ! k x s
+    | +Err() => ret (+Err(), s)
+    end
+  end
+} in
+let step = {
+  fn (A : VType) (r : E A) (s : Int) =>
+    do s <- ! numeric/int/add s 1;
+    ret (r, s)
+} in
+let p = {
+  @[monadic] fn (m : Thk (Ret Int)) (n : Thk (Ret Int)) =>
+    begin
+      def T : VType =
+        data
+        | +T : Int * Int
+        end
+      in
+      do x <- ! m;
+      do y <- ! n;
+      ret (+T(x, y) : T)
+    end
+} in
+let x = { ! step Int +Ok(1) } in
+let y = { ! step Int +Ok(2) } in
+let e = { ! step Int +Err() } in
+do a <- ! p M mo x y 0;
+do b <- ! p M mo e y 0;
+do c <- ! p M mo x e 0;
+match (a, b, c)
+| ((+Ok(+T(1, 2)), 2), (+Err(), 1), (+Err(), 2)) => ! process/exit 0
+| _ => ! process/exit 1
+end

@@ -1,0 +1,62 @@
+-- C captures A through D; constructing its thunk must not run the State effect.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let basis = @(import("../../std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> basis in
+let state = @(import("../../std/control/state.zy")) in
+let (/State; /mo_state) = builtin |> state in
+let p = {
+  @[monadic] fn (A : VType) (step : Thk (Ret A)) =>
+    begin
+      def D : VType =
+        data
+        | +End : Unit
+        | +Item : A * Thk C
+        end
+      that
+      def C : CType =
+        codata
+        | .next : Ret D
+        end
+      that
+      let val cons (tail : Thk C) : Thk C = {
+        comatch
+        | .next =>
+          do x <- ! step;
+          ret +Item(x, tail)
+        end
+      } in
+      ret (
+        cons {
+          comatch
+          | .next => ret +End()
+          end
+        }
+      )
+    end
+} in
+-- The external nominal type enters through A and its trivial structure.
+def X : VType =
+  data
+  | +X : Int
+  end
+in
+do (c, s0) <- ! p (State Int) { ! mo_state Int } X {
+  comatch
+  end
+} {
+  fn s =>
+    do s <- ! numeric/int/add s 1;
+    ret (+X(s), s)
+} 0;
+do (d, s1) <- ! c .next s0;
+match d
+| +Item(+X(x), tail) =>
+  do (d, s2) <- ! tail .next s1;
+  match (s0, x, s1, d, s2)
+  | (0, 1, 1, +End(), 1) => ! process/exit 0
+  | _ => ! process/exit 1
+  end
+| +End() => ! process/exit 1
+end

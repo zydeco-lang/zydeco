@@ -1,0 +1,58 @@
+-- A nominal expression type and evaluator translated under State and Exception.
+param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let basis = @(import("../../std/control/monad.zy")) in
+let (/Monad; /Algebra) = builtin |> basis in
+let state = @(import("../../std/control/state.zy")) in
+let (/State; /mo_state) = builtin |> state in
+let exception = @(import("../../std/control/exception.zy")) in
+let (/Exception; /mo_exception) = builtin |> exception in
+let evaluate = {
+  @[monadic] fn (lookup : Thk (Int -> Ret Int)) (add : Thk (Int -> Int -> Ret Int)) =>
+    begin
+      def Expr : VType =
+        data
+        | +Lit : Int
+        | +Var : Int
+        | +Add : Expr * Expr
+        end
+      that
+      def fix eval (e : Expr) : Ret Int =
+        match e
+        | +Lit(x) => ret x
+        | +Var(x) => ! lookup x
+        | +Add(a, b) =>
+          do x <- ! eval a;
+          do y <- ! eval b;
+          ! add x y
+        end
+      in
+      ! eval +Add(+Var(1), +Add(+Lit(2), +Var(2)))
+    end
+} in
+do a <- ! evaluate (State Int) { ! mo_state Int } {
+  fn x s =>
+    do s <- ! numeric/int/mul s 10;
+    do s <- ! numeric/int/add s x;
+    do x <- ! numeric/int/mul x 10;
+    ret (x, s)
+} {
+  fn x y s =>
+    do z <- ! numeric/int/add x y;
+    ret (z, s)
+} 0;
+do b <- ! evaluate (Exception Unit) { ! mo_exception Unit } {
+  fn x =>
+    ! numeric/int/eq (Exception Unit Int) x 1
+      { ret +Right(10) } { ret +Left() }
+} {
+  fn x y =>
+    do z <- ! numeric/int/add x y;
+    ret +Right(z)
+};
+-- State records lookup order 12; Exception rejects the second variable.
+match (a, b)
+| ((32, 12), +Left()) => ! process/exit 0
+| _ => ! process/exit 1
+end

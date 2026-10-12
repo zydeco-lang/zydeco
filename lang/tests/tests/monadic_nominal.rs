@@ -3,6 +3,9 @@ use zydeco_tests::utils::SourceCase;
 
 zydeco_tests::e2e_sources!({
     state_recursive_protocol => "tests/monadic/nominal-types.zy",
+    nominal_short_circuit => "tests/monadic/nominal-short-circuit.zy",
+    expression_evaluator => "tests/monadic/nominal-expression-evaluator.zy",
+    nominal_mutual => "tests/monadic/nominal-mutual.zy",
 });
 
 zydeco_tests::e2e_io_source!(state_lazy_list, "tests/monadic/lazy-list.zy", "", "0\n0\n3\n12\n");
@@ -383,6 +386,58 @@ do second <- ! program Ret runtime_mo;
 let T = @[typeof] first in
 let same : T = second in
 match same | +Box value => do status <- ! int/sub value 1; ! exit status end
+"#,
+    );
+    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::run(&source));
+    SourceCase::assert_accepted(SourceCase::lower(&source));
+}
+
+#[test]
+fn nominal_algebras_use_the_selected_runtime_dictionary() {
+    let source = MonadicCase::source(
+        r#"
+let Writer (A : VType) = Ret (A * Int) in
+let additive : Thk (Monad Writer) = {
+  comatch
+  | .return A value => ret (value, 0)
+  | .bind A B operation continuation =>
+      do (value, first) <- ! operation;
+      do (result, second) <- ! continuation value;
+      do trace <- ! int/add first second;
+      ret (result, trace)
+  end
+} in
+let multiplicative : Thk (Monad Writer) = {
+  comatch
+  | .return A value => ret (value, 1)
+  | .bind A B operation continuation =>
+      do (value, first) <- ! operation;
+      do (result, second) <- ! continuation value;
+      do trace <- ! int/mul first second;
+      ret (result, trace)
+  end
+} in
+let program = {
+  @[monadic] fn (first : Thk (Ret Int)) (second : Thk (Ret Int)) =>
+    begin
+      def Report : CType = codata | .finish : Ret Int end in
+      do _ <- ! first;
+      do value <- ! second;
+      (comatch | .finish => ret value end : Report)
+    end
+} in
+do runtime_mo <- ! int/eq (Ret (Thk (Monad Writer))) 1 1
+  { ret multiplicative } { ret additive };
+let first = { ! program Writer additive { ret (1, 2) } { ret (1, 3) } } in
+let second = { ! program Writer runtime_mo { ret (1, 2) } { ret (1, 3) } } in
+let ReportThunk = @[typeof] first in
+let same : ReportThunk = second in
+do (_, additive_trace) <- ! first .finish;
+do (_, multiplicative_trace) <- ! same .finish;
+! int/eq OS additive_trace 5 {
+  ! int/eq OS multiplicative_trace 6 { ! exit 0 } { ! exit 2 }
+} { ! exit 1 }
 "#,
     );
     SourceCase::assert_accepted(SourceCase::check_linted(&source));

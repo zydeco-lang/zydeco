@@ -212,16 +212,15 @@ impl<'a> Lowerer<'a> {
     }
 
     /// Whether a pattern must be lowered through the match-plan machinery
-    /// instead of a structural binder: it contains a refutable literal row,
-    /// possibly nested under other patterns.
+    /// instead of a structural binder. Constructors need explicit coproduct
+    /// elimination even when coverage proves that their tag is irrefutable.
     fn pattern_needs_match_plan(&self, pattern: ss::VPatId) -> bool {
         let mut pending = vec![pattern];
         while let Some(pattern) = pending.pop() {
             match &self.statics.vpats[&pattern] {
-                | ss::ValuePattern::Lit(_) => return true,
+                | ss::ValuePattern::Lit(_) | ss::ValuePattern::Ctor(_) => return true,
                 | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
                 | ss::ValuePattern::Named(Named(_, pattern))
-                | ss::ValuePattern::Ctor(Ctor(_, pattern))
                 | ss::ValuePattern::SCons(ss::ConsN(_, pattern)) => pending.push(*pattern),
                 | ss::ValuePattern::Alias(Alias(patterns)) => {
                     pending.extend(patterns.iter().rev().copied());
@@ -235,6 +234,21 @@ impl<'a> Lowerer<'a> {
             }
         }
         false
+    }
+
+    /// A direct coproduct arm consumes one constructor head itself. Its payload
+    /// must be structural; nested decisions and constructor aliases use plans.
+    fn match_arm_needs_match_plan(&self, mut pattern: ss::VPatId) -> bool {
+        loop {
+            match &self.statics.vpats[&pattern] {
+                | ss::ValuePattern::Named(Named(_, inner))
+                | ss::ValuePattern::SCons(ss::ConsN(_, inner)) => pattern = *inner,
+                | ss::ValuePattern::Ctor(Ctor(_, payload)) => {
+                    return self.pattern_needs_match_plan(*payload);
+                }
+                | _ => return self.pattern_needs_match_plan(pattern),
+            }
+        }
     }
 
     fn is_coprod_pattern(&self, pattern: ss::VPatId) -> bool {

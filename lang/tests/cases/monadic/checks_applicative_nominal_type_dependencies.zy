@@ -1,0 +1,24 @@
+-- prelude: monadic
+
+fn (mo : Thk (Monad Ret)) =>
+  let make = {
+    @[monadic] fn (A : VType) (value : A) =>
+      begin
+        def Box : VType =
+          data
+          | +Box : A
+          end
+        in
+        ret (+Box(value) : Box)
+      end
+  } in
+  do first <- ! make Ret mo Int {
+    comatch
+    end
+  } 1;
+  do second <- ! make Ret mo Int {
+    comatch
+    end
+  } 2;
+  let BoxInt = @[typeof] first in
+  ret (second : BoxInt)

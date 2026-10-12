@@ -256,6 +256,19 @@ do wrapped <- ret (+Wrap(37) : Wrapped);
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
+fn nested_constructor_patterns_work_with_and_without_normalization() {
+    let fixture = Fixture::with_source("lib/tests/core/nested-constructor-patterns.zy");
+    for plan in ["none", "default", "normalize,normalize"] {
+        for target in ["wasm-am", "wasm-sps", "exe"] {
+            let output = fixture.execute_options(plan, target, &["--verify-passes"]);
+            Fixture::assert_success(&output);
+            assert!(output.stdout.is_empty(), "{plan}/{target}");
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
 fn selected_sequences_keep_unused_traps_between_effects() {
     let fixture = Fixture::new(
         r#"

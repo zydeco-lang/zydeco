@@ -3,6 +3,7 @@ use zydeco_tests::e2e_sources;
 e2e_sources!({
     constructor_fallthrough => "tests/core/constructor-fallthrough.zy",
     constructor_fallback_sharing => "tests/core/constructor-fallback-sharing.zy",
+    nested_constructor_patterns => "tests/core/nested-constructor-patterns.zy",
 });
 
 #[test]

@@ -521,7 +521,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 let mixed = arms.iter().any(|arm| self.lo.is_coprod_pattern(arm.binder))
                     && arms.iter().any(|arm| !self.lo.is_coprod_pattern(arm.binder));
                 let kind = if mixed
-                    || arms.iter().any(|arm| self.lo.pattern_needs_match_plan(arm.binder))
+                    || arms.iter().any(|arm| self.lo.match_arm_needs_match_plan(arm.binder))
                 {
                     MatchKind::Planned
                 } else if self.lo.is_coprod_match(&arms) {
