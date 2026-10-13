@@ -1634,7 +1634,7 @@ impl<'arena> PrettyFormatter<'arena> {
                 | PipelineDirection::Backward => self
                     .term_through(*function, TermPrecedence::Application)
                     .append(RcDoc::text(" <| "))
-                    .append(self.term_through(*subject, TermPrecedence::BackwardCut)),
+                    .append(self.term_with_requirement(*subject, TermRequirement::Any)),
             },
             | Term::ContextBind(ContextBind { mode, binding, placement, tail }) => {
                 let keyword = match mode {
@@ -2874,6 +2874,40 @@ mod tests {
             let reparsed = ParsedSource::new(&formatted);
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
+    }
+
+    #[test]
+    fn backward_application_omits_right_operand_parentheses() {
+        let cases = [
+            ("apply <| (fn x => x)", "apply <| fn x => x\n"),
+            ("apply <| (val x => x)", "apply <| val x => x\n"),
+            (
+                "Thk <| (forall (A : VType) . A -> Ret A)",
+                "Thk <| forall (A : VType) . A -> Ret A\n",
+            ),
+            ("first <| (second <| value)", "first <| second <| value\n"),
+            ("(first <| second) <| value", "(first <| second) <| value\n"),
+            ("(apply <| fn x => x) argument", "(apply <| fn x => x) argument\n"),
+        ];
+        for (source, expected) in cases {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Ignore);
+            assert_eq!(formatted, expected, "source: {source}");
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Ignore));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        }
+
+        let multiline = concat!(
+            "WithMonad <| fn (M : VType -> CType) =>\n",
+            "  IState S M * IException E M\n",
+        );
+        let parsed = ParsedSource::new(multiline);
+        let formatted = parsed.render(LayoutIntentions::Preserve);
+        assert_eq!(formatted, multiline);
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
     }
 
     #[test]

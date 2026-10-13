@@ -100,17 +100,23 @@ The main precedence levels, from tightest to loosest, are:
 | `A * B * C` | One flat product; explicit nesting is retained |
 | `A -> B -> C` | Right |
 | `v \|> f` | Left |
-| `f <\| v` | Right |
+| `f <\| v` | Right; the right operand is a full term |
 | `pi`, `val pi`, `forall`, `sigma`, `exists` | Binder bodies extend rightward |
 | Abstractions, bindings, metadata | Extend over their following term |
 
 Thus `!p/action x` means `(! (p/action)) x`.
 The thin arrow `->` constructs a classifier; `=>` separates a function or matching header from its body.
+Backward application, also called the backward pipe, accepts an abstraction, quantifier,
+or binding directly after `<|`: `f <| fn x => body` groups as `f (fn x => body)`.
+The abstraction's body extends rightward as usual.
+Parenthesize the completed application when supplying another argument, as in `(f <| fn x => body) next`.
+
 Annotations and named components have a separate grouping layer: `:` is non-associative
 and binds more tightly than the right-associative `=` and `::` naming forms.
 Expression annotations use parentheses, `(e : S)`, or the contents of a `begin ... end` block.
 Write `((#x = 1) : (#x :: Int))` to annotate the whole named value; `(#x = 1 : Int)` annotates its payload.
-Metadata in an application argument also needs parentheses.
+Metadata in a juxtaposed application argument also needs parentheses; backward application admits it
+as a full right operand.
 
 ## 3. Bindings and Scope
 
@@ -409,7 +415,7 @@ let val duplicate (x : @(intrinsic(int))) = (x, x) in
 ret (4 |> duplicate)
 ```
 
-`f v`, `v |> f`, and `f <| v` are the same value application.
+`f v`, `v |> f`, and `f <| v` are the same application; the directional spellings also apply to type functions.
 Functions can be partially applied, passed to other value functions, returned,
 and stored in intermediate structures, subject to §10.
 They may capture runtime values, but cannot execute computations to form their result.

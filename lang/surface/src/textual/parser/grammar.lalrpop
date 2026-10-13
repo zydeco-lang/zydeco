@@ -510,8 +510,11 @@ Term: ParsedNode<Term> = {
         subject,
         function,
     }.into()),
-    #[precedence(level="7")] #[assoc(side="right")]
-    <function:TermGen<Term>> "<|" <subject:TermGen<Term>> => ParsedNode::Syntax(Pipeline {
+    // The left operand stops before another backward application; the full
+    // right operand makes the operator right-associative and admits bare
+    // abstractions, quantifiers, and bindings without wrapper parentheses.
+    #[precedence(level="7")] #[assoc(side="none")]
+    <function:TermGen<Term>> "<|" <subject:TermId> => ParsedNode::Syntax(Pipeline {
         direction: PipelineDirection::Backward,
         subject,
         function,

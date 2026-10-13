@@ -23,6 +23,11 @@ Align related observations and indent their bodies.
 Parentheses mark actual grouping, such as a product payload or an annotated parameter;
 newlines and alignment help the reader follow the path without changing its parse.
 
+Prefer backward application `<|` when a final abstraction, quantifier, or binding would
+otherwise need multiline grouping parentheses, as in `Apply <| fn (A : VType) => A * A`.
+Keep ordinary short applications in juxtaposed form.
+The [syntax rules](references/language.md#2-lexical-structure-and-syntax) specify the right operand's extent.
+
 The distinction between `->` and `=>` helps readers find the boundary between a classifier and a body.
 For example, in `fn (f : Thk (A -> B)) x => ! f x`, the annotation's arrow stays inside the header,
 while the fat arrow introduces the body.

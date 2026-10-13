@@ -941,6 +941,63 @@ fn parses_both_pipeline_spellings_and_view_patterns() {
 }
 
 #[test]
+fn backward_application_accepts_a_full_right_operand() {
+    for subject in [
+        "fn (M : VType -> CType) => State M * Exception M",
+        "fn value => transform <| value |> finish",
+        "val value => value",
+        "forall (A : VType) . A -> Ret A",
+        "let value = initial in value",
+        "param val value in value",
+        "@[monadic] ret value",
+    ] {
+        let mut parser = Parser::new();
+        let source = format!("apply <| {subject}");
+        let term = StrictParser::term(&source, &mut parser).unwrap();
+        let Term::Pipeline(Pipeline {
+            direction: PipelineDirection::Backward,
+            subject: parsed_subject,
+            ..
+        }) = parser.arena.terms[&term]
+        else {
+            panic!("expected a backward application: {source}")
+        };
+        let expected_subject = StrictParser::term(subject, &mut parser).unwrap();
+        let formatter = Formatter::new(&parser.arena);
+        assert_eq!(parsed_subject.ugly(&formatter), expected_subject.ugly(&formatter));
+    }
+}
+
+#[test]
+fn backward_application_remains_right_associative() {
+    let mut parser = Parser::new();
+    let term = StrictParser::term("first <| second <| value", &mut parser).unwrap();
+    let Term::Pipeline(Pipeline { subject, function, .. }) = parser.arena.terms[&term] else {
+        panic!("expected an outer backward application")
+    };
+    assert!(matches!(parser.arena.terms[&function], Term::Var(_)));
+    assert!(matches!(
+        parser.arena.terms[&subject],
+        Term::Pipeline(Pipeline { direction: PipelineDirection::Backward, .. })
+    ));
+}
+
+#[test]
+fn backward_application_rejects_incomplete_operands() {
+    for source in [
+        "apply <|",
+        "apply <| fn value",
+        "apply <| fn value =>",
+        "apply <| val value",
+        "apply fn value => value",
+        "value |> fn argument => argument",
+    ] {
+        let mut parser = Parser::new();
+        assert!(StrictParser::term(source, &mut parser).is_err(), "source: {source}");
+    }
+}
+
+#[test]
 fn parses_manifest_existential_with_a_punned_field_binder() {
     let source = "exists (= Counter as Int : VType) . Counter";
     let mut parser = Parser::new();

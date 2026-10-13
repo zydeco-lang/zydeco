@@ -16,6 +16,32 @@ end
 }
 
 #[test]
+fn backward_application_accepts_bare_type_and_value_abstractions() {
+    let source = r#"
+let Apply (F : VType -> VType) = F Unit in
+let Applied = Apply <| fn (A : VType) => A * Int in
+let val apply (f : val pi (_ : Int) . Int) : Int = f 0 in
+let value = apply <| val (value : Int) => value in
+let ((), status) : Applied = ((), value) in
+! exit status
+"#;
+    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::run(source));
+    SourceCase::assert_accepted(SourceCase::lower(source));
+}
+
+#[test]
+fn backward_application_rejects_a_type_function_with_the_wrong_result_kind() {
+    let source = r#"
+let Apply (F : VType -> VType) = F Unit in
+let Invalid = Apply <| fn (A : VType) => Ret A in
+! exit 0
+"#;
+    SourceCase::assert_rejected(SourceCase::check(source), TyckDiagnosticCode::KindMismatch);
+    SourceCase::assert_rejected(SourceCase::lower(source), TyckDiagnosticCode::KindMismatch);
+}
+
+#[test]
 fn explicit_value_pi_classifies_a_value_abstraction() {
     SourceCase::assert_accepted(SourceCase::run(
         r#"
