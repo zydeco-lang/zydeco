@@ -4,7 +4,7 @@ begin
   param (/numeric; /system; /VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /Int; builtin) :
   @(import("../../std/builtin.zy")) that
   let int = numeric/int that
-  let (= Monad, = Algebra, ()) =
+  let (/Monad; /Algebra) =
     builtin |> monadic_basis
   in
   begin

@@ -6,7 +6,7 @@ val
 =>
   begin
     let monadic_basis = @(import("monad.zy")) that
-    let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+    let (/Monad; /WithMonad) = builtin |> monadic_basis in
     begin
       -- The operations of the State effect, relative to an ambient monad M.
       let MonadState = @(import("state.type.zy")) that
@@ -15,10 +15,9 @@ val
       -- both the answer and the final state.
       let State (S : VType) (A : VType) = S -> Ret (A * S) that
 
-      -- One opening keeps the carrier, Monad dictionary, and State operations together.
-      let IState (S : VType) =
-        exists (M : VType -> CType) .
-          (#monad :: Thk (Monad M)) * (#state :: Thk (MonadState S M))
+      -- The carrier is supplied by the surrounding composition or WithMonad package.
+      let IState (S : VType) (M : VType -> CType) =
+        (#state :: Thk (MonadState S M))
       that
 
       def ! mo_state (S : VType) : Monad (State S) =
@@ -53,7 +52,7 @@ val
       that
 
       def ! modify (S : VType)
-        ((M, (/monad; /state)) : IState S)
+        ((M, (/monad; /state)) : WithMonad (IState S))
         (f : Thk (S -> Ret S))
       : M Unit =
           ! monad .bind S Unit { ! state .get } {
@@ -88,7 +87,7 @@ val
       pack
           (= State as State : VType -> VType -> CType)
           (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
-          (= IState as IState : VType -> VType)
+          (= IState as IState : VType -> (VType -> CType) -> VType)
       where
         = instance,
         = modify,

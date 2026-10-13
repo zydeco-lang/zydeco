@@ -3,7 +3,7 @@ param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @
   "../../std/builtin.zy"
 )) in
 let basis = @(import("../../std/control/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> basis in
+let (/Monad; /Algebra; /WithMonad) = builtin |> basis in
 let state = @(import("../../std/control/state.zy")) in
 let (/IState; /instance) = builtin |> state in
 let p = {
@@ -43,7 +43,7 @@ def X : VType =
   end
 in
 let make = {
-  fn ((M, (/monad; /state)) : IState Int) =>
+  fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
     ! p M monad X {
       comatch
       end

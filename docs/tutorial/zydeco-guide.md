@@ -505,7 +505,7 @@ The control modules are ordinary value-function builders from Builtin to packed 
 
 | Module | Exports |
 | --- | --- |
-| `monad.zy` | `Monad`, `Algebra` |
+| `monad.zy` | `Monad`, `Algebra`, `WithMonad` |
 | `state.zy` | `State`, `MonadState`, `IState`, `instance`, `modify`, `run_state`, `eval_state` |
 | `exception.zy` | `Exception`, `MonadThrow`, `IException`, `instance`, `raise`, `catch`, `handle_exception` |
 | `state-exn.zy` | `StateExn`, `IStateExn`, `instance`, `run_state_exn` |
@@ -549,6 +549,8 @@ See [packed value composition](../../lib/std/README.md#packed-value-composition)
 
 Use a packed instance when a generic client needs a carrier, its monad dictionary, and effect operations together.
 The [packed-effect contract](../references/language.md#packed-effect-instances) specifies this boundary.
+`IState S M` and `IException E M` describe operations at a supplied carrier;
+`WithMonad` packages such an interface with its carrier and monad dictionary.
 A witness-dependent `pi` lets the client's result refer to the carrier opened from its argument.
 The client then adapts the dictionaries to the operation signatures written with `Ret` inside its monadic block.
 
@@ -557,11 +559,11 @@ This example reads the old state, replaces it, and returns both the old and fina
 ```zydeco
 param (/VType; /Thk; /Ret; /Unit; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
 let make_monad = @(import("../../lib/std/control/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> make_monad in
+let (/Monad; /Algebra; /WithMonad) = builtin |> make_monad in
 let make_state = @(import("../../lib/std/control/state.zy")) in
 let (/IState; /instance; /run_state) = builtin |> make_state in
-let program : Thk (pi ((M, _) : IState Int) . Int -> M Int) = {
-  fn ((M, (/monad; /state)) : IState Int) =>
+let program : Thk (pi ((M, _) : WithMonad (IState Int)) . Int -> M Int) = {
+  fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
     (@[monadic] fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit)) (next : Int) =>
       do old <- ! get;
       do _ <- ! put next;
@@ -575,7 +577,7 @@ let (M, ops) = instance Int in
 ```
 
 The concrete `instance Int` exposes `M` as `State Int`.
-Reconstructing `(M, ops)` supplies the expected abstract `IState Int` argument while retaining
+Reconstructing `(M, ops)` supplies the expected abstract `WithMonad (IState Int)` argument while retaining
 that concrete witness at the call site, so `run_state` can execute the result.
 The generic `program` body uses only the operations from its one package opening.
 

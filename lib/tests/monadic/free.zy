@@ -1,7 +1,7 @@
 begin
   let monadic_basis = @(import("../../std/control/monad.zy")) that
   param (/system; /VType; /CType; /Thk; /process; builtin) : @(import("../../std/builtin.zy")) that
-  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+  let (/Monad; /Algebra) = builtin |> monadic_basis in
   begin
 
     let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that

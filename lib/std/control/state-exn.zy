@@ -8,9 +8,9 @@ val
     let monadic_basis = @(import("monad.zy")) that
     let state_basis = @(import("state.zy")) that
     let exception_basis = @(import("exception.zy")) that
-    let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
-    let (/MonadState) = builtin |> state_basis in
-    let (/MonadThrow) = builtin |> exception_basis in
+    let (/Monad; /WithMonad) = builtin |> monadic_basis in
+    let (/MonadState; /IState) = builtin |> state_basis in
+    let (/MonadThrow; /IException) = builtin |> exception_basis in
     begin
       def Either (E : VType) (A : VType) =
         data
@@ -25,11 +25,8 @@ val
       that
 
       let IStateExn (S : VType) (E : VType) =
-        exists (M : VType -> CType) .
-            (#monad :: Thk (Monad M))
-          * (#state :: Thk (MonadState S M))
-          * (#exception :: Thk (MonadThrow E M))
-          * (#catch :: Thk (forall (A : VType) . Thk (M A) -> Thk (E -> M A) -> M A))
+        WithMonad <| fn (M : VType -> CType) =>
+          IState S M * IException E M
       that
 
       def ! mo_state_exn (S : VType) (E : VType) : Monad (StateExn S E) =
@@ -84,9 +81,10 @@ val
         pack (M as StateExn S E : VType -> CType)
         where
           #monad = { ! mo_state_exn S E },
-          #state = { ! state_ops S E },
-          #exception = { ! throw_ops S E },
-          #catch = { ! catch S E }
+          (
+            #state = { ! state_ops S E },
+            (#exception = { ! throw_ops S E }, #catch = { ! catch S E })
+          )
         end
       that
 

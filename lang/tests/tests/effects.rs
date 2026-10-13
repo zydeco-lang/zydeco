@@ -4,6 +4,7 @@ use zydeco_tests::utils::SourceCase;
 zydeco_tests::check_source!(exception_module, "std/control/exception.zy");
 zydeco_tests::check_source!(state_module, "std/control/state.zy");
 zydeco_tests::check_source!(state_exn_module, "std/control/state-exn.zy");
+zydeco_tests::check_source!(monad_module, "std/control/monad.zy");
 
 zydeco_tests::e2e_io_source!(
     exception_state,
@@ -26,11 +27,12 @@ impl EffectCase {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/control");
         format!(
             r#"
+let (/Monad; /WithMonad) = builtin |> (@(import("{control}/monad.zy"))) in
 let (/IState; /instance = state_instance; /modify) =
   builtin |> (@(import("{control}/state.zy"))) in
 let (/IException; /instance = exception_instance; /raise; /catch) =
   builtin |> (@(import("{control}/exception.zy"))) in
-let (/IStateExn; /instance = combined_instance) =
+let (/IStateExn; /instance = combined_instance; /run_state_exn) =
   builtin |> (@(import("{control}/state-exn.zy"))) in
 let (S, s) = state_instance Int in
 let (E, e) = exception_instance Unit in
@@ -52,12 +54,12 @@ let (C, c) = combined_instance Int Unit in
 fn packed_instances_accept_dictionaries_for_one_carrier() {
     let source = EffectCase::source(
         r#"
-let _ : IState Int = (S, s) in
-let _ : IException Unit = (E, e) in
+let _ : WithMonad (IState Int) = (S, s) in
+let _ : WithMonad (IException Unit) = (E, e) in
 let _ : IStateExn Int Unit = (C, c) in
-let _ : IState Int = (C, #monad = c/monad, #state = c/state) in
-let _ : IException Unit =
-  (C, #monad = c/monad, #exception = c/exception, #catch = c/catch) in
+let _ : WithMonad (IState Int) = (C, #monad = c/monad, #state = c/state) in
+let _ : WithMonad (IException Unit) =
+  (C, #monad = c/monad, (#exception = c/exception, #catch = c/catch)) in
 ! exit 0
 "#,
     );
@@ -66,14 +68,42 @@ let _ : IException Unit =
 }
 
 #[test]
+fn carrier_indexed_interfaces_compose_under_one_monad() {
+    let source = EffectCase::source(
+        r#"
+let state_ops : IState Int C = (#state = c/state) in
+let exception_ops : IException Unit C = (#exception = c/exception, #catch = c/catch) in
+let Composed = WithMonad <| fn (M : VType -> CType) =>
+  IState Int M * IException Unit M
+in
+let ops : IStateExn Int Unit = (C, #monad = c/monad, (state_ops, exception_ops)) in
+let _ : Composed = ops in
+let run : Thk (pi ((M, _) : Composed) . M Int) = {
+  fn ((M, (/monad; /state; /exception; /catch)) : Composed) =>
+    ! catch Int { ! exception .throw Int () } { fn _ => ! state .get }
+} in
+let (M, payload) = ops in
+let _ : WithMonad (IState Int) = (M, #monad = payload/monad, #state = payload/state) in
+do status <- ! run_state_exn Int Unit Int (Ret Int) 7 { ! run (C, c) }
+  { fn _ => ret 1 }
+  { fn state answer => match (state, answer) | (7, 7) => ret 0 | _ => ret 1 end };
+! exit status
+"#,
+    );
+    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::run(&source));
+    SourceCase::assert_accepted(SourceCase::lower(&source));
+}
+
+#[test]
 fn std_helpers_expose_packed_pi_signatures() {
     let source = EffectCase::source(
         r#"
 let _ : Thk (forall (S : VType) .
-  pi ((M, _) : IState S) . Thk (S -> Ret S) -> M Unit) = modify in
-let _ : Thk (forall (E : VType) . pi ((M, _) : IException E) .
+  pi ((M, _) : WithMonad (IState S)) . Thk (S -> Ret S) -> M Unit) = modify in
+let _ : Thk (forall (E : VType) . pi ((M, _) : WithMonad (IException E)) .
   forall (A : VType) . Thk Top -> E -> M A) = raise in
-let _ : Thk (forall (E : VType) . pi ((M, _) : IException E) .
+let _ : Thk (forall (E : VType) . pi ((M, _) : WithMonad (IException E)) .
   forall (A : VType) . Thk Top -> Thk (M A) -> Thk (E -> M A) -> M A) = catch in
 ! exit 0
 "#,
@@ -84,9 +114,11 @@ let _ : Thk (forall (E : VType) . pi ((M, _) : IException E) .
 
 #[test]
 fn packed_interfaces_reject_a_named_carrier_wrapper() {
-    for (interface, carrier, operations) in
-        [("IState Int", "S", "s"), ("IException Unit", "E", "e"), ("IStateExn Int Unit", "C", "c")]
-    {
+    for (interface, carrier, operations) in [
+        ("WithMonad (IState Int)", "S", "s"),
+        ("WithMonad (IException Unit)", "E", "e"),
+        ("IStateExn Int Unit", "C", "c"),
+    ] {
         EffectCase::reject(
             &format!("let _ : {interface} = (#M = {carrier}, {operations}) in ! exit 0"),
             TyckDiagnosticCode::KindMismatch,
@@ -98,7 +130,7 @@ fn packed_interfaces_reject_a_named_carrier_wrapper() {
 fn state_instance_rejects_a_monad_for_another_carrier() {
     EffectCase::reject(
         r#"
-let _ : IState Int = (S, #monad = e/monad, #state = s/state) in
+let _ : WithMonad (IState Int) = (S, #monad = e/monad, #state = s/state) in
 ! exit 0
 "#,
         TyckDiagnosticCode::TypeMismatch,
@@ -109,8 +141,8 @@ let _ : IState Int = (S, #monad = e/monad, #state = s/state) in
 fn exception_instance_rejects_throw_for_another_carrier() {
     EffectCase::reject(
         r#"
-let _ : IException Unit =
-  (E, #monad = e/monad, #exception = c/exception, #catch = e/catch) in
+let _ : WithMonad (IException Unit) =
+  (E, #monad = e/monad, (#exception = c/exception, #catch = e/catch)) in
 ! exit 0
 "#,
         TyckDiagnosticCode::TypeMismatch,
@@ -122,7 +154,7 @@ fn combined_instance_rejects_state_for_another_carrier() {
     EffectCase::reject(
         r#"
 let _ : IStateExn Int Unit =
-  (C, #monad = c/monad, #state = s/state, #exception = c/exception, #catch = c/catch) in
+  (C, #monad = c/monad, (#state = s/state, (#exception = c/exception, #catch = c/catch))) in
 ! exit 0
 "#,
         TyckDiagnosticCode::TypeMismatch,
@@ -133,10 +165,10 @@ let _ : IStateExn Int Unit =
 fn packed_pi_forwards_one_opening_and_its_result_carrier() {
     let source = EffectCase::source(
         r#"
-let Read = pi ((M, _) : IState Int) . M Int in
-let read : Thk Read = { fn ((M, (/state)) : IState Int) => ! state .get } in
+let Read = pi ((M, _) : WithMonad (IState Int)) . M Int in
+let read : Thk Read = { fn ((M, (/state)) : WithMonad (IState Int)) => ! state .get } in
 let forward : Thk Read = {
-  fn ((M, ops) : IState Int) => ! read (M, ops)
+  fn ((M, ops) : WithMonad (IState Int)) => ! read (M, ops)
 } in
 do (x, s) <- ! forward (S, s) 7;
 match (x, s) | (7, 7) => ! exit 0 | _ => ! exit 1 end
@@ -151,9 +183,9 @@ match (x, s) | (7, 7) => ! exit 0 | _ => ! exit 1 end
 fn packed_pi_rejects_an_unopened_instance() {
     EffectCase::reject(
         r#"
-let Read = pi ((M, _) : IState Int) . M Int in
-let read : Thk Read = { fn ((M, (/state)) : IState Int) => ! state .get } in
-let hidden = { fn (ops : IState Int) => ! read ops } in
+let Read = pi ((M, _) : WithMonad (IState Int)) . M Int in
+let read : Thk Read = { fn ((M, (/state)) : WithMonad (IState Int)) => ! state .get } in
+let hidden = { fn (ops : WithMonad (IState Int)) => ! read ops } in
 ! exit 0
 "#,
         TyckDiagnosticCode::PackageWitnessesUnavailable,

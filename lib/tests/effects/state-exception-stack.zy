@@ -35,8 +35,8 @@ let p : Thk (pi ((M, _) : IStateExn Int String) . M Int) = {
         do _ <- ! put n;
         ret n
     ) M monad { ! state .get } { ! state .put }
-      { ! raise String (M, = monad, = exception, #catch = recover) }
-      { ! catch String (M, = monad, = exception, #catch = recover) } {
+      { ! raise String (M, = monad, (= exception, #catch = recover)) }
+      { ! catch String (M, = monad, (= exception, #catch = recover)) } {
       fn x y =>
         do z <- ! numeric/int/add x y;
         ! monad .return Int z

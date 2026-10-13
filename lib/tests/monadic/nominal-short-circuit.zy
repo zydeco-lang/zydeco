@@ -43,7 +43,7 @@ let catch : Thk (forall (A : VType) . Thk (M A) -> Thk (Unit -> M A) -> M A) = {
     | +Err() => ! h () s
     end
 } in
-let ops = (= monad, = state, = exception, = catch) in
+let ops = (= monad, (= state, (= exception, = catch))) in
 let p = {
   fn ((M, (/monad; /state; /exception)) : IStateExn Int Unit) =>
     let step : Thk (Int -> M Int) = {

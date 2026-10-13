@@ -8,9 +8,15 @@ val
     let Monad = @(import("monad.type.zy")) that
     let Algebra = @(import("algebra.type.zy")) that
 
+    -- Compose carrier-indexed operations before packaging one carrier and its monad.
+    let WithMonad (I : (VType -> CType) -> VType) =
+      exists (M : VType -> CType) . (#monad :: Thk (Monad M)) * I M
+    that
+
     pack
         (= Monad as Monad : (VType -> CType) -> CType)
         (= Algebra as Algebra : (VType -> CType) -> CType -> CType)
+        (= WithMonad as WithMonad : ((VType -> CType) -> VType) -> VType)
     where
       ()
     end

@@ -7,7 +7,7 @@
 begin
   param val (/VType; /CType; /Thk; /Ret; builtin) : @(import("../../std/builtin.zy")) that
   let monadic_basis = @(import("../../std/control/monad.zy")) that
-  let (= Monad, = Algebra, ()) =
+  let (/Monad; /Algebra) =
     builtin |> monadic_basis
   in
   begin

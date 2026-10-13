@@ -326,7 +326,7 @@ pub mod utils {
             let open_monadic = match prelude {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => {
-                    concat!("let (= Monad, = Algebra, ()) =\n", "  builtin |> monadic_basis in\n",)
+                    concat!("let (/Monad; /Algebra) =\n", "  builtin |> monadic_basis in\n",)
                         .to_string()
                 }
             };

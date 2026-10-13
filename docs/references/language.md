@@ -682,15 +682,28 @@ let mo : Thk (Monad Ret) = {
 ### Packed Effect Instances
 
 An effect-polymorphic client needs a carrier, its monad dictionary, and operations at that same carrier.
-The [control library](../../lib/std/control) groups them in a packed instance
-with one leading positional witness `M : VType -> CType`.
-`IState S` contains `monad : Thk (Monad M)` and `state : Thk (MonadState S M)`;
-`IException E` contains the monad dictionary, `exception : Thk (MonadThrow E M)`, and a `catch` operation.
-`IStateExn S E` combines both effect interfaces under one `M`.
+The [control library](../../lib/std/control) separates carrier-indexed operations
+from existential packaging so several effects can share one carrier.
+`IState S M` contains `state : Thk (MonadState S M)`; `IException E M` contains `exception : Thk (MonadThrow E M)`
+and a `catch` operation at `M`.
+Neither operation bundle introduces a carrier or a monad dictionary of its own.
+
+`WithMonad I` packages one leading positional witness `M : VType -> CType`,
+one `monad : Thk (Monad M)` dictionary, and an operation payload of type `I M`.
+Standalone clients use `WithMonad (IState S)` or `WithMonad (IException E)`.
+The combined signature `IStateExn S E` composes the operation bundles before packaging them:
+
+```zydeco
+WithMonad <| fn (M : VType -> CType) =>
+  IState S M * IException E M
+```
+
+Both bundles therefore use the same `M` and the surrounding package's single monad dictionary.
+A product of independently packaged interfaces would instead introduce independent witnesses.
 These signatures constrain carrier agreement, not the algebraic laws of the supplied operations.
 
 A client whose result uses that carrier has a [witness-dependent signature](#9-polymorphism-and-packed-values),
-such as `pi ((M, _) : IState Int) . M Int`.
+such as `pi ((M, _) : WithMonad (IState Int)) . M Int`.
 Its parameter pattern opens the carrier and operation payload once;
 repacking `(M, ops)` forwards the same witness to other clients.
 The packed boundary is an ordinary library interface.

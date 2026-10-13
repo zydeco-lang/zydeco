@@ -6,7 +6,7 @@ val
 =>
   begin
     let monadic_basis = @(import("monad.zy")) that
-    let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+    let (/Monad; /WithMonad) = builtin |> monadic_basis in
     begin
       def Either (E : VType) (A : VType) =
         data
@@ -22,11 +22,9 @@ val
       -- The canonical Exception relative monad: a returned Either observation.
       let Exception (E : VType) (A : VType) = Ret (Either E A) that
 
-      let IException (E : VType) =
-        exists (M : VType -> CType) .
-            (#monad :: Thk (Monad M))
-          * (#exception :: Thk (MonadThrow E M))
-          * (#catch :: Thk (forall (A : VType) . Thk (M A) -> Thk (E -> M A) -> M A))
+      let IException (E : VType) (M : VType -> CType) =
+          (#exception :: Thk (MonadThrow E M))
+        * (#catch :: Thk (forall (A : VType) . Thk (M A) -> Thk (E -> M A) -> M A))
       that
 
       def ! mo_exception (E : VType) : Monad (Exception E) =
@@ -53,17 +51,17 @@ val
         pack (M as Exception E : VType -> CType)
         where
           #monad = { ! mo_exception E },
-          #exception = { ! throw_ops E },
-          #catch = (
-            {
-              fn (A : VType) (m : Thk (Exception E A)) (h : Thk (E -> Exception E A)) =>
-                do r <- ! m;
-                match r
-                | +Left(e) => ! h e
-                | +Right(a) => ret +Right(a)
-                end
-            } : Thk (
-              forall (A : VType) .
+          (
+            #exception = { ! throw_ops E },
+            #catch = (
+              {
+                fn (A : VType) (m : Thk (Exception E A)) (h : Thk (E -> Exception E A)) =>
+                  do r <- ! m;
+                  match r
+                  | +Left(e) => ! h e
+                  | +Right(a) => ret +Right(a)
+                  end
+              } : Thk <| forall (A : VType) .
                 Thk (Exception E A) -> Thk (E -> Exception E A) -> Exception E A
             )
           )
@@ -72,13 +70,13 @@ val
 
       -- A monadic-block-ready raise function. The leading Top argument carries
       -- the structure required by the algebra translation for the answer type A.
-      def ! raise (E : VType) ((M, /exception) : IException E) :
+      def ! raise (E : VType) ((M, /exception) : WithMonad (IException E)) :
         forall (A : VType) . Thk Top -> E -> M A =
           fn (A : VType) (_ : Thk Top) (e : E) =>
             ! exception .throw A e
       that
 
-      def ! catch (E : VType) ((M, /catch) : IException E)
+      def ! catch (E : VType) ((M, /catch) : WithMonad (IException E))
         (A : VType) (_ : Thk Top) (m : Thk (M A)) (h : Thk (E -> M A))
       : M A =
           ! catch A m h
@@ -101,7 +99,7 @@ val
       pack
           (= Exception as Exception : VType -> VType -> CType)
           (= MonadThrow as MonadThrow : VType -> (VType -> CType) -> CType)
-          (= IException as IException : VType -> VType)
+          (= IException as IException : VType -> (VType -> CType) -> VType)
       where
         = instance,
         = raise,

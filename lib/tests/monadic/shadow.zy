@@ -1,11 +1,11 @@
 begin
   let outer_basis = @(import("../../std/control/monad.zy")) that
   param (/Unit; builtin) : @(import("../../std/builtin.zy")) that
-  let (= Monad, = Algebra, ()) = builtin |> outer_basis in
+  let (/Monad; /Algebra) = builtin |> outer_basis in
 
   begin
     let inner_basis = @(import("../../std/control/monad.zy")) that
-    let (= Monad, = Algebra, ()) = builtin |> inner_basis in
+    let (/Monad; /Algebra) = builtin |> inner_basis in
 
     begin
       @[monadic] begin

@@ -3,7 +3,7 @@ begin
   param (/numeric; /system; /VType; /CType; /Thk; /Ret; /OS; /process; /String; /Int; builtin) :
   @(import("../../std/builtin.zy")) that
   let int = numeric/int that
-  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+  let (/Monad; /Algebra) = builtin |> monadic_basis in
   begin
 
     def Either (E : VType) (A : VType) =

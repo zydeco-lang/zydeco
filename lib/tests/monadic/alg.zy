@@ -3,7 +3,7 @@ begin
   param (/system; /VType; /CType; /Thk; /Ret; /process; /Int; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
-  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+  let (/Monad; /Algebra) = builtin |> monadic_basis in
   begin
 
     def With (B1 : CType) (B2 : CType) =

@@ -13,15 +13,15 @@ param (
   /process;
   builtin
 ) : @(import("../../std/builtin.zy")) in
-let (/Monad; /Algebra) = builtin |> (@(import("../../std/control/monad.zy"))) in
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/control/monad.zy"))) in
 let (/IState; /instance = state_instance; /modify; /run_state; /eval_state) =
   builtin |> (@(import("../../std/control/state.zy")))
 in
 let (/IException; /instance = exception_instance; /raise; /catch; /handle_exception) =
   builtin |> (@(import("../../std/control/exception.zy")))
 in
-let step : Thk (pi ((M, _) : IState Int) . M Int) = {
-  fn ((M, (/monad; /state)) : IState Int) =>
+let step : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
+  fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
     (
       @[monadic] fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit))
         (add : Thk (Int -> Int -> Ret Int))
@@ -36,8 +36,8 @@ let step : Thk (pi ((M, _) : IState Int) . M Int) = {
         ! monad .return Int z
     }
 } in
-let fail : Thk (pi ((M, _) : IException String) . String -> M Int) = {
-  fn ((M, (/monad; ops)) : IException String) =>
+let fail : Thk (pi ((M, _) : WithMonad (IException String)) . String -> M Int) = {
+  fn ((M, (/monad; ops)) : WithMonad (IException String)) =>
     (
       @[monadic] fn (raise : Thk (forall (A : VType) . String -> Ret A)) (msg : String) =>
         do n <- ! raise Int msg;

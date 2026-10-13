@@ -282,8 +282,12 @@ Neither callback type promises purity or single invocation.
 
 ## Relative monads and control examples
 
-The [control modules](control) supply `Monad`, `Algebra`, and packed State, Exception, and combined instances.
-Each module's `instance` builder groups the carrier and its dictionaries; generic clients use a witness-dependent `pi`.
+The [control modules](control) supply `Monad`, `Algebra`, `WithMonad`,
+and carrier-indexed State and Exception interfaces.
+`WithMonad` packages one carrier and monad dictionary with the chosen operations;
+the combined `IStateExn` interface composes both effects inside that boundary.
+Each effect module's `instance` builder supplies a concrete carrier and its dictionaries;
+generic clients use a witness-dependent `pi`.
 [L11](../../docs/references/language.md#packed-effect-instances) owns the packed boundary
 and its connection to monadic-block translation.
 The [capability walkthrough](../../docs/tutorial/zydeco-guide.md#10-capability-dictionaries) shows how

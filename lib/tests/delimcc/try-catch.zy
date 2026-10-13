@@ -4,7 +4,7 @@ begin
     "../../std/builtin.zy"
   )) that
   let int = numeric/int that
-  let (= Monad, = Algebra, ()) = builtin |> monadic_basis in
+  let (/Monad; /Algebra) = builtin |> monadic_basis in
   begin
 
     let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that

@@ -3,7 +3,7 @@ param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let basis = @(import("../../std/control/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> basis in
+let (/Monad; /Algebra; /WithMonad) = builtin |> basis in
 let state = @(import("../../std/control/state.zy")) in
 let (/IState; /instance = state_instance) = builtin |> state in
 let exception = @(import("../../std/control/exception.zy")) in
@@ -31,8 +31,8 @@ let evaluate = {
       ! eval +Add(+Var(1), +Add(+Lit(2), +Var(2)))
     end
 } in
-let under_state : Thk (pi ((M, _) : IState Int) . M Int) = {
-  fn ((M, (/monad; /state)) : IState Int) =>
+let under_state : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
+  fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
     ! evaluate M monad {
       fn x =>
         ! monad .bind Int Int { ! state .get } {
@@ -48,8 +48,8 @@ let under_state : Thk (pi ((M, _) : IState Int) . M Int) = {
         ! monad .return Int z
     }
 } in
-let under_exception : Thk (pi ((M, _) : IException Unit) . M Int) = {
-  fn ((M, (/monad; /exception)) : IException Unit) =>
+let under_exception : Thk (pi ((M, _) : WithMonad (IException Unit)) . M Int) = {
+  fn ((M, (/monad; /exception)) : WithMonad (IException Unit)) =>
     ! evaluate M monad {
       fn x =>
         ! numeric/int/eq (M Int) x 1
