@@ -7,51 +7,21 @@ use crate::{
         MonadicMetaError,
     },
     textual::{
-        arena::TextualScope,
         fmt::Formatter,
         syntax::{
-            Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, CoPatId,
-            ContextBind, Ctor, DefId, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists,
-            Force, Hole, IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label,
-            Literal, ManifestPattern, Meta, MetaId, MetaNode, MetaTerm, Named, Pack, Param,
-            ParameterFlavor, Paren, Parser, PatId, Pattern, Pipeline, PipelineDirection, Placement,
-            Prod, Proj, ProjectionPattern, Return, SourceUnit, Term, TermId, ViewPattern,
+            Alias, Ann, Appli, BindingFlavor, Block, BuiltinRole, BuiltinValueRole, ContextBind,
+            Ctor, DefinitionMode, Dtor, EntityId, ExistentialParameter, Exists, Force, Hole,
+            IntegerLiteral, IntegerOperation, IntegerType, IntrinsicRole, Label, Literal,
+            ManifestPattern, Meta, MetaNode, MetaTerm, Named, Pack, Param, ParameterFlavor, Paren,
+            Parser, Pattern, Pipeline, PipelineDirection, Placement, Prod, Proj, ProjectionPattern,
+            Return, SourceUnit, Term, ViewPattern,
         },
     },
 };
 use zydeco_syntax::Ugly;
-use zydeco_utils::{arena::IdAllocator, pass::CompilerPass};
+use zydeco_utils::pass::CompilerPass;
 
 use super::*;
-
-#[test]
-fn textual_entities_retain_their_category_tags() {
-    let mut allocator = IdAllocator::<TextualScope>::new();
-    let def: DefId = allocator.alloc();
-    let pat: PatId = allocator.alloc();
-    let copat: CoPatId = allocator.alloc();
-    let meta: MetaId = allocator.alloc();
-    let term: TermId = allocator.alloc();
-
-    assert!(matches!(EntityId::from(def), EntityId::Def(id) if id == def));
-    assert!(matches!(EntityId::from(pat), EntityId::Pat(id) if id == pat));
-    assert!(matches!(EntityId::from(copat), EntityId::CoPat(id) if id == copat));
-    assert!(matches!(EntityId::from(meta), EntityId::Meta(id) if id == meta));
-    assert!(matches!(EntityId::from(term), EntityId::Term(id) if id == term));
-}
-
-#[test]
-fn parsing_1() {
-    let source = "!(!1)";
-    let mut parser = Parser::new();
-    let _ = StrictParser::term(source, &mut parser).unwrap();
-}
-#[test]
-fn parsing_2() {
-    let source = "{ let x = 1 in ! exit x }";
-    let mut parser = Parser::new();
-    let _ = StrictParser::source(source, &mut parser).unwrap();
-}
 
 #[test]
 fn rejects_retired_do_tilde_syntax() {

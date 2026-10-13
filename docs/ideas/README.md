@@ -27,7 +27,6 @@ Dated experimental reports and their evidence live in [evaluations](../evaluatio
 | [Macro source provenance](macro-source-provenance.md) | Would a future macro system need hygiene in source provenance? |
 | [An editor action for typeof](typeof-editor-action.md) | Should the editor construct source classifier queries? |
 | [Classifier pattern aliases](classifier-pattern-aliases.md) | What would type and kind pattern aliases mean? |
-| [Formatter punning audit retirement](formatter-punning-audit.md) | Does the formatter still need its migration audit helper? |
 | [Kind-witness introduction](kind-witness-introduction.md) | How could packed values introduce kind witnesses? |
 | [Computation witness routes](computation-witness-routes.md) | How could computation application follow witnesses beneath products? |
 | [Companion interface generation](companion-interface-generation.md) | Do companion interfaces need generation or synchronization? |

@@ -60,8 +60,7 @@ pub mod textual {
     /// A wrapper for the formatters.
     pub mod fmt {
         pub use super::pretty::{
-            IndentWidth, LayoutIntentions, NamedTermPunningAudit, Parentheses, PrettyFormatter,
-            PrettyOptions,
+            IndentWidth, LayoutIntentions, Parentheses, PrettyFormatter, PrettyOptions,
         };
         pub use super::ugly::*;
     }

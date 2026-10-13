@@ -10,7 +10,6 @@ use super::syntax::*;
 pub use config::{IndentWidth, LayoutIntentions, Parentheses, PrettyOptions};
 use context::{GrammarContext, PatternRequirement, TermPrecedence, TermRequirement};
 use pretty::{DocAllocator, RcAllocator, RcDoc};
-pub use punning::NamedTermPunningAudit;
 use punning::{PunnedPatternPayload, PunnedTermPayload, Punning};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use zydeco_syntax::{Pretty, ViewSpine};
@@ -2629,14 +2628,17 @@ mod tests {
             "(#field = field, = kept, #annotated = annotated : Type, #renamed = other)",
         );
         let parsed = ParsedSource::new(source);
-
+        let formatted = parsed.render(LayoutIntentions::Preserve);
         assert_eq!(
-            parsed.render(LayoutIntentions::Preserve),
+            formatted,
             concat!(
                 "let (= field, /projected) = input in\n",
                 "(= field, = kept, = annotated : Type, #renamed = other)\n",
             )
         );
+        let reparsed = ParsedSource::new(&formatted);
+        assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
     }
 
     #[test]
@@ -5134,20 +5136,8 @@ mod tests {
     }
 
     #[test]
-    fn canonical_pretty_printing_round_trips_idempotently() {
-        let parsed = ParsedSource::new("(#field = field, = kept, #renamed = other)");
-        let first = parsed.render(LayoutIntentions::Ignore);
-        let reparsed = ParsedSource::new(&first);
-        let second = reparsed.render(LayoutIntentions::Ignore);
-
-        assert_eq!(first, second);
-    }
-
-    /// Representative standard-library sources shared by repository audits:
-    /// one entry per composition boundary and topic, so adding a topic or
-    /// reshaping the library updates every audit at once.
-    fn standard_library_sources() -> Vec<(&'static str, &'static str)> {
-        vec![
+    fn standard_library_pretty_printing_reparses_idempotently() {
+        [
             ("builtin.zy", include_str!("../../../../lib/std/builtin.zy")),
             ("data-package.zy", include_str!("../../../../lib/std/data/package.zy")),
             ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
@@ -5156,28 +5146,8 @@ mod tests {
             ("system-package.zy", include_str!("../../../../lib/std/system/package.zy")),
             ("text-package.zy", include_str!("../../../../lib/std/text/package.zy")),
         ]
-    }
-
-    #[test]
-    fn standard_library_has_no_named_term_punning_backlog() {
-        let remaining = standard_library_sources()
-            .into_iter()
-            .filter_map(|(name, source)| {
-                let parsed = ParsedSource::new(source);
-                let candidates =
-                    NamedTermPunningAudit::new(source, &parsed.parser.spans, &parsed.parser.arena)
-                        .candidates()
-                        .len();
-                (candidates != 0).then_some((name, candidates))
-            })
-            .collect::<Vec<_>>();
-
-        assert!(remaining.is_empty(), "unpunned named terms remain: {remaining:?}");
-    }
-
-    #[test]
-    fn standard_library_pretty_printing_reparses_idempotently() {
-        standard_library_sources().into_iter().for_each(|(name, source)| {
+        .into_iter()
+        .for_each(|(name, source)| {
             let original = ParsedSource::new(source);
             let first = original.render(LayoutIntentions::Ignore);
             let reparsed = ParsedSource::named(&first, name);

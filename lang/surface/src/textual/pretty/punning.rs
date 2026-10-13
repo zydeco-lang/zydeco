@@ -1,4 +1,4 @@
-//! Canonical pun recognition shared by rendering and source audits.
+//! Canonical pun recognition for terms and patterns.
 
 use crate::textual::syntax::*;
 
@@ -65,42 +65,5 @@ impl<'arena> Punning<'arena> {
 
     fn is_trivia_free(&self, entity: impl Into<EntityId>) -> bool {
         self.arena.trivia.leading_comments(entity.into()).is_empty()
-    }
-}
-
-/// Read-only inventory of explicit named terms that canonical formatting can
-/// replace with puns.
-pub struct NamedTermPunningAudit<'source, 'arena> {
-    source: &'source str,
-    spans: &'arena SpanArena,
-    punning: Punning<'arena>,
-}
-
-impl<'source, 'arena> NamedTermPunningAudit<'source, 'arena> {
-    pub fn new(source: &'source str, spans: &'arena SpanArena, arena: &'arena TextArena) -> Self {
-        Self { source, spans, punning: Punning::new(arena) }
-    }
-
-    pub fn candidates(&self) -> Vec<TermId> {
-        self.punning
-            .arena
-            .terms
-            .iter()
-            .filter_map(|(term, syntax)| match syntax {
-                | Term::Named(Named(field, inner))
-                    if self.punning.term_payload(field, *inner).is_some()
-                        && !self.source_is_punned(*term) =>
-                {
-                    Some(*term)
-                }
-                | _ => None,
-            })
-            .collect()
-    }
-
-    fn source_is_punned(&self, term: TermId) -> bool {
-        let span = self.spans[&EntityId::Term(term)].range();
-        let (start, end) = (span.start, span.end);
-        self.source.get(start..end).is_some_and(|source| source.starts_with('='))
     }
 }

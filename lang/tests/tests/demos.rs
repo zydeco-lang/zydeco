@@ -1,8 +1,6 @@
-use zydeco_tests::e2e_io_source;
-use zydeco_tests::e2e_sources;
+use zydeco_tests::{e2e_io_source, e2e_sources};
 
 e2e_sources!({
-    y => "tests/demos/Y.zydeco",
     abort => "tests/demos/abort.zy",
     abort_variadic => "tests/demos/abort-variadic.zydeco",
     add => "tests/demos/add.zy",
@@ -10,29 +8,53 @@ e2e_sources!({
     avl_hash => "tests/demos/avl-hash.zy",
     backtrace => "tests/demos/backtrace.zydeco",
     bigmac => "tests/demos/bigmac.zy",
-    choice => "tests/demos/choice.zy",
     comment => "tests/demos/comment.zy",
-    defunctionalization => "tests/demos/defunctionalization.zydeco",
-    deterministic_pushdown_automaton => "tests/demos/deterministic-pushdown-automaton.zydeco",
     even_odd_codata => "tests/demos/even-odd-codata.zy",
     even_odd_data => "tests/demos/even-odd-data.zy",
     even_odd_fix => "tests/demos/even-odd-fix.zy",
     fn_opt => "tests/demos/fn-opt.zy",
     forall => "tests/demos/forall.zy",
     ifz => "tests/demos/ifz.zy",
-    interpreter => "tests/demos/interpreter.zydeco",
     invert => "tests/demos/invert.zydeco",
-    list => "tests/demos/list.zydeco",
-    listm => "tests/demos/listm.zydeco",
-    literal => "tests/demos/literal.zy",
     merge => "tests/demos/merge.zydeco",
     num => "tests/demos/num.zy",
-    oo => "tests/demos/oo.zydeco",
-    regex => "tests/demos/regex.zy",
     ret => "tests/demos/ret.zydeco",
-    unit => "tests/demos/unit.zy",
-    variadic => "tests/demos/variadic.zy",
 });
+
+e2e_io_source!(y, "tests/demos/Y.zydeco", "", "");
+e2e_io_source!(choice, "tests/demos/choice.zy", "", "0\n1\no\n");
+e2e_io_source!(defunctionalization, "tests/demos/defunctionalization.zydeco", "", "18\n");
+e2e_io_source!(
+    deterministic_pushdown_automaton,
+    "tests/demos/deterministic-pushdown-automaton.zydeco",
+    "",
+    concat!(
+        "The following parens are balanced? (())\n",
+        "true\n",
+        "The following parens are balanced? ()()\n",
+        "true\n",
+        "The following parens are balanced? )(()\n",
+        "false\n",
+        "The following parens are balanced? ()(\n",
+        "false\n",
+        "The following parens are balanced? ()\n",
+        "true\n",
+        "The following parens are balanced? (\n",
+        "false\n",
+        "The following parens are balanced? )\n",
+        "false\n",
+        "The following parens are balanced? \n",
+        "true\n",
+    )
+);
+e2e_io_source!(self_interpreter, "tests/demos/interpreter.zydeco", "", "false\n");
+e2e_io_source!(list, "tests/demos/list.zydeco", "", "4\n");
+e2e_io_source!(listm, "tests/demos/listm.zydeco", "", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n");
+e2e_io_source!(literal, "tests/demos/literal.zy", "", "Hello literal\nsecond line\n");
+e2e_io_source!(oo, "tests/demos/oo.zydeco", "", "42\n");
+e2e_io_source!(regex, "tests/demos/regex.zy", "", "\\^o^/\n");
+e2e_io_source!(unit, "tests/demos/unit.zy", "", "()\n");
+e2e_io_source!(variadic, "tests/demos/variadic.zy", "", "hello\nworld\nhello\nworld\n");
 
 // `algebra` and `echo_sum` read stdin in a loop, so they declare their input
 // and assert the exact interaction on every backend.

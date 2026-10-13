@@ -72,5 +72,3 @@ source intentions, boundary algebra, canonical layout families, and directives.
 The [language reference](../../../../docs/references/language.md#meta-annotations-compile-time-metadata) provides
 meta annotation syntax, while [source analysis](../../../../docs/references/compiler.md#shared-source-analysis)
 owns documentation/literal attachment decoding and diagnostics.
-`NamedTermPunningAudit` remains a formatter test helper; its eventual retirement is tracked
-in [deferred work](../../../../docs/ideas/formatter-punning-audit.md).
