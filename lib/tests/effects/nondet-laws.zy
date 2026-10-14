@@ -1,0 +1,61 @@
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
+let nondet = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let reader = builtin |> (@(import("../../std/effect/reader.zy"))) in
+let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/render) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
+let (/branch_laws) = builtin |> (@(import("nondet-law-suite.zy"))) in
+let (/laws; /lift_laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+let (N, n) = nondet/instance in
+let (R, r) = reader/instance Int in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (W, w) = writer/instance String output in
+let (NR, nr) = nondet/transformer_instance R in
+let (NW, nw) = nondet/transformer_instance W in
+let observe : Thk (Thk (N Int) -> Ret String) = {
+  fn m =>
+    do values <- ! nondet/observe_all Int m;
+    ! render values
+} in
+let observe_reader : Thk (Thk (NR Int) -> Ret String) = {
+  fn m =>
+    do values <- ! reader/run_reader Int (List Int) 7 {
+      ! nondet/observe_all_t R r/monad Int m
+    };
+    ! render values
+} in
+let observe_writer : Thk (Thk (NW Int) -> Ret String) = {
+  fn m =>
+    do (values, written) <- ! writer/run_writer String (List Int) {
+      ! nondet/observe_all_t W w/monad Int m
+    };
+    do rendered <- ! render values;
+    ! string/append rendered written
+} in
+! with_trace {
+  fn mark read reset =>
+    do singleton <- ! laws N n/monad { ! n/monad .return Int 1 }
+      { fn value => ! n/monad .return Int value }
+      { fn value => ! n/monad .return Int value }
+      observe mark read reset;
+    do concrete <- ! branch_laws N n/monad n/nondet observe mark read reset;
+    do over_reader <- ! branch_laws NR nr/monad nr/nondet observe_reader mark read reset;
+    do over_writer <- ! branch_laws NW nw/monad nw/nondet observe_writer mark read reset;
+    do reader_lift <- ! lift_laws R NR r/monad nr/monad
+      { fn m => ! nondet/lift R Int m }
+      { ! r/reader .ask }
+      { fn value environment => ! numeric/int/add value environment }
+      observe_reader mark read reset;
+    do writer_lift <- ! lift_laws W NW w/monad nw/monad
+      { fn m => ! nondet/lift W Int m }
+      { ret (1, "a") }
+      { fn value => ret (value, "b") }
+      observe_writer mark read reset;
+    match (singleton, concrete, over_reader, over_writer, reader_lift, writer_lift)
+    | (0, 0, 0, 0, 0, 0) => ret 0
+    | _ => ret 1
+    end
+}

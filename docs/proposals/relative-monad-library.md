@@ -1,7 +1,9 @@
 # Extending the Relative Monad Library
 
-Status: ongoing library programme. The authorized Ret, Reader, Writer, and Option batch is implemented;
-its settled design lives in the [language reference](../references/language.md#elementary-effect-instances).
+Status: ongoing library programme.
+The authorized Ret, Reader, Writer, and Option batch is implemented, as is ordered depth-first NonDet/NonDetT.
+Their settled designs live in the [elementary effect reference](../references/language.md#elementary-effect-instances)
+and [search reference](../references/language.md#ordered-depth-first-nondeterminism).
 The directions below require separate implementation decisions.
 This document proposes library work, not new language semantics.
 
@@ -18,7 +20,7 @@ Its principal constraint is that a carrier must compose with ambient computation
 without changing their observable order.
 In particular, eagerly collecting nondeterministic results
 into a returned list does not provide an unrestricted relative monad.
-The initial implementation establishes reusable dictionaries, transformer conventions,
+The implemented libraries establish reusable dictionaries, transformer conventions, ordered depth-first search,
 and law-oriented tests without introducing a scheduler, a resource runtime, or compiler changes.
 
 ## 1. Motivation and Research Question
@@ -73,8 +75,9 @@ The standard data library already owns [Option](../../lib/std/data/option.zy),
 [Result](../../lib/std/data/result.zy), and list operations.
 [Transformer examples](../../lib/tests/monadic/trans.zy) implement ReaderT, OptionT,
 and a continuation-based optional transformer.
-Other examples cover [backtracking](../../lib/tests/monadic/backtrack.zydeco),
-[free effects](../../lib/tests/oopsla/free.zydeco), and [delimited control](../../lib/tests/delimcc/reset-shift-k.zy).
+The [backtracking example](../../lib/tests/monadic/backtrack.zydeco) now uses the standard NonDet library.
+Other examples cover [free effects](../../lib/tests/oopsla/free.zydeco)
+and [delimited control](../../lib/tests/delimcc/reset-shift-k.zy).
 These examples establish feasibility of particular encodings, not a stable API or general law certification.
 
 ## 3. Semantic Admission Criteria
@@ -109,21 +112,12 @@ The implemented elementary dictionaries have been tested through translated clie
 A general transformer typeclass remains unnecessary for the elementary batch.
 Consistent constructors and lift functions can establish the actual common interface before it is abstracted.
 
-### 3.3. The Returned-List Counterexample
+### 3.3. Search Observations
 
-The naive candidate `N A = Ret (List A)` first executes its input, then executes a continuation
-for each element and concatenates the results.
-Suppose the input contains `1` and `2`.
-Let `f i` emit `F_i` before returning one result, and let `g` emit `G_i` on that result.
-Left-associated bind emits `F_1, F_2, G_1, G_2`, whereas right-associated bind emits `F_1, G_1, F_2, G_2`.
-The final list agrees, but the ambient trace differs.
-
-Consequently, the original suggestion to add this carrier as an unrestricted relative monad must be withdrawn.
-The paper explicitly identifies the commutativity restriction in [§5.4](https://arxiv.org/html/2502.15031v2#S5.SS4).
-A pure finite-list API remains useful, and a commutative-base specialization may be lawful.
-Neither justifies exporting a general `Monad` dictionary for returned lists over arbitrary ambient effects.
-The more promising unrestricted direction represents search as a protocol whose bind installs continuations
-before results are observed.
+The [search reference](../references/language.md#lists-and-search-observations) owns the returned-list counterexample
+and the distinction between search sequencing and collecting its answers.
+Future search representations must preserve that distinction or state the additional assumptions they require.
+A finite-list collection API remains useful independently of a relative-monad dictionary.
 
 ## 4. Implemented Foundation
 
@@ -134,7 +128,14 @@ The [library guide](../../lib/std/README.md#relative-monads-and-effect-examples)
 to importable modules and executable clients.
 The [standard library organization](../references/language.md#standard-library-organization) assigns these modules
 to `effect/` and their general-purpose monoid dictionary to `algebra/`.
-Search, StateT, ExceptionT, and the remaining directions below are outside that batch.
+StateT, ExceptionT, and the remaining directions below are outside that batch.
+
+The subsequent NonDet/NonDetT implementation provides the
+[ordered depth-first baseline](../references/language.md#ordered-depth-first-nondeterminism).
+Its backtracking client replaces the former eager-list example; that example was list-backed,
+not Church-encoded as an earlier version of this proposal claimed.
+The unsuitable eager-list strategy remains represented
+by a [negative law fixture](../../lib/tests/effects/nondet-law-counterexamples.zy).
 
 This foundation makes the later comparisons concrete: a candidate can be tested over an existing effectful base,
 through a closed monadic block, and with the same carrier-indexed packaging.
@@ -187,23 +188,19 @@ Before standardization, identify which constructors clients may use and how the 
 or documents the necessary canonicity invariant.
 No ambient native stack-capture primitive is proposed.
 
-### 5.3. Finite Nondeterminism, Backtracking, and LogicT
+### 5.3. Fair Search, Pruning, and LogicT
 
-The first search library should build on the existing Church-style backtracking example,
-with success and failure continuations or a related demand-driven protocol.
-Bind can then compose the search before a runner decides how many results to observe.
-Collecting a finite prefix or all finite results becomes an observation, rather than the definition of effectful bind.
-
-Fair search is a further design decision. The documented `logict` interface includes mechanisms
+Ordered depth-first search and bounded-result observation are implemented;
+the [search reference](../references/language.md#ordered-depth-first-nondeterminism) specifies their limits.
+Fair search remains a separate design decision. The documented `logict` interface includes mechanisms
 for interleaving and observing search ([package documentation](https://hackage.haskell.org/package/logict)).
 A depth-first choice operator should not be called fair merely because it has the same monad operations.
 Acceptance tests should distinguish an infinite left branch from a finite right branch
 and specify whether each operation interleaves, commits, or exhausts a branch.
 
-This direction needs a bounded observer, ordering tests with ambient effects, and a written account of pruning.
-A general collection `flat_map` may remain in the data library without being promoted
-to an unrestricted relative-monad dictionary.
-Search is explicitly outside the initial implementation goal.
+The next search design needs scheduling and pruning contracts beyond the existing depth-first operations.
+Its tests should preserve ambient effect order within each documented traversal policy
+and distinguish bounded result counts from termination guarantees.
 
 ### 5.4. Parser and ParsecT
 
@@ -319,7 +316,7 @@ than a thin Monad wrapper in the standard library.
 
 Every admitted module needs source checking, a representative executable client,
 and a runner that reveals the promised observation.
-The implemented elementary fixtures establish the following pattern for later admission tests:
+The implemented fixtures establish the following pattern for later admission tests:
 
 | Obligation | Positive observation | Counterpart that must be distinguished or rejected |
 | --- | --- | --- |
@@ -328,6 +325,8 @@ The implemented elementary fixtures establish the following pattern for later ad
 | Reader scope | Nested local replacement restores the surrounding environment | A replacement must not persist after its protected computation |
 | Writer order | Noncommutative output is combined left to right | Reversed concatenation and duplicated output fail exact observation |
 | Optional failure | `Some` continues and `None` skips the continuation | A continuation or fallback that should be skipped must not emit its marker |
+| Search order | Depth-first traversal preserves order and duplicates | Reversed, deduplicated, or eagerly collected branches change answers or traces |
+| Search observation | First and bounded observers stop without forcing unused alternatives | A zero bound or an unneeded right branch must not emit its marker |
 | Transformer lift | Lift preserves return, bind, and base-effect order | A lifted computation must not execute twice or lose effects preceding `None` |
 | Translation | Explicit bind and a closed `@[monadic]` client agree | Unsupported capture is not used as an implicit effect bridge |
 
@@ -338,24 +337,26 @@ Tests with pure inputs are necessary but insufficient for the returned-list and 
 Focused tests should cover the interpreter while iterating and the affected end-to-end fixtures
 on the supported native and WebAssembly backends before claiming cross-backend support.
 The full workspace test suite is outside this task unless explicitly requested.
-The elementary batch required no dependency or compiler-pass change.
+The implemented effects required no dependency or compiler-pass change.
 
 ### 6.2. Stages and Decision Gates
 
 1. **Elementary library, implemented:** Ret, Reader/ReaderT, Writer/WriterT,
    and Optional/OptionT provide the [reference baseline](../references/language.md#elementary-effect-instances).
-   Finite-list nondeterminism remains excluded.
-2. **Composition:** add StateT and ExceptionT, then exercise ordered combinations with Writer and Option.
+   An unrestricted returned-list monad remains excluded.
+2. **Ordered search, implemented:** NonDet/NonDetT supplies the
+   [depth-first baseline](../references/language.md#ordered-depth-first-nondeterminism).
+3. **Composition:** add StateT and ExceptionT, then exercise ordered combinations with Writer and Option.
    Consider RWST after the component behavior is stable.
-3. **Protocol-based control:** settle continuation abstraction and backtracking observation.
+4. **Protocol-based control:** settle continuation abstraction, fair search, and pruning.
    Compare inspectable and Church-encoded Free representations, then build parser experiments on explicit state,
    failure, and choice policies.
-4. **Domain libraries:** develop diagnostic accumulation and deterministic randomness with real consumers.
+5. **Domain libraries:** develop diagnostic accumulation and deterministic randomness with real consumers.
    Validation remains an applicative companion.
-5. **Runtime-backed effects:** design resource scopes and asynchronous execution only with their supporting failure,
+6. **Runtime-backed effects:** design resource scopes and asynchronous execution only with their supporting failure,
    cancellation, and lifetime contracts.
 
-Each later stage is a proposal, not authorization to expand the initial implementation goal.
+The remaining stages are proposals, not authorization for further implementation.
 Implemented, approved rules should move to their owning reference section, leaving only unresolved work here.
 Example-only representations should remain labelled as such until their advertised laws
 and target support have been exercised.
@@ -372,6 +373,6 @@ or its resource operations safe.
 The main practical contribution of this programme is a repeatable admission rule:
 choose a computation carrier, identify its observable effects, justify the relative-monad laws,
 and specify the interaction policy before standardizing operations.
-Reader, Writer, and Option provide a small setting in which to establish that discipline.
-The same rule then explains why search requires a protocol, why accumulating validation is separate,
+Reader, Writer, Option, and NonDet provide concrete settings in which to establish that discipline.
+The same rule explains why search uses a protocol, why accumulating validation is separate,
 and why resource management and concurrency cannot be completed by naming a carrier alone.

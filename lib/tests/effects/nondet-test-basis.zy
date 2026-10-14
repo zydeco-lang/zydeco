@@ -1,0 +1,28 @@
+-- Shared observations for the search regressions; the caller forwards one List opening.
+begin
+  param val (/Thk; /Ret; /Unit; /Int; /String; /numeric; /string) :
+  @(import("../../std/builtin.zy")) in
+  param val (/List; /list) : @(import("../../std/data/package.type.zy")) in
+  begin
+    def ! render (values : List Int) : Ret String =
+      ! list/fold Int (Ret String) values { ret "" } {
+        fn value rest =>
+          do head <- ! numeric/int/to_string value;
+          do tail <- ! rest;
+          do separated <- ! string/append "," tail;
+          ! string/append head separated
+      }
+    that
+    def ! check (observation : Thk (Ret String)) (expected : String) (expected_trace : Int)
+      (read : Thk (Ret Int)) (reset : Thk (Ret Unit))
+    : Ret Int =
+        do _ <- ! reset;
+        do actual <- ! observation;
+        do trace <- ! read;
+        ! string/eq (Ret Int) actual expected {
+          ! numeric/int/eq (Ret Int) trace expected_trace { ret 0 } { ret 1 }
+        } { ret 1 }
+    that
+    (= render, = check)
+  end
+end

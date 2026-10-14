@@ -1,0 +1,145 @@
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /string; /numeric; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/Option; /List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
+let nondet = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let optional = builtin |> (@(import("../../std/effect/option.zy"))) in
+let (/render; /check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (N, n) = nondet/instance in
+let (W, w) = writer/instance String output in
+let (NW, nw) = nondet/transformer_instance W in
+let (WN, wn) = writer/transformer_instance String N n/monad output in
+let (O, o) = optional/instance in
+let (NO, no) = nondet/transformer_instance O in
+let render_written : Thk (List Int -> String -> Ret String) = {
+  fn values written =>
+    do text <- ! render values;
+    do suffix <- ! string/append "|" written;
+    ! string/append text suffix
+} in
+let collect_writer : Thk (Thk (NW Int) -> Ret String) = {
+  fn m =>
+    do (values, written) <- ! writer/run_writer String (List Int) {
+      ! nondet/observe_all_t W w/monad Int m
+    };
+    ! render_written values written
+} in
+let many_writer : Thk (Int -> Thk (NW Int) -> Ret String) = {
+  fn limit m =>
+    do (values, written) <- ! writer/run_writer String (List Int) {
+      ! nondet/observe_many_t W w/monad Int limit m
+    };
+    ! render_written values written
+} in
+let collect_optional : Thk (Thk (NO Int) -> Ret String) = {
+  fn m =>
+    do result <- ! optional/run_option (List Int) { ! nondet/observe_all_t O o/monad Int m };
+    match result
+    | +None() => ret "none"
+    | +Some(values) => ! render values
+    end
+} in
+! with_trace {
+  fn mark read reset =>
+    let emit : Thk (String -> Int -> NW Int) = {
+      fn tag digit =>
+        ! nondet/lift W Int {
+          do _ <- ! mark digit;
+          ret (digit, tag)
+        }
+    } in
+    let failed : Thk (NW Int) = {
+      ! nw/monad .bind Unit Int {
+        ! nondet/lift W Unit {
+          do _ <- ! mark 4;
+          ret ((), "x")
+        }
+      } { fn _ => ! nw/nondet .empty Int }
+    } in
+    let search : Thk (NW Int) = {
+      ! nw/monad .bind Unit Int {
+        ! nondet/lift W Unit {
+          do _ <- ! mark 3;
+          ret ((), "p")
+        }
+      } {
+        fn _ =>
+          ! nw/nondet .choice Int failed {
+            ! nw/nondet .choice Int { ! emit "a" 1 } { ! emit "b" 2 }
+          }
+      }
+    } in
+    do all <- ! check { ! collect_writer search } "1,2,|pxab" 3412 read reset;
+    do first <- ! check {
+      do (result, written) <- ! writer/run_writer String (Option Int) {
+        ! nondet/observe_first_t W w/monad Int search
+      };
+      match result
+      | +None() => ret "none"
+      | +Some(value) =>
+        do text <- ! numeric/int/to_string value;
+        do suffix <- ! string/append "|" written;
+        ! string/append text suffix
+      end
+    } "1|pxa" 341 read reset;
+    do one <- ! check { ! many_writer 1 search } "1,|pxa" 341 read reset;
+    do two <- ! check { ! many_writer 2 search } "1,2,|pxab" 3412 read reset;
+    do zero <- ! check { ! many_writer 0 search } "|" 0 read reset;
+    do negative <- ! check { ! many_writer -1 search } "|" 0 read reset;
+    do failure_output <- ! check { ! collect_writer failed } "|x" 4 read reset;
+    do empty_alternative <- ! check {
+      ! collect_optional {
+        ! no/nondet .choice Int { ! no/nondet .empty Int } { ! no/monad .return Int 7 }
+      }
+    } "7," 0 read reset;
+    do base_failure <- ! check {
+      ! collect_optional {
+        ! no/nondet .choice Int {
+          ! nondet/lift O Int {
+            do _ <- ! mark 1;
+            ! o/option .none Int
+          }
+        } {
+          do _ <- ! mark 9;
+          ! no/monad .return Int 9
+        }
+      }
+    } "none" 1 read reset;
+    do writer_over_search <- ! check {
+      do results <- ! nondet/observe_all (Int * String) {
+        ! writer/run_writer_t String N Int {
+          ! n/nondet .choice (Int * String) {
+            ! wn/monad .bind Unit Int { ! wn/writer .tell "discarded" } {
+              fn _ => ! writer/lift String N n/monad output Int { ! n/nondet .empty Int }
+            }
+          } {
+            ! n/nondet .choice (Int * String) {
+              ! wn/monad .bind Unit Int { ! wn/writer .tell "a" } {
+                fn _ => ! wn/monad .return Int 1
+              }
+            } {
+              ! wn/monad .bind Unit Int { ! wn/writer .tell "b" } {
+                fn _ => ! wn/monad .return Int 2
+              }
+            }
+          }
+        }
+      };
+      ! list/fold (Int * String) (Ret String) results { ret "" } {
+        fn (value, written) rest =>
+          do number <- ! numeric/int/to_string value;
+          do head <- ! string/append number written;
+          do tail <- ! rest;
+          do suffix <- ! string/append "," tail;
+          ! string/append head suffix
+      }
+    } "1a,2b," 0 read reset;
+    match (all, first, one, two, zero, negative, failure_output,
+      empty_alternative, base_failure, writer_over_search)
+    | (0, 0, 0, 0, 0, 0, 0, 0, 0, 0) => ret 0
+    | _ => ret 1
+    end
+}

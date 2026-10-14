@@ -1,0 +1,135 @@
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/List; /list; /bool; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
+let nondet = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/render; /check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
+let (N, n) = nondet/instance in
+let collect : Thk (Thk (N Int) -> Ret String) = {
+  fn m =>
+    do values <- ! nondet/observe_all Int m;
+    ! render values
+} in
+let first : Thk (Thk (N Int) -> Ret String) = {
+  fn m =>
+    do answer <- ! nondet/observe_first Int m;
+    match answer
+    | +None() => ret "none"
+    | +Some(value) => ! numeric/int/to_string value
+    end
+} in
+let many : Thk (Int -> Thk (N Int) -> Ret String) = {
+  fn limit m =>
+    do values <- ! nondet/observe_many Int limit m;
+    ! render values
+} in
+do empty <- ! list/nil Int;
+do third <- ! list/cons Int 2 empty;
+do second <- ! list/cons Int 1 third;
+do values <- ! list/cons Int 1 second;
+! with_trace {
+  fn mark read reset =>
+    let branch : Thk (Int -> N Int) = {
+      fn digit =>
+        do _ <- ! mark digit;
+        ! n/monad .return Int digit
+    } in
+    let choice : Thk (N Int) = {
+      ! n/nondet .choice Int { ! branch 1 } {
+        ! n/nondet .choice Int { ! branch 2 } { ! branch 3 }
+      }
+    } in
+    do no_answers <- ! check { ! collect { ! n/nondet .empty Int } } "" 0 read reset;
+    do empty_first <- ! check { ! first { ! n/nondet .empty Int } } "none" 0 read reset;
+    do singleton <- ! check { ! collect { ! branch 4 } } "4," 4 read reset;
+    do ordered <- ! check { ! collect choice } "1,2,3," 123 read reset;
+    do duplicate <- ! check {
+      ! collect { ! n/nondet .choice Int { ! branch 2 } { ! branch 2 } }
+    } "2,2," 22 read reset;
+    do reversed <- ! check {
+      ! collect { ! n/nondet .choice Int { ! branch 2 } { ! branch 1 } }
+    } "2,1," 21 read reset;
+    do first_only <- ! check { ! first choice } "1" 1 read reset;
+    do replay <- ! check {
+      do left <- ! first choice;
+      do right <- ! first choice;
+      ! string/append left right
+    } "11" 11 read reset;
+    do zero <- ! check { ! many 0 choice } "" 0 read reset;
+    do negative <- ! check { ! many -5 choice } "" 0 read reset;
+    do one <- ! check { ! many 1 choice } "1," 1 read reset;
+    do two <- ! check { ! many 2 choice } "1,2," 12 read reset;
+    do exact <- ! check { ! many 3 choice } "1,2,3," 123 read reset;
+    do oversized <- ! check { ! many 8 choice } "1,2,3," 123 read reset;
+    do chosen <- ! check { ! collect { ! nondet/choose (N, n) Int values } } "1,1,2," 0 read reset;
+    do chosen_empty <- ! check { ! collect { ! nondet/choose (N, n) Int empty } } "" 0 read reset;
+    do rejected <- ! check {
+      ! collect {
+        ! n/monad .bind Unit Int { ! nondet/guard (N, n) bool/false } { fn _ => ! branch 9 }
+      }
+    } "" 0 read reset;
+    do accepted <- ! check {
+      ! collect {
+        ! n/monad .bind Unit Int { ! nondet/guard (N, n) bool/true } { fn _ => ! branch 9 }
+      }
+    } "9," 9 read reset;
+    do failed_branch <- ! check {
+      ! first {
+        ! n/nondet .choice Int {
+          do _ <- ! mark 4;
+          ! n/nondet .empty Int
+        } { ! branch 5 }
+      }
+    } "5" 45 read reset;
+    do failed_continuations <- ! check {
+      ! collect {
+        ! n/monad .bind Int Int {
+          do _ <- ! mark 1;
+          ! n/nondet .choice Int { ! n/monad .return Int 0 } { ! n/monad .return Int 0 }
+        } {
+          fn _ =>
+            do _ <- ! mark 2;
+            ! n/nondet .empty Int
+        }
+      }
+    } "" 122 read reset;
+    do depth_first <- ! check {
+      ! collect {
+        ! n/monad .bind Int Int {
+          ! n/nondet .choice Int { ! branch 1 } { ! branch 2 }
+        } {
+          fn value =>
+            ! n/nondet .choice Int {
+              do _ <- ! mark 3;
+              ! n/monad .return Int value
+            } {
+              do _ <- ! mark 4;
+              do next <- ! numeric/int/add value 10;
+              ! n/monad .return Int next
+            }
+        }
+      }
+    } "1,11,2,12," 134234 read reset;
+    do right_zero_keeps_effects <- ! check {
+      ! collect {
+        ! n/monad .bind Int Int { ! branch 6 } { fn _ => ! n/nondet .empty Int }
+      }
+    } "" 6 read reset;
+    do productive_infinite <- ! check {
+      let fix naturals (value : Int) : N Int =
+        ! n/nondet .choice Int { ! n/monad .return Int value } {
+          do next <- ! numeric/int/add value 1;
+          ! naturals next
+        }
+      in
+      ! many 4 { ! n/nondet .choice Int { ! naturals 0 } { ! branch 9 } }
+    } "0,1,2,3," 0 read reset;
+    match (no_answers, empty_first, singleton, ordered, duplicate, reversed, first_only, replay,
+      zero, negative, one, two, exact, oversized, chosen, chosen_empty,
+      rejected, accepted, failed_branch, failed_continuations, depth_first,
+      right_zero_keeps_effects, productive_infinite)
+    | (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) => ret 0
+    | _ => ret 1
+    end
+}

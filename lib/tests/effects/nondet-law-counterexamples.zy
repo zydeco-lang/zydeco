@@ -1,0 +1,72 @@
+-- The eager returned-list dictionary typechecks but fails branching associativity.
+param (/VType; /CType; /Thk; /Ret; /Int; /String; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
+let (/Monad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let MonadNonDet = @(import("../../std/effect/nondet.type.zy")) in
+let (/render) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/branch_laws) = builtin |> (@(import("nondet-law-suite.zy"))) in
+let Eager (A : VType) = Ret (List A) in
+let monad : Thk (Monad Eager) = {
+  comatch
+  | .return A a => ! list/singleton A a
+  | .bind A B m f =>
+    do values <- ! m;
+    ! list/fold A (Ret (List B)) values { ! list/nil B } {
+      fn a rest =>
+        do first <- ! f a;
+        do remaining <- ! rest;
+        ! list/append B first remaining
+    }
+  end
+} in
+let nondet : Thk (MonadNonDet Eager) = {
+  comatch
+  | .empty A => ! list/nil A
+  | .choice A left right =>
+    do first <- ! left;
+    do second <- ! right;
+    ! list/append A first second
+  end
+} in
+! with_trace {
+  fn mark read reset =>
+    do rejected <- ! branch_laws Eager monad nondet {
+      fn m =>
+        do values <- ! m;
+        ! render values
+    } mark read reset;
+    let m : Thk (Eager Int) = {
+      do _ <- ! mark 1;
+      do empty <- ! list/nil Int;
+      do tail <- ! list/cons Int 20 empty;
+      ! list/cons Int 10 tail
+    } in
+    let f : Thk (Int -> Eager Int) = {
+      fn value =>
+        do _ <- ! mark 2;
+        ! monad .return Int value
+    } in
+    let g : Thk (Int -> Eager Int) = {
+      fn value =>
+        do _ <- ! mark 3;
+        ! monad .return Int value
+    } in
+    do _ <- ! reset;
+    do left <- ! monad .bind Int Int { ! monad .bind Int Int m f } g;
+    do left_trace <- ! read;
+    do left_text <- ! render left;
+    do _ <- ! reset;
+    do right <- ! monad .bind Int Int m { fn value => ! monad .bind Int Int { ! f value } g };
+    do right_trace <- ! read;
+    do right_text <- ! render right;
+    match (rejected, left_trace, right_trace)
+    | (1, 12233, 12323) =>
+      ! string/eq (Ret Int) left_text "10,20," {
+        ! string/eq (Ret Int) right_text "10,20," { ret 0 } { ret 1 }
+      } { ret 1 }
+    | _ => ret 1
+    end
+}

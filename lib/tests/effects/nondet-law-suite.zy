@@ -1,0 +1,86 @@
+-- Branching versions of the relative-monad laws, with explicit ambient effect traces.
+val
+  (
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; builtin) : @(import(
+      "../../std/builtin.zy"
+    ))
+  )
+=>
+  begin
+    let (/Monad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+    let MonadNonDet = @(import("../../std/effect/nondet.type.zy")) in
+    let (/compare) = builtin |> (@(import("effect-law-suite.zy"))) in
+    begin
+      def ! branch_laws (M : VType -> CType)
+        (monad : Thk (Monad M)) (nondet : Thk (MonadNonDet M))
+        (observe : Thk (Thk (M Int) -> Ret String))
+        (mark : Thk (Int -> Ret Unit)) (read : Thk (Ret Int)) (reset : Thk (Ret Unit))
+      : Ret Int =
+          let m : Thk (M Int) = {
+            do _ <- ! mark 1;
+            ! nondet .choice Int { ! monad .return Int 10 } { ! monad .return Int 20 }
+          } in
+          let f : Thk (Int -> M Int) = {
+            fn value =>
+              do _ <- ! mark 2;
+              ! nondet .choice Int { ! monad .return Int value } {
+                do next <- ! numeric/int/add value 1;
+                ! monad .return Int next
+              }
+          } in
+          let g : Thk (Int -> M Int) = {
+            fn value =>
+              do _ <- ! mark 3;
+              do next <- ! numeric/int/mul value 2;
+              ! monad .return Int next
+          } in
+          let tt : Thk (Ret (Thk (M Int))) = {
+            do _ <- ! mark 4;
+            ret m
+          } in
+          do left_unit <- ! compare M observe read reset 2
+            { ! monad .bind Int Int { ! monad .return Int 1 } f }
+            { ! f 1 };
+          do right_unit <- ! compare M observe read reset 1
+            { ! monad .bind Int Int m { fn value => ! monad .return Int value } }
+            m;
+          do associativity <- ! compare M observe read reset 1233233
+            { ! monad .bind Int Int { ! monad .bind Int Int m f } g }
+            { ! monad .bind Int Int m { fn value => ! monad .bind Int Int { ! f value } g } };
+          do linearity <- ! compare M observe read reset 4122
+            {
+              do t <- ! tt;
+              ! monad .bind Int Int t f
+            }
+            {
+              ! monad .bind Int Int {
+                do t <- ! tt;
+                ! t
+              } f
+            };
+          do left_empty <- ! compare M observe read reset 1
+            { ! nondet .choice Int { ! nondet .empty Int } m } m;
+          do right_empty <- ! compare M observe read reset 1
+            { ! nondet .choice Int m { ! nondet .empty Int } } m;
+          do choice_associativity <- ! compare M observe read reset 123
+            { ! nondet .choice Int { ! nondet .choice Int m { ! f 5 } } { ! g 6 } }
+            { ! nondet .choice Int m { ! nondet .choice Int { ! f 5 } { ! g 6 } } };
+          do left_zero <- ! compare M observe read reset 0
+            { ! monad .bind Int Int { ! nondet .empty Int } f }
+            { ! nondet .empty Int };
+          do left_distribution <- ! compare M observe read reset 133233
+            { ! monad .bind Int Int { ! nondet .choice Int m { ! f 5 } } g }
+            {
+              ! nondet .choice Int { ! monad .bind Int Int m g } {
+                ! monad .bind Int Int { ! f 5 } g
+              }
+            };
+          match (left_unit, right_unit, associativity, linearity,
+            left_empty, right_empty, choice_associativity, left_zero, left_distribution)
+          | (0, 0, 0, 0, 0, 0, 0, 0, 0) => ret 0
+          | _ => ret 1
+          end
+      that
+      (= branch_laws)
+    end
+  end

@@ -1,0 +1,110 @@
+-- A closed translated client uses the same search operations as an explicit-bind client.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let Top = @(import("../../std/effect/top.type.zy")) in
+let (/INonDet; nondet) = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (N, n) = nondet/instance in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (W, w) = writer/instance String output in
+let (NW, nw) = nondet/transformer_instance W in
+let client : Thk (pi ((M, _) : WithMonad INonDet) . Thk (Int -> M Unit) -> M (Int * Int)) = {
+  fn ((M, (/monad; /nondet)) : WithMonad INonDet) record =>
+    (
+      @[monadic]
+      fn (choice : Thk (forall (A : VType) . Thk (Ret A) -> Thk (Ret A) -> Ret A))
+        (empty : Thk (forall (A : VType) . Ret A))
+        (record : Thk (Int -> Ret Unit))
+      =>
+        do x <- ! choice Int { ret 1 } { ret 2 };
+        do _ <- ! record x;
+        do y <- ! choice Int { ret 3 } { ret 4 };
+        match (x, y)
+        | (1, 4) => ret (x, y)
+        | (2, 3) => ret (x, y)
+        | _ => ! empty (Int * Int)
+        end
+    ) M monad {
+      fn (A : VType) (_ : Thk Top) left right => ! nondet .choice A left right
+    } {
+      fn (A : VType) (_ : Thk Top) => ! nondet .empty A
+    } record
+} in
+let explicit : Thk (pi ((M, _) : WithMonad INonDet) . Thk (Int -> M Unit) -> M (Int * Int)) = {
+  fn ((M, (/monad; /nondet)) : WithMonad INonDet) record =>
+    ! monad .bind Int (Int * Int) {
+      ! nondet .choice Int { ! monad .return Int 1 } { ! monad .return Int 2 }
+    } {
+      fn x =>
+        ! monad .bind Unit (Int * Int) { ! record x } {
+          fn _ =>
+            ! monad .bind Int (Int * Int) {
+              ! nondet .choice Int { ! monad .return Int 3 } { ! monad .return Int 4 }
+            } {
+              fn y =>
+                match (x, y)
+                | (1, 4) => ! monad .return (Int * Int) (x, y)
+                | (2, 3) => ! monad .return (Int * Int) (x, y)
+                | _ => ! nondet .empty (Int * Int)
+                end
+            }
+        }
+    }
+} in
+let render_pairs : Thk (List (Int * Int) -> Ret String) = {
+  fn values =>
+    ! list/fold (Int * Int) (Ret String) values { ret "" } {
+      fn (x, y) rest =>
+        do left <- ! numeric/int/to_string x;
+        do right <- ! numeric/int/to_string y;
+        do tail <- ! rest;
+        do joined <- ! string/append left right;
+        do suffix <- ! string/append "," tail;
+        ! string/append joined suffix
+    }
+} in
+! with_trace {
+  fn mark read reset =>
+    let record : Thk (Int -> N Unit) = {
+      fn digit => ! nondet/lift Ret Unit { ! mark digit }
+    } in
+    let record_writer : Thk (Int -> NW Unit) = {
+      fn digit =>
+        ! nondet/lift W Unit {
+          do _ <- ! mark digit;
+          do text <- ! numeric/int/to_string digit;
+          ret ((), text)
+        }
+    } in
+    do translated <- ! check {
+      do values <- ! nondet/observe_all (Int * Int) { ! client (N, n) record };
+      ! render_pairs values
+    } "14,23," 12 read reset;
+    do direct <- ! check {
+      do values <- ! nondet/observe_all (Int * Int) { ! explicit (N, n) record };
+      ! render_pairs values
+    } "14,23," 12 read reset;
+    do short_circuit <- ! check {
+      do result <- ! nondet/observe_first (Int * Int) { ! client (N, n) record };
+      match result
+      | +Some(1, 4) => ret "first"
+      | _ => ret "wrong"
+      end
+    } "first" 1 read reset;
+    do transformed <- ! check {
+      do (values, written) <- ! writer/run_writer String (List (Int * Int)) {
+        ! nondet/observe_all_t W w/monad (Int * Int) { ! client (NW, nw) record_writer }
+      };
+      do rendered <- ! render_pairs values;
+      ! string/append rendered written
+    } "14,23,12" 12 read reset;
+    match (translated, direct, short_circuit, transformed)
+    | (0, 0, 0, 0) => ret 0
+    | _ => ret 1
+    end
+}

@@ -99,6 +99,6 @@ val
             { ! monad .bind Int Int { ! lift m } { fn n => ! lift { ! f n } } };
           ! numeric/int/add unit bind
       that
-      (= laws, = lift_laws)
+      (= compare, = laws, = lift_laws)
     end
   end

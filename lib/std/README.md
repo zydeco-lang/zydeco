@@ -151,6 +151,7 @@ algebra/monoid.type.zy      general-purpose monoid dictionary
 effect/monad.zy            Monad, Algebra, and WithMonad
 effect/{ret,reader,writer,option}.zy  elementary carriers, instances, and transformers
 effect/{state,exception,state-exn}.zy  state, exceptions, and their combination
+effect/nondet.zy           ordered depth-first search and result observers
 effect/*.type.zy           relative-monad basis and carrier-indexed operation interfaces
 
 **/*.type.zy               reusable type terms imported by implementations and companions
@@ -291,12 +292,12 @@ Neither callback type promises purity or single invocation.
 ## Relative monads and effect examples
 
 The [effect modules](effect) supply `Monad`, `Algebra`, `WithMonad`, and carrier-indexed Reader,
-Writer, Option, State, and Exception interfaces.
+Writer, Option, State, Exception, and nondeterminism interfaces.
 `WithMonad` packages one carrier and monad dictionary with the chosen operations;
 the combined `IStateExn` interface composes both effects inside that boundary.
 Each effect module's `instance` builder supplies a concrete carrier and its dictionaries;
 generic clients use a witness-dependent `pi`.
-Ret and Optional use an `instance` value rather than a parameterized builder.
+Ret, Optional, and NonDet use an `instance` value rather than a parameterized builder.
 [L11](../../docs/references/language.md#packed-effect-instances) owns the packed boundary
 and its connection to monadic-block translation.
 The [capability walkthrough](../../docs/tutorial/zydeco-guide.md#10-capability-dictionaries) shows how
@@ -309,7 +310,7 @@ or [Option](effect/option.zy) explicitly with the same Builtin value used by oth
 Reader, Writer, and Option each expose `transformer_instance`, `lift`, and concrete/base-aware runners.
 The [translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients,
 and the [composition example](../tests/effects/effect-operations.zy) exercises the transformers together.
-The [remaining library proposal](../../docs/proposals/relative-monad-library.md) covers search, control,
+The [remaining library proposal](../../docs/proposals/relative-monad-library.md) covers fair search, control,
 parsing, and other unimplemented families.
 
 For delimited control, the repository explores a library encoding with `Kont R A = Thk (A -> R) -> R`,
@@ -326,6 +327,31 @@ and [the delimcc API discussion](https://okmij.org/ftp/continuations/implementat
 These encodings do not capture native frame tokens;
 [native lifetime rules](../../docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
 remain a separate implementation contract.
+
+### Ordered depth-first search
+
+Apply [NonDet](effect/nondet.zy) to Builtin and then the shared data package.
+This keeps `choose` inputs and list observations at the same `List` witness as the caller's other operations:
+
+```zydeco
+param (/Int; builtin) : @(import("builtin.zy")) in
+let (/list; data_package) = builtin |> (@(import("data/package.zy"))) in
+let nondet = (builtin |> (@(import("effect/nondet.zy")))) data_package in
+let (N, n) = nondet/instance in
+do answers <- ! nondet/observe_many Int 2 {
+  ! n/nondet .choice Int { ! n/monad .return Int 3 } { ! n/monad .return Int 1 }
+};
+! list/length Int answers
+```
+
+This library term observes the two answers `3, 1` and returns their length.
+The module supplies `choose`, `guard`, `observe_first`, `observe_many`, and `observe_all`.
+Use `transformer_instance M` and `lift M A computation` for an explicit base carrier;
+the `_t` observers additionally take its monad dictionary.
+The [search reference](../../docs/references/language.md#ordered-depth-first-nondeterminism) owns
+the continuation protocol, observation limits, and interaction with base effects.
+The [backtracking example](../tests/monadic/backtrack.zydeco) is a complete executable client;
+the [translated clients](../tests/effects/nondet-monadic.zy) demonstrate `@[monadic]` composition.
 
 ## Text model
 
