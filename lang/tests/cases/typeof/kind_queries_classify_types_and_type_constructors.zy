@@ -1,0 +1,11 @@
+begin
+  let ValueKind = @[typeof] Int that
+  let ConstructorKind = @[typeof] Ret that
+  let A : ValueKind = Unit that
+  let F : ConstructorKind = Ret that
+  let nested_kind = @[typeof] @[typeof] 1 that
+  let B : nested_kind = Int that
+  let value : A = () that
+  let computation : Thk (F B) = { ret 0 } that
+  ! computation
+end

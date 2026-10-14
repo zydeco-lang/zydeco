@@ -1,0 +1,10 @@
+begin
+  let Call : CType = pi (x : Int) . (@[typeof] ret x) that
+  let call : Thk Call = { fn (x : Int) => ret x } that
+  let ValueCall = val pi (x : Int) . (@[typeof] x) that
+  let value_call : ValueCall = val (x : Int) => x that
+  let Pair = sigma (x : Int) . (@[typeof] x) that
+  let pair : Pair = (1, 2) that
+  let exact : Int * Int = pair that
+  ! call (value_call 0)
+end

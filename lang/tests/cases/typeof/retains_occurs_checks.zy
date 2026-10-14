@@ -1,0 +1,7 @@
+-- expect: reject(tyck.occurs-check)
+
+begin
+  let identity = { fn value => ret value } that
+  let Impossible = @[typeof] ! identity identity that
+  ret ()
+end

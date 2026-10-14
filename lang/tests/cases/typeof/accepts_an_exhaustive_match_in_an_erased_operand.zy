@@ -1,0 +1,13 @@
+let Choice =
+  data
+  | +Here : Unit
+  | +There : Unit
+  end
+in
+let T = @[typeof] (
+  match (+Here() : Choice)
+  | +Here(_) => ret 0
+  | +There(_) => ret 1
+  end
+) in
+ret ()

@@ -1,5 +1,6 @@
 #[path = "support/memory.rs"]
 mod memory;
+use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{e2e_sources, utils::SourceCase};
 
@@ -12,7 +13,7 @@ e2e_sources!({
 });
 
 fn source(body: &str) -> String {
-    memory::source(&format!(
+    MemoryCase::source(&format!(
         "match memory/uint8 | +Err(_) => ! fail | +Ok(plan) => \
         let (= L, repr) = memory/realize UInt8 plan in \
         ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no {{ fn vacant => {body} }} end"

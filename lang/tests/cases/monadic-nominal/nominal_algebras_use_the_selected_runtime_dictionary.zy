@@ -1,0 +1,52 @@
+-- stage: run
+-- prelude: monadic
+
+let Writer (A : VType) = Ret (A * Int) in
+let additive : Thk (Monad Writer) = {
+  comatch
+  | .return A value => ret (value, 0)
+  | .bind A B operation continuation =>
+    do (value, first) <- ! operation;
+    do (result, second) <- ! continuation value;
+    do trace <- ! int/add first second;
+    ret (result, trace)
+  end
+} in
+let multiplicative : Thk (Monad Writer) = {
+  comatch
+  | .return A value => ret (value, 1)
+  | .bind A B operation continuation =>
+    do (value, first) <- ! operation;
+    do (result, second) <- ! continuation value;
+    do trace <- ! int/mul first second;
+    ret (result, trace)
+  end
+} in
+let program = {
+  @[monadic] fn (first : Thk (Ret Int)) (second : Thk (Ret Int)) =>
+    begin
+      def Report : CType =
+        codata
+        | .finish : Ret Int
+        end
+      in
+      do _ <- ! first;
+      do value <- ! second;
+      (
+        comatch
+        | .finish => ret value
+        end : Report
+      )
+    end
+} in
+do runtime_mo <- ! int/eq (Ret (Thk (Monad Writer))) 1 1
+  { ret multiplicative } { ret additive };
+let first = { ! program Writer additive { ret (1, 2) } { ret (1, 3) } } in
+let second = { ! program Writer runtime_mo { ret (1, 2) } { ret (1, 3) } } in
+let ReportThunk = @[typeof] first in
+let same : ReportThunk = second in
+do (_, additive_trace) <- ! first .finish;
+do (_, multiplicative_trace) <- ! same .finish;
+! int/eq OS additive_trace 5 {
+  ! int/eq OS multiplicative_trace 6 { ! exit 0 } { ! exit 2 }
+} { ! exit 1 }

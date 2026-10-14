@@ -1,0 +1,9 @@
+begin
+  let first = {
+    fn pair =>
+      let (head, _) = pair in
+      ret head
+  } that
+  do result <- ! first ((), ());
+  ret result
+end

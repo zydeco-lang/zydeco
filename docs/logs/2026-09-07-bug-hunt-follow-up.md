@@ -135,7 +135,7 @@ of concrete and abstract payloads is in [Packed Value Introduction](../../DESIGN
 
 First retain the exact reproducer and assert its synthesized classifier,
 then compare checking against an explicitly abstract package contract.
-The existing [existential tests](../../lang/tests/tests/existential.rs) include accepted dependent payload annotations,
+The existing [existential fixtures](../../lang/tests/cases/existential) include accepted dependent payload annotations,
 so a change must preserve intended uses as well as diagnose misleading ones.
 Decide whether to warn about a concrete exported payload or revise the annotation behavior.
 Any semantic decision belongs in the existing package-introduction section, with a linked summary

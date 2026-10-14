@@ -1,0 +1,14 @@
+-- stage: run
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int, 0) that
+  def producer : Thk (Ret Box) = {
+    ret boxed
+  } that
+  do returned <- ! producer;
+  let (X, value) = returned in
+  ! exit 0
+end

@@ -1,0 +1,9 @@
+begin
+  let Box = exists (X : VType) . X that
+  let boxed : Box = (Int, 0) that
+  let (X, value) = boxed in
+  let T = @[typeof] value in
+  let same : T = value in
+  let original : X = same in
+  ret ()
+end

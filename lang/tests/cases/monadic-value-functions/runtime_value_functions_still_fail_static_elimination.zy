@@ -1,0 +1,5 @@
+-- prelude: monadic
+-- expect: reject(tyck.static-elimination)
+
+@[monadic] fn (unknown : val pi (B : CType) . Thk (Thk B -> B)) =>
+  ! (unknown (Ret Int)) { ret 1 }

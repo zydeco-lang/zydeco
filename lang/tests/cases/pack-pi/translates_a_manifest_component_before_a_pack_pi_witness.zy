@@ -1,0 +1,23 @@
+-- stage: check-value
+-- prelude: monadic
+
+begin
+  let Mixed =
+    exists (Y as Unit : VType) .
+      exists (X : VType) .
+        exists (Z as X : VType) .
+          Z
+  that
+
+  def translated = {
+    @[monadic] begin
+      let reveal = {
+        do _ <- ret ();
+        fn ((Y, X, Z, value) : Mixed) => ret value
+      } in
+      ! reveal (Unit, Unit, Unit, ())
+    end
+  } that
+
+  translated
+end

@@ -1,0 +1,20 @@
+-- expect: reject(tyck.coverage)
+
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let Pair =
+    data
+    | +Pair : Bool * Bool
+    end
+  that
+  let value : Pair = +Pair(+True(), +False()) that
+  match value
+  | +Pair(+True(_), _) => ret ()
+  | +Pair(_, +False(_)) => ret ()
+  end
+end

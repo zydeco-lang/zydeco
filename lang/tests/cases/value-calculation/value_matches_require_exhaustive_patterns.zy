@@ -1,0 +1,8 @@
+-- expect: reject(tyck.coverage)
+
+let selected =
+  match (0 : Int)
+  | 0 => 1
+  end
+in
+! exit 0

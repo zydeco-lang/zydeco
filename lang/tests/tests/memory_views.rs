@@ -1,5 +1,6 @@
 #[path = "support/memory.rs"]
 mod memory;
+use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::SourceCase;
 
@@ -7,7 +8,7 @@ struct SliceCase;
 
 impl SliceCase {
     fn source(body: &str) -> String {
-        memory::source(&format!(
+        MemoryCase::source(&format!(
             "match memory/int | +Err(_) => ! fail | +Ok(plan) => \
              let (= L, repr) = memory/realize Int plan in \
              let access = slices/for_layout L repr/storage in {body} end"

@@ -1,0 +1,20 @@
+-- expect: reject(tyck.coverage)
+
+begin
+  let Inner =
+    codata
+    | .left : Ret Unit
+    | .right : Ret Unit
+    end
+  that
+  let Outer =
+    codata
+    | .open : Inner
+    end
+  that
+  (
+    comatch
+    | .open .left => ret ()
+    end : Outer
+  )
+end

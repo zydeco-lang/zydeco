@@ -1,0 +1,19 @@
+-- stage: run
+
+begin
+  let Box =
+    exists (A : VType) . A
+  that
+  let Service =
+    codata
+    | .unbox : pi ((A, _) : Box) . Ret A
+    end
+  that
+  do status <-
+    (
+      comatch
+      | .unbox ((A, value) : Box) => ret value
+      end : Service
+    ) .unbox (Int, 0);
+  ! api/exit status
+end

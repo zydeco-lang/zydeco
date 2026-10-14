@@ -1,0 +1,2 @@
+let value : @[typeof] (1 : Int8) = (2 : Int8) in
+ret value

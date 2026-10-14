@@ -1,3 +1,5 @@
+//! Source cases live in `cases/monadic-nominal/`; Rust retains compiler assertions and backend coverage.
+
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::SourceCase;
 
@@ -31,243 +33,95 @@ let (/Monad; /Algebra) = builtin |> monadic_basis in
         )
     }
 
-    fn ret_program(body: &str) -> String {
-        Self::source(&format!(
-            r#"
-let mo : Thk (Monad Ret) = {{
-  comatch
-  | .return A value => ret value
-  | .bind A B computation continuation =>
-      do value <- ! computation;
-      ! continuation value
-  end
-}} in
-do result <- (@[monadic] {body}) Ret mo;
-do status <- ! int/sub result 1;
-! exit status
-"#
-        ))
-    }
-
-    fn run(body: &str) {
-        let source = Self::ret_program(body);
+    fn assert_linted_and_lowered(source: &str) {
+        let source = Self::source(source);
         SourceCase::assert_accepted(SourceCase::check_linted(&source));
-        SourceCase::assert_accepted(SourceCase::run(&source));
         SourceCase::assert_accepted(SourceCase::lower(&source));
     }
 }
 
 #[test]
 fn local_nominal_data_preserves_constructors_and_patterns() {
-    MonadicCase::run(
-        r#"
-begin
-  def Box : VType = data | +Box : Int end in
-  let item = (+Box 1 : Box) in
-  match item | +Box n => ret n end
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/local_nominal_data_preserves_constructors_and_patterns.zy"
+    ));
 }
 
 #[test]
 fn recursive_type_constructor_reuses_its_family() {
-    MonadicCase::run(
-        r#"
-begin
-  def List (A : VType) : VType =
-    data | +Nil : Unit | +Cons : A * List A end
-  that
-  let items = (+Cons (1, +Nil ()) : List Int) in
-  match items
-  | +Nil _ => ret 0
-  | +Cons (head, tail) =>
-      match tail | +Nil _ => ret head | +Cons _ => ret 0 end
-  end
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/recursive_type_constructor_reuses_its_family.zy"
+    ));
 }
 
 #[test]
 fn recursive_codata_uses_lazy_algebra_evidence() {
-    MonadicCase::run(
-        r#"
-begin
-  def Stream : CType = codata | .head : Ret Int | .tail : Stream end that
-  let stream : Thk Stream = {
-    fix self =>
-      do _ <- ret ();
-      comatch
-      | .head => ret 1
-      | .tail => ! self
-      end
-  } in
-  ! stream .tail .tail .head
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/recursive_codata_uses_lazy_algebra_evidence.zy"
+    ));
 }
 
 #[test]
 fn mutually_recursive_data_preserves_nominal_edges() {
-    MonadicCase::run(
-        r#"
-begin
-  def Left : VType = data | +Done : Int | +Right : Right end that
-  def Right : VType = data | +Left : Left end that
-  let item = (+Right (+Left (+Done 1)) : Left) in
-  match item
-  | +Done n => ret n
-  | +Right (+Left tail) =>
-      match tail | +Done n => ret n | +Right _ => ret 0 end
-  end
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/mutually_recursive_data_preserves_nominal_edges.zy"
+    ));
 }
 
 #[test]
 fn mutually_recursive_codata_shares_its_dictionary() {
-    MonadicCase::run(
-        r#"
-begin
-  def Left : CType = codata | .right : Right | .done : Ret Int end that
-  def Right : CType = codata | .left : Left end that
-  let left : Thk Left = {
-    fix self => do _ <- ret ();
-    comatch
-    | .right => do _ <- ret (); comatch | .left => ! self end
-    | .done => ret 1
-    end
-  } in
-  ! left .right .left .right .left .done
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/mutually_recursive_codata_shares_its_dictionary.zy"
+    ));
 }
 
 #[test]
 fn local_declarations_abstract_their_free_type_dependencies() {
-    MonadicCase::run(
-        r#"
-begin
-  let make = { fn (A : VType) (B : CType) (item : A) (finish : Thk (A -> B)) => begin
-    def Box : VType = data | +Box : A end in
-    def Stream : CType = codata | .next : Stream | .done : B end that
-    let boxed = (+Box item : Box) in
-    let stream : Thk Stream = {
-      fix self => do _ <- ret ();
-      comatch
-      | .next => ! self
-      | .done => match boxed | +Box value => ! finish value end
-      end
-    } in
-    ! stream .next .done
-  end } in
-  ! make Int (Ret Int) 1 { fn value => ret value }
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/local_declarations_abstract_their_free_type_dependencies.zy"
+    ));
 }
 
 #[test]
 fn higher_kinded_dependencies_supply_their_structure() {
-    MonadicCase::run(
-        r#"
-begin
-  let run = { fn (P : VType -> CType) (operation : Thk (P Int)) => begin
-    def Stream : CType = codata | .next : Stream | .done : P Int end that
-    let stream : Thk Stream = {
-      fix self => do _ <- ret ();
-      comatch | .next => ! self | .done => ! operation end
-    } in
-    ! stream .next .done
-  end } in
-  ! run Ret { ret 1 }
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/higher_kinded_dependencies_supply_their_structure.zy"
+    ));
 }
 
 #[test]
 fn captured_nominal_definitions_can_leave_through_existential_packages() {
-    MonadicCase::run(
-        r#"
-begin
-  let make = { fn (A : VType) (item : A) => begin
-    def Box : VType = data | +Box : A end in
-    ret ((Box, (+Box item, { fn boxed => match boxed | +Box value => ret value end }))
-      : exists (B : VType) . B * Thk (B -> Ret A))
-  end } in
-  do (B, (boxed, read)) <- ! make Int 1;
-  ! read boxed
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/captured_nominal_definitions_can_leave_through_existential_packages.zy"
+    ));
 }
 
 #[test]
 fn nonuniform_recursive_codata_does_not_specialize_each_application() {
-    MonadicCase::run(
-        r#"
-begin
-  def Growing (A : VType) : CType =
-    codata | .step : A -> Growing (A * A) | .done : Ret Int end
-  that
-  def fix consume (A : VType) : Growing A =
-    do _ <- ret ();
-    comatch | .step _ => ! consume (A * A) | .done => ret 1 end
-  in
-  ! consume Int .step 0 .step (0, 0) .step ((0, 0), (0, 0)) .done
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/nonuniform_recursive_codata_does_not_specialize_each_application.zy"
+    ));
 }
 
 #[test]
 fn nominal_packages_keep_their_operations_and_structures() {
-    MonadicCase::run(
-        r#"
-begin
-  def Box : VType = data | +Box : Int end in
-  let package : exists (A : VType) . A * Thk (A -> Ret Int) =
-    (Box, (+Box 1, { fn item => match item | +Box value => ret value end }))
-  in
-  let (A, (item, read)) = package in
-  ! read item
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/nominal_packages_keep_their_operations_and_structures.zy"
+    ));
 }
 
 #[test]
 fn nominal_payloads_carry_computation_kind_package_evidence() {
-    MonadicCase::run(
-        r#"
-begin
-  def Packed : VType = data
-    | +Packed : exists (B : CType) . Thk B * Thk (Thk B -> Ret Int)
-  end in
-  let packed = (+Packed (Ret Int, ({ ret 1 }, { fn k => ! k })) : Packed) in
-  match packed | +Packed (B, (operation, run)) => ! run operation end
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/nominal_payloads_carry_computation_kind_package_evidence.zy"
+    ));
 }
 
 #[test]
 fn nominal_families_parameterize_the_selected_algebra_constructor() {
-    let source = MonadicCase::source(
-        r#"
-fn (Selected : (VType -> CType) -> CType -> CType) =>
-  let Algebra = Selected in
-  @[monadic] begin
-    def Packed : VType = data | +Packed : exists (B : CType) . Thk B end in
-    fn (packed : Packed) => ret ()
-  end
-"#,
-    );
+    let source = MonadicCase::source(include_str!(
+        "../cases/monadic-nominal/nominal_families_parameterize_the_selected_algebra_constructor.zy"
+    ));
     SourceCase::assert_accepted(SourceCase::check_linted(&source));
 }
 
@@ -323,7 +177,19 @@ fn nominal_boundaries_retain_source_rejections() {
 
 #[test]
 fn closed_source_expansions_own_their_local_declarations() {
-    let source = MonadicCase::ret_program("! helper");
+    let source = MonadicCase::source(
+        r#"let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
+  end
+} in
+do result <- (@[monadic] ! helper) Ret mo;
+do status <- ! int/sub result 1;
+! exit status"#,
+    );
     let source = format!(
         r#"
 let helper = {{ begin
@@ -341,108 +207,23 @@ end }} in
 
 #[test]
 fn nested_translation_composes_nominal_families() {
-    MonadicCase::run(
-        r#"
-begin
-  let identity_mo : Thk (Monad Ret) = {
-    comatch
-    | .return A value => ret value
-    | .bind A B computation continuation => do value <- ! computation; ! continuation value
-    end
-  } in
-  (@[monadic] begin
-    def Box : VType = data | +Box : Int end in
-    match (+Box 1 : Box) | +Box value => ret value end
-  end) Ret identity_mo
-end
-"#,
-    );
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/nested_translation_composes_nominal_families.zy"
+    ));
 }
 
 #[test]
 fn different_runtime_dictionaries_preserve_applicative_identity() {
-    let source = MonadicCase::source(
-        r#"
-let first_mo : Thk (Monad Ret) = {
-  comatch
-  | .return A value => ret value
-  | .bind A B computation continuation => do value <- ! computation; ! continuation value
-  end
-} in
-let second_mo : Thk (Monad Ret) = {
-  comatch
-  | .return A value => ret value
-  | .bind A B computation continuation => do value <- ! computation; ! continuation value
-  end
-} in
-let program = { @[monadic] begin
-  def Box : VType = data | +Box : Int end in
-  ret (+Box 1 : Box)
-end } in
-do runtime_mo <- ! int/eq (Ret (Thk (Monad Ret))) 1 1
-  { ret first_mo } { ret second_mo };
-do first <- ! program Ret first_mo;
-do second <- ! program Ret runtime_mo;
-let T = @[typeof] first in
-let same : T = second in
-match same | +Box value => do status <- ! int/sub value 1; ! exit status end
-"#,
-    );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
-    SourceCase::assert_accepted(SourceCase::run(&source));
-    SourceCase::assert_accepted(SourceCase::lower(&source));
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/different_runtime_dictionaries_preserve_applicative_identity.zy"
+    ));
 }
 
 #[test]
 fn nominal_algebras_use_the_selected_runtime_dictionary() {
-    let source = MonadicCase::source(
-        r#"
-let Writer (A : VType) = Ret (A * Int) in
-let additive : Thk (Monad Writer) = {
-  comatch
-  | .return A value => ret (value, 0)
-  | .bind A B operation continuation =>
-      do (value, first) <- ! operation;
-      do (result, second) <- ! continuation value;
-      do trace <- ! int/add first second;
-      ret (result, trace)
-  end
-} in
-let multiplicative : Thk (Monad Writer) = {
-  comatch
-  | .return A value => ret (value, 1)
-  | .bind A B operation continuation =>
-      do (value, first) <- ! operation;
-      do (result, second) <- ! continuation value;
-      do trace <- ! int/mul first second;
-      ret (result, trace)
-  end
-} in
-let program = {
-  @[monadic] fn (first : Thk (Ret Int)) (second : Thk (Ret Int)) =>
-    begin
-      def Report : CType = codata | .finish : Ret Int end in
-      do _ <- ! first;
-      do value <- ! second;
-      (comatch | .finish => ret value end : Report)
-    end
-} in
-do runtime_mo <- ! int/eq (Ret (Thk (Monad Writer))) 1 1
-  { ret multiplicative } { ret additive };
-let first = { ! program Writer additive { ret (1, 2) } { ret (1, 3) } } in
-let second = { ! program Writer runtime_mo { ret (1, 2) } { ret (1, 3) } } in
-let ReportThunk = @[typeof] first in
-let same : ReportThunk = second in
-do (_, additive_trace) <- ! first .finish;
-do (_, multiplicative_trace) <- ! same .finish;
-! int/eq OS additive_trace 5 {
-  ! int/eq OS multiplicative_trace 6 { ! exit 0 } { ! exit 2 }
-} { ! exit 1 }
-"#,
-    );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
-    SourceCase::assert_accepted(SourceCase::run(&source));
-    SourceCase::assert_accepted(SourceCase::lower(&source));
+    MonadicCase::assert_linted_and_lowered(include_str!(
+        "../cases/monadic-nominal/nominal_algebras_use_the_selected_runtime_dictionary.zy"
+    ));
 }
 
 #[test]
@@ -482,40 +263,4 @@ fn large_recursive_graph_allocates_one_family_per_declaration() {
     let source_count = MonadicCase::seal_count(&body);
     let target_count = MonadicCase::seal_count(&format!("@[monadic] {body}"));
     assert_eq!(target_count - source_count, DECLARATIONS);
-}
-
-#[test]
-fn separate_translated_declarations_remain_distinct() {
-    let source = MonadicCase::source(
-        r#"
-fn (mo : Thk (Monad Ret)) =>
-  do first <- (@[monadic] begin
-    def Box : VType = data | +Box : Int end in ret (+Box 1 : Box)
-  end) Ret mo;
-  do second <- (@[monadic] begin
-    def Box : VType = data | +Box : Int end in ret (+Box 1 : Box)
-  end) Ret mo;
-  let First = @[typeof] first in
-  ret (second : First)
-"#,
-    );
-    SourceCase::assert_rejected(SourceCase::check(&source), TyckDiagnosticCode::TypeMismatch);
-}
-
-#[test]
-fn different_carriers_select_different_nominal_applications() {
-    let source = MonadicCase::source(
-        r#"
-let Reader (A : VType) = Unit -> Ret A in
-fn (identity : Thk (Monad Ret)) (reader : Thk (Monad Reader)) =>
-  let program = { @[monadic] begin
-    def Box : VType = data | +Box : Int end in ret (+Box 1 : Box)
-  end } in
-  do first <- ! program Ret identity;
-  do second <- ! program Reader reader ();
-  let First = @[typeof] first in
-  ret (second : First)
-"#,
-    );
-    SourceCase::assert_rejected(SourceCase::check(&source), TyckDiagnosticCode::TypeMismatch);
 }

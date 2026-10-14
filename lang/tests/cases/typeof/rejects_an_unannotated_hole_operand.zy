@@ -1,0 +1,4 @@
+-- expect: reject(tyck.missing-annotation)
+
+let T = @(typeof) in
+ret ()

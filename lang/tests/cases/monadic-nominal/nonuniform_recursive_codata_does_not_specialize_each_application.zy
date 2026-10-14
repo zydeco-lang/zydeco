@@ -1,0 +1,31 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    def Growing (A : VType) : CType =
+      codata
+      | .step : A -> Growing (A * A)
+      | .done : Ret Int
+      end
+    that
+    def fix consume (A : VType) : Growing A =
+      do _ <- ret ();
+      comatch
+      | .step _ => ! consume (A * A)
+      | .done => ret 1
+      end
+    in
+    ! consume Int .step 0 .step (0, 0) .step ((0, 0), (0, 0)) .done
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

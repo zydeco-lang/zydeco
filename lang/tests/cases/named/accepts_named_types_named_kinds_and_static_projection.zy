@@ -1,0 +1,98 @@
+-- stage: check-value
+
+begin
+  let Identity :
+    VType -> VType =
+      begin
+        param A : VType that
+        A
+      end
+  that
+
+  let NamedIdentity :
+    (#constructor :: VType -> VType) =
+      (#constructor = Identity)
+  that
+
+  let NamedInt : (#item :: VType) =
+    (#item = NamedIdentity/constructor Int)
+  that
+
+  let ProjectedInt : VType = NamedInt/item that
+  let PayloadOf :
+    (#item :: VType) -> VType =
+      begin
+        param (#item = A) : (#item :: VType) that
+        A
+      end
+  that
+  let WholePayloadOf :
+    (#item :: VType) -> VType =
+      begin
+        param Whole : (#item :: VType) that
+        Whole/item
+      end
+  that
+  let PatternProjectedInt : VType =
+    PayloadOf NamedInt
+  that
+  let WholeProjectedInt : VType =
+    WholePayloadOf NamedInt
+  that
+
+  let NamedOS : (#operation :: CType) =
+    (#operation = OS)
+  that
+  let ProjectedOS : CType = NamedOS/operation that
+
+  let PunnedNamedType :
+       VType
+    -> (#Punned :: VType)
+  = begin
+    param Punned : VType that
+    (= Punned)
+  end that
+  let PunnedNamedInt : (#Punned :: VType) =
+    PunnedNamedType Int
+  that
+  let PunnedProjectedInt : VType =
+    PunnedNamedInt/Punned
+  that
+
+  let NestedNamedInt :
+    (#outer :: #inner :: VType) =
+      (#outer = #inner = Int)
+  that
+  let NestedProjectedInt : VType =
+    NestedNamedInt/inner
+  that
+  let NestedChainedProjectedInt : VType =
+    NestedNamedInt/outer/inner
+  that
+  let (/inner = NestedPatternProjectedInt) =
+    NestedNamedInt
+  that
+  let (/inner) =
+    NestedNamedInt
+  that
+
+  def value : ProjectedInt = 0 that
+  def pattern_value : PatternProjectedInt = 1 that
+  def whole_value : WholeProjectedInt = 2 that
+  def nested_value : NestedProjectedInt = 3 that
+  def nested_chained_value : NestedChainedProjectedInt = 3 that
+  def nested_pattern_value : NestedPatternProjectedInt = 3 that
+  def nested_punned_pattern_value : inner = 3 that
+  def punned_value : PunnedProjectedInt = 4 that
+
+  (
+    = value,
+    = pattern_value,
+    = whole_value,
+    = nested_value,
+    = nested_chained_value,
+    = nested_pattern_value,
+    = nested_punned_pattern_value,
+    = punned_value
+  )
+end

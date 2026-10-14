@@ -1,0 +1,40 @@
+-- stage: run
+-- prelude: monadic
+
+begin
+  def mo_ret : Thk (Monad Ret) = {
+    comatch
+    | .return A value =>
+      ret value
+    | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
+  begin
+    let Core =
+      exists (A : VType) .
+        exists (OS : CType) .
+          A * Thk (A -> OS)
+    that
+
+    def translated = {
+      @[monadic] begin
+        let run = {
+          do _ <- ret ();
+          fn ((A, OS, value, execute) : Core) =>
+            ! execute value
+        } in
+        ! run (
+          Int,
+          Ret Int,
+          0,
+          { fn (value : Int) => ret value }
+        )
+      end
+    } that
+
+    do status <- ! translated Ret { ! mo_ret };
+    ! exit status
+  end
+end

@@ -1,0 +1,12 @@
+-- stage: check-value
+
+begin
+  let Transparent =
+    exists (X as Int : VType) . X
+  that
+
+  let val disclose ((X, value) : Transparent) : Int = value that
+
+  let packed = pack (X as Int : VType) where 42 : X end in
+  disclose packed
+end

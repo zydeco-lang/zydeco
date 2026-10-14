@@ -1,0 +1,6 @@
+let foreign : Thk (Addr -> Int -> UInt64 -> Ret UInt64) = @(ffi(
+  c,
+  library("zyffi_examples"),
+  symbol("sample_checksum")
+)) in
+! exit 0

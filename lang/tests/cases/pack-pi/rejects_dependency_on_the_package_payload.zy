@@ -1,0 +1,14 @@
+-- stage: check-value
+-- expect: reject(tyck.sort-mismatch)
+
+begin
+  let Core =
+    exists (OS : CType) . Int
+  that
+
+  let Bad : CType =
+    pi ((OS, payload) : Core) . payload
+  that
+
+  ()
+end

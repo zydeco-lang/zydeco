@@ -1,0 +1,4 @@
+-- expect: reject(tyck.sort-mismatch)
+
+let Bad = sigma (x : Int) . x in
+ret ()

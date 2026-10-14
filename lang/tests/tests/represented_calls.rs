@@ -1,5 +1,6 @@
 #[path = "support/memory.rs"]
 mod memory;
+use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{e2e_sources, utils::SourceCase};
 
@@ -21,7 +22,7 @@ match memory/uint8 | +Err(_) => ! fail | +Ok(plan) =>
 end
 "#
         );
-        let source = memory::source(&body);
+        let source = MemoryCase::source(&body);
         if accepted {
             SourceCase::assert_accepted(SourceCase::check_linted(&source));
             SourceCase::assert_accepted(SourceCase::run(&source));

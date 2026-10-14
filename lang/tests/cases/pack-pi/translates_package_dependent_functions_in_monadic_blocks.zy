@@ -1,0 +1,20 @@
+-- stage: check-value
+-- prelude: monadic
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+
+  def translated = {
+    @[monadic] begin
+      let unbox = {
+        do _ <- ret ();
+        fn ((X, value) : Box) => ret value
+      } in
+      ! unbox (Unit, ())
+    end
+  } that
+
+  translated
+end

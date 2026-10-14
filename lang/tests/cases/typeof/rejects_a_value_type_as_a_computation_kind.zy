@@ -1,0 +1,4 @@
+-- expect: reject(tyck.kind-mismatch)
+
+let Wrong : CType = @[typeof] 1 in
+ret ()

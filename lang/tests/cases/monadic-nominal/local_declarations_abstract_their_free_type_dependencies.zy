@@ -1,0 +1,47 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    let make = {
+      fn (A : VType) (B : CType) (item : A) (finish : Thk (A -> B)) =>
+        begin
+          def Box : VType =
+            data
+            | +Box : A
+            end
+          in
+          def Stream : CType =
+            codata
+            | .next : Stream
+            | .done : B
+            end
+          that
+          let boxed = (+Box(item) : Box) in
+          let stream : Thk Stream = {
+            fix self =>
+              do _ <- ret ();
+              comatch
+              | .next => ! self
+              | .done =>
+                match boxed
+                | +Box(value) => ! finish value
+                end
+              end
+          } in
+          ! stream .next .done
+        end
+    } in
+    ! make Int (Ret Int) 1 { fn value => ret value }
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

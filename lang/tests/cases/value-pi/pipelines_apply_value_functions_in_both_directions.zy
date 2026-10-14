@@ -1,0 +1,8 @@
+-- stage: run
+
+begin
+  let val keep (A : VType) (value : A) : A = value that
+  let forward : Int = 0 |> keep Int that
+  let backward : Int = keep Int <| forward that
+  ! exit backward
+end

@@ -1,0 +1,7 @@
+begin
+  let Box = exists (X : VType) . X that
+  let Unbox = pi ((X, value) : Box) . (@[typeof] ret value) that
+  let unbox : Thk Unbox = { fn ((X, value) : Box) => ret value } that
+  let result : Thk (Ret Int) = { ! unbox (Int, 0) } that
+  ! result
+end

@@ -1,0 +1,6 @@
+-- expect: reject(tyck.unconstrained-inference)
+
+begin
+  let ignore = { fn value => ret () } that
+  ret ()
+end

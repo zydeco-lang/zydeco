@@ -1,0 +1,7 @@
+-- stage: check-value
+-- expect: reject(tyck.named-label-mismatch)
+
+begin
+  def bad : (#x :: Int) = (#y = 0) that
+  bad
+end

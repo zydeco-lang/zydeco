@@ -1,0 +1,18 @@
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  def Token : VType =
+    data
+    | +Token : Unit
+    end
+  that
+  def Other : VType =
+    data
+    | +Token : Unit
+    end
+  that
+  let token : Token = +Token() that
+  let other : Other = +Token() that
+  let wrong : @[typeof] token = other that
+  ret wrong
+end

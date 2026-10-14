@@ -1,0 +1,11 @@
+begin
+  let Value = @[typeof] 1 that
+  let Computation = @[typeof] ret 1 that
+  let Suspended = @[typeof] { ret 1 } that
+  let value : Value = 2 that
+  let same : Int = value that
+  let computation : Thk Computation = { ret same } that
+  let suspended : Suspended = computation that
+  let exact : Thk (Ret Int) = suspended that
+  ! exact
+end

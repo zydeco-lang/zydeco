@@ -1,0 +1,35 @@
+-- stage: run
+-- prelude: monadic
+
+begin
+  def mo_ret : Thk (Monad Ret) = {
+    comatch
+    | .return A value =>
+      ret value
+    | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
+  begin
+    let Box =
+      exists (X : VType) . X
+    that
+
+    def translated = {
+      @[monadic] begin
+        let reveal = {
+          do _ <- ret ();
+          fn ((X, value) : Box) => ret value
+        } in
+        fn ((X, value) : Box) =>
+          do first <- ! reveal (X, value);
+          ! reveal (X, first)
+      end
+    } that
+
+    do value <- ! translated Ret { ! mo_ret } (Int, triv, 41);
+    do status <- ! api/int/sub value 41;
+    ! exit status
+  end
+end

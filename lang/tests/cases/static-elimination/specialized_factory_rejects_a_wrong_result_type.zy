@@ -1,0 +1,9 @@
+-- expect: reject(tyck.type-mismatch)
+
+let val factory (A : VType) (B : VType) =
+  let val wrap (R : CType) (body : Thk (A -> Ret B)) : Thk (A -> Ret B) = body in
+  (= wrap)
+in
+let discard = factory Int Unit in
+let broken = discard/wrap OS { fn value => ret value } in
+! exit 0

@@ -1,0 +1,11 @@
+-- stage: check-value
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  let Transparent =
+    exists (X as Int : VType) . X
+  that
+  def packed : Transparent = (Char, 'x') that
+
+  packed
+end

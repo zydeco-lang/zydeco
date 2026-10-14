@@ -1,0 +1,12 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def unpack = {
+    fn ((X, value) : Box) => ret value
+  } that
+
+  unpack
+end

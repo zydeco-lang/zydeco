@@ -1,0 +1,9 @@
+-- stage: run
+
+let val pair (a : Int) (b : Int) : Int * Int = (a, b) in
+let partial = pair 1 in
+let alias = partial in
+let (a, b) = alias 2 in
+! int/eq OS a 1 {
+  ! int/eq OS b 2 { ! exit 0 } { ! exit 41 }
+} { ! exit 42 }

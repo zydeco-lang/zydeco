@@ -1,0 +1,6 @@
+begin
+  let ConstructorKind = pi (A : VType) . (@[typeof] A) that
+  let Identity : ConstructorKind = fn (A : VType) => A that
+  let value : Identity Int = 0 that
+  ret value
+end

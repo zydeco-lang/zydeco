@@ -1,0 +1,18 @@
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let Nested =
+    data
+    | +Nested : Bool * (Bool * Bool)
+    end
+  that
+  let value : Nested = +Nested(+True(), (+False(), +True())) that
+  match value
+  | +Nested(+False(_), _) => ret ()
+  | +Nested(+True(_), (_, _)) => ret ()
+  end
+end

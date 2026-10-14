@@ -1,0 +1,16 @@
+-- stage: run
+
+let val factory (A : VType) (B : VType) =
+  let val wrap (R : CType) (body : Thk (A -> Ret B)) : Thk (A -> Ret B) = body in
+  (= wrap)
+in
+let units = factory Unit Unit in
+let integers = factory Int Int in
+let discard = factory Int Unit in
+let unit = units/wrap (Ret Unit) { fn value => ret value } in
+let integer = integers/wrap OS { fn value => ret value } in
+let ignore = discard/wrap OS { fn value => ret () } in
+do () <- ! unit ();
+do () <- ! ignore 42;
+do code <- ! integer 0;
+! exit code

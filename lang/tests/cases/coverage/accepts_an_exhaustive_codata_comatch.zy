@@ -1,0 +1,14 @@
+begin
+  let Choice =
+    codata
+    | .left : Ret Unit
+    | .right : Ret Unit
+    end
+  that
+  (
+    comatch
+    | .left => ret ()
+    | .right => ret ()
+    end : Choice
+  )
+end

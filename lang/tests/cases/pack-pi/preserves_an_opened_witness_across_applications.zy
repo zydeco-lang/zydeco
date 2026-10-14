@@ -1,0 +1,31 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (X : VType) .
+      X * Thk (X -> Ret Int)
+  that
+
+  let Reveal =
+    pi ((X, _, _) : Box) . Ret X
+  that
+
+  def reveal : Thk Reveal = {
+    fn ((X, value, _) : Box) => ret value
+  } that
+
+  def consume_twice = {
+    fn ((X, value, consume) : Box) =>
+      do first <- ! reveal (X, value, consume);
+      do second <- ! reveal (X, first, consume);
+      ! consume second
+  } that
+
+  def boxed : Box = (
+    Int,
+    41,
+    { fn (value : Int) => ret value }
+  ) that
+
+  { ! consume_twice boxed }
+end

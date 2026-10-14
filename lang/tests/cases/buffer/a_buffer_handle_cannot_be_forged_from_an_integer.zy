@@ -1,0 +1,4 @@
+-- expect: reject(tyck.type-mismatch)
+
+let (/memory) = builtin in
+! memory/free OS 0 8 8 { fn _ => ! exit 1 } { ! exit 0 }

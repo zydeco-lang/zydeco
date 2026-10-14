@@ -1,0 +1,5 @@
+-- expect: reject(tyck.kind-mismatch)
+
+let Apply (F : VType -> VType) = F Unit in
+let Invalid = Apply <| fn (A : VType) => Ret A in
+! exit 0

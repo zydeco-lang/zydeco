@@ -1,0 +1,10 @@
+-- stage: run
+
+begin
+  let val keep (A : VType) (value : A) : A = value that
+  let keep_unit : val pi (value : Unit) . Unit = keep Unit that
+  let functions = (keep_unit, ()) that
+  let (stored, _) = functions that
+  let recovered : Unit = () |> stored that
+  ! exit 0
+end

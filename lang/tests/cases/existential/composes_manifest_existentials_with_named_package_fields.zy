@@ -1,0 +1,15 @@
+-- stage: check-value
+
+begin
+  let CounterLibrary =
+    exists (#Counter = Representation as Int : VType) .
+      (#zero :: Representation)
+  that
+  def library : CounterLibrary = (
+    #Counter = Int,
+    #zero = 0
+  ) that
+  let val disclose ((= Counter, = zero) : CounterLibrary) : Int = zero that
+
+  disclose library
+end

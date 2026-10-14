@@ -1,0 +1,7 @@
+-- expect: reject(tyck.sort-mismatch)
+
+begin
+  let val keep (A : VType) (value : A) : A = value that
+  let invalid = () |> keep that
+  ! exit 0
+end

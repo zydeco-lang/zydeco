@@ -1,0 +1,12 @@
+begin
+  let Void =
+    data
+    end
+  that
+  let absurd : Thk (Void -> Ret Unit) = {
+    fn value =>
+      match value
+      end
+  } that
+  ret ()
+end

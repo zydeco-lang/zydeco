@@ -1,0 +1,9 @@
+begin
+  let run = {
+    fn thunk =>
+      do result <- ! thunk;
+      ret result
+  } that
+  do result <- ! run { ret () };
+  ret result
+end

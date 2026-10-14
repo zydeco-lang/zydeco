@@ -1,0 +1,7 @@
+-- expect: reject(tyck.package-witnesses-unavailable)
+
+let Box = exists (A : VType) . A * (exists (B : VType) . B) in
+let val take ((A, (_, (B, value))) : Box) : B = value in
+fn (hidden : Box) =>
+  let value = take hidden in
+  ret ()

@@ -1,0 +1,10 @@
+-- prelude: monadic
+
+begin
+  let val make (B : CType) = {
+    fn (k : Thk B) =>
+      do _ <- ret ();
+      ! k
+  } in
+  ! (make (Ret Int)) { ret 1 }
+end

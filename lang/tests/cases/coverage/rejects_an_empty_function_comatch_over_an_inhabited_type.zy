@@ -1,0 +1,14 @@
+-- expect: reject(tyck.coverage)
+
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  (
+    comatch
+    end : Bool -> Ret Unit
+  )
+end

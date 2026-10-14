@@ -1,5 +1,5 @@
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::utils::SourceCase;
+use zydeco_tests::utils::{SourceCase, SourceTemplate};
 
 zydeco_tests::check_source!(exception_module, "std/control/exception.zy");
 zydeco_tests::check_source!(state_module, "std/control/state.zy");
@@ -23,24 +23,13 @@ struct EffectCase;
 
 impl EffectCase {
     fn source(body: &str) -> String {
-        let control =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/control");
-        format!(
-            r#"
-let (/Monad; /WithMonad) = builtin |> (@(import("{control}/monad.zy"))) in
-let (/IState; /instance = state_instance; /modify) =
-  builtin |> (@(import("{control}/state.zy"))) in
-let (/IException; /instance = exception_instance; /raise; /catch) =
-  builtin |> (@(import("{control}/exception.zy"))) in
-let (/IStateExn; /instance = combined_instance; /run_state_exn) =
-  builtin |> (@(import("{control}/state-exn.zy"))) in
-let (S, s) = state_instance Int in
-let (E, e) = exception_instance Unit in
-let (C, c) = combined_instance Int Unit in
-{body}
-"#,
-            control = control.display(),
-        )
+        let control = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/control")
+            .display()
+            .to_string();
+        SourceTemplate::parse(include_str!("../templates/effects.zy.in"))
+            .and_then(|template| template.render([("control", control.as_str()), ("body", body)]))
+            .expect("the effects source template and its arguments must agree")
     }
 
     fn reject(body: &str, code: TyckDiagnosticCode) {

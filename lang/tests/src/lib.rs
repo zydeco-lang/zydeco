@@ -1,4 +1,7 @@
+mod template;
+
 pub mod utils {
+    pub use crate::template::{SourceTemplate, SourceTemplateError};
     use std::{
         collections::BTreeSet,
         path::{Path, PathBuf},

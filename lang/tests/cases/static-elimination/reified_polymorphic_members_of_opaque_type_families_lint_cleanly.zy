@@ -1,0 +1,10 @@
+let val make (u : Unit) =
+  let D (L : VType) = Int in
+  let f = { fn (L : VType) (x : D L) => ret x } in
+  (
+    (= D, #create = f) : exists (= D : VType -> VType) .
+      (#create :: Thk (forall (L : VType) . D L -> Ret (D L)))
+  )
+in
+let module = make () in
+! exit 0

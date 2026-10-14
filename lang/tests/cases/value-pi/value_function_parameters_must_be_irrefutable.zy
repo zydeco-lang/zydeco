@@ -1,0 +1,12 @@
+-- expect: reject(tyck.expressivity)
+
+begin
+  let Maybe =
+    data
+    | +None : Unit
+    | +Some : Int
+    end
+  that
+  let val invalid (+Some(value) : Maybe) : Int = value that
+  ! exit 0
+end

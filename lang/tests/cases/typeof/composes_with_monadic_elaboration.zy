@@ -1,0 +1,8 @@
+-- prelude: monadic
+
+begin
+  let translated = { @[monadic] fn (value : Int) => ret (value : @[typeof] value) } that
+  let Signature = @[typeof] translated that
+  let same : Signature = translated that
+  ret ()
+end

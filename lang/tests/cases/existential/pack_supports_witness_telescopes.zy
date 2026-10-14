@@ -1,0 +1,13 @@
+-- stage: check-value
+
+begin
+  let Mixed =
+    exists (X as Int : VType) .
+      exists (Y as Char : VType) .
+        X
+  that
+  let val disclose ((X, Y, value) : Mixed) : Int = value that
+
+  let mixed = pack (X as Int : VType) (Y as Char : VType) where 7 : X end in
+  disclose mixed
+end

@@ -1,0 +1,4 @@
+-- expect: resolve-error
+
+let T = @[typeof] undefined_value in
+ret ()

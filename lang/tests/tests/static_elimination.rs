@@ -1,3 +1,5 @@
+//! Source cases live in `cases/static-elimination/`; Rust retains arena assertions and generated matrices.
+
 use std::collections::HashSet;
 use zydeco_statics::{TyckDiagnosticCode, arena::StaticsArena, syntax::*, validate::LintChecker};
 use zydeco_tests::utils::SourceCase;
@@ -37,17 +39,10 @@ let result = match add 12 4 | 16 => sub 16 16 | _ => 1 end in
 
 #[test]
 fn known_named_witnesses_bind_the_payload_type_during_static_elimination() {
-    let source = r#"
-let Package = exists (= Stored : VType) . (#value :: Stored) in
-let val package (A : VType) (value : A) : Package = (#Stored = A, #value = value) in
-let (= Stored, payload) = package Int 0 in
-let consume : Thk (Stored -> Ret Stored) = { fn value => ret value } in
-do _ <- ! consume payload/value;
-let val identity ((#item = A) : (#item :: VType)) (value : A) : A = value in
-! exit (identity (#item = Int) 0)
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/known_named_witnesses_bind_the_payload_type_during_static_elimination.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -201,121 +196,46 @@ end
 
 #[test]
 fn static_arguments_and_results_can_be_functions_and_packages() {
-    let source = r#"
-begin
-  let Transform = val pi (_ : Int) . Int that
-  let val keep (A : VType) (value : A) : A = value that
-  let val twice (function : Transform) : Transform =
-    val (value : Int) => function (function value)
-  that
-  let Package = exists (A : VType) . (val pi (_ : A) . A) * A that
-  let val forward (package : Package) : Package = package that
-  let package : Package = (Int, twice (keep Int), 0) that
-  let (A, transform, value) = forward package that
-  let transformed : A = transform value that
-  ! exit 0
-end
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/static_arguments_and_results_can_be_functions_and_packages.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
 #[test]
 fn inferred_factory_fields_specialize_solved_result_holes() {
-    let factory = r#"
-let val factory (A : VType) (B : VType) =
-  let val wrap (R : CType) (body : Thk (A -> Ret B)) : Thk (A -> Ret B) = body in
-  (#wrap = wrap)
-in
-"#;
-    let source = format!(
-        r#"{factory}
-let units = factory Unit Unit in
-let integers = factory Int Int in
-let discard = factory Int Unit in
-let unit = units/wrap (Ret Unit) {{ fn value => ret value }} in
-let integer = integers/wrap OS {{ fn value => ret value }} in
-let ignore = discard/wrap OS {{ fn value => ret () }} in
-do () <- ! unit ();
-do () <- ! ignore 42;
-do code <- ! integer 0;
-! exit code
-"#
+    let source = include_str!(
+        "../cases/static-elimination/inferred_factory_fields_specialize_solved_result_holes.zy"
     );
-    SourceCase::assert_accepted(SourceCase::check_linted(&source));
-    SourceCase::assert_accepted(SourceCase::run(&source));
-    SourceCase::assert_accepted(SourceCase::lower(&source));
-    SourceCase::assert_rejected(
-        SourceCase::check(&format!(
-            "{factory} let discard = factory Int Unit in \
-             let broken = discard/wrap OS {{ fn value => ret value }} in ! exit 0"
-        )),
-        TyckDiagnosticCode::TypeMismatch,
-    );
+    SourceCase::assert_accepted(SourceCase::check_linted(source));
+    SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
 #[test]
 fn dependent_applications_recover_forwarded_and_constructed_package_witnesses() {
-    let source = r#"
-begin
-  let Box = exists (A : VType) . A that
-  let val keep (A : VType) (value : A) : A = value that
-  let val box (A : VType) (value : A) : Box = (A, value) that
-  let val take ((A, value) : Box) : A = value that
-  let unbox : Thk (pi ((A, _) : Box) . Ret A) = {
-    fn ((A, value) : Box) => ret value
-  } that
-  let direct : Box = (Int, 0) that
-  let forwarded = keep Box direct that
-  let value : Int = take forwarded that
-  let constructed = box Int value that
-  let fields = (#box = keep Box constructed, #other = ()) that
-  let selected : Int = take fields/box that
-  do status <- ! unbox (keep Box (box Int selected));
-  ! exit status
-end
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/dependent_applications_recover_forwarded_and_constructed_package_witnesses.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
 #[test]
 fn dependent_product_arguments_preserve_each_forwarded_witness() {
-    let source = r#"
-begin
-  let Box = exists (A : VType) . A that
-  let val keep (A : VType) (value : A) : A = value that
-  let val pair ((A, first) : Box, (B, second) : Box) : A * B = (first, second) that
-  let arguments = keep (Box * Box) ((Int, 0), (Unit, ())) that
-  let result : Int * Unit = pair arguments that
-  let (status, _) = result that
-  ! exit status
-end
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/dependent_product_arguments_preserve_each_forwarded_witness.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
 #[test]
 fn witness_inspection_keeps_runtime_constructor_payloads_opaque() {
-    let source = r#"
-begin
-  let Box = exists (A : VType) . A that
-  let Wrapped = data | +Wrap : Int end that
-  let val box (wrapped : Wrapped) : Box =
-    let +Wrap(value) = wrapped in (Int, value)
-  that
-  let val take ((A, value) : Box) : A = value that
-  do wrapped <- ret (+Wrap(0) : Wrapped);
-  let status : Int = take (box wrapped) in
-  ! exit status
-end
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/witness_inspection_keeps_runtime_constructor_payloads_opaque.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -361,20 +281,10 @@ end
 
 #[test]
 fn specialization_keeps_type_arguments_and_lexical_captures_distinct() {
-    let source = r#"
-begin
-  let val suspend (A : VType) (value : A) : Thk (Ret A) = { ret value } that
-  do captured <- ret 0;
-  let integer = suspend Int captured in
-  let unit = suspend Unit () in
-  let captured : Int = 1 in
-  do ignored <- ! unit;
-  do status <- ! integer;
-  ! exit status
-end
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/specialization_keeps_type_arguments_and_lexical_captures_distinct.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -403,17 +313,10 @@ fn runtime_boundaries_reject_static_requirements_consistently() {
 
 #[test]
 fn aliases_of_partial_value_applications_preserve_bound_arguments() {
-    let source = r#"
-let val pair (a : Int) (b : Int) : Int * Int = (a, b) in
-let partial = pair 1 in
-let alias = partial in
-let (a, b) = alias 2 in
-! int/eq OS a 1 {
-  ! int/eq OS b 2 { ! exit 0 } { ! exit 41 }
-} { ! exit 42 }
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/aliases_of_partial_value_applications_preserve_bound_arguments.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
@@ -438,29 +341,9 @@ fn exponentially_composed_value_functions_reach_the_static_reduction_limit() {
 }
 
 #[test]
-fn self_application_reports_a_static_reduction_limit() {
-    let definition = r#"
-      begin
-      def Self : VType = val pi (_ : Self) . Unit that
-      let loop : Self = val (function : Self) => function function that
-    "#;
-    SourceCase::assert_accepted(SourceCase::check(&format!("{definition} ! exit 0 end")));
-    let source = format!("{definition} let result = loop loop in ! exit 0 end");
-    SourceCase::assert_rejected(SourceCase::check(&source), TyckDiagnosticCode::StaticElimination);
-}
-
-#[test]
 fn reified_polymorphic_members_of_opaque_type_families_lint_cleanly() {
-    let source = r#"
-let val make (u : Unit) =
-  let D (L : VType) = Int in
-  let f = { fn (L : VType) (x : D L) => ret x } in
-  ((= D, #create = f) :
-    exists (= D : VType -> VType) .
-      (#create :: Thk (forall (L : VType) . D L -> Ret (D L))))
-in
-let module = make () in
-! exit 0
-"#;
+    let source = include_str!(
+        "../cases/static-elimination/reified_polymorphic_members_of_opaque_type_families_lint_cleanly.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
 }

@@ -57,7 +57,7 @@ A proposed extension should show complete and incomplete clause matrices, witnes
 and agreement between generated matching and direct witness-dependent abstraction.
 [Copattern checking](../../lang/statics/src/check/copattern.rs),
 [coverage validation](../../lang/statics/src/validate/coverage.rs),
-and [coverage regressions](../../lang/tests/tests/coverage.rs) are the implementation and validation entry points.
+and [coverage regressions](../../lang/tests/cases/coverage) are the implementation and validation entry points.
 
 ## Refutable projection payloads
 

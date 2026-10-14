@@ -1,0 +1,12 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int, 0) that
+  let Module = exists (M : VType) . (Box * Int) * (#peer :: Box) that
+  def module : Module = (Int, (boxed, 0), #peer = boxed) that
+
+  module
+end

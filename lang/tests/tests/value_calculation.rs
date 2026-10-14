@@ -1,31 +1,16 @@
+//! Source cases live in `cases/value-calculation/`; Rust retains generated matrices and cross-stage checks.
+
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn value_matches_and_arithmetic_reduce_through_higher_order_application() {
-    let source = r#"
-let add = @(intrinsic(int_add)) in
-let compare = @(intrinsic(int_compare)) in
-let sub = @(intrinsic(int_sub)) in
-let val maximum (a : Int) (b : Int) : Int =
-  match compare a b | -1 => b | _ => a end
-in
-let val apply (f : val pi (x : Int) . Int) (x : Int) : Int = f x in
-let answer = apply (maximum 16) (add 5 11) in
-! exit (sub answer 16)
-"#;
+    let source = include_str!(
+        "../cases/value-calculation/value_matches_and_arithmetic_reduce_through_higher_order_application.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::run_monadic(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
-}
-
-#[test]
-fn value_matches_require_exhaustive_patterns() {
-    SourceCase::assert_rejected(
-        SourceCase::check("let selected = match (0 : Int) | 0 => 1 end in ! exit 0"),
-        TyckDiagnosticCode::Coverage,
-    );
 }
 
 #[test]
@@ -58,51 +43,16 @@ fn value_integer_leaves_have_total_wrapping_and_signed_comparison_semantics() {
 
 #[test]
 fn known_choices_can_forward_runtime_payloads_through_views_and_nested_patterns() {
-    let source = r#"
-let Choice = data | +Left : Int * Int | +Right : Unit end in
-let val first ((left, _) : Int * Int) : Int = left in
-let f : Thk (Int -> Ret Int) = { fn x =>
-  let selected = match (+Left(x, 3) : Choice)
-    | +Right() => 1
-    | +Left(first ~> result) => result
-    end
-  in ret selected
-} in
-do result <- ! f 0;
-! exit result
-"#;
+    let source = include_str!(
+        "../cases/value-calculation/known_choices_can_forward_runtime_payloads_through_views_and_nested_patterns.zy"
+    );
     SourceCase::assert_accepted(SourceCase::check_linted(source));
-    SourceCase::assert_accepted(SourceCase::run(source));
     SourceCase::assert_accepted(SourceCase::lower(source));
 }
 
 #[test]
-fn an_unknown_earlier_row_cannot_be_skipped_for_a_known_later_match() {
-    SourceCase::assert_rejected(
-        SourceCase::check(
-            r#"
-let f : Thk (Int -> Ret Int) = { fn x =>
-  ret (match (x, 0) | (0, _) => 1 | (_, 0) => 2 | _ => 3 end)
-} in ! exit 0
-"#,
-        ),
-        TyckDiagnosticCode::StaticElimination,
-    );
-}
-
-#[test]
 fn value_matching_does_not_execute_suspended_effects() {
-    let source = r#"
-let run = match (0 : Int)
-  | 0 => { ! exit 0 }
-  | _ => { ! exit 1 }
-  end
-in ! run
-"#;
-    SourceCase::assert_accepted(SourceCase::run(source));
-    SourceCase::assert_accepted(SourceCase::run_monadic(source));
-    SourceCase::assert_rejected(
-        SourceCase::check("let selected = match (0 : Int) | 0 => 1 | _ => ret 2 end in ! exit 0"),
-        TyckDiagnosticCode::TypeMismatch,
-    );
+    SourceCase::assert_accepted(SourceCase::run_monadic(include_str!(
+        "../cases/value-calculation/value_matching_does_not_execute_suspended_effects.zy"
+    )));
 }

@@ -1,0 +1,4 @@
+-- expect: reject(tyck.sort-mismatch)
+
+let Bad = pi (x : Int) . x in
+ret ()

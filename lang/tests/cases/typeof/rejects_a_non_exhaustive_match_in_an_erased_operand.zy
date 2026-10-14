@@ -1,0 +1,14 @@
+-- expect: reject(tyck.coverage)
+
+let Choice =
+  data
+  | +Here : Unit
+  | +There : Unit
+  end
+in
+let T = @[typeof] (
+  match (+Here() : Choice)
+  | +Here(_) => ret 0
+  end
+) in
+ret ()

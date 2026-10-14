@@ -1,0 +1,4 @@
+-- expect: reject(tyck.float-literal-out-of-range)
+
+let value : Float32 = 3.5e38 in
+ret value

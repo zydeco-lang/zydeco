@@ -1,0 +1,55 @@
+-- stage: run
+-- prelude: monadic
+
+begin
+  def mo_ret : Thk (Monad Ret) = {
+    comatch
+    | .return A value =>
+      ret value
+    | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
+  begin
+    let Core =
+      exists (OS : CType) . Thk OS
+    that
+
+    let Runner : CType =
+      codata
+      | .run : pi ((OS, _) : Core) . OS
+      end
+    that
+
+    def ret_algebra : Thk (
+      forall (R : CType) .
+        Algebra Ret R
+    ) = {
+      fn (R : CType) =>
+        fn X computation continuation =>
+          do value <- ! computation;
+          ! continuation value
+    } that
+
+    def translated = {
+      @[monadic] begin
+        do _ <- ret ();
+        (
+          comatch
+          | .run =>
+            fn ((OS, computation) : Core) => ! computation
+          end : Runner
+        )
+      end
+    } that
+
+    do value <- ! translated Ret { ! mo_ret } .run (
+      Ret Int,
+      { ! ret_algebra (Ret Int) },
+      { ret 41 }
+    );
+    do status <- ! api/int/sub value 41;
+    ! exit status
+  end
+end

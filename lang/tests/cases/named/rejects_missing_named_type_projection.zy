@@ -1,0 +1,12 @@
+-- stage: check-value
+-- expect: reject(tyck.missing-named-type-field)
+
+begin
+  let NamedInt : (#item :: VType) =
+    (#item = Int)
+  that
+  let InvalidProjection : VType =
+    NamedInt/other
+  that
+  ()
+end

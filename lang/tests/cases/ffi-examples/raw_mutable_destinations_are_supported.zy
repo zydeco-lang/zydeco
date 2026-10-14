@@ -1,0 +1,6 @@
+let foreign : Thk (Addr -> UInt8 -> UInt32 -> Ret Int32) = @(ffi(
+  c,
+  library("zyffi_examples"),
+  symbol("sample_write")
+)) in
+! exit 0

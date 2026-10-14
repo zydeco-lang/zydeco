@@ -1,0 +1,7 @@
+-- expect: reject(tyck.escaping-existential)
+
+begin
+  let Box = exists (X : VType) . X that
+  let Leaked = sigma ((X, value) : Box) . (@[typeof] value) that
+  ret ()
+end

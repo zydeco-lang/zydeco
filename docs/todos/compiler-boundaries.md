@@ -169,3 +169,21 @@ The bounded repair is to reject unsupported ZASM execution explicitly before run
 Completing host operations and context allocation is a larger alternative.
 Retain the successful interpreter/rendering counterparts and a subprocess rejection regression;
 check that unsupported execution neither panics nor performs earlier program effects.
+
+## Partial annotation scope during formatting
+
+The [formatter's semantic-identity law](../references/compiler.md#semantic-identity)
+and [partial-binder scope](../references/language.md#7-patterns-and-coverage) govern this boundary.
+Observed during the 2026-10-13 fixture migration, formatting this source fragment merges the two function headers:
+
+```zydeco
+@[partial] fn (0 : Int) => fn (1 : Int) => ret 0
+```
+
+The original rejects with `tyck.refutable-binding`; the printed `@[partial] fn (0 : Int) (1 : Int) => ret 0` is accepted
+because both binders now belong to the annotated header.
+The [partial-binding tables](../../lang/tests/tests/partial.rs) retain this rejected nested header
+and accepted single-header counterparts as inline Rust sources.
+
+Preserve nested headers when flattening would extend a meta annotation's scope.
+Add a formatter round-trip regression for this pair.

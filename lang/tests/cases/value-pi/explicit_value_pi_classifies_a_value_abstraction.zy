@@ -1,0 +1,9 @@
+-- stage: run
+
+begin
+  let identity : val pi (A : VType) (value : A) . A =
+    val (A : VType) (value : A) => value
+  that
+  let recovered : Unit = () |> identity Unit that
+  ! exit 0
+end

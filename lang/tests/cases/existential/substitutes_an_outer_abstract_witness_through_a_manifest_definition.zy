@@ -1,0 +1,15 @@
+-- stage: check-value
+
+begin
+  let Mixed =
+    exists (X : VType) .
+      exists (Y as X : VType) .
+        Y
+  that
+  def packed : Mixed = (Int, Int, 7) that
+  def unpack = {
+    fn ((X, Y, value) : Mixed) => ret value
+  } that
+
+  { ! unpack packed }
+end

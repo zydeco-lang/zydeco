@@ -1,0 +1,5 @@
+-- expect: reject(tyck.type-mismatch)
+
+let (/Addr) = builtin in
+let forged : Addr = 0 in
+! exit 0

@@ -1,0 +1,9 @@
+-- stage: run
+
+let run =
+  match (0 : Int)
+  | 0 => { ! exit 0 }
+  | _ => { ! exit 1 }
+  end
+in
+! run

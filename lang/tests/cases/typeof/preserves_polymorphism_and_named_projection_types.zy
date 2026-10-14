@@ -1,0 +1,11 @@
+begin
+  let api = (
+    #count = 1,
+    #identity = { fn (A : VType) (value : A) => ret value }
+  ) that
+  let Identity = @[typeof] api/identity that
+  let replacement : Identity = { fn (A : VType) (value : A) => ret value } that
+  let Named = @[typeof] (#count = 1) that
+  let field : Named = (#count = 2) that
+  ! replacement Int field/count
+end

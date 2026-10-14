@@ -1,0 +1,13 @@
+-- stage: check-value
+-- expect: reject(tyck.missing-named-field)
+
+begin
+  let Box =
+    exists (Item : VType) .
+      (#value :: Item)
+  that
+  def boxed : Box = (Int, #value = 42) that
+
+  let (/Missing) = boxed in
+  ()
+end

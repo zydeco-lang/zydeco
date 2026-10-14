@@ -1,0 +1,19 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (#Item = Hidden : VType) .
+        (#value :: Hidden)
+      * (#consume :: Thk (Hidden -> Ret Int))
+  that
+  def boxed : Box = (
+    #Item = Int,
+    #value = 41,
+    #consume = { fn value => ret value }
+  ) that
+
+  {
+    let (/Item; /value; /consume) = boxed in
+    ! consume value
+  }
+end

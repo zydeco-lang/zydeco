@@ -1,0 +1,12 @@
+begin
+  def Token : VType =
+    data
+    | +Token : Unit
+    end
+  that
+  let token : Token = +Token() that
+  let Query = @[typeof] token that
+  let same : Query = token that
+  let original : Token = same that
+  ret original
+end

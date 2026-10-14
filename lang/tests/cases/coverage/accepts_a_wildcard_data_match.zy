@@ -1,0 +1,12 @@
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let value : Bool = +True() that
+  match value
+  | _ => ret ()
+  end
+end

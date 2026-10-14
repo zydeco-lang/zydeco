@@ -1,0 +1,23 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    let Box = exists (B : CType) . Thk B in
+    let val make ((B, k) : Box) = {
+      do _ <- ret ();
+      ! k
+    } in
+    ! (make (Ret Int, { ret 1 }))
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

@@ -1,0 +1,12 @@
+-- stage: lower
+
+begin
+  -- A lexical let must leave its right-hand side reducible through lowering.
+  let wrapped : val pi (value : Unit) . Unit =
+    let ignored : Unit = () in
+    param val value : Unit in
+    value
+  that
+  let recovered : Unit = () |> wrapped that
+  ! exit 0
+end

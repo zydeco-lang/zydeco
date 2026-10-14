@@ -1,0 +1,9 @@
+-- expect: reject(tyck.expressivity)
+
+begin
+  let invalid =
+    param value : Unit in
+    value
+  that
+  ! exit 0
+end

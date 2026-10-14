@@ -1,5 +1,6 @@
 #[path = "support/memory.rs"]
 mod memory;
+use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{e2e_sources, utils::SourceCase};
 
@@ -16,7 +17,7 @@ struct LayoutCase;
 
 impl LayoutCase {
     fn source(body: &str) -> String {
-        memory::source(&format!(
+        MemoryCase::source(&format!(
             "match memory/int | +Err(_) => ! fail | +Ok(plan) => \
              let (#L = Left, left) = memory/realize Int plan in \
              let (#L = Right, right) = memory/realize Int plan in {body} end"
@@ -77,7 +78,7 @@ fn checked_static_multiplication_handles_overflow_without_runtime_primitives() {
         let body = format!(
             "let code = match size/multiply {left} {right} | {pattern} => 0 | _ => 1 end in ! exit code"
         );
-        SourceCase::assert_accepted(SourceCase::run(&memory::source(&body)));
+        SourceCase::assert_accepted(SourceCase::run(&MemoryCase::source(&body)));
     }
 }
 
@@ -232,7 +233,7 @@ let Values = Sequence Unit in
   }
 end
 "#;
-    SourceCase::assert_accepted(SourceCase::run(&memory::source(body)));
+    SourceCase::assert_accepted(SourceCase::run(&MemoryCase::source(body)));
 }
 
 #[test]
@@ -300,7 +301,7 @@ let bad = compose_checked Fault Int Int Int first second in
 } { fn _ => ! fail }
 }}
 "#;
-    SourceCase::assert_accepted(SourceCase::run(&memory::source(body)));
+    SourceCase::assert_accepted(SourceCase::run(&MemoryCase::source(body)));
 }
 
 #[test]
@@ -381,7 +382,7 @@ fn storage_only_array_stride_is_checked_before_reservation() {
         (8, 64, -1, "+Err(+NegativeSize())"),
         (4611686018427387903, 8, 1, "+Err(+SizeOverflow())"),
     ] {
-        let source = memory::source(&format!(
+        let source = MemoryCase::source(&format!(
             r#"
 match storage/constant/create {count} {alignment}
 | +Err(_) => ! fail

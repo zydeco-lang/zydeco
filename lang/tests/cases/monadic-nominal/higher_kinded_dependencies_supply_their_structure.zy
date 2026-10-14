@@ -1,0 +1,38 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    let run = {
+      fn (P : VType -> CType) (operation : Thk (P Int)) =>
+        begin
+          def Stream : CType =
+            codata
+            | .next : Stream
+            | .done : P Int
+            end
+          that
+          let stream : Thk Stream = {
+            fix self =>
+              do _ <- ret ();
+              comatch
+              | .next => ! self
+              | .done => ! operation
+              end
+          } in
+          ! stream .next .done
+        end
+    } in
+    ! run Ret { ret 1 }
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

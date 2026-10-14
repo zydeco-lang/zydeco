@@ -1,0 +1,5 @@
+begin
+  let duplicate = { fn value => ret (value, value) } that
+  do _ <- ! duplicate ();
+  ret ()
+end

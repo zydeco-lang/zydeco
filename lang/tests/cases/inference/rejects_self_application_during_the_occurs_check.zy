@@ -1,0 +1,6 @@
+-- expect: reject(tyck.occurs-check)
+
+begin
+  let identity = { fn value => ret value } that
+  ! identity identity
+end

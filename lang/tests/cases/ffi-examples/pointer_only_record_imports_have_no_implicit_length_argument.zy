@@ -1,0 +1,6 @@
+let foreign : Thk (Addr -> UInt -> UInt -> UInt -> UInt -> UInt -> Ret UInt) = @(ffi(
+  c,
+  library("zyffi_examples"),
+  symbol("sample_inspect_with_options")
+)) in
+! exit 0

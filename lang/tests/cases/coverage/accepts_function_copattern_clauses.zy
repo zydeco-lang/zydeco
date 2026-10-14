@@ -1,0 +1,14 @@
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  (
+    comatch
+    | +False(_) => ret ()
+    | +True(_) => ret ()
+    end : Bool -> Ret Unit
+  )
+end

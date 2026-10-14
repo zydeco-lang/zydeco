@@ -1,0 +1,51 @@
+-- stage: check-value
+-- prelude: monadic
+
+begin
+  def mo_ret : Thk (Monad Ret) = {
+    comatch
+    | .return A value => ret value
+    | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
+
+  def translated : Thk (Ret Unit) = {
+    (
+      @[monadic] begin
+        let named_identity = {
+          fn ((#item = A) : (#item :: VType))
+            (value : A)
+          =>
+            ret value
+        } in
+        ! named_identity (#item = Unit) ()
+      end
+    )
+      Ret
+      { ! mo_ret }
+  } that
+
+  def translated_polymorphic : Thk (
+    forall ((#item = A) : (#item :: VType)) .
+      Thk Top -> A -> Ret A
+  ) = {
+    (
+      @[monadic] begin
+        do _ <- ret ();
+        fn ((#item = A) : (#item :: VType))
+          (value : A)
+        =>
+          ret value
+      end
+    )
+      Ret
+      { ! mo_ret }
+  } that
+
+  (
+    = translated,
+    = translated_polymorphic
+  )
+end

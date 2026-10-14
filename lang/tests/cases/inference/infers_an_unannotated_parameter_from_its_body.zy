@@ -1,0 +1,4 @@
+begin
+  let consume = { fn value => ! exit value } that
+  ret ()
+end

@@ -1,0 +1,20 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (X : VType) . X * Thk (X -> Ret Int)
+  that
+  def boxed : Box = (
+    Int,
+    0,
+    { fn (x : Int) => ret x }
+  ) that
+
+  {
+    match boxed
+    | (X, value, consume) =>
+      do status <- ! consume value;
+      ret status
+    end
+  }
+end

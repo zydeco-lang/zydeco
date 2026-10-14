@@ -8,7 +8,7 @@ Remove resolved entries once their repair and durable rationale have reached the
 - [Reference drift](reference-drift.md): remaining formal-calculus disagreements and duplicate documentation accounts.
 - [Compiler boundaries](compiler-boundaries.md): product inference, computation-witness diagnostics,
   higher-order value-function inference, source-load error locations, unsupported ZASM execution,
-  and monadic closure validation.
+  monadic closure validation, and partial-annotation scope during formatting.
 
 ## Next pass, reviewed 2026-09-14
 

@@ -1,0 +1,17 @@
+-- stage: run
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int, 0) that
+  def Holder =
+    data
+    | +Hold : Box
+    end
+  that
+  do stored <- ret (+Hold(boxed) : Holder);
+  match stored
+  | +Hold(value) => ! exit 0
+  end
+end

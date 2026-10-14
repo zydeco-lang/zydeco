@@ -1,0 +1,8 @@
+-- expect: reject(tyck.unconstrained-inference)
+
+let identity =
+  begin
+    { fn value => ret value }
+  end
+in
+! identity ()

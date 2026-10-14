@@ -1,0 +1,26 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    def Packed : VType =
+      data
+      | +Packed : exists (B : CType) . Thk B * Thk (Thk B -> Ret Int)
+      end
+    in
+    let packed = (+Packed(Ret Int, ({ ret 1 }, { fn k => ! k })) : Packed) in
+    match packed
+    | +Packed(B, (operation, run)) => ! run operation
+    end
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

@@ -538,6 +538,15 @@ The [cases README](lang/tests/cases/README.md) holds the directive reference;
 Fixtures join the repository Zydeco corpus, so the parser and formatter law tests
 in `zydeco-surface` cover them as well.
 
+For Rust tables with long shared source skeletons,
+use the [template helper](docs/references/compiler.md#source-fixtures-and-runtime-oracles).
+The [memory wrapper](lang/tests/tests/support/memory.rs) shows loading and substituting a `.zy.in` file;
+the focused template checks cover rendering errors and parser/formatter behavior:
+
+```sh
+cargo test -p zydeco-tests --lib --test templates
+```
+
 Run only the WebAssembly cases when working on those backends:
 
 ```sh

@@ -1,0 +1,14 @@
+-- stage: check-value
+
+begin
+  let Mixed =
+    exists (Y as Char : VType) (X : VType) . Y * Int
+  that
+  def packed : Mixed =
+    pack (Y as Char : VType) (X : VType) is Int
+    where
+      ('x' : Y, 42) end
+  that
+
+  packed
+end

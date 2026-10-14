@@ -1,0 +1,5 @@
+begin
+  let apply = { fn thunk => ! thunk () } that
+  do result <- ! apply { fn (_ : Unit) => ret () };
+  ret result
+end

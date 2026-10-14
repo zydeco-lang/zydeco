@@ -1,0 +1,19 @@
+begin
+  let Inner =
+    codata
+    | .left : Ret Unit
+    | .right : Ret Unit
+    end
+  that
+  let Outer =
+    codata
+    | .open : Inner
+    end
+  that
+  (
+    comatch
+    | .open .left => ret ()
+    | .open .right => ret ()
+    end : Outer
+  )
+end

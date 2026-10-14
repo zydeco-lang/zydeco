@@ -1,0 +1,2 @@
+let T = @[typeof] (_ : Int) in
+ret (0 : T)

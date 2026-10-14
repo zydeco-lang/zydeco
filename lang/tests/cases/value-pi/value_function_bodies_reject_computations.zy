@@ -1,0 +1,8 @@
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  let invalid : val pi (_ : Unit) . Unit =
+    val (_ : Unit) => ret ()
+  that
+  ! exit 0
+end

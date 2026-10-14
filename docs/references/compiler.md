@@ -1118,8 +1118,10 @@ Starting a fresh memo at every root would repeatedly traverse shared signature t
 Compiler-owned identity maps use the repository's fast internal hashing;
 changing storage must preserve key-space identity.
 Finalized annotations feed coverage, residualization, and editor facts.
-[Inference](../../lang/tests/tests/inference.rs), [classifier-query](../../lang/tests/tests/typeof.rs),
+[Inference fixtures](../../lang/tests/cases/inference), [classifier-query fixtures](../../lang/tests/cases/typeof),
 and [statics tests](../../lang/statics/tests) cover closure, scope, rejection, and reuse.
+The Rust [inference tests](../../lang/tests/tests/inference.rs) retain import boundaries and numeric matrices;
+[classifier-query tests](../../lang/tests/tests/typeof.rs) retain root classification and source dependencies.
 
 ## C6. Typed Elaboration, Residualization, and Validation
 
@@ -1169,9 +1171,10 @@ The payload is checked once, then translated, finalized, and statically eliminat
 The static evaluator can forward opaque runtime monad dictionaries through known value closures;
 it never executes their structure thunks to recover a type witness.
 Translated terms retain source provenance so residualization failures identify the source construct.
-[Focused regressions](../../lang/tests/tests/monadic_value_functions.rs) cover signatures, witness scope, rejection,
-typed-arena lint, and lowering; the [State fixture](../../lib/tests/monadic/value-functions.zy) checks effect order
-through the interpreter and both Wasm backends.
+[Source fixtures](../../lang/tests/cases/monadic-value-functions) cover signatures, witness scope, and rejection;
+[Rust assertions](../../lang/tests/tests/monadic_value_functions.rs) retain typed-arena lint and lowering checks.
+The [State fixture](../../lib/tests/monadic/value-functions.zy) checks effect order through the interpreter
+and both Wasm backends.
 
 #### Nominal Algebra Construction
 
@@ -1214,9 +1217,10 @@ so dynamic evaluation and inlining use the same generated code and nominal famil
 The `comatch` constructor accepts an expected classifier, exposes its codata shape to check each arm,
 and retains the nominal classifier on the result.
 This keeps codata introductions, observations, algebra signatures, and coverage hints consistent.
-[Nominal regressions](../../lang/tests/tests/monadic_nominal.rs) cover mutual recursion,
-growing type arguments, scoped and higher-kinded dependencies, packages, nested translation,
-applicative equality and rejection, source sharing, and bounded family counts on a 160-declaration cycle.
+[Nominal fixtures](../../lang/tests/cases/monadic-nominal) cover mutual recursion, growing type arguments,
+scoped and higher-kinded dependencies, packages, nested translation, and applicative equality and rejection.
+[Rust regressions](../../lang/tests/tests/monadic_nominal.rs) retain typed-arena lint,
+lowering, source sharing, and bounded family counts on a 160-declaration cycle.
 The [State fixture](../../lib/tests/monadic/nominal-types.zy) checks runtime dictionary selection,
 finite protocol observations, and absence of eager effects in the interpreter, native backend, and both Wasm backends.
 
@@ -1266,7 +1270,7 @@ and duplicate typed destructors.
 Diagnostics retain at most eight uncovered witnesses and probe for a ninth to mark truncation.
 That bounds reported evidence, not the coverage decision.
 Normalization and local errors prevent malformed rows from reaching this pass.
-[Coverage tests](../../lang/tests/tests/coverage.rs) pair accepted matrices with correlated gaps,
+[Coverage fixtures](../../lang/tests/cases/coverage) pair accepted matrices with correlated gaps,
 empty types, and nested observation failures.
 [Remaining pattern decisions](../proposals/exhaustiveness.md) cover usefulness, literal matching extensions,
 and refutable conjunctions.
@@ -1305,8 +1309,10 @@ exhausted witness inspection supplies no evidence.
 Both linking and SPS lowering select the stored residual root.
 [ExecutionReadiness](../../lang/statics/src/validate) rejects reachable executable holes before effects;
 typed holes may still be inspected during ordinary checking.
-[Static-elimination regressions](../../lang/tests/tests/static_elimination.rs) distinguish erased library structure,
-runtime payloads, shared runtime data, and failed evidence recovery.
+[Static-elimination fixtures](../../lang/tests/cases/static-elimination) distinguish erased library structure,
+runtime payloads, and failed evidence recovery.
+[Rust regressions](../../lang/tests/tests/static_elimination.rs) inspect residual sharing and source facts,
+retain lint and lowering assertions, and generate boundary and reduction-limit matrices.
 
 ### Residual Runtime Traversal
 
@@ -3361,15 +3367,35 @@ the [case guide](../../lang/tests/cases/README.md) is the directive reference.
 Unknown, duplicated, or inapplicable directives fail a trial instead of weakening its expectation.
 Diagnostic spellings are parsed beside their stable compiler codes and round-trip through that shared catalog.
 Fixtures also enter the parser/formatter corpus,
-so a source edit needs neither manual registration nor a Rust recompilation.
+so standalone trials need neither manual registration nor a Rust recompilation after source edits.
 
 Topic paths name the regression; directives name its phase and expected outcome.
 This avoids renaming tests when their stage changes and avoids coupling semantic assertions to rendered error prose.
 Using the trial runner directly keeps naming and directive validation explicit.
 Rendered-diagnostic snapshots can be added for a distinct presentation contract.
+Table-driven `for` loops retain their sources and assertions together in Rust,
+whether their input lists are handwritten or generated.
 Multi-file imports, arena mutation, desugared-variant assertions, emitted-code structure,
 process arguments, and I/O remain Rust tests or whole-program fixtures
 because a single-fragment expectation cannot express those relationships.
+
+Long shared program skeletons can obscure the varying inputs in a Rust table.
+Keep those skeletons in [`.zy.in` templates](../../lang/tests/templates), loaded with `include_str!`
+and rendered by [`SourceTemplate`](../../lang/tests/src/template.rs).
+Rust still owns loops, case data, diagnostic codes, and assertions; concrete single cases remain `.zy` fixtures.
+Templates provide named textual substitutions only, with no loops or conditionals.
+`${name}` selects a parameter whose name is an ASCII identifier; ordinary Zydeco braces remain literal.
+Each distinct parameter requires exactly one argument, even when it appears repeatedly.
+Malformed placeholders and missing, unused, or duplicate arguments return structured errors before rendering.
+Substitutions are copied verbatim without escaping or recursive expansion, so callers supply valid source text,
+including any string-literal escaping their inputs require.
+
+The memory and effects wrappers are the initial template users.
+Their rendered programs go through the existing source harness, preserving each Rust test's pipeline checks.
+[Template integration tests](../../lang/tests/tests/templates.rs) also pair an accepted body
+with an exact-code rejection, then check both expectations after formatting and verify formatter idempotence.
+Raw `.zy.in` files are skeletons rather than complete Zydeco terms, so only their rendered sources enter these checks;
+they are not discovered as standalone case fixtures or parser/formatter corpus files.
 
 [The shared harness](../../lang/tests/src/lib.rs) supplies check, runtime, and end-to-end registrations.
 Whole-program tests declare their backends, input, arguments, expected output,

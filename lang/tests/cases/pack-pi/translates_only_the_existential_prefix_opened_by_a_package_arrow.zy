@@ -1,0 +1,24 @@
+-- stage: check-value
+-- prelude: monadic
+
+begin
+  let Inner =
+    exists (Y : VType) . Y
+  that
+
+  let NestedBox =
+    exists (X : VType) . X * Inner
+  that
+
+  def translated = {
+    @[monadic] begin
+      let first = {
+        do _ <- ret ();
+        fn ((X, value, _) : NestedBox) => ret value
+      } in
+      ! first (Unit, (), (Unit, ()))
+    end
+  } that
+
+  translated
+end

@@ -1,0 +1,10 @@
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  let impossible = {
+    fn value =>
+      let (_ : Unit) = value in
+      ! exit value
+  } that
+  ret ()
+end

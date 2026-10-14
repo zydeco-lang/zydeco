@@ -1,0 +1,37 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    def Left : VType =
+      data
+      | +Done : Int
+      | +Right : Right
+      end
+    that
+    def Right : VType =
+      data
+      | +Left : Left
+      end
+    that
+    let item = (+Right(+Left(+Done(1))) : Left) in
+    match item
+    | +Done(n) => ret n
+    | +Right(+Left(tail)) =>
+      match tail
+      | +Done(n) => ret n
+      | +Right(_) => ret 0
+      end
+    end
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

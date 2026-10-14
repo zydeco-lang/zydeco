@@ -1,0 +1,23 @@
+-- expect: reject(tyck.coverage)
+
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let Box =
+    exists (A : VType) . Bool
+  that
+  let Service =
+    codata
+    | .inspect : pi ((A, _) : Box) . Ret Unit
+    end
+  that
+  (
+    comatch
+    | .inspect ((A, +True(_)) : Box) => ret ()
+    end : Service
+  )
+end

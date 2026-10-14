@@ -37,10 +37,14 @@ end
 
 Use a fixture for one source fragment, one stage, and one structured expectation.
 New source rejection regressions should normally start here; migrate existing inline cases when touching their topic.
+Keep `for`-loop-based tables in Rust, including handwritten source lists as well as generated matrices,
+so their inputs and assertions remain together.
 Keep multi-file imports, desugared-variant checks, arena mutation, emitted-code structure, process arguments,
 and exact I/O in the Rust harness, which can express their relationships.
+When a fixture also needs typed-arena linting or cross-stage assertions, load it with `include_str!`
+in Rust and leave its declared source-level expectation to this runner.
 The [compiler reference](../../../docs/references/compiler.md#source-fixtures-and-runtime-oracles) explains discovery,
-diagnostic-code ownership, and runtime oracles.
+diagnostic-code ownership, runtime oracles, and the `.zy.in` template helper for long shared Rust-test skeletons.
 
 Possible argument, exit, and desugaring-rejection directives are tracked
 in [deferred designs](../../../docs/ideas/fixture-directives.md).

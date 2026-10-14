@@ -1,0 +1,18 @@
+-- stage: run
+
+begin
+  let Box = exists (A : VType) . A that
+  let Wrapped =
+    data
+    | +Wrap : Int
+    end
+  that
+  let val box (wrapped : Wrapped) : Box =
+    let +Wrap(value) = wrapped in
+    (Int, value)
+  that
+  let val take ((A, value) : Box) : A = value that
+  do wrapped <- ret (+Wrap(0) : Wrapped);
+  let status : Int = take (box wrapped) in
+  ! exit status
+end

@@ -1,0 +1,20 @@
+-- stage: check-value
+
+begin
+  def selective = {
+    fn
+      (
+        (
+          /VType = SelectedVType;
+          /String = SelectedString;
+          /string;
+          builtin
+        ) : Builtin
+      )
+    =>
+      let Selected : SelectedVType = SelectedString in
+      ! string/append "" ""
+  } that
+
+  selective
+end

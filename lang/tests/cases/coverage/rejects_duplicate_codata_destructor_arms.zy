@@ -1,0 +1,17 @@
+-- expect: reject(tyck.overlapping-copattern-clauses)
+
+begin
+  let Choice =
+    codata
+    | .left : Ret Unit
+    | .right : Ret Unit
+    end
+  that
+  (
+    comatch
+    | .left => ret ()
+    | .left => ret ()
+    | .right => ret ()
+    end : Choice
+  )
+end

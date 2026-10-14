@@ -1,0 +1,6 @@
+-- expect: reject(tyck.invalid-binding-cycle)
+
+begin
+  let val loop (value : Unit) : Unit = value |> loop that
+  ! exit 0
+end

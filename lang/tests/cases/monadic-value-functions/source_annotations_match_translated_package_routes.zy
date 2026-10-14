@@ -1,0 +1,23 @@
+-- prelude: monadic
+
+let Box = exists (A : VType) (B : CType) . A * Thk B in
+let Translated = @[typeof] @[monadic]
+fn (factory : val pi ((A, B, (_, k)) : Box) . Thk B) => ret () in
+let Implementation = @[typeof] (
+  {
+    fn (M : VType -> CType) (mo : Thk (Monad M))
+      (
+        factory : val pi
+          (
+            (A, (_, (B, (_, (_, k))))) : exists (A : VType) .
+                Thk Top
+              * (exists (B : CType) . Thk (Algebra M B) * (A * Thk B))
+          )
+        .
+          Thk B
+      )
+    =>
+      ! mo .return Unit ()
+  } : Thk Translated
+) in
+ret ()

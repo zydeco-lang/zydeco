@@ -1,0 +1,21 @@
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let Observer =
+    codata
+    | .choose : Bool -> Ret Unit
+    | .reset : Ret Unit
+    end
+  that
+  (
+    comatch
+    | .choose +False(_) => ret ()
+    | .choose +True(_) => ret ()
+    | .reset => ret ()
+    end : Observer
+  )
+end

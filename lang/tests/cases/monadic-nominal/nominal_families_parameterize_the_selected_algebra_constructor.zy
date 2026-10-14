@@ -1,0 +1,12 @@
+-- prelude: monadic
+
+fn (Selected : (VType -> CType) -> CType -> CType) =>
+  let Algebra = Selected in
+  @[monadic] begin
+    def Packed : VType =
+      data
+      | +Packed : exists (B : CType) . Thk B
+      end
+    in
+    fn (packed : Packed) => ret ()
+  end

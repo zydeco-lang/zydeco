@@ -1,0 +1,16 @@
+-- stage: check-value
+
+begin
+  let Core =
+    exists (OS : CType) . Unit
+  that
+
+  let Binary =
+    pi ((OS, _) : Core) . OS
+  that
+
+  let Export =
+    exists (BinaryType as Binary : CType) . Unit
+  that
+  (Binary, ()) : Export
+end

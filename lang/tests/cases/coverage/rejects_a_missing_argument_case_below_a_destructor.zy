@@ -1,0 +1,20 @@
+-- expect: reject(tyck.coverage)
+
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let Observer =
+    codata
+    | .choose : Bool -> Ret Unit
+    end
+  that
+  (
+    comatch
+    | .choose +True(_) => ret ()
+    end : Observer
+  )
+end

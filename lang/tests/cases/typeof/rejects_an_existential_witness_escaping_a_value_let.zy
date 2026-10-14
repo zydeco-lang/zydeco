@@ -1,0 +1,11 @@
+-- expect: reject(tyck.escaping-existential)
+
+begin
+  let Box = exists (X : VType) . X that
+  let boxed : Box = (Int, 0) that
+  let Leaked = @[typeof] (
+    let (X, value) = boxed in
+    value
+  ) that
+  ret ()
+end

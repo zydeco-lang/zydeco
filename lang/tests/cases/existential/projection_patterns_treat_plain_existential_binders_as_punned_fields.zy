@@ -1,0 +1,13 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (Item : VType) .
+      (#value :: Item)
+  that
+  def boxed : Box = (Int, #value = 42) that
+
+  let (/Item; /value) = boxed in
+  def selected : Item = value in
+  ()
+end

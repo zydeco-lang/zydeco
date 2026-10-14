@@ -1,0 +1,20 @@
+-- stage: check-value
+
+begin
+  def Switch =
+    data
+    | +Off : Unit
+    | +On : Unit
+    end
+  that
+  let Library =
+    exists (B : VType) . (#value :: B)
+  that
+  def library : Library =
+    pack (B : VType) is Switch
+    where
+      (#value = +On()) : (#value :: B) end
+  that
+
+  library
+end

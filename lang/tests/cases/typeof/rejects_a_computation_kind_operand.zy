@@ -1,0 +1,4 @@
+-- expect: reject(tyck.typeof-kind)
+
+let K = @[typeof] CType in
+ret ()

@@ -1,0 +1,24 @@
+-- stage: check-value
+-- expect: reject(tyck.package-witnesses-unavailable)
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+
+  let Unbox =
+    pi ((X, _) : Box) . Ret X
+  that
+
+  def unbox : Thk Unbox = {
+    fn ((X, value) : Box) => ret value
+  } that
+
+  def hidden : Thk (Box -> Ret Int) = {
+    fn (boxed : Box) =>
+      do _ <- ! unbox boxed;
+      ret 0
+  } that
+
+  hidden
+end

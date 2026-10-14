@@ -1,0 +1,38 @@
+-- stage: run
+-- prelude: monadic
+
+begin
+  def mo_ret : Thk (Monad Ret) = {
+    comatch
+    | .return A value =>
+      ret value
+    | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
+  begin
+    let Inner =
+      exists (Y : VType) . Y
+    that
+
+    let NestedBox =
+      exists (X : VType) . X * Inner
+    that
+
+    def translated = {
+      @[monadic] begin
+        do _ <- ret ();
+        fn ((X, value, _) : NestedBox) => ret value
+      end
+    } that
+
+    do value <- ! translated Ret { ! mo_ret } (
+      Int,
+      triv,
+      (41, (Unit, triv, ()))
+    );
+    do status <- ! api/int/sub value 41;
+    ! exit status
+  end
+end

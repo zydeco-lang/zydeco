@@ -1,0 +1,4 @@
+-- expect: reject(tyck.integer-literal-out-of-range)
+
+let value : Int8 = 128 in
+ret value

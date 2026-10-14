@@ -1,0 +1,30 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    let make : val pi (B : CType) . Thk (Thk B -> B) =
+      val (Result : CType) =>
+        {
+          fn (k : Thk Result) =>
+            do _ <- ret ();
+            ! k
+        }
+    in
+    let val apply (factory : val pi (B : CType) . Thk (Thk B -> B)) =
+      factory (Ret Int)
+    in
+    let specialized = apply make in
+    ! specialized { ret 1 }
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

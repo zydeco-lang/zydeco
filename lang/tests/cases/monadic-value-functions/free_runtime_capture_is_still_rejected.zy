@@ -1,0 +1,11 @@
+-- prelude: monadic
+-- expect: reject(tyck.not-inlinable)
+
+fn (captured : Int) =>
+  @[monadic]
+  let val make (B : CType) = {
+    fn (k : Thk B) =>
+      do _ <- ret captured;
+      ! k
+  } in
+  ! (make (Ret Int)) { ret 1 }

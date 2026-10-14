@@ -1,0 +1,15 @@
+-- stage: run
+
+begin
+  let Transform = val pi (_ : Int) . Int that
+  let val keep (A : VType) (value : A) : A = value that
+  let val twice (function : Transform) : Transform =
+    val (value : Int) => function (function value)
+  that
+  let Package = exists (A : VType) . (val pi (_ : A) . A) * A that
+  let val forward (package : Package) : Package = package that
+  let package : Package = (Int, twice (keep Int), 0) that
+  let (A, transform, value) = forward package that
+  let transformed : A = transform value that
+  ! exit 0
+end

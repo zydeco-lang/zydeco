@@ -233,14 +233,3 @@ fn failed_patterns_do_not_invent_bindings_for_their_bodies() {
     );
     SourceCase::assert_accepted(SourceCase::check_linted("ret (match 0 | 0 => 1 | _ => 2 end)"));
 }
-
-#[test]
-fn an_oversized_package_payload_is_rejected_before_indexing_its_expected_components() {
-    SourceCase::assert_rejected(
-        SourceCase::check_value("((Int, 1, 2, 3, 4) : exists (A : VType) . A * A)"),
-        TyckDiagnosticCode::TypeExpected,
-    );
-    SourceCase::assert_accepted(SourceCase::check_value(
-        "((Int, 1, 2) : exists (A : VType) . A * A)",
-    ));
-}

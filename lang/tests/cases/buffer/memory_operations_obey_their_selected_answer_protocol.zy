@@ -1,0 +1,7 @@
+-- expect: reject(tyck.type-mismatch)
+
+let (/memory) = builtin in
+let pure : Thk (Ret Unit) = {
+  ! memory/allocate OS 4 4 { fn _ => ! exit 1 } { fn _ => ! exit 0 }
+} in
+! exit 0

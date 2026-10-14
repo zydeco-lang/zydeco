@@ -1,0 +1,4 @@
+-- expect: reject(tyck.unconstrained-inference)
+
+let Signature = @[typeof] fn value => ret value in
+ret ()

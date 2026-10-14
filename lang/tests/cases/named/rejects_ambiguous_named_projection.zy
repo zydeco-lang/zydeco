@@ -1,0 +1,8 @@
+-- stage: check-value
+-- expect: reject(tyck.duplicate-named-field)
+
+begin
+  let DuplicateFields = (#x :: Int) * (#x :: Int) that
+  def duplicate : DuplicateFields = (#x = 0, #x = 1) that
+  duplicate/x
+end

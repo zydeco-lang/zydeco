@@ -1,0 +1,19 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+
+  let Unbox =
+    pi ((X, _) : Box) . Ret X
+  that
+
+  def unbox : Thk Unbox = {
+    fn ((X, value) : Box) => ret value
+  } that
+
+  def boxed : Box = (Int, 41) that
+
+  { ! unbox boxed }
+end

@@ -1,0 +1,8 @@
+-- stage: run
+
+begin
+  do captured <- ret 0;
+  let val constant (_ : Unit) : Int = captured in
+  let status = () |> constant in
+  ! exit status
+end

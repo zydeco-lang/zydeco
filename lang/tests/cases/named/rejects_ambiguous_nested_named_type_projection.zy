@@ -1,0 +1,10 @@
+-- stage: check-value
+-- expect: reject(tyck.ambiguous-named-type-field)
+
+begin
+  let DuplicateFields : (#x :: #x :: VType) =
+    (#x = #x = Int)
+  that
+  let InvalidProjection : VType = DuplicateFields/x that
+  ()
+end

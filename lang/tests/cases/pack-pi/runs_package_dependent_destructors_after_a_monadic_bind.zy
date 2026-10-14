@@ -1,0 +1,41 @@
+-- stage: run
+-- prelude: monadic
+
+begin
+  def mo_ret : Thk (Monad Ret) = {
+    comatch
+    | .return A value =>
+      ret value
+    | .bind A B computation continuation =>
+      do value <- ! computation;
+      ! continuation value
+    end
+  } that
+  begin
+    let Box =
+      exists (X : VType) . X
+    that
+
+    let Service : CType =
+      codata
+      | .unbox : pi ((X, _) : Box) . Ret X
+      end
+    that
+
+    def translated = {
+      @[monadic] begin
+        do _ <- ret ();
+        (
+          comatch
+          | .unbox =>
+            fn ((X, value) : Box) => ret value
+          end : Service
+        )
+      end
+    } that
+
+    do value <- ! translated Ret { ! mo_ret } .unbox (Int, triv, 41);
+    do status <- ! api/int/sub value 41;
+    ! exit status
+  end
+end

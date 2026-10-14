@@ -1,0 +1,20 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists ((#item = A) : (#item :: VType)) .
+      A
+  that
+
+  let Reveal =
+    pi ((#item = A, _) : Box) . Ret A
+  that
+
+  def reveal : Thk Reveal = {
+    fn ((#item = A, value) : Box) => ret value
+  } that
+
+  def boxed : Box = (#item = Int, 41) that
+
+  { ! reveal boxed }
+end

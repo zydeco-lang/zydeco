@@ -1,0 +1,3 @@
+-- expect: reject(tyck.sort-mismatch)
+
+ret (@[typeof] 1)

@@ -1,0 +1,8 @@
+-- stage: run
+
+begin
+  let val apply_twice (function : val pi (_ : Unit) . Unit) : Unit =
+    () |> function
+  that
+  ! exit 0
+end

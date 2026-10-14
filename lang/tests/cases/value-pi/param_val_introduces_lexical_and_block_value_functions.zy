@@ -1,0 +1,15 @@
+-- stage: run
+
+begin
+  let lexical : val pi (value : Unit) . Unit =
+    param val value : Unit in
+    value
+  that
+  let mobile : val pi (value : Unit) . Unit = begin
+    param val value : Unit that
+    value
+  end that
+  let first : Unit = () |> lexical that
+  let second : Unit = first |> mobile that
+  ! exit 0
+end

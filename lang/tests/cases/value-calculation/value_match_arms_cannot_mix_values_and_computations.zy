@@ -1,0 +1,9 @@
+-- expect: reject(tyck.type-mismatch)
+
+let selected =
+  match (0 : Int)
+  | 0 => 1
+  | _ => ret 2
+  end
+in
+! exit 0

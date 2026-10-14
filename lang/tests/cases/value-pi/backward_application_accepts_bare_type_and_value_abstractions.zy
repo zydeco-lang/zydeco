@@ -1,0 +1,8 @@
+-- stage: run
+
+let Apply (F : VType -> VType) = F Unit in
+let Applied = Apply <| fn (A : VType) => A * Int in
+let val apply (f : val pi (_ : Int) . Int) : Int = f 0 in
+let value = apply <| val (value : Int) => value in
+let ((), status) : Applied = ((), value) in
+! exit status

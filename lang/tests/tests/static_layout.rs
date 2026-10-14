@@ -1,5 +1,6 @@
 #[path = "support/memory.rs"]
 mod memory;
+use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::{e2e_sources, utils::SourceCase};
 
@@ -11,7 +12,7 @@ struct LayoutCase;
 
 impl LayoutCase {
     fn source(body: &str) -> String {
-        memory::source(body)
+        MemoryCase::source(body)
     }
 
     fn accepts(expression: &str, pattern: &str) {

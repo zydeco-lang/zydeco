@@ -1,0 +1,11 @@
+-- stage: run
+
+begin
+  let Box = exists (A : VType) . A that
+  let val keep (A : VType) (value : A) : A = value that
+  let val pair ((A, first) : Box, (B, second) : Box) : A * B = (first, second) that
+  let arguments = keep (Box * Box) ((Int, 0), (Unit, ())) that
+  let result : Int * Unit = pair arguments that
+  let (status, _) = result that
+  ! exit status
+end

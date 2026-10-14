@@ -1,0 +1,13 @@
+-- stage: check-value
+-- expect: reject(tyck.duplicate-named-field)
+
+begin
+  let Box =
+    exists (Item : VType) .
+      (#Item :: Item)
+  that
+  def boxed : Box = (Int, #Item = 42) that
+
+  let (/Item) = boxed in
+  ()
+end

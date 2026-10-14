@@ -1,0 +1,20 @@
+-- stage: check-value
+
+begin
+  def Switch =
+    data
+    | +Off : Unit
+    | +On : Unit
+    end
+  that
+  let CounterLibrary =
+    exists (#Counter = Representation : VType) . (#zero :: Representation)
+  that
+  def library : CounterLibrary =
+    pack (#Counter = Representation : VType) is Switch
+    where
+      #zero = +Off() : Switch end
+  that
+
+  library
+end

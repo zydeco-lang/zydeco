@@ -1,0 +1,8 @@
+let Choice =
+  data
+  | +Here : Unit
+  | +There : Unit
+  end
+in
+let T = @[typeof] (+Here() : Choice) in
+ret (+There() : T)

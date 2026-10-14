@@ -1,0 +1,40 @@
+-- stage: run
+-- prelude: monadic
+
+let first_mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+let second_mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+let program = {
+  @[monadic] begin
+    def Box : VType =
+      data
+      | +Box : Int
+      end
+    in
+    ret (+Box(1) : Box)
+  end
+} in
+do runtime_mo <- ! int/eq (Ret (Thk (Monad Ret))) 1 1
+  { ret first_mo } { ret second_mo };
+do first <- ! program Ret first_mo;
+do second <- ! program Ret runtime_mo;
+let T = @[typeof] first in
+let same : T = second in
+match same
+| +Box(value) =>
+  do status <- ! int/sub value 1;
+  ! exit status
+end

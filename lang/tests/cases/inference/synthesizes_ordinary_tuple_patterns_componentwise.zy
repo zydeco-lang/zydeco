@@ -1,0 +1,5 @@
+begin
+  let swap = { fn (first, second) => ret (second, first) } that
+  do _ <- ! swap ((), ());
+  ret ()
+end

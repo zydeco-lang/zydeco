@@ -1,0 +1,12 @@
+-- stage: run
+
+begin
+  let Box = exists (A : VType) . A that
+  let val take_second
+    (_ : Box, (B, value) : Box)
+  : B =
+      value
+  that
+  let status : Int = ((Unit, ()), (Int, 0)) |> take_second that
+  ! exit status
+end

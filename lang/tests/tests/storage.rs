@@ -1,5 +1,6 @@
 #[path = "support/memory.rs"]
 mod memory;
+use memory::MemoryCase;
 
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::SourceCase;
@@ -13,11 +14,11 @@ fn storage_geometry_is_validated_and_sealed() {
         (8, 0, "+Err(+InvalidAlignment())"),
         (8, 3, "+Err(+InvalidAlignment())"),
     ] {
-        SourceCase::assert_accepted(SourceCase::run(&memory::source(&format!(
+        SourceCase::assert_accepted(SourceCase::run(&MemoryCase::source(&format!(
             "match storage/constant/create {count} {alignment} \
              | {pattern} => ! exit 0 | _ => ! exit 1 end"
         ))));
-        SourceCase::assert_accepted(SourceCase::run(&memory::source(&format!(
+        SourceCase::assert_accepted(SourceCase::run(&MemoryCase::source(&format!(
             "do checked <- ! storage/runtime/create {count} {alignment}; \
              match checked | {pattern} => ! exit 0 | _ => ! exit 1 end"
         ))));
@@ -33,10 +34,10 @@ fn storage_geometry_is_validated_and_sealed() {
             TyckDiagnosticCode::TypeMismatch,
         ),
     ] {
-        SourceCase::assert_rejected(SourceCase::check(&memory::source(body)), code);
+        SourceCase::assert_rejected(SourceCase::check(&MemoryCase::source(body)), code);
     }
     SourceCase::assert_rejected(
-        SourceCase::check(&memory::source(
+        SourceCase::check(&MemoryCase::source(
             "let build : Thk (Int -> OS) = { fn count => \
          let checked = storage/constant/create count 8 in ! exit 0 } in ! exit 0",
         )),
@@ -49,7 +50,7 @@ fn codecs_require_matching_states_values_and_layout_witnesses() {
     let prefix = "match storage/constant/create 8 8 | +Err(_) => ! fail | +Ok(= L, layout) => \
         let codec = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in \
         ! (allocation/reserve L Unit allocation/static_heap () layout) OS no { fn vacant => ";
-    let source = |body: &str| memory::source(&format!("{prefix} {body} }} end"));
+    let source = |body: &str| MemoryCase::source(&format!("{prefix} {body} }} end"));
     let valid = "! (codec/init vacant (7 : Int64)) OS { fn initialized => \
         ! (codecs/unsafe/take L Int64 codec initialized) OS { fn vacant _ => \
         ! (allocation/unsafe/release L Unit allocation/static_heap () layout vacant) OS no { ! exit 0 } } }";

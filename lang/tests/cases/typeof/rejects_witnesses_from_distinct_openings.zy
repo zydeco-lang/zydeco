@@ -1,0 +1,10 @@
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  let Box = exists (X : VType) . X that
+  let boxed : Box = (Int, 0) that
+  let (X, first) = boxed in
+  let (Y, second) = boxed in
+  let wrong : @[typeof] first = second in
+  ret ()
+end

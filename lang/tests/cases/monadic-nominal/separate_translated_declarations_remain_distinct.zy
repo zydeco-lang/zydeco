@@ -1,0 +1,26 @@
+-- prelude: monadic
+-- expect: reject(tyck.type-mismatch)
+
+fn (mo : Thk (Monad Ret)) =>
+  do first <- (
+    @[monadic] begin
+      def Box : VType =
+        data
+        | +Box : Int
+        end
+      in
+      ret (+Box(1) : Box)
+    end
+  ) Ret mo;
+  do second <- (
+    @[monadic] begin
+      def Box : VType =
+        data
+        | +Box : Int
+        end
+      in
+      ret (+Box(1) : Box)
+    end
+  ) Ret mo;
+  let First = @[typeof] first in
+  ret (second : First)

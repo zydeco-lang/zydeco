@@ -1,0 +1,21 @@
+-- stage: run
+
+let Choice =
+  data
+  | +Left : Int * Int
+  | +Right : Unit
+  end
+in
+let val first ((left, _) : Int * Int) : Int = left in
+let f : Thk (Int -> Ret Int) = {
+  fn x =>
+    let selected =
+      match (+Left(x, 3) : Choice)
+      | +Right() => 1
+      | +Left(first ~> result) => result
+      end
+    in
+    ret selected
+} in
+do result <- ! f 0;
+! exit result

@@ -1,0 +1,10 @@
+-- expect: reject(tyck.missing-annotation)
+
+let Choice =
+  data
+  | +Here : Unit
+  | +There : Unit
+  end
+in
+let T = @[typeof] +Here() in
+ret ()

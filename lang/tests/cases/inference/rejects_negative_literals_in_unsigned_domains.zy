@@ -1,0 +1,4 @@
+-- expect: reject(tyck.integer-literal-out-of-range)
+
+let value : UInt8 = -1 in
+ret value

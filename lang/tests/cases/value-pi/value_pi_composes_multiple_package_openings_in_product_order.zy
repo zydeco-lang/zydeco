@@ -1,0 +1,14 @@
+-- stage: run
+
+begin
+  let Box = exists (A : VType) . A that
+  let val unpack_both
+    ((A, left) : Box, (B, right) : Box)
+  : A * B =
+      (left, right)
+  that
+  let (_ : Unit, status : Int) =
+    ((Unit, ()), (Int, 0)) |> unpack_both
+  that
+  ! exit status
+end

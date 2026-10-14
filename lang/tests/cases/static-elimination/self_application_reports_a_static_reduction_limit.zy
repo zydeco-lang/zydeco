@@ -1,0 +1,8 @@
+-- expect: reject(tyck.static-elimination)
+
+begin
+  def Self : VType = val pi (_ : Self) . Unit that
+  let loop : Self = val (function : Self) => function function that
+  let result = loop loop in
+  ! exit 0
+end

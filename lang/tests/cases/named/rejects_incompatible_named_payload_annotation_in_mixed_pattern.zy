@@ -1,0 +1,16 @@
+-- stage: check-value
+-- expect: reject(tyck.type-expected)
+
+begin
+  let Mixed = (#left :: Int) * (Int * (#right :: Int)) that
+  def value : Mixed = (#left = 1, 2, #right = 3) that
+  let (
+    = left : String,
+    middle : Int,
+    = right : Int
+  )
+  =
+    value
+  in
+  (left, middle, right)
+end

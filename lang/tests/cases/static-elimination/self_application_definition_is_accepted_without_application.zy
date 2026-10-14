@@ -1,0 +1,5 @@
+begin
+  def Self : VType = val pi (_ : Self) . Unit that
+  let loop : Self = val (function : Self) => function function that
+  ! exit 0
+end

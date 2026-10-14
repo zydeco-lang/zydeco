@@ -1,0 +1,12 @@
+-- stage: run
+
+begin
+  let val suspend (A : VType) (value : A) : Thk (Ret A) = { ret value } that
+  do captured <- ret 0;
+  let integer = suspend Int captured in
+  let unit = suspend Unit () in
+  let captured : Int = 1 in
+  do ignored <- ! unit;
+  do status <- ! integer;
+  ! exit status
+end

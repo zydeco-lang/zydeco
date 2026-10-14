@@ -1,0 +1,15 @@
+-- stage: check-value
+
+begin
+  def named_identity : Thk (
+    forall ((#item = A) : (#item :: VType)) .
+      A -> Ret A
+  ) = {
+    fn ((#item = A) : (#item :: VType))
+      (value : A)
+    =>
+      ret value
+  } that
+
+  { ! named_identity (#item = Int) 0 }
+end

@@ -1,0 +1,9 @@
+begin
+  def Node : @[typeof] Int =
+    data
+    | +End : Unit
+    | +Next : Node
+    end
+  that
+  ret (+End() : Node)
+end

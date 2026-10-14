@@ -1,0 +1,12 @@
+-- expect: reject(tyck.missing-annotation)
+
+begin
+  let Optional =
+    data
+    | +None : Unit
+    | +Some : Unit
+    end
+  that
+  let unwrap = { fn +Some(value) => ret value } that
+  ret ()
+end

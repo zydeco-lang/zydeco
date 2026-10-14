@@ -1,0 +1,6 @@
+begin
+  let identity = { fn value => ret value } that
+  let Signature = @[typeof] identity that
+  let replacement : Signature = { fn (value : Int) => ret value } that
+  ! identity 0
+end

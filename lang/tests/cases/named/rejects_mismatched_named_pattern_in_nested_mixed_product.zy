@@ -1,0 +1,15 @@
+-- stage: check-value
+-- expect: reject(tyck.named-label-mismatch)
+
+begin
+  let Nested = ((#left :: Int) * Int) * (#right :: Int) that
+  def value : Nested = ((#left = 1, 2), #right = 3) that
+  let (
+    (#wrong = left : Int, middle : Int),
+    = right : Int
+  )
+  =
+    value
+  in
+  (left, middle, right)
+end

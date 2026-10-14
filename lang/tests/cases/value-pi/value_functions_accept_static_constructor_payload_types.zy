@@ -1,0 +1,10 @@
+-- stage: run
+
+begin
+  let Stored =
+    data
+    | +Wrap : val pi (_ : Unit) . Unit
+    end
+  that
+  ! exit 0
+end

@@ -1,0 +1,7 @@
+-- expect: reject(tyck.sort-mismatch)
+
+let T = (
+  let x = 1 in
+  @[typeof] x
+) in
+ret ()

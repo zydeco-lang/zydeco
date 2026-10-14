@@ -1,0 +1,5 @@
+let T = @[typeof] (
+  let x = 1 in
+  x
+) in
+ret (0 : T)

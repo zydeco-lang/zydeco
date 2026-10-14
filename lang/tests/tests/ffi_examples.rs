@@ -61,17 +61,15 @@ end
 
 #[test]
 fn checksum_has_a_direct_foreign_classifier() {
-    SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
-        "sample_checksum",
-        "Thk (Addr -> Int -> UInt64 -> Ret UInt64)",
+    SourceCase::assert_accepted(SourceCase::check_linted(include_str!(
+        "../cases/ffi-examples/checksum_has_a_direct_foreign_classifier.zy"
     )));
 }
 
 #[test]
 fn pointer_only_record_imports_have_no_implicit_length_argument() {
-    SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
-        "sample_inspect_with_options",
-        "Thk (Addr -> UInt -> UInt -> UInt -> UInt -> UInt -> Ret UInt)",
+    SourceCase::assert_accepted(SourceCase::check_linted(include_str!(
+        "../cases/ffi-examples/pointer_only_record_imports_have_no_implicit_length_argument.zy"
     )));
 }
 
@@ -107,9 +105,8 @@ fn a_logical_product_does_not_select_the_c_record_value_abi() {
 
 #[test]
 fn raw_mutable_destinations_are_supported_and_capturing_callbacks_remain_unsupported() {
-    SourceCase::assert_accepted(SourceCase::check_linted(&ForeignExamples::declaration(
-        "sample_write",
-        "Thk (Addr -> UInt8 -> UInt32 -> Ret Int32)",
+    SourceCase::assert_accepted(SourceCase::check_linted(include_str!(
+        "../cases/ffi-examples/raw_mutable_destinations_are_supported.zy"
     )));
     ForeignExamples::rejects(
         &ForeignExamples::declaration(

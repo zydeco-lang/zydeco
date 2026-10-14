@@ -1,0 +1,8 @@
+-- stage: run
+
+let Box = exists (A : VType) . A * (exists (B : VType) . B) in
+let take : val pi ((A, (_, (B, value))) : Box) . B =
+  val ((X, (_, (Y, value))) : Box) => value
+in
+let status : Int = take (Unit, ((), (Int, 0))) in
+! exit status

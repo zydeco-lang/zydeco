@@ -1,0 +1,4 @@
+-- expect: reject(tyck.type-mismatch)
+
+let value : @[typeof] 1 = (2 : Int8) in
+ret value

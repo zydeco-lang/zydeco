@@ -1,0 +1,14 @@
+-- stage: run
+
+let add = @(intrinsic(int_add)) in
+let compare = @(intrinsic(int_compare)) in
+let sub = @(intrinsic(int_sub)) in
+let val maximum (a : Int) (b : Int) : Int =
+  match compare a b
+  | -1 => b
+  | _ => a
+  end
+in
+let val apply (f : val pi (x : Int) . Int) (x : Int) : Int = f x in
+let answer = apply (maximum 16) (add 5 11) in
+! exit (sub answer 16)

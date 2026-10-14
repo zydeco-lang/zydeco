@@ -1,0 +1,20 @@
+-- stage: check-value
+
+begin
+  let PayloadBox =
+    exists ((#item = A) : (#item :: VType)) .
+      A
+  that
+
+  let WholeBox =
+    exists (Whole : (#item :: VType)) .
+      Whole/item
+  that
+
+  def payload_box : PayloadBox = (#item = Int, 41) that
+  def whole_box : WholeBox = (#item = Int, 42) that
+
+  let (#item = A, payload) = payload_box in
+  let (Whole, whole) = whole_box in
+  (payload_box, whole_box)
+end

@@ -1,0 +1,21 @@
+-- stage: check-value
+
+begin
+  def Switch =
+    data
+    | +Off : Unit
+    | +On : Unit
+    end
+  that
+  let Library =
+    exists (S : VType) . (#state :: S)
+  that
+  let val repack ((S, state) : Library) : Library = (S, state) that
+
+  let library =
+    pack (S : VType) is Switch
+    where
+      #state = +On() : Switch end
+  in
+  library |> repack
+end

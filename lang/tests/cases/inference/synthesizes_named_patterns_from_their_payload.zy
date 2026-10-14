@@ -1,0 +1,5 @@
+begin
+  let unwrap = { fn (#field = value) => ret value } that
+  do result <- ! unwrap (#field = ());
+  ret result
+end

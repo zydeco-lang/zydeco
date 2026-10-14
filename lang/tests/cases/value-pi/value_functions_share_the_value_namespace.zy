@@ -1,0 +1,10 @@
+-- stage: run
+
+begin
+  let val keep (value : Int) : Int = value in
+  let stored = keep in
+  let keep : Unit = () in
+  let transformed : Int = 0 |> stored in
+  let _ : Unit = keep in
+  ! exit transformed
+end

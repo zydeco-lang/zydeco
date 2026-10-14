@@ -1,0 +1,4 @@
+-- expect: reject(tyck.named-label-mismatch)
+
+let value : @[typeof] (#count = 1) = (#other = 2) in
+ret value

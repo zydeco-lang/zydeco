@@ -1,0 +1,9 @@
+-- stage: run
+
+let Package = exists (= Stored : VType) . (#value :: Stored) in
+let val package (A : VType) (value : A) : Package = (#Stored = A, = value) in
+let (= Stored, payload) = package Int 0 in
+let consume : Thk (Stored -> Ret Stored) = { fn value => ret value } in
+do _ <- ! consume payload/value;
+let val identity ((#item = A) : (#item :: VType)) (value : A) : A = value in
+! exit (identity (#item = Int) 0)

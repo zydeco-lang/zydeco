@@ -1,0 +1,31 @@
+-- stage: run
+
+begin
+  let Input =
+    data
+    | +First : Int
+    | +Second : Int
+    end
+  that
+  let Choice =
+    codata
+    | .left : Ret Int
+    | .right : Ret Int
+    end
+  that
+  let Router =
+    codata
+    | .route : Input -> Choice
+    end
+  that
+  do status <-
+    (
+      comatch
+      | .route +First(value) .left => ret 1
+      | .route +First(value) .right => ret value
+      | .route +Second(_) .left => ret 1
+      | .route +Second(_) .right => ret 1
+      end : Router
+    ) .route +First(0) .right;
+  ! api/exit status
+end

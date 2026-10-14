@@ -1,0 +1,8 @@
+-- stage: check-value
+-- expect: reject(tyck.named-label-mismatch)
+
+begin
+  def value : (#x :: Int) = (#x = 0) that
+  let (#y = inner) = value in
+  inner
+end

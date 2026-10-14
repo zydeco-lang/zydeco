@@ -1,0 +1,9 @@
+-- stage: check-value
+-- expect: reject(tyck.kind-mismatch)
+
+begin
+  let InvalidNamedComputation : CType =
+    (#operation :: OS)
+  that
+  ()
+end

@@ -1,0 +1,9 @@
+-- stage: check-value
+-- expect: reject(tyck.named-label-mismatch)
+
+begin
+  let InvalidNamedType : (#operation :: CType) =
+    (#other = OS)
+  that
+  ()
+end

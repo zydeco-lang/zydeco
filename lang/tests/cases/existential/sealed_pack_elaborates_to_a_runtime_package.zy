@@ -1,0 +1,9 @@
+-- stage: run
+
+begin
+  let Sealed = exists (X : VType) . Int that
+  let packed = pack (X : VType) is Int where 0 end in
+  match packed
+  | (X, value) => ! exit 0
+  end
+end

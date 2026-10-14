@@ -1,0 +1,10 @@
+begin
+  let Void =
+    data
+    end
+  that
+  (
+    comatch
+    end : Void -> Ret Unit
+  )
+end

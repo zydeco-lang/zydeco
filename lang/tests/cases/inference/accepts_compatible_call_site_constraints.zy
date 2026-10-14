@@ -1,0 +1,6 @@
+begin
+  let identity = { fn value => ret value } that
+  do _ <- ! identity ();
+  do result <- ! identity ();
+  ret result
+end

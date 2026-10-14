@@ -1,0 +1,4 @@
+-- stage: check-value
+-- expect: reject(tyck.type-expected)
+
+((Int, 1, 2, 3, 4) : exists (A : VType) . A * A)

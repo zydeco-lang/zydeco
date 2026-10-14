@@ -1,0 +1,19 @@
+-- prelude: monadic
+-- expect: reject(tyck.type-mismatch)
+
+let Reader (A : VType) = Unit -> Ret A in
+fn (identity : Thk (Monad Ret)) (reader : Thk (Monad Reader)) =>
+  let program = {
+    @[monadic] begin
+      def Box : VType =
+        data
+        | +Box : Int
+        end
+      in
+      ret (+Box(1) : Box)
+    end
+  } in
+  do first <- ! program Ret identity;
+  do second <- ! program Reader reader ();
+  let First = @[typeof] first in
+  ret (second : First)

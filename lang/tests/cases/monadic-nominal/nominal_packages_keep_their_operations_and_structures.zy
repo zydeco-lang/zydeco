@@ -1,0 +1,38 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+do result <- (
+  @[monadic] begin
+    def Box : VType =
+      data
+      | +Box : Int
+      end
+    in
+    let package : exists (A : VType) . A * Thk (A -> Ret Int) =
+      (
+        Box,
+        (
+          +Box(1),
+          {
+            fn item =>
+              match item
+              | +Box(value) => ret value
+              end
+          }
+        )
+      )
+    in
+    let (A, (item, read)) = package in
+    ! read item
+  end
+) Ret mo;
+do status <- ! int/sub result 1;
+! exit status

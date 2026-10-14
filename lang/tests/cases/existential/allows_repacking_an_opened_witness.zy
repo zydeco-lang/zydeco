@@ -1,0 +1,11 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int, 0) that
+  let val repack ((X, value) : Box) : Box = (X, value) that
+
+  boxed |> repack
+end

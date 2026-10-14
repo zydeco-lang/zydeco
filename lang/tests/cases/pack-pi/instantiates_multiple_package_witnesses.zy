@@ -1,0 +1,21 @@
+-- stage: check-value
+
+begin
+  let PairBox =
+    exists (X : VType) .
+      exists (Y : VType) .
+        X * Y
+  that
+
+  let UnboxPair =
+    pi ((X, Y, _, _) : PairBox) . Ret (X * Y)
+  that
+
+  def unbox_pair : Thk UnboxPair = {
+    fn ((X, Y, x, y) : PairBox) => ret (x, y)
+  } that
+
+  def boxed : PairBox = (Int, Char, 41, 'z') that
+
+  { ! unbox_pair boxed }
+end

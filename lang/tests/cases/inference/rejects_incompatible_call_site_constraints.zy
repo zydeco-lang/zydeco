@@ -1,0 +1,8 @@
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  let identity = { fn value => ret value } that
+  do _ <- ! identity ();
+  do _ <- ! identity 0;
+  ret ()
+end

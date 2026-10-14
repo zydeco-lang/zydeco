@@ -1,0 +1,12 @@
+-- stage: run
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def consume : Thk (Box -> Ret Int) = {
+    fn (boxed : Box) => ret 0
+  } that
+  do value <- ! consume (Int, 0);
+  ! exit value
+end

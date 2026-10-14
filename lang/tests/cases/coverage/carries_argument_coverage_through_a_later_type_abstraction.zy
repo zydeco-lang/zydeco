@@ -1,0 +1,23 @@
+-- stage: run
+
+begin
+  let Bool =
+    data
+    | +False : Unit
+    | +True : Unit
+    end
+  that
+  let Poly =
+    codata
+    | .open : Bool -> (forall (A : VType) . Ret Unit)
+    end
+  that
+  do _ <-
+    (
+      comatch
+      | .open +False(_) A => ret ()
+      | .open +True(_) A => ret ()
+      end : Poly
+    ) .open +True() Unit;
+  ! api/exit 0
+end

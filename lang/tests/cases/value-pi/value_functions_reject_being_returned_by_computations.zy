@@ -1,0 +1,7 @@
+-- expect: reject(tyck.static-elimination)
+
+begin
+  let val keep (value : Unit) : Unit = value that
+  do escaped <- ret keep;
+  ! exit 0
+end

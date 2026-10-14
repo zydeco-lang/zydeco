@@ -1,0 +1,22 @@
+-- stage: check-value
+
+begin
+  let Box =
+    exists (#Item = ItemType : VType) .
+      (#value :: ItemType)
+  that
+
+  let Reveal =
+    pi ((#Item = ItemType, _) : Box) . Ret ItemType
+  that
+
+  def reveal : Thk Reveal = {
+    fn ((#Item = ItemType, = value) : Box) => ret value
+  } that
+
+  def forward : Thk Reveal = {
+    fn ((/Item; /value; whole) : Box) => ! reveal whole
+  } that
+
+  forward
+end

@@ -1,0 +1,11 @@
+begin
+  let outer = {
+    fn value =>
+      begin
+        let identity = { fn inner => ret inner } that
+        ! identity value
+      end
+  } that
+  do _ <- ! outer ();
+  ret ()
+end

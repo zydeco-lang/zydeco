@@ -1,0 +1,4 @@
+begin
+  let ignore = { fn (value : Unit) => ret () } that
+  ret ()
+end

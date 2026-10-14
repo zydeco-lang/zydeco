@@ -1,0 +1,16 @@
+-- stage: check-value
+-- expect: reject(tyck.escaping-existential)
+
+begin
+  let Box =
+    exists (X : VType) . X
+  that
+  def boxed : Box = (Int, 0) that
+  def leak = {
+    match boxed
+    | (X, value) => ret value
+    end
+  } that
+
+  leak
+end

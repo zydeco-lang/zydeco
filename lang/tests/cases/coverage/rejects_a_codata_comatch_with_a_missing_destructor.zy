@@ -1,0 +1,15 @@
+-- expect: reject(tyck.coverage)
+
+begin
+  let Choice =
+    codata
+    | .left : Ret Unit
+    | .right : Ret Unit
+    end
+  that
+  (
+    comatch
+    | .left => ret ()
+    end : Choice
+  )
+end

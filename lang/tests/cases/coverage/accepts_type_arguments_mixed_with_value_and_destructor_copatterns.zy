@@ -1,0 +1,19 @@
+begin
+  let Inner (A : VType) =
+    codata
+    | .get : Ret A
+    | .ignore : Ret Unit
+    end
+  that
+  let Poly =
+    codata
+    | .open : forall (A : VType) . A -> Inner A
+    end
+  that
+  (
+    comatch
+    | .open A (value : A) .get => ret value
+    | .open A _ .ignore => ret ()
+    end : Poly
+  )
+end
