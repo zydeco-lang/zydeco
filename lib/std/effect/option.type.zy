@@ -1,0 +1,10 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  param M : VType -> CType in
+  codata
+  | .none : forall (A : VType) . M A
+  | .or_else : forall (A : VType) . Thk (M A) -> Thk (M A) -> M A
+  end
+end

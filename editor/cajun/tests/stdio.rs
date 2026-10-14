@@ -1381,7 +1381,7 @@ fn stdio_server_treats_overlapping_open_analyses_as_superseded() {
     let documents = [
         "lib/std/builtin.zy",
         "lib/std/data/package.zy",
-        "lib/std/control/monad.zy",
+        "lib/std/effect/monad.zy",
         "lib/std/std.zy",
     ]
     .into_iter()

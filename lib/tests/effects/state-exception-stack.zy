@@ -13,11 +13,11 @@ param (
   /process;
   builtin
 ) : @(import("../../std/builtin.zy")) in
-let (/Monad; /Algebra) = builtin |> (@(import("../../std/control/monad.zy"))) in
-let (/raise; /catch) = builtin |> (@(import("../../std/control/exception.zy"))) in
-let (/modify) = builtin |> (@(import("../../std/control/state.zy"))) in
+let (/Monad; /Algebra) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/raise; /catch) = builtin |> (@(import("../../std/effect/exception.zy"))) in
+let (/modify) = builtin |> (@(import("../../std/effect/state.zy"))) in
 let (/IStateExn; /instance; /run_state_exn) =
-  builtin |> (@(import("../../std/control/state-exn.zy")))
+  builtin |> (@(import("../../std/effect/state-exn.zy")))
 in
 let p : Thk (pi ((M, _) : IStateExn Int String) . M Int) = {
   fn ((M, (/monad; /state; /exception; /catch = recover)) : IStateExn Int String) =>

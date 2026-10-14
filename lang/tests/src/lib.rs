@@ -322,7 +322,7 @@ pub mod utils {
             let monadic = match prelude {
                 | SourceCasePrelude::Core => String::new(),
                 | SourceCasePrelude::Monadic => {
-                    let basis = library.join("control/monad.zy").canonicalize().unwrap();
+                    let basis = library.join("effect/monad.zy").canonicalize().unwrap();
                     format!(concat!("let monadic_basis = @(import(\"{}\")) in\n",), basis.display())
                 }
             };

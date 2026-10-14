@@ -1,6 +1,6 @@
 -- A monad structure that supports fail and print as well
 begin
-  let monadic_basis = @(import("../../std/control/monad.zy")) that
+  let monadic_basis = @(import("../../std/effect/monad.zy")) that
   param (
     /text;
     /system;

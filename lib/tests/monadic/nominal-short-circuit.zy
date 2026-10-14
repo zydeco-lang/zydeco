@@ -2,10 +2,10 @@
 param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/Monad; /Algebra) = builtin |> (@(import("../../std/control/monad.zy"))) in
-let (/MonadState) = builtin |> (@(import("../../std/control/state.zy"))) in
-let (/MonadThrow) = builtin |> (@(import("../../std/control/exception.zy"))) in
-let (/IStateExn) = builtin |> (@(import("../../std/control/state-exn.zy"))) in
+let (/Monad; /Algebra) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/MonadState) = builtin |> (@(import("../../std/effect/state.zy"))) in
+let (/MonadThrow) = builtin |> (@(import("../../std/effect/exception.zy"))) in
+let (/IStateExn) = builtin |> (@(import("../../std/effect/state-exn.zy"))) in
 let E (A : VType) =
   data
   | +Ok : A

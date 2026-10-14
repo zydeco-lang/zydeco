@@ -1,10 +1,10 @@
 use zydeco_statics::TyckDiagnosticCode;
 use zydeco_tests::utils::{SourceCase, SourceTemplate};
 
-zydeco_tests::check_source!(exception_module, "std/control/exception.zy");
-zydeco_tests::check_source!(state_module, "std/control/state.zy");
-zydeco_tests::check_source!(state_exn_module, "std/control/state-exn.zy");
-zydeco_tests::check_source!(monad_module, "std/control/monad.zy");
+zydeco_tests::check_source!(exception_module, "std/effect/exception.zy");
+zydeco_tests::check_source!(state_module, "std/effect/state.zy");
+zydeco_tests::check_source!(state_exn_module, "std/effect/state-exn.zy");
+zydeco_tests::check_source!(monad_module, "std/effect/monad.zy");
 
 zydeco_tests::e2e_io_source!(
     exception_state,
@@ -23,12 +23,12 @@ struct EffectCase;
 
 impl EffectCase {
     fn source(body: &str) -> String {
-        let control = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../lib/std/control")
+        let effect = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../lib/std/effect")
             .display()
             .to_string();
         SourceTemplate::parse(include_str!("../templates/effects.zy.in"))
-            .and_then(|template| template.render([("control", control.as_str()), ("body", body)]))
+            .and_then(|template| template.render([("effect", effect.as_str()), ("body", body)]))
             .expect("the effects source template and its arguments must agree")
     }
 

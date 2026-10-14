@@ -129,7 +129,7 @@ The following paired checks guide validation at the compiler and runtime boundar
 
 Both compiler validation and runtime model checks can enforce these conditions at their appropriate boundary;
 `FramePlanError` and `FrameError` report violations at those boundaries.
-Existing native programs, including control-library examples and returning C imports, must keep their source behavior.
+Existing native programs, including effect-library examples and returning C imports, must keep their source behavior.
 Focused tests should compare interpreter results with each candidate native scheme and check heap pointer survival
 under forced collection.
 

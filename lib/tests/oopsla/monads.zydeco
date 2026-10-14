@@ -1,7 +1,7 @@
 --| A bunch of example of monads
 --| The program prints "Hello, world!" using the io monads and then exits.
 begin
-  let monadic_basis = @(import("../../std/control/monad.zy")) that
+  let monadic_basis = @(import("../../std/effect/monad.zy")) that
   param (/system; /VType; /CType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; builtin) :
   @(import("../../std/builtin.zy")) that
   let (/Monad; /Algebra) =

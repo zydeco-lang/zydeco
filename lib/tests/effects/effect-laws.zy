@@ -1,0 +1,120 @@
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
+let reader = builtin |> (@(import("../../std/effect/reader.zy"))) in
+let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/Option; optional) = builtin |> (@(import("../../std/effect/option.zy"))) in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/laws; /lift_laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+let (R, r) = reader/instance Int in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (W, w) = writer/instance String output in
+let (O, o) = optional/instance in
+let (RW, rw) = reader/transformer_instance Int W w/monad in
+let (WR, wr) = writer/transformer_instance String R r/monad output in
+let (OW, ow) = optional/transformer_instance W w/monad in
+let observe_ret : Thk (Thk (Ret Int) -> Ret String) = {
+  fn m =>
+    do n <- ! m;
+    ! numeric/int/to_string n
+} in
+let observe_writer : Thk (Thk (W Int) -> Ret String) = {
+  fn m =>
+    do (n, written) <- ! writer/run_writer String Int m;
+    do text <- ! numeric/int/to_string n;
+    ! string/append text written
+} in
+let render_option : Thk (Option Int -> Ret String) = {
+  fn observation =>
+    match observation
+    | +None() => ret "none"
+    | +Some(n) =>
+      do text <- ! numeric/int/to_string n;
+      ! string/append "some" text
+    end
+} in
+let observe_reader : Thk (Thk (R Int) -> Ret String) = {
+  fn m => ! observe_ret { ! reader/run_reader Int Int 1 m }
+} in
+let observe_reader_writer : Thk (Thk (RW Int) -> Ret String) = {
+  fn m => ! observe_writer { ! reader/run_reader_t Int W Int 1 m }
+} in
+let observe_writer_reader : Thk (Thk (WR Int) -> Ret String) = {
+  fn m => ! observe_writer { ! reader/run_reader Int (Int * String) 1 { ! m } }
+} in
+let observe_option_writer : Thk (Thk (OW Int) -> Ret String) = {
+  fn m =>
+    do (observation, written) <- ! writer/run_writer String (Option Int) { ! m };
+    do text <- ! render_option observation;
+    ! string/append text written
+} in
+let writer_first : Thk (Int -> W Int) = {
+  fn n =>
+    do next <- ! numeric/int/add n 2;
+    ret (next, "f")
+} in
+let writer_second : Thk (Int -> W Int) = {
+  fn n =>
+    do next <- ! numeric/int/add n 3;
+    ret (next, "g")
+} in
+! with_trace {
+  fn mark read reset =>
+    do ret_status <- ! laws Ret ret_instance/monad { ret 1 }
+      { fn n => ! numeric/int/add n 2 } { fn n => ! numeric/int/add n 3 }
+      observe_ret mark read reset;
+    do reader_status <- ! laws R r/monad { ! r/reader .ask }
+      { fn n environment => ! numeric/int/add n environment }
+      { fn n environment => ! numeric/int/add n environment }
+      observe_reader mark read reset;
+    do writer_status <- ! laws W w/monad { ret (1, "m") } writer_first writer_second
+      observe_writer mark read reset;
+    do option_status <- ! laws O o/monad { ! o/monad .return Int 1 }
+      {
+        fn n =>
+          do next <- ! numeric/int/add n 2;
+          ! o/monad .return Int next
+      }
+      { fn _ => ! o/option .none Int }
+      {
+        fn m =>
+          do observation <- ! optional/run_option Int m;
+          ! render_option observation
+      }
+      mark read reset;
+    do reader_writer_status <- ! laws RW rw/monad { ! rw/reader .ask }
+      { fn n => ! reader/lift Int W Int { ! writer_first n } }
+      { fn n => ! reader/lift Int W Int { ! writer_second n } }
+      observe_reader_writer mark read reset;
+    do writer_reader_status <- ! laws WR wr/monad { ! wr/monad .return Int 1 }
+      {
+        fn n environment =>
+          do next <- ! numeric/int/add n environment;
+          ret (next, "f")
+      }
+      {
+        fn n environment =>
+          do next <- ! numeric/int/add n environment;
+          ret (next, "g")
+      }
+      observe_writer_reader mark read reset;
+    do option_writer_status <- ! laws OW ow/monad { ! optional/lift W w/monad Int { ret (1, "m") } }
+      { fn n => ! optional/lift W w/monad Int { ! writer_first n } }
+      { fn _ => ! ow/option .none Int }
+      observe_option_writer mark read reset;
+    do reader_lift <- ! lift_laws W RW w/monad rw/monad { fn m => ! reader/lift Int W Int m }
+      { ret (1, "m") } writer_first observe_reader_writer mark read reset;
+    do writer_lift <- ! lift_laws R WR r/monad wr/monad
+      { fn m => ! writer/lift String R r/monad output Int m }
+      { ! r/reader .ask } { fn n environment => ! numeric/int/add n environment }
+      observe_writer_reader mark read reset;
+    do option_lift <- ! lift_laws W OW w/monad ow/monad { fn m => ! optional/lift W w/monad Int m }
+      { ret (1, "m") } writer_first observe_option_writer mark read reset;
+    match (ret_status, reader_status, writer_status, option_status,
+      reader_writer_status, writer_reader_status, option_writer_status,
+      reader_lift, writer_lift, option_lift)
+    | (0, 0, 0, 0, 0, 0, 0, 0, 0, 0) => ret 0
+    | _ => ret 1
+    end
+}

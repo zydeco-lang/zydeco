@@ -1,0 +1,104 @@
+-- Executable observations of both units, associativity, linearity, and transformer lift.
+val
+  (
+    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+      "../../std/builtin.zy"
+    ))
+  )
+=>
+  begin
+    let (/Monad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+    begin
+      def ! compare (M : VType -> CType)
+        (observe : Thk (Thk (M Int) -> Ret String))
+        (read : Thk (Ret Int)) (reset : Thk (Ret Unit)) (expected : Int)
+        (left : Thk (M Int)) (right : Thk (M Int))
+      : Ret Int =
+          do _ <- ! reset;
+          do left_value <- ! observe left;
+          do left_trace <- ! read;
+          do _ <- ! reset;
+          do right_value <- ! observe right;
+          do right_trace <- ! read;
+          ! string/eq (Ret Int) left_value right_value {
+            ! numeric/int/eq (Ret Int) left_trace expected {
+              ! numeric/int/eq (Ret Int) right_trace expected { ret 0 } { ret 1 }
+            } { ret 1 }
+          } { ret 1 }
+      that
+
+      def ! laws (M : VType -> CType) (monad : Thk (Monad M))
+        (source : Thk (M Int)) (first : Thk (Int -> M Int)) (second : Thk (Int -> M Int))
+        (observe : Thk (Thk (M Int) -> Ret String))
+        (mark : Thk (Int -> Ret Unit)) (read : Thk (Ret Int)) (reset : Thk (Ret Unit))
+      : Ret Int =
+          let m : Thk (M Int) = {
+            do _ <- ! mark 1;
+            ! source
+          } in
+          let f : Thk (Int -> M Int) = {
+            fn n =>
+              do _ <- ! mark 2;
+              ! first n
+          } in
+          let g : Thk (Int -> M Int) = {
+            fn n =>
+              do _ <- ! mark 3;
+              ! second n
+          } in
+          let tt : Thk (Ret (Thk (M Int))) = {
+            do _ <- ! mark 4;
+            ret m
+          } in
+          do left_unit <- ! compare M observe read reset 2
+            { ! monad .bind Int Int { ! monad .return Int 1 } f }
+            { ! f 1 };
+          do right_unit <- ! compare M observe read reset 1
+            { ! monad .bind Int Int m { fn n => ! monad .return Int n } }
+            m;
+          do associativity <- ! compare M observe read reset 123
+            { ! monad .bind Int Int { ! monad .bind Int Int m f } g }
+            { ! monad .bind Int Int m { fn n => ! monad .bind Int Int { ! f n } g } };
+          do linearity <- ! compare M observe read reset 412
+            {
+              do t <- ! tt;
+              ! monad .bind Int Int t f
+            }
+            {
+              ! monad .bind Int Int {
+                do t <- ! tt;
+                ! t
+              } f
+            };
+          do units <- ! numeric/int/add left_unit right_unit;
+          do rest <- ! numeric/int/add associativity linearity;
+          ! numeric/int/add units rest
+      that
+
+      def ! lift_laws (M : VType -> CType) (T : VType -> CType)
+        (base : Thk (Monad M)) (monad : Thk (Monad T))
+        (lift : Thk (Thk (M Int) -> T Int))
+        (source : Thk (M Int)) (next : Thk (Int -> M Int))
+        (observe : Thk (Thk (T Int) -> Ret String))
+        (mark : Thk (Int -> Ret Unit)) (read : Thk (Ret Int)) (reset : Thk (Ret Unit))
+      : Ret Int =
+          let m : Thk (M Int) = {
+            do _ <- ! mark 1;
+            ! source
+          } in
+          let f : Thk (Int -> M Int) = {
+            fn n =>
+              do _ <- ! mark 2;
+              ! next n
+          } in
+          do unit <- ! compare T observe read reset 0
+            { ! lift { ! base .return Int 1 } }
+            { ! monad .return Int 1 };
+          do bind <- ! compare T observe read reset 12
+            { ! lift { ! base .bind Int Int m f } }
+            { ! monad .bind Int Int { ! lift m } { fn n => ! lift { ! f n } } };
+          ! numeric/int/add unit bind
+      that
+      (= laws, = lift_laws)
+    end
+  end

@@ -658,6 +658,35 @@ and `.bind : forall (A : VType) (B : VType) . Thk (M A) -> Thk (A -> M B) -> M B
 An `Algebra M R` is the computation type `forall (A : VType) . Thk (M A) -> Thk (A -> R) -> R`.
 These are ordinary library interfaces; their types do not enforce algebraic laws.
 
+### Relative Monad Laws
+
+A lawful dictionary preserves both answers and observable effects when sequencing is reassociated.
+Write `return_M a` for its return operation and `bind_M m f` for its bind,
+omitting type arguments and writing braces for thunks.
+The two unit equations and associativity are:
+
+```text
+bind_M { return_M a } f                         ≃ f a
+bind_M m { x => return_M x }                    ≃ force m
+bind_M { bind_M m f } g                         ≃ bind_M m { x => bind_M { f x } g }
+```
+
+Linearity additionally preserves the effects of producing the first computation thunk:
+
+```text
+tt : Thk (Ret (Thk (M A)))
+
+do t <- force tt; bind_M t f
+  ≃ bind_M { do t <- force tt; force t } f
+```
+
+This equation concerns bind's first computation argument, not a global linear-use restriction on thunks.
+The equalities are observational, including ambient effect order rather than only returned values.
+The [relative-monad paper, §4.2](https://arxiv.org/html/2502.15031v2#S4.SS2), gives the semantic account.
+Checking a `Monad` dictionary verifies its classifier, not these equations.
+
+### Monadic Blocks
+
 `@[monadic] e` selects the lexically visible `Monad` and `Algebra` constructors and performs algebra translation.
 It supplies an outer carrier parameter followed by a thunked monad implementation.
 Source `Ret`, `ret`, and `do` are reinterpreted through that carrier and its operations.
@@ -666,7 +695,7 @@ Polymorphic translation may require additional structure arguments describing ho
 
 ```zydeco
 param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
-let basis = @(import("../../lib/std/control/monad.zy")) in
+let basis = @(import("../../lib/std/effect/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> basis in
 let mo : Thk (Monad Ret) = {
   comatch
@@ -682,7 +711,7 @@ let mo : Thk (Monad Ret) = {
 ### Packed Effect Instances
 
 An effect-polymorphic client needs a carrier, its monad dictionary, and operations at that same carrier.
-The [control library](../../lib/std/control) separates carrier-indexed operations
+The [effect library](../../lib/std/effect) separates carrier-indexed operations
 from existential packaging so several effects can share one carrier.
 `IState S M` contains `state : Thk (MonadState S M)`; `IException E M` contains `exception : Thk (MonadThrow E M)`
 and a `catch` operation at `M`.
@@ -724,6 +753,102 @@ The [combined example](../../lib/tests/effects/state-exception-stack.zy) tests t
 The same packed interface also admits a carrier `S -> Ret (Either E A * S)` that retains state on failure;
 the [short-circuit fixture](../../lib/tests/monadic/nominal-short-circuit.zy) tests that alternative.
 The interface alone does not choose the interaction between the effects.
+
+### Elementary Effect Instances
+
+The [effect library](../../lib/std/effect) exports elementary effects independently of OS capabilities.
+Each concrete instance specializes its transformer to the reusable `Monad Ret` dictionary.
+`Ret` is the ambient computation carrier, not a separate pure identity effect.
+These modules are imported explicitly rather than aggregated by `std.zy`.
+
+| Module | Concrete carrier | Instance entry point | Carrier-indexed operation bundle |
+| --- | --- | --- | --- |
+| [`ret.zy`](../../lib/std/effect/ret.zy) | `Ret` | `instance` | Only `monad` |
+| [`reader.zy`](../../lib/std/effect/reader.zy) | `Reader R A = R -> Ret A` | `instance R` | `IReader R M`: `reader : Thk (MonadReader R M)` |
+| [`writer.zy`](../../lib/std/effect/writer.zy) | `Writer W A = Ret (A * W)` | `instance W output` | `IWriter W M`: `writer : Thk (MonadWriter W M)` |
+| [`option.zy`](../../lib/std/effect/option.zy) | `Optional A = Ret (Option A)` | `instance` | `IOption M`: `option : Thk (MonadOption M)` |
+
+The value `Option` is the existing [data-library type](../../lib/std/data/option.zy).
+`Optional` names its computation carrier, so a client does not confuse a value datatype with a relative monad.
+Concrete builders disclose their carriers.
+As with State and Exception, open an instance and repack `(M, operations)` for a client taking `WithMonad`
+of the corresponding bundle.
+
+Reader's `.ask` returns the current environment.
+Its `.local A replacement computation` runs only the protected computation with a replacement environment.
+The surrounding environment is restored after that computation.
+The replacement is a value, not an environment-mapping function.
+`run_reader R A environment computation` supplies the initial environment and returns `Ret A`.
+
+Writer's `.tell output` emits an output with a Unit answer.
+Its `.listen A computation` returns the protected computation's answer and output together,
+while retaining that output in the surrounding Writer computation.
+Bind combines the first computation's output before the continuation's output.
+`run_writer W A computation` returns the answer and accumulated output as `Ret (A * W)`.
+
+Optional's `.none A` produces an absent answer.
+Bind runs its continuation on `Some` and propagates `None` without running it.
+Its `.or_else A computation fallback` executes the fallback only after `None`.
+`run_option A computation` returns the existing `Option A` observation.
+Short-circuiting and fallback do not undo effects already performed by the protected computation.
+These operations make no fairness or distributivity promise.
+
+#### Writer Output Contract
+
+[`Monoid W`](../../lib/std/algebra/monoid.type.zy) contains `empty : W` and `append : Thk (W -> W -> Ret W)`.
+For Writer, append must be total and observationally pure, associative, and have `empty` as a two-sided identity.
+Commutativity is unnecessary: output order is significant. The computational operation supports runtime-selectable
+and recursive implementations beyond the current total value-function fragment,
+but its classifier cannot establish the purity or algebraic obligations.
+
+Purity matters because reassociating Writer bind changes when intermediate outputs are combined.
+An append that prints can move those prints relative to user computations even
+if its returned values obey the ordinary monoid equations.
+Such a dictionary is well-typed but outside the Writer contract.
+String concatenation with the empty string is a useful noncommutative instance.
+No complexity guarantee is imposed on a caller's append implementation.
+
+#### Elementary Transformers
+
+The transformer carriers retain the underlying base computation:
+
+```text
+ReaderT R M A = R -> M A
+WriterT W M A = M (A * W)
+OptionT M A   = M (Option A)
+```
+
+Their `transformer_instance` value functions accept `R M base`, `W M base output`,
+and `M base`, respectively, where `base : Thk (Monad M)` and `output : Monoid W`.
+Each supplies a manifest transformed carrier, its monad dictionary, and its own carrier-indexed operations.
+They do not automatically lift every other effect interface from the base.
+The `run_*_t` functions expose the corresponding `M A`, `M (A * W)`, or `M (Option A)` observation.
+Reader's runner additionally takes the environment.
+
+Reader's `lift R M A computation` ignores the environment.
+Writer's `lift W M base output A computation` attaches `empty` to the base answer.
+Optional's `lift M base A computation` wraps the base answer in `Some`.
+Each lift preserves return and bind:
+
+```text
+lift (return_M a)       ≃ return_T a
+lift (bind_M m f)       ≃ bind_T { lift (force m) } { x => lift (f x) }
+```
+
+Base effects preceding `None` remain observable in OptionT.
+For example, `OptionT (Writer W) A` can retain output with an absent answer,
+whereas `WriterT W Optional A` has no returned output when its base computation produces `None`.
+This difference follows from the carrier equations, not from a common rollback policy.
+
+The [operation fixture](../../lib/tests/effects/effect-operations.zy) exercises scoped environments,
+noncommutative output, lazy fallback, and transformer order.
+The [law fixture](../../lib/tests/effects/effect-laws.zy) checks the four monad equations
+and lift laws using an ambient mutable trace.
+Its [counterparts](../../lib/tests/effects/effect-law-counterexamples.zy) detect repeated execution
+and effectful append despite successful typechecking.
+The [translated clients](../../lib/tests/effects/effect-monadic.zy) demonstrate closed adapters,
+including the structure arguments required for polymorphic operations.
+These finite tests are regression evidence, not proofs for arbitrary dictionaries.
 
 ### Closed Translation Boundary
 
@@ -846,7 +971,7 @@ For example, the type parameter and recursive constructor below both belong to t
 
 ```zydeco
 param (/VType; /Unit; builtin) : @(import("../../lib/std/builtin.zy")) in
-let basis = @(import("../../lib/std/control/monad.zy")) in
+let basis = @(import("../../lib/std/effect/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> basis in
 @[monadic] fn (A : VType) (item : A) =>
   begin
@@ -1159,6 +1284,33 @@ Copies that merge can share a binding; conflicting resolved definitions produce 
 
 An imported computation executes at each dynamic occurrence.
 A semantic unit supports several compilations through the package's declared external contract.
+
+### Standard Library Organization
+
+The standard library separates value representations, reusable algebraic dictionaries, and effect protocols.
+This keeps a data type such as `Option` independent of a computation carrier that uses it,
+and lets a dictionary such as `Monoid` serve more than one effect.
+The directories under `lib/std/` have these responsibilities:
+
+| Directory | Responsibility |
+| --- | --- |
+| `data/` | Value representations and their operations, including `Bool`, `Option`, `Result`, and `List` |
+| `algebra/` | General-purpose algebraic dictionaries, currently `Monoid` |
+| `effect/` | Effect interfaces, carriers, transformers, handlers, and shared relative-monad machinery |
+| `numeric/` | Numeric operations and their domain-specific dictionaries |
+| `text/` | Text and byte-sequence operations |
+| `system/`, `memory/` | Concrete runtime capabilities and their library interfaces |
+
+`Algebra M R` belongs to `effect/`: it describes an algebra for a particular relative monad,
+whereas `Monoid W` describes an operation and identity on a value type independently of a monad.
+Each effect's concrete carrier and transformer stay in the same module,
+with an adjacent `.type.zy` file for its operation interface when needed.
+The Writer effect is distinct from the host stream `Writer` capability.
+
+The root `builtin.zy` remains the host contract, and `std.zy` remains the assembled public value.
+The `algebra/` and `effect/` modules are imported explicitly rather than added to that aggregate.
+Directory ownership does not assign [source-package names](#source-packages).
+The [library guide](../../lib/std/README.md#source-layout) inventories the entry points and imports.
 
 ## 13. Primitive Values and Capabilities
 

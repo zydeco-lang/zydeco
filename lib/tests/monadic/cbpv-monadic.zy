@@ -1,7 +1,7 @@
 begin
   let U = Thk that
   let F = Ret that
-  let monadic_basis = @(import("../../std/control/monad.zy")) that
+  let monadic_basis = @(import("../../std/effect/monad.zy")) that
   param (
     /numeric;
     /text;

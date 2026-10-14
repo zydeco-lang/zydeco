@@ -1,0 +1,79 @@
+-- Ordered output. The supplied monoid must have total, observationally pure append.
+val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
+  begin
+    let (/Monad) = builtin |> (@(import("monad.zy"))) in
+    let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
+    begin
+      let Monoid = @(import("../algebra/monoid.type.zy")) that
+      let MonadWriter = @(import("writer.type.zy")) that
+      let WriterT (W : VType) (M : VType -> CType) (A : VType) = M (A * W) that
+      let Writer (W : VType) = WriterT W Ret that
+      let IWriter (W : VType) (M : VType -> CType) = (#writer :: Thk (MonadWriter W M)) that
+
+      def ! append_output (W : VType) (M : VType -> CType) (base : Thk (Monad M))
+        (output : Monoid W) (A : VType) (first : W) (m : Thk (M (A * W)))
+      : M (A * W) =
+          ! base .bind (A * W) (A * W) m {
+            fn (a, second) =>
+              do combined <- ! output/append first second;
+              ! base .return (A * W) (a, combined)
+          }
+      that
+
+      let val transformer_instance (W : VType) (M : VType -> CType)
+        (base : Thk (Monad M)) (output : Monoid W)
+      =
+        pack (T as WriterT W M : VType -> CType)
+        where
+          #monad = (
+            {
+              comatch
+              | .return A a => ! base .return (A * W) (a, output/empty)
+              | .bind A B m f =>
+                ! base .bind (A * W) (B * W) m {
+                  fn (a, first) =>
+                    ! append_output W M base output B first { ! f a }
+                }
+              end
+            } : Thk (Monad (WriterT W M))
+          ),
+          #writer = (
+            {
+              comatch
+              | .tell written => ! base .return (Unit * W) ((), written)
+              | .listen A m =>
+                ! base .bind (A * W) ((A * W) * W) m {
+                  fn (a, written) => ! base .return ((A * W) * W) ((a, written), written)
+                }
+              end
+            } : Thk (MonadWriter W (WriterT W M))
+          )
+        end
+      that
+      let val instance (W : VType) (output : Monoid W) =
+        transformer_instance W Ret ret_instance/monad output
+      that
+
+      def ! lift (W : VType) (M : VType -> CType) (base : Thk (Monad M))
+        (output : Monoid W) (A : VType) (m : Thk (M A))
+      : WriterT W M A =
+          ! base .bind A (A * W) m { fn a => ! base .return (A * W) (a, output/empty) }
+      that
+
+      def ! run_writer_t (W : VType) (M : VType -> CType) (A : VType) (m : Thk (WriterT W M A)) :
+        M (A * W) = ! m that
+
+      def ! run_writer (W : VType) (A : VType) (m : Thk (Writer W A)) :
+        Ret (A * W) = ! run_writer_t W Ret A m that
+
+      pack
+          (= Writer as Writer : VType -> VType -> CType)
+          (= WriterT as WriterT : VType -> (VType -> CType) -> VType -> CType)
+          (= Monoid as Monoid : VType -> VType)
+          (= MonadWriter as MonadWriter : VType -> (VType -> CType) -> CType)
+          (= IWriter as IWriter : VType -> (VType -> CType) -> VType)
+      where
+        = instance, = transformer_instance, = lift, = run_writer, = run_writer_t
+      end
+    end
+  end

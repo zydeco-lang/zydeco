@@ -5140,7 +5140,7 @@ mod tests {
         [
             ("builtin.zy", include_str!("../../../../lib/std/builtin.zy")),
             ("data-package.zy", include_str!("../../../../lib/std/data/package.zy")),
-            ("monad.zy", include_str!("../../../../lib/std/control/monad.zy")),
+            ("monad.zy", include_str!("../../../../lib/std/effect/monad.zy")),
             ("numeric-package.zy", include_str!("../../../../lib/std/numeric/package.zy")),
             ("std.zy", include_str!("../../../../lib/std/std.zy")),
             ("system-package.zy", include_str!("../../../../lib/std/system/package.zy")),

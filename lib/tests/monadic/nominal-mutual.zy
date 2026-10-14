@@ -2,9 +2,9 @@
 param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let basis = @(import("../../std/control/monad.zy")) in
+let basis = @(import("../../std/effect/monad.zy")) in
 let (/Monad; /Algebra; /WithMonad) = builtin |> basis in
-let state = @(import("../../std/control/state.zy")) in
+let state = @(import("../../std/effect/state.zy")) in
 let (/IState; /instance) = builtin |> state in
 let p = {
   @[monadic] fn (A : VType) (step : Thk (Ret A)) =>

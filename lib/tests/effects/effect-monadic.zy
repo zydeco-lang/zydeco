@@ -1,0 +1,77 @@
+-- Closed translated clients consume only carrier-indexed operations.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /string; /stdio; /process; builtin) :
+@(import("../../std/builtin.zy")) in
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let Top = @(import("../../std/effect/top.type.zy")) in
+let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
+let (/IReader; reader) = builtin |> (@(import("../../std/effect/reader.zy"))) in
+let (/Monoid; /IWriter; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/IOption; optional) = builtin |> (@(import("../../std/effect/option.zy"))) in
+let reader_client : Thk (pi ((M, _) : WithMonad (IReader Int)) . M (Int * Int * Int)) = {
+  fn ((M, (/monad; /reader)) : WithMonad (IReader Int)) =>
+    (
+      @[monadic]
+      fn (ask : Thk (Ret Int)) (local : Thk (forall (A : VType) . Int -> Thk (Ret A) -> Ret A)) =>
+        do before <- ! ask;
+        do during <- ! local Int 8 ask;
+        do after <- ! ask;
+        ret (before, during, after)
+    ) M monad { ! reader .ask } {
+      fn (A : VType) (_ : Thk Top) replacement m => ! reader .local A replacement m
+    }
+} in
+let writer_client : Thk (pi ((M, _) : WithMonad (IWriter String)) . M (Int * String)) = {
+  fn ((M, (/monad; /writer)) : WithMonad (IWriter String)) =>
+    (
+      @[monadic]
+      fn (tell : Thk (String -> Ret Unit))
+        (listen : Thk (forall (A : VType) . Thk (Ret A) -> Ret (A * String)))
+      =>
+        do _ <- ! tell "a";
+        ! listen Int {
+          do _ <- ! tell "b";
+          ret 7
+        }
+    ) M monad { ! writer .tell } {
+      fn (A : VType) (_ : Thk Top) m => ! writer .listen A m
+    }
+} in
+let option_client : Thk (pi ((M, _) : WithMonad IOption) . M Int) = {
+  fn ((M, (/monad; /option)) : WithMonad IOption) =>
+    (
+      @[monadic]
+      fn (none : Thk (forall (A : VType) . Ret A))
+        (or_else : Thk (forall (A : VType) . Thk (Ret A) -> Thk (Ret A) -> Ret A))
+      =>
+        ! or_else Int {
+          do _ <- ! none Unit;
+          ret -1
+        } { ret 42 }
+    ) M monad { fn (A : VType) (_ : Thk Top) => ! option .none A } {
+      fn (A : VType) (_ : Thk Top) m fallback => ! option .or_else A m fallback
+    }
+} in
+let (R, r) = reader/instance Int in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (W, w) = writer/instance String output in
+let (O, o) = optional/instance in
+do base <- (
+  @[monadic] begin
+    do n <- ret 5;
+    ret n
+  end
+) Ret ret_instance/monad;
+do environment <- ! reader/run_reader Int (Int * Int * Int) 3 { ! reader_client (R, r) };
+do ((answer, heard), written) <- ! writer/run_writer String (Int * String) {
+  ! writer_client (W, w)
+};
+do observation <- ! optional/run_option Int { ! option_client (O, o) };
+match (base, environment, answer, observation)
+| (5, (3, 8, 3), 7, +Some(42)) =>
+  ! string/eq OS heard "b" {
+    ! string/eq OS written "ab" {
+      ! stdio/write_line "effect monadic clients passed" { ! process/exit 0 }
+    } { ! process/exit 1 }
+  } { ! process/exit 2 }
+| _ => ! process/exit 3
+end

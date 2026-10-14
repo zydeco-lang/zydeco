@@ -1,0 +1,144 @@
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
+let reader = builtin |> (@(import("../../std/effect/reader.zy"))) in
+let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/Option; optional) = builtin |> (@(import("../../std/effect/option.zy"))) in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (R, r) = reader/instance Int in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (W, w) = writer/instance String output in
+let (O, o) = optional/instance in
+let (RW, rw) = reader/transformer_instance Int W w/monad in
+let (WR, wr) = writer/transformer_instance String R r/monad output in
+let (OW, ow) = optional/transformer_instance W w/monad in
+let (WO, wo) = writer/transformer_instance String O o/monad output in
+! with_trace {
+  fn mark read reset =>
+    do base <- ! ret_instance/monad .bind Int Int { ret 5 } { fn n => ! numeric/int/add n 2 };
+    do environments <- ! reader/run_reader Int (Int * (Int * Int * Int) * Int) 3 {
+      ! r/monad .bind Int (Int * (Int * Int * Int) * Int) { ! r/reader .ask } {
+        fn before =>
+          ! r/monad .bind (Int * Int * Int) (Int * (Int * Int * Int) * Int) {
+            ! r/reader .local (Int * Int * Int) 8 {
+              ! r/monad .bind Int (Int * Int * Int) { ! r/reader .ask } {
+                fn first =>
+                  ! r/monad .bind Int (Int * Int * Int) {
+                    ! r/reader .local Int 9 { ! r/reader .ask }
+                  } {
+                    fn second =>
+                      ! r/monad .bind Int (Int * Int * Int) { ! r/reader .ask } {
+                        fn third => ! r/monad .return (Int * Int * Int) (first, second, third)
+                      }
+                  }
+              }
+            }
+          } {
+            fn inside =>
+              ! r/monad .bind Int (Int * (Int * Int * Int) * Int) { ! r/reader .ask } {
+                fn after =>
+                  ! r/monad .return (Int * (Int * Int * Int) * Int) (before, inside, after)
+              }
+          }
+      }
+    };
+    do ((answer, heard), written) <- ! writer/run_writer String (Int * String) {
+      ! w/monad .bind Unit (Int * String) { ! w/writer .tell "a" } {
+        fn _ =>
+          ! w/writer .listen Int {
+            ! w/monad .bind Unit Int { ! w/writer .tell "b" } { fn _ => ! w/monad .return Int 7 }
+          }
+      }
+    };
+    -- None must skip its continuation, and Some must skip its fallback.
+    do absent <- ! optional/run_option Int {
+      do _ <- ! mark 1;
+      ! o/monad .bind Int Int { ! o/option .none Int } {
+        fn _ =>
+          do _ <- ! mark 9;
+          ! o/monad .return Int -1
+      }
+    };
+    do present <- ! optional/run_option Int {
+      ! o/option .or_else Int { ! o/monad .return Int 5 } {
+        do _ <- ! mark 9;
+        ! o/monad .return Int -1
+      }
+    };
+    do recovered <- ! optional/run_option Int {
+      ! o/option .or_else Int { ! o/option .none Int } {
+        do _ <- ! mark 2;
+        ! o/monad .return Int 42
+      }
+    };
+    do reader_writer <- ! writer/run_writer String Int {
+      ! reader/run_reader_t Int W Int 6 {
+        ! rw/monad .bind Int Int { ! rw/reader .ask } {
+          fn environment =>
+            ! rw/monad .bind Unit Int { ! reader/lift Int W Unit { ! w/writer .tell "r" } } {
+              fn _ => ! rw/monad .return Int environment
+            }
+        }
+      }
+    };
+    do writer_reader <- ! reader/run_reader Int (Int * String) 4 {
+      ! writer/run_writer_t String R Int {
+        ! wr/monad .bind Int Int { ! writer/lift String R r/monad output Int { ! r/reader .ask } } {
+          fn environment =>
+            ! wr/monad .bind Unit Int { ! wr/writer .tell "w" } {
+              fn _ => ! wr/monad .return Int environment
+            }
+        }
+      }
+    };
+    let fail_with_output : Thk (OW Int) = {
+      ! ow/monad .bind Unit Int { ! optional/lift W w/monad Unit { ! w/writer .tell "pre" } } {
+        fn _ => ! ow/option .none Int
+      }
+    } in
+    do option_writer <- ! writer/run_writer String (Option Int) {
+      ! optional/run_option_t W Int {
+        ! ow/monad .bind Int Int fail_with_output {
+          fn _ =>
+            do _ <- ! mark 9;
+            ! ow/monad .return Int -1
+        }
+      }
+    };
+    do fallback_writer <- ! writer/run_writer String (Option Int) {
+      ! ow/option .or_else Int fail_with_output {
+        ! ow/monad .bind Unit Int { ! optional/lift W w/monad Unit { ! w/writer .tell "post" } } {
+          fn _ => ! ow/monad .return Int 9
+        }
+      }
+    };
+    do writer_option <- ! optional/run_option (Int * String) {
+      ! writer/run_writer_t String O Int {
+        ! wo/monad .bind Unit Int { ! wo/writer .tell "lost" } {
+          fn _ => ! writer/lift String O o/monad output Int { ! o/option .none Int }
+        }
+      }
+    };
+    do trace <- ! read;
+    match (base, environments, answer, absent, present, recovered, writer_option, trace)
+    | (7, (3, (8, 9, 8), 3), 7, +None(), +Some(5), +Some(42), +None(), 12) =>
+      match (reader_writer, writer_reader, option_writer, fallback_writer)
+      | ((6, rw_log), (4, wr_log), (+None(), ow_log), (+Some(9), fallback_log)) =>
+        ! string/eq (Ret Int) heard "b" {
+          ! string/eq (Ret Int) written "ab" {
+            ! string/eq (Ret Int) rw_log "r" {
+              ! string/eq (Ret Int) wr_log "w" {
+                ! string/eq (Ret Int) ow_log "pre" {
+                  ! string/eq (Ret Int) fallback_log "prepost" { ret 0 } { ret 1 }
+                } { ret 2 }
+              } { ret 3 }
+            } { ret 4 }
+          } { ret 5 }
+        } { ret 6 }
+      | _ => ret 7
+      end
+    | _ => ret 8
+    end
+}

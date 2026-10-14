@@ -10,7 +10,7 @@ struct MonadicCase;
 impl MonadicCase {
     fn source(body: &str) -> String {
         let basis =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/control/monad.zy");
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std/effect/monad.zy");
         format!(
             r#"
 let monadic_basis = @(import("{}")) in

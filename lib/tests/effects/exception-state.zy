@@ -13,12 +13,12 @@ param (
   /process;
   builtin
 ) : @(import("../../std/builtin.zy")) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/control/monad.zy"))) in
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
 let (/IState; /instance = state_instance; /modify; /run_state; /eval_state) =
-  builtin |> (@(import("../../std/control/state.zy")))
+  builtin |> (@(import("../../std/effect/state.zy")))
 in
 let (/IException; /instance = exception_instance; /raise; /catch; /handle_exception) =
-  builtin |> (@(import("../../std/control/exception.zy")))
+  builtin |> (@(import("../../std/effect/exception.zy")))
 in
 let step : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
   fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>

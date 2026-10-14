@@ -1,10 +1,10 @@
-let (/Monad; /WithMonad) = builtin |> (@(import("${control}/monad.zy"))) in
+let (/Monad; /WithMonad) = builtin |> (@(import("${effect}/monad.zy"))) in
 let (/IState; /instance = state_instance; /modify) =
-  builtin |> (@(import("${control}/state.zy"))) in
+  builtin |> (@(import("${effect}/state.zy"))) in
 let (/IException; /instance = exception_instance; /raise; /catch) =
-  builtin |> (@(import("${control}/exception.zy"))) in
+  builtin |> (@(import("${effect}/exception.zy"))) in
 let (/IStateExn; /instance = combined_instance; /run_state_exn) =
-  builtin |> (@(import("${control}/state-exn.zy"))) in
+  builtin |> (@(import("${effect}/state-exn.zy"))) in
 let (S, s) = state_instance Int in
 let (E, e) = exception_instance Unit in
 let (C, c) = combined_instance Int Unit in

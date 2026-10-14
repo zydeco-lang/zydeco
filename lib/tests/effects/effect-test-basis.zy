@@ -1,0 +1,30 @@
+-- A bounded decimal trace records ambient effects without relying on stdout inside Ret.
+val
+  (
+    (/Thk; /Ret; /Unit; /Int; /OS; /numeric; /memory; /process; builtin) : @(import(
+      "../../std/builtin.zy"
+    ))
+  )
+=>
+  begin
+    def ! with_trace
+      (body : Thk (Thk (Int -> Ret Unit) -> Thk (Ret Int) -> Thk (Ret Unit) -> Ret Int))
+    : OS =
+        ! memory/allocate OS 8 8 { fn _ => ! process/exit 101 } {
+          fn cell =>
+            let reset : Thk (Ret Unit) = { ! numeric/int/store_le (Ret Unit) cell 0 { ret () } } in
+            let read : Thk (Ret Int) = { ! numeric/int/load_le (Ret Int) cell { fn n => ret n } } in
+            let mark : Thk (Int -> Ret Unit) = {
+              fn digit =>
+                do previous <- ! read;
+                do shifted <- ! numeric/int/mul previous 10;
+                do next <- ! numeric/int/add shifted digit;
+                ! numeric/int/store_le (Ret Unit) cell next { ret () }
+            } in
+            do _ <- ! reset;
+            do status <- ! body mark read reset;
+            ! memory/free OS cell 8 8 { fn _ => ! process/exit 102 } { ! process/exit status }
+        }
+    that
+    (= with_trace)
+  end

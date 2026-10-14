@@ -1,5 +1,5 @@
 begin
-  let monadic_basis = @(import("../../std/control/monad.zy")) that
+  let monadic_basis = @(import("../../std/effect/monad.zy")) that
   param (/numeric; /system; /Ret; /OS; /process; /Int; builtin) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let (/Monad; /Algebra) = builtin |> monadic_basis in

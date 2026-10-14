@@ -70,8 +70,7 @@ to automatically derive relative monad transformers using monadic blocks in Zyde
 
 ### Running the examples
 
-The maintained programs are complete, declaration-free source terms beside this README;
-the algebra example is shared with `lib/examples`.
+The maintained programs are complete, declaration-free source terms beside this README.
 
 | Example | Maintained source term |
 | --- | --- |
@@ -81,7 +80,7 @@ the algebra example is shared with `lib/examples`.
 | relative monads | [`monads.zydeco`](monads.zydeco) |
 | exceptions | [`exn.zydeco`](exn.zydeco) |
 | free monad | [`free.zydeco`](free.zydeco) |
-| relative-monad algebras | [`algebra.zydeco`](../../examples/algebra.zydeco) |
+| relative-monad algebras | [`algebra.zydeco`](algebra.zydeco) |
 | ExnT | [`exnt.zydeco`](exnt.zydeco) |
 | ExnKT | [`exnkt.zydeco`](exnkt.zydeco) |
 
@@ -340,7 +339,7 @@ in the source code of this example, which demonstrates a general pattern that re
 ### Relative Monads in Zydeco
 
 In Section 4 of the paper, we demonstrated how to define relative monads in Zydeco.
-The current relative-monad interface is defined in [`lib/std/control/monad.zy`](../../std/control/monad.zy),
+The current relative-monad interface is defined in [`lib/std/effect/monad.zy`](../../std/effect/monad.zy),
 while the migrated artifact encoding remains in [`core.zydeco`](core.zydeco).
 Three exception monads are defined in [`exn.zydeco`](exn.zydeco).
 Furthermore, common data structures that are relative monads are defined in [`monads.zydeco`](monads.zydeco).

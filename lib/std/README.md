@@ -49,7 +49,7 @@ Each topic owns exactly one implementation: `data`, `text`, `system`, and `numer
 sealed by a final `pack` introduction whose existential type the checker synthesizes,
 so importers splice the implementation without a companion annotation.
 Implementations annotate their parameters in place: the Builtin group through `builtin.zy`,
-and the shared algebraic base through `data/package.type.zy`.
+and the shared data package through `data/package.type.zy`.
 The implementation defines its topic's data types and operations in one dependency-scheduled block,
 so derived operations sit next to the types they observe and no per-module contract split remains for those topics.
 `data/package.type.zy` names that shared base type directly, carrying the data topic's existential witnesses
@@ -67,7 +67,7 @@ Tails are ordinary reusable computations, and host runtimes need no special clos
 [Argument semantics](../../docs/references/language.md#13-primitive-values-and-capabilities) specify lookup failures
 and repeated forcing.
 
-The optional `memory/package.zy` builder is imported directly, like the control libraries.
+The optional `memory/package.zy` builder is imported directly, like the effect libraries.
 It supplies fixed and dynamic layouts, typed pointers, and explicit allocation operations.
 See [explicit storage](#explicit-storage).
 
@@ -106,7 +106,9 @@ There is no separate version resolver or hosted registry.
 
 ## Source layout
 
-The files at the root of this directory define the public entry points:
+The [organization rule](../../docs/references/language.md#standard-library-organization) separates value data,
+general-purpose dictionaries, effects, and runtime capabilities.
+The current files are:
 
 ```text
 builtin.zy                 complete host ABI: surface kinds and types, operation groups
@@ -144,12 +146,18 @@ memory/representation.type.zy  witness with separate storage and codec component
 
 system/package.zy          system data types and capability-preserving assembly
 
-control/*.zy               monadic basis, State, Exception, and their combination
+algebra/monoid.type.zy      general-purpose monoid dictionary
+
+effect/monad.zy            Monad, Algebra, and WithMonad
+effect/{ret,reader,writer,option}.zy  elementary carriers, instances, and transformers
+effect/{state,exception,state-exn}.zy  state, exceptions, and their combination
+effect/*.type.zy           relative-monad basis and carrier-indexed operation interfaces
 
 **/*.type.zy               reusable type terms imported by implementations and companions
 ```
 
 Topic implementations are independently checkable module factories.
+Import `algebra/monoid.type.zy` and the `effect/` modules directly; `std.zy` does not assemble them.
 The public packed value keeps one opening for `Reader`, `Writer`, and `OS`;
 splitting that opening would give related I/O operations incompatible abstract types.
 No compatibility forwarding files remain at the old flat paths.
@@ -280,18 +288,30 @@ Its result protocol `R` is chosen outside the opening, so the private witness ca
 The corresponding curried callback takes `forall (X : VType) . X -> Thk (X -> Ret Int) -> R`.
 Neither callback type promises purity or single invocation.
 
-## Relative monads and control examples
+## Relative monads and effect examples
 
-The [control modules](control) supply `Monad`, `Algebra`, `WithMonad`,
-and carrier-indexed State and Exception interfaces.
+The [effect modules](effect) supply `Monad`, `Algebra`, `WithMonad`, and carrier-indexed Reader,
+Writer, Option, State, and Exception interfaces.
 `WithMonad` packages one carrier and monad dictionary with the chosen operations;
 the combined `IStateExn` interface composes both effects inside that boundary.
 Each effect module's `instance` builder supplies a concrete carrier and its dictionaries;
 generic clients use a witness-dependent `pi`.
+Ret and Optional use an `instance` value rather than a parameterized builder.
 [L11](../../docs/references/language.md#packed-effect-instances) owns the packed boundary
 and its connection to monadic-block translation.
 The [capability walkthrough](../../docs/tutorial/zydeco-guide.md#10-capability-dictionaries) shows how
 to open a concrete instance and pass it to a generic client.
+
+The [elementary effect reference](../../docs/references/language.md#elementary-effect-instances)
+specifies Reader's scoped replacement, Writer's pure monoid contract, and Optional's short-circuiting.
+Import [Ret](effect/ret.zy), [Reader](effect/reader.zy), [Writer](effect/writer.zy),
+or [Option](effect/option.zy) explicitly with the same Builtin value used by other modules.
+Reader, Writer, and Option each expose `transformer_instance`, `lift`, and concrete/base-aware runners.
+The [translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients,
+and the [composition example](../tests/effects/effect-operations.zy) exercises the transformers together.
+The [remaining library proposal](../../docs/proposals/relative-monad-library.md) covers search, control,
+parsing, and other unimplemented families.
+
 For delimited control, the repository explores a library encoding with `Kont R A = Thk (A -> R) -> R`,
 explicit `reset` and `shift`, and ordinary thunks.
 Working examples are [reset/shift with an explicit continuation](../tests/delimcc/reset-shift-k.zy),

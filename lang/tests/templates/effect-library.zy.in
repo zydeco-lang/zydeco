@@ -1,0 +1,9 @@
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("${effect}/monad.zy"))) in
+let (/IReader; reader) = builtin |> (@(import("${effect}/reader.zy"))) in
+let (/Monoid; /IWriter; writer) = builtin |> (@(import("${effect}/writer.zy"))) in
+let (/Option; /IOption; optional) = builtin |> (@(import("${effect}/option.zy"))) in
+let (R, r) = reader/instance Int in
+let output : Monoid Int = (#empty = 0, #append = numeric/int/add) in
+let (W, w) = writer/instance Int output in
+let (O, o) = optional/instance in
+${body}

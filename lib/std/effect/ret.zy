@@ -1,0 +1,21 @@
+-- The ambient relative monad, reusable as the base of a transformer.
+val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
+  begin
+    let (/Monad) = builtin |> (@(import("monad.zy"))) in
+    let instance =
+      pack (M as Ret : VType -> CType)
+      where
+        #monad = (
+          {
+            comatch
+            | .return A a => ret a
+            | .bind A B m f =>
+              do a <- ! m;
+              ! f a
+            end
+          } : Thk (Monad Ret)
+        )
+      end
+    in
+    (= instance)
+  end

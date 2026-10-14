@@ -419,7 +419,7 @@ Use the documented ABI subset when writing a binding.
 ## 7. Relative monads
 
 A relative monad has a carrier `M : VType -> CType` and a codata dictionary `Monad M`.
-The [monadic basis](../../lib/std/control/monad.zy) exports `Monad` and `Algebra`:
+The [monadic basis](../../lib/std/effect/monad.zy) exports `Monad` and `Algebra`:
 
 ```text
 Monad M = codata
@@ -438,7 +438,7 @@ The `Ret` instance implements the operations with ordinary `ret` and `do`:
 
 ```zydeco
 param (/Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_monad = @(import("../../lib/std/control/monad.zy")) in
+let make_monad = @(import("../../lib/std/effect/monad.zy")) in
 let (/Monad) = builtin |> make_monad in
 let ! mo_ret : Monad Ret = comatch
   | .return A value => ret value
@@ -460,7 +460,7 @@ Open the basis in the annotation's scope:
 
 ```zydeco
 param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_monad = @(import("../../lib/std/control/monad.zy")) in
+let make_monad = @(import("../../lib/std/effect/monad.zy")) in
 let (/Monad; /Algebra) = builtin |> make_monad in
 let mo_ret : Thk (Monad Ret) = {
   comatch
@@ -494,14 +494,14 @@ raise : Thk (forall (A : VType) . E -> Ret A)
 ```
 
 Here `Top` is empty codata. The extra `Thk Top` supplies the structure needed for the quantified value type.
-The control library's `raise` and `catch` adapters accept that structure argument
+The effect library's `raise` and `catch` adapters accept that structure argument
 after their packed effect input, introduced below.
 More general polymorphic translation is described
 in [the relative-monad reference](../references/language.md#11-relative-monads).
 
 ## 9. Effect modules
 
-The control modules are ordinary value-function builders from Builtin to packed values:
+The effect modules are ordinary value-function builders from Builtin to packed values:
 
 | Module | Exports |
 | --- | --- |
@@ -514,7 +514,7 @@ Apply a builder and open the selected fields directly:
 
 ```zydeco
 param (/Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_state = @(import("../../lib/std/control/state.zy")) in
+let make_state = @(import("../../lib/std/effect/state.zy")) in
 let (/instance; /eval_state) = builtin |> make_state in
 let ops = instance Int in
 ! eval_state Int Int 7 { ! ops/state .get }
@@ -531,7 +531,7 @@ the handler operations expose its alternatives to clients.
 
 ```zydeco
 param (/String; /Int; /Ret; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_exception = @(import("../../lib/std/control/exception.zy")) in
+let make_exception = @(import("../../lib/std/effect/exception.zy")) in
 let (/instance; /raise; /handle_exception) = builtin |> make_exception in
 let (M, ops) = instance String in
 ! handle_exception String Int (Ret Int)
@@ -558,9 +558,9 @@ This example reads the old state, replaces it, and returns both the old and fina
 
 ```zydeco
 param (/VType; /Thk; /Ret; /Unit; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_monad = @(import("../../lib/std/control/monad.zy")) in
+let make_monad = @(import("../../lib/std/effect/monad.zy")) in
 let (/Monad; /Algebra; /WithMonad) = builtin |> make_monad in
-let make_state = @(import("../../lib/std/control/state.zy")) in
+let make_state = @(import("../../lib/std/effect/state.zy")) in
 let (/IState; /instance; /run_state) = builtin |> make_state in
 let program : Thk (pi ((M, _) : WithMonad (IState Int)) . Int -> M Int) = {
   fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
@@ -656,7 +656,7 @@ let val f P = V in term        total value-function binding
 
 - [Language reference](../references/language.md) — source rules and execution boundaries.
 - [Standard library guide](../../lib/std/README.md) — current capabilities, storage, and packed value composition.
-- [Effect examples](../../lib/tests/effects/) — complete programs using control modules and capability dictionaries.
+- [Effect examples](../../lib/tests/effects/) — complete programs using effect modules and capability dictionaries.
 - [OOPSLA artifact overview](../../lib/tests/oopsla/README.md) — paper examples, transformers,
   and evaluation instructions.
 - [Compiler reference](../references/compiler.md) — phase contracts and maintenance entry points.

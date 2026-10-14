@@ -1,0 +1,56 @@
+-- Read-only environments, specialized to Ret or layered over an explicit base.
+val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
+  begin
+    let (/Monad) = builtin |> (@(import("monad.zy"))) in
+    let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
+    begin
+      let MonadReader = @(import("reader.type.zy")) that
+      let ReaderT (R : VType) (M : VType -> CType) (A : VType) = R -> M A that
+      let Reader (R : VType) = ReaderT R Ret that
+      let IReader (R : VType) (M : VType -> CType) = (#reader :: Thk (MonadReader R M)) that
+
+      let val transformer_instance (R : VType) (M : VType -> CType) (base : Thk (Monad M)) =
+        pack (T as ReaderT R M : VType -> CType)
+        where
+          #monad = (
+            {
+              comatch
+              | .return A a => fn _ => ! base .return A a
+              | .bind A B m f =>
+                fn environment =>
+                  ! base .bind A B { ! m environment } { fn a => ! f a environment }
+              end
+            } : Thk (Monad (ReaderT R M))
+          ),
+          #reader = (
+            {
+              comatch
+              | .ask => fn environment => ! base .return R environment
+              | .local A replacement m => fn _ => ! m replacement
+              end
+            } : Thk (MonadReader R (ReaderT R M))
+          )
+        end
+      that
+      let val instance (R : VType) = transformer_instance R Ret ret_instance/monad that
+
+      def ! lift (R : VType) (M : VType -> CType) (A : VType) (m : Thk (M A)) :
+        ReaderT R M A = fn _ => ! m that
+
+      def ! run_reader_t (R : VType) (M : VType -> CType) (A : VType)
+        (environment : R) (m : Thk (ReaderT R M A))
+      : M A = ! m environment that
+
+      def ! run_reader (R : VType) (A : VType) (environment : R) (m : Thk (Reader R A)) :
+        Ret A = ! run_reader_t R Ret A environment m that
+
+      pack
+          (= Reader as Reader : VType -> VType -> CType)
+          (= ReaderT as ReaderT : VType -> (VType -> CType) -> VType -> CType)
+          (= MonadReader as MonadReader : VType -> (VType -> CType) -> CType)
+          (= IReader as IReader : VType -> (VType -> CType) -> VType)
+      where
+        = instance, = transformer_instance, = lift, = run_reader, = run_reader_t
+      end
+    end
+  end

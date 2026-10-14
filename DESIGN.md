@@ -507,10 +507,12 @@ topics that depend on the shared algebraic base accept that packed value alongsi
 The aggregate carries the library-defined types and modules; host types stay on the Builtin contract.
 Module factories are value functions, while effectful operations inside their results retain computation types.
 See the [standard library guide](lib/std/README.md) for current entry points and interface shapes.
+The [library organization rule](docs/references/language.md#standard-library-organization) assigns value data,
+algebraic dictionaries, effect protocols, and runtime capabilities to their owning directories.
 
 ## Relative Monads and Monadic Blocks
 
-Relative monads are defined as codata in the standard library (see `lib/std/control/monad.zy`).
+Relative monads are defined as codata in the standard library (see `lib/std/effect/monad.zy`).
 The module exports a value function from Builtin to the packed value containing `Monad` and `Algebra`,
 so importing and opening it requires neither a thunk nor a returned computation.
 Zydeco also implements *monadic blocks*, a generalized do-notation selected by the `@[monadic]` meta annotation.

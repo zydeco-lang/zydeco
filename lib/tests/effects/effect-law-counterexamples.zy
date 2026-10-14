@@ -1,0 +1,73 @@
+-- These dictionaries typecheck, but the observation-based law suite must reject them.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/Monad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+-- Duplicating either argument is observable even when its returned answers agree.
+let duplicate_source : Thk (Monad Ret) = {
+  comatch
+  | .return A a => ret a
+  | .bind A B m f =>
+    do _ <- ! m;
+    do a <- ! m;
+    ! f a
+  end
+} in
+let duplicate_continuation : Thk (Monad Ret) = {
+  comatch
+  | .return A a => ret a
+  | .bind A B m f =>
+    do a <- ! m;
+    do _ <- ! f a;
+    ! f a
+  end
+} in
+let observe_ret : Thk (Thk (Ret Int) -> Ret String) = {
+  fn m =>
+    do n <- ! m;
+    ! numeric/int/to_string n
+} in
+! with_trace {
+  fn mark read reset =>
+    do source_status <- ! laws Ret duplicate_source { ret 1 }
+      { fn n => ! numeric/int/add n 2 } { fn n => ! numeric/int/add n 3 }
+      observe_ret mark read reset;
+    do continuation_status <- ! laws Ret duplicate_continuation { ret 1 }
+      { fn n => ! numeric/int/add n 2 } { fn n => ! numeric/int/add n 3 }
+      observe_ret mark read reset;
+    -- Returned strings still obey the monoid equations; the ambient trace does not.
+    let output : Monoid String = (
+      #empty = "",
+      #append = {
+        fn left right =>
+          do _ <- ! mark 5;
+          ! string/append left right
+      }
+    ) in
+    let (W, w) = writer/instance String output in
+    do impure_status <- ! laws W w/monad { ret (1, "m") }
+      {
+        fn n =>
+          do next <- ! numeric/int/add n 2;
+          ret (next, "f")
+      }
+      {
+        fn n =>
+          do next <- ! numeric/int/add n 3;
+          ret (next, "g")
+      }
+      {
+        fn m =>
+          do (n, written) <- ! writer/run_writer String Int m;
+          do text <- ! numeric/int/to_string n;
+          ! string/append text written
+      } mark read reset;
+    ! numeric/int/gt (Ret Int) source_status 0 {
+      ! numeric/int/gt (Ret Int) continuation_status 0 {
+        ! numeric/int/gt (Ret Int) impure_status 0 { ret 0 } { ret 1 }
+      } { ret 2 }
+    } { ret 3 }
+}

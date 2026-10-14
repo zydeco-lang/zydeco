@@ -9,7 +9,8 @@ use zydeco_tests::utils::{
 fn rendered_wrappers_preserve_acceptance_and_rejection_through_formatting() {
     for (source, parameter, directory) in [
         (include_str!("../templates/memory.zy.in"), "directory", "../../lib/std/memory"),
-        (include_str!("../templates/effects.zy.in"), "control", "../../lib/std/control"),
+        (include_str!("../templates/effects.zy.in"), "effect", "../../lib/std/effect"),
+        (include_str!("../templates/effect-library.zy.in"), "effect", "../../lib/std/effect"),
     ] {
         let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join(directory)
