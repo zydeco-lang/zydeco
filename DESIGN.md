@@ -662,7 +662,7 @@ Default evaluation supports values and directly returning computations;
 explicit execution may supply a Builtin host contract.
 The frontend captures output and uses empty stdin and arguments.
 The [interactive engine](docs/references/compiler.md#interactive-engine) explains its lifecycle,
-and [CONTRIBUTING.md](CONTRIBUTING.md#use-the-interactive-repl) lists the commands and editing keys.
+and the [CLI guide](cli/README.md#interactive-repl) lists the commands and editing keys.
 
 ### Arena and ID invariants
 
@@ -773,7 +773,7 @@ Different source identities therefore fail to link.
 This is a conservative compatibility check: even a comment change requires rebuilding both sides.
 It checks artifact pairing, while the shared definitions remove duplicated layout and protocol decisions;
 it does not prove the correctness of handwritten instruction selection or host implementations.
-See [native build packaging](CONTRIBUTING.md#compile-programs) for the build-directory contract.
+See [native build packaging](cli/README.md#native-executables) for the build-directory contract.
 
 The frame model implements entry, suspension, resumption, and sparse root discovery.
 Native preparation checks activation ownership, initialized bindings, and continuation slot aliases before emission;

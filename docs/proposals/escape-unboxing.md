@@ -67,7 +67,7 @@ This evidence supports an opt-in closure experiment and a reusable comparison bo
 It does not establish a general speedup or justify a new default.
 Frame-resident products, mixed raw/reference fields, and layout-directed machine calls remain deferred:
 they need lifetime or entry evidence that the current policy cannot supply.
-The [workflow](../../CONTRIBUTING.md#representation-experiments) gives reproduction and validation commands.
+The [workflow](../../cli/README.md#representation-experiments) gives reproduction and validation commands.
 
 ## Further scalar unboxing
 

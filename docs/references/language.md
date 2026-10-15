@@ -2217,7 +2217,7 @@ Calling A again while it is active is rejected. Entry from a signal handler is u
 Retained callbacks, persistent instances, recoverable errors, and incoming memory ownership remain separate extensions.
 
 `build --target object`, `staticlib`, and `sharedlib` emit AMD64 Linux or macOS libraries.
-The [artifact workflow](../../CONTRIBUTING.md#compile-and-consume-c-libraries) produces a C header,
+The [artifact workflow](../../cli/README.md#c-libraries) produces a C header,
 a generated Zydeco import interface, and a manifest alongside the native output.
 Ordinary `@(import(...))` still imports source, including a compiled library's original factory;
 it does not choose an artifact or implicitly apply Builtin.
@@ -2277,7 +2277,7 @@ Units require matching compiler, runtime model, runtime source, target, and entr
 Native unit dependencies are supported; dependencies between native units
 and C library artifacts inside a library remain unsupported.
 A process may separately link both kinds of library.
-The [workflow](../../CONTRIBUTING.md#compile-and-consume-native-zydeco-units) shows the commands;
+The [workflow](../../cli/README.md#native-zydeco-units) shows the commands;
 the [compiler contract](compiler.md#native-unit-artifacts) owns artifact and linkage details.
 Broader type interfaces and host-language bindings remain in the [ABI proposal](../proposals/zydeco-abi.md).
 
@@ -2333,7 +2333,7 @@ Zero exits pass; nonzero exits display captured stdout and stderr.
 Runtime errors also fail their pair, and remaining pairs still run.
 The summary counts pairs, and the command fails if any pair fails.
 Wasm requires Node.js and uses the bundled host; native execution requires the AMD64 tools and runtime sources.
-See the [workflow](../../CONTRIBUTING.md#check-and-run-source-terms) for tool and runtime configuration.
+See the [workflow](../../cli/README.md#run-and-test-programs) for tool and runtime configuration.
 
 ## Meta Annotations (Compile-Time Metadata)
 

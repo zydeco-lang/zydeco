@@ -2264,7 +2264,7 @@ The [policy experiment](../../cli/examples/representations.rs) compares residual
 including a Rust const-generic width limit; these are static code counts, not executed allocations or peak memory.
 The [execution fixture](../../lib/tests/core/representation-policies.zy) exercises a locally opened recursive closure
 with live captured values.
-See [the contribution workflow](../../CONTRIBUTING.md#representation-experiments) for reproducible commands.
+See [the CLI guide](../../cli/README.md#representation-experiments) for reproducible commands.
 
 ### Storage Evidence and Machine Calls
 
@@ -2382,7 +2382,7 @@ The [environment capability](#environment-actions-and-roots) defines address sta
 The emitter serializes model-defined actions and implements SysV register placement,
 stack alignment, jumps, return prologues, and host bridges.
 [Native packaging](../../cli/src/native.rs) bundles the runtime and shared model
-and invokes the target toolchain using [CONTRIBUTING's build contract](../../CONTRIBUTING.md#compile-programs).
+and invokes the target toolchain using [the CLI build workflow](../../cli/README.md#native-executables).
 [Native-model tests](../../lang/tests/tests/native_model.rs) check preparation and transitions;
 [native frame proposal](../proposals/native-frames.md) retains alternative storage and evaluation decisions.
 Model regressions reject mismatched layouts, uninitialized reads, stale or out-of-order tokens,
@@ -3337,7 +3337,7 @@ Explicit execution goes through the executable entry boundary.
 Root command metadata is parsed into typed commands before ordinary submission handling.
 Help and quit do not consume a source number; unsupported command arguments are rejected,
 and unrecognized metadata remains ordinary language syntax.
-[CONTRIBUTING](../../CONTRIBUTING.md#use-the-interactive-repl) owns commands, keys, and retry interaction.
+The [CLI guide](../../cli/README.md#interactive-repl) documents commands, editing keys, and retry interaction.
 Deferred interaction work covers [history persistence and replay](../ideas/repl-history-replay.md)
 and [history pruning](../ideas/repl-history-pruning.md).
 

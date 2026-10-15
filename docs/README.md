@@ -16,6 +16,7 @@ The [ownership map](references/README.md#rule-ownership) connects source rules t
 | --- | --- |
 | [Language reference](references/language.md) | Look up syntax, typing, behavior, packages, capabilities, and execution boundaries |
 | [Compiler reference](references/compiler.md) | Find phase contracts, representations, algorithms, runtimes, and validation |
+| [CLI guide](../cli/README.md) | Run programs, use the REPL, and build artifacts |
 | [Standard library guide](../lib/std/README.md) | Use current interfaces, capabilities, and library composition |
 | [Code style](style.md) | Choose readable names, source layout, and composition idioms |
 | [Editor guide](../editor/README.md) | Configure Cajun and find client setup |

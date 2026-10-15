@@ -123,7 +123,7 @@ to 6% faster than retained frames.
 Small process-wall-time differences do not establish a general throughput ranking.
 Runtime optimization and inlining materially affected the results;
 compiler `--release` alone does not optimize the linked runtime.
-See the [native build workflow](../../../CONTRIBUTING.md#compile-programs).
+See the [native build workflow](../../../cli/README.md#native-executables).
 
 Persistent environment figures include word-buffer capacity, Rust owner state, and metadata-vector capacity.
 They exclude allocator overhead, the control stack, managed heap, host roots,

@@ -560,7 +560,7 @@ and observable source semantics remain shared.
 Separately compiled Zydeco code needs the native agreement in section 1, but does not need a foreign-language SDK.
 The implemented [native units](../references/language.md#native-zydeco-units) supply independently compiled objects,
 typed initializer imports, exact compatibility checks, and source-free transitive linking.
-The [workflow](../../CONTRIBUTING.md#compile-and-consume-native-zydeco-units) demonstrates this minimum.
+The [workflow](../../cli/README.md#native-zydeco-units) demonstrates this minimum.
 The remaining questions concern richer public types and optional shared dependency initialization.
 
 ### The unit boundary

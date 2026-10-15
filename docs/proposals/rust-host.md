@@ -43,7 +43,7 @@ fn main() {
 }
 ```
 
-The [C library workflow](../../CONTRIBUTING.md#compile-and-consume-c-libraries) builds the artifact
+The [C library workflow](../../cli/README.md#c-libraries) builds the artifact
 and explains its dependencies and runtime support.
 Rust's [external blocks](https://doc.rust-lang.org/reference/items/external-blocks.html) supply the declarations;
 a [Cargo build script](https://doc.rust-lang.org/cargo/reference/build-scripts.html) can supply link inputs
