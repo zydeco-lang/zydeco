@@ -1137,6 +1137,10 @@ and static-root elaboration before publishing its result.
 synthesizes the payload once under its monadic environment, and passes a `CheckedTerm`
 to the [algebra translation](../../lang/statics/src/elaborate/monadic).
 The translator constructs lifted types, structures, and terms, rebinding their static evidence into the output context.
+It dispatches the retained root to the existing type, value, or computation translation and preserves that sort.
+The outer wrapper is a carrier-parameterized type abstraction, a carrier-and-dictionary value abstraction,
+or the existing carrier-and-dictionary computation abstraction, respectively.
+Kinds are rejected before nominal preparation.
 It translates the retained checked payload rather than rechecking its source under unrelated expectations.
 [L11](language.md#11-relative-monads) specifies the source translation and basis;
 generated code must satisfy the same finalization and residual representation boundaries as ordinary terms.
@@ -1211,8 +1215,11 @@ Structure generation reserves one private codata dictionary and builds it with t
 Its methods quantify each declaration's free type dependencies and their structure evidence;
 higher-kinded declarations additionally quantify their ordinary type arguments and structures.
 Recursive requests select methods on the fixed dictionary instead of rebuilding their bodies.
-The translated block binds the dictionary thunk under its carrier and runtime monad arguments,
+Translated value and computation roots bind the dictionary thunk under their carrier and runtime monad arguments,
 so dynamic evaluation and inlining use the same generated code and nominal families.
+Type roots prepare the same applicative families but skip dictionary construction entirely.
+[Root-sort regressions](../../lang/tests/tests/monadic_roots.rs) check that distinction, source imports,
+typed-arena invariants, and shared lowering.
 
 The `comatch` constructor accepts an expected classifier, exposes its codata shape to check each arm,
 and retains the nominal classifier on the result.

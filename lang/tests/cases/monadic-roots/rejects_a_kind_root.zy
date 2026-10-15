@@ -1,0 +1,4 @@
+-- prelude: monadic
+-- expect: reject(tyck.sort-mismatch)
+
+@[monadic] VType

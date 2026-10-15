@@ -1,0 +1,7 @@
+-- prelude: monadic
+-- expect: reject(tyck.type-mismatch)
+
+let M (A : VType) = Unit -> Ret A in
+fn (mo : Thk (Monad Ret)) =>
+  let _ = (@[monadic] { ret 1 }) M mo in
+  ret ()

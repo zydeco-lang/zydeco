@@ -78,7 +78,9 @@ impl MetadataKind {
             | Self::Intrinsic => "Splice a compiler-defined CBPV intrinsic.",
             | Self::Builtin => "Assign a compiler-defined Builtin package role.",
             | Self::Ffi => "Declare a C function or native Zydeco unit initializer.",
-            | Self::Monadic => "Translate an expression using the lexical monadic basis.",
+            | Self::Monadic => {
+                "Translate a type, value, or computation using the lexical monadic basis."
+            }
             | Self::TypeOf => "Extract an expression's type or kind without running it.",
             | Self::Partial => "Allow the annotated computation's own binding patterns to fail.",
             | Self::Format => "Override source formatting policy for an expression.",

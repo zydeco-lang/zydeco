@@ -1,0 +1,12 @@
+-- prelude: monadic
+
+let MonadicMonad : (VType -> CType) -> CType = @[monadic] Monad Ret in
+let mo : Thk (MonadicMonad Ret) = {
+  comatch
+  | .return A structure value => ret value
+  | .bind A structure_A B structure_B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+! mo .return Unit triv ()

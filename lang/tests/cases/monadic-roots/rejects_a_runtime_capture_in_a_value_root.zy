@@ -1,0 +1,6 @@
+-- prelude: monadic
+-- expect: reject(tyck.not-inlinable)
+
+fn (captured : Int) =>
+  let translated = @[monadic] (#value = captured) in
+  ret ()

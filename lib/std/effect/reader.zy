@@ -11,7 +11,9 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
         end
       } that
       let MonadReader = @(import("reader.type.zy")) that
-      let ReaderT (R : VType) (M : VType -> CType) (A : VType) = R -> M A that
+      let ReaderT (R : VType) (M : VType -> CType) =
+        (@[monadic] @(import("reader-source.type.zy"))) M R
+      that
       let Reader (R : VType) = ReaderT R Ret that
       let IReader (R : VType) (M : VType -> CType) = (#reader :: Thk (MonadReader R M)) that
 
@@ -20,12 +22,11 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
           (
             @[monadic] begin
               let VType = @(intrinsic(vtype)) in
-              let Thk = @(intrinsic(thk)) in
               let Ret = @(intrinsic(ret)) in
               let Transformer = @(import("transformer-inner.type.zy")) in
               let MonadReader = @(import("reader.type.zy")) in
               let with_lift = { @(import("transformer-source.zy")) } in
-              let Reader (R : VType) (A : VType) = R -> Ret A in
+              let Reader = @(import("reader-source.type.zy")) in
               let Source (R : VType) =
                 codata
                 | .core : Transformer Ret (Reader R)

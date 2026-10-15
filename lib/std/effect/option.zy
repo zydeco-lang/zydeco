@@ -12,7 +12,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       } that
       let Option = @(import("../data/option.zy")) that
       let MonadOption = @(import("option.type.zy")) that
-      let OptionT (M : VType -> CType) (A : VType) = M (Option A) that
+      let OptionT = @[monadic] @(import("option-source.type.zy")) that
       let Optional = OptionT Ret that
       let IOption (M : VType -> CType) = (#option :: Thk (MonadOption M)) that
 
@@ -20,15 +20,10 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
         let translated = {
           (
             @[monadic] begin
-              let VType = @(intrinsic(vtype)) in
-              let CType = @(intrinsic(ctype)) in
-              let Thk = @(intrinsic(thk)) in
               let Ret = @(intrinsic(ret)) in
-              let Unit = @(intrinsic(unit)) in
               let Transformer = @(import("transformer-inner.type.zy")) in
               let with_lift = { @(import("transformer-source.zy")) } in
-              let Option = @(import("../data/option.zy")) in
-              let Optional (A : VType) = Ret (Option A) in
+              let Optional = @(import("option-source.type.zy")) in
               let MonadOption = @(import("option.type.zy")) in
               let Source =
                 codata

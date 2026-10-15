@@ -1085,7 +1085,43 @@ $
 $
 
 `Monad` and `Algebra` are lexical type constructors. The structural algebra translation produces $M_2$ and $B_2$;
-the displayed `forall` and computation arrow are the exact wrapper emitted by the checker.
+the displayed `forall` and computation arrow are the exact wrapper emitted for a computation root.
+Type and value roots use the same lexical basis and structural translation, preserving their sorts.
+The following rules share the basis premises above and take $X$ fresh:
+
+$
+  frac(
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $op("global")(Gamma) \; Delta tack.r S_1 arrow.r.double K$,
+      $op("global")(Gamma) \, X : ("VType" arrow.r "CType")
+        tack.r S_1 arrow.r.squiggly S_2 : K$,
+    )),
+    Gamma \; Delta tack.r #text("@[monadic]") space S_1 arrow.r.double
+      ("VType" arrow.r "CType") arrow.r K,
+  )
+  quad #text(size: 6.5pt)[MONADIC-TYPE]
+$
+
+$
+  frac(
+    #pad(bottom: 3pt, stack(
+      spacing: 11pt,
+      $op("global")(Gamma) \; Delta tack.r V_1 arrow.r.double A_1$,
+      $op("global")(Gamma) \, X : ("VType" arrow.r "CType")
+        tack.r V_1 arrow.r.squiggly V_2 : A_2$,
+    )),
+    Gamma \; Delta tack.r #text("@[monadic]") space V_1 arrow.r.double
+      #text("val pi") (X : "VType" arrow.r "CType")
+        ("mo" : "Thk" ("Monad" space X)) . A_2,
+  )
+  quad #text(size: 6.5pt)[MONADIC-VALUE]
+$
+
+The type result is `fn X =>` $S_2$, with no runtime dictionary parameter.
+The value result is `val X mo =>` $V_2$, without an additional `ret` or force.
+Runtime algebra dictionaries for local nominal declarations are bound inside value and computation wrappers;
+type roots construct only their applicative families. There is no kind-root translation rule.
 
 #pagebreak()
 

@@ -687,11 +687,30 @@ Checking a `Monad` dictionary verifies its classifier, not these equations.
 
 ### Monadic Blocks
 
-`@[monadic] e` selects the lexically visible `Monad` and `Algebra` constructors and performs algebra translation.
-It supplies an outer carrier parameter followed by a thunked monad implementation.
-Source `Ret`, `ret`, and `do` are reinterpreted through that carrier and its operations.
-Parameters outside the annotation remain outside; translated parameters inside follow the carrier and instance.
+`@[monadic] e` selects the lexically visible `Monad` and `Algebra` constructors
+and performs sort-preserving algebra translation.
+Write `L_M` for translation under carrier `M` and its monad implementation.
+The annotation synthesizes its operand once, then supplies an outer interface appropriate to that operand's sort:
+
+| Operand | Generated interface | Result classifier |
+| --- | --- | --- |
+| Type `T : K` | `fn (M : VType -> CType) => L_M(T)` | `(VType -> CType) -> K` |
+| Value `v : A` | `val (M : VType -> CType) (mo : Thk (Monad M)) => L_M(v)` | `val pi (M : VType -> CType) (mo : Thk (Monad M)) . L_M(A)` |
+| Computation `e : B` | `fn (M : VType -> CType) (mo : Thk (Monad M)) => L_M(e)` | `forall (M : VType -> CType) . Thk (Monad M) -> L_M(B)` |
+
+Type operands include value types, computation types, and higher-kinded type constructors.
+Their translation needs the carrier but no runtime dictionary argument.
+Value operands include thunks, value functions, and ordinary value packages used as modules;
+translation preserves them as values rather than inserting a `ret` or forcing suspended computations.
+Kinds have no operand translation and are rejected with `tyck.sort-mismatch`.
+The operand receives no expected classifier from outside the annotation; an ascription inside it applies normally.
+
+Source `Ret`, `ret`, and `do` are reinterpreted through the supplied carrier and its operations.
+Parameters outside the annotation remain outside; translated parameters inside follow the generated interface.
 Polymorphic translation may require additional structure arguments describing how a type supports the translation.
+For example, `let MonadicMonad = @[monadic] (Monad Ret)` derives the dictionary classifier:
+`MonadicMonad M` has the translated operations, including a `Thk Top` argument after each value-type quantifier.
+Likewise, `(@[monadic] { ret 1 }) M mo` is a value of type `Thk (M Int)`.
 
 ```zydeco
 param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
@@ -801,6 +820,14 @@ Translation acts on both, generating the transformed dictionary and lift at once
 It does not inspect an opaque dictionary passed from outside the annotation.
 Dependencies must be bound as parameters inside the payload, as required
 by the [closed translation boundary](#closed-translation-boundary).
+
+The adapter's input classifier is itself derived by translating `fn (T : VType -> CType) => Transformer Ret T`
+as a type root.
+This keeps the translated monad and lift signatures synchronized with their ordinary definitions.
+Each standard effect similarly shares one closed source carrier, such
+as [Reader's](../../lib/std/effect/reader-source.type.zy) or [NonDet's](../../lib/std/effect/nondet-source.type.zy),
+between its public type derivation and its implementation translation.
+Configured effects reorder the generated type arguments to keep configuration before the base carrier.
 
 `from_monadic` supplies the trivial `Top` arguments introduced for value-type quantifiers
 on the generated monad and lift.
@@ -1063,8 +1090,8 @@ and [translated clients](../../lib/tests/effects/nondet-monadic.zy) exercise the
 Algebra translation is defined on closed payloads.
 Supply external runtime values and operations through function parameters bound inside the annotation;
 supply external types and type constructors through type abstractions inside it.
-Instantiating the translated function supplies those arguments after the carrier and monad implementation,
-together with any structure arguments introduced by translation.
+Instantiating the translated function supplies those arguments after the carrier and, for value or computation roots,
+the monad implementation, together with any structure arguments introduced by translation.
 This parameter-passing boundary is intentional.
 Implicit runtime capture and importing algebra evidence from the enclosing lexical environment are outside the design.
 
@@ -1084,14 +1111,12 @@ It is not a planned mechanism for importing external structure evidence.
 
 ### Polymorphic Value Functions
 
-A value function inside a monadic computation may assemble suspended code that sequences
-into an abstract computation type.
+A translated value function may assemble suspended code that sequences into an abstract computation type.
 Translation supplies that type's algebra at the value-function binder,
 using the same structure-passing convention as computation polymorphism.
 The value function still disappears through [static elimination](#10-static-elimination).
 
-Write `L_M` for translation under carrier `M`, and `Sig_M,K(T)` for the computation type
-of the structure required by a target type `T : K`.
+Write `Sig_M,K(T)` for the computation type of the structure required by a target type `T : K`.
 The existing kind-directed signature rules are:
 
 ```text
@@ -1140,7 +1165,7 @@ currently requires an explicit signature for some higher-order factories even wi
 
 ### Applicative Nominal Translation
 
-A closed monadic computation can define its own nominal data and codata types,
+A closed monadic payload can define its own nominal data and codata types,
 including parameterized and mutually recursive definitions.
 Translation preserves their constructors, patterns, and observations through a nominal type family
 for each source declaration.
@@ -1197,12 +1222,12 @@ External nominal types still enter through type parameters inside the annotation
 Knowing their seal bodies does not authorize opening them or constructing an enclosing algebra implicitly.
 The [compiler reference](compiler.md#nominal-algebra-construction) describes ownership and recursive construction.
 
-### Translation Coverage and Deferred Roots
+### Translation Coverage
 
-The implemented annotation requires a computation payload.
-Extending it to type, value, or pure module roots is deferred until their result
-and application interfaces are designed.
-That deferral does not exclude value functions or type definitions occurring inside a computation payload.
+Type, value, and computation roots use the same structural translation rules.
+Pure modules are translated according to their ordinary type or value sort, with no separate module mechanism.
+Type roots construct applicative nominal families without generating runtime algebra dictionaries.
+Value and computation roots bind the shared lazy dictionary inside their carrier and monad parameters.
 Polymorphic value functions and local nominal data/codata follow the rules above.
 Supported nominal definitions have a data or codata body after their type parameters.
 Other sealed heads, including nominal aliases of arrows, `Ret`, or abstract constructors,

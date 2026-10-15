@@ -1,0 +1,22 @@
+-- prelude: monadic
+
+let translated : val pi (M : VType -> CType) (mo : Thk (Monad M))
+  (A : VType) (structure : Thk Top) (value : A)
+.
+  Thk (
+    M A
+  ) =
+  @[monadic] val (A : VType) (value : A) => { ret value }
+in
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+let value : Thk (Ret Int) = translated Ret mo Int triv 5 in
+let Same = (@[monadic] val pi (A : VType) (value : A) . Thk (Ret A)) Ret in
+let _ : Same = translated Ret mo in
+! value

@@ -1,0 +1,33 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+let translated : val pi (M : VType -> CType) (mo : Thk (Monad M))
+  (B : CType) (algebra : Thk (Algebra M B))
+.
+  Thk (
+    Thk B -> B
+  ) =
+  @[monadic] val (B : CType) =>
+    {
+      fn (continuation : Thk B) =>
+        do _ <- ret ();
+        ! continuation
+    }
+in
+let algebra : Thk (Algebra Ret (Ret Int)) = {
+  fn A computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+} in
+let run = translated Ret mo (Ret Int) algebra in
+do value <- ! run { ret 4 };
+do status <- ! int/sub value 4;
+! exit status

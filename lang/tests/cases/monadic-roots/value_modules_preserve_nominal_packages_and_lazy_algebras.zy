@@ -1,0 +1,37 @@
+-- stage: run
+-- prelude: monadic
+
+let mo : Thk (Monad Ret) = {
+  comatch
+  | .return A value => ret value
+  | .bind A B computation continuation =>
+    do value <- ! computation;
+    ! continuation value
+  end
+} in
+let translated = @[monadic] begin
+  def Stream : CType =
+    codata
+    | .head : Ret Int
+    | .tail : Stream
+    end
+  that
+  let stream : Thk Stream = {
+    fix self =>
+      do _ <- ret ();
+      comatch
+      | .head => ret 9
+      | .tail => ! self
+      end
+  } in
+  (
+    (Stream, (stream, { fn (source : Thk Stream) => ! source .tail .tail .head })) : exists
+      (R : CType)
+    .
+      Thk R * Thk (Thk R -> Ret Int)
+  )
+end in
+let (R, (algebra, (stream, read))) = translated Ret mo in
+do value <- ! read stream;
+do status <- ! int/sub value 9;
+! exit status

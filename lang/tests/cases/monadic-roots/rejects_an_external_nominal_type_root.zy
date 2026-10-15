@@ -1,0 +1,10 @@
+-- prelude: monadic
+-- expect: reject(tyck.not-inlinable-seal)
+
+def Outside : VType =
+  data
+  | +Outside : Unit
+  end
+in
+let Invalid = @[monadic] Outside in
+ret ()

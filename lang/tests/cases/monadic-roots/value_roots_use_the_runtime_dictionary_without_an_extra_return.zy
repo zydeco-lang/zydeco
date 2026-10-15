@@ -1,0 +1,33 @@
+-- stage: run
+-- prelude: monadic
+
+let Count (A : VType) = Int -> Ret (A * Int) in
+let make_dictionary : Thk (Int -> Monad Count) = {
+  fn increment =>
+    comatch
+    | .return A value => fn count =>
+      do next <- ! int/add count increment;
+      ret (value, next)
+    | .bind A B computation continuation => fn count =>
+      do (value, next) <- ! computation count;
+      ! continuation value next
+    end
+} in
+let first = { ! make_dictionary 1 } in
+let second = { ! make_dictionary 2 } in
+let translated = @[monadic] (
+  #plain = 7,
+  #run = {
+    do value <- ret 1;
+    ret value
+  }
+) in
+let first_value = translated Count first in
+do selected <- ! int/eq (Ret (Thk (Monad Count))) 0 0 { ret second } { ret first };
+let second_value = translated Count selected in
+do (a, first_count) <- ! first_value/run 0;
+do (b, second_count) <- ! second_value/run 0;
+match (first_value/plain, second_value/plain, a, b, first_count, second_count)
+| (7, 7, 1, 1, 2, 4) => ! exit 0
+| _ => ! exit 1
+end

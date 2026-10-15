@@ -1,0 +1,8 @@
+-- Ordinary source shared by the carrier and implementation translations.
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Ret = @(intrinsic(ret)) in
+  param R : VType in
+  param A : VType in
+  R -> Ret A
+end

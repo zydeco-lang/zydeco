@@ -1,0 +1,9 @@
+-- Ordinary source shared by the carrier and implementation translations.
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Ret = @(intrinsic(ret)) in
+  let Either = @(import("../data/either.zy")) in
+  param E : VType in
+  param A : VType in
+  Ret (Either E A)
+end

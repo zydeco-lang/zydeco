@@ -1,0 +1,19 @@
+-- prelude: monadic
+
+let Stream = @[monadic] begin
+  def Stream (A : VType) : CType =
+    codata
+    | .head : Ret A
+    | .tail : Stream A
+    end
+  that
+  Stream
+end in
+let stream : Thk (Stream Ret Int) = {
+  fix self =>
+    comatch
+    | .head => ret 1
+    | .tail => ! self
+    end
+} in
+! stream .tail .head

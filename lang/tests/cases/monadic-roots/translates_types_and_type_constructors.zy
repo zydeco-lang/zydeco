@@ -1,0 +1,12 @@
+-- prelude: monadic
+
+let Lift : (VType -> CType) -> VType -> CType = @[monadic] Ret in
+let Value : (VType -> CType) -> VType = @[monadic] Int * Thk (Ret Int) in
+let Computation = @[monadic] forall (A : VType) . Thk (Ret A) -> Ret A in
+let M (A : VType) = Int -> Ret A in
+let _ : Thk (Lift M Int) = { fn state => ret 1 } in
+let _ : Value M = (1, { fn state => ret 2 }) in
+let _ : Thk (Computation M) = { fn A structure computation => ! computation } in
+let Twice = @[monadic] @[monadic] Ret Int in
+let _ : Thk (Twice M Ret) = { ret 3 } in
+ret ()

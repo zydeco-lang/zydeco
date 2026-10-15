@@ -1,7 +1,8 @@
 -- Shared interface adaptation for transformers derived by algebra translation.
-val ((/VType; /CType; /Thk; builtin) : @(import("../builtin.zy"))) =>
+val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
   begin
     let Monad = @(import("monad.type.zy")) that
+    let Algebra = @(import("algebra.type.zy")) that
     let Transformer = @(import("transformer-inner.type.zy")) that
     let MonadTrans = @(import("transformer.type.zy")) that
     let Top = @(import("top.type.zy")) that
@@ -15,19 +16,8 @@ val ((/VType; /CType; /Thk; builtin) : @(import("../builtin.zy"))) =>
     let ITransformer (M : VType -> CType) (T : VType -> CType) =
       (#lift :: Thk (Lift M T))
     that
-    let MonadicMonad (T : VType -> CType) =
-      codata
-      | .return : forall (A : VType) . Thk Top -> A -> T A
-      | .bind : forall (A : VType) .
-           Thk Top
-        -> (forall (B : VType) . Thk Top -> Thk (T A) -> Thk (A -> T B) -> T B)
-      end
-    that
-    let MonadicTransformer (M : VType -> CType) (T : VType -> CType) =
-      codata
-      | .monad : MonadicMonad T
-      | .lift : forall (A : VType) . Thk Top -> Thk (M A) -> T A
-      end
+    let MonadicTransformer =
+      @[monadic] fn (T : VType -> CType) => Transformer Ret T
     that
     -- Supply only trivial value-type structure; carrier-internal algebras remain intact.
     def ! from_monadic (M : VType -> CType) (T : VType -> CType)

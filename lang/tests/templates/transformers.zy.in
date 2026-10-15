@@ -5,8 +5,8 @@ let (/instance = ret_instance) = builtin |> (@(import("${std}/effect/ret.zy"))) 
 let (/StateT; /IState; state) = builtin |> (@(import("${std}/effect/state.zy"))) in
 let (/ExceptionT; /IException; exception) = builtin |> (@(import("${std}/effect/exception.zy"))) in
 let (/ReaderT; reader) = builtin |> (@(import("${std}/effect/reader.zy"))) in
-let (/Monoid; writer) = builtin |> (@(import("${std}/effect/writer.zy"))) in
-let optional = builtin |> (@(import("${std}/effect/option.zy"))) in
+let (/WriterT; /Monoid; writer) = builtin |> (@(import("${std}/effect/writer.zy"))) in
+let (/Option; /OptionT; optional) = builtin |> (@(import("${std}/effect/option.zy"))) in
 let (/List; data_package) = builtin |> (@(import("${std}/data/package.zy"))) in
 let (/NonDetT; nondet) = (builtin |> (@(import("${std}/effect/nondet.zy")))) data_package in
 let output : Monoid Int = (#empty = 0, #append = numeric/int/add) in

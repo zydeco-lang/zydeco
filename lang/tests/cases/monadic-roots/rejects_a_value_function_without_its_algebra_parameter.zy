@@ -1,0 +1,16 @@
+-- prelude: monadic
+-- expect: reject(tyck.type-mismatch)
+
+let translated = @[monadic] val (B : CType) =>
+  {
+    fn (continuation : Thk B) =>
+      do _ <- ret ();
+      ! continuation
+  } in
+let _ : val pi (M : VType -> CType) (mo : Thk (Monad M))
+  (B : CType)
+.
+  Thk (
+    Thk B -> B
+  ) = translated in
+ret ()

@@ -28,6 +28,61 @@ impl TransformerCase {
 }
 
 #[test]
+fn derived_carriers_preserve_public_argument_order_and_structure() {
+    let source = TransformerCase::source(
+        r#"
+let _ = val (R : VType) (M : VType -> CType) (A : VType)
+  (m : Thk (ReaderT R M A))
+=>
+  (
+    m : Thk (R -> M A)
+  ) in
+let _ = val (S : VType) (M : VType -> CType) (A : VType)
+  (m : Thk (StateT S M A))
+=>
+  (
+    m : Thk (S -> M (A * S))
+  ) in
+let _ = val (W : VType) (M : VType -> CType) (A : VType)
+  (m : Thk (WriterT W M A))
+=>
+  (
+    m : Thk (M (A * W))
+  ) in
+let _ = val (M : VType -> CType) (A : VType)
+  (m : Thk (OptionT M A))
+=>
+  (
+    m : Thk (M (Option A))
+  ) in
+let _ = val (E : VType) (M : VType -> CType) (A : VType)
+  (m : Thk (ExceptionT E M A))
+=>
+  (
+    m : Thk (
+      M (
+        data
+        | +Left : E
+        | +Right : A
+        end
+      )
+    )
+  ) in
+let _ = val (M : VType -> CType) (A : VType) (m : Thk (NonDetT M A)) =>
+  (
+    m : Thk (
+      forall (R : CType) .
+        Thk (Algebra M R) -> Thk (A -> Thk R -> R) -> Thk R -> R
+    )
+  ) in
+! exit 0
+"#,
+    );
+    SourceCase::assert_accepted(SourceCase::check_linted(&source));
+    SourceCase::assert_accepted(SourceCase::lower(&source));
+}
+
+#[test]
 fn common_interface_derives_a_closed_source_and_preserves_packed_witnesses() {
     let source = TransformerCase::source(
         r#"
@@ -131,15 +186,22 @@ fn transformer_interfaces_reject_wrong_bases_carriers_and_lifts() {
 
 #[test]
 fn adaptation_does_not_erase_the_generated_answer_type_algebra() {
-    TransformerCase::reject(
-        r#"
+    for body in [
+        "let _ : Thk (WithoutAlgebra Int) = { ! nw/monad .return Int 1 } in ! exit 0",
+        "let (N, n) = nondet/instance in \
+         let _ : Thk (WithoutAlgebra Int) = { ! n/monad .return Int 1 } in ! exit 0",
+    ] {
+        TransformerCase::reject(
+            &format!(
+                r#"
 let WithoutAlgebra (A : VType) =
   forall (R : CType) . Thk (A -> Thk R -> R) -> Thk R -> R in
-let _ : Thk (WithoutAlgebra Int) = { ! nw/monad .return Int 1 } in
-! exit 0
+{body}
 "#,
-        TyckDiagnosticCode::TypeMismatch,
-    );
+            ),
+            TyckDiagnosticCode::TypeMismatch,
+        );
+    }
 }
 
 #[test]

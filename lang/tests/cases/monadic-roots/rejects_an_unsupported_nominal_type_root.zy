@@ -1,0 +1,8 @@
+-- prelude: monadic
+-- expect: reject(tyck.not-inlinable-seal)
+
+let Invalid = @[monadic] begin
+  def Unsupported : CType = Ret Int in
+  Unsupported
+end in
+ret ()

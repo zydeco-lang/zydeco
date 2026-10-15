@@ -1,0 +1,7 @@
+-- prelude: monadic
+-- expect: reject(tyck.type-mismatch)
+
+let MonadicMonad = @[monadic] Monad Ret in
+fn (ordinary : Thk (Monad Ret)) =>
+  let _ : Thk (MonadicMonad Ret) = ordinary in
+  ret ()

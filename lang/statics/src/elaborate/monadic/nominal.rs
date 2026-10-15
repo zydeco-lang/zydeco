@@ -155,8 +155,10 @@ impl TypeFolder for ReferencedDeclarations {
 }
 
 impl ReferencedDeclarations {
-    fn collect(tycker: &mut Tycker<'_>, env: &TyEnv, root: CompuId) -> Result<BTreeSet<AbstId>> {
-        let mut collector = Self { pending: vec![CheckedNode::Computation(root)] };
+    fn collect(
+        tycker: &mut Tycker<'_>, env: &TyEnv, root: CheckedNode,
+    ) -> Result<BTreeSet<AbstId>> {
+        let mut collector = Self { pending: vec![root] };
         let mut visited = HashSet::new();
         let mut declarations = BTreeSet::new();
         while let Some(node) = collector.pending.pop() {
@@ -201,7 +203,7 @@ impl NominalTranslation {
     /// Reserve all local families before rebuilding any body. The explicit
     /// parameters make the cached bodies independent of this translation's M.
     pub(crate) fn prepare(
-        tycker: &mut Tycker<'_>, mut env: MonEnv, root: su::TermId, body: CompuId,
+        tycker: &mut Tycker<'_>, mut env: MonEnv, root: su::TermId, body: CheckedNode,
     ) -> Result<MonEnv> {
         let ownership = Ownership::collect(tycker, root);
         let mut pending =
