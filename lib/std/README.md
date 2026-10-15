@@ -41,7 +41,7 @@ then uses the assembled standard-library value for arithmetic.
 Runtime operations have two boundaries.
 [`builtin.zy`](builtin.zy) is the typed contract between Zydeco programs and the host runtime.
 Its operations expose representation-independent observations and effects,
-but never construct library-defined `Bool`, `Option`, `Result`, `List`, or `Bytes` values.
+but never construct library-defined `Bool`, `Option`, `Either`, `List`, or `Bytes` values.
 [`std.zy`](std.zy) applies the factories supplied by topic packages and assembles the public packed value,
 whose sealed type its final `pack` introduction synthesizes.
 
@@ -118,9 +118,10 @@ builtin/numeric/*.zy       primitive numeric operations
 builtin/text/*.zy          Char and String host operations
 builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
 
-data/package.zy            Bool, Option, Result, List, and every derived operation
+data/package.zy            Bool, Option, Either, List, and every derived operation
 data/package.type.zy       DataPackage existential wrapper with the module telescopes
 data/bool.type.zy          BoolModule telescope shared with the numeric builders
+data/either.zy             shared binary sum for data, effects, I/O, and memory APIs
 
 numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
 numeric/package.zy         the twelve numeric modules and their capability dictionaries
@@ -157,6 +158,10 @@ effect/*.type.zy           relative-monad basis and carrier-indexed operation in
 
 **/*.type.zy               reusable type terms imported by implementations and companions
 ```
+
+The public `Either` type
+and `either` operation bundle follow the [shared binary-sum contract](../../docs/references/language.md#either-values).
+Fallible APIs put errors on the left and successful values on the right.
 
 Topic implementations are independently checkable module factories.
 Import `algebra/monoid.type.zy` and the `effect/` modules directly; `std.zy` does not assemble them.
@@ -439,8 +444,8 @@ let Fault = @(import("memory/fault.zy")) in
 let fail = { ! process/exit 1 } in
 let no = { fn (_ : Fault) => ! fail } in
 match layouts/uint8
-| +Err(_) => ! fail
-| +Ok(plan) =>
+| +Left(_) => ! fail
+| +Right(plan) =>
   let (= L, repr) = layouts/realize UInt8 plan in
   ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no { fn vacant =>
     ! (repr/codec/init vacant 7) OS { fn live =>
@@ -658,7 +663,7 @@ when operations must be dynamically selectable.
 - `process`: process arguments, randomness, successful halt, panic, and explicit exit.
 
 Filesystem contents are bytes by default. Text conveniences explicitly validate or produce UTF-8,
-and every fallible operation reports `Result A IoError` to its `OS` continuation.
+and every fallible operation reports `Either IoError A` to its `OS` continuation.
 EOF is represented as `Option` by line reads; it is not conflated with an empty line or an I/O failure.
 The [stream guide](#streams-and-files) gives the operations and lifecycle contract;
 [filesystem design](../../docs/proposals/filesystem.md) retains the rationale and extension questions.
@@ -679,13 +684,13 @@ The following computation protocols apply after forcing the exported operation t
 Fallible resource operations use the standard library's continuation-passing `OS` convention:
 
 ```text
-io/read       : Reader -> Int -> Thk (Result Bytes IoError -> OS) -> OS
-io/read_line  : Reader -> Thk (Result (Option Bytes) IoError -> OS) -> OS
-io/read_all   : Reader -> Thk (Result Bytes IoError -> OS) -> OS
-io/write_all  : Writer -> Bytes -> Thk (Result Unit IoError -> OS) -> OS
-io/flush      : Writer -> Thk (Result Unit IoError -> OS) -> OS
-io/close_reader : Reader -> Thk (Result Unit IoError -> OS) -> OS
-io/close_writer : Writer -> Thk (Result Unit IoError -> OS) -> OS
+io/read       : Reader -> Int -> Thk (Either IoError Bytes -> OS) -> OS
+io/read_line  : Reader -> Thk (Either IoError (Option Bytes) -> OS) -> OS
+io/read_all   : Reader -> Thk (Either IoError Bytes -> OS) -> OS
+io/write_all  : Writer -> Bytes -> Thk (Either IoError Unit -> OS) -> OS
+io/flush      : Writer -> Thk (Either IoError Unit -> OS) -> OS
+io/close_reader : Reader -> Thk (Either IoError Unit -> OS) -> OS
+io/close_writer : Writer -> Thk (Either IoError Unit -> OS) -> OS
 ```
 
 `read` rejects negative byte counts. `write_all` either writes the complete buffer or reports an error;
@@ -700,13 +705,13 @@ a future platform-specific path representation can replace the wrapper without c
 ```text
 fs/path          : String -> Ret Path
 fs/path_string   : Path -> Ret String
-fs/open_reader   : Path -> Thk (Result Reader IoError -> OS) -> OS
-fs/create_writer : Path -> Thk (Result Writer IoError -> OS) -> OS
-fs/append_writer : Path -> Thk (Result Writer IoError -> OS) -> OS
-fs/read_bytes    : Path -> Thk (Result Bytes IoError -> OS) -> OS
-fs/read_text     : Path -> Thk (Result String IoError -> OS) -> OS
-fs/write_bytes   : Path -> Bytes -> Thk (Result Unit IoError -> OS) -> OS
-fs/write_text    : Path -> String -> Thk (Result Unit IoError -> OS) -> OS
+fs/open_reader   : Path -> Thk (Either IoError Reader -> OS) -> OS
+fs/create_writer : Path -> Thk (Either IoError Writer -> OS) -> OS
+fs/append_writer : Path -> Thk (Either IoError Writer -> OS) -> OS
+fs/read_bytes    : Path -> Thk (Either IoError Bytes -> OS) -> OS
+fs/read_text     : Path -> Thk (Either IoError String -> OS) -> OS
+fs/write_bytes   : Path -> Bytes -> Thk (Either IoError Unit -> OS) -> OS
+fs/write_text    : Path -> String -> Thk (Either IoError Unit -> OS) -> OS
 ```
 
 `create_writer` creates a missing file and truncates an existing one.
@@ -715,14 +720,14 @@ Whole-file helpers open, operate, and close internally.
 If the data operation fails, that error wins; otherwise a close error is returned.
 
 The `stdio` module exposes `stdin`, `stdout`, and `stderr` as capabilities.
-Its `read_line` checks UTF-8 and returns `Result (Option String) IoError`; its `write`, `write_line`,
+Its `read_line` checks UTF-8 and returns `Either IoError (Option String)`; its `write`, `write_line`,
 and error-stream variants encode `String` to `Bytes`, delegate to `io/write_all`, and preserve write or flush failures.
 
 `IoError` carries a stable kind and a display message.
 The kinds are `NotFound`, `PermissionDenied`, `AlreadyExists`, `InvalidInput`, `InvalidData`,
 `BrokenPipe`, `Closed`, and `Other`; branch on the kind rather than parsing the message.
-A read at EOF returns empty bytes; `read_line` returns `Ok None` instead.
-An empty line is `Ok (Some empty)`, and a final line without a newline is still returned.
+A read at EOF returns empty bytes; `read_line` returns `Right None` instead.
+An empty line is `Right (Some empty)`, and a final line without a newline is still returned.
 Line reads strip a trailing LF and its immediately preceding CR; arbitrary byte reads preserve their contents.
 A zero-byte read also returns empty bytes, so it cannot by itself establish EOF.
 

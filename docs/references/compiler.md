@@ -2853,7 +2853,7 @@ identifiers are not source-visible pointers.
 Reserved standard-stream capabilities remain open.
 The interpreter backs them with injected streams, while native execution uses the process streams.
 Primitive success/error branches carry a result or an error kind and message;
-[the library](../../lib/std/README.md#streams-and-files) constructs `Result`, `Option`, and typed paths.
+[the library](../../lib/std/README.md#streams-and-files) constructs `Either`, `Option`, and typed paths.
 Adapters distinguish EOF, empty data, invalid text, I/O errors, and closed resources.
 [Capability design](../proposals/filesystem.md) owns stream extensions and resource-lifetime choices.
 

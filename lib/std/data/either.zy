@@ -1,0 +1,10 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let Either (L : VType) (R : VType) =
+    data
+    | +Left : L
+    | +Right : R
+    end
+  in
+  Either
+end

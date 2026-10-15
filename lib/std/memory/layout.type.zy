@@ -7,10 +7,10 @@ begin
   let Int = @(intrinsic(int)) in
   let Error = @(import("layout-error.zy")) in
   let Shape = @(import("shape.zy")) in
-  let Result = @(import("../data/result.zy")) in
+  let Either = @(import("../data/either.zy")) in
   let Representation = (@(import("representation.type.zy"))) Storage Codec in
   exists (= Plan : VType -> VType)
-    (= Layout as fn (A : VType) => Result (Plan A) Error)
+    (= Layout as fn (A : VType) => Either Error (Plan A))
   .
       (#unit :: Layout Unit)
     * (#padding :: val pi (count : Int) . Layout Unit)

@@ -10,7 +10,7 @@ begin
     Init Ptr Field DynamicField in
   param val (/Storage; /constant) : @(import("storage.type.zy")) in
   let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
-  let Result = @(import("../data/result.zy")) in
+  let Either = @(import("../data/either.zy")) in
   let Error = @(import("layout-error.zy")) in
   let size = @(import("size.zy")) in
   let compare = @(intrinsic(int_compare)) in
@@ -188,7 +188,7 @@ begin
   let val at (Left : VType) (Right : VType)
     (left : Storage Left) (right : Storage Right)
     (left_offset : Int) (right_offset : Int) (count : Int) (alignment : Int)
-  : Result (Record Left Right) Error =
+  : Either Error (Record Left Right) =
       let Out = Record Left Right in
       let lg = constant/query Left left in
       let rg = constant/query Right right in
@@ -204,16 +204,16 @@ begin
                         val re =>
                           size/bind Int Out (size/size count) (
                             val count =>
-                              let val valid () : Result Out Error =
+                              let val valid () : Either Error Out =
                                 size/bind (Storage Unit) Out (
                                   constant/unsafe/for_layout Unit count alignment
                                 )
                                   (
                                     val storage =>
-                                      +Ok(make Left Right left_offset right_offset storage)
+                                      +Right(make Left Right left_offset right_offset storage)
                                   )
                               in
-                              let val disjoint () : Result Out Error =
+                              let val disjoint () : Either Error Out =
                                 match compare le right_offset
                                 | 1 =>
                                   match compare re left_offset
@@ -221,7 +221,7 @@ begin
                                     match (compare lg/size 0, compare rg/size 0)
                                     | (0, _) => valid ()
                                     | (_, 0) => valid ()
-                                    | _ => +Err(+OverlappingFields())
+                                    | _ => +Left(+OverlappingFields())
                                     end
                                   | _ => valid ()
                                   end
@@ -235,15 +235,15 @@ begin
                                 bits right_offset (sub ra 1),
                                 bits count (sub alignment 1)
                               )
-                              | (-1, _, _, _, _) => +Err(+MisalignedField())
-                              | (_, -1, _, _, _) => +Err(+MisalignedField())
+                              | (-1, _, _, _, _) => +Left(+MisalignedField())
+                              | (_, -1, _, _, _) => +Left(+MisalignedField())
                               | (_, _, 0, 0, 0) =>
                                 match (compare count le, compare count re)
-                                | (-1, _) => +Err(+InvalidExtent())
-                                | (_, -1) => +Err(+InvalidExtent())
+                                | (-1, _) => +Left(+InvalidExtent())
+                                | (_, -1) => +Left(+InvalidExtent())
                                 | _ => disjoint ()
                                 end
-                              | _ => +Err(+MisalignedField())
+                              | _ => +Left(+MisalignedField())
                               end
                           )
                       )
@@ -254,7 +254,7 @@ begin
   in
   let val product (Left : VType) (Right : VType)
     (left : Storage Left) (right : Storage Right)
-  : Result (Record Left Right) Error =
+  : Either Error (Record Left Right) =
       let Out = Record Left Right in
       let lg = constant/query Left left in
       let rg = constant/query Right right in

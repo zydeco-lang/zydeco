@@ -26,8 +26,8 @@ begin
   let no = { fn (_ : Fault) => ! fail } in
 
   match layout/int
-  | +Err(_) => ! fail
-  | +Ok(plan) =>
+  | +Left(_) => ! fail
+  | +Right(plan) =>
     let (= L, repr) = layout/realize Int plan in
     let access = slices/for_layout L repr/storage in
     ! raw/allocate OS 24 8 no {

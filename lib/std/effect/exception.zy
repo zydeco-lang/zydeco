@@ -10,12 +10,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
         comatch
         end
       } that
-      let Either (E : VType) (A : VType) =
-        data
-        | +Left : E
-        | +Right : A
-        end
-      that
+      let Either = @(import("../data/either.zy")) that
       let MonadThrow = @(import("exception.type.zy")) that
       let ExceptionSource (E : VType) (A : VType) = Ret (Either E A) that
       let ExceptionT (E : VType) (M : VType -> CType) =

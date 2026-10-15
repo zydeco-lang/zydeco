@@ -18,7 +18,7 @@ struct LayoutCase;
 impl LayoutCase {
     fn source(body: &str) -> String {
         MemoryCase::source(&format!(
-            "match memory/int | +Err(_) => ! fail | +Ok(plan) => \
+            "match memory/int | +Left(_) => ! fail | +Right(plan) => \
              let (#L = Left, left) = memory/realize Int plan in \
              let (#L = Right, right) = memory/realize Int plan in {body} end"
         ))
@@ -27,7 +27,7 @@ impl LayoutCase {
     fn record(body: &str) -> String {
         Self::source(&format!(
             "let run = match records/product Left Right left/storage right/storage \
-             | +Err(_) => fail | +Ok(record) => \
+             | +Left(_) => fail | +Right(record) => \
              let (/L; /storage = object_storage; /states; /left = first; /right = second) = record in
              let value = (#storage = object_storage, #codec = codecs/product L Left Right Int Int first/path second/path left/codec right/codec) in \
              {{ {body} }} end in ! run"
@@ -38,20 +38,20 @@ impl LayoutCase {
 #[test]
 fn explicit_record_placement_checks_alignment_overlap_and_extent() {
     for (first, second, count, alignment, pattern) in [
-        (0_i64, 8_i64, 16_i64, 8_i64, "+Ok(_)"),
-        (8, 0, 16, 8, "+Ok(_)"),
-        (0, 16, 32, 16, "+Ok(_)"),
-        (-1, 8, 16, 8, "+Err(+NegativeSize())"),
-        (0, 4, 16, 8, "+Err(+MisalignedField())"),
-        (0, 0, 16, 8, "+Err(+OverlappingFields())"),
-        (0, 8, 8, 8, "+Err(+InvalidExtent())"),
-        (0, 8, 16, 3, "+Err(+InvalidAlignment())"),
+        (0_i64, 8_i64, 16_i64, 8_i64, "+Right(_)"),
+        (8, 0, 16, 8, "+Right(_)"),
+        (0, 16, 32, 16, "+Right(_)"),
+        (-1, 8, 16, 8, "+Left(+NegativeSize())"),
+        (0, 4, 16, 8, "+Left(+MisalignedField())"),
+        (0, 0, 16, 8, "+Left(+OverlappingFields())"),
+        (0, 8, 8, 8, "+Left(+InvalidExtent())"),
+        (0, 8, 16, 3, "+Left(+InvalidAlignment())"),
         (
             0,
             zydeco_machine::word::RuntimeWord::SIGNED_MAX,
             zydeco_machine::word::RuntimeWord::SIGNED_MAX,
             8,
-            "+Err(+SizeOverflow())",
+            "+Left(+SizeOverflow())",
         ),
     ] {
         let body = format!(
@@ -64,16 +64,16 @@ fn explicit_record_placement_checks_alignment_overlap_and_extent() {
 #[test]
 fn checked_static_multiplication_handles_overflow_without_runtime_primitives() {
     for (left, right, pattern) in [
-        (0_i64, zydeco_machine::word::RuntimeWord::SIGNED_MAX, "+Ok(0)".to_owned()),
-        (zydeco_machine::word::RuntimeWord::SIGNED_MAX, 0, "+Ok(0)".to_owned()),
-        (23, 45, "+Ok(1035)".to_owned()),
+        (0_i64, zydeco_machine::word::RuntimeWord::SIGNED_MAX, "+Right(0)".to_owned()),
+        (zydeco_machine::word::RuntimeWord::SIGNED_MAX, 0, "+Right(0)".to_owned()),
+        (23, 45, "+Right(1035)".to_owned()),
         (
             zydeco_machine::word::RuntimeWord::SIGNED_MAX,
             1,
-            format!("+Ok({})", zydeco_machine::word::RuntimeWord::SIGNED_MAX),
+            format!("+Right({})", zydeco_machine::word::RuntimeWord::SIGNED_MAX),
         ),
-        (zydeco_machine::word::RuntimeWord::SIGNED_MAX, 2, "+Err(+SizeOverflow())".to_owned()),
-        (-1, 0, "+Err(+NegativeSize())".to_owned()),
+        (zydeco_machine::word::RuntimeWord::SIGNED_MAX, 2, "+Left(+SizeOverflow())".to_owned()),
+        (-1, 0, "+Left(+NegativeSize())".to_owned()),
     ] {
         let body = format!(
             "let code = match size/multiply {left} {right} | {pattern} => 0 | _ => 1 end in ! exit code"
@@ -111,10 +111,10 @@ fn fixed_views_and_geometry_cannot_be_unknown_runtime_arguments() {
          do value <- ! use (val value => { ret value }) 1; ! exit 0",
         "let use : Thk (Int -> OS) = { fn count => \
          match arrays/make Left left/storage count 8 \
-         | +Err(_) => ! fail | +Ok(_) => ! exit 0 end } in ! use 4",
+         | +Left(_) => ! fail | +Right(_) => ! exit 0 end } in ! use 4",
         "let use : Thk (Int -> OS) = { fn offset => \
          match records/at Left Right left/storage right/storage 0 offset 16 8 \
-         | +Err(_) => ! fail | +Ok(_) => ! exit 0 end } in ! use 8",
+         | +Left(_) => ! fail | +Right(_) => ! exit 0 end } in ! use 8",
     ] {
         SourceCase::assert_rejected(
             SourceCase::check(&LayoutCase::source(body)),
@@ -211,8 +211,8 @@ let use : Thk (DynamicField L Right -> Ptr L Init -> Thk (Int -> OS) -> OS) = {
 fn zero_sized_arrays_and_empty_builders_do_not_access_storage() {
     let body = r#"
 match memory/unit
-| +Err(_) => ! fail
-| +Ok(plan) =>
+| +Left(_) => ! fail
+| +Right(plan) =>
   let (#L = Element, element) = memory/realize Unit plan in
   ! arrays/realize Element OS (storage/constant/materialize Element element/storage) 3 16 no { fn array =>
     let (/L; /storage = array_storage; /elements; /buffer; /Values = Sequence; /codecs = array_codecs) = array in
@@ -343,8 +343,8 @@ let (/H; /unsafe = view) = forms/inline in
 fn nested_field_paths_and_partial_updates_preserve_sibling_states() {
     let body = r#"
 let next = match records/product Left L left/storage value/storage
-| +Err(_) => fail
-| +Ok(outer) =>
+| +Left(_) => fail
+| +Right(outer) =>
   let (/L = Outer; /storage = outer_storage; /states = outer_states; /left = head; /right = tail) = outer in
   let outer_value = (#storage = outer_storage, #codec = codecs/product Outer Left L Int (Int * Int) head/path tail/path left/codec value/codec) in
   let path = fields/compose Outer L Right tail/path second/path in
@@ -377,16 +377,16 @@ end in ! next
 #[test]
 fn storage_only_array_stride_is_checked_before_reservation() {
     for (count, alignment, capacity, expected) in [
-        (8_i64, 64_i64, 2_i64, "+Ok(_)"),
-        (0, 64, 0, "+Ok(_)"),
-        (8, 64, -1, "+Err(+NegativeSize())"),
-        (4611686018427387903, 8, 1, "+Err(+SizeOverflow())"),
+        (8_i64, 64_i64, 2_i64, "+Right(_)"),
+        (0, 64, 0, "+Right(_)"),
+        (8, 64, -1, "+Left(+NegativeSize())"),
+        (4611686018427387903, 8, 1, "+Left(+SizeOverflow())"),
     ] {
         let source = MemoryCase::source(&format!(
             r#"
 match storage/constant/create {count} {alignment}
-| +Err(_) => ! fail
-| +Ok(#L = Element, element) =>
+| +Left(_) => ! fail
+| +Right(#L = Element, element) =>
   match arrays/make Element element {capacity} 1
   | {expected} => ! exit 0 | _ => ! fail end
 end

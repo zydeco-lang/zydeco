@@ -11,8 +11,8 @@ begin
   let ! dynamic (count : Int) (boundary : Int) : OS =
     do checked <- ! storage/runtime/create count boundary;
     match checked
-    | +Err(_) => ! fail
-    | +Ok(= L, geometry) =>
+    | +Left(_) => ! fail
+    | +Right(= L, geometry) =>
       let value = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in
       let codec = codecs/materialize L Int64 value in
       ! allocation/dynamic_reserve L OS allocation/heap geometry no {
@@ -30,8 +30,8 @@ begin
     end
   in
   match storage/constant/create 8 8
-  | +Err(_) => ! fail
-  | +Ok(= L, geometry) =>
+  | +Left(_) => ! fail
+  | +Right(= L, geometry) =>
     let codec = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in
     let carried : DynamicStorage L = storage/constant/materialize L geometry in
     let facts = storage/runtime/query L carried in

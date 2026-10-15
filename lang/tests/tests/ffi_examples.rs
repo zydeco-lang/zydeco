@@ -48,8 +48,8 @@ let decode = (builtin |> (@(import("{library}/tests/ffi/record-input.zy")))) byt
 let Record = UInt8 * UInt32 in
 let fail = {{ ! exit 1 }} in
 match memory/product UInt8 UInt32 memory/uint8 memory/uint32
-| +Err(_) => ! fail
-| +Ok(plan) =>
+| +Left(_) => ! fail
+| +Right(plan) =>
   let (= L, storage) = memory/realize Record plan in
   {body}
 end

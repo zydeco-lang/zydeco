@@ -165,8 +165,8 @@ begin
         {
           fn R no yes =>
             match stride
-            | +Err(_) => ! no +Overflow()
-            | +Ok(stride) =>
+            | +Left(_) => ! no +Overflow()
+            | +Right(stride) =>
               ! (view handle) R no {
                 fn (pointer, count) =>
                   ! indexed/at L S R stride pointer count index no yes
@@ -183,8 +183,8 @@ begin
           fn R no yes =>
             do stride <- ! dynamic_size/round_up geometry/size geometry/alignment;
             match stride
-            | +Err(_) => ! no +Overflow()
-            | +Ok(stride) =>
+            | +Left(_) => ! no +Overflow()
+            | +Right(stride) =>
               ! (view handle) R no {
                 fn (pointer, count) =>
                   ! indexed/at L S R stride pointer count index no yes

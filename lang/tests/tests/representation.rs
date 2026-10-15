@@ -14,7 +14,7 @@ e2e_sources!({
 
 fn source(body: &str) -> String {
     MemoryCase::source(&format!(
-        "match memory/uint8 | +Err(_) => ! fail | +Ok(plan) => \
+        "match memory/uint8 | +Left(_) => ! fail | +Right(plan) => \
         let (= L, repr) = memory/realize UInt8 plan in \
         ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no {{ fn vacant => {body} }} end"
     ))

@@ -9,7 +9,7 @@ struct SliceCase;
 impl SliceCase {
     fn source(body: &str) -> String {
         MemoryCase::source(&format!(
-            "match memory/int | +Err(_) => ! fail | +Ok(plan) => \
+            "match memory/int | +Left(_) => ! fail | +Right(plan) => \
              let (= L, repr) = memory/realize Int plan in \
              let access = slices/for_layout L repr/storage in {body} end"
         ))

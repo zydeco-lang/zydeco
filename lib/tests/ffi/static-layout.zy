@@ -15,8 +15,8 @@ begin
   match layouts/align (UInt8 * UInt32) 64 (
     layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32
   )
-  | +Err(_) => ! fail
-  | +Ok(plan) =>
+  | +Left(_) => ! fail
+  | +Right(plan) =>
     let (= L, repr) = layouts/realize (UInt8 * UInt32) plan in
     ! (allocation/reserve L Unit allocation/static_heap () repr/storage) OS no {
       fn vacant =>

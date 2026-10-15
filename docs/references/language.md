@@ -935,8 +935,8 @@ StateT S M A     = S -> M (A * S)
 ExceptionT E M A = M (Either E A)
 ```
 
-`Either E A` denotes Exception's existing observation with `Left E` and `Right A` cases;
-it is not the data library's differently labelled `Result` type.
+Exception uses the data library's shared [`Either E A`](#either-values),
+with `Left E` for errors and `Right A` for successful values.
 The builders share the [derived transformer interface](#derived-relative-monad-transformers):
 
 | Module | Packed builder | Base-aware observation |
@@ -1527,7 +1527,7 @@ The directories under `lib/std/` have these responsibilities:
 
 | Directory | Responsibility |
 | --- | --- |
-| `data/` | Value representations and their operations, including `Bool`, `Option`, `Result`, and `List` |
+| `data/` | Value representations and their operations, including `Bool`, `Option`, `Either`, and `List` |
 | `algebra/` | General-purpose algebraic dictionaries, currently `Monoid` |
 | `effect/` | Effect interfaces, carriers, transformers, handlers, and shared relative-monad machinery |
 | `numeric/` | Numeric operations and their domain-specific dictionaries |
@@ -1545,6 +1545,33 @@ The `algebra/` and `effect/` modules are imported explicitly rather than added t
 Directory ownership does not assign [source-package names](#source-packages).
 The [library guide](../../lib/std/README.md#source-layout) inventories the entry points and imports.
 
+#### Either Values
+
+The data library's shared [`Either L R`](../../lib/std/data/either.zy) represents a choice
+between `Left` carrying an `L` and `Right` carrying an `R`.
+It is a transparent type, so data operations, exception carriers, I/O, and memory interfaces share its representation.
+The constructors do not intrinsically mean failure or success; fallible library APIs use `Either E A`,
+with errors on the left and successful values on the right.
+The public std value and the data package both export `Either` and its `either` operation bundle.
+
+All operations take the input branch types `L` and `R` first.
+Transformations then take their new payload type `S`; `fold` instead takes an arbitrary computation result `B`.
+The operations select only the callback for the branch present in the input:
+
+| Operation | Contract |
+| --- | --- |
+| `left L R value`, `right L R value` | Construct the corresponding branch under `Ret` |
+| `fold L R B value on_left on_right` | Apply the handler for the selected branch, returning `B` |
+| `map L R S value transform` | Transform a right payload through `R -> Ret S`, returning `Ret (Either L S)` |
+| `map_left L R S value transform` | Transform a left payload through `L -> Ret S`, returning `Ret (Either S R)` |
+| `and_then L R S value next` | Sequence a right payload through `R -> Ret (Either L S)`; preserve a left payload |
+| `unwrap_or L R value fallback` | Return the right payload, or the fallback for a left value |
+| `is_left L R value`, `is_right L R value` | Return the corresponding branch test as `Ret Bool` |
+
+`map` and `and_then` are right-biased; their callbacks are not run for a left value.
+`map_left` leaves right values untouched, and `fold` takes its left handler before its right handler.
+Computation callbacks are passed as thunks.
+
 ## 13. Primitive Values and Capabilities
 
 [Builtin](../../lib/std/builtin.zy) exposes canonical kinds and fixed-representation types as manifest fields.
@@ -1557,7 +1584,7 @@ Resource operations instead share their provider's abstract opening,
 so a composition root must forward the capability and its operations together.
 The `numeric`, `text`, and `system` groups contain host operations.
 The [standard library](../../lib/std/README.md) assembles ordinary module factories and defines `Bool`, `Option`,
-`Result`, `List`, and abstract `Bytes`; host operations select continuations instead of constructing those types.
+`Either`, `List`, and abstract `Bytes`; host operations select continuations instead of constructing those types.
 
 The memory interfaces build on those capabilities using ordinary packed values and computation protocols:
 
@@ -1606,7 +1633,7 @@ Float rendering uses the selected width's Rust Display spelling, including signe
 `String` indices are scalar positions, not byte offsets or grapheme clusters; `byte_length` observes UTF-8 bytes.
 The source-defined `Bytes` type contains immutable octets; equality compares contents and ordering is lexicographic.
 Negative or out-of-range positions, invalid Unicode scalars, and invalid UTF-8 select failure branches.
-The public library reifies these as `Option` or `Result`.
+The public library reifies these as `Option` or `Either`.
 The [immutable byte contract](#immutable-owners-and-source-bytes) below explains ownership and library operations.
 
 Every scalar Builtin module provides raw `store_le` and `load_le` operations over `Addr`.
@@ -1663,7 +1690,7 @@ The library supplies the other types:
 | `Slice L S` | Contiguous elements with an explicit dynamic extent | Pointer and element count |
 | `Field P C`, `DynamicField P C` | A parent/child layout path | Fixed recipe erases; dynamic path carries one offset |
 | `views/View P H A`, `views/DynamicView P H A` | Handle interpretation | Fixed recipe erases; dynamic operation is an ordinary thunk |
-| `fixed/Layout A` | A static `Result (Plan A) LayoutError` | Construction evidence eliminates before fixed realization |
+| `fixed/Layout A` | A static `Either LayoutError (Plan A)` | Construction evidence eliminates before fixed realization |
 | `Representation A` | An existential layout witness with separate storage and codec components | Fixed recipes erase; dynamic counterparts carry geometry and operation thunks |
 | `dynamic/Layout A` | Runtime layout computation | Captured dynamic inputs and operations |
 | `Storage L`, `DynamicStorage L` | Validated geometry independent of logical values | Fixed recipe erases; dynamic geometry carries size/alignment |
@@ -1697,8 +1724,8 @@ the supplied layouts cover scalars and unmanaged addresses.
 ### Independent Storage and Codecs
 
 [Storage](../../lib/std/memory/storage.zy) validates geometry without selecting a logical value type or allocator.
-`storage/constant/create size alignment` returns `Result (exists L. Storage L) LayoutError`;
-its runtime counterpart returns `Ret (Result (exists L. DynamicStorage L) LayoutError)`.
+`storage/constant/create size alignment` returns `Either LayoutError (exists L. Storage L)`;
+its runtime counterpart returns `Ret (Either LayoutError (exists L. DynamicStorage L))`.
 Both reject negative sizes and nonpositive or non-power-of-two alignments.
 The fixed constructor requires static operands. Both representations are sealed against unchecked construction;
 `unsafe/for_layout L` validates the same geometry but lets the caller associate it with an existing witness.
@@ -1793,11 +1820,11 @@ A raw slice does not retain its allocation.
 ### Static Layout Plans
 
 Fixed placement belongs to source value calculation.
-The [fixed builder](../../lib/std/memory/layout.zy) exposes `Layout A = Result (Plan A) LayoutError`,
+The [fixed builder](../../lib/std/memory/layout.zy) exposes `Layout A = Either LayoutError (Plan A)`,
 with an abstract successful plan and [inspectable shape](../../lib/std/memory/shape.zy).
 Its constructors support scalars, unmanaged addresses, unit, padding, products, and increased alignment.
-Invalid alignment, negative size, and overflow produce typed `Err` results during static construction;
-only an `Ok` plan can be realized.
+Invalid alignment, negative size, and overflow produce typed `Left` results during static construction;
+only a `Right` plan can be realized.
 The caller handles that static result explicitly.
 Unknown runtime inputs to placement or fixed realization produce a `StaticElimination` diagnostic.
 
@@ -1848,7 +1875,7 @@ The [runtime-layout example](../../lib/tests/std/representation.zy) exercises th
 The [record factories](../../lib/std/memory/record.zy) compose child storage geometry while preserving its witnesses.
 `records/product Left Right left_storage right_storage` calculates ordinary product placement;
 `records/at` additionally accepts the left and right byte offsets, total size, and alignment.
-Both produce a static `Result (Record Left Right) LayoutError`; neither takes a logical type or codec.
+Both produce a static `Either LayoutError (Record Left Right)`; neither takes a logical type or codec.
 Explicit placement checks nonnegative extents, alignment, field overlap, and the enclosing size before construction.
 Zero-sized fields occupy no bytes; padding remains uninterpreted.
 
@@ -1902,7 +1929,7 @@ The [record and view example](../../lib/tests/std/general-views.zy) exercises di
 
 The [array factory](../../lib/std/memory/array.zy) composes element storage without selecting a logical value type.
 `arrays/make Element storage capacity boundary` takes `Storage Element` and static inputs,
-returning `Result (Array Element) LayoutError`.
+returning `Either LayoutError (Array Element)`.
 `arrays/realize Element R storage capacity boundary no yes` takes `DynamicStorage Element`,
 validates runtime inputs, and supplies `DynamicArray Element`.
 Both calculate `stride = round_up(element_size, element_alignment)`

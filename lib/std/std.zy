@@ -10,7 +10,7 @@ begin
   let PartialEquality = @(import("numeric/partial-equality.type.zy")) in
   let PartialOrder = @(import("numeric/partial-order.type.zy")) in
   let Numeric = @(import("numeric/numeric.type.zy")) in
-  let (/Bool; /Option; /Result; /List; /bool; /option; /result; /list; base) =
+  let (/Bool; /Option; /Either; /List; /bool; /option; /either; /list; base) =
     builtin |> make_data
   in
   let (/Bytes; byte_package) = builtin |> (@(import("text/bytes.zy"))) in
@@ -41,7 +41,7 @@ begin
   pack
     (= Bool as Bool)
     (= Option as Option)
-    (= Result as Result)
+    (= Either as Either)
     (= Bytes : VType) is Bytes
     (= Buffer : VType) is Buffer
     (= List : VType -> VType) is List
@@ -57,7 +57,7 @@ begin
     (
       = bool,
       = option,
-      = result,
+      = either,
       = list
     ),
     (

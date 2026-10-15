@@ -2,19 +2,19 @@
 begin
   let VType = @(intrinsic(vtype)) in
   let Int = @(intrinsic(int)) in
-  let Result = @(import("../data/result.zy")) in
+  let Either = @(import("../data/either.zy")) in
   let Error = @(import("layout-error.zy")) in
   let add_bits = @(intrinsic(int_add)) in
   let sub_bits = @(intrinsic(int_sub)) in
   let bit_and = @(intrinsic(int_and)) in
   let compare = @(intrinsic(int_compare)) in
 
-  let val bind (A : VType) (B : VType) (result : Result A Error)
-    (next : val pi (value : A) . Result B Error)
-  : Result B Error =
+  let val bind (A : VType) (B : VType) (result : Either Error A)
+    (next : val pi (value : A) . Either Error B)
+  : Either Error B =
       match result
-      | +Err(error) => +Err(error)
-      | +Ok(value) => next value
+      | +Left(error) => +Left(error)
+      | +Right(value) => next value
       end
   in
   let val maximum (left : Int) (right : Int) : Int =
@@ -23,50 +23,50 @@ begin
     | _ => left
     end
   in
-  let val size (value : Int) : Result Int Error =
+  let val size (value : Int) : Either Error Int =
     match compare value 0
-    | -1 => +Err(+NegativeSize())
-    | _ => +Ok(value)
+    | -1 => +Left(+NegativeSize())
+    | _ => +Right(value)
     end
   in
-  let val alignment (value : Int) : Result Int Error =
+  let val alignment (value : Int) : Either Error Int =
     match compare value 1
-    | -1 => +Err(+InvalidAlignment())
+    | -1 => +Left(+InvalidAlignment())
     | _ =>
       match bit_and value (sub_bits value 1)
-      | 0 => +Ok(value)
-      | _ => +Err(+InvalidAlignment())
+      | 0 => +Right(value)
+      | _ => +Left(+InvalidAlignment())
       end
     end
   in
-  let val add (left : Int) (right : Int) : Result Int Error =
+  let val add (left : Int) (right : Int) : Either Error Int =
     bind Int Int (size left) (
       val left =>
         bind Int Int (size right) (
           val right =>
             match compare left (sub_bits 4611686018427387903 right)
-            | 1 => +Err(+SizeOverflow())
-            | _ => +Ok(add_bits left right)
+            | 1 => +Left(+SizeOverflow())
+            | _ => +Right(add_bits left right)
             end
         )
     )
   in
-  let val round_up (count : Int) (boundary : Int) : Result Int Error =
+  let val round_up (count : Int) (boundary : Int) : Either Error Int =
     bind Int Int (alignment boundary) (
       val boundary =>
         bind Int Int (add count (sub_bits boundary 1)) (
           val rounded =>
-            +Ok(bit_and rounded (sub_bits 0 boundary))
+            +Right(bit_and rounded (sub_bits 0 boundary))
         )
     )
   in
   -- Sixty-four statically composed steps need no multiplication intrinsic or runtime loop.
-  let val multiply (left : Int) (right : Int) : Result Int Error =
+  let val multiply (left : Int) (right : Int) : Either Error Int =
     bind Int Int (size left) (
       val left =>
         bind Int Int (size right) (
           val right =>
-            let State = Result Int Error * Int * Result Int Error in
+            let State = Either Error Int * Int * Either Error Int in
             let val step ((power, mask, total) : State) : State =
               let next =
                 match bit_and right mask
@@ -83,9 +83,9 @@ begin
               val state => f (f state)
             in
             let (_, _, result) = twice (twice (twice (twice (twice (twice step))))) (
-              +Ok(left),
+              +Right(left),
               1,
-              +Ok(0)
+              +Right(0)
             ) in
             result
         )

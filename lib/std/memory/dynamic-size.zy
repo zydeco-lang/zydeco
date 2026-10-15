@@ -1,25 +1,25 @@
 -- Pure checked arithmetic for runtime geometry; every public operand is validated.
 begin
   param val (/Ret; /Int; /numeric; builtin) : @(import("../builtin.zy")) in
-  let Result = @(import("../data/result.zy")) in
+  let Either = @(import("../data/either.zy")) in
   let Error = @(import("layout-error.zy")) in
-  let Checked = Result Int Error in
+  let Checked = Either Error Int in
   let int = numeric/int in
   let ! size (value : Int) : Ret Checked =
-    ! int/lt (Ret Checked) value 0 { ret +Err(+NegativeSize()) } { ret +Ok(value) }
+    ! int/lt (Ret Checked) value 0 { ret +Left(+NegativeSize()) } { ret +Right(value) }
   in
   let fix power_of_two (value : Int) : Ret Checked =
-    ! int/lt (Ret Checked) value 1 { ret +Err(+InvalidAlignment()) } {
-      ! int/eq (Ret Checked) value 1 { ret +Ok(value) } {
+    ! int/lt (Ret Checked) value 1 { ret +Left(+InvalidAlignment()) } {
+      ! int/eq (Ret Checked) value 1 { ret +Right(value) } {
         do remainder <- ! int/mod value 2;
         ! int/eq (Ret Checked) remainder 0 {
           do half <- ! int/div value 2;
           do checked <- ! power_of_two half;
           match checked
-          | +Err(error) => ret +Err(error)
-          | +Ok(_) => ret +Ok(value)
+          | +Left(error) => ret +Left(error)
+          | +Right(_) => ret +Right(value)
           end
-        } { ret +Err(+InvalidAlignment()) }
+        } { ret +Left(+InvalidAlignment()) }
       }
     }
   in
@@ -27,13 +27,13 @@ begin
     do left <- ! size left;
     do right <- ! size right;
     match (left, right)
-    | (+Err(error), _) => ret +Err(error)
-    | (_, +Err(error)) => ret +Err(error)
-    | (+Ok(left), +Ok(right)) =>
+    | (+Left(error), _) => ret +Left(error)
+    | (_, +Left(error)) => ret +Left(error)
+    | (+Right(left), +Right(right)) =>
       do limit <- ! int/sub 4611686018427387903 right;
-      ! int/gt (Ret Checked) left limit { ret +Err(+SizeOverflow()) } {
+      ! int/gt (Ret Checked) left limit { ret +Left(+SizeOverflow()) } {
         do value <- ! int/add left right;
-        ret +Ok(value)
+        ret +Right(value)
       }
     end
   in
@@ -41,14 +41,14 @@ begin
     do left <- ! size left;
     do right <- ! size right;
     match (left, right)
-    | (+Err(error), _) => ret +Err(error)
-    | (_, +Err(error)) => ret +Err(error)
-    | (+Ok(left), +Ok(right)) =>
-      ! int/eq (Ret Checked) right 0 { ret +Ok(0) } {
+    | (+Left(error), _) => ret +Left(error)
+    | (_, +Left(error)) => ret +Left(error)
+    | (+Right(left), +Right(right)) =>
+      ! int/eq (Ret Checked) right 0 { ret +Right(0) } {
         do limit <- ! int/div 4611686018427387903 right;
-        ! int/gt (Ret Checked) left limit { ret +Err(+SizeOverflow()) } {
+        ! int/gt (Ret Checked) left limit { ret +Left(+SizeOverflow()) } {
           do value <- ! int/mul left right;
-          ret +Ok(value)
+          ret +Right(value)
         }
       }
     end
@@ -57,11 +57,11 @@ begin
     do count <- ! size count;
     do boundary <- ! power_of_two boundary;
     match (count, boundary)
-    | (+Err(error), _) => ret +Err(error)
-    | (_, +Err(error)) => ret +Err(error)
-    | (+Ok(count), +Ok(boundary)) =>
+    | (+Left(error), _) => ret +Left(error)
+    | (_, +Left(error)) => ret +Left(error)
+    | (+Right(count), +Right(boundary)) =>
       do remainder <- ! int/mod count boundary;
-      ! int/eq (Ret Checked) remainder 0 { ret +Ok(count) } {
+      ! int/eq (Ret Checked) remainder 0 { ret +Right(count) } {
         do extra <- ! int/sub boundary remainder;
         ! add count extra
       }

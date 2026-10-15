@@ -41,16 +41,16 @@ begin
   let no = { fn (_ : Fault) => ! fail } in
   let run =
     match layout/int
-    | +Err(_) => fail
-    | +Ok(length_plan) =>
+    | +Left(_) => fail
+    | +Right(length_plan) =>
       let (#L = Length, length) = layout/realize Int length_plan in
       match layout/uint32
-      | +Err(_) => fail
-      | +Ok(value_plan) =>
+      | +Left(_) => fail
+      | +Right(value_plan) =>
         let (#L = Value, value) = layout/realize UInt32 value_plan in
         match records/at Length Value length/storage value/storage 0 16 32 16
-        | +Err(_) => fail
-        | +Ok(record) =>
+        | +Left(_) => fail
+        | +Right(record) =>
           let (/L; /storage = object_storage; /states; /left; /right) = record in
           let object = (
             #storage = object_storage,

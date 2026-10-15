@@ -37,8 +37,8 @@ begin
     layout/product UInt8 UInt32 layout/uint8 layout/uint32
   ) in
   match record
-  | +Err(_) => ! fail
-  | +Ok(plan) =>
+  | +Left(_) => ! fail
+  | +Right(plan) =>
     let shape = layout/inspect (UInt8 * UInt32) plan in
     let (= L, repr) = layout/realize (UInt8 * UInt32) plan in
     let shape_ok =

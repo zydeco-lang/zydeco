@@ -1,0 +1,69 @@
+@[package(test(of(/std)))]
+begin
+  let make_std = @(import(/std)) that
+  param (/Thk; /Ret; /OS; /Int; /String; builtin) : @(import(/std/builtin)) that
+  let (/Either; /either; /int; /string; /process) = builtin |> make_std in
+  do left <- ! either/left String Int "left";
+  do right <- ! either/right String Int 7;
+  do folded_left <- ! either/fold String Int (Ret Int) left
+    { fn _ => ret 11 } { fn _ => ! int/div 1 0 };
+  do folded_right <- ! either/fold String Int (Ret Int) right
+    { fn _ => ! int/div 1 0 } { fn value => ! int/add value 1 };
+  -- Equal branch types make handler order observable independently of type checking.
+  do same_left <- ! either/fold Int Int (Ret Int) (+Left(4) : Either Int Int)
+    { fn value => ! int/add value 10 } { fn value => ! int/add value 100 };
+  do same_right <- ! either/fold Int Int (Ret Int) (+Right(4) : Either Int Int)
+    { fn value => ! int/add value 10 } { fn value => ! int/add value 100 };
+  do mapped_left <- ! either/map String Int String left
+    {
+      fn _ =>
+        do _ <- ! int/div 1 0;
+        ret "unreachable"
+    };
+  do mapped_right <- ! either/map String Int String right
+    { fn _ => ret "mapped" };
+  do mapped_error <- ! either/map_left String Int Int left
+    { fn _ => ret 12 };
+  do untouched_right <- ! either/map_left String Int Int right
+    { fn _ => ! int/div 1 0 };
+  do chained_left <- ! either/and_then String Int Int left
+    {
+      fn _ =>
+        do value <- ! int/div 1 0;
+        ret +Right(value)
+    };
+  do chained_right <- ! either/and_then String Int Int right
+    {
+      fn value =>
+        do next <- ! int/add value 2;
+        ret +Right(next)
+    };
+  do failed_right <- ! either/and_then String Int Int right
+    { fn _ => ret +Left("failed") };
+  do default_left <- ! either/unwrap_or String Int left 99;
+  do default_right <- ! either/unwrap_or String Int right 99;
+  do left_is_left <- ! either/is_left String Int left;
+  do left_is_right <- ! either/is_right String Int left;
+  do right_is_left <- ! either/is_left String Int right;
+  do right_is_right <- ! either/is_right String Int right;
+  match (
+    folded_left, folded_right, same_left, same_right,
+    mapped_left, mapped_right, mapped_error, untouched_right,
+    chained_left, chained_right, failed_right, default_left, default_right,
+    left_is_left, left_is_right, right_is_left, right_is_right
+  )
+  | (11, 8, 14, 104,
+    +Left(left_error), +Right(mapped_value), +Left(12), +Right(7),
+    +Left(chained_error), +Right(9), +Left(failed_error), 99, 7,
+    +True(), +False(), +False(), +True()) =>
+    do same_left_error <- ! string/eq left_error "left";
+    do same_mapped_value <- ! string/eq mapped_value "mapped";
+    do same_chained_error <- ! string/eq chained_error "left";
+    do same_failed_error <- ! string/eq failed_error "failed";
+    match (same_left_error, same_mapped_value, same_chained_error, same_failed_error)
+    | (+True(), +True(), +True(), +True()) => ! process/exit 0
+    | _ => ! process/exit 1
+    end
+  | _ => ! process/exit 1
+  end
+end

@@ -14,8 +14,8 @@ begin
   : R =
       do checked <- ! runtime/unsafe/for_layout Unit count alignment;
       match checked
-      | +Err(_) => ! no
-      | +Ok(storage) => ! yes ((#L = Unit, = storage, = codec) : Representation A)
+      | +Left(_) => ! no
+      | +Right(storage) => ! yes ((#L = Unit, = storage, = codec) : Representation A)
       end
   in
   let val scalar (A : VType) (count : Int)
@@ -42,18 +42,18 @@ begin
               let rg = runtime/query Right right/storage in
               do placement <- ! size/round_up lg/size rg/alignment;
               match placement
-              | +Err(_) => ! no
-              | +Ok(offset) =>
+              | +Left(_) => ! no
+              | +Right(offset) =>
                 do ending <- ! size/add offset rg/size;
                 match ending
-                | +Err(_) => ! no
-                | +Ok(ending) =>
+                | +Left(_) => ! no
+                | +Right(ending) =>
                   do alignment <- ! int/gt (Ret Int) lg/alignment rg/alignment
                     { ret lg/alignment } { ret rg/alignment };
                   do extent <- ! size/round_up ending alignment;
                   match extent
-                  | +Err(_) => ! no
-                  | +Ok(count) => ! make (A * B) R count alignment
+                  | +Left(_) => ! no
+                  | +Right(count) => ! make (A * B) R count alignment
                     (
                       codecs/unsafe/dynamic_product_at Unit Left Right A B left/codec right/codec 0
                         offset
@@ -68,8 +68,8 @@ begin
     fn R no yes =>
       do checked <- ! size/alignment boundary;
       match checked
-      | +Err(_) => ! no
-      | +Ok(boundary) =>
+      | +Left(_) => ! no
+      | +Right(boundary) =>
         ! layout R no {
           fn (#L = Old, layout) =>
             let geometry = runtime/query Old layout/storage in
@@ -77,8 +77,8 @@ begin
               { ret boundary } { ret geometry/alignment };
             do extent <- ! size/round_up geometry/size alignment;
             match extent
-            | +Err(_) => ! no
-            | +Ok(count) => ! make A R count alignment
+            | +Left(_) => ! no
+            | +Right(count) => ! make A R count alignment
               (codecs/unsafe/dynamic_relabel Unit Old A layout/codec) no yes
             end
         }

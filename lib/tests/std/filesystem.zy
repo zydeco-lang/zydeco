@@ -5,7 +5,7 @@ begin
   )) that
   let (
     /Bytes;
-    /Bool; /Result; /Path; /IoError;
+    /Bool; /Either; /Path; /IoError;
     /bool; /option; /list;
     /int; /string; /bytes; /io; /fs; /stdio; /process
   )
@@ -13,12 +13,12 @@ begin
     builtin |> make_std
   in
   let ! expect_ok (A : VType)
-    (result : Result A IoError)
+    (result : Either IoError A)
     (continuation : Thk (A -> OS))
   : OS =
       match result
-      | +Ok(value) => ! continuation value
-      | +Err(_) => ! process/exit 1
+      | +Right(value) => ! continuation value
+      | +Left(_) => ! process/exit 1
       end
   in
   let ! require (condition : Bool) (continuation : Thk OS) : OS = ! bool/if
@@ -29,7 +29,7 @@ begin
       ! process/exit 2
     } in
   let ! verify_stdio : OS =
-    let successful : Result Unit IoError = +Ok() in
+    let successful : Either IoError Unit = +Right() in
     ! expect_ok Unit successful {
       fn _ =>
         ! stdio/write "" { fn written => ! expect_ok Unit written { fn _ => ! process/exit 0 } }
@@ -41,8 +41,8 @@ begin
     ! fs/read_bytes missing_path {
       fn result =>
         match result
-        | +Ok(_) => ! process/exit 3
-        | +Err(error) =>
+        | +Right(_) => ! process/exit 3
+        | +Left(error) =>
           do kind <- ! io/error_kind error;
           do correct <- ! io/kind_eq kind io/not_found;
           ! require correct verify_stdio
@@ -55,8 +55,8 @@ begin
     ! fs/read_text invalid_path {
       fn result =>
         match result
-        | +Ok(_) => ! process/exit 6
-        | +Err(error) =>
+        | +Right(_) => ! process/exit 6
+        | +Left(error) =>
           do kind <- ! io/error_kind error;
           do correct <- ! io/kind_eq kind io/invalid_data;
           ! require correct { ! verify_missing path_string }
@@ -87,8 +87,8 @@ begin
   : OS = ! io/close_writer writer {
       fn closed_again =>
         match closed_again
-        | +Ok(_) => ! process/exit 4
-        | +Err(error) =>
+        | +Right(_) => ! process/exit 4
+        | +Left(error) =>
           do kind <- ! io/error_kind error;
           do correct <- ! io/kind_eq kind io/closed;
           ! require correct { ! verify_contents path path_string }

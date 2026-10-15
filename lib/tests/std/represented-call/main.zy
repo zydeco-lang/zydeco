@@ -13,8 +13,8 @@ begin
   let no = { fn (_ : Fault) => ! fail } in
   let make_worker = builtin |> (@(import("worker.zy"))) in
   match layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32
-  | +Err(_) => ! fail
-  | +Ok(plan) =>
+  | +Left(_) => ! fail
+  | +Right(plan) =>
     let (= L, repr) = layouts/realize (UInt8 * UInt32) plan in
     let worker = make_worker (Ptr L Init) (Ptr L Uninit) {
       fn R pointer yes => ! (codecs/unsafe/take L (UInt8 * UInt32) repr/codec pointer) R yes

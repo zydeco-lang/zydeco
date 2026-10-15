@@ -9,7 +9,7 @@ begin
   let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
   let Alloc = (@(import("allocator.type.zy"))) Addr in
   let Fault = @(import("fault.zy")) in
-  let Result = @(import("../data/result.zy")) in
+  let Either = @(import("../data/either.zy")) in
   let indexed = (builtin |> (@(import("indexed.zy")))) types in
   let int = numeric/int in
   def Contents (A : VType) : VType =
@@ -29,7 +29,7 @@ begin
       * (
           #values ::
             (#generate :: Thk (forall (A : VType) . Thk (Int -> Ret A) -> Ret (Values A)))
-          * (#at :: Thk (forall (A : VType) . Values A -> Int -> Ret (Result A Fault)))
+          * (#at :: Thk (forall (A : VType) . Values A -> Int -> Ret (Either Fault A)))
         )
       * (
           #elements :: (
@@ -155,17 +155,17 @@ begin
             },
             #at = {
               fn A values index =>
-                let fix loop (values : Values A) (index : Int) : Ret (Result A Fault) =
+                let fix loop (values : Values A) (index : Int) : Ret (Either Fault A) =
                   match values
-                  | +Nil(_) => ret +Err(+Bounds())
+                  | +Nil(_) => ret +Left(+Bounds())
                   | +Cons(head, tail) =>
-                    ! int/eq (Ret (Result A Fault)) index 0 { ret +Ok(head) } {
+                    ! int/eq (Ret (Either Fault A)) index 0 { ret +Right(head) } {
                       do previous <- ! int/sub index 1;
                       ! loop tail previous
                     }
                   end
                 in
-                ! int/lt (Ret (Result A Fault)) index 0 { ret +Err(+Bounds()) } {
+                ! int/lt (Ret (Either Fault A)) index 0 { ret +Left(+Bounds()) } {
                   ! loop values index
                 }
             }

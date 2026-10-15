@@ -8,11 +8,11 @@ use zydeco_tests::utils::SourceCase;
 #[test]
 fn storage_geometry_is_validated_and_sealed() {
     for (count, alignment, pattern) in [
-        (8, 8, "+Ok(_)"),
-        (0, 1, "+Ok(_)"),
-        (-1, 8, "+Err(+NegativeSize())"),
-        (8, 0, "+Err(+InvalidAlignment())"),
-        (8, 3, "+Err(+InvalidAlignment())"),
+        (8, 8, "+Right(_)"),
+        (0, 1, "+Right(_)"),
+        (-1, 8, "+Left(+NegativeSize())"),
+        (8, 0, "+Left(+InvalidAlignment())"),
+        (8, 3, "+Left(+InvalidAlignment())"),
     ] {
         SourceCase::assert_accepted(SourceCase::run(&MemoryCase::source(&format!(
             "match storage/constant/create {count} {alignment} \
@@ -47,7 +47,7 @@ fn storage_geometry_is_validated_and_sealed() {
 
 #[test]
 fn codecs_require_matching_states_values_and_layout_witnesses() {
-    let prefix = "match storage/constant/create 8 8 | +Err(_) => ! fail | +Ok(= L, layout) => \
+    let prefix = "match storage/constant/create 8 8 | +Left(_) => ! fail | +Right(= L, layout) => \
         let codec = codecs/unsafe/scalar L Int64 numeric/int64/store_le numeric/int64/load_le in \
         ! (allocation/reserve L Unit allocation/static_heap () layout) OS no { fn vacant => ";
     let source = |body: &str| MemoryCase::source(&format!("{prefix} {body} }} end"));
@@ -68,7 +68,7 @@ fn codecs_require_matching_states_values_and_layout_witnesses() {
             TyckDiagnosticCode::TypeMismatch,
         ),
         (
-            "match storage/constant/create 8 8 | +Err(_) => ! fail | +Ok(= Other, _) => \
+            "match storage/constant/create 8 8 | +Left(_) => ! fail | +Right(= Other, _) => \
          let other = codecs/unsafe/scalar Other Int64 numeric/int64/store_le numeric/int64/load_le in \
          ! (other/init vacant (7 : Int64)) OS { fn _ => ! exit 0 } end",
             TyckDiagnosticCode::NamedLabelMismatch,

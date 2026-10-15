@@ -13,8 +13,8 @@ begin
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_write_record")))
   in
   match layouts/product UInt8 UInt32 layouts/uint8 layouts/uint32
-  | +Err(_) => ! fail
-  | +Ok(plan) =>
+  | +Left(_) => ! fail
+  | +Right(plan) =>
     let (= L, repr) = layouts/realize (UInt8 * UInt32) plan in
     -- The binding exposes effects through CPS and interprets C's status before asserting Init.
     let initialize : Thk (Ptr L Uninit -> Thk (Ptr L Init -> OS) -> OS) = {

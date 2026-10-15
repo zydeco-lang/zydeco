@@ -1315,25 +1315,22 @@ mod tests {
     }
 
     #[test]
-    fn type_hover_breaks_result_constructor_signatures_at_72_columns() {
+    fn type_hover_breaks_either_constructor_signatures_at_72_columns() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../lib/std/data/package.zy")
             .canonicalize()
             .unwrap();
         let source = concat!(
-            "param (\n",
-            "  (/VType; /CType; /Thk; /Ret) :\n",
-            "  @(import(\"../builtin.zy\"))\n",
-            ") in\n",
+            "param (/VType; /CType; /Thk; /Ret) : @(import(\"../builtin.zy\")) in\n",
             "begin\n",
-            "  def Result (A : VType) (E : VType) =\n",
+            "  def Either (L : VType) (R : VType) =\n",
             "    data\n",
-            "    | +Ok : A\n",
-            "    | +Err : E\n",
+            "    | +Left : L\n",
+            "    | +Right : R\n",
             "    end\n",
             "  that\n",
-            "  def ! ok (A : VType) (E : VType) (value : A) : Ret (Result A E) =\n",
-            "    ret +Ok(value)\n",
+            "  def ! right (L : VType) (R : VType) (value : R) : Ret (Either L R) =\n",
+            "    ret +Right(value)\n",
             "  that\n",
             "  ()\n",
             "end\n",
@@ -1345,7 +1342,7 @@ mod tests {
             .hover(
                 &session,
                 &path,
-                source_position(source, "ok (A : VType)"),
+                source_position(source, "right (L : VType)"),
                 HoverOptions { line_width, ..HoverOptions::default() },
             )
             .unwrap();
@@ -1365,7 +1362,7 @@ mod tests {
                 .iter()
                 .flat_map(|source| source.lines())
                 .all(|line| line.chars().count() <= line_width.columns()),
-            "the result hover should fit without Zed soft-wrapping it:\n{}",
+            "the either hover should fit without Zed soft-wrapping it:\n{}",
             contents.value
         );
         assert_eq!(sources.len(), 2, "the declaration and equation should use separate fences");

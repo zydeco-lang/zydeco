@@ -74,7 +74,7 @@ Zydeco's current implementation provides a stronger starting point than its expo
 [State](../../lib/std/effect/state.zy), [Exception](../../lib/std/effect/exception.zy),
 and [StateExn](../../lib/std/effect/state-exn.zy) are ordinary libraries over Builtin.
 The standard data library already owns [Option](../../lib/std/data/option.zy),
-[Result](../../lib/std/data/result.zy), and list operations.
+[Either](../../lib/std/data/either.zy), and list operations.
 [Transformer examples](../../lib/tests/monadic/trans.zy) implement ReaderT, OptionT,
 and a continuation-based optional transformer.
 The [backtracking example](../../lib/tests/monadic/backtrack.zydeco) now uses the standard NonDet library.

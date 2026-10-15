@@ -7,7 +7,7 @@ begin
   let Int = @(intrinsic(int)) in
   let Bool = @(import("bool.zy")) in
   let Option = @(import("option.zy")) in
-  let Result = @(import("result.zy")) in
+  let Either = @(import("either.zy")) in
   let BoolModule = @(import("bool.type.zy")) in
 
   let OptionModule
@@ -48,59 +48,39 @@ begin
     * (#is_none :: Thk (forall (A : VType) . Option A -> Ret Bool))
   in
 
-  let ResultModule
+  let EitherModule
     (Bool : VType)
-    (Result : VType -> VType -> VType)
+    (Either : VType -> VType -> VType)
   =
-      (
-        #ok :: Thk (
-          forall (A : VType) (E : VType) . A -> Ret (Result A E)
-        )
-      )
-    * (
-        #err :: Thk (
-          forall (A : VType) (E : VType) . E -> Ret (Result A E)
-        )
-      )
+      (#left :: Thk (forall (L : VType) (R : VType) . L -> Ret (Either L R)))
+    * (#right :: Thk (forall (L : VType) (R : VType) . R -> Ret (Either L R)))
     * (
         #fold :: Thk (
-          forall (A : VType) (E : VType) (B : CType) .
-            Result A E -> Thk (A -> B) -> Thk (E -> B) -> B
+          forall (L : VType) (R : VType) (B : CType) .
+            Either L R -> Thk (L -> B) -> Thk (R -> B) -> B
         )
       )
     * (
         #map :: Thk (
-          forall (A : VType) (B : VType) (E : VType) .
-            Result A E -> Thk (A -> Ret B) -> Ret (Result B E)
+          forall (L : VType) (R : VType) (S : VType) .
+            Either L R -> Thk (R -> Ret S) -> Ret (Either L S)
         )
       )
     * (
-        #map_err :: Thk (
-          forall (A : VType) (E : VType) (F : VType) .
-            Result A E -> Thk (E -> Ret F) -> Ret (Result A F)
+        #map_left :: Thk (
+          forall (L : VType) (R : VType) (S : VType) .
+            Either L R -> Thk (L -> Ret S) -> Ret (Either S R)
         )
       )
     * (
         #and_then :: Thk (
-          forall (A : VType) (B : VType) (E : VType) .
-            Result A E -> Thk (A -> Ret (Result B E)) -> Ret (Result B E)
+          forall (L : VType) (R : VType) (S : VType) .
+            Either L R -> Thk (R -> Ret (Either L S)) -> Ret (Either L S)
         )
       )
-    * (
-        #unwrap_or :: Thk (
-          forall (A : VType) (E : VType) . Result A E -> A -> Ret A
-        )
-      )
-    * (
-        #is_ok :: Thk (
-          forall (A : VType) (E : VType) . Result A E -> Ret Bool
-        )
-      )
-    * (
-        #is_err :: Thk (
-          forall (A : VType) (E : VType) . Result A E -> Ret Bool
-        )
-      )
+    * (#unwrap_or :: Thk (forall (L : VType) (R : VType) . Either L R -> R -> Ret R))
+    * (#is_left :: Thk (forall (L : VType) (R : VType) . Either L R -> Ret Bool))
+    * (#is_right :: Thk (forall (L : VType) (R : VType) . Either L R -> Ret Bool))
   in
 
   let ListModule
@@ -152,11 +132,11 @@ begin
   exists
     (= Bool as Bool)
     (= Option as Option)
-    (= Result as Result)
+    (= Either as Either)
     (= List : VType -> VType)
   .
       (#bool :: BoolModule Bool)
     * (#option :: OptionModule Bool Option)
-    * (#result :: ResultModule Bool Result)
+    * (#either :: EitherModule Bool Either)
     * (#list :: ListModule Bool Option List Int)
 end

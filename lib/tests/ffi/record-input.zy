@@ -13,8 +13,8 @@ begin
   let Decoder = Thk (forall (R : CType) . Bytes -> Thk R -> Thk (Record -> R) -> R) in
   let reject : Decoder = { fn R _ no _ => ! no } in
   match memory/product UInt8 UInt32 memory/uint8 memory/uint32
-  | +Err(_) => reject
-  | +Ok(plan) =>
+  | +Left(_) => reject
+  | +Right(plan) =>
     let shape = memory/inspect Record plan in
     match shape/form
     | +Product(fields) => {

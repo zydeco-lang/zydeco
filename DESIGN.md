@@ -864,8 +864,8 @@ surrogates and values above `U+10FFFF` are rejected.
 Unknown or incomplete escapes are source errors.
 
 Builtin operations report invalid observations through computation-polymorphic branches.
-The library reifies those branches as `Option` for operations such as indexing,
-splitting, parsing, and codepoint conversion, or as `Result` for fallible I/O.
+The library reifies those branches as `Option` for operations such as indexing, splitting, parsing,
+and codepoint conversion, or as [`Either`](docs/references/language.md#either-values) for fallible I/O.
 Filesystem contents are bytes; text conveniences explicitly validate or produce UTF-8.
 EOF, an empty line, and an I/O error have distinct results.
 The [text and library contracts](lib/std/README.md#text-model)

@@ -136,7 +136,7 @@ Product suffix pointers already occur internally;
 rooting and projection must respect the collector's interior-pointer support rather
 than assuming every payload pointer is an allocation base.
 
-`Bool`, `Option A`, `Result A E`, and `List A` are source data types using these rules.
+`Bool`, `Option A`, `Either E A`, and `List A` are source data types using these rules.
 They do not acquire another language's enum layout, null-pointer optimization, or vector representation implicitly.
 The interface manifest publishes the actual constructor-name/index map from the compiler's checked/lowered type.
 Do not guess it from a foreign language's declaration order or confuse it with codata observation numbering.

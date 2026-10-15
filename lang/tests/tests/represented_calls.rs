@@ -11,7 +11,7 @@ fn pointer_call_protocols_require_a_shared_layout_and_state() {
     for (parameter, accepted) in [("Ptr L Init", true), ("Ptr L Uninit", false), ("UInt8", false)] {
         let body = format!(
             r#"
-match memory/uint8 | +Err(_) => ! fail | +Ok(plan) =>
+match memory/uint8 | +Left(_) => ! fail | +Right(plan) =>
   let (= L, repr) = memory/realize UInt8 plan in
   let use : Thk ({parameter} -> OS) = {{ fn value =>
     ! (codecs/unsafe/take L UInt8 repr/codec value) OS {{ fn vacant _ => ! (allocation/unsafe/release L Unit allocation/static_heap () repr/storage vacant) OS no {{ ! exit 0 }} }}

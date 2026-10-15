@@ -7,7 +7,7 @@ val
   let int = numeric/int in
   let Bool = @(import("bool.zy")) in
   let Option = @(import("option.zy")) in
-  let Result = @(import("result.zy")) in
+  let Either = @(import("either.zy")) in
   begin
     def true : Bool = +True() that
     def false : Bool = +False() that
@@ -133,81 +133,79 @@ val
       ! not present
     that
 
-    def ! ok (A : VType) (E : VType) (value : A) : Ret (Result A E) = ret +Ok(value) that
-    def ! err (A : VType) (E : VType) (error : E) : Ret (Result A E) = ret +Err(error) that
-    def ! result_fold (A : VType)
-      (E : VType)
+    def ! left (L : VType) (R : VType) (value : L) : Ret (Either L R) = ret +Left(value) that
+    def ! right (L : VType) (R : VType) (value : R) : Ret (Either L R) = ret +Right(value) that
+    def ! either_fold (L : VType)
+      (R : VType)
       (B : CType)
-      (result : Result A E)
-      (when_ok : Thk (A -> B))
-      (when_err : Thk (E -> B))
+      (value : Either L R)
+      (when_left : Thk (L -> B))
+      (when_right : Thk (R -> B))
     : B =
-        match result
-        | +Ok(value) => ! when_ok value
-        | +Err(error) => ! when_err error
+        match value
+        | +Left(value) => ! when_left value
+        | +Right(value) => ! when_right value
         end
     that
-    def ! result_map (A : VType)
-      (B : VType)
-      (E : VType)
-      (result : Result A E)
-      (transform : Thk (A -> Ret B))
-    : Ret (Result B E) =
-        match result
-        | +Ok(value) =>
+    def ! either_map (L : VType)
+      (R : VType)
+      (S : VType)
+      (value : Either L R)
+      (transform : Thk (R -> Ret S))
+    : Ret (Either L S) =
+        match value
+        | +Left(value) => ! left L S value
+        | +Right(value) =>
           do transformed <- ! transform value;
-          ! ok B E transformed
-        | +Err(error) => ! err B E error
+          ! right L S transformed
         end
     that
-    def ! map_err (A : VType)
-      (E : VType)
-      (F : VType)
-      (result : Result A E)
-      (transform : Thk (E -> Ret F))
-    : Ret (Result A F) =
-        match result
-        | +Ok(value) => ! ok A F value
-        | +Err(error) =>
-          do transformed <- ! transform error;
-          ! err A F transformed
+    def ! map_left (L : VType)
+      (R : VType)
+      (S : VType)
+      (value : Either L R)
+      (transform : Thk (L -> Ret S))
+    : Ret (Either S R) =
+        match value
+        | +Left(value) =>
+          do transformed <- ! transform value;
+          ! left S R transformed
+        | +Right(value) => ! right S R value
         end
     that
-    def ! result_and_then (A : VType)
-      (B : VType)
-      (E : VType)
-      (result : Result A E)
-      (transform : Thk (A -> Ret (Result B E)))
-    : Ret (Result B E) =
-        match result
-        | +Ok(value) => ! transform value
-        | +Err(error) => ! err B E error
+    def ! either_and_then (L : VType)
+      (R : VType)
+      (S : VType)
+      (value : Either L R)
+      (transform : Thk (R -> Ret (Either L S)))
+    : Ret (Either L S) =
+        match value
+        | +Left(value) => ! left L S value
+        | +Right(value) => ! transform value
         end
     that
-    def ! result_unwrap_or (A : VType)
-      (E : VType)
-      (result : Result A E)
-      (default : A)
-    : Ret A =
-        match result
-        | +Ok(value) => ret value
-        | +Err(_) => ret default
+    def ! either_unwrap_or (L : VType)
+      (R : VType)
+      (value : Either L R)
+      (default : R)
+    : Ret R =
+        match value
+        | +Left(_) => ret default
+        | +Right(value) => ret value
         end
     that
-    def ! is_ok (A : VType) (E : VType) (value : Result A E) : Ret Bool = ! result_fold
-      A
-      E
+    def ! is_left (L : VType) (R : VType) (value : Either L R) : Ret Bool = ! either_fold
+      L
+      R
       (Ret Bool)
       value
-      {
-        fn _ => ret true
-      }
+      { fn _ => ret true }
       {
         fn _ => ret false
       } that
-    def ! is_err (A : VType) (E : VType) (value : Result A E) : Ret Bool =
-      do successful <- ! is_ok A E value;
-      ! not successful
+    def ! is_right (L : VType) (R : VType) (value : Either L R) : Ret Bool =
+      do on_left <- ! is_left L R value;
+      ! not on_left
     that
 
     def List (A : VType) : VType =
@@ -355,7 +353,7 @@ val
     pack
       (= Bool as Bool)
       (= Option as Option)
-      (= Result as Result)
+      (= Either as Either)
       (= List : VType -> VType) is List
     where
       #bool = (
@@ -382,16 +380,16 @@ val
         = is_some,
         = is_none
       ),
-      #result = (
-        = ok,
-        = err,
-        #fold = result_fold,
-        #map = result_map,
-        = map_err,
-        #and_then = result_and_then,
-        #unwrap_or = result_unwrap_or,
-        = is_ok,
-        = is_err
+      #either = (
+        = left,
+        = right,
+        #fold = either_fold,
+        #map = either_map,
+        = map_left,
+        #and_then = either_and_then,
+        #unwrap_or = either_unwrap_or,
+        = is_left,
+        = is_right
       ),
       #list = (
         = nil,

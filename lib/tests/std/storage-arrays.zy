@@ -11,11 +11,11 @@ begin
   let no = { fn (_ : Fault) => ! fail } in
   -- The element has eight data bytes and a 64-byte boundary. No logical value or codec is selected.
   match storage/constant/create 8 64
-  | +Err(_) => ! fail
-  | +Ok(#L = Element, element) =>
+  | +Left(_) => ! fail
+  | +Right(#L = Element, element) =>
     match arrays/make Element element 2 1
-    | +Err(_) => ! fail
-    | +Ok(array) =>
+    | +Left(_) => ! fail
+    | +Right(array) =>
       let (/L; /storage = extent; /stride; /elements) = array in
       let geometry = storage/constant/query L extent in
       ! numeric/int/eq OS geometry/size 128 {

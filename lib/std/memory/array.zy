@@ -7,7 +7,7 @@ begin
   param val (/Storage; /DynamicStorage; /constant; /runtime) : @(import("storage.type.zy")) in
   let Fault = @(import("fault.zy")) in
   let Error = @(import("layout-error.zy")) in
-  let Result = @(import("../data/result.zy")) in
+  let Either = @(import("../data/either.zy")) in
   let size = @(import("size.zy")) in
   let dynamic_size = builtin |> (@(import("dynamic-size.zy"))) in
   let (/Array; /make = fixed_core) = (builtin |> (@(import("array-core.zy")))) types Storage in
@@ -27,7 +27,7 @@ begin
       * (
           #values ::
             (#generate :: Thk (forall (A : VType) . Thk (Int -> Ret A) -> Ret (Values A)))
-          * (#at :: Thk (forall (A : VType) . Values A -> Int -> Ret (Result A Fault)))
+          * (#at :: Thk (forall (A : VType) . Values A -> Int -> Ret (Either Fault A)))
         )
       * (
           #elements :: (
@@ -135,7 +135,7 @@ begin
     )
   in
   let val make (Element : VType) (element : Storage Element) (capacity : Int) (boundary : Int) :
-    Result (Array Element) Error =
+    Either Error (Array Element) =
       let geometry = constant/query Element element in
       size/bind Int (Array Element) (size/alignment boundary) (
         val boundary =>
@@ -151,7 +151,7 @@ begin
                       )
                         (
                           val storage =>
-                            +Ok(fixed_core Element storage capacity stride count alignment)
+                            +Right(fixed_core Element storage capacity stride count alignment)
                         )
                   )
               )
@@ -173,26 +173,26 @@ begin
       in
       do aligned <- ! dynamic_size/alignment boundary;
       match aligned
-      | +Err(error) => ! invalid error
-      | +Ok(boundary) =>
+      | +Left(error) => ! invalid error
+      | +Right(boundary) =>
         do rounded <- ! dynamic_size/round_up geometry/size geometry/alignment;
         match rounded
-        | +Err(error) => ! invalid error
-        | +Ok(stride) =>
+        | +Left(error) => ! invalid error
+        | +Right(stride) =>
           do multiplied <- ! dynamic_size/multiply stride capacity;
           match multiplied
-          | +Err(error) => ! invalid error
-          | +Ok(bytes) =>
+          | +Left(error) => ! invalid error
+          | +Right(bytes) =>
             do alignment <- ! numeric/int/gt (Ret Int) geometry/alignment boundary
               { ret geometry/alignment } { ret boundary };
             do extent <- ! dynamic_size/round_up bytes alignment;
             match extent
-            | +Err(error) => ! invalid error
-            | +Ok(count) =>
+            | +Left(error) => ! invalid error
+            | +Right(count) =>
               do checked <- ! runtime/unsafe/for_layout Unit count alignment;
               match checked
-              | +Err(error) => ! invalid error
-              | +Ok(storage) => ! yes (
+              | +Left(error) => ! invalid error
+              | +Right(storage) => ! yes (
                 materialize_parts Element (
                   dynamic_core Element storage capacity stride count alignment
                 )

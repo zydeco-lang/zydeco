@@ -1,35 +1,29 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
   param (/Thk; /OS; /Int; /String; builtin) : @(import("../../std/builtin.zy")) that
-  let (/Option; /IoError; /option; /result; /string; /stdio; /process) = builtin |> make_std in
+  let (/Option; /IoError; /option; /either; /string; /stdio; /process) = builtin |> make_std in
   let ! read_int (continuation : Thk (Option Int -> OS)) : OS = ! stdio/read_line {
     fn read =>
-      ! result/fold
-        (Option String)
-        IoError
-        OS
-        read
-        {
-          fn line =>
-            ! option/fold
-              String
-              OS
-              line
-              {
-                do absent <- ! option/none Int;
-                ! continuation absent
-              }
-              {
-                fn text =>
-                  do parsed <- ! string/parse_int text;
-                  ! continuation parsed
-              }
-        }
-        {
-          fn _ =>
-            do absent <- ! option/none Int;
-            ! continuation absent
-        }
+      ! either/fold IoError (Option String) OS read {
+        fn _ =>
+          do absent <- ! option/none Int;
+          ! continuation absent
+      } {
+        fn line =>
+          ! option/fold
+            String
+            OS
+            line
+            {
+              do absent <- ! option/none Int;
+              ! continuation absent
+            }
+            {
+              fn text =>
+                do parsed <- ! string/parse_int text;
+                ! continuation parsed
+            }
+      }
   } in
   ! read_int {
     fn first =>
