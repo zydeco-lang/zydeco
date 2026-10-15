@@ -1,9 +1,0 @@
-begin
-  let VType = @(intrinsic(vtype)) in
-  param E : VType in
-  param A : VType in
-  data
-  | +Left : E
-  | +Right : A
-  end
-end

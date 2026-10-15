@@ -13,7 +13,11 @@ begin
       end
     } that
     let MonadNonDet = @(import("nondet.type.zy")) that
-    let NonDetT = @[monadic] @(import("nondet-source.type.zy")) that
+    -- Translation supplies the answer-type algebra; the source has none.
+    let NonDetSource (A : VType) =
+      forall (R : CType) . Thk (A -> Thk R -> R) -> Thk R -> R
+    that
+    let NonDetT = @[monadic] NonDetSource that
     let NonDet = NonDetT Ret that
     let INonDet (M : VType -> CType) = (#nondet :: Thk (MonadNonDet M)) that
 
@@ -25,7 +29,7 @@ begin
             let Transformer = @(import("transformer-inner.type.zy")) in
             let MonadNonDet = @(import("nondet.type.zy")) in
             let with_lift = { @(import("transformer-source.zy")) } in
-            let NonDet = @(import("nondet-source.type.zy")) in
+            let NonDet = NonDetSource in
             let Source =
               codata
               | .core : Transformer Ret NonDet

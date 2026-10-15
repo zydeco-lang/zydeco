@@ -1,8 +1,0 @@
--- Translation supplies the answer-type algebra; the shared source has none.
-begin
-  let VType = @(intrinsic(vtype)) in
-  let CType = @(intrinsic(ctype)) in
-  let Thk = @(intrinsic(thk)) in
-  param A : VType in
-  forall (R : CType) . Thk (A -> Thk R -> R) -> Thk R -> R
-end

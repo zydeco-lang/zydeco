@@ -824,8 +824,8 @@ by the [closed translation boundary](#closed-translation-boundary).
 The adapter's input classifier is itself derived by translating `fn (T : VType -> CType) => Transformer Ret T`
 as a type root.
 This keeps the translated monad and lift signatures synchronized with their ordinary definitions.
-Each standard effect similarly shares one closed source carrier, such
-as [Reader's](../../lib/std/effect/reader-source.type.zy) or [NonDet's](../../lib/std/effect/nondet-source.type.zy),
+Each standard effect similarly shares one closed, module-local source carrier, such as `ReaderSource`
+in [Reader](../../lib/std/effect/reader.zy) or `NonDetSource` in [NonDet](../../lib/std/effect/nondet.zy),
 between its public type derivation and its implementation translation.
 Configured effects reorder the generated type arguments to keep configuration before the base carrier.
 

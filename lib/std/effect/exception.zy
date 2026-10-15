@@ -10,10 +10,16 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
         comatch
         end
       } that
-      let Either = @(import("../data/either.zy")) that
+      let Either (E : VType) (A : VType) =
+        data
+        | +Left : E
+        | +Right : A
+        end
+      that
       let MonadThrow = @(import("exception.type.zy")) that
+      let ExceptionSource (E : VType) (A : VType) = Ret (Either E A) that
       let ExceptionT (E : VType) (M : VType -> CType) =
-        (@[monadic] @(import("exception-source.type.zy"))) M E
+        (@[monadic] ExceptionSource) M E
       that
       let Exception (E : VType) = ExceptionT E Ret that
       let IException (E : VType) (M : VType -> CType) =
@@ -30,7 +36,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
               let Ret = @(intrinsic(ret)) in
               let Transformer = @(import("transformer-inner.type.zy")) in
               let with_lift = { @(import("transformer-source.zy")) } in
-              let Exception = @(import("exception-source.type.zy")) in
+              let Exception = ExceptionSource in
               let MonadThrow = @(import("exception.type.zy")) in
               let Source (E : VType) =
                 codata

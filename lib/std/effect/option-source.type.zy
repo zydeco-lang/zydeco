@@ -1,8 +1,0 @@
--- Ordinary source shared by the carrier and implementation translations.
-begin
-  let VType = @(intrinsic(vtype)) in
-  let Ret = @(intrinsic(ret)) in
-  let Option = @(import("../data/option.zy")) in
-  param A : VType in
-  Ret (Option A)
-end

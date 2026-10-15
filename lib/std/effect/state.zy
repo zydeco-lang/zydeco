@@ -11,8 +11,9 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
         end
       } that
       let MonadState = @(import("state.type.zy")) that
+      let StateSource (S : VType) (A : VType) = S -> Ret (A * S) that
       let StateT (S : VType) (M : VType -> CType) =
-        (@[monadic] @(import("state-source.type.zy"))) M S
+        (@[monadic] StateSource) M S
       that
       let State (S : VType) = StateT S Ret that
       let IState (S : VType) (M : VType -> CType) = (#state :: Thk (MonadState S M)) that
@@ -25,7 +26,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
               let Ret = @(intrinsic(ret)) in
               let Transformer = @(import("transformer-inner.type.zy")) in
               let with_lift = { @(import("transformer-source.zy")) } in
-              let State = @(import("state-source.type.zy")) in
+              let State = StateSource in
               let MonadState = @(import("state.type.zy")) in
               let Source (S : VType) =
                 codata

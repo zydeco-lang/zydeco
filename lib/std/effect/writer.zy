@@ -12,8 +12,9 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       } that
       let Monoid = @(import("../algebra/monoid.type.zy")) that
       let MonadWriter = @(import("writer.type.zy")) that
+      let WriterSource (W : VType) (A : VType) = Ret (A * W) that
       let WriterT (W : VType) (M : VType -> CType) =
-        (@[monadic] @(import("writer-source.type.zy"))) M W
+        (@[monadic] WriterSource) M W
       that
       let Writer (W : VType) = WriterT W Ret that
       let IWriter (W : VType) (M : VType -> CType) = (#writer :: Thk (MonadWriter W M)) that
@@ -29,7 +30,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
               let Ret = @(intrinsic(ret)) in
               let Transformer = @(import("transformer-inner.type.zy")) in
               let with_lift = { @(import("transformer-source.zy")) } in
-              let Writer = @(import("writer-source.type.zy")) in
+              let Writer = WriterSource in
               let MonadWriter = @(import("writer.type.zy")) in
               let Source (W : VType) =
                 codata
