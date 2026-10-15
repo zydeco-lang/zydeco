@@ -1,0 +1,10 @@
+-- stage: check-value
+
+begin
+  let Library =
+    exists (#outer = #inner = Representation as (#element = Int)) . Representation/element
+  that
+  let library : Library = (#outer = #inner = #element = Int, 42) in
+  let (#outer = #inner = Representation, value) = library in
+  value : Int
+end

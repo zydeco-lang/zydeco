@@ -176,12 +176,8 @@ impl TermChecker<'_> {
                             TermAnnId::Type(id, kd)
                         }
                         | TermAnnId::Type(definition, definition_kind) => {
-                            let binder_action = if tycker.pattern_has_payload_annotation(binder) {
-                                PatternAction::syn()
-                            } else {
-                                PatternAction::ana(definition_kind.into())
-                            };
-                            let binder = self.mk(binder).tyck_k(tycker, binder_action)?;
+                            let binder = tycker
+                                .check_type_payload_pattern_k(self.mk(binder), definition_kind)?;
                             let (pattern, _domain_kind) = binder.try_as_type(
                                 tycker,
                                 TyckError::SortMismatch,
@@ -276,12 +272,8 @@ impl TermChecker<'_> {
                     let definition = self.mk(evidence).tyck_k(tycker, Action::syn())?;
                     match definition {
                         | TermAnnId::Type(definition, definition_kind) => {
-                            let binder_action = if tycker.pattern_has_payload_annotation(binder) {
-                                PatternAction::syn()
-                            } else {
-                                PatternAction::ana(definition_kind.into())
-                            };
-                            let binder = self.mk(binder).tyck_k(tycker, binder_action)?;
+                            let binder = tycker
+                                .check_type_payload_pattern_k(self.mk(binder), definition_kind)?;
                             let (pattern, _domain_kind) = binder.try_as_type(
                                 tycker,
                                 TyckError::SortMismatch,

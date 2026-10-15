@@ -1,0 +1,12 @@
+-- stage: check-value
+
+begin
+  let library =
+    pack (#outer = #inner = Representation as (#element = Int))
+    where
+      42 : Representation/element
+    end
+  in
+  let (#outer = #inner = Representation, value) = library in
+  value : Int
+end

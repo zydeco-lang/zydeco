@@ -1,0 +1,5 @@
+-- stage: check-value
+-- expect: reject(tyck.kind-mismatch)
+
+pack (= Element as Int : CType)
+where () end

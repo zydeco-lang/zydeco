@@ -1,0 +1,32 @@
+-- stage: check-value
+
+begin
+  let Monad (M : VType -> CType) =
+    codata
+    | .return : forall (A : VType) . A -> M A
+    end
+  that
+  let Library =
+    exists
+      (= Monad as Monad)
+      (#Return = R as Ret)
+      (= Element as Int)
+    .
+      Thk (Monad R) * Element
+  that
+  let library : Library =
+    (
+      = Monad,
+      #Return = Ret,
+      #Element = Int,
+      {
+        comatch
+        | .return => fn A x => ret x
+        end
+      },
+      42
+    )
+  in
+  let (= Monad, = Return, = Element, check, value) = library in
+  (check : Thk (Monad Return), value : Int)
+end

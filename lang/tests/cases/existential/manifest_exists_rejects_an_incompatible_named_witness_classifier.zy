@@ -1,0 +1,7 @@
+-- stage: check-value
+-- expect: reject(tyck.kind-mismatch)
+
+begin
+  let Invalid = exists (= Element as Int : CType) . Unit in
+  ()
+end

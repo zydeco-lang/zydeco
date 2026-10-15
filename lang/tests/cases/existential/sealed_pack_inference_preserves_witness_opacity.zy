@@ -1,0 +1,19 @@
+-- stage: check-value
+-- expect: reject(tyck.type-mismatch)
+
+begin
+  def Switch =
+    data
+    | +Off : Unit
+    | +On : Unit
+    end
+  that
+  let library =
+    pack (#Element = Representation) is Switch
+    where
+      #value = +On() : Representation
+    end
+  in
+  let (/Element; /value) = library in
+  value : Switch
+end

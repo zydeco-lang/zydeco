@@ -324,7 +324,32 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
 }
 
 impl Tycker<'_> {
-    pub(in crate::check) fn pattern_has_payload_annotation(&self, pattern: su::PatId) -> bool {
+    /// Check a type binder against its payload's inferred kind, preserving the
+    /// binder's named wrappers and any explicit payload annotation.
+    pub(in crate::check) fn check_type_payload_pattern_k(
+        &mut self, pattern: TyEnvT<su::PatId>, payload_kind: KindId,
+    ) -> ResultKont<CheckedPattern> {
+        let action = if self.pattern_has_payload_annotation(pattern.inner) {
+            PatternAction::syn()
+        } else {
+            // The definition classifies the innermost payload. Ordinary pattern
+            // checking expects a kind for the whole named pattern instead.
+            let mut inner_pattern = pattern.inner;
+            let mut names = Vec::new();
+            while let su::Pattern::Named(su::Named(name, inner)) = &self.scoped.pats[&inner_pattern]
+            {
+                names.push(name.clone());
+                inner_pattern = *inner;
+            }
+            let kind = names.into_iter().rev().fold(payload_kind, |kind, name| {
+                Alloc::alloc(self, ss::Label(name, kind), (), &())
+            });
+            PatternAction::ana(kind.into())
+        };
+        pattern.tyck_k(self, action)
+    }
+
+    fn pattern_has_payload_annotation(&self, pattern: su::PatId) -> bool {
         match self.scoped.pats[&pattern].clone() {
             | su::Pattern::Ann(_) => true,
             | su::Pattern::Named(su::Named(_, inner)) => self.pattern_has_payload_annotation(inner),

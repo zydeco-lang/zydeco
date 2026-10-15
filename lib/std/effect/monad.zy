@@ -11,10 +11,10 @@ begin
   that
 
   pack
-      (= Monad as Monad : (VType -> CType) -> CType)
-      (= Algebra as Algebra : (VType -> CType) -> CType -> CType)
-      (= MonadInstance as MonadInstance : VType)
-      (= WithMonad as WithMonad : ((VType -> CType) -> VType) -> VType)
+      (= Monad as Monad)
+      (= Algebra as Algebra)
+      (= MonadInstance as MonadInstance)
+      (= WithMonad as WithMonad)
   where
     ()
   end
