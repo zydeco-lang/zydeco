@@ -43,7 +43,7 @@ begin
     ! bool/if
       OS
       correct
-      { ! t }
+      t
       {
         do input <- ! int/to_string input;
         do expected <- ! int/to_string expected;

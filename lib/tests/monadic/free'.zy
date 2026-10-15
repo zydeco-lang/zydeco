@@ -112,7 +112,7 @@ begin
             {
               fn _ =>
                 ! mfree .bind Bool Unit
-                  { ! flip }
+                  flip
                   {
                     fn choice =>
                       ! mfree .bind Bool Unit

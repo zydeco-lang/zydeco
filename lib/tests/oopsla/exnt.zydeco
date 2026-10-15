@@ -166,7 +166,7 @@ begin
         | .return A a =>
           ! mo .return (Either E A) +Right(a)
         | .bind A A' m f =>
-          ! mo .bind (Either E A) (Either E A') { ! m }
+          ! mo .bind (Either E A) (Either E A') m
             {
               fn a? =>
                 match a?
@@ -184,8 +184,8 @@ begin
       end that
 
     (
-      #generated = { ! mt_exn },
-      #manual = { ! mt_exn_manual }
+      #generated = mt_exn,
+      #manual = mt_exn_manual
     )
   end
 end

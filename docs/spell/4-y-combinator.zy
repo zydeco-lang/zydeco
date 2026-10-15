@@ -62,7 +62,7 @@ begin
         ! bool/if
           OS
           correct
-          { ! continuation }
+          continuation
           { ! process/exit 1 }
     } that
 

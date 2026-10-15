@@ -41,11 +41,11 @@ let observe_reader_writer : Thk (Thk (RW Int) -> Ret String) = {
   fn m => ! observe_writer { ! reader/run_reader_t Int W Int 1 m }
 } in
 let observe_writer_reader : Thk (Thk (WR Int) -> Ret String) = {
-  fn m => ! observe_writer { ! reader/run_reader Int (Int * String) 1 { ! m } }
+  fn m => ! observe_writer { ! reader/run_reader Int (Int * String) 1 m }
 } in
 let observe_option_writer : Thk (Thk (OW Int) -> Ret String) = {
   fn m =>
-    do (observation, written) <- ! writer/run_writer String (Option Int) { ! m };
+    do (observation, written) <- ! writer/run_writer String (Option Int) m;
     do text <- ! render_option observation;
     ! string/append text written
 } in

@@ -103,9 +103,7 @@ begin
                                 ! numeric/uint32/eq OS item 7 {
                                   ! (buffer/pop UInt32 element/codec progress) OS no {
                                     fn empty _ =>
-                                      ! buffer/free OS heap empty no {
-                                        ! complete
-                                      }
+                                      ! buffer/free OS heap empty no complete
                                   }
                                 } fail
                             }

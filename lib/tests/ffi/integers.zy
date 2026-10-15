@@ -191,19 +191,19 @@ begin
   } in
   let signed : Thk (Thk OS -> OS) = {
     fn next =>
-      ! check_int8 { ! check_int16 { ! check_int64 { ! check_int32 { ! check_int { ! next } } } } }
+      ! check_int8 { ! check_int16 { ! check_int64 { ! check_int32 { ! check_int next } } } }
   } in
   let unsigned : Thk (Thk OS -> OS) = {
     fn next =>
       ! check_uint8 {
-        ! check_uint16 { ! check_uint64 { ! check_uint32 { ! check_uint { ! next } } } }
+        ! check_uint16 { ! check_uint64 { ! check_uint32 { ! check_uint next } } }
       }
   } in
   let dirty_signed : Thk (Thk OS -> OS) = {
-    fn next => ! check_dirty_int8 { ! check_dirty_int16 { ! check_dirty_int32 { ! next } } }
+    fn next => ! check_dirty_int8 { ! check_dirty_int16 { ! check_dirty_int32 next } }
   } in
   let dirty_unsigned : Thk (Thk OS -> OS) = {
-    fn next => ! check_dirty_uint8 { ! check_dirty_uint16 { ! check_dirty_uint32 { ! next } } }
+    fn next => ! check_dirty_uint8 { ! check_dirty_uint16 { ! check_dirty_uint32 next } }
   } in
   ! signed {
     ! unsigned { ! dirty_signed { ! dirty_unsigned { ! check_effect { ! process/exit 0 } } } }

@@ -59,9 +59,7 @@ begin
       ! check_int64_conversion 0 {
         ! check_int64_conversion 4611686018427387903 {
           ! check_uint64_conversion 0 {
-            ! check_uint64_conversion 9223372036854775807 {
-              ! rejected
-            }
+            ! check_uint64_conversion 9223372036854775807 rejected
           }
         }
       }
@@ -77,9 +75,7 @@ begin
               ! check_uint64_bytes 18446744073709551615 {
                 ! check_uint64_bytes 9223372036854775808 {
                   ! check_uint64_bytes 0 {
-                    ! check_uint64_bytes 4096 {
-                      ! converted
-                    }
+                    ! check_uint64_bytes 4096 converted
                   }
                 }
               }

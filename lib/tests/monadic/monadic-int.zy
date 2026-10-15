@@ -18,7 +18,7 @@ begin
       ret value
     end that
 
-    do value <- ! translated Ret { ! ret_monad };
+    do value <- ! translated Ret ret_monad;
     ! int/eq
       OS
       value

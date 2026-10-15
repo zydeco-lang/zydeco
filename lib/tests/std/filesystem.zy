@@ -45,7 +45,7 @@ begin
         | +Err(error) =>
           do kind <- ! io/error_kind error;
           do correct <- ! io/kind_eq kind io/not_found;
-          ! require correct { ! verify_stdio }
+          ! require correct verify_stdio
         end
     }
   in

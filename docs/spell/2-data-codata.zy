@@ -194,7 +194,7 @@ begin
         OS
         expected
         actual
-        { ! continuation }
+        continuation
         {
           do message <- ! string/append label " is not correct";
           ! stdio/write_line message {

@@ -34,6 +34,7 @@ begin
   do first <- ! args/at (Ret String) 0 { ret "" } { fn value => ret value };
   do length <- ! string/length first;
   do captured <- ! numeric/float64/add 1e18 4e18;
+  -- Keep the forwarding thunk so the multishot-tail regression also covers a captured tail.
   do folded <- ! arguments/fold (Ret Float64) { ret captured } {
     fn argument tail =>
       ! string/eq (Ret Float64) argument "alpha" {

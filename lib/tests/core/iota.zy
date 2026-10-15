@@ -58,5 +58,5 @@ begin
       ! panic "unreachable"
     } that
 
-  (#loopy = { ! loopy })
+  (= loopy)
 end

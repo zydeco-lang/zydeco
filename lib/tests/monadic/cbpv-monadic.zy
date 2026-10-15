@@ -354,8 +354,7 @@ begin
           -- Continuation sequencing is written explicitly as `<comp1> { <comp2> }`.
           ! stdio/write "{ " {
             ! print-scbpv .compu sc {
-              ! stdio/write " }" {
-                ! kont }
+              ! stdio/write " }" kont
             }
           }
         end
@@ -364,8 +363,7 @@ begin
         | +Lam(x, sc) => ! stdio/write "fn " {
           ! stdio/write x {
             ! stdio/write " -> " {
-              ! print-scbpv .compu sc {
-                ! kont }
+              ! print-scbpv .compu sc kont
             }
           }
         }
@@ -373,15 +371,13 @@ begin
           ! print-scbpv .compu sc {
             ! stdio/write " " {
               ! print-scbpv .value sv {
-                ! stdio/write ")" {
-                  ! kont }
+                ! stdio/write ")" kont
               }
             }
           }
         }
         | +Ret(sv) => ! stdio/write "ret " {
-          ! print-scbpv .value sv {
-            ! kont }
+          ! print-scbpv .value sv kont
         }
         | +Bind(sc1, x, sc2) =>
           do m <- ! string/append "bind " x;
@@ -389,20 +385,17 @@ begin
           ! stdio/write m {
             ! print-scbpv .compu sc1 {
               ! stdio/write "; " {
-                ! print-scbpv .compu sc2 {
-                  ! kont }
+                ! print-scbpv .compu sc2 kont
               }
             }
           }
         | +Force(sv) => ! stdio/write "! " {
-          ! print-scbpv .value sv {
-            ! kont }
+          ! print-scbpv .value sv kont
         }
         | +Rec(x, sc) => ! stdio/write "fix " {
           ! stdio/write x {
             ! stdio/write " -> " {
-              ! print-scbpv .compu sc {
-                ! kont }
+              ! print-scbpv .compu sc kont
             }
           }
         }
@@ -411,8 +404,7 @@ begin
             ! stdio/write " then " {
               ! print-scbpv .compu sc1 {
                 ! stdio/write " else " {
-                  ! print-scbpv .compu sc2 {
-                    ! kont }
+                  ! print-scbpv .compu sc2 kont
                 }
               }
             }
@@ -420,8 +412,7 @@ begin
         }
         | +Env(sc) => ! stdio/write "env[" {
           ! print-scbpv .compu sc {
-            ! stdio/write "]" {
-              ! kont }
+            ! stdio/write "]" kont
           }
         }
         end
@@ -446,8 +437,7 @@ begin
           ! stdio/write i kont
         | +Thunk(c) => ! stdio/write "{ " {
           ! print-cbpv .compu c {
-            ! stdio/write " }" {
-              ! kont }
+            ! stdio/write " }" kont
           }
         }
         end
@@ -538,8 +528,7 @@ begin
                   -- | +App(_sv, v) =>
                   ! stdio/write "  app " {
                     ! print-value v {
-                      ! stdio/write_line "," {
-                        ! kont }
+                      ! stdio/write_line "," kont
                     }
                   }
                 -- | +Bind(_k) =>
@@ -547,8 +536,7 @@ begin
                   ! stdio/write x {
                     ! stdio/write ". " {
                       ! print-scompu sc {
-                        ! stdio/write_line "," {
-                          ! kont }
+                        ! stdio/write_line "," kont
                       }
                     }
                   }

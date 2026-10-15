@@ -40,7 +40,7 @@ begin
       )
     end that
 
-    do status <- ! translated Ret { ! mo_ret };
+    do status <- ! translated Ret mo_ret;
     ! process/exit status
   end
 end

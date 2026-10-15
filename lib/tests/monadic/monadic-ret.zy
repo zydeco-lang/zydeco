@@ -16,7 +16,7 @@ begin
       ret ()
     end that
 
-    do _ <- ! translated Ret { ! ret_monad };
+    do _ <- ! translated Ret ret_monad;
     ! process/exit 0
   end
 end

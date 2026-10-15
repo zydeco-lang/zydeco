@@ -50,9 +50,7 @@ begin
                                     fn second =>
                                       ! numeric/uint8/eq OS first 7 {
                                         ! numeric/uint8/eq OS padding 99 {
-                                          ! numeric/uint8/eq OS second 9 {
-                                            ! finish
-                                          } fail
+                                          ! numeric/uint8/eq OS second 9 finish fail
                                         } fail
                                       } fail
                                   }

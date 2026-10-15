@@ -17,6 +17,7 @@ begin
     end
   in
   def fix push (remaining : Int) (sink : Thk Stream) : Stream =
+    -- Keep the forwarding thunk to exercise pending destructor arguments through an extra closure.
     ! int/eq Stream remaining 0 { ! sink } {
       do next <- ! int/sub remaining 1;
       ! push next sink .item remaining
