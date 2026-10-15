@@ -37,7 +37,7 @@ let p = {
     end
 } in
 -- The external nominal type enters through A and its trivial structure.
-def X : VType =
+def X =
   data
   | +X : Int
   end

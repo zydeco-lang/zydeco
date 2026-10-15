@@ -63,7 +63,7 @@ begin
   -- end module Identity
 
   -- module Pair
-  let Pair (A : VType) (A' : VType) : VType =
+  let Pair (A : VType) (A' : VType) =
     data
     | +Cons : A * A'
     end
@@ -234,7 +234,7 @@ begin
 
   -- module LList
   --| Lazy List
-  def LListV (A : VType) (B : CType) : VType =
+  def LListV (A : VType) (B : CType) =
     data
     | +Nil : Unit
     | +Cons : A * Thunk B
@@ -417,7 +417,7 @@ begin
     }
   that
 
-  let Cmp (A : VType) : VType = U (A -> A -> F Bool) that
+  let Cmp (A : VType) = U (A -> A -> F Bool) that
 
   def fix min_list (A : VType) (cmp : Cmp A) (xs : U (LList A)) : F (Option (Pair A Int)) =
     do xs' <- ! xs .run;

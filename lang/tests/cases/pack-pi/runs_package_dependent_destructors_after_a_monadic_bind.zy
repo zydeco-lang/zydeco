@@ -16,7 +16,7 @@ begin
       exists (X : VType) . X
     that
 
-    let Service : CType =
+    let Service =
       codata
       | .unbox : pi ((X, _) : Box) . Ret X
       end

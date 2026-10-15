@@ -22,7 +22,7 @@ let tick : Thk (State Int) = {
 let program = {
   @[monadic] fn (tick : Thk (Ret Int)) =>
     begin
-      def Box : VType =
+      def Box =
         data
         | +Box : Int
         end

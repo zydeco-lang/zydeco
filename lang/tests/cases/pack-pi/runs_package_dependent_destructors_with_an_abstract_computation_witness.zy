@@ -16,7 +16,7 @@ begin
       exists (OS : CType) . Thk OS
     that
 
-    let Runner : CType =
+    let Runner =
       codata
       | .run : pi ((OS, _) : Core) . OS
       end

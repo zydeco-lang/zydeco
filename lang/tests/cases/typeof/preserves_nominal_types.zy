@@ -1,5 +1,5 @@
 begin
-  def Token : VType =
+  def Token =
     data
     | +Token : Unit
     end

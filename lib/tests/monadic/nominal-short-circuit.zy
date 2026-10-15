@@ -61,7 +61,7 @@ let p = {
     (
       @[monadic] fn (step : Thk (Int -> Ret Int)) (a : Int) (b : Int) =>
         begin
-          def T : VType =
+          def T =
             data
             | +T : Int * Int
             end

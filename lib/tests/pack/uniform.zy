@@ -21,11 +21,11 @@ begin
     Result
   that
   let LexicalHidden =
-    def Secret : VType = Int in
+    def Secret = Int in
     Secret
   that
   let Hidden = begin
-    def Secret : VType = Int that
+    def Secret = Int that
     Secret
   end that
   let RecursiveList = begin
@@ -57,7 +57,7 @@ begin
     def expected : Int = 42 that
     let Number = A that
     param A : VType that
-    def Opaque : VType = Int that
+    def Opaque = Int that
     do status <- ! int/sub expected 42;
     ! process/exit status
   end that

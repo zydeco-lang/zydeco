@@ -1,12 +1,12 @@
 -- expect: reject(tyck.type-mismatch)
 
 begin
-  def Token : VType =
+  def Token =
     data
     | +Token : Unit
     end
   that
-  def Other : VType =
+  def Other =
     data
     | +Token : Unit
     end

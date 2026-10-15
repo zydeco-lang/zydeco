@@ -16,7 +16,7 @@ begin
     /system
   ) : @(import("../../lib/std/builtin.zy")) that
   let int = numeric/int that
-  def Bool : VType =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit

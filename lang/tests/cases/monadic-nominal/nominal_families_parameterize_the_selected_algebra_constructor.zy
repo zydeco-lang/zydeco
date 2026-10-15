@@ -3,7 +3,7 @@
 fn (Selected : (VType -> CType) -> CType -> CType) =>
   let Algebra = Selected in
   @[monadic] begin
-    def Packed : VType =
+    def Packed =
       data
       | +Packed : exists (B : CType) . Thk B
       end

@@ -5,7 +5,7 @@ fn (mo : Thk (Monad Ret)) =>
   let make = {
     @[monadic] fn (A : VType) (value : A) =>
       begin
-        def Box : VType =
+        def Box =
           data
           | +Box : A
           end

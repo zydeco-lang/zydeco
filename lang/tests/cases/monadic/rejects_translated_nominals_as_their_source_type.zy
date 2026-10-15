@@ -5,7 +5,7 @@ let make = {
   begin
     let VType = @(intrinsic(vtype)) in
     let Int = @(intrinsic(int)) in
-    def Box : VType =
+    def Box =
       data
       | +Box : Int
       end

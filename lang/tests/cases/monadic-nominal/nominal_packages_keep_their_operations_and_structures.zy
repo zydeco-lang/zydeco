@@ -11,7 +11,7 @@ let mo : Thk (Monad Ret) = {
 } in
 do result <- (
   @[monadic] begin
-    def Box : VType =
+    def Box =
       data
       | +Box : Int
       end

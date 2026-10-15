@@ -1,7 +1,7 @@
 -- expect: reject(tyck.refutable-pattern-alias)
 
 begin
-  def Bool : VType =
+  def Bool =
     data
     | +True : Unit
     | +False : Unit

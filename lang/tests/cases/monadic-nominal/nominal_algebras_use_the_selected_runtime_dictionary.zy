@@ -25,7 +25,7 @@ let multiplicative : Thk (Monad Writer) = {
 let program = {
   @[monadic] fn (first : Thk (Ret Int)) (second : Thk (Ret Int)) =>
     begin
-      def Report : CType =
+      def Report =
         codata
         | .finish : Ret Int
         end

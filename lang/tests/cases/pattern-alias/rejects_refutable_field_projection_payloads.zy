@@ -1,7 +1,7 @@
 -- expect: reject(tyck.refutable-field-projection-pattern)
 
 begin
-  def Maybe : VType =
+  def Maybe =
     data
     | +Some : Int
     | +None : Unit

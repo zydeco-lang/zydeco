@@ -19,7 +19,7 @@ let second_mo : Thk (Monad Ret) = {
 } in
 let program = {
   @[monadic] begin
-    def Box : VType =
+    def Box =
       data
       | +Box : Int
       end

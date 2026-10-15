@@ -14,7 +14,7 @@ do result <- (
     let make = {
       fn (A : VType) (item : A) =>
         begin
-          def Box : VType =
+          def Box =
             data
             | +Box : A
             end

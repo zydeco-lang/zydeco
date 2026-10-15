@@ -21,7 +21,7 @@ do result <- (
     } in
     (
       @[monadic] begin
-        def Box : VType =
+        def Box =
           data
           | +Box : Int
           end

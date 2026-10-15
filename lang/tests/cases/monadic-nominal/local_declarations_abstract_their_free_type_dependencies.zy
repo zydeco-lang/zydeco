@@ -14,7 +14,7 @@ do result <- (
     let make = {
       fn (A : VType) (B : CType) (item : A) (finish : Thk (A -> B)) =>
         begin
-          def Box : VType =
+          def Box =
             data
             | +Box : A
             end

@@ -32,7 +32,7 @@ begin
     | .some : ParenCounterStk
     end
   that
-  let ParenCounterTrans : CType =
+  let ParenCounterTrans =
     ParenCounterState -> ParenCounterStk
   that
 

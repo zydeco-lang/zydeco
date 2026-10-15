@@ -11,6 +11,7 @@ let mo : Thk (Monad Ret) = {
 } in
 do result <- (
   @[monadic] begin
+    -- Keep the explicit kind to cover annotated nominal definitions during translation.
     def Box : VType =
       data
       | +Box : Int

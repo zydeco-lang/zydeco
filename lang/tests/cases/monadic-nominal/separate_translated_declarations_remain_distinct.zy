@@ -4,7 +4,7 @@
 fn (mo : Thk (Monad Ret)) =>
   do first <- (
     @[monadic] begin
-      def Box : VType =
+      def Box =
         data
         | +Box : Int
         end
@@ -14,7 +14,7 @@ fn (mo : Thk (Monad Ret)) =>
   ) Ret mo;
   do second <- (
     @[monadic] begin
-      def Box : VType =
+      def Box =
         data
         | +Box : Int
         end

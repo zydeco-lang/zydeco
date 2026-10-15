@@ -5,7 +5,7 @@ let Reader (A : VType) = Unit -> Ret A in
 fn (identity : Thk (Monad Ret)) (reader : Thk (Monad Reader)) =>
   let program = {
     @[monadic] begin
-      def Box : VType =
+      def Box =
         data
         | +Box : Int
         end

@@ -15,7 +15,7 @@ begin
         def expected : Int = 0 that
         let Number = A that
         param A : VType that
-        def Opaque : VType = Int that
+        def Opaque = Int that
         do status <- ! int/add expected 0;
         ! process/exit status
       end

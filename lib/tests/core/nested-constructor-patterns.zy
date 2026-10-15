@@ -2,18 +2,18 @@
 param (/VType; /Thk; /Ret; /Int; /numeric; /process) : @(import(
   "../../std/builtin.zy"
 )) in
-def Choice : VType =
+def Choice =
   data
   | +Left : Int
   | +Right : Int
   end
 in
-def Pair : VType =
+def Pair =
   data
   | +Pair : Choice * Choice
   end
 in
-def Box : VType =
+def Box =
   data
   | +Box : Int
   end
