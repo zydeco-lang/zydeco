@@ -1,6 +1,7 @@
 mod analysis;
 mod completion;
 mod configuration;
+mod cursor;
 mod document_links;
 mod format;
 mod hover;

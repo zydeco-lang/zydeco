@@ -1,5 +1,6 @@
+use crate::cursor::RangeEnd;
 use serde::Deserialize;
-use std::{collections::BTreeMap, num::NonZeroUsize, ops::Range};
+use std::{collections::BTreeMap, num::NonZeroUsize};
 use tower_lsp::lsp_types::{Position, Url};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -8,31 +9,6 @@ pub(crate) struct HoverOptions {
     pub(crate) line_width: HoverLineWidth,
     #[serde(rename = "inclusiveEnd")]
     pub(crate) range_end: RangeEnd,
-}
-
-/// Position-query policy; source spans and returned LSP ranges retain their original endpoints.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-#[serde(from = "bool")]
-pub(crate) enum RangeEnd {
-    #[default]
-    Exclusive,
-    Inclusive,
-}
-
-impl From<bool> for RangeEnd {
-    fn from(inclusive: bool) -> Self {
-        if inclusive { Self::Inclusive } else { Self::Exclusive }
-    }
-}
-
-impl RangeEnd {
-    pub(crate) fn contains(&self, range: &Range<usize>, offset: usize) -> bool {
-        range.start <= offset
-            && match self {
-                | Self::Exclusive => offset < range.end,
-                | Self::Inclusive => offset <= range.end,
-            }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]

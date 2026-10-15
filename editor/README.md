@@ -49,12 +49,11 @@ Clients that push settings send a complete snapshot in `workspace/didChangeConfi
 }
 ```
 
-`hover.inclusiveEnd` defaults to `false`, using `start <= offset && offset < end` to select a name or term.
-Setting it to `true` uses `start <= offset && offset <= end`, so the position immediately
-after a name can still show that name's type.
-Symbols retain priority over enclosing terms, and the smallest matching span wins.
-This setting controls hover lookup; source spans, returned LSP ranges, navigation,
-and rename keep their existing boundaries.
+`hover.inclusiveEnd` defaults to `false`; enabling it lets the position immediately
+after a name or term still show its type.
+This setting controls hover only.
+Navigation and rename share [cursor-based selection](../docs/references/compiler.md#cursor-based-selection),
+which accepts either identifier edge while preserving the original source ranges.
 `hover.lineWidth` is a positive integer column budget for hover signatures and completion type details.
 The server and VS Code default to 100 columns; the Zed integration supplies a 72-column default.
 

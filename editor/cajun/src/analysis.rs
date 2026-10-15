@@ -28,8 +28,9 @@ use zydeco_utils::{
 };
 
 use crate::{
+    cursor::RangeEnd,
     hover::{
-        HoverLineWidth, HoverOptions, HoverSignature, RangeEnd, SealedTypeEquationPreview,
+        HoverLineWidth, HoverOptions, HoverSignature, SealedTypeEquationPreview,
         TypeDefinitionLink, TypeDefinitionPreview,
     },
     progress::{AnalysisProgress, SourceDiscovery},
@@ -240,14 +241,14 @@ impl ProjectState {
     }
 
     pub(crate) fn definition(&self, file_path: &Path, position: Position) -> Option<Location> {
-        let occurrence = self.symbol_at(file_path, position, RangeEnd::Exclusive)?;
+        let occurrence = self.symbol_at(file_path, position)?;
         self.definition_location(occurrence.definition)
     }
 
     pub(crate) fn references(
         &self, file_path: &Path, position: Position, include_declaration: bool,
     ) -> Option<Vec<Location>> {
-        let definition = self.symbol_at(file_path, position, RangeEnd::Exclusive)?.definition;
+        let definition = self.symbol_at(file_path, position)?.definition;
         let declaration =
             include_declaration.then(|| self.definition_location(definition)).into_iter().flatten();
         let uses = self
@@ -259,7 +260,7 @@ impl ProjectState {
         Some(Self::ordered_locations(declaration.chain(uses).collect()))
     }
 
-    /// Offer the identifier under the position for interactive renaming.
+    /// Offer the identifier under or immediately before the position for interactive renaming.
     ///
     /// Names introduced by data, codata, and comatch arms resolve during type
     /// checking rather than name resolution, so they have no resolver-backed
@@ -267,20 +268,18 @@ impl ProjectState {
     pub(crate) fn prepare_rename(
         &self, file_path: &Path, position: Position,
     ) -> Option<PrepareRenameResponse> {
-        let occurrence = self.symbol_at(file_path, position, RangeEnd::Exclusive)?;
+        let occurrence = self.symbol_at(file_path, position)?;
         self.definition_location(occurrence.definition)?;
         let placeholder = self.scoped().defs[&occurrence.definition].0.clone();
         Some(PrepareRenameResponse::RangeWithPlaceholder { range: occurrence.range, placeholder })
     }
 
-    /// Rewrite the definition and every resolved use of the symbol under the
-    /// position, across all files of the analyzed import closure.
+    /// Rewrite the definition and every resolved use of the symbol under or immediately before
+    /// the position, across all files of the analyzed import closure.
     pub(crate) fn rename(
         &self, file_path: &Path, position: Position, new_name: &str,
     ) -> Result<WorkspaceEdit, RenameRejection> {
-        let occurrence = self
-            .symbol_at(file_path, position, RangeEnd::Exclusive)
-            .ok_or(RenameRejection::Unresolved)?;
+        let occurrence = self.symbol_at(file_path, position).ok_or(RenameRejection::Unresolved)?;
         let current = self.scoped().defs[&occurrence.definition].0.clone();
         let renamer = Renamer::adopt(&current, new_name)?;
         let declaration =
@@ -299,7 +298,7 @@ impl ProjectState {
         &self, session: &CompilerSession, file_path: &Path, position: Position,
         options: HoverOptions,
     ) -> Option<Hover> {
-        self.symbol_at(file_path, position, options.range_end)
+        self.symbol_at_with_range_end(file_path, position, options.range_end)
             .and_then(|occurrence| self.symbol_hover(session, &occurrence, options.line_width))
             .or_else(|| self.term_hover(file_path, position, options))
     }
@@ -542,7 +541,13 @@ impl ProjectState {
         crate::document_links::ImportDocumentLinks::new(self.analysis.graph()).for_file(&file_path)
     }
 
-    fn symbol_at(
+    /// Shared lookup for symbol commands: accept either identifier edge without extending its range.
+    fn symbol_at(&self, file_path: &Path, position: Position) -> Option<SymbolOccurrence> {
+        self.symbol_at_with_range_end(file_path, position, RangeEnd::Inclusive)
+    }
+
+    /// The same occurrence lookup with an explicit endpoint policy, used by configurable hover.
+    fn symbol_at_with_range_end(
         &self, file_path: &Path, position: Position, range_end: RangeEnd,
     ) -> Option<SymbolOccurrence> {
         let file_path = Self::normalize_path(file_path);
@@ -709,8 +714,9 @@ mod tests {
     };
     use std::{collections::HashMap, path::Path};
     use tower_lsp::lsp_types::{
-        DiagnosticSeverity, HoverContents, NumberOrString, Position, PrepareRenameResponse, Range,
-        SemanticToken, SemanticTokensLegend, Url,
+        DiagnosticSeverity, HoverContents, Location, NumberOrString, Position,
+        PrepareRenameResponse, Range, SemanticToken, SemanticTokensLegend, TextEdit, Url,
+        WorkspaceEdit,
     };
     use zydeco_session::SourceDiagnosticSite;
     use zydeco_utils::span::{FileMap, LineCol};
@@ -998,6 +1004,92 @@ mod tests {
             edits.iter().map(|edit| edit.range.start).collect::<Vec<_>>(),
             vec![Position::new(1, 6), Position::new(2, 3), Position::new(2, 11)]
         );
+    }
+
+    #[test]
+    fn symbol_queries_accept_both_identifier_edges_without_extending_ranges() {
+        let directory = tempfile::tempdir().unwrap();
+        let library = directory.path().join("library.zy");
+        let root = directory.path().join("main.zy");
+        std::fs::write(&root, "@(import(\"library.zy\"))\n").unwrap();
+
+        for (name, replacement) in [("W", "Wide"), ("answer", "result")] {
+            let source =
+                format!("let {name} = () in\r\n/- 😀 -/ let pair = ({name} , {name}) in\r\n{name}");
+            std::fs::write(&library, &source).unwrap();
+            let (project, _session) = ProjectState::load(&root, &HashMap::new()).unwrap();
+            assert!(project.diagnostics(&library).is_empty());
+            let file = FileMap::local(source.as_str(), None);
+            let ranges = source
+                .match_indices(name)
+                .map(|(byte, _)| {
+                    Range::new(
+                        ProjectState::position(file.line_col_utf16(byte).unwrap()),
+                        ProjectState::position(file.line_col_utf16(byte + name.len()).unwrap()),
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(ranges.len(), 4, "the definition, two pair elements, and the EOF use");
+            let uri = Url::from_file_path(library.canonicalize().unwrap()).unwrap();
+            let locations = ranges
+                .iter()
+                .map(|range| Location { uri: uri.clone(), range: *range })
+                .collect::<Vec<_>>();
+            let expected = WorkspaceEdit {
+                changes: Some(HashMap::from([(
+                    uri,
+                    ranges
+                        .iter()
+                        .map(|range| TextEdit { range: *range, new_text: replacement.to_owned() })
+                        .collect(),
+                )])),
+                ..WorkspaceEdit::default()
+            };
+
+            for range in ranges {
+                for character in range.start.character..=range.end.character {
+                    let position = Position::new(range.start.line, character);
+                    assert_eq!(
+                        project.definition(&library, position),
+                        Some(locations[0].clone()),
+                        "{name} at {position:?}"
+                    );
+                    assert_eq!(
+                        project.references(&library, position, true),
+                        Some(locations.clone()),
+                        "{name} at {position:?}"
+                    );
+                    assert_eq!(
+                        project.references(&library, position, false),
+                        Some(locations[1..].to_vec()),
+                        "{name} at {position:?}"
+                    );
+                    assert_eq!(
+                        project.prepare_rename(&library, position),
+                        Some(PrepareRenameResponse::RangeWithPlaceholder {
+                            range,
+                            placeholder: name.to_owned(),
+                        }),
+                        "{name} at {position:?}"
+                    );
+                    assert_eq!(
+                        project.rename(&library, position, replacement),
+                        Ok(expected.clone()),
+                        "{name} at {position:?}"
+                    );
+                }
+
+                let beyond_end = Position::new(range.end.line, range.end.character + 1);
+                assert_eq!(project.definition(&library, beyond_end), None);
+                assert_eq!(project.references(&library, beyond_end, true), None);
+                assert_eq!(project.references(&library, beyond_end, false), None);
+                assert_eq!(project.prepare_rename(&library, beyond_end), None);
+                assert_eq!(
+                    project.rename(&library, beyond_end, replacement),
+                    Err(RenameRejection::Unresolved)
+                );
+            }
+        }
     }
 
     #[test]

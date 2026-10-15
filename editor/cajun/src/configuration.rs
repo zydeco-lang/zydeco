@@ -187,7 +187,10 @@ impl Configuration {
 #[cfg(test)]
 mod tests {
     use super::{CajunSettings, ConfigurationState};
-    use crate::hover::{HoverLineWidth, HoverOptions, RangeEnd};
+    use crate::{
+        cursor::RangeEnd,
+        hover::{HoverLineWidth, HoverOptions},
+    };
     use serde_json::json;
 
     #[test]

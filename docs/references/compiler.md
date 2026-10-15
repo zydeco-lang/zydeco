@@ -2916,6 +2916,21 @@ by an earlier failure should not manufacture independent evidence.
 Definition, reference, rename, hover, and semantic-token operations use current provenance and lexical identity.
 UTF-16 conversion happens when reading or writing client positions.
 
+### Cursor-Based Selection
+
+An editor cursor sits between characters, so a symbol command should accept both `|W` and `W|`.
+Cajun's shared `symbol_at` lookup selects a resolved occurrence with `start <= offset && offset <= end`;
+go-to-definition, find-references, prepare-rename, and rename all use this entry point.
+The smallest matching source span wins.
+Positions beyond either edge do not select that occurrence.
+
+Cursor hit-testing is separate from source-range representation.
+The [shared endpoint policy](../../editor/cajun/src/cursor.rs) changes which positions match, while source spans,
+navigation targets, reference locations, and edit ranges remain half-open.
+Hover uses the same occurrence lookup with its configured endpoint policy and falls back
+to the smallest matching term; resolved symbols take precedence over enclosing terms.
+The [editor guide](../../editor/README.md#runtime-configuration) documents the hover settings.
+
 ### Diagnostic Collection
 
 Parsing retains all `ParseIssue` entries in `ParseFailure`.

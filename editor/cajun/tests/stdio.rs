@@ -819,11 +819,31 @@ fn stdio_server_renames_resolved_symbols() {
     assert_eq!(edits[0]["range"]["start"], json!({ "line": 1, "character": 6 }));
     assert_eq!(edits[1]["range"]["start"], json!({ "line": 2, "character": 2 }));
 
+    for character in [2, 8] {
+        let at_edge = server.request(
+            "textDocument/prepareRename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": character },
+            }),
+        );
+        assert_eq!(at_edge["result"], prepared["result"]);
+        let at_edge = server.request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": character },
+                "newName": "result",
+            }),
+        );
+        assert_eq!(at_edge["result"], renamed["result"]);
+    }
+
     let refused = server.request(
         "textDocument/rename",
         json!({
             "textDocument": { "uri": uri },
-            "position": { "line": 2, "character": 4 },
+            "position": { "line": 2, "character": 8 },
             "newName": "let",
         }),
     );
@@ -1146,17 +1166,24 @@ fn stdio_hover_updates_endpoint_policy_without_restarting() {
                 json!({ "textDocument": { "uri": uri }, "position": comma }),
             );
             assert_eq!(beyond_end["result"]["contents"]["value"], pair_signature);
-            for method in ["textDocument/definition", "textDocument/prepareRename"] {
-                let inside = server.request(
-                    method,
-                    json!({ "textDocument": { "uri": uri }, "position": use_start }),
-                );
+            for (method, mut params) in [
+                ("textDocument/definition", json!({})),
+                ("textDocument/references", json!({ "context": { "includeDeclaration": true } })),
+                ("textDocument/references", json!({ "context": { "includeDeclaration": false } })),
+                ("textDocument/prepareRename", json!({})),
+                ("textDocument/rename", json!({ "newName": "renamed" })),
+            ] {
+                params["textDocument"] = json!({ "uri": uri });
+                params["position"] = json!(use_start);
+                let inside = server.request(method, params.clone());
+                assert!(inside.get("error").is_none(), "{method} failed: {inside}");
                 assert!(!inside["result"].is_null());
-                let at_end = server.request(
-                    method,
-                    json!({ "textDocument": { "uri": uri }, "position": use_end }),
+                params["position"] = json!(use_end);
+                let at_end = server.request(method, params);
+                assert_eq!(
+                    at_end["result"], inside["result"],
+                    "{method} must accept endpoints independently of hover settings"
                 );
-                assert!(at_end["result"].is_null(), "{method} must retain exclusive endpoints");
             }
             let outside = server.request(
                 "textDocument/hover",
