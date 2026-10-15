@@ -44,6 +44,11 @@
         "path": "./syntaxes/zydeco.tmLanguage.json"
       }
     ],
+    "configurationDefaults": {
+      "[zydeco]": {
+        "editor.defaultColorDecorators": "never"
+      }
+    },
     "configuration": {
       "type": "object",
       "title": "Cajun",
