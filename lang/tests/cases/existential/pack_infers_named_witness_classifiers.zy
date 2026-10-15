@@ -8,9 +8,9 @@ begin
   that
   let library =
     pack
-        (= Monad as Monad)
-        (#Return = R as Ret)
-        (= Element as Int)
+      (= Monad as Monad)
+      (#Return = R as Ret)
+      (= Element as Int)
     where
       #value = 42 : Element
     end

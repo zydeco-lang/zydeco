@@ -353,10 +353,10 @@ val
     that
 
     pack
-        (= Bool as Bool)
-        (= Option as Option)
-        (= Result as Result)
-        (= List : VType -> VType) is List
+      (= Bool as Bool)
+      (= Option as Option)
+      (= Result as Result)
+      (= List : VType -> VType) is List
     where
       #bool = (
         = true,

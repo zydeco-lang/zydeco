@@ -30,11 +30,11 @@ begin
     codecs/materialize L A codec
   in
   pack
-      (= Ptr : VType -> VType -> VType) is Ptr
-      (= Uninit : VType) is Uninit
-      (= Init : VType) is Init
-      (= Storage : VType -> VType) is Storage
-      (= DynamicStorage : VType -> VType) is DynamicStorage
+    (= Ptr : VType -> VType -> VType) is Ptr
+    (= Uninit : VType) is Uninit
+    (= Init : VType) is Init
+    (= Storage : VType -> VType) is Storage
+    (= DynamicStorage : VType -> VType) is DynamicStorage
   where
     (= fixed_geometry, = dynamic_geometry, = select_runtime_codec,
       #heap = allocation/static_heap : StaticAlloc Unit)

@@ -71,8 +71,8 @@ val
       that
 
       pack
-          (= StateExn as StateExn)
-          (= IStateExn as IStateExn)
+        (= StateExn as StateExn)
+        (= IStateExn as IStateExn)
       where
         = instance,
         = run_state_exn

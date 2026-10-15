@@ -39,20 +39,20 @@ begin
     (builtin, base) |> make_numeric
   in
   pack
-      (= Bool as Bool)
-      (= Option as Option)
-      (= Result as Result)
-      (= Bytes : VType) is Bytes
-      (= Buffer : VType) is Buffer
-      (= List : VType -> VType) is List
-      (= Path : VType) is Path
-      (= IoErrorKind : VType) is IoErrorKind
-      (= IoError : VType) is IoError
-      (= Additive as Additive)
-      (= Multiplicative as Multiplicative)
-      (= PartialEquality as PartialEquality)
-      (= PartialOrder as PartialOrder)
-      (= Numeric as Numeric)
+    (= Bool as Bool)
+    (= Option as Option)
+    (= Result as Result)
+    (= Bytes : VType) is Bytes
+    (= Buffer : VType) is Buffer
+    (= List : VType -> VType) is List
+    (= Path : VType) is Path
+    (= IoErrorKind : VType) is IoErrorKind
+    (= IoError : VType) is IoError
+    (= Additive as Additive)
+    (= Multiplicative as Multiplicative)
+    (= PartialEquality as PartialEquality)
+    (= PartialOrder as PartialOrder)
+    (= Numeric as Numeric)
   where
     (
       = bool,

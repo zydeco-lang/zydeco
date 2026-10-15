@@ -51,10 +51,10 @@ val ((/VType; /CType; /Thk; builtin) : @(import("../builtin.zy"))) =>
         end
     that
     pack
-        (= Transformer as Transformer)
-        (= MonadTrans as MonadTrans)
-        (= Lift as Lift)
-        (= ITransformer as ITransformer)
+      (= Transformer as Transformer)
+      (= MonadTrans as MonadTrans)
+      (= Lift as Lift)
+      (= ITransformer as ITransformer)
     where
       = from_monadic, = from_instance
     end

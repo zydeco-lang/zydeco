@@ -31,18 +31,18 @@ begin
   let (= Slice, slices) = (builtin |> (@(import("slice.zy")))) types storage in
   let raw = builtin |> (@(import("native.zy"))) in
   pack
-      (= Uninit : VType) is Uninit
-      (= Init : VType) is Init
-      (= Field : VType -> VType -> VType) is Field
-      (= DynamicField : VType -> VType -> VType) is DynamicField
-      (= Fields : VType -> VType -> VType) is Fields
-      (= Ptr : VType -> VType -> VType) is Ptr
-      (= Slice : VType -> VType -> VType) is Slice
-      (= Storage : VType -> VType) is Storage
-      (= DynamicStorage : VType -> VType) is DynamicStorage
-      (= SizeAlign as SizeAlign)
-      (= Codec as Codec)
-      (= DynamicCodec as DynamicCodec)
+    (= Uninit : VType) is Uninit
+    (= Init : VType) is Init
+    (= Field : VType -> VType -> VType) is Field
+    (= DynamicField : VType -> VType -> VType) is DynamicField
+    (= Fields : VType -> VType -> VType) is Fields
+    (= Ptr : VType -> VType -> VType) is Ptr
+    (= Slice : VType -> VType -> VType) is Slice
+    (= Storage : VType -> VType) is Storage
+    (= DynamicStorage : VType -> VType) is DynamicStorage
+    (= SizeAlign as SizeAlign)
+    (= Codec as Codec)
+    (= DynamicCodec as DynamicCodec)
   where
     (
       = slices,

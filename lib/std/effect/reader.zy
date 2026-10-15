@@ -89,10 +89,10 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
         Ret A = ! run_reader_t R Ret A environment m that
 
       pack
-          (= Reader as Reader)
-          (= ReaderT as ReaderT)
-          (= MonadReader as MonadReader)
-          (= IReader as IReader)
+        (= Reader as Reader)
+        (= ReaderT as ReaderT)
+        (= MonadReader as MonadReader)
+        (= IReader as IReader)
       where
         = instance, = transformer_instance, = transformer, = run_reader, = run_reader_t
       end

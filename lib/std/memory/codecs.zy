@@ -129,7 +129,7 @@ begin
     )
   in
   pack (= Codec as Codec)
-      (= DynamicCodec as DynamicCodec)
+    (= DynamicCodec as DynamicCodec)
   where
     (
       = materialize,

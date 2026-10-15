@@ -503,9 +503,9 @@ begin
       ! stdio_write_error_line message { fn _ => ! process/exit 1 }
     in
     pack
-        (= Path : VType) is Path
-        (= IoErrorKind : VType) is IoErrorKind
-        (= IoError : VType) is IoError
+      (= Path : VType) is Path
+      (= IoErrorKind : VType) is IoErrorKind
+      (= IoError : VType) is IoError
     where
       #io = (
         = not_found,

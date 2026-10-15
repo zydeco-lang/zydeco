@@ -11,10 +11,10 @@ begin
   that
 
   pack
-      (= Monad as Monad)
-      (= Algebra as Algebra)
-      (= MonadInstance as MonadInstance)
-      (= WithMonad as WithMonad)
+    (= Monad as Monad)
+    (= Algebra as Algebra)
+    (= MonadInstance as MonadInstance)
+    (= WithMonad as WithMonad)
   where
     ()
   end
