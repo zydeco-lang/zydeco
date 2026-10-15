@@ -85,9 +85,9 @@ begin
     that
 
     def ! transformer : MonadTrans NonDetT =
-      fn M base =>
-        let (T, operations) = transformer_instance M base in
-        ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
+      fn (M, base) =>
+        let (T, (/monad; /lift)) = transformer_instance M base in
+        ! from_instance M T (= monad, = lift)
     that
 
     def ! choose ((M, (/monad; /nondet)) : WithMonad INonDet)

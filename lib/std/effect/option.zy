@@ -87,9 +87,9 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       that
 
       def ! transformer : MonadTrans OptionT =
-        fn M base =>
-          let (T, operations) = transformer_instance M base in
-          ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
+        fn (M, base) =>
+          let (T, (/monad; /lift)) = transformer_instance M base in
+          ! from_instance M T (= monad, = lift)
       that
 
       def ! run_option_t (M : VType -> CType) (A : VType) (m : Thk (OptionT M A)) :

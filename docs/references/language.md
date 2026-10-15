@@ -717,8 +717,16 @@ from existential packaging so several effects can share one carrier.
 and a `catch` operation at `M`.
 Neither operation bundle introduces a carrier or a monad dictionary of its own.
 
+The carrier and its required dictionary form one packed argument.
+The shared `MonadInstance` interface carries the dictionary as its unnamed payload,
+without additional effect operations:
+
+```zydeco
+exists (M : VType -> CType) . Thk (Monad M)
+```
+
 `WithMonad I` packages one leading positional witness `M : VType -> CType`,
-one `monad : Thk (Monad M)` dictionary, and an operation payload of type `I M`.
+a named `monad : Thk (Monad M)` dictionary, and an operation payload of type `I M`.
 Standalone clients use `WithMonad (IState S)` or `WithMonad (IException E)`.
 The combined signature `IStateExn S E` composes the operation bundles before packaging them:
 
@@ -768,13 +776,16 @@ Transformer M T = codata
   .monad : Monad T
   .lift  : forall A. Thk (M A) -> T A
 
-MonadTrans F = forall M. Thk (Monad M) -> Transformer M (F M)
+MonadTrans F = pi ((M, _) : MonadInstance) . Transformer M (F M)
 ```
 
 Here `F : (VType -> CType) -> VType -> CType` maps a base carrier to a transformed carrier.
-Each effect exports `transformer`, with effect configuration before the common `M base` arguments.
+Each effect exports `transformer`, with effect configuration
+before one [`MonadInstance`](#packed-effect-instances) argument `(M, base)`.
 For example, `{ ! reader/transformer R }` has type `Thk (MonadTrans (ReaderT R))`,
 and `{ ! writer/transformer W output }` has type `Thk (MonadTrans (WriterT W))`.
+The witness-dependent arrow opens the caller's chosen base once and retains that identity in both `M`
+and `F M` in the result; the implementation may remain an unknown runtime thunk.
 The interface constrains the carriers of the dictionary and lift; lawfulness remains a semantic obligation.
 For lawful source and base monads, lift preserves return and bind:
 
@@ -810,6 +821,9 @@ for example, pass `(T, #monad = t/monad, #state = t/state)` to `WithMonad (IStat
 A lift-aware client instead uses `WithMonad (ITransformer M)` or a composition of that bundle with effect operations.
 Concrete `instance` builders specialize to `Ret` and project the ordinary effect interface.
 The computation-level `transformer` is a view of the same derived instance, not a separate dictionary implementation.
+It opens its packed base and forwards the curried `M base` arguments to `transformer_instance`.
+The generated `@[monadic]` interface also remains curried; packaging belongs to the library boundary,
+with no definitional equality between the packed and curried classifiers (§9).
 
 External dependencies remain explicit at the translation boundary.
 Writer supplies its source with an empty value and an append operation;

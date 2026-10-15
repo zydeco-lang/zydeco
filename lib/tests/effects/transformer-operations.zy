@@ -28,14 +28,14 @@ let probe : Thk (
     Thk (MonadTrans F) -> Thk (Int -> Ret Unit) -> F W Int
 ) = {
   fn F transformation mark =>
-    ! transformation W w/monad .monad .bind Int Int {
-      ! transformation W w/monad .lift Int {
+    ! transformation (W, w/monad) .monad .bind Int Int {
+      ! transformation (W, w/monad) .lift Int {
         do _ <- ! mark 1;
         ret (5, "a")
       }
     } {
       fn first =>
-        ! transformation W w/monad .lift Int {
+        ! transformation (W, w/monad) .lift Int {
           do _ <- ! mark 2;
           do answer <- ! numeric/int/add first 2;
           ret (answer, "b")

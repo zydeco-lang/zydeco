@@ -148,7 +148,7 @@ system/package.zy          system data types and capability-preserving assembly
 
 algebra/monoid.type.zy      general-purpose monoid dictionary
 
-effect/monad.zy            Monad, Algebra, and WithMonad
+effect/monad.zy            Monad, Algebra, MonadInstance, and WithMonad
 effect/{ret,reader,writer,option}.zy  elementary carriers and derived transformers
 effect/transformer*.zy              shared transformer interfaces and derivation adapters
 effect/{state,exception,state-exn}.zy  state, exceptions, and their combination
@@ -292,8 +292,8 @@ Neither callback type promises purity or single invocation.
 
 ## Relative monads and effect examples
 
-The [effect modules](effect) supply `Monad`, `Algebra`, `WithMonad`, and carrier-indexed Reader,
-Writer, Option, State, Exception, and nondeterminism interfaces.
+The [effect modules](effect) supply `Monad`, `Algebra`, `MonadInstance`, `WithMonad`,
+and carrier-indexed Reader, Writer, Option, State, Exception, and nondeterminism interfaces.
 `WithMonad` packages one carrier and monad dictionary with the chosen operations;
 the combined `IStateExn` interface composes both effects inside that boundary.
 Each effect module's `instance` builder supplies a concrete carrier and its dictionaries;
@@ -320,7 +320,10 @@ parsing, and other unimplemented families.
 
 Use each module's `transformer_instance` builder when the program needs that effect's operations and a lift.
 Effect configuration comes first, followed by the base carrier and its monad dictionary.
-The computation-level `transformer` exposes the common `MonadTrans` interface for generic transformer clients.
+The computation-level `transformer` exposes the common `MonadTrans` interface for generic transformer clients,
+accepting the base as one `MonadInstance` argument after effect configuration: `! state/transformer S (M, base)`.
+[The packed-base contract](../../docs/references/language.md#derived-relative-monad-transformers) keeps
+the result indexed by the supplied carrier while the generated monadic interface stays curried internally.
 [The reference](../../docs/references/language.md#elementary-transformers) lists the exact constructors and runners.
 
 For example, StateT over Writer keeps state operations and base output at one transformed carrier:

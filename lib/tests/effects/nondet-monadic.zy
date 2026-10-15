@@ -72,7 +72,8 @@ let render_pairs : Thk (List (Int * Int) -> Ret String) = {
 ! with_trace {
   fn mark read reset =>
     let record : Thk (Int -> N Unit) = {
-      fn digit => ! nondet/transformer Ret ret_instance/monad .lift Unit { ! mark digit }
+      fn digit =>
+        ! nondet/transformer (Ret, ret_instance/monad) .lift Unit { ! mark digit }
     } in
     let record_writer : Thk (Int -> NW Unit) = {
       fn digit =>

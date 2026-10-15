@@ -505,7 +505,7 @@ The effect modules are ordinary value-function builders from Builtin to packed v
 
 | Module | Exports |
 | --- | --- |
-| `monad.zy` | `Monad`, `Algebra`, `WithMonad` |
+| `monad.zy` | `Monad`, `Algebra`, `MonadInstance`, `WithMonad` |
 | `state.zy` | `State`, `MonadState`, `IState`, `instance`, `modify`, `run_state`, `eval_state` |
 | `exception.zy` | `Exception`, `MonadThrow`, `IException`, `instance`, `raise`, `catch`, `handle_exception` |
 | `state-exn.zy` | `StateExn`, `IStateExn`, `instance`, `run_state_exn` |

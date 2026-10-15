@@ -77,9 +77,9 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
       that
 
       def ! transformer (R : VType) : MonadTrans (ReaderT R) =
-        fn M base =>
-          let (T, operations) = transformer_instance R M base in
-          ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
+        fn (M, base) =>
+          let (T, (/monad; /lift)) = transformer_instance R M base in
+          ! from_instance M T (= monad, = lift)
       that
       def ! run_reader_t (R : VType) (M : VType -> CType) (A : VType)
         (environment : R) (m : Thk (ReaderT R M A))
