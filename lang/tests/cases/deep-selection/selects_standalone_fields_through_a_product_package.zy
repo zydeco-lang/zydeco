@@ -2,8 +2,8 @@
 
 let box =
   (
-    (#inner = pack (= Token as Unit : VType) where #content = () end) : (
-      #inner :: exists (= Token as Unit : VType) . (#content :: Unit)
+    (#inner = pack (= Token as Unit) where #content = () end) : (
+      #inner :: exists (= Token as Unit) . (#content :: Unit)
     ),
     ()
   )

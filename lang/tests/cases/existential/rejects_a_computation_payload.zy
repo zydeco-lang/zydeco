@@ -2,6 +2,6 @@
 -- expect: reject(tyck.expressivity)
 
 begin
-  let packed = pack (X as Int : VType) where ret 42 end in
+  let packed = pack (X as Int) where ret 42 end in
   packed
 end

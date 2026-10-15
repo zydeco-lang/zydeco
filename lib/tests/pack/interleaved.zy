@@ -3,12 +3,12 @@ begin
     "../../std/builtin.zy"
   )) that
   let int = numeric/int that
-  let Interleaved = exists (Leading as Unit : VType)
+  let Interleaved = exists (Leading as Unit)
     (X : VType)
-    (AliasX as X : VType)
-    (Middle as Unit : VType)
+    (AliasX as X)
+    (Middle as Unit)
     (Y : VType)
-    (AliasY as Y : VType)
+    (AliasY as Y)
   .
     X * Y that
   let Reveal = pi

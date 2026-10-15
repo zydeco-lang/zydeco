@@ -2,7 +2,7 @@
 
 begin
   let Mixed =
-    exists (Y as Int : VType) .
+    exists (Y as Int) .
       exists (X : VType) .
         X
   that

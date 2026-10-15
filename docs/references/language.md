@@ -522,7 +522,7 @@ Against an expected existential, `(T, v)` supplies the witness and payload.
 ```zydeco
 let Int = @(intrinsic(int)) in
 let package =
-  pack (= Item as Int : @(intrinsic(vtype)))
+  pack (= Item as Int)
   where #value = 42 end
 in
 let (/Item; /value) = package in

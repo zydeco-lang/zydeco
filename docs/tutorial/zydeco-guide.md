@@ -180,12 +180,14 @@ The abstract and manifest forms are:
 
 ```text
 exists (X : K) . A          -- hide the witness's definition
-exists (X as T : K) . A     -- disclose the equation X = T
+exists (X as T) . A         -- disclose the equation X = T
 ```
 
 A named binder such as `exists (#Item = X : VType) . A` exposes the public name `Item`.
 `exists (= Item : VType) . A` puns the public and local names.
-Manifest entries use `as`, for example `exists (= Item as Int : VType) . A`.
+Manifest entries use `as`, for example `exists (= Item as Int) . A`.
+The definition supplies the classifier when it synthesizes one;
+an explicit `(X as T : K)` checks that same definition against `K`.
 An existential may also disclose a kind equation, with its inferred classifier omitted.
 
 `pi` abstracts over a parameter whose pattern may open type witnesses used in the result type.
@@ -265,7 +267,7 @@ This is why module examples retain `builtin` and forward it to their builders.
 
 ```zydeco
 let Int = @(intrinsic(int)) in
-let package = pack (= Item as Int : @(intrinsic(vtype))) where #value = 42 end in
+let package = pack (= Item as Int) where #value = 42 end in
 let (/Item; /value) = package in
 ret (value : Item)
 ```
@@ -618,7 +620,7 @@ forall (X : K) . B             computation-level polymorphism
 pi (pattern : A) . B           computation parameter, possibly opening witnesses
 val pi (pattern : A) . A'      total value-function type
 exists (X : K) . A             existential type with an abstract witness
-exists (X as T : K) . A        existential type with a manifest equation
+exists (X as T) . A            existential type with a manifest equation
 
 { M }                          thunk value
 ! V                            force
@@ -637,7 +639,7 @@ V / field                      named projection
 #field :: A                    named payload classifier
 #field = term                  named payload introduction/pattern
 (/field; /other; whole)        projection-pattern group
-pack (X as T : K) where V end  packed value with a manifest witness
+pack (X as T) where V end      packed value with a manifest witness
 pack (X : K) is T where V end  packed value with an abstract witness
 
 begin term end                 mobile-binding block

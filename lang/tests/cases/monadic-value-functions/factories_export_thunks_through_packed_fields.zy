@@ -12,7 +12,7 @@ let mo : Thk (Monad Ret) = {
 do result <- (
   @[monadic] begin
     let val make (B : CType) (k : Thk B) :
-      exists (Result as B : CType) . (#run :: Thk Result) * Unit =
+      exists (Result as B) . (#run :: Thk Result) * Unit =
         (B, (#run = k, ()))
     in
     let exports = make (Ret Int) { ret 1 } in

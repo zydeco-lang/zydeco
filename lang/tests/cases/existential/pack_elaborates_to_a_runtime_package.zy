@@ -1,9 +1,9 @@
 -- stage: run
 
 begin
-  let Box = exists (X as Int : VType) . X that
+  let Box = exists (X as Int) . X that
   let val unpack ((X, value) : Box) : X = value that
-  let packed = pack (X as Int : VType) where 0 : X end in
+  let packed = pack (X as Int) where 0 : X end in
   let result : Int = unpack packed in
   ! exit result
 end

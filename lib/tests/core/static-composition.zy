@@ -17,7 +17,7 @@ begin
   let mixed : Stored = +Store(compose (keep Int) constant, { ret captured }) in
   match mixed
   | +Store(function, suspended) =>
-    let module = pack (= Int as Int : VType)
+    let module = pack (= Int as Int)
     where
       (#apply = function, #read = suspended)
     end in

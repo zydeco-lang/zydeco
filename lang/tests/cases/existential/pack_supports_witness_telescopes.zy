@@ -2,12 +2,12 @@
 
 begin
   let Mixed =
-    exists (X as Int : VType) .
-      exists (Y as Char : VType) .
+    exists (X as Int) .
+      exists (Y as Char) .
         X
   that
   let val disclose ((X, Y, value) : Mixed) : Int = value that
 
-  let mixed = pack (X as Int : VType) (Y as Char : VType) where 7 : X end in
+  let mixed = pack (X as Int) (Y as Char) where 7 : X end in
   disclose mixed
 end

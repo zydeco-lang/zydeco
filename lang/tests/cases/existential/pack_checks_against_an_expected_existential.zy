@@ -2,9 +2,9 @@
 
 begin
   let Transparent =
-    exists (X as Int : VType) . X
+    exists (X as Int) . X
   that
-  def packed : Transparent = pack (X as Int : VType) where 42 : X end that
+  def packed : Transparent = pack (X as Int) where 42 : X end that
   let val disclose ((X, value) : Transparent) : Int = value that
 
   disclose packed

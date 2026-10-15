@@ -25,14 +25,14 @@ begin
     VType =
       exists
         (X : VType)
-        (Alias as X : VType)
+        (Alias as X)
         (value : Alias)
       .
         X
   that
 
   let Export =
-    exists (MixedPackageType as MixedPackage : VType) . Unit
+    exists (MixedPackageType as MixedPackage) . Unit
   that
   (MixedPackage, ()) : Export
 end

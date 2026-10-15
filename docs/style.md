@@ -92,7 +92,7 @@ For a type family:
 
 ```zydeco
 param Bool : VType in
-exists (= Int as @(intrinsic(int)) : VType) .
+exists (= Int as @(intrinsic(int))) .
   Numeric Bool Int
 ```
 
@@ -261,9 +261,8 @@ and value components use `lower_snake_case`.
 Place an abstract type component before the values whose classifiers mention it.
 A manifest witness records a type equation as part of the interface;
 an abstract witness publishes its kind and identity without disclosing that equation.
-Write signature binders with the field pun, as in `exists (= Bool : VType)`
-or `exists (= Int as @(intrinsic(int)) : VType)`, so the public field name and the payload binder coincide
-and the body refers to the public name directly.
+Write signature binders with the field pun, as in `exists (= Bool : VType)` or `exists (= Int as @(intrinsic(int)))`,
+so the public field name and the payload binder coincide and the body refers to the public name directly.
 The explicit `exists (#Int = Hidden : VType)` form is reserved for a provider
 whose local binder genuinely needs a different name.
 The order of these components forms a telescope and remains significant.

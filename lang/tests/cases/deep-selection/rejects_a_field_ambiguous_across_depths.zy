@@ -1,8 +1,8 @@
 -- expect: reject(tyck.duplicate-named-field)
 
 let Package =
-  exists (= Tag as Int : VType) .
-    (#inner :: exists (= Tag as String : VType) . Unit)
+  exists (= Tag as Int) .
+    (#inner :: exists (= Tag as String) . Unit)
 in
 param (/Tag) : Package in
 ret ()

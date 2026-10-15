@@ -4,8 +4,8 @@ begin
   let (/Monad; /Algebra) = builtin |> monadic_basis in
   begin
 
-    let Mixed = exists (Leading as Unit : VType) (X : VType) .
-      exists (AliasX as X : VType) (Trailing as Unit : VType) .
+    let Mixed = exists (Leading as Unit) (X : VType) .
+      exists (AliasX as X) (Trailing as Unit) .
         X that
     def ! mo_ret : Monad Ret =
       comatch

@@ -34,7 +34,7 @@ let program = {
       factory (Ret Int)
     in
     let val exports (B : CType) (run : Thk (Thk B -> B)) :
-      exists (Result as B : CType) . (#run :: Thk (Thk Result -> Result)) * Unit =
+      exists (Result as B) . (#run :: Thk (Thk Result -> Result)) * Unit =
         (B, (= run, ()))
     in
     let operations = exports (Ret Int) (specialize make) in

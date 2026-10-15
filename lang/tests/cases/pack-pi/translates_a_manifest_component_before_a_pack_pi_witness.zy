@@ -3,9 +3,9 @@
 
 begin
   let Mixed =
-    exists (Y as Unit : VType) .
+    exists (Y as Unit) .
       exists (X : VType) .
-        exists (Z as X : VType) .
+        exists (Z as X) .
           Z
   that
 

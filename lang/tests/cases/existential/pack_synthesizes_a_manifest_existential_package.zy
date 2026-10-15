@@ -1,6 +1,7 @@
 -- stage: check-value
 
 begin
+  -- Keep explicit kinds here to cover checking manifest definitions.
   let Transparent =
     exists (X as Int : VType) . X
   that

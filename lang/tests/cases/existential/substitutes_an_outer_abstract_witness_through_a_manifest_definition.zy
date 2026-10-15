@@ -3,7 +3,7 @@
 begin
   let Mixed =
     exists (X : VType) .
-      exists (Y as X : VType) .
+      exists (Y as X) .
         Y
   that
   def packed : Mixed = (Int, Int, 7) that

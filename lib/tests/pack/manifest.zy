@@ -1,7 +1,7 @@
 begin
-  param (/VType; /Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
-  let Transparent = exists (Representation as Int : VType) . Representation that
+  let Transparent = exists (Representation as Int) . Representation that
   def packed : Transparent = (
     Int,
     42

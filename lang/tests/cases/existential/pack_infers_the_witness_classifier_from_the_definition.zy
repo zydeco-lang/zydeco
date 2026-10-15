@@ -2,7 +2,7 @@
 
 begin
   let Transparent =
-    exists (X as Int : VType) . X
+    exists (X as Int) . X
   that
   let val disclose ((X, value) : Transparent) : Int = value that
 

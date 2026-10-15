@@ -2,10 +2,10 @@
 
 begin
   let Mixed =
-    exists (Y as Char : VType) (X : VType) . Y * Int
+    exists (Y as Char) (X : VType) . Y * Int
   that
   def packed : Mixed =
-    pack (Y as Char : VType) (X : VType) is Int
+    pack (Y as Char) (X : VType) is Int
     where
       ('x' : Y, 42) end
   that

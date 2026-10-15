@@ -1,9 +1,9 @@
 -- stage: run
 
 let package =
-  pack (= Tag as Int : VType)
+  pack (= Tag as Int)
   where
-    #inner = pack (= Mark as String : VType) where #text = "ok" end
+    #inner = pack (= Mark as String) where #text = "ok" end
   end
 in
 do text <- ret package/text;

@@ -1,12 +1,7 @@
 begin
-  param (/VType; /Thk; /Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
-  let CounterLibrary = exists
-    (
-      #Counter = Representation as Int :
-      VType
-    )
-  .
+  let CounterLibrary = exists (#Counter = Representation as Int) .
       (#zero :: Representation)
     * (
         #increment :: Thk (Representation -> Ret Representation)

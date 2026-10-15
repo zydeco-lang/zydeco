@@ -10,7 +10,7 @@ begin
   that
 
   let Export =
-    exists (BinaryType as Binary : CType) . Unit
+    exists (BinaryType as Binary) . Unit
   that
   (Binary, ()) : Export
 end

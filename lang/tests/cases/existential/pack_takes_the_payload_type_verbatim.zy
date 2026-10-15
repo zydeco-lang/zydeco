@@ -2,10 +2,10 @@
 
 begin
   let Degenerate =
-    exists (X as Int : VType) . Int
+    exists (X as Int) . Int
   that
   let val disclose ((X, value) : Degenerate) : Int = value that
 
-  let packed = pack (X as Int : VType) where 42 end in
+  let packed = pack (X as Int) where 42 end in
   disclose packed
 end

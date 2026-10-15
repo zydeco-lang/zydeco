@@ -48,7 +48,8 @@ fn known_named_witnesses_bind_the_payload_type_during_static_elimination() {
 
 #[test]
 fn pack_preserves_named_type_arguments_for_both_disclosed_and_sealed_evidence() {
-    for evidence in ["(= Item as Int : VType)", "(= Item : VType) is Int"] {
+    // Keep the explicitly annotated form as the original named-type regression.
+    for evidence in ["(= Item as Int)", "(= Item as Int : VType)", "(= Item : VType) is Int"] {
         let source = format!(
             r#"
 let package = pack {evidence} where #value = (0 : Int) end in
