@@ -2,7 +2,7 @@
 
 --| Funciton Type (A -> B)
 begin
-  param (/VType; /CType; /Thk; /Ret; /process; /Int; /numeric; /system) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /process; /Int; /numeric) : @(import(
     "../../std/builtin.zy"
   )) that
   let int = numeric/int that

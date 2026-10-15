@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /process; /Int) : @(import("../../std/builtin.zy")) that
   def ! apply (A : VType) (B : CType) (f : Thk (A -> B)) (x : A) : B = ! f x that
 
   do x <- ! apply Int (Ret Int) { fn x => ret x } 0;

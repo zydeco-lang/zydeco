@@ -1,5 +1,5 @@
 begin
-  param (/OS; /stdio; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
+  param (/OS; /stdio; /process; /Int) : @(import("../../std/builtin.zy")) that
   ! stdio/read_line {
     fn line =>
       let ! f (z : Int) : OS =

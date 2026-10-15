@@ -1,7 +1,7 @@
 -- We can do good old object-oriented programming in here
 -- e.g. define a Counter that can incr and project out Int or String
 begin
-  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int; /numeric; /system) : @(import(
+  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int; /numeric) : @(import(
     "../../std/builtin.zy"
   )) that
   let int = numeric/int that

@@ -2,7 +2,7 @@
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit;
     /Int; /String; /Addr; /Reader; /Writer; /OS;
-    /io; /fs; /stdio; /args; /random; /process; /int; builtin) : @(import("../builtin.zy")) that
+    /io; /fs; /stdio; /random; /process; /int; builtin) : @(import("../builtin.zy")) that
   param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr in
   param val (/Bool; /Option; /Result; /List; /bool; /option; /result; /list) : @(import(
     "../data/package.type.zy"

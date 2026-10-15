@@ -3,7 +3,6 @@ begin
   param (
     /numeric;
     /text;
-    /system;
     /VType;
     /CType;
     /Thk;

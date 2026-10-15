@@ -1,6 +1,7 @@
 -- Ordered depth-first search through the standard NonDet library.
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /OS; /numeric; /stdio; /process; builtin) :
-@(import("../../std/builtin.zy")) in
+param (/Thk; /Ret; /Unit; /Int; /OS; /numeric; /stdio; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
 let (/Bool; /List; /list; /bool; data_package) = builtin |> (
   @(import("../../std/data/package.zy"))
 ) in

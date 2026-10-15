@@ -1,5 +1,5 @@
 begin
-  param (/Unit; /process; /system) : @(import("../../std/builtin.zy")) that
+  param (/Unit; /process) : @(import("../../std/builtin.zy")) that
   def Bool =
     data
     | +True : Unit

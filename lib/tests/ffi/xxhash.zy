@@ -1,7 +1,6 @@
 begin
   let make_xxhash = @(import("../../ffi/xxhash.zy")) that
-  param (/Int; /Addr; /text; /numeric; /system; /OS; /process; /UInt32; /UInt64; builtin) :
-  @(import(
+  param (/numeric; /OS; /process; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
   let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in

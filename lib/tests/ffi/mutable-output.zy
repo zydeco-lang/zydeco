@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt; /Int32;
+  param (/Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt; /Int32;
     /numeric; /process; /Unit; builtin) : @(import("../../std/builtin.zy")) in
   let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = builtin |> (
     @(import("../../std/memory/package.zy"))

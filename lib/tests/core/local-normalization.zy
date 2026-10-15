@@ -1,5 +1,5 @@
 begin
-  param (/Thk; /Ret; /Int; /process; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /Ret; /Int; /process; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   def Choice =
     data

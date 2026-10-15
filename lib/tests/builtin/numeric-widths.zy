@@ -2,19 +2,8 @@ begin
   param (
     /OS;
     /process;
-    /Int8;
-    /Int16;
-    /Int32;
-    /Int;
-    /UInt8;
-    /UInt16;
-    /UInt32;
-    /UInt;
-    /Float32;
-    /Float64;
     /numeric;
-    /text;
-    /system
+    /text
   ) : @(import("../../std/builtin.zy")) that
   let int8 = numeric/int8 that
   let int16 = numeric/int16 that

@@ -18,7 +18,7 @@ begin
     | +S(_) => ret +True()
     end
   that
-  param (/VType; /Ret; /Unit; /process; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Ret; /Unit; /process) : @(import("../../std/builtin.zy")) that
   do one <- ! successor +Z();
   do result <- ! is_nonzero one;
   match result

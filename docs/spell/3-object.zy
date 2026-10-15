@@ -5,7 +5,7 @@
 -- methods, while a comatch supplies their implementations.
 
 begin
-  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int; /numeric; /system) : @(import(
+  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int; /numeric) : @(import(
     "../../lib/std/builtin.zy"
   )) that
   let int = numeric/int that

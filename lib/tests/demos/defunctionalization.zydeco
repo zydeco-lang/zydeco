@@ -2,7 +2,7 @@
 -- Let's consider a simple example of a recursive function, summing up
 -- the numbers in a list.
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /Int; /numeric; /system) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /Int; /numeric) : @(import(
     "../../std/builtin.zy"
   )) that
   let int = numeric/int that

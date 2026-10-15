@@ -1,5 +1,5 @@
 begin
-  param (/Ret; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/Ret; /process; /Int; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   def ! poly (x : Int) : Ret Int =
     -- f(x) = x^2 + x + 10

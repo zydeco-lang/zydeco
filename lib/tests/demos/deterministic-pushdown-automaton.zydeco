@@ -1,6 +1,7 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /text; /system) :
-  @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /text) : @(import(
+    "../../std/builtin.zy"
+  )) that
   let string = text/string that
   def Bool =
     data

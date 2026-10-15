@@ -1,6 +1,6 @@
 /- /- -/ -/
 begin
-  param (/process; /system) : @(import("../../std/builtin.zy")) that
+  param (/process) : @(import("../../std/builtin.zy")) that
   ! process/exit -- 1
   0
 end

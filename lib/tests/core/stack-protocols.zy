@@ -1,6 +1,6 @@
 -- Ret describes an installed continuation; pending argument/tag depth is dynamic.
 begin
-  param (/VType; /CType; /Unit; /Int; /String; /Thk; /Ret; /OS;
+  param (/CType; /Int; /String; /Thk; /Ret;
     /numeric; /int; /string; /args; /process) : @(import("../../std/builtin.zy")) that
   def Stream : CType =
     codata

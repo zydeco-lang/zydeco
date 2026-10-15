@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Ret; /process; /Int) : @(import("../../std/builtin.zy")) that
   let x = 100 that
   def ! const (A : VType) (A' : VType) (a : A) (_ : A') : Ret A =
     let _ = x in

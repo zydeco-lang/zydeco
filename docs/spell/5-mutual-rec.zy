@@ -5,7 +5,7 @@
 -- direct representation of mutually recursive operations.
 
 begin
-  param (/VType; /Thk; /Ret; /Unit; /OS; /process; /system) : @(import("../../lib/std/builtin.zy")) that
+  param (/VType; /Thk; /Ret; /Unit; /OS; /process) : @(import("../../lib/std/builtin.zy")) that
   def Nat : VType =
     data
     | +Zero : Unit

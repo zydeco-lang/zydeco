@@ -9,7 +9,6 @@ begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
   param (
     /numeric;
-    /system;
     /VType;
     /CType;
     /Thk;

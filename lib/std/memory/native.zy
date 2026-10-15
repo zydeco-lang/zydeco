@@ -1,7 +1,6 @@
 -- Raw operations: callers establish lifetime, initialization, bounds, and allocator ownership.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /UInt8; /memory; /numeric; builtin) :
-  @(import("../builtin.zy")) that
+  param val (/CType; /Thk; /Addr; /Int; /memory; /numeric; builtin) : @(import("../builtin.zy")) that
   let Fault = @(import("fault.zy")) in
   let error : Thk (forall (R : CType) . Thk (Fault -> R) -> Int -> R) = {
     fn R no code =>

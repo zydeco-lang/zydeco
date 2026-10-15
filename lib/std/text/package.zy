@@ -1,6 +1,6 @@
 @[package(library, name(std/text))]
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit;
+  param val (/VType; /CType; /Thk; /Ret;
     /Char; /String; /UInt8; /Int; /Addr;
     /numeric; /char; /string; builtin) : @(import("../builtin.zy")) that
   param val (/Bytes; /bytes) : (@(import("bytes.type.zy"))) Addr in

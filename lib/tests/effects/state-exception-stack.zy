@@ -1,7 +1,6 @@
 -- A single packed carrier supports both effects; catch rolls State back on failure.
 param (
   /VType;
-  /CType;
   /Thk;
   /Ret;
   /Unit;

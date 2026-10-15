@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Ret; /process; /Int) : @(import("../../std/builtin.zy")) that
   def ! id (A : VType) (a : A) : Ret A = ret a that
 
   do x <- ! id Int 0;

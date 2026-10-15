@@ -3,7 +3,6 @@ begin
   param (
     /numeric;
     /text;
-    /system;
     /VType;
     /CType;
     /Thk;
@@ -14,7 +13,6 @@ begin
     /random;
     /process;
     /String;
-    /Int;
     builtin
   ) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that

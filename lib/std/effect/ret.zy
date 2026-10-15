@@ -1,5 +1,5 @@
 -- The ambient relative monad, reusable as the base of a transformer.
-val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
+val ((/Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
   begin
     let (/Monad) = builtin |> (@(import("monad.zy"))) in
     let instance =

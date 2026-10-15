@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Ret; /process; /Int) : @(import("../../std/builtin.zy")) that
   def FnRet (A : VType) =
     codata
     | .arg : A -> Ret A

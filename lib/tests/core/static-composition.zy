@@ -1,5 +1,5 @@
 begin
-  param (/VType; /Unit; /Thk; /Ret; /Int; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Thk; /Ret; /Int; /process) : @(import("../../std/builtin.zy")) that
 
   let Transform = val pi (_ : Int) . Int that
   let val compose (first : Transform) (second : Transform) : Transform =

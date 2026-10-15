@@ -5,7 +5,7 @@ begin
     Result
   end that
   let IdentityResult = TypeIdentity Int that
-  param (/VType; /OS; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /OS; /process; /Int; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   def ! run :
     forall (A : VType) . A -> OS =

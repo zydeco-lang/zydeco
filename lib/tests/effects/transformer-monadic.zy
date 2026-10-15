@@ -1,5 +1,5 @@
 -- The same closed client observes the chosen state/exception order through WithMonad.
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /process; builtin) : @(import(
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in

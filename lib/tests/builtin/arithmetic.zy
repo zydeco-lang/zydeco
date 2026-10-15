@@ -1,5 +1,5 @@
 begin
-  param (/process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/process; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   do quotient <- ! int/div -7 3;
   do remainder <- ! int/mod -7 3;

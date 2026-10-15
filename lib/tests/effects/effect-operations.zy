@@ -1,4 +1,4 @@
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+param (/Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in

@@ -1,6 +1,6 @@
 -- Pure checked arithmetic for runtime geometry; every public operand is validated.
 begin
-  param val (/VType; /Ret; /Int; /numeric; builtin) : @(import("../builtin.zy")) in
+  param val (/Ret; /Int; /numeric; builtin) : @(import("../builtin.zy")) in
   let Result = @(import("../data/result.zy")) in
   let Error = @(import("layout-error.zy")) in
   let Checked = Result Int Error in

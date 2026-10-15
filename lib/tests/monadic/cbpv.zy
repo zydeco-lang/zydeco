@@ -3,7 +3,6 @@ begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
   param (
     /text;
-    /system;
     /VType;
     /CType;
     /Thk;

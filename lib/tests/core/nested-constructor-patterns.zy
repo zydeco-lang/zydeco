@@ -1,5 +1,5 @@
 -- Nested constructors require decisions, even without a monadic annotation.
-param (/VType; /Thk; /Ret; /Int; /numeric; /process) : @(import(
+param (/Thk; /Ret; /Int; /numeric; /process) : @(import(
   "../../std/builtin.zy"
 )) in
 def Choice =

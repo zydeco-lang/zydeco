@@ -1,6 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/system; /Thk; /OS; /Int; /String; builtin) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /OS; /Int; /String; builtin) : @(import("../../std/builtin.zy")) that
   let (/Option; /IoError; /option; /result; /string; /stdio; /process) = builtin |> make_std in
   let ! read_int (continuation : Thk (Option Int -> OS)) : OS = ! stdio/read_line {
     fn read =>

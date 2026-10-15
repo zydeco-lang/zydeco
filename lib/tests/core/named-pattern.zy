@@ -1,7 +1,7 @@
 -- Named components support payload annotations, opaque variable bindings,
 -- whole-pattern annotations, and holes alongside unnamed patterns.
 begin
-  param (/process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/process; /Int; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let PatternTarget = (
     #left :: Int

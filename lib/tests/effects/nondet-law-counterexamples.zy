@@ -1,5 +1,5 @@
 -- The eager returned-list dictionary typechecks but fails branching associativity.
-param (/VType; /CType; /Thk; /Ret; /Int; /String; /string; builtin) : @(import(
+param (/VType; /Thk; /Ret; /Int; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in

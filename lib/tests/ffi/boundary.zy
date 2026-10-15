@@ -8,9 +8,7 @@ begin
     /OS;
     /process;
     /UInt;
-    /text;
     /numeric;
-    /system;
     builtin
   ) : @(import(
     "../../std/builtin.zy"

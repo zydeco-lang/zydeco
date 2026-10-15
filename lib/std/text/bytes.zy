@@ -1,11 +1,9 @@
 -- Contiguous immutable bytes with explicit retention and no per-copy reference counting.
 begin
   param val (
-    /VType;
     /CType;
     /Thk;
     /Ret;
-    /Unit;
     /Addr;
     /Int;
     /UInt8;

@@ -1,5 +1,5 @@
 begin
-  param (/Ret; /OS; /args; /process; /String; /text; /system; builtin) : @(import(
+  param (/Ret; /OS; /process; /String; /text; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
   let make_arguments = @(import("../../std/system/arguments.zy")) in

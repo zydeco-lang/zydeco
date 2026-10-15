@@ -1,5 +1,5 @@
 -- Nominal protocols share generated algebra code while the instance is runtime data.
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+param (/VType; /CType; /Thk; /Ret; /Int; /numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let monadic_basis = @(import("../../std/effect/monad.zy")) in

@@ -1,6 +1,6 @@
 -- Data constructors treat a named tuple as an ordinary payload type.
 begin
-  param (/Unit; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/Unit; /process; /Int; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   def Packet =
     data

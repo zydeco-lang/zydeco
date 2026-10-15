@@ -1,5 +1,5 @@
 -- A closed translated client uses the same search operations as an explicit-bind client.
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+param (/VType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let (/List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in

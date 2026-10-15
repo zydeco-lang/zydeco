@@ -5,7 +5,7 @@
 -- interprets the same lens as an observation.
 
 begin
-  param (/VType; /CType; /Thk; /Ret; /process; /system) : @(import("../../lib/std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /process) : @(import("../../lib/std/builtin.zy")) that
   let Lens (S : VType) (A : VType) = forall
     (
       Fun :

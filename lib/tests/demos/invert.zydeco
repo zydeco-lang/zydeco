@@ -1,6 +1,6 @@
 -- a binary tree
 begin
-  param (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /Int; /system) : @(import(
+  param (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /Int) : @(import(
     "../../std/builtin.zy"
   )) that
   def Tree (A : VType) : VType =

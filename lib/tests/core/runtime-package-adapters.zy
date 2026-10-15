@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int; /Unit; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Thk; /Ret; /Int; /process) : @(import("../../std/builtin.zy")) that
 
   let Box = exists (X : VType) . X that
   let Methods (X : VType) =

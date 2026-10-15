@@ -14,8 +14,7 @@ begin
     /process;
     /String;
     /Int;
-    /numeric;
-    /system
+    /numeric
   ) : @(import("../../../std/builtin.zy")) that
   let int = numeric/int that
   let Thunk (B : CType) = Thk B that

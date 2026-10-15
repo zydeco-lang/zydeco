@@ -1,7 +1,6 @@
 -- Packed-pi clients use State and Exception without choosing their carriers.
 param (
   /VType;
-  /CType;
   /Thk;
   /Ret;
   /Unit;

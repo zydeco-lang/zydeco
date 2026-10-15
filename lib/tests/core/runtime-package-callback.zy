@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int; /Unit; /process) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /Int; /process) : @(import("../../std/builtin.zy")) that
   let Entry = exists (X : VType) . X * Thk (X -> Ret Int) that
   let HiddenByPackage =
     codata

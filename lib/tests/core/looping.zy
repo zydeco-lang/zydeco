@@ -1,4 +1,4 @@
 begin
-  param (/Thk; /OS; /system) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /OS) : @(import("../../std/builtin.zy")) that
   fix (loop : Thk OS) => ! loop
 end

@@ -1,5 +1,5 @@
 begin
-  param val (/Addr; /VType; /CType; /Thk; /Ret; /Unit;
+  param val (/Addr; /VType; /CType; /Thk; /Unit;
     /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
     /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) in
   param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr in

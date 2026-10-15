@@ -1,4 +1,4 @@
-param val (/VType; /CType; /Thk; /Unit; builtin) : @(import("../builtin.zy")) in
+param val (/VType; /CType; /Thk; builtin) : @(import("../builtin.zy")) in
 begin
   -- Shared Monad and algebra type constructors, and the packed base interface.
   let Monad = @(import("monad.type.zy")) that

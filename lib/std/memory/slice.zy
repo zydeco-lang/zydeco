@@ -1,7 +1,7 @@
 -- A slice carries only a typed pointer and a runtime element count.
 -- The caller guarantees allocation extent, element stride, state, and alias validity.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+  param val (/VType; /CType; /Thk; /Addr; /Int; /numeric; builtin) : @(import(
     "../builtin.zy"
   )) in
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in

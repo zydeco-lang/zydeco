@@ -1,6 +1,6 @@
 -- Unit defined in std.zydeco
 begin
-  param (/Ret; /Unit; /stdio; /process; /String; /system) : @(import("../../std/builtin.zy")) that
+  param (/Ret; /Unit; /stdio; /process; /String) : @(import("../../std/builtin.zy")) that
   def ! unit_to_str (_ : Unit) : Ret String = ret "()" that
 
   let v : Unit = () in

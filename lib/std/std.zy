@@ -1,6 +1,6 @@
 @[package(library, name(std))]
 begin
-  param val (/VType; /CType; builtin) : @(import("builtin.zy")) that
+  param val (/VType; builtin) : @(import("builtin.zy")) that
   let make_data = @(import("data/package.zy")) that
   let make_text = @(import("text/package.zy")) that
   let make_system = @(import("system/package.zy")) that

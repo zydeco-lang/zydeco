@@ -1,5 +1,5 @@
 begin
-  param (/OS; /process; /Int; /numeric; /text; /system) : @(import("../../std/builtin.zy")) that
+  param (/OS; /process; /numeric; /text) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let string = text/string that
   do unicode_length <- ! string/length "λx";

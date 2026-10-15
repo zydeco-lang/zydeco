@@ -12,8 +12,7 @@ begin
     /String;
     /Int;
     /numeric;
-    /text;
-    /system
+    /text
   ) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let char = text/char that

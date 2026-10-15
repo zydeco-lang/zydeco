@@ -4,7 +4,7 @@
 -- Then it loops.
 -- If the input is not a number, the program exits.
 begin
-  param (/Thk; /OS; /stdio; /process; /Int; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/Thk; /OS; /stdio; /process; /Int; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   (
     fix (loop : Thk (Int -> OS)) =>

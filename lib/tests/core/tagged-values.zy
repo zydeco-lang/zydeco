@@ -1,5 +1,5 @@
 begin
-  param (/OS; /process; /Int; /UInt; /numeric; /system) : @(import("../../std/builtin.zy")) that
+  param (/OS; /process; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let uint = numeric/uint that
   do wrapped_min <- ! int/add 4611686018427387903 1;

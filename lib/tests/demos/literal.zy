@@ -1,6 +1,6 @@
 -- A `@[literal]` splice becomes a multi-line string value.
 begin
-  param (/Ret; /Unit; /stdio; /process; /String; /system) : @(import("../../std/builtin.zy")) that
+  param (/stdio; /process; /String) : @(import("../../std/builtin.zy")) that
   let message : String =
     --| Hello literal
     --| second line

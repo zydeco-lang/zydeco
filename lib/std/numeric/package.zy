@@ -1,8 +1,7 @@
 @[package(library, name(std/numeric))]
 begin
   param val (
-    (
-      /VType; /CType; /Thk; /Ret; /Unit; /String;
+    (/String;
       /Int8; /Int16; /Int32; /Int64; /Int;
       /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
       /Float32; /Float64;

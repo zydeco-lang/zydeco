@@ -1,5 +1,5 @@
 -- Derived State and Exception satisfy the same ambient-effect and lift laws as the earlier transformers.
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+param (/Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let state = builtin |> (@(import("../../std/effect/state.zy"))) in

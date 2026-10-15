@@ -1,6 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/system; /OS; /String; builtin) : @(import("../../std/builtin.zy")) that
+  param (/OS; /String; builtin) : @(import("../../std/builtin.zy")) that
   let (/bool; /list; /string; /process) = builtin |> make_std in
   ! process/arg_list {
     fn arguments =>

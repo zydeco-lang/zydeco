@@ -3,7 +3,7 @@
 -- As it is a CBPV language, our syntax distinguishes between values
 -- and computations
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /String; /text; /system) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /String; /text) : @(import(
     "../../std/builtin.zy"
   )) that
   let string = text/string that

@@ -1,6 +1,6 @@
 begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
-  param (/system; /VType; /Ret; /Unit; /process; /Int; builtin) : @(import("../../std/builtin.zy")) that
+  param (/VType; /Ret; /Unit; /process; /Int; builtin) : @(import("../../std/builtin.zy")) that
   let (/Monad; /Algebra) = builtin |> monadic_basis in
   begin
 

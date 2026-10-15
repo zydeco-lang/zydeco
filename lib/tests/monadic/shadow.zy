@@ -1,5 +1,6 @@
 begin
   let outer_basis = @(import("../../std/effect/monad.zy")) that
+  -- Keep the projection: it opens Builtin witnesses before the package-dependent basis applications.
   param (/Unit; builtin) : @(import("../../std/builtin.zy")) that
   let (/Monad; /Algebra) = builtin |> outer_basis in
 

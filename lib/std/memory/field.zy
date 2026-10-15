@@ -1,6 +1,6 @@
 -- Field witnesses describe layout relationships, never allocation identity or ownership.
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+  param val (/VType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in

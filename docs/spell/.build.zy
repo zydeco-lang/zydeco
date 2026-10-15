@@ -1,6 +1,5 @@
 begin
   param (
-    /VType;
     /CType;
     /Thk;
     /Ret;
@@ -11,9 +10,7 @@ begin
     /string;
     /String;
     /Int;
-    /numeric;
-    /text;
-    /system
+    /numeric
   ) : @(import("../../lib/std/builtin.zy")) that
   let int = numeric/int that
   def Bool =

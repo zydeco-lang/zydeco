@@ -1,6 +1,7 @@
 begin
-  param val (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /Int; /numeric; /system) :
-  @(import("../../std/builtin.zy")) that
+  param val (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /Int; /numeric) : @(import(
+    "../../std/builtin.zy"
+  )) that
   let int = numeric/int that
   let U = Thk that
   let F = Ret that

@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /process; /Int; /system) : @(import(
+  param (/VType; /CType; /Thk; /Ret; /OS; /process; /Int) : @(import(
     "../../std/builtin.zy"
   )) that
   def ! id (A : VType) (value : A) : Ret A = ret value that

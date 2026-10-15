@@ -1,6 +1,6 @@
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/system; /VType; /Thk; /Ret; /Unit; /OS; /Int; /String; builtin) : @(import(
+  param (/VType; /Thk; /Ret; /Unit; /OS; /Int; /String; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
   let (/Bool; /Option; /bool; /option; /int; /string; /stdio; /process) = builtin |> make_std in

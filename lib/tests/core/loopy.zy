@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Thk; /Ret; /OS; /process; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Thk; /Ret; /OS; /process) : @(import("../../std/builtin.zy")) that
   def Y (B : CType) : CType =
     codata
     | .y : Thk (Y B) -> B

@@ -1,4 +1,4 @@
-param (/process; /system) : @(import("../../std/builtin.zy")) in
+param (/process) : @(import("../../std/builtin.zy")) in
 let x = 0 in
 (
   let y = 42 in

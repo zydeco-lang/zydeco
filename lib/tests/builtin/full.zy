@@ -1,3 +1,4 @@
+-- Keep every projection: this fixture checks the complete Builtin signature and its witness roles.
 param (
   /VType;
   /CType;

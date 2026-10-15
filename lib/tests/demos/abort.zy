@@ -1,5 +1,5 @@
 begin
-  param (/VType; /CType; /Ret; /process; /Int; /system) : @(import("../../std/builtin.zy")) that
+  param (/VType; /CType; /Ret; /process; /Int) : @(import("../../std/builtin.zy")) that
   def Stack (A : VType) : CType =
     codata
     | .app : A -> Stack A
