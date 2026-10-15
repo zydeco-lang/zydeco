@@ -203,7 +203,7 @@ begin
         end
       end
   } in
-  pack (= Array as Array : VType -> VType) (= DynamicArray as DynamicArray : VType -> VType)
+  pack (= Array as Array) (= DynamicArray as DynamicArray)
   where
     (= make, = realize) end
 end

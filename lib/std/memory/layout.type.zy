@@ -10,7 +10,7 @@ begin
   let Result = @(import("../data/result.zy")) in
   let Representation = (@(import("representation.type.zy"))) Storage Codec in
   exists (= Plan : VType -> VType)
-    (= Layout as fn (A : VType) => Result (Plan A) Error : VType -> VType)
+    (= Layout as fn (A : VType) => Result (Plan A) Error)
   .
       (#unit :: Layout Unit)
     * (#padding :: val pi (count : Int) . Layout Unit)

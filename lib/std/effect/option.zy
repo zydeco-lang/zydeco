@@ -98,11 +98,11 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       def ! run_option (A : VType) (m : Thk (Optional A)) :
         Ret (Option A) = ! run_option_t Ret A m that
       pack
-          (= Option as Option : VType -> VType)
-          (= Optional as Optional : VType -> CType)
-          (= OptionT as OptionT : (VType -> CType) -> VType -> CType)
-          (= MonadOption as MonadOption : (VType -> CType) -> CType)
-          (= IOption as IOption : (VType -> CType) -> VType)
+          (= Option as Option)
+          (= Optional as Optional)
+          (= OptionT as OptionT)
+          (= MonadOption as MonadOption)
+          (= IOption as IOption)
       where
         = instance, = transformer_instance, = transformer, = run_option, = run_option_t
       end

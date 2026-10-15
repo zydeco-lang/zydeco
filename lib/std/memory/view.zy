@@ -202,11 +202,11 @@ begin
   : View (Checked Fault) (H * Int) (Ptr L S) =
       counted_checked L S H layout (as_checked Fault H (Ptr L S * Int) view)
   in
-  pack (= Header as Header : VType -> VType -> VType)
-      (= Cps as Cps : VType -> CType)
-      (= Checked as Checked : VType -> VType -> CType)
-      (= View as View : (VType -> CType) -> VType -> VType -> VType)
-      (= DynamicView as Dynamic : (VType -> CType) -> VType -> VType -> VType)
+  pack (= Header as Header)
+      (= Cps as Cps)
+      (= Checked as Checked)
+      (= View as View)
+      (= DynamicView as Dynamic)
   where
     (
       = identity,

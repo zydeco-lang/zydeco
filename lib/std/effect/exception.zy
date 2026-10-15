@@ -144,10 +144,10 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
           end
       that
       pack
-          (= Exception as Exception : VType -> VType -> CType)
-          (= ExceptionT as ExceptionT : VType -> (VType -> CType) -> VType -> CType)
-          (= MonadThrow as MonadThrow : VType -> (VType -> CType) -> CType)
-          (= IException as IException : VType -> (VType -> CType) -> VType)
+          (= Exception as Exception)
+          (= ExceptionT as ExceptionT)
+          (= MonadThrow as MonadThrow)
+          (= IException as IException)
       where
         = instance,
         = transformer_instance,

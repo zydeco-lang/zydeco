@@ -270,7 +270,7 @@ begin
           )
       )
   in
-  pack (= Record as Record : VType -> VType -> VType)
+  pack (= Record as Record)
   where
     (= at, = product) end
 end

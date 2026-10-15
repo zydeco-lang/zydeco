@@ -250,7 +250,7 @@ begin
         ) : Array Element
       )
   in
-  pack (= Array as Array : VType -> VType)
+  pack (= Array as Array)
   where
     = make end
 end

@@ -7,23 +7,23 @@ exists
   -- Compiler-canonical types are manifest components on the surface: every
   -- public name is unique across the complete package, so consumers select
   -- kinds, types, operations, and capabilities by direct field search.
-  (= Thk as @(intrinsic(thk)) : CType -> VType)
-  (= Ret as @(intrinsic(ret)) : VType -> CType)
-  (= Unit as @(intrinsic(unit)) : VType)
-  (= Int8 as @(intrinsic(i8)) : VType)
-  (= Int16 as @(intrinsic(i16)) : VType)
-  (= Int32 as @(intrinsic(i32)) : VType)
-  (= Int64 as @(intrinsic(i64)) : VType)
-  (= Int as @(intrinsic(int)) : VType)
-  (= UInt8 as @(intrinsic(u8)) : VType)
-  (= UInt16 as @(intrinsic(u16)) : VType)
-  (= UInt32 as @(intrinsic(u32)) : VType)
-  (= UInt64 as @(intrinsic(u64)) : VType)
-  (= UInt as @(intrinsic(uint)) : VType)
-  (= Float32 as @(intrinsic(f32)) : VType)
-  (= Float64 as @(intrinsic(f64)) : VType)
-  (= Char as @(intrinsic(char)) : VType)
-  (= String as @(intrinsic(string)) : VType)
+  (= Thk as @(intrinsic(thk)))
+  (= Ret as @(intrinsic(ret)))
+  (= Unit as @(intrinsic(unit)))
+  (= Int8 as @(intrinsic(i8)))
+  (= Int16 as @(intrinsic(i16)))
+  (= Int32 as @(intrinsic(i32)))
+  (= Int64 as @(intrinsic(i64)))
+  (= Int as @(intrinsic(int)))
+  (= UInt8 as @(intrinsic(u8)))
+  (= UInt16 as @(intrinsic(u16)))
+  (= UInt32 as @(intrinsic(u32)))
+  (= UInt64 as @(intrinsic(u64)))
+  (= UInt as @(intrinsic(uint)))
+  (= Float32 as @(intrinsic(f32)))
+  (= Float64 as @(intrinsic(f64)))
+  (= Char as @(intrinsic(char)))
+  (= String as @(intrinsic(string)))
   -- Effect capabilities remain generative at the provider boundary.
   @[builtin(addr)]
   (SystemAddr : VType)
@@ -59,10 +59,10 @@ exists
     * (
         #system ::
         exists
-          (= Addr as SystemAddr : VType)
-          (= Reader as SystemReader : VType)
-          (= Writer as SystemWriter : VType)
-          (= OS as SystemOS : CType)
+          (= Addr as SystemAddr)
+          (= Reader as SystemReader)
+          (= Writer as SystemWriter)
+          (= OS as SystemOS)
         .
             (
               #memory :: (@(import("builtin/system/memory.zy"))) SystemAddr

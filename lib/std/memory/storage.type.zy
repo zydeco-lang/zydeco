@@ -7,7 +7,7 @@ begin
   let Error = @(import("layout-error.zy")) in
   let SizeAlign = (#size :: Int) * (#alignment :: Int) in
   exists (= Storage : VType -> VType) (= DynamicStorage : VType -> VType)
-    (= SizeAlign as SizeAlign : VType)
+    (= SizeAlign as SizeAlign)
   .
       (
         #constant ::

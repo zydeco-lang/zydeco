@@ -73,7 +73,7 @@ begin
       let geometry = runtime/query L layout in
       ! allocator/free R (unsafe/address L Uninit pointer) geometry/size geometry/alignment no done
   in
-  pack (= Alloc as Alloc : VType) (= StaticAlloc as StaticAlloc : VType -> VType)
+  pack (= Alloc as Alloc) (= StaticAlloc as StaticAlloc)
   where
     (= heap, = limited, = static_heap, = materialize,
       #reserve = allocate, #dynamic_reserve = dynamic_allocate,

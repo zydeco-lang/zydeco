@@ -40,9 +40,9 @@ begin
       (= Slice : VType -> VType -> VType) is Slice
       (= Storage : VType -> VType) is Storage
       (= DynamicStorage : VType -> VType) is DynamicStorage
-      (= SizeAlign as SizeAlign : VType)
-      (= Codec as Codec : VType -> VType -> VType)
-      (= DynamicCodec as DynamicCodec : VType -> VType -> VType)
+      (= SizeAlign as SizeAlign)
+      (= Codec as Codec)
+      (= DynamicCodec as DynamicCodec)
   where
     (
       = slices,

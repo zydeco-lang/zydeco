@@ -27,7 +27,7 @@ begin
         ! memory/retain R address size alignment { ! error R no } done
     }
   in
-  pack (= Fault as Fault : VType)
+  pack (= Fault as Fault)
   where
     (
       = allocate,

@@ -221,7 +221,7 @@ Kind fields currently need an annotated packed value introduction rather than `p
 let VType = @(intrinsic(vtype)) in
 let CType = @(intrinsic(ctype)) in
 let types =
-  pack (= Thk as @(intrinsic(thk)) : CType -> VType)
+  pack (= Thk as @(intrinsic(thk)))
   where () end
 in
 ((VType, CType, types) :
@@ -615,7 +615,7 @@ param (/VType; builtin) : @(import("builtin.zy")) in
 let make_std = @(import("std.zy")) in
 let (/Bool; /Numeric; /dictionaries) = builtin |> make_std in
 let int_instance =
-  pack (= Int as @(intrinsic(int)) : VType)
+  pack (= Int as @(intrinsic(int)))
   where #operations = dictionaries/int_dictionary end
 in
 let (/Int = Carrier; /operations) = int_instance in

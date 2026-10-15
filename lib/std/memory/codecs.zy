@@ -128,8 +128,8 @@ begin
       }
     )
   in
-  pack (= Codec as Codec : VType -> VType -> VType)
-      (= DynamicCodec as DynamicCodec : VType -> VType -> VType)
+  pack (= Codec as Codec)
+      (= DynamicCodec as DynamicCodec)
   where
     (
       = materialize,

@@ -100,11 +100,11 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       def ! run_writer (W : VType) (A : VType) (m : Thk (Writer W A)) :
         Ret (A * W) = ! run_writer_t W Ret A m that
       pack
-          (= Writer as Writer : VType -> VType -> CType)
-          (= WriterT as WriterT : VType -> (VType -> CType) -> VType -> CType)
-          (= Monoid as Monoid : VType -> VType)
-          (= MonadWriter as MonadWriter : VType -> (VType -> CType) -> CType)
-          (= IWriter as IWriter : VType -> (VType -> CType) -> VType)
+          (= Writer as Writer)
+          (= WriterT as WriterT)
+          (= Monoid as Monoid)
+          (= MonadWriter as MonadWriter)
+          (= IWriter as IWriter)
       where
         = instance, = transformer_instance, = transformer, = run_writer, = run_writer_t
       end

@@ -9,7 +9,7 @@ begin
   let Int = @(intrinsic(int)) in
   let Representation = (@(import("representation.type.zy"))) Storage Codec in
   exists (= Layout : VType -> VType)
-    (= Representation as Representation : VType -> VType)
+    (= Representation as Representation)
   .
       (#unit :: Layout Unit)
     * (#padding :: val pi (count : Int) . Layout Unit)

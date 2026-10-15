@@ -120,10 +120,10 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
           ret a
       that
       pack
-          (= State as State : VType -> VType -> CType)
-          (= StateT as StateT : VType -> (VType -> CType) -> VType -> CType)
-          (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
-          (= IState as IState : VType -> (VType -> CType) -> VType)
+          (= State as State)
+          (= StateT as StateT)
+          (= MonadState as MonadState)
+          (= IState as IState)
       where
         = instance,
         = transformer_instance,

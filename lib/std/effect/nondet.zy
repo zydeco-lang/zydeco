@@ -171,10 +171,10 @@ begin
     that
 
     pack
-        (= NonDet as NonDet : VType -> CType)
-        (= NonDetT as NonDetT : (VType -> CType) -> VType -> CType)
-        (= MonadNonDet as MonadNonDet : (VType -> CType) -> CType)
-        (= INonDet as INonDet : (VType -> CType) -> VType)
+        (= NonDet as NonDet)
+        (= NonDetT as NonDetT)
+        (= MonadNonDet as MonadNonDet)
+        (= INonDet as INonDet)
     where
       = instance, = transformer_instance, = transformer, = choose, = guard,
       = observe_first, = observe_all, = observe_many,
