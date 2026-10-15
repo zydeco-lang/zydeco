@@ -1,42 +1,86 @@
--- Read-only environments, specialized to Ret or layered over an explicit base.
+-- Read-only environments, derived from ordinary Ret sequencing.
 val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad) = builtin |> (@(import("monad.zy"))) in
+    let (/Monad; /Algebra) = builtin |> (@(import("monad.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
+      let Top = @(import("top.type.zy")) that
+      let triv : Thk Top = {
+        comatch
+        end
+      } that
       let MonadReader = @(import("reader.type.zy")) that
       let ReaderT (R : VType) (M : VType -> CType) (A : VType) = R -> M A that
       let Reader (R : VType) = ReaderT R Ret that
       let IReader (R : VType) (M : VType -> CType) = (#reader :: Thk (MonadReader R M)) that
 
       let val transformer_instance (R : VType) (M : VType -> CType) (base : Thk (Monad M)) =
+        let translated = {
+          (
+            @[monadic] begin
+              let VType = @(intrinsic(vtype)) in
+              let Thk = @(intrinsic(thk)) in
+              let Ret = @(intrinsic(ret)) in
+              let Transformer = @(import("transformer-inner.type.zy")) in
+              let MonadReader = @(import("reader.type.zy")) in
+              let with_lift = { @(import("transformer-source.zy")) } in
+              let Reader (R : VType) (A : VType) = R -> Ret A in
+              let Source (R : VType) =
+                codata
+                | .core : Transformer Ret (Reader R)
+                | .reader : MonadReader R (Reader R)
+                end
+              in
+              fn (R : VType) =>
+                (
+                  comatch
+                  | .core => ! with_lift (Reader R) {
+                    comatch
+                    | .return A a => fn _ => ret a
+                    | .bind A B m f =>
+                      fn environment =>
+                        do a <- ! m environment;
+                        ! f a environment
+                    end
+                  }
+                  | .reader =>
+                    comatch
+                    | .ask => fn environment => ret environment
+                    | .local A replacement m => fn _ => ! m replacement
+                    end
+                  end : Source R
+                )
+            end
+          ) M base R triv
+        } in
+        let core = { ! from_monadic M (ReaderT R M) { ! translated .core } } in
         pack (T as ReaderT R M : VType -> CType)
         where
-          #monad = (
-            {
-              comatch
-              | .return A a => fn _ => ! base .return A a
-              | .bind A B m f =>
-                fn environment =>
-                  ! base .bind A B { ! m environment } { fn a => ! f a environment }
-              end
-            } : Thk (Monad (ReaderT R M))
-          ),
+          #monad = { ! core .monad },
+          #lift = { ! core .lift },
           #reader = (
             {
               comatch
-              | .ask => fn environment => ! base .return R environment
-              | .local A replacement m => fn _ => ! m replacement
+              | .ask => ! translated .reader .ask
+              | .local A => ! translated .reader .local A triv
               end
             } : Thk (MonadReader R (ReaderT R M))
           )
         end
       that
-      let val instance (R : VType) = transformer_instance R Ret ret_instance/monad that
+      let val instance (R : VType) =
+        let (T, operations) = transformer_instance R Ret ret_instance/monad in
+        pack (M as Reader R : VType -> CType)
+        where
+          #monad = operations/monad, #reader = operations/reader end
+      that
 
-      def ! lift (R : VType) (M : VType -> CType) (A : VType) (m : Thk (M A)) :
-        ReaderT R M A = fn _ => ! m that
-
+      def ! transformer (R : VType) : MonadTrans (ReaderT R) =
+        fn M base =>
+          let (T, operations) = transformer_instance R M base in
+          ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
+      that
       def ! run_reader_t (R : VType) (M : VType -> CType) (A : VType)
         (environment : R) (m : Thk (ReaderT R M A))
       : M A = ! m environment that
@@ -50,7 +94,7 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
           (= MonadReader as MonadReader : VType -> (VType -> CType) -> CType)
           (= IReader as IReader : VType -> (VType -> CType) -> VType)
       where
-        = instance, = transformer_instance, = lift, = run_reader, = run_reader_t
+        = instance, = transformer_instance, = transformer, = run_reader, = run_reader_t
       end
     end
   end

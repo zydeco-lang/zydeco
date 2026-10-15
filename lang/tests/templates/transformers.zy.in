@@ -1,0 +1,38 @@
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("${std}/effect/monad.zy"))) in
+let (/MonadTrans; /Transformer; /Lift; /ITransformer; /from_monadic) =
+  builtin |> (@(import("${std}/effect/transformer.zy"))) in
+let (/instance = ret_instance) = builtin |> (@(import("${std}/effect/ret.zy"))) in
+let (/StateT; /IState; state) = builtin |> (@(import("${std}/effect/state.zy"))) in
+let (/ExceptionT; /IException; exception) = builtin |> (@(import("${std}/effect/exception.zy"))) in
+let (/ReaderT; reader) = builtin |> (@(import("${std}/effect/reader.zy"))) in
+let (/Monoid; writer) = builtin |> (@(import("${std}/effect/writer.zy"))) in
+let optional = builtin |> (@(import("${std}/effect/option.zy"))) in
+let (/List; data_package) = builtin |> (@(import("${std}/data/package.zy"))) in
+let (/NonDetT; nondet) = (builtin |> (@(import("${std}/effect/nondet.zy")))) data_package in
+let output : Monoid Int = (#empty = 0, #append = numeric/int/add) in
+let (W, w) = writer/instance Int output in
+let (SW, sw) = state/transformer_instance Int W w/monad in
+let (EW, ew) = exception/transformer_instance Unit W w/monad in
+let (RW, rw) = reader/transformer_instance Int W w/monad in
+let (NW, nw) = nondet/transformer_instance W w/monad in
+let IdentityT (M : VType -> CType) (A : VType) = M A in
+let identity : Thk (MonadTrans IdentityT) = {
+  fn M base =>
+    ! from_monadic M M {
+      (@[monadic] begin
+        let VType = @(intrinsic(vtype)) in
+        let CType = @(intrinsic(ctype)) in
+        let Thk = @(intrinsic(thk)) in
+        let Ret = @(intrinsic(ret)) in
+        let Monad = @(import("${std}/effect/monad.type.zy")) in
+        let with_lift = { @(import("${std}/effect/transformer-source.zy")) } in
+        ! with_lift Ret ({
+          comatch
+          | .return A a => ret a
+          | .bind A B m f => do a <- ! m; ! f a
+          end
+        } : Thk (Monad Ret))
+      end) M base
+    }
+} in
+${body}

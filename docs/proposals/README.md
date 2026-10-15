@@ -13,7 +13,7 @@ as current behavior.
 
 | Proposal | Remaining work | Implemented starting point |
 | --- | --- | --- |
-| [Relative monad library](relative-monad-library.md) | Further effect composition, fair search, control, parsing, diagnostics, randomness, resources, and concurrency | [Elementary effects](../references/language.md#elementary-effect-instances) and [ordered search](../references/language.md#ordered-depth-first-nondeterminism) |
+| [Relative monad library](relative-monad-library.md) | Further effect composition, fair search, control, parsing, diagnostics, randomness, resources, and concurrency | [Elementary effects](../references/language.md#elementary-effect-instances), [ordered search](../references/language.md#ordered-depth-first-nondeterminism), and [shared transformer derivation](../references/language.md#derived-relative-monad-transformers) |
 | [Compiler memory](arena-gc.md) | Memo reclamation, compact facts, and consumer-driven normalization | [Retained analysis facts](../references/compiler.md#analysis-facts-and-materialization) |
 | [Binary products](binary-products.md) | Unadopted right-spine alternative | [Current n-ary products](../references/language.md#5-values-products-and-data) |
 | [Immutable bytes](bytes.md) | Functional updates, ownership-based reuse, and alternative representations | [Retained bytes](../references/language.md#immutable-owners-and-source-bytes) |

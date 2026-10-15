@@ -9,81 +9,46 @@ val
     let state_basis = @(import("state.zy")) that
     let exception_basis = @(import("exception.zy")) that
     let (/Monad; /WithMonad) = builtin |> monadic_basis in
-    let (/MonadState; /IState) = builtin |> state_basis in
-    let (/MonadThrow; /IException) = builtin |> exception_basis in
+    let (/MonadState; /IState; /StateT; state_library) = builtin |> state_basis in
+    let (/MonadThrow; /IException; /Exception; exception_library) = builtin |> exception_basis in
     begin
-      def Either (E : VType) (A : VType) =
-        data
-        | +Left : E
-        | +Right : A
-        end
-      that
       -- State layered over Exception: failure discards the state, and catch
       -- restarts its handler from the state at entry to the protected computation.
-      let StateExn (S : VType) (E : VType) (A : VType) =
-        S -> Ret (Either E (A * S))
-      that
+      let StateExn (S : VType) (E : VType) = StateT S (Exception E) that
 
       let IStateExn (S : VType) (E : VType) =
         WithMonad <| fn (M : VType -> CType) =>
           IState S M * IException E M
       that
 
-      def ! mo_state_exn (S : VType) (E : VType) : Monad (StateExn S E) =
-        comatch
-        | .return A a =>
-          fn s =>
-            ret +Right(a, s)
-        | .bind A A' m f =>
-          fn s =>
-            do r <- ! m s;
-            match r
-            | +Left(e) => ret +Left(e)
-            | +Right(a, s') => ! f a s'
-            end
-        end
-      that
-
-      def ! state_ops (S : VType) (E : VType) : MonadState S (StateExn S E) =
-        comatch
-        | .get =>
-          fn s =>
-            ret +Right(s, s)
-        | .put s' =>
-          fn _ =>
-            ret +Right((), s')
-        end
-      that
-
-      def ! throw_ops (S : VType) (E : VType) : MonadThrow E (StateExn S E) =
-        comatch
-        | .throw A e =>
-          fn _ =>
-            ret +Left(e)
-        end
-      that
-
-      def ! catch (S : VType)
-        (E : VType)
-        (A : VType)
-        (m : Thk (StateExn S E A))
-        (h : Thk (E -> StateExn S E A))
-      : StateExn S E A =
-          fn s =>
-            do r <- ! m s;
-            match r
-            | +Left(e) => ! h e s
-            | +Right(a, s') => ret +Right(a, s')
-            end
-      that
-
       let val instance (S : VType) (E : VType) =
+        let (X, exception) = exception_library/instance E in
+        let (T, state) = state_library/transformer_instance S X exception/monad in
         pack (M as StateExn S E : VType -> CType)
         where
-          #monad = { ! mo_state_exn S E },
+          #monad = state/monad,
           (
-            #state = { ! state_ops S E },
-            (#exception = { ! throw_ops S E }, #catch = { ! catch S E })
+            #state = state/state,
+            (
+              #exception = (
+                {
+                  comatch
+                  | .throw A error => ! state/lift A { ! exception/exception .throw A error }
+                  end
+                } : Thk (MonadThrow E (StateExn S E))
+              ),
+              #catch = (
+                {
+                  fn (A : VType) m handler initial =>
+                    ! exception/catch (A * S) { ! m initial } {
+                      fn error => ! handler error initial
+                    }
+                } : Thk (
+                  forall (A : VType) .
+                    Thk (StateExn S E A) -> Thk (E -> StateExn S E A) -> StateExn S E A
+                )
+              )
+            )
           )
         end
       that

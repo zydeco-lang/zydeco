@@ -12,7 +12,7 @@ let output : Monoid String = (#empty = "", #append = string/append) in
 let (W, w) = writer/instance String output in
 let (O, o) = optional/instance in
 let (RW, rw) = reader/transformer_instance Int W w/monad in
-let (WR, wr) = writer/transformer_instance String R r/monad output in
+let (WR, wr) = writer/transformer_instance String output R r/monad in
 let (OW, ow) = optional/transformer_instance W w/monad in
 let observe_ret : Thk (Thk (Ret Int) -> Ret String) = {
   fn m =>
@@ -84,8 +84,8 @@ let writer_second : Thk (Int -> W Int) = {
       }
       mark read reset;
     do reader_writer_status <- ! laws RW rw/monad { ! rw/reader .ask }
-      { fn n => ! reader/lift Int W Int { ! writer_first n } }
-      { fn n => ! reader/lift Int W Int { ! writer_second n } }
+      { fn n => ! rw/lift Int { ! writer_first n } }
+      { fn n => ! rw/lift Int { ! writer_second n } }
       observe_reader_writer mark read reset;
     do writer_reader_status <- ! laws WR wr/monad { ! wr/monad .return Int 1 }
       {
@@ -99,17 +99,17 @@ let writer_second : Thk (Int -> W Int) = {
           ret (next, "g")
       }
       observe_writer_reader mark read reset;
-    do option_writer_status <- ! laws OW ow/monad { ! optional/lift W w/monad Int { ret (1, "m") } }
-      { fn n => ! optional/lift W w/monad Int { ! writer_first n } }
+    do option_writer_status <- ! laws OW ow/monad { ! ow/lift Int { ret (1, "m") } }
+      { fn n => ! ow/lift Int { ! writer_first n } }
       { fn _ => ! ow/option .none Int }
       observe_option_writer mark read reset;
-    do reader_lift <- ! lift_laws W RW w/monad rw/monad { fn m => ! reader/lift Int W Int m }
+    do reader_lift <- ! lift_laws W RW w/monad rw/monad { fn m => ! rw/lift Int m }
       { ret (1, "m") } writer_first observe_reader_writer mark read reset;
     do writer_lift <- ! lift_laws R WR r/monad wr/monad
-      { fn m => ! writer/lift String R r/monad output Int m }
+      { fn m => ! wr/lift Int m }
       { ! r/reader .ask } { fn n environment => ! numeric/int/add n environment }
       observe_writer_reader mark read reset;
-    do option_lift <- ! lift_laws W OW w/monad ow/monad { fn m => ! optional/lift W w/monad Int m }
+    do option_lift <- ! lift_laws W OW w/monad ow/monad { fn m => ! ow/lift Int m }
       { ret (1, "m") } writer_first observe_option_writer mark read reset;
     match (ret_status, reader_status, writer_status, option_status,
       reader_writer_status, writer_reader_status, option_writer_status,

@@ -43,11 +43,11 @@ let _ : WithMonad (IReader Int) = (R, r) in
 let _ : WithMonad (IWriter Int) = (W, w) in
 let _ : WithMonad IOption = (O, o) in
 let (RW, rw) = reader/transformer_instance Int W w/monad in
-let (WR, wr) = writer/transformer_instance Int R r/monad output in
+let (WR, wr) = writer/transformer_instance Int output R r/monad in
 let (OW, ow) = optional/transformer_instance W w/monad in
-let _ : WithMonad (IReader Int) = (RW, rw) in
-let _ : WithMonad (IWriter Int) = (WR, wr) in
-let _ : WithMonad IOption = (OW, ow) in
+let _ : WithMonad (IReader Int) = (RW, #monad = rw/monad, #reader = rw/reader) in
+let _ : WithMonad (IWriter Int) = (WR, #monad = wr/monad, #writer = wr/writer) in
+let _ : WithMonad IOption = (OW, #monad = ow/monad, #option = ow/option) in
 ! exit 0
 "#,
     );

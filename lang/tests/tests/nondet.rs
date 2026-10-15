@@ -32,9 +32,9 @@ fn shared_list_and_carrier_witnesses_survive_composition() {
     let source = NonDetCase::source(
         r#"
 let _ : WithMonad INonDet = (N, n) in
-let _ : WithMonad INonDet = (NO, no) in
+let _ : WithMonad INonDet = (NO, #monad = no/monad, #nondet = no/nondet) in
 let _ : Thk (forall (A : VType) . Thk (O A) -> NO A) = {
-  fn A m => ! nondet/lift O A m
+  fn A m => ! no/lift A m
 } in
 let algebra : Thk (Algebra Ret (Ret Int)) = {
   fn A m k => do a <- ! m; ! k a
@@ -43,7 +43,7 @@ do result <- ! n/monad .return Int 7 (Ret Int) algebra { fn value rest => ret va
 do values <- ! nondet/observe_many Int 2 { ! n/monad .return Int result };
 let _ : List Int = values in
 let _ : Thk (N Int) = { ! nondet/choose (N, n) Int values } in
-let _ : Thk (NO Int) = { ! nondet/choose (NO, no) Int values } in
+let _ : Thk (NO Int) = { ! nondet/choose (NO, #monad = no/monad, #nondet = no/nondet) Int values } in
 ! exit 0
 "#,
     );

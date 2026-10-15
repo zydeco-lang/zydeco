@@ -5,5 +5,5 @@ let (/NonDet; /NonDetT; /MonadNonDet; /INonDet; nondet) =
 let optional = builtin |> (@(import("${std}/effect/option.zy"))) in
 let (N, n) = nondet/instance in
 let (O, o) = optional/instance in
-let (NO, no) = nondet/transformer_instance O in
+let (NO, no) = nondet/transformer_instance O o/monad in
 ${body}

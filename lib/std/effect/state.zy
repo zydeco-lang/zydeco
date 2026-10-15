@@ -1,55 +1,91 @@
--- The State effect, packaged as a pure library over the Builtin signature.
-val
-  (
-    (/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))
-  )
-=>
+-- State threading and its transformer, derived from ordinary Ret sequencing.
+val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let monadic_basis = @(import("monad.zy")) that
-    let (/Monad; /WithMonad) = builtin |> monadic_basis in
+    let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("monad.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
+    let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
-      -- The operations of the State effect, relative to an ambient monad M.
+      let Top = @(import("top.type.zy")) that
+      let triv : Thk Top = {
+        comatch
+        end
+      } that
       let MonadState = @(import("state.type.zy")) that
+      let StateT (S : VType) (M : VType -> CType) (A : VType) = S -> M (A * S) that
+      let State (S : VType) = StateT S Ret that
+      let IState (S : VType) (M : VType -> CType) = (#state :: Thk (MonadState S M)) that
 
-      -- The canonical State relative monad: thread S through Ret and return
-      -- both the answer and the final state.
-      let State (S : VType) (A : VType) = S -> Ret (A * S) that
-
-      -- The carrier is supplied by the surrounding composition or WithMonad package.
-      let IState (S : VType) (M : VType -> CType) =
-        (#state :: Thk (MonadState S M))
-      that
-
-      def ! mo_state (S : VType) : Monad (State S) =
-        comatch
-        | .return A a =>
-          fn s =>
-            ret (a, s)
-        | .bind A A' m f =>
-          fn s =>
-            do (a, s') <- ! m s;
-            ! f a s'
+      let val transformer_instance (S : VType) (M : VType -> CType) (base : Thk (Monad M)) =
+        let translated = {
+          (
+            @[monadic] begin
+              let VType = @(intrinsic(vtype)) in
+              let CType = @(intrinsic(ctype)) in
+              let Thk = @(intrinsic(thk)) in
+              let Ret = @(intrinsic(ret)) in
+              let Unit = @(intrinsic(unit)) in
+              let Transformer = @(import("transformer-inner.type.zy")) in
+              let with_lift = { @(import("transformer-source.zy")) } in
+              let State (S : VType) (A : VType) = S -> Ret (A * S) in
+              let MonadState = @(import("state.type.zy")) in
+              let Source (S : VType) =
+                codata
+                | .core : Transformer Ret (State S)
+                | .state : MonadState S (State S)
+                end
+              in
+              fn (S : VType) =>
+                (
+                  comatch
+                  | .core => ! with_lift (State S) {
+                    comatch
+                    | .return A a => fn s => ret (a, s)
+                    | .bind A B m f => fn s =>
+                      do (a, next) <- ! m s;
+                      ! f a next
+                    end
+                  }
+                  | .state =>
+                    comatch
+                    | .get => fn s => ret (s, s)
+                    | .put next => fn _ => ret ((), next)
+                    end
+                  end : Source S
+                )
+            end
+          ) M base S triv
+        } in
+        let core = { ! from_monadic M (StateT S M) { ! translated .core } } in
+        pack (T as StateT S M : VType -> CType)
+        where
+          #monad = { ! core .monad },
+          #lift = { ! core .lift },
+          #state = (
+            {
+              comatch
+              | .get => ! translated .state .get
+              | .put => ! translated .state .put
+              end
+            } : Thk (MonadState S (StateT S M))
+          )
         end
       that
-
-      def ! state (S : VType) : MonadState S (State S) =
-        comatch
-        | .get =>
-          fn s =>
-            ret (s, s)
-        | .put s' =>
-          fn _ =>
-            ret ((), s')
-        end
-      that
-
       let val instance (S : VType) =
+        let (T, operations) = transformer_instance S Ret ret_instance/monad in
         pack (M as State S : VType -> CType)
         where
-          #monad = { ! mo_state S },
-          #state = { ! state S }
-        end
+          #monad = operations/monad, #state = operations/state end
       that
+
+      def ! transformer (S : VType) : MonadTrans (StateT S) =
+        fn M base =>
+          let (T, operations) = transformer_instance S M base in
+          ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
+      that
+
+      def ! run_state_t (S : VType) (M : VType -> CType) (A : VType)
+        (initial : S) (m : Thk (StateT S M A))
+      : M (A * S) = ! m initial that
 
       def ! modify (S : VType)
         ((M, (/monad; /state)) : WithMonad (IState S))
@@ -83,17 +119,19 @@ val
           do (a, _) <- ! m initial;
           ret a
       that
-
       pack
           (= State as State : VType -> VType -> CType)
+          (= StateT as StateT : VType -> (VType -> CType) -> VType -> CType)
           (= MonadState as MonadState : VType -> (VType -> CType) -> CType)
           (= IState as IState : VType -> (VType -> CType) -> VType)
       where
         = instance,
+        = transformer_instance,
+        = transformer,
         = modify,
         = run_state,
+        = run_state_t,
         = eval_state
       end
     end
   end
--- end module State

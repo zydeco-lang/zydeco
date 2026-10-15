@@ -1,0 +1,14 @@
+-- A transformed monad and a lift from its chosen base, at one fixed carrier.
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Monad = @(import("monad.type.zy")) in
+  let Transformer (M : VType -> CType) (T : VType -> CType) =
+    codata
+    | .monad : Monad T
+    | .lift : forall (A : VType) . Thk (M A) -> T A
+    end
+  in
+  Transformer
+end

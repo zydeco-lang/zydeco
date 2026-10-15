@@ -1,0 +1,230 @@
+-- One MonadTrans client exercises every standard derivation, then checks State/Exception interaction.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/MonadTrans; /ITransformer) = builtin |> (@(import("../../std/effect/transformer.zy"))) in
+let (/List; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
+let (/ReaderT; reader) = builtin |> (@(import("../../std/effect/reader.zy"))) in
+let (/Monoid; /WriterT; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/OptionT; optional) = builtin |> (@(import("../../std/effect/option.zy"))) in
+let (/IState; /StateT; state) = builtin |> (@(import("../../std/effect/state.zy"))) in
+let (/IException; /ExceptionT; exception) = builtin |> (
+  @(import("../../std/effect/exception.zy"))
+) in
+let (/NonDetT; nondet) = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/render; /check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (W, w) = writer/instance String output in
+let (S, s) = state/instance Int in
+let (E, e) = exception/instance String in
+let (SW, sw) = state/transformer_instance Int W w/monad in
+let (EW, ew) = exception/transformer_instance String W w/monad in
+let (SE, se) = state/transformer_instance Int E e/monad in
+let (ES, es) = exception/transformer_instance String S s/monad in
+let probe : Thk (
+  forall (F : (VType -> CType) -> VType -> CType) .
+    Thk (MonadTrans F) -> Thk (Int -> Ret Unit) -> F W Int
+) = {
+  fn F transformation mark =>
+    ! transformation W w/monad .monad .bind Int Int {
+      ! transformation W w/monad .lift Int {
+        do _ <- ! mark 1;
+        ret (5, "a")
+      }
+    } {
+      fn first =>
+        ! transformation W w/monad .lift Int {
+          do _ <- ! mark 2;
+          do answer <- ! numeric/int/add first 2;
+          ret (answer, "b")
+        }
+    }
+} in
+let lifted_client : Thk (pi ((T, _) : WithMonad (ITransformer W)) . T Int) = {
+  fn ((T, (/monad; /lift)) : WithMonad (ITransformer W)) =>
+    ! monad .bind Int Int { ! lift Int { ret (4, "l") } } {
+      fn answer => ! monad .return Int answer
+    }
+} in
+! with_trace {
+  fn mark read reset =>
+    do reader_status <- ! check {
+      do (answer, written) <- ! probe (ReaderT Int) { ! reader/transformer Int } mark 9;
+      match answer
+      | 7 => ret written
+      | _ => ret "wrong"
+      end
+    } "ab" 12 read reset;
+    do writer_status <- ! check {
+      do ((answer, outer), written) <- ! probe (WriterT String) {
+        ! writer/transformer String output
+      } mark;
+      match answer
+      | 7 => ! string/append outer written
+      | _ => ret "wrong"
+      end
+    } "ab" 12 read reset;
+    do option_status <- ! check {
+      do (answer, written) <- ! probe OptionT optional/transformer mark;
+      match answer
+      | +Some(7) => ret written
+      | _ => ret "wrong"
+      end
+    } "ab" 12 read reset;
+    do state_status <- ! check {
+      do ((answer, final), written) <- ! probe (StateT Int) { ! state/transformer Int } mark 9;
+      match (answer, final)
+      | (7, 9) => ret written
+      | _ => ret "wrong"
+      end
+    } "ab" 12 read reset;
+    do exception_status <- ! check {
+      do (answer, written) <- ! probe (ExceptionT String) { ! exception/transformer String } mark;
+      match answer
+      | +Right(7) => ret written
+      | _ => ret "wrong"
+      end
+    } "ab" 12 read reset;
+    do nondet_status <- ! check {
+      do (answers, written) <- ! nondet/observe_all_t W w/monad Int {
+        ! probe NonDetT nondet/transformer mark
+      };
+      do text <- ! render answers;
+      ! string/append text written
+    } "7,ab" 12 read reset;
+    do packed_lift <- ! check {
+      do ((answer, final), written) <- ! state/run_state_t Int W Int 9 {
+        ! lifted_client (SW, #monad = sw/monad, #lift = sw/lift)
+      };
+      match (answer, final)
+      | (4, 9) => ret written
+      | _ => ret "wrong"
+      end
+    } "l" 0 read reset;
+    do state_updates <- ! check {
+      do ((answer, final), written) <- ! state/run_state_t Int W Int 5 {
+        ! sw/monad .bind Int Int { ! sw/state .get } {
+          fn old =>
+            ! sw/monad .bind Unit Int { ! sw/state .put 8 } {
+              fn _ =>
+                ! sw/lift Int {
+                  do _ <- ! mark 3;
+                  ret (old, "state")
+                }
+            }
+        }
+      };
+      match (answer, final)
+      | (5, 8) => ret written
+      | _ => ret "wrong"
+      end
+    } "state" 3 read reset;
+    do recover <- ! check {
+      do (answer, written) <- ! exception/run_exception_t String W Int {
+        ! ew/catch Int {
+          ! ew/monad .bind Unit Int {
+            ! ew/lift Unit {
+              do _ <- ! mark 1;
+              ret ((), "pre")
+            }
+          } { fn _ => ! ew/exception .throw Int "problem" }
+        } {
+          fn error =>
+            ! ew/lift Int {
+              do _ <- ! mark 2;
+              ret (42, error)
+            }
+        }
+      };
+      match answer
+      | +Right(42) => ret written
+      | _ => ret "wrong"
+      end
+    } "preproblem" 12 read reset;
+    do skip_continuation <- ! check {
+      do (answer, written) <- ! exception/run_exception_t String W Int {
+        ! ew/monad .bind Int Int { ! ew/exception .throw Int "stop" } {
+          fn _ =>
+            do _ <- ! mark 9;
+            ! ew/monad .return Int 0
+        }
+      };
+      match answer
+      | +Left(error) => ! string/eq (Ret String) error "stop" { ret written } { ret "wrong" }
+      | _ => ret "wrong"
+      end
+    } "" 0 read reset;
+    do skip_handler <- ! check {
+      do (answer, written) <- ! exception/run_exception_t String W Int {
+        ! ew/catch Int { ! ew/monad .return Int 7 } {
+          fn _ =>
+            do _ <- ! mark 9;
+            ! ew/monad .return Int 0
+        }
+      };
+      match answer
+      | +Right(7) => ret written
+      | _ => ret "wrong"
+      end
+    } "" 0 read reset;
+    do discard_state <- ! check {
+      do answer <- ! state/run_state_t Int E Int 5 {
+        ! se/monad .bind Unit Int { ! se/state .put 8 } {
+          fn _ =>
+            ! se/lift Int {
+              do _ <- ! mark 1;
+              ! e/exception .throw Int "stop"
+            }
+        }
+      };
+      match answer
+      | +Left(error) => ! string/eq (Ret String) error "stop" { ret "discarded" } { ret "wrong" }
+      | _ => ret "wrong"
+      end
+    } "discarded" 1 read reset;
+    do preserve_state <- ! check {
+      ! state/run_state Int (
+        data
+        | +Left : String
+        | +Right : Int
+        end
+      ) (Ret String) 5 {
+        ! exception/run_exception_t String S Int {
+          ! es/monad .bind Unit Int { ! es/lift Unit { ! s/state .put 8 } } {
+            fn _ =>
+              do _ <- ! mark 1;
+              ! es/exception .throw Int "stop"
+          }
+        }
+      } {
+        fn final answer =>
+          match (final, answer)
+          | (8, +Left(error)) => ! string/eq (Ret String) error "stop" { ret "preserved" } {
+            ret "wrong"
+          }
+          | _ => ret "wrong"
+          end
+      }
+    } "preserved" 1 read reset;
+    do recover_state <- ! check {
+      do (answer, final) <- ! exception/run_exception_t String S Int {
+        ! es/catch Int {
+          ! es/monad .bind Unit Int { ! es/lift Unit { ! s/state .put 8 } } {
+            fn _ => ! es/exception .throw Int "stop"
+          }
+        } { fn _ => ! es/lift Int { ! s/state .get } }
+      } 5;
+      match (answer, final)
+      | (+Right(8), 8) => ret "retained"
+      | _ => ret "wrong"
+      end
+    } "retained" 0 read reset;
+    match (reader_status, writer_status, option_status, state_status, exception_status,
+      nondet_status, packed_lift, state_updates, recover, skip_continuation, skip_handler,
+      discard_state, preserve_state, recover_state)
+    | (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) => ret 0
+    | _ => ret 1
+    end
+}

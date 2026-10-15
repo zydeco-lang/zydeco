@@ -4,8 +4,14 @@ begin
   @(import("../builtin.zy")) in
   param val (/Bool; /Option; /List; /list) : @(import("../data/package.type.zy")) in
   let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("monad.zy"))) in
+  let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
   let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
   begin
+    let Top = @(import("top.type.zy")) that
+    let triv : Thk Top = {
+      comatch
+      end
+    } that
     let MonadNonDet = @(import("nondet.type.zy")) that
     let NonDetT (M : VType -> CType) (A : VType) =
       forall (R : CType) .
@@ -14,39 +20,74 @@ begin
     let NonDet = NonDetT Ret that
     let INonDet (M : VType -> CType) = (#nondet :: Thk (MonadNonDet M)) that
 
-    -- The observation supplies the algebra; the search dictionary needs no base operations.
-    let val transformer_instance (M : VType -> CType) =
+    let val transformer_instance (M : VType -> CType) (base : Thk (Monad M)) =
+      let translated = {
+        (
+          @[monadic] begin
+            let VType = @(intrinsic(vtype)) in
+            let CType = @(intrinsic(ctype)) in
+            let Thk = @(intrinsic(thk)) in
+            let Ret = @(intrinsic(ret)) in
+            let Transformer = @(import("transformer-inner.type.zy")) in
+            let MonadNonDet = @(import("nondet.type.zy")) in
+            let with_lift = { @(import("transformer-source.zy")) } in
+            -- Translation supplies the answer-type algebra; the source has none.
+            let NonDet (A : VType) =
+              forall (R : CType) . Thk (A -> Thk R -> R) -> Thk R -> R
+            in
+            let Source =
+              codata
+              | .core : Transformer Ret NonDet
+              | .nondet : MonadNonDet NonDet
+              end
+            in
+            (
+              comatch
+              | .core => ! with_lift NonDet {
+                comatch
+                | .return A a => fn R success failure => ! success a failure
+                | .bind A B m f =>
+                  fn R success failure =>
+                    ! m R { fn a rest => ! f a R success rest } failure
+                end
+              }
+              | .nondet =>
+                comatch
+                | .empty A => fn R success failure => ! failure
+                | .choice A left right =>
+                  fn R success failure => ! left R success { ! right R success failure }
+                end
+              end : Source
+            )
+          end
+        ) M base
+      } in
+      let core = { ! from_monadic M (NonDetT M) { ! translated .core } } in
       pack (T as NonDetT M : VType -> CType)
       where
-        #monad = (
-          {
-            comatch
-            | .return A a => fn R algebra success failure => ! success a failure
-            | .bind A B m f =>
-              fn R algebra success failure =>
-                ! m R algebra {
-                  fn a rest => ! f a R algebra success rest
-                } failure
-            end
-          } : Thk (Monad (NonDetT M))
-        ),
+        #monad = { ! core .monad },
+        #lift = { ! core .lift },
         #nondet = (
           {
             comatch
-            | .empty A => fn R algebra success failure => ! failure
-            | .choice A left right =>
-              fn R algebra success failure =>
-                ! left R algebra success { ! right R algebra success failure }
+            | .empty A => ! translated .nondet .empty A triv
+            | .choice A => ! translated .nondet .choice A triv
             end
           } : Thk (MonadNonDet (NonDetT M))
         )
       end
     that
-    let instance = transformer_instance Ret that
+    let instance =
+      let (T, operations) = transformer_instance Ret ret_instance/monad in
+      pack (M as NonDet : VType -> CType)
+      where
+        #monad = operations/monad, #nondet = operations/nondet end
+    that
 
-    def ! lift (M : VType -> CType) (A : VType) (m : Thk (M A)) : NonDetT M A =
-      fn R algebra success failure =>
-        ! algebra A m { fn a => ! success a failure }
+    def ! transformer : MonadTrans NonDetT =
+      fn M base =>
+        let (T, operations) = transformer_instance M base in
+        ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
     that
 
     def ! choose ((M, (/monad; /nondet)) : WithMonad INonDet)
@@ -135,7 +176,7 @@ begin
         (= MonadNonDet as MonadNonDet : (VType -> CType) -> CType)
         (= INonDet as INonDet : (VType -> CType) -> VType)
     where
-      = instance, = transformer_instance, = lift, = choose, = guard,
+      = instance, = transformer_instance, = transformer, = choose, = guard,
       = observe_first, = observe_all, = observe_many,
       = observe_first_t, = observe_all_t, = observe_many_t
     end

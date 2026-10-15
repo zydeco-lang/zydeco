@@ -149,7 +149,8 @@ system/package.zy          system data types and capability-preserving assembly
 algebra/monoid.type.zy      general-purpose monoid dictionary
 
 effect/monad.zy            Monad, Algebra, and WithMonad
-effect/{ret,reader,writer,option}.zy  elementary carriers, instances, and transformers
+effect/{ret,reader,writer,option}.zy  elementary carriers and derived transformers
+effect/transformer*.zy              shared transformer interfaces and derivation adapters
 effect/{state,exception,state-exn}.zy  state, exceptions, and their combination
 effect/nondet.zy           ordered depth-first search and result observers
 effect/*.type.zy           relative-monad basis and carrier-indexed operation interfaces
@@ -307,11 +308,43 @@ The [elementary effect reference](../../docs/references/language.md#elementary-e
 specifies Reader's scoped replacement, Writer's pure monoid contract, and Optional's short-circuiting.
 Import [Ret](effect/ret.zy), [Reader](effect/reader.zy), [Writer](effect/writer.zy),
 or [Option](effect/option.zy) explicitly with the same Builtin value used by other modules.
-Reader, Writer, and Option each expose `transformer_instance`, `lift`, and concrete/base-aware runners.
+Reader, Writer, Option, State, Exception, and NonDet use the shared
+[derived transformer interface](../../docs/references/language.md#derived-relative-monad-transformers).
+Their transformer instances package a lift together with the monad and effect operations.
 The [translated example](../tests/effects/effect-monadic.zy) shows their carrier-polymorphic clients,
 and the [composition example](../tests/effects/effect-operations.zy) exercises the transformers together.
 The [remaining library proposal](../../docs/proposals/relative-monad-library.md) covers fair search, control,
 parsing, and other unimplemented families.
+
+### Derived transformers
+
+Use each module's `transformer_instance` builder when the program needs that effect's operations and a lift.
+Effect configuration comes first, followed by the base carrier and its monad dictionary.
+The computation-level `transformer` exposes the common `MonadTrans` interface for generic transformer clients.
+[The reference](../../docs/references/language.md#elementary-transformers) lists the exact constructors and runners.
+
+For example, StateT over Writer keeps state operations and base output at one transformed carrier:
+
+```zydeco
+param (/Int; /String; /Unit; /string; builtin) : @(import("builtin.zy")) in
+let writer = builtin |> (@(import("effect/writer.zy"))) in
+let state = builtin |> (@(import("effect/state.zy"))) in
+let (W, w) = writer/instance String (#empty = "", #append = string/append) in
+let (SW, sw) = state/transformer_instance Int W w/monad in
+! state/run_state_t Int W Int 3 {
+  ! sw/monad .bind Unit Int { ! sw/state .put 8 } {
+    fn _ => ! sw/lift Int { ret (7, "changed") }
+  }
+}
+```
+
+It returns `((7, 8), "changed")`: answer, final state, and base output.
+To call an ordinary State client, project `(SW, #monad = sw/monad, #state = sw/state)`;
+a lift-aware client can instead request `WithMonad (ITransformer W)` from [the shared module](effect/transformer.zy).
+The [uniform transformer example](../tests/effects/transformer-operations.zy) covers all six families,
+and the [translated stack example](../tests/effects/transformer-monadic.zy) contrasts State/Exception order.
+
+### Delimited control examples
 
 For delimited control, the repository explores a library encoding with `Kont R A = Thk (A -> R) -> R`,
 explicit `reset` and `shift`, and ordinary thunks.
@@ -346,8 +379,8 @@ do answers <- ! nondet/observe_many Int 2 {
 
 This library term observes the two answers `3, 1` and returns their length.
 The module supplies `choose`, `guard`, `observe_first`, `observe_many`, and `observe_all`.
-Use `transformer_instance M` and `lift M A computation` for an explicit base carrier;
-the `_t` observers additionally take its monad dictionary.
+Use `transformer_instance M base` for an explicit base carrier and invoke `lift A computation` on that instance.
+The `_t` observers also take `M base` to build their observation algebras.
 The [search reference](../../docs/references/language.md#ordered-depth-first-nondeterminism) owns
 the continuation protocol, observation limits, and interaction with base effects.
 The [backtracking example](../tests/monadic/backtrack.zydeco) is a complete executable client;

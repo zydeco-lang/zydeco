@@ -1,72 +1,120 @@
--- The Exception effect, packaged as a pure library over the Builtin signature.
-val
-  (
-    (/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))
-  )
-=>
+-- Exceptions and recovery, translated from one returned-Either implementation.
+val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let monadic_basis = @(import("monad.zy")) that
-    let (/Monad; /WithMonad) = builtin |> monadic_basis in
+    let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("monad.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
+    let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
-      def Either (E : VType) (A : VType) =
+      let Top = @(import("top.type.zy")) that
+      let triv : Thk Top = {
+        comatch
+        end
+      } that
+      let Either (E : VType) (A : VType) =
         data
         | +Left : E
         | +Right : A
         end
       that
-      let Top = @(import("top.type.zy")) that
-
-      -- The operations of the Exception effect, relative to an ambient monad M.
       let MonadThrow = @(import("exception.type.zy")) that
-
-      -- The canonical Exception relative monad: a returned Either observation.
-      let Exception (E : VType) (A : VType) = Ret (Either E A) that
-
+      let ExceptionT (E : VType) (M : VType -> CType) (A : VType) = M (Either E A) that
+      let Exception (E : VType) = ExceptionT E Ret that
       let IException (E : VType) (M : VType -> CType) =
           (#exception :: Thk (MonadThrow E M))
         * (#catch :: Thk (forall (A : VType) . Thk (M A) -> Thk (E -> M A) -> M A))
       that
 
-      def ! mo_exception (E : VType) : Monad (Exception E) =
-        comatch
-        | .return A a =>
-          ret +Right(a)
-        | .bind A A' m f =>
-          do r <- ! m;
-          match r
-          | +Left(e) => ret +Left(e)
-          | +Right(a) => ! f a
-          end
-        end
-      that
-
-      def ! throw_ops (E : VType) : MonadThrow E (Exception E) =
-        comatch
-        | .throw A e =>
-          ret +Left(e)
-        end
-      that
-
-      let val instance (E : VType) =
-        pack (M as Exception E : VType -> CType)
-        where
-          #monad = { ! mo_exception E },
+      let val transformer_instance (E : VType) (M : VType -> CType) (base : Thk (Monad M)) =
+        let translated = {
           (
-            #exception = { ! throw_ops E },
-            #catch = (
+            @[monadic] begin
+              let VType = @(intrinsic(vtype)) in
+              let CType = @(intrinsic(ctype)) in
+              let Thk = @(intrinsic(thk)) in
+              let Ret = @(intrinsic(ret)) in
+              let Unit = @(intrinsic(unit)) in
+              let Transformer = @(import("transformer-inner.type.zy")) in
+              let with_lift = { @(import("transformer-source.zy")) } in
+              let Either (E : VType) (A : VType) =
+                data
+                | +Left : E
+                | +Right : A
+                end
+              in
+              let Exception (E : VType) (A : VType) = Ret (Either E A) in
+              let MonadThrow = @(import("exception.type.zy")) in
+              let Source (E : VType) =
+                codata
+                | .core : Transformer Ret (Exception E)
+                | .exception : MonadThrow E (Exception E)
+                | .catch : forall (A : VType) .
+                  Thk (Exception E A) -> Thk (E -> Exception E A) -> Exception E A
+                end
+              in
+              fn (E : VType) =>
+                (
+                  comatch
+                  | .core => ! with_lift (Exception E) {
+                    comatch
+                    | .return A a => ret +Right(a)
+                    | .bind A B m f =>
+                      do observation <- ! m;
+                      match observation
+                      | +Left(e) => ret +Left(e)
+                      | +Right(a) => ! f a
+                      end
+                    end
+                  }
+                  | .exception =>
+                    comatch
+                    | .throw A e => ret +Left(e)
+                    end
+                  | .catch A m handler =>
+                    do observation <- ! m;
+                    match observation
+                    | +Left(e) => ! handler e
+                    | +Right(a) => ret +Right(a)
+                    end
+                  end : Source E
+                )
+            end
+          ) M base E triv
+        } in
+        let core = { ! from_monadic M (ExceptionT E M) { ! translated .core } } in
+        pack (T as ExceptionT E M : VType -> CType)
+        where
+          #monad = { ! core .monad },
+          #lift = { ! core .lift },
+          (
+            #exception = (
               {
-                fn (A : VType) (m : Thk (Exception E A)) (h : Thk (E -> Exception E A)) =>
-                  do r <- ! m;
-                  match r
-                  | +Left(e) => ! h e
-                  | +Right(a) => ret +Right(a)
-                  end
-              } : Thk <| forall (A : VType) .
-                Thk (Exception E A) -> Thk (E -> Exception E A) -> Exception E A
-            )
+                comatch
+                | .throw A => ! translated .exception .throw A triv
+                end
+              } : Thk (MonadThrow E (ExceptionT E M))
+            ),
+            #catch = { fn (A : VType) => ! translated .catch A triv }
           )
         end
       that
+      let val instance (E : VType) =
+        let (T, operations) = transformer_instance E Ret ret_instance/monad in
+        pack (M as Exception E : VType -> CType)
+        where
+          #monad = operations/monad,
+          (#exception = operations/exception, #catch = operations/catch)
+        end
+      that
+
+      def ! transformer (E : VType) : MonadTrans (ExceptionT E) =
+        fn M base =>
+          let (T, operations) = transformer_instance E M base in
+          ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
+      that
+
+      def ! run_exception_t (E : VType) (M : VType -> CType) (A : VType)
+        (m : Thk (ExceptionT E M A))
+      : M (Either E A) = ! m that
 
       -- A monadic-block-ready raise function. The leading Top argument carries
       -- the structure required by the algebra translation for the answer type A.
@@ -95,17 +143,19 @@ val
           | +Right(a) => ! on_value a
           end
       that
-
       pack
           (= Exception as Exception : VType -> VType -> CType)
+          (= ExceptionT as ExceptionT : VType -> (VType -> CType) -> VType -> CType)
           (= MonadThrow as MonadThrow : VType -> (VType -> CType) -> CType)
           (= IException as IException : VType -> (VType -> CType) -> VType)
       where
         = instance,
+        = transformer_instance,
+        = transformer,
         = raise,
         = catch,
-        = handle_exception
+        = handle_exception,
+        = run_exception_t
       end
     end
   end
--- end module Exception

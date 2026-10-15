@@ -12,9 +12,9 @@ let output : Monoid String = (#empty = "", #append = string/append) in
 let (W, w) = writer/instance String output in
 let (O, o) = optional/instance in
 let (RW, rw) = reader/transformer_instance Int W w/monad in
-let (WR, wr) = writer/transformer_instance String R r/monad output in
+let (WR, wr) = writer/transformer_instance String output R r/monad in
 let (OW, ow) = optional/transformer_instance W w/monad in
-let (WO, wo) = writer/transformer_instance String O o/monad output in
+let (WO, wo) = writer/transformer_instance String output O o/monad in
 ! with_trace {
   fn mark read reset =>
     do base <- ! ret_instance/monad .bind Int Int { ret 5 } { fn n => ! numeric/int/add n 2 };
@@ -77,7 +77,7 @@ let (WO, wo) = writer/transformer_instance String O o/monad output in
       ! reader/run_reader_t Int W Int 6 {
         ! rw/monad .bind Int Int { ! rw/reader .ask } {
           fn environment =>
-            ! rw/monad .bind Unit Int { ! reader/lift Int W Unit { ! w/writer .tell "r" } } {
+            ! rw/monad .bind Unit Int { ! rw/lift Unit { ! w/writer .tell "r" } } {
               fn _ => ! rw/monad .return Int environment
             }
         }
@@ -85,7 +85,7 @@ let (WO, wo) = writer/transformer_instance String O o/monad output in
     };
     do writer_reader <- ! reader/run_reader Int (Int * String) 4 {
       ! writer/run_writer_t String R Int {
-        ! wr/monad .bind Int Int { ! writer/lift String R r/monad output Int { ! r/reader .ask } } {
+        ! wr/monad .bind Int Int { ! wr/lift Int { ! r/reader .ask } } {
           fn environment =>
             ! wr/monad .bind Unit Int { ! wr/writer .tell "w" } {
               fn _ => ! wr/monad .return Int environment
@@ -94,7 +94,7 @@ let (WO, wo) = writer/transformer_instance String O o/monad output in
       }
     };
     let fail_with_output : Thk (OW Int) = {
-      ! ow/monad .bind Unit Int { ! optional/lift W w/monad Unit { ! w/writer .tell "pre" } } {
+      ! ow/monad .bind Unit Int { ! ow/lift Unit { ! w/writer .tell "pre" } } {
         fn _ => ! ow/option .none Int
       }
     } in
@@ -109,7 +109,7 @@ let (WO, wo) = writer/transformer_instance String O o/monad output in
     };
     do fallback_writer <- ! writer/run_writer String (Option Int) {
       ! ow/option .or_else Int fail_with_output {
-        ! ow/monad .bind Unit Int { ! optional/lift W w/monad Unit { ! w/writer .tell "post" } } {
+        ! ow/monad .bind Unit Int { ! ow/lift Unit { ! w/writer .tell "post" } } {
           fn _ => ! ow/monad .return Int 9
         }
       }
@@ -117,7 +117,7 @@ let (WO, wo) = writer/transformer_instance String O o/monad output in
     do writer_option <- ! optional/run_option (Int * String) {
       ! writer/run_writer_t String O Int {
         ! wo/monad .bind Unit Int { ! wo/writer .tell "lost" } {
-          fn _ => ! writer/lift String O o/monad output Int { ! o/option .none Int }
+          fn _ => ! wo/lift Int { ! o/option .none Int }
         }
       }
     };

@@ -1,9 +1,15 @@
--- Optional computations reuse the standard Option observation and short-circuit on None.
-val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
+-- Optional computations, with short-circuiting translated from one ordinary implementation.
+val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad) = builtin |> (@(import("monad.zy"))) in
+    let (/Monad; /Algebra) = builtin |> (@(import("monad.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
+      let Top = @(import("top.type.zy")) that
+      let triv : Thk Top = {
+        comatch
+        end
+      } that
       let Option = @(import("../data/option.zy")) that
       let MonadOption = @(import("option.type.zy")) that
       let OptionT (M : VType -> CType) (A : VType) = M (Option A) that
@@ -11,45 +17,79 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
       let IOption (M : VType -> CType) = (#option :: Thk (MonadOption M)) that
 
       let val transformer_instance (M : VType -> CType) (base : Thk (Monad M)) =
-        pack (T as OptionT M : VType -> CType)
-        where
-          #monad = (
-            {
-              comatch
-              | .return A a => ! base .return (Option A) +Some(a)
-              | .bind A B m f =>
-                ! base .bind (Option A) (Option B) m {
-                  fn observation =>
+        let translated = {
+          (
+            @[monadic] begin
+              let VType = @(intrinsic(vtype)) in
+              let CType = @(intrinsic(ctype)) in
+              let Thk = @(intrinsic(thk)) in
+              let Ret = @(intrinsic(ret)) in
+              let Unit = @(intrinsic(unit)) in
+              let Transformer = @(import("transformer-inner.type.zy")) in
+              let with_lift = { @(import("transformer-source.zy")) } in
+              let Option = @(import("../data/option.zy")) in
+              let Optional (A : VType) = Ret (Option A) in
+              let MonadOption = @(import("option.type.zy")) in
+              let Source =
+                codata
+                | .core : Transformer Ret Optional
+                | .option : MonadOption Optional
+                end
+              in
+              (
+                comatch
+                | .core => ! with_lift Optional {
+                  comatch
+                  | .return A a => ret +Some(a)
+                  | .bind A B m f =>
+                    do observation <- ! m;
                     match observation
-                    | +None() => ! base .return (Option B) +None()
+                    | +None() => ret +None()
                     | +Some(a) => ! f a
                     end
+                  end
                 }
-              end
-            } : Thk (Monad (OptionT M))
-          ),
+                | .option =>
+                  comatch
+                  | .none A => ret +None()
+                  | .or_else A m fallback =>
+                    do observation <- ! m;
+                    match observation
+                    | +None() => ! fallback
+                    | +Some(a) => ret +Some(a)
+                    end
+                  end
+                end : Source
+              )
+            end
+          ) M base
+        } in
+        let core = { ! from_monadic M (OptionT M) { ! translated .core } } in
+        pack (T as OptionT M : VType -> CType)
+        where
+          #monad = { ! core .monad },
+          #lift = { ! core .lift },
           #option = (
             {
               comatch
-              | .none A => ! base .return (Option A) +None()
-              | .or_else A m fallback =>
-                ! base .bind (Option A) (Option A) m {
-                  fn observation =>
-                    match observation
-                    | +None() => ! fallback
-                    | +Some(a) => ! base .return (Option A) +Some(a)
-                    end
-                }
+              | .none A => ! translated .option .none A triv
+              | .or_else A => ! translated .option .or_else A triv
               end
             } : Thk (MonadOption (OptionT M))
           )
         end
       that
-      let instance = transformer_instance Ret ret_instance/monad that
+      let instance =
+        let (T, operations) = transformer_instance Ret ret_instance/monad in
+        pack (M as Optional : VType -> CType)
+        where
+          #monad = operations/monad, #option = operations/option end
+      that
 
-      def ! lift (M : VType -> CType) (base : Thk (Monad M)) (A : VType) (m : Thk (M A)) :
-        OptionT M A =
-          ! base .bind A (Option A) m { fn a => ! base .return (Option A) +Some(a) }
+      def ! transformer : MonadTrans OptionT =
+        fn M base =>
+          let (T, operations) = transformer_instance M base in
+          ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
       that
 
       def ! run_option_t (M : VType -> CType) (A : VType) (m : Thk (OptionT M A)) :
@@ -57,7 +97,6 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
 
       def ! run_option (A : VType) (m : Thk (Optional A)) :
         Ret (Option A) = ! run_option_t Ret A m that
-
       pack
           (= Option as Option : VType -> VType)
           (= Optional as Optional : VType -> CType)
@@ -65,7 +104,7 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
           (= MonadOption as MonadOption : (VType -> CType) -> CType)
           (= IOption as IOption : (VType -> CType) -> VType)
       where
-        = instance, = transformer_instance, = lift, = run_option, = run_option_t
+        = instance, = transformer_instance, = transformer, = run_option, = run_option_t
       end
     end
   end

@@ -10,10 +10,10 @@ let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let output : Monoid String = (#empty = "", #append = string/append) in
 let (N, n) = nondet/instance in
 let (W, w) = writer/instance String output in
-let (NW, nw) = nondet/transformer_instance W in
-let (WN, wn) = writer/transformer_instance String N n/monad output in
+let (NW, nw) = nondet/transformer_instance W w/monad in
+let (WN, wn) = writer/transformer_instance String output N n/monad in
 let (O, o) = optional/instance in
-let (NO, no) = nondet/transformer_instance O in
+let (NO, no) = nondet/transformer_instance O o/monad in
 let render_written : Thk (List Int -> String -> Ret String) = {
   fn values written =>
     do text <- ! render values;
@@ -46,14 +46,14 @@ let collect_optional : Thk (Thk (NO Int) -> Ret String) = {
   fn mark read reset =>
     let emit : Thk (String -> Int -> NW Int) = {
       fn tag digit =>
-        ! nondet/lift W Int {
+        ! nw/lift Int {
           do _ <- ! mark digit;
           ret (digit, tag)
         }
     } in
     let failed : Thk (NW Int) = {
       ! nw/monad .bind Unit Int {
-        ! nondet/lift W Unit {
+        ! nw/lift Unit {
           do _ <- ! mark 4;
           ret ((), "x")
         }
@@ -61,7 +61,7 @@ let collect_optional : Thk (Thk (NO Int) -> Ret String) = {
     } in
     let search : Thk (NW Int) = {
       ! nw/monad .bind Unit Int {
-        ! nondet/lift W Unit {
+        ! nw/lift Unit {
           do _ <- ! mark 3;
           ret ((), "p")
         }
@@ -98,7 +98,7 @@ let collect_optional : Thk (Thk (NO Int) -> Ret String) = {
     do base_failure <- ! check {
       ! collect_optional {
         ! no/nondet .choice Int {
-          ! nondet/lift O Int {
+          ! no/lift Int {
             do _ <- ! mark 1;
             ! o/option .none Int
           }
@@ -113,7 +113,7 @@ let collect_optional : Thk (Thk (NO Int) -> Ret String) = {
         ! writer/run_writer_t String N Int {
           ! n/nondet .choice (Int * String) {
             ! wn/monad .bind Unit Int { ! wn/writer .tell "discarded" } {
-              fn _ => ! writer/lift String N n/monad output Int { ! n/nondet .empty Int }
+              fn _ => ! wn/lift Int { ! n/nondet .empty Int }
             }
           } {
             ! n/nondet .choice (Int * String) {

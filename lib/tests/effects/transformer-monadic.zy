@@ -1,0 +1,60 @@
+-- The same closed client observes the chosen state/exception order through WithMonad.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /OS; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/IState; /MonadState; state) = builtin |> (@(import("../../std/effect/state.zy"))) in
+let (/IException; exception) = builtin |> (@(import("../../std/effect/exception.zy"))) in
+let combined = builtin |> (@(import("../../std/effect/state-exn.zy"))) in
+let Top = @(import("../../std/effect/top.type.zy")) in
+let Effects = WithMonad <| fn (M : VType -> CType) => IState Int M * IException String M in
+let client : Thk (pi ((M, _) : Effects) . M Int) = {
+  fn ((M, (/monad; /state; /exception; /catch)) : Effects) =>
+    (
+      @[monadic]
+      fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit))
+        (throw : Thk (forall (A : VType) . String -> Ret A))
+        (catch : Thk (forall (A : VType) . Thk (Ret A) -> Thk (String -> Ret A) -> Ret A))
+      =>
+        do _ <- ! put 8;
+        ! catch Int {
+          do _ <- ! put 9;
+          ! throw Int "stop"
+        } { fn _ => ! get }
+    ) M monad { ! state .get } { ! state .put }
+      { fn (A : VType) (_ : Thk Top) => ! exception .throw A }
+      { fn (A : VType) (_ : Thk Top) => ! catch A }
+} in
+let (SE, se) = combined/instance Int String in
+let (S, s) = state/instance Int in
+let (ES, es) = exception/transformer_instance String S s/monad in
+do restored <- ! combined/run_state_exn Int String Int (Ret Int) 5 { ! client (SE, se) }
+  { fn _ => ret 1 }
+  {
+    fn final answer =>
+      match (final, answer)
+      | (8, 8) => ret 0
+      | _ => ret 1
+      end
+  };
+do (observation, final) <- ! exception/run_exception_t String S Int {
+  ! client (
+    ES,
+    #monad = es/monad,
+    (
+      #state = (
+        {
+          comatch
+          | .get => ! es/lift Int { ! s/state .get }
+          | .put next => ! es/lift Unit { ! s/state .put next }
+          end
+        } : Thk (MonadState Int ES)
+      ),
+      (#exception = es/exception, #catch = es/catch)
+    )
+  )
+} 5;
+match (restored, observation, final)
+| (0, +Right(9), 9) => ! process/exit 0
+| _ => ! process/exit 1
+end

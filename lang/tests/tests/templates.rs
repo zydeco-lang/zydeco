@@ -12,6 +12,7 @@ fn rendered_wrappers_preserve_acceptance_and_rejection_through_formatting() {
         (include_str!("../templates/effects.zy.in"), "effect", "../../lib/std/effect"),
         (include_str!("../templates/effect-library.zy.in"), "effect", "../../lib/std/effect"),
         (include_str!("../templates/nondet.zy.in"), "std", "../../lib/std"),
+        (include_str!("../templates/transformers.zy.in"), "std", "../../lib/std"),
     ] {
         let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join(directory)

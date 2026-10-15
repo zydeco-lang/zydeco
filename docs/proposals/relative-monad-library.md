@@ -1,8 +1,10 @@
 # Extending the Relative Monad Library
 
 Status: ongoing library programme.
-The authorized Ret, Reader, Writer, and Option batch is implemented, as is ordered depth-first NonDet/NonDetT.
-Their settled designs live in the [elementary effect reference](../references/language.md#elementary-effect-instances)
+Ret, Reader, Writer, Option, State, Exception, and ordered depth-first NonDet are implemented. The six effect
+transformers share the [derived construction](../references/language.md#derived-relative-monad-transformers);
+settled effect contracts live
+in the [elementary effect reference](../references/language.md#elementary-effect-instances)
 and [search reference](../references/language.md#ordered-depth-first-nondeterminism).
 The directions below require separate implementation decisions.
 This document proposes library work, not new language semantics.
@@ -97,20 +99,11 @@ These are semantic obligations that the current dictionary types do not enforce.
 
 ### 3.2. Transformer Construction
 
-For closed, lawful relative-monad definitions, the paper derives transformers
-by algebra translation ([§5.4](https://arxiv.org/html/2502.15031v2#S5.SS4)).
-This is more than replacing the spelling `Ret` with `M`: computation-type parameters require algebra evidence,
-and the whole definition must respect the translation boundary.
-In particular, importing an effectful function from the surrounding scope is not an implicit lift.
-The repository's [closed translation boundary](../references/language.md#closed-translation-boundary) continues
-to govern implementation.
-
-For elementary carriers, direct dictionary implementations make the order of operations easy to inspect.
-A transformer should provide an explicit lift satisfying the
-[monad-morphism contract](../references/language.md#elementary-transformers).
-The implemented elementary dictionaries have been tested through translated clients as well as explicit bind.
-A general transformer typeclass remains unnecessary for the elementary batch.
-Consistent constructors and lift functions can establish the actual common interface before it is abstracted.
+The [derived transformer reference](../references/language.md#derived-relative-monad-transformers) owns the approved
+construction and shared interface, replacing the earlier recommendation to handwrite elementary transformers.
+New effects should supply a closed, lawful source implementation and make their external dependencies explicit.
+Review must justify the source operations and their interaction contracts;
+translating them does not discharge those obligations or certify arbitrary supplied dictionaries.
 
 ### 3.3. Search Observations
 
@@ -122,13 +115,16 @@ A finite-list collection API remains useful independently of a relative-monad di
 ## 4. Implemented Foundation
 
 The initial batch implements Ret, Reader/ReaderT, Writer/WriterT, and Optional/OptionT.
-Their approved carriers, operation contracts, instance packaging, and lift equations now have one home
-in the [elementary effect reference](../references/language.md#elementary-effect-instances).
+Their approved effect contracts live
+in the [elementary effect reference](../references/language.md#elementary-effect-instances);
+the [transformer reference](../references/language.md#derived-relative-monad-transformers) owns shared construction,
+packaging, and lift equations.
 The [library guide](../../lib/std/README.md#relative-monads-and-effect-examples) points
 to importable modules and executable clients.
 The [standard library organization](../references/language.md#standard-library-organization) assigns these modules
 to `effect/` and their general-purpose monoid dictionary to `algebra/`.
-StateT, ExceptionT, and the remaining directions below are outside that batch.
+StateT and ExceptionT now use the same shared derivation as the initial transformers.
+The standard StateExn instance composes StateT with Exception and retains its established recovery policy.
 
 The subsequent NonDet/NonDetT implementation provides the
 [ordered depth-first baseline](../references/language.md#ordered-depth-first-nondeterminism).
@@ -144,27 +140,18 @@ and warning abstractions, subject to the [Writer output contract](../references/
 
 ## 5. Subsequent Library Directions
 
-### 5.1. StateT and ExceptionT
+### 5.1. Stack Construction and Effect Lifting
 
-The existing concrete instances make these natural follow-ups:
+The implemented StateT and ExceptionT provide the component carriers;
+the [composition reference](../references/language.md#state-and-exception-composition) owns their interaction policy.
+What remains is convenience for constructing stacks and forwarding base operations.
+Such helpers should preserve one carrier and dictionary while making any scoped-operation policy explicit.
+For example, lifting a throwing operation does not by itself determine how a state-transforming catch restores state.
 
-```text
-StateT S M A       = S -> M (A * S)
-ExceptionT E M A   = M (Result A E)
-```
-
-The second equation is a proposed observation format, not permission
-to silently replace Exception's current private result representation.
-An implementation should reconcile that interface deliberately and update callers in the same change
-if it replaces the design.
-
-Transformer order chooses behavior.
-`S -> M (Result (A * S) E)` loses the updated state on failure, whereas `S -> M (Result A E * S)` preserves it.
-The current StateExn policy is already specified
-in the [language reference](../references/language.md#packed-effect-instances).
-Future stacking helpers should expose their chosen policy and test handlers
-against it instead of treating the two shapes as interchangeable.
-Writer/Exception and Writer/Option combinations similarly determine whether an output remains observable on failure.
+A future combined helper should eliminate repeated client wiring without concealing which stack it constructs.
+Its tests should compare it with explicit composition, including effects
+that precede failure and state visible to a handler.
+RWST remains a separate candidate below rather than an assumed optimization of every stack.
 
 ### 5.2. Continuations and Delimited Control
 
@@ -328,7 +315,9 @@ The implemented fixtures establish the following pattern for later admission tes
 | Search order | Depth-first traversal preserves order and duplicates | Reversed, deduplicated, or eagerly collected branches change answers or traces |
 | Search observation | First and bounded observers stop without forcing unused alternatives | A zero bound or an unneeded right branch must not emit its marker |
 | Transformer lift | Lift preserves return, bind, and base-effect order | A lifted computation must not execute twice or lose effects preceding `None` |
-| Translation | Explicit bind and a closed `@[monadic]` client agree | Unsupported capture is not used as an implicit effect bridge |
+| Translation | Explicit bind and a closed `@[monadic]` client agree | An opaque captured dictionary is rejected rather than implicitly lifted |
+| Generated evidence | NonDet retains the algebra introduced for its answer computation | An algebra-free target classifier is rejected |
+| Stack order | StateT/Exception and ExceptionT/State expose their respective failure observations | A handler must not silently switch between entry state and updated state |
 
 Negative classifier cases should assert the structured error and rejection before lower-stage execution.
 Runtime tests should use deterministic traces and exact results rather than only successful termination.
@@ -346,8 +335,9 @@ The implemented effects required no dependency or compiler-pass change.
    An unrestricted returned-list monad remains excluded.
 2. **Ordered search, implemented:** NonDet/NonDetT supplies the
    [depth-first baseline](../references/language.md#ordered-depth-first-nondeterminism).
-3. **Composition:** add StateT and ExceptionT, then exercise ordered combinations with Writer and Option.
-   Consider RWST after the component behavior is stable.
+3. **Derived transformers, implemented:** the common construction covers all six effect families,
+   including StateT and ExceptionT with ordered composition tests.
+   Stack-construction helpers and RWST remain open.
 4. **Protocol-based control:** settle continuation abstraction, fair search, and pruning.
    Compare inspectable and Church-encoded Free representations, then build parser experiments on explicit state,
    failure, and choice policies.
@@ -373,6 +363,6 @@ or its resource operations safe.
 The main practical contribution of this programme is a repeatable admission rule:
 choose a computation carrier, identify its observable effects, justify the relative-monad laws,
 and specify the interaction policy before standardizing operations.
-Reader, Writer, Option, and NonDet provide concrete settings in which to establish that discipline.
+Reader, Writer, Option, State, Exception, and NonDet provide concrete settings in which to establish that discipline.
 The same rule explains why search uses a protocol, why accumulating validation is separate,
 and why resource management and concurrency cannot be completed by naming a carrier alone.

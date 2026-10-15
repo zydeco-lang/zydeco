@@ -1,0 +1,91 @@
+-- Derived State and Exception satisfy the same ambient-effect and lift laws as the earlier transformers.
+param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let state = builtin |> (@(import("../../std/effect/state.zy"))) in
+let exception = builtin |> (@(import("../../std/effect/exception.zy"))) in
+let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
+let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/laws; /lift_laws) = builtin |> (@(import("effect-law-suite.zy"))) in
+let output : Monoid String = (#empty = "", #append = string/append) in
+let (W, w) = writer/instance String output in
+let (S, s) = state/instance Int in
+let (E, e) = exception/instance String in
+let (SW, sw) = state/transformer_instance Int W w/monad in
+let (EW, ew) = exception/transformer_instance String W w/monad in
+let render_state : Thk (Int -> Int -> Ret String) = {
+  fn answer final =>
+    do left <- ! numeric/int/to_string answer;
+    do right <- ! numeric/int/to_string final;
+    do prefix <- ! string/append left ":";
+    ! string/append prefix right
+} in
+let observe_state : Thk (Thk (S Int) -> Ret String) = {
+  fn m =>
+    ! state/run_state Int Int (Ret String) 5 m {
+      fn final answer => ! render_state answer final
+    }
+} in
+let observe_exception : Thk (Thk (E Int) -> Ret String) = {
+  fn m =>
+    ! exception/handle_exception String Int (Ret String) m
+      { fn error => ! string/append "error:" error }
+      { fn answer => ! numeric/int/to_string answer }
+} in
+let observe_state_writer : Thk (Thk (SW Int) -> Ret String) = {
+  fn m =>
+    do ((answer, final), written) <- ! state/run_state_t Int W Int 5 m;
+    do text <- ! render_state answer final;
+    ! string/append text written
+} in
+let observe_exception_writer : Thk (Thk (EW Int) -> Ret String) = {
+  fn m =>
+    do (observation, written) <- ! exception/run_exception_t String W Int m;
+    do text <-
+      match observation
+      | +Left(error) => ! string/append "error:" error
+      | +Right(answer) => ! numeric/int/to_string answer
+      end;
+    ! string/append text written
+} in
+let state_next : Thk (Int -> S Int) = {
+  fn answer =>
+    do next <- ! numeric/int/add answer 2;
+    ! s/monad .bind Unit Int { ! s/state .put next } { fn _ => ! s/state .get }
+} in
+let state_writer_next : Thk (Int -> SW Int) = {
+  fn answer =>
+    do next <- ! numeric/int/add answer 2;
+    ! sw/monad .bind Unit Int { ! sw/state .put next } {
+      fn _ => ! sw/lift Int { ret (next, "f") }
+    }
+} in
+let writer_next : Thk (Int -> W Int) = {
+  fn answer =>
+    do next <- ! numeric/int/add answer 2;
+    ret (next, "f")
+} in
+! with_trace {
+  fn mark read reset =>
+    do concrete_state <- ! laws S s/monad { ! s/state .get }
+      state_next state_next observe_state mark read reset;
+    do concrete_exception <- ! laws E e/monad { ! e/monad .return Int 1 }
+      { fn answer => ! e/monad .return Int answer }
+      { fn _ => ! e/exception .throw Int "stop" }
+      observe_exception mark read reset;
+    do transformed_state <- ! laws SW sw/monad { ! sw/state .get }
+      state_writer_next state_writer_next observe_state_writer mark read reset;
+    do transformed_exception <- ! laws EW ew/monad { ! ew/lift Int { ret (1, "m") } }
+      { fn answer => ! ew/lift Int { ! writer_next answer } }
+      { fn _ => ! ew/exception .throw Int "stop" }
+      observe_exception_writer mark read reset;
+    do state_lift <- ! lift_laws W SW w/monad sw/monad { fn m => ! sw/lift Int m }
+      { ret (1, "m") } writer_next observe_state_writer mark read reset;
+    do exception_lift <- ! lift_laws W EW w/monad ew/monad { fn m => ! ew/lift Int m }
+      { ret (1, "m") } writer_next observe_exception_writer mark read reset;
+    match (concrete_state, concrete_exception, transformed_state, transformed_exception,
+      state_lift, exception_lift)
+    | (0, 0, 0, 0, 0, 0) => ret 0
+    | _ => ret 1
+    end
+}

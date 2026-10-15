@@ -1,63 +1,97 @@
--- Ordered output. The supplied monoid must have total, observationally pure append.
+-- Ordered output. Append remains total and observationally pure across translation.
 val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad) = builtin |> (@(import("monad.zy"))) in
+    let (/Monad; /Algebra) = builtin |> (@(import("monad.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
+      let Top = @(import("top.type.zy")) that
+      let triv : Thk Top = {
+        comatch
+        end
+      } that
       let Monoid = @(import("../algebra/monoid.type.zy")) that
       let MonadWriter = @(import("writer.type.zy")) that
       let WriterT (W : VType) (M : VType -> CType) (A : VType) = M (A * W) that
       let Writer (W : VType) = WriterT W Ret that
       let IWriter (W : VType) (M : VType -> CType) = (#writer :: Thk (MonadWriter W M)) that
 
-      def ! append_output (W : VType) (M : VType -> CType) (base : Thk (Monad M))
-        (output : Monoid W) (A : VType) (first : W) (m : Thk (M (A * W)))
-      : M (A * W) =
-          ! base .bind (A * W) (A * W) m {
-            fn (a, second) =>
-              do combined <- ! output/append first second;
-              ! base .return (A * W) (a, combined)
-          }
-      that
-
-      let val transformer_instance (W : VType) (M : VType -> CType)
-        (base : Thk (Monad M)) (output : Monoid W)
+      let val transformer_instance (W : VType) (output : Monoid W)
+        (M : VType -> CType) (base : Thk (Monad M))
       =
+        let translated = {
+          (
+            @[monadic] begin
+              let VType = @(intrinsic(vtype)) in
+              let CType = @(intrinsic(ctype)) in
+              let Thk = @(intrinsic(thk)) in
+              let Ret = @(intrinsic(ret)) in
+              let Unit = @(intrinsic(unit)) in
+              let Transformer = @(import("transformer-inner.type.zy")) in
+              let with_lift = { @(import("transformer-source.zy")) } in
+              let Writer (W : VType) (A : VType) = Ret (A * W) in
+              let MonadWriter = @(import("writer.type.zy")) in
+              let Source (W : VType) =
+                codata
+                | .core : Transformer Ret (Writer W)
+                | .writer : MonadWriter W (Writer W)
+                end
+              in
+              fn (W : VType) (empty : W) (append : Thk (W -> W -> Ret W)) =>
+                (
+                  comatch
+                  | .core => ! with_lift (Writer W) {
+                    comatch
+                    | .return A a => ret (a, empty)
+                    | .bind A B m f =>
+                      do (a, first) <- ! m;
+                      do (b, second) <- ! f a;
+                      do combined <- ! append first second;
+                      ret (b, combined)
+                    end
+                  }
+                  | .writer =>
+                    comatch
+                    | .tell written => ret ((), written)
+                    | .listen A m =>
+                      do (a, written) <- ! m;
+                      ret ((a, written), written)
+                    end
+                  end : Source W
+                )
+            end
+          ) M base W triv output/empty {
+            fn first second =>
+              do combined <- ! output/append first second;
+              ! base .return W combined
+          }
+        } in
+        let core = { ! from_monadic M (WriterT W M) { ! translated .core } } in
         pack (T as WriterT W M : VType -> CType)
         where
-          #monad = (
-            {
-              comatch
-              | .return A a => ! base .return (A * W) (a, output/empty)
-              | .bind A B m f =>
-                ! base .bind (A * W) (B * W) m {
-                  fn (a, first) =>
-                    ! append_output W M base output B first { ! f a }
-                }
-              end
-            } : Thk (Monad (WriterT W M))
-          ),
+          #monad = { ! core .monad },
+          #lift = { ! core .lift },
           #writer = (
             {
               comatch
-              | .tell written => ! base .return (Unit * W) ((), written)
-              | .listen A m =>
-                ! base .bind (A * W) ((A * W) * W) m {
-                  fn (a, written) => ! base .return ((A * W) * W) ((a, written), written)
-                }
+              | .tell => ! translated .writer .tell
+              | .listen A => ! translated .writer .listen A triv
               end
             } : Thk (MonadWriter W (WriterT W M))
           )
         end
       that
       let val instance (W : VType) (output : Monoid W) =
-        transformer_instance W Ret ret_instance/monad output
+        let (T, operations) = transformer_instance W output Ret ret_instance/monad in
+        pack (M as Writer W : VType -> CType)
+        where
+          #monad = operations/monad, #writer = operations/writer end
       that
 
-      def ! lift (W : VType) (M : VType -> CType) (base : Thk (Monad M))
-        (output : Monoid W) (A : VType) (m : Thk (M A))
-      : WriterT W M A =
-          ! base .bind A (A * W) m { fn a => ! base .return (A * W) (a, output/empty) }
+      def ! transformer (W : VType) (output : Monoid W) : MonadTrans (WriterT W) =
+        fn M base =>
+          let (T, operations) = transformer_instance W output M base in
+          ! from_instance M T (#monad = operations/monad, #lift = operations/lift)
       that
 
       def ! run_writer_t (W : VType) (M : VType -> CType) (A : VType) (m : Thk (WriterT W M A)) :
@@ -65,7 +99,6 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
 
       def ! run_writer (W : VType) (A : VType) (m : Thk (Writer W A)) :
         Ret (A * W) = ! run_writer_t W Ret A m that
-
       pack
           (= Writer as Writer : VType -> VType -> CType)
           (= WriterT as WriterT : VType -> (VType -> CType) -> VType -> CType)
@@ -73,7 +106,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
           (= MonadWriter as MonadWriter : VType -> (VType -> CType) -> CType)
           (= IWriter as IWriter : VType -> (VType -> CType) -> VType)
       where
-        = instance, = transformer_instance, = lift, = run_writer, = run_writer_t
+        = instance, = transformer_instance, = transformer, = run_writer, = run_writer_t
       end
     end
   end

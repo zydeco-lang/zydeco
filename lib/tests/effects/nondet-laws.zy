@@ -13,8 +13,8 @@ let (N, n) = nondet/instance in
 let (R, r) = reader/instance Int in
 let output : Monoid String = (#empty = "", #append = string/append) in
 let (W, w) = writer/instance String output in
-let (NR, nr) = nondet/transformer_instance R in
-let (NW, nw) = nondet/transformer_instance W in
+let (NR, nr) = nondet/transformer_instance R r/monad in
+let (NW, nw) = nondet/transformer_instance W w/monad in
 let observe : Thk (Thk (N Int) -> Ret String) = {
   fn m =>
     do values <- ! nondet/observe_all Int m;
@@ -45,12 +45,12 @@ let observe_writer : Thk (Thk (NW Int) -> Ret String) = {
     do over_reader <- ! branch_laws NR nr/monad nr/nondet observe_reader mark read reset;
     do over_writer <- ! branch_laws NW nw/monad nw/nondet observe_writer mark read reset;
     do reader_lift <- ! lift_laws R NR r/monad nr/monad
-      { fn m => ! nondet/lift R Int m }
+      { fn m => ! nr/lift Int m }
       { ! r/reader .ask }
       { fn value environment => ! numeric/int/add value environment }
       observe_reader mark read reset;
     do writer_lift <- ! lift_laws W NW w/monad nw/monad
-      { fn m => ! nondet/lift W Int m }
+      { fn m => ! nw/lift Int m }
       { ret (1, "a") }
       { fn value => ret (value, "b") }
       observe_writer mark read reset;

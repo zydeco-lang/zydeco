@@ -1,0 +1,11 @@
+begin
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Monad = @(import("monad.type.zy")) in
+  let Transformer = @(import("transformer-inner.type.zy")) in
+  let MonadTrans (F : (VType -> CType) -> VType -> CType) =
+    forall (M : VType -> CType) . Thk (Monad M) -> Transformer M (F M)
+  in
+  MonadTrans
+end

@@ -9,10 +9,11 @@ let (/INonDet; nondet) = (builtin |> (@(import("../../std/effect/nondet.zy")))) 
 let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
 let (/check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
+let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
 let (N, n) = nondet/instance in
 let output : Monoid String = (#empty = "", #append = string/append) in
 let (W, w) = writer/instance String output in
-let (NW, nw) = nondet/transformer_instance W in
+let (NW, nw) = nondet/transformer_instance W w/monad in
 let client : Thk (pi ((M, _) : WithMonad INonDet) . Thk (Int -> M Unit) -> M (Int * Int)) = {
   fn ((M, (/monad; /nondet)) : WithMonad INonDet) record =>
     (
@@ -71,11 +72,11 @@ let render_pairs : Thk (List (Int * Int) -> Ret String) = {
 ! with_trace {
   fn mark read reset =>
     let record : Thk (Int -> N Unit) = {
-      fn digit => ! nondet/lift Ret Unit { ! mark digit }
+      fn digit => ! nondet/transformer Ret ret_instance/monad .lift Unit { ! mark digit }
     } in
     let record_writer : Thk (Int -> NW Unit) = {
       fn digit =>
-        ! nondet/lift W Unit {
+        ! nw/lift Unit {
           do _ <- ! mark digit;
           do text <- ! numeric/int/to_string digit;
           ret ((), text)
@@ -98,7 +99,9 @@ let render_pairs : Thk (List (Int * Int) -> Ret String) = {
     } "first" 1 read reset;
     do transformed <- ! check {
       do (values, written) <- ! writer/run_writer String (List (Int * Int)) {
-        ! nondet/observe_all_t W w/monad (Int * Int) { ! client (NW, nw) record_writer }
+        ! nondet/observe_all_t W w/monad (Int * Int) {
+          ! client (NW, #monad = nw/monad, #nondet = nw/nondet) record_writer
+        }
       };
       do rendered <- ! render_pairs values;
       ! string/append rendered written
