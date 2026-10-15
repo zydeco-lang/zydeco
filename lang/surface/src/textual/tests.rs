@@ -1150,6 +1150,10 @@ fn parses_pack_introduction_with_a_manifest_telescope() {
         panic!("expected the payload to retain its comma sequence")
     };
     assert_eq!(components.len(), 2);
+    assert_eq!(
+        &source[parser.spans[&EntityId::Term(*body)].range()],
+        "where (0 : X), 'a' : Y, end"
+    );
 
     assert_eq!(kind.plain(), "VType");
     assert_eq!(parser.arena.defs[inner].plain(), "Y");

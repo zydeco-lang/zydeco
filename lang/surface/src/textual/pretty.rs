@@ -2049,14 +2049,15 @@ impl<'arena> PrettyFormatter<'arena> {
         };
         let components =
             components.iter().map(|component| self.annotated_term_fragment(*component)).collect();
-        head.append(RcDoc::line()).nest(self.indent()).append(self.delimited_with_spacing(
-            Some(term.into()),
+        let payload = self.delimited_with_spacing(
+            Some((*body).into()),
             "where",
             components,
             ",",
             "end",
             DelimiterSpacing::Spaced,
-        ))
+        );
+        head.append(RcDoc::line()).append(self.with_leading_comments((*body).into(), payload))
     }
 
     fn existential_parameter(&self, parameter: &ExistentialParameter) -> LayoutFragment<'arena> {
@@ -4094,6 +4095,110 @@ mod tests {
             assert_eq!(formatted, reparsed.render_with_options(options));
             assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
         });
+    }
+
+    #[test]
+    fn pack_parameters_nest_once_at_preserved_boundaries() {
+        let cases = [
+            (
+                concat!(
+                    "pack\n",
+                    "    -- Re-export the constructors.\n",
+                    "    (= Monad as Monad)\n",
+                    "\n",
+                    "    (= Algebra as Algebra)\n",
+                    "    (= List : VType -> VType) is List\n",
+                    "-- Package operations.\n",
+                    "where\n",
+                    "  ()\n",
+                    "end\n",
+                ),
+                concat!(
+                    "pack\n",
+                    "  -- Re-export the constructors.\n",
+                    "  (= Monad as Monad)\n",
+                    "\n",
+                    "  (= Algebra as Algebra)\n",
+                    "  (= List : VType -> VType) is List\n",
+                    "-- Package operations.\n",
+                    "where\n",
+                    "  ()\n",
+                    "end\n",
+                ),
+            ),
+            (
+                concat!(
+                    "begin\n",
+                    "  pack\n",
+                    "      (= Monad as Monad)\n",
+                    "      (= Algebra as Algebra)\n",
+                    "  where\n",
+                    "    ()\n",
+                    "  end\n",
+                    "end\n",
+                ),
+                concat!(
+                    "begin\n",
+                    "  pack\n",
+                    "    (= Monad as Monad)\n",
+                    "    (= Algebra as Algebra)\n",
+                    "  where\n",
+                    "    ()\n",
+                    "  end\n",
+                    "end\n",
+                ),
+            ),
+            (
+                "pack (= Monad as Monad)\n    (= Algebra as Algebra)\nwhere () end\n",
+                "pack (= Monad as Monad)\n  (= Algebra as Algebra)\nwhere () end\n",
+            ),
+        ];
+        for (source, expected) in cases {
+            let parsed = ParsedSource::new(source);
+            let formatted = parsed.render(LayoutIntentions::Preserve);
+            assert_eq!(formatted, expected, "source: {source}");
+            assert_eq!(RetainedComments::collect(source), RetainedComments::collect(&formatted));
+            let reparsed = ParsedSource::new(&formatted);
+            assert_eq!(formatted, reparsed.render(LayoutIntentions::Preserve));
+            assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+        }
+    }
+
+    #[test]
+    fn pack_parameters_nest_once_when_expanding_for_width() {
+        for indent in [1, 2, 4] {
+            for layout in [
+                LayoutIntentions::Preserve,
+                LayoutIntentions::BlankLinesOnly,
+                LayoutIntentions::Ignore,
+            ] {
+                let options = PrettyOptions::default()
+                    .with_indent(IndentWidth::new(indent).unwrap())
+                    .with_line_width(22)
+                    .with_layout_intentions(layout);
+                let step = " ".repeat(indent);
+                for (source, expected) in [
+                    (
+                        "pack (A as Int) (B as Char) where 1, 'a' end",
+                        format!("pack\n{step}(A as Int)\n{step}(B as Char)\nwhere 1, 'a' end\n"),
+                    ),
+                    (
+                        "begin pack (A as Int) (B as Char) where 1, 'a' end end",
+                        format!(
+                            "begin\n{step}pack\n{step}{step}(A as Int)\n\
+                             {step}{step}(B as Char)\n{step}where 1, 'a' end\nend\n"
+                        ),
+                    ),
+                ] {
+                    let parsed = ParsedSource::new(source);
+                    let formatted = parsed.render_with_options(options);
+                    assert_eq!(formatted, expected, "indent: {indent}, layout: {layout:?}");
+                    let reparsed = ParsedSource::new(&formatted);
+                    assert_eq!(formatted, reparsed.render_with_options(options));
+                    assert_eq!(parsed.desugared_shape(), reparsed.desugared_shape());
+                }
+            }
+        }
     }
 
     #[test]

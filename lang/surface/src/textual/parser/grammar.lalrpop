@@ -459,10 +459,11 @@ Term: ParsedNode<Term> = {
     // comatch
     "comatch" <arms:(<CoMatcher>)*> "end" => ParsedNode::Syntax(CoMatchParam {<>}.into()),
     // package introduction; the `where` body is one nonempty comma sequence,
-    // kept as a `Paren` so payload components share tuple desugaring.
+    // kept as a `Paren` so payload components share tuple desugaring. Its
+    // span includes `where` and `end`, which own the payload layout boundaries.
     // Abstract parameters are rejected during desugaring with a pointed error.
-    "pack" <parameters:PackParameter+> "where" <l:@L> <first:TermAnnId>
-        <rest:("," <TermAnnId>)*> <_trailing:","?> <r:@R> "end" => {
+    "pack" <parameters:PackParameter+> <l:@L> "where" <first:TermAnnId>
+        <rest:("," <TermAnnId>)*> <_trailing:","?> "end" <r:@R> => {
         let mut components = Vec::new();
         components.push(first);
         components.extend(rest);
