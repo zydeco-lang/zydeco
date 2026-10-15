@@ -586,7 +586,7 @@ begin
   that
 
   def char_eq : Thunk (Char -> Char -> Ret Bool) = {
-    fn (c : Char) (c' : Char) =>
+    fn c c' =>
       do c <- ! char/to_string c;
       do c' <- ! char/to_string c';
       ! str_eq c c'

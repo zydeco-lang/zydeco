@@ -34,12 +34,7 @@ begin
       -> S
       -> Ret S
   ) = {
-    fn (S : VType)
-      (A : VType)
-      lens
-      function
-      source
-    =>
+    fn S A lens function source =>
       ! lens
         Identity
         {
@@ -56,11 +51,7 @@ begin
       -> S
       -> Ret A
   ) = {
-    fn (S : VType)
-      (A : VType)
-      lens
-      source
-    =>
+    fn S A lens source =>
       ! lens
         (Const A)
         {

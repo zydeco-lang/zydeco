@@ -89,7 +89,7 @@ begin
 
   --| Removing the need of trivial algebra for generated monad transformers
   def ! detriv-mt (T : (VType -> CType) -> VType -> CType) (mt : Thk (MonadTrans' T)) : MonadTrans T
-  = fn (M : VType -> CType) (mo : Thk (Monad M)) =>
+  = fn M mo =>
     comatch
     | .monad => ! detriv-mo (T M) { ! mt M mo .monad }
     | .lift A => ! mt M mo .lift A triv
@@ -175,7 +175,7 @@ begin
   def halt : Thk OS = { ! process/exit 0 } that
 
   def panic : Thk (String -> OS) = {
-    fn (msg : String) =>
+    fn msg =>
       -- do msg <- ! str_append "Program panicked with message: " msg;
       ! stdio/write_line msg { ! process/exit 1 }
   } that

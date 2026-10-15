@@ -10,8 +10,8 @@ begin
 
   def ! choose (which : Int) : Ret Entry =
     match which
-    | 0 => ret ((Int, 0, { fn (value : Int) => ret value }) : Entry)
-    | _ => ret ((Unit, (), { fn (_ : Unit) => ret 1 }) : Entry)
+    | 0 => ret ((Int, 0, { fn value => ret value }) : Entry)
+    | _ => ret ((Unit, (), { fn _ => ret 1 }) : Entry)
     end
   that
   def ! consume (entry : Entry) : Ret Int =

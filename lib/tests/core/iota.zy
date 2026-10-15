@@ -32,7 +32,7 @@ begin
     end
   that
 
-  def fix iota : Int -> F (LList' Int) = fn (i : Int) =>
+  def fix iota : Int -> F (LList' Int) = fn i =>
     do i+1 <- ! int/add i 1;
     ret +Cons(
       i,
@@ -50,7 +50,7 @@ begin
   def ! loopy = ! llist_foldr
     { ! iota 0 }
     {
-      fn (x : Int) (b : U OS) =>
+      fn x b =>
         do next? <- ! int_lt x 10;
         ! write_int_line x b
     }

@@ -25,11 +25,7 @@ begin
   def branch : Thk (
     forall (B : CType) . Bool -> Thk B -> Thk B -> B
   ) = {
-    fn (B : CType)
-      condition
-      when_true
-      when_false
-    =>
+    fn B condition when_true when_false =>
       match condition
       | +True() => ! when_true
       | +False() => ! when_false

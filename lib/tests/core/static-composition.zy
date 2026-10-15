@@ -3,7 +3,7 @@ begin
 
   let Transform = val pi (_ : Int) . Int that
   let val compose (first : Transform) (second : Transform) : Transform =
-    val (value : Int) => second (first value)
+    val value => second (first value)
   that
   let val keep (A : VType) (value : A) : A = value that
   let Stored =

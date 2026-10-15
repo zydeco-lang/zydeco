@@ -12,17 +12,17 @@ begin
   let Packaged = pi ((X, _) : Box) . Methods X that
 
   def curried : Thk Curried = {
-    fn (X : VType) (value : X) =>
+    fn X value =>
       comatch
       | .get => ret value
       | .replace replacement => ret replacement
       end
   } that
   def packaged : Thk Packaged = {
-    fn ((X, value) : Box) => ! curried X value
+    fn (X, value) => ! curried X value
   } that
   def restored : Thk Curried = {
-    fn (X : VType) (value : X) => ! packaged ((X, value) : Box)
+    fn X value => ! packaged ((X, value) : Box)
   } that
 
   do selected <- ret packaged;

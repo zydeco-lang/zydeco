@@ -32,7 +32,7 @@ let evaluate = {
     end
 } in
 let under_state : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
-  fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
+  fn (M, (/monad; /state)) =>
     ! evaluate M monad {
       fn x =>
         ! monad .bind Int Int { ! state .get } {
@@ -49,7 +49,7 @@ let under_state : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
     }
 } in
 let under_exception : Thk (pi ((M, _) : WithMonad (IException Unit)) . M Int) = {
-  fn ((M, (/monad; /exception)) : WithMonad (IException Unit)) =>
+  fn (M, (/monad; /exception)) =>
     ! evaluate M monad {
       fn x =>
         ! numeric/int/eq (M Int) x 1

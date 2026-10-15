@@ -8,7 +8,7 @@ let (/IReader; reader) = builtin |> (@(import("../../std/effect/reader.zy"))) in
 let (/Monoid; /IWriter; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
 let (/IOption; optional) = builtin |> (@(import("../../std/effect/option.zy"))) in
 let reader_client : Thk (pi ((M, _) : WithMonad (IReader Int)) . M (Int * Int * Int)) = {
-  fn ((M, (/monad; /reader)) : WithMonad (IReader Int)) =>
+  fn (M, (/monad; /reader)) =>
     (
       @[monadic]
       fn (ask : Thk (Ret Int)) (local : Thk (forall (A : VType) . Int -> Thk (Ret A) -> Ret A)) =>
@@ -21,7 +21,7 @@ let reader_client : Thk (pi ((M, _) : WithMonad (IReader Int)) . M (Int * Int * 
     }
 } in
 let writer_client : Thk (pi ((M, _) : WithMonad (IWriter String)) . M (Int * String)) = {
-  fn ((M, (/monad; /writer)) : WithMonad (IWriter String)) =>
+  fn (M, (/monad; /writer)) =>
     (
       @[monadic]
       fn (tell : Thk (String -> Ret Unit))
@@ -37,7 +37,7 @@ let writer_client : Thk (pi ((M, _) : WithMonad (IWriter String)) . M (Int * Str
     }
 } in
 let option_client : Thk (pi ((M, _) : WithMonad IOption) . M Int) = {
-  fn ((M, (/monad; /option)) : WithMonad IOption) =>
+  fn (M, (/monad; /option)) =>
     (
       @[monadic]
       fn (none : Thk (forall (A : VType) . Ret A))

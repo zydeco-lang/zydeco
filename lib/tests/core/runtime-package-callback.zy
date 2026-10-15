@@ -10,13 +10,13 @@ begin
 
   def boxed : Thk HiddenByPackage = {
     comatch
-    | .open (R : CType) (use : Thk (pi ((X, _, _) : Entry) . R)) =>
-      ! use ((Int, 0, { fn (value : Int) => ret value }) : Entry)
+    | .open R use =>
+      ! use ((Int, 0, { fn value => ret value }) : Entry)
     end
   } that
   do selected <- ret boxed;
   do status <- ! selected .open (Ret Int) {
-    fn ((X, value, read) : Entry) => ! read value
+    fn (X, value, read) => ! read value
   };
   ! process/exit status
 end

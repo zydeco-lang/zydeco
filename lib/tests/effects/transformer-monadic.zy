@@ -9,7 +9,7 @@ let combined = builtin |> (@(import("../../std/effect/state-exn.zy"))) in
 let Top = @(import("../../std/effect/top.type.zy")) in
 let Effects = WithMonad <| fn (M : VType -> CType) => IState Int M * IException String M in
 let client : Thk (pi ((M, _) : Effects) . M Int) = {
-  fn ((M, (/monad; /state; /exception; /catch)) : Effects) =>
+  fn (M, (/monad; /state; /exception; /catch)) =>
     (
       @[monadic]
       fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit))

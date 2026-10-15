@@ -15,7 +15,7 @@ begin
   let View = val pi (_ : Tagged) . Tagged that
   let val keep (value : Tagged) : Tagged = value that
   let val compose (first : View) (second : View) : View =
-    val (value : Tagged) => second (first value)
+    val value => second (first value)
   that
   let inspect = compose keep keep that
 

@@ -4,7 +4,7 @@ begin
   @(import("../builtin.zy")) that
   let Fault = @(import("fault.zy")) in
   let error : Thk (forall (R : CType) . Thk (Fault -> R) -> Int -> R) = {
-    fn (R : CType) (no : Thk (Fault -> R)) (code : Int) =>
+    fn R no code =>
       match code
       | 0 => ! no +InvalidLayout()
       | 1 => ! no +AllocationFailed()
@@ -14,16 +14,16 @@ begin
   let allocate : Thk (
     forall (R : CType) . Int -> Int -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
   ) = {
-    fn (R : CType) size alignment (no : Thk (Fault -> R)) yes =>
+    fn R size alignment no yes =>
       ! memory/allocate R size alignment { ! error R no } yes
   } in
   let free : Thk (forall (R : CType) . Addr -> Int -> Int -> Thk (Fault -> R) -> Thk R -> R) = {
-    fn (R : CType) address size alignment (no : Thk (Fault -> R)) done =>
+    fn R address size alignment no done =>
       ! memory/free R address size alignment { ! error R no } done
   } in
   let retain : Thk (forall (R : CType) . Addr -> Int -> Int -> Thk (Fault -> R) -> Thk R -> R) =
     {
-      fn (R : CType) address size alignment (no : Thk (Fault -> R)) done =>
+      fn R address size alignment no done =>
         ! memory/retain R address size alignment { ! error R no } done
     }
   in

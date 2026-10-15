@@ -43,7 +43,7 @@ let probe : Thk (
     }
 } in
 let lifted_client : Thk (pi ((T, _) : WithMonad (ITransformer W)) . T Int) = {
-  fn ((T, (/monad; /lift)) : WithMonad (ITransformer W)) =>
+  fn (T, (/monad; /lift)) =>
     ! monad .bind Int Int { ! lift Int { ret (4, "l") } } {
       fn answer => ! monad .return Int answer
     }

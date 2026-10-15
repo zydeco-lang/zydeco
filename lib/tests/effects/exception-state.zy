@@ -21,7 +21,7 @@ let (/IException; /instance = exception_instance; /raise; /catch; /handle_except
   builtin |> (@(import("../../std/effect/exception.zy")))
 in
 let step : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
-  fn ((M, (/monad; /state)) : WithMonad (IState Int)) =>
+  fn (M, (/monad; /state)) =>
     (
       @[monadic] fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit))
         (add : Thk (Int -> Int -> Ret Int))
@@ -37,7 +37,7 @@ let step : Thk (pi ((M, _) : WithMonad (IState Int)) . M Int) = {
     }
 } in
 let fail : Thk (pi ((M, _) : WithMonad (IException String)) . String -> M Int) = {
-  fn ((M, (/monad; ops)) : WithMonad (IException String)) =>
+  fn (M, (/monad; ops)) =>
     (
       @[monadic] fn (raise : Thk (forall (A : VType) . String -> Ret A)) (msg : String) =>
         do n <- ! raise Int msg;

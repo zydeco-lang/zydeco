@@ -19,9 +19,7 @@ begin
          Thk (Thk B -> B)
       -> Ret (Thk B)
   ) = {
-    fn (B : CType)
-      (function : Thk (Thk B -> B))
-    =>
+    fn B function =>
       let self_application : Thk (Y B) = {
         comatch
         | .apply recursive => ! function { ! recursive .apply recursive }

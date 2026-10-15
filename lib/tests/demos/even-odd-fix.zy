@@ -19,7 +19,7 @@ begin
       | +S(x) => ! odd x
       end
     in
-    fn (x : Nat) =>
+    fn x =>
       match x
       | +Z() => ret +False()
       | +S(x) => ! even x

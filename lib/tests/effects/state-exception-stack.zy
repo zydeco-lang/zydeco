@@ -20,7 +20,7 @@ let (/IStateExn; /instance; /run_state_exn) =
   builtin |> (@(import("../../std/effect/state-exn.zy")))
 in
 let p : Thk (pi ((M, _) : IStateExn Int String) . M Int) = {
-  fn ((M, (/monad; /state; /exception; /catch = recover)) : IStateExn Int String) =>
+  fn (M, (/monad; /state; /exception; /catch = recover)) =>
     (
       @[monadic] fn (get : Thk (Ret Int)) (put : Thk (Int -> Ret Unit))
         (raise : Thk (forall (A : VType) . String -> Ret A))

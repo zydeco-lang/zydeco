@@ -43,9 +43,7 @@ begin
          Thk (Ret A)
       -> Ret (Thk (Ret A))
   ) = {
-    fn (A : VType)
-      (suspended : Thk (Ret A))
-    =>
+    fn A suspended =>
       do cache <- ! references/allocate (Option A) +None();
       ret {
         do cached <- ! references/read (Option A) cache;
