@@ -24,7 +24,7 @@ val
       let val instance (S : VType) (E : VType) =
         let (X, exception) = exception_library/instance E in
         let (T, state) = state_library/transformer_instance S X exception/monad in
-        pack (M as StateExn S E : VType -> CType)
+        pack (M as StateExn S E)
         where
           #monad = state/monad,
           (

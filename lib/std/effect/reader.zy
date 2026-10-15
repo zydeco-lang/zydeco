@@ -55,7 +55,7 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
           ) M base R triv
         } in
         let core = { ! from_monadic M (ReaderT R M) { ! translated .core } } in
-        pack (T as ReaderT R M : VType -> CType)
+        pack (T as ReaderT R M)
         where
           #monad = { ! core .monad },
           #lift = { ! core .lift },
@@ -71,7 +71,7 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
       that
       let val instance (R : VType) =
         let (T, operations) = transformer_instance R Ret ret_instance/monad in
-        pack (M as Reader R : VType -> CType)
+        pack (M as Reader R)
         where
           #monad = operations/monad, #reader = operations/reader end
       that

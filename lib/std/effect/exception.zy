@@ -81,7 +81,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
           ) M base E triv
         } in
         let core = { ! from_monadic M (ExceptionT E M) { ! translated .core } } in
-        pack (T as ExceptionT E M : VType -> CType)
+        pack (T as ExceptionT E M)
         where
           #monad = { ! core .monad },
           #lift = { ! core .lift },
@@ -99,7 +99,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       that
       let val instance (E : VType) =
         let (T, operations) = transformer_instance E Ret ret_instance/monad in
-        pack (M as Exception E : VType -> CType)
+        pack (M as Exception E)
         where
           #monad = operations/monad,
           (#exception = operations/exception, #catch = operations/catch)

@@ -3,7 +3,7 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
   begin
     let (/Monad) = builtin |> (@(import("monad.zy"))) in
     let instance =
-      pack (M as Ret : VType -> CType)
+      pack (M as Ret)
       where
         #monad = (
           {

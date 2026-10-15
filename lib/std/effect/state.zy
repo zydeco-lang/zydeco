@@ -56,7 +56,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
           ) M base S triv
         } in
         let core = { ! from_monadic M (StateT S M) { ! translated .core } } in
-        pack (T as StateT S M : VType -> CType)
+        pack (T as StateT S M)
         where
           #monad = { ! core .monad },
           #lift = { ! core .lift },
@@ -72,7 +72,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       that
       let val instance (S : VType) =
         let (T, operations) = transformer_instance S Ret ret_instance/monad in
-        pack (M as State S : VType -> CType)
+        pack (M as State S)
         where
           #monad = operations/monad, #state = operations/state end
       that

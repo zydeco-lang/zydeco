@@ -67,7 +67,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
           }
         } in
         let core = { ! from_monadic M (WriterT W M) { ! translated .core } } in
-        pack (T as WriterT W M : VType -> CType)
+        pack (T as WriterT W M)
         where
           #monad = { ! core .monad },
           #lift = { ! core .lift },
@@ -83,7 +83,7 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
       that
       let val instance (W : VType) (output : Monoid W) =
         let (T, operations) = transformer_instance W output Ret ret_instance/monad in
-        pack (M as Writer W : VType -> CType)
+        pack (M as Writer W)
         where
           #monad = operations/monad, #writer = operations/writer end
       that

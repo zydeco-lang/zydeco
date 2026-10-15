@@ -63,7 +63,7 @@ begin
         ) M base
       } in
       let core = { ! from_monadic M (NonDetT M) { ! translated .core } } in
-      pack (T as NonDetT M : VType -> CType)
+      pack (T as NonDetT M)
       where
         #monad = { ! core .monad },
         #lift = { ! core .lift },
@@ -79,7 +79,7 @@ begin
     that
     let instance =
       let (T, operations) = transformer_instance Ret ret_instance/monad in
-      pack (M as NonDet : VType -> CType)
+      pack (M as NonDet)
       where
         #monad = operations/monad, #nondet = operations/nondet end
     that
