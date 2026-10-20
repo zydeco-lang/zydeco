@@ -1,3 +1,6 @@
+-- stage: run
+-- backends: all
+-- input: "123\n"
 begin
   let make_std = @(import("../../../std/std.zy")) that
   param (/Thk; /OS; /Int; /String; builtin) : @(import("../../../std/builtin.zy")) that

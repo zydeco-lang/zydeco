@@ -1,3 +1,5 @@
+-- stage: run
+-- backends: all
 @[package(test(of(/std)))]
 begin
   let make_std = @(import(/std)) that
