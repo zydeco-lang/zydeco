@@ -3391,6 +3391,12 @@ Diagnostic spellings are parsed beside their stable compiler codes and round-tri
 Fixtures also enter the parser/formatter corpus,
 so standalone trials need neither manual registration nor a Rust recompilation after source edits.
 
+The [standard-library directive runner](../../lang/tests/tests/std_directives.rs) applies the same leading block
+to whole-program fixtures.
+A file enters that runner when it declares `stage: run`; `backends`, `args`, `input`,
+`output`, and `setup` describe its execution.
+Inline case fixtures reject those execution directives.
+
 Topic paths name the regression; directives name its phase and expected outcome.
 This avoids renaming tests when their stage changes and avoids coupling semantic assertions to rendered error prose.
 Using the trial runner directly keeps naming and directive validation explicit.
@@ -3420,8 +3426,9 @@ Raw `.zy.in` files are skeletons rather than complete Zydeco terms, so only thei
 they are not discovered as standalone case fixtures or parser/formatter corpus files.
 
 [The shared harness](../../lang/tests/src/lib.rs) supplies check, runtime, and end-to-end registrations.
-Whole-program tests declare their backends, input, arguments, expected output,
-and exit behavior; undeclared stdin is EOF and output is captured.
+Whole-program tests declare their backends, input, arguments, expected output, and exit behavior;
+directive-driven fixtures declare the same execution metadata, with the runner requiring exit 0.
+Undeclared stdin is EOF and output is captured.
 Native FFI and toolchain-dependent cases can require explicit opt-in.
 A regression must preserve both the accepted use and the rejected or non-optimizable counterpart relevant
 to its invariant.

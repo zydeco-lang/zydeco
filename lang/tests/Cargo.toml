@@ -26,3 +26,7 @@ zydeco-assembly = { workspace = true }
 [[test]]
 name = "cases"
 harness = false
+
+[[test]]
+name = "std_directives"
+harness = false

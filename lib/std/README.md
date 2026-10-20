@@ -97,8 +97,9 @@ remains planned; select test files explicitly for execution.
 
 The package runner defaults to the interpreter and uses empty stdin and arguments on every selected backend.
 Support programs that need supplied arguments, fixtures, or input live under `lib/tests/std/support/`;
-they have no standalone test annotation. The [Rust registrations](../../lang/tests/tests/std.rs)
-drive those programs and share the execution runner, explicitly selecting the repository project too.
+they have no standalone package test.
+Their leading directives declare the execution setup,
+and the [std_directives runner](../../lang/tests/tests/std_directives.rs) supplies it.
 
 Use std from the same compiler release or revision, preserving its internal relative imports.
 There is no separate version resolver or hosted registry.
