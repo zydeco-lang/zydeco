@@ -77,6 +77,10 @@ or a name filter, are accepted.
 - `--status` prints the saved results; `--clear` deletes them for the invocation.
 - `--dry-run` prints which targets would run without executing any test.
 
+Harness output keeps its colors when the runner's stdout is a terminal.
+Pass `--color=never` or `--color=always` after `--` to override that detection,
+for example when redirecting a run into a file.
+
 Saved passes are reused even when the build changed.
 That keeps the fix-and-rerun loop short but can hide a regression in a test that already passed.
 Validate the final state with `cargo test-all --release` (or `cargo test-resume --force`);

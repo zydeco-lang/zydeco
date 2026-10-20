@@ -1,10 +1,11 @@
 //! Resumable execution of the workspace test suite.
 
-use std::io::{BufRead, BufReader};
+use std::borrow::Cow;
+use std::io::{BufRead, BufReader, IsTerminal};
 use std::process::{Command, Stdio};
 
 use crate::cargo::{Cargo, TestTarget};
-use crate::cli::{Action, Invocation, TestArgs};
+use crate::cli::{Action, ColorChoice, Invocation, TestArgs};
 use crate::state::{ResumeState, RunKey, Stamp, Store, TestStatus, now_unix_ms, source_stamp};
 use crate::{Error, Result};
 
@@ -308,6 +309,57 @@ fn record_stale_passes(
     }
 }
 
+/// Color setting for the test harness.
+///
+/// The harness detects a pipe (which is how the runner captures its output),
+/// so `auto` must be resolved against the runner's own standard output.
+fn harness_color(test_args: &TestArgs) -> &'static str {
+    match test_args.color {
+        | ColorChoice::Always => "always",
+        | ColorChoice::Never => "never",
+        | ColorChoice::Auto => {
+            if std::io::stdout().is_terminal() {
+                "always"
+            } else {
+                "never"
+            }
+        }
+    }
+}
+
+/// Removes ANSI escape sequences so colored harness output can still be parsed.
+fn strip_ansi(line: &str) -> Cow<'_, str> {
+    if !line.contains('\u{1b}') {
+        return Cow::Borrowed(line);
+    }
+    let mut stripped = String::with_capacity(line.len());
+    let mut characters = line.chars();
+    while let Some(character) = characters.next() {
+        if character != '\u{1b}' {
+            stripped.push(character);
+            continue;
+        }
+        match characters.next() {
+            // CSI sequences (colors, resets) end at a byte in 0x40..=0x7e.
+            | Some('[') => {
+                for next in characters.by_ref() {
+                    if ('\u{40}'..='\u{7e}').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            // Charset designations such as the `ESC ( B` that termcolor emits
+            // alongside resets take one more character.
+            | Some('(' | ')' | '*' | '+' | '#' | '%') => {
+                characters.next();
+            }
+            // Any other escape form drops its introducer and next character.
+            | Some(_) | None => {}
+        }
+    }
+    Cow::Owned(stripped)
+}
+
 /// Enumerates the tests of one executable under the current test arguments.
 fn list_tests(target: &TestTarget, test_args: &TestArgs) -> Result<Vec<String>> {
     let output = Command::new(&target.executable)
@@ -391,7 +443,7 @@ impl<'a> TargetRunner<'a> {
         for pattern in skip {
             command.arg("--skip").arg(pattern);
         }
-        command.arg("--color=never");
+        command.arg(format!("--color={}", harness_color(self.test_args)));
         command.stdout(Stdio::piped());
         let mut child = command
             .spawn()
@@ -405,7 +457,10 @@ impl<'a> TargetRunner<'a> {
         for line in BufReader::new(stdout).lines() {
             let line = line?;
             println!("{line}");
-            if let Some((test, status)) = parse_test_line(&line) {
+            // Colors keep the output readable, but the escape sequences must
+            // not hide the test name or outcome from the parser.
+            let plain = strip_ansi(&line);
+            if let Some((test, status)) = parse_test_line(&plain) {
                 let expected_test =
                     expected.is_none_or(|names| names.iter().any(|name| name == &test));
                 if !expected_test && !self.store.has_test(&id, &test) {
@@ -426,7 +481,7 @@ impl<'a> TargetRunner<'a> {
                     | TestStatus::Pending => {}
                 }
                 self.store.record(&id, &test, status)?;
-            } else if line.starts_with("test result:") {
+            } else if plain.starts_with("test result:") {
                 finished = true;
             }
         }
@@ -641,6 +696,31 @@ mod tests {
             Some(("ignored_case".into(), TestStatus::Ignored))
         );
         assert_eq!(parse_test_line("test result: ok. 1 passed; 0 failed"), None);
+    }
+
+    #[test]
+    fn colored_result_lines_are_parsed_after_stripping_ansi() {
+        let passed = "\u{1b}[32mok\u{1b}[0m";
+        let failed = "\u{1b}[31mFAILED\u{1b}[0m";
+        assert_eq!(strip_ansi("plain line"), "plain line");
+        // termcolor resets the character set alongside the color reset.
+        assert_eq!(strip_ansi("\u{1b}[32mok\u{1b}(B\u{1b}[m"), "ok");
+        assert_eq!(
+            parse_test_line(&strip_ansi(&format!("test arena::insert ... {passed}"))),
+            Some(("arena::insert".into(), TestStatus::Pass))
+        );
+        assert_eq!(
+            parse_test_line(&strip_ansi(&format!("test arena::insert ... {failed}"))),
+            Some(("arena::insert".into(), TestStatus::Fail))
+        );
+        assert_eq!(
+            parse_test_line(&strip_ansi("test arena::insert ... \u{1b}[32mok\u{1b}(B\u{1b}[m")),
+            Some(("arena::insert".into(), TestStatus::Pass))
+        );
+        assert!(
+            strip_ansi("\u{1b}[32mtest result: ok.\u{1b}[0m 1 passed; 0 failed")
+                .starts_with("test result:")
+        );
     }
 
     #[test]

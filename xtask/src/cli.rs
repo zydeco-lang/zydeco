@@ -166,6 +166,31 @@ fn selects_targets(args: &[String]) -> bool {
     })
 }
 
+/// Color choice for test-harness output, mirroring the harness `--color` flag.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ColorChoice {
+    /// Color when the xtask's own standard output is a terminal.
+    #[default]
+    Auto,
+    /// Always emit color escape sequences.
+    Always,
+    /// Never emit color escape sequences.
+    Never,
+}
+
+impl ColorChoice {
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            | "auto" => Ok(Self::Auto),
+            | "always" => Ok(Self::Always),
+            | "never" => Ok(Self::Never),
+            | other => Err(Error::Usage(format!(
+                "`--color` expects `auto`, `always`, or `never`, not `{other}`"
+            ))),
+        }
+    }
+}
+
 /// Test-executable arguments after normalizing them for result parsing.
 #[derive(Debug, Clone, Default)]
 pub struct TestArgs {
@@ -177,12 +202,15 @@ pub struct TestArgs {
     pub scope: Vec<String>,
     /// Whether ignored tests are requested by `--ignored` or `--include-ignored`.
     pub include_ignored: bool,
+    /// Color requested for harness output.
+    pub color: ColorChoice,
 }
 
 impl TestArgs {
-    /// Drops output-format options that would break result parsing.
+    /// Intercepts output-format options that would break result parsing.
     pub fn normalize(args: &[String]) -> Result<Self> {
         let mut passthrough = Vec::new();
+        let mut color = ColorChoice::default();
         let mut index = 0;
         while index < args.len() {
             let arg = &args[index];
@@ -199,14 +227,24 @@ impl TestArgs {
                             .into(),
                     ));
                 }
-                | "--color" | "--format" | "--logfile" => {
+                | "--color" => {
+                    let value = args.get(index + 1).ok_or_else(|| {
+                        Error::Usage("`--color` requires `auto`, `always`, or `never`".into())
+                    })?;
+                    color = ColorChoice::parse(value)?;
                     index += 2;
                     continue;
                 }
-                | _ if arg.starts_with("--color=")
-                    || arg.starts_with("--format=")
-                    || arg.starts_with("--logfile=") =>
-                {
+                | "--format" | "--logfile" => {
+                    index += 2;
+                    continue;
+                }
+                | _ if arg.starts_with("--color=") => {
+                    color = ColorChoice::parse(&arg["--color=".len()..])?;
+                    index += 1;
+                    continue;
+                }
+                | _ if arg.starts_with("--format=") || arg.starts_with("--logfile=") => {
                     index += 1;
                     continue;
                 }
@@ -221,7 +259,7 @@ impl TestArgs {
         let scope = selection_args(&passthrough);
         let include_ignored =
             passthrough.iter().any(|arg| arg == "--ignored" || arg == "--include-ignored");
-        Ok(TestArgs { passthrough, scope, include_ignored })
+        Ok(TestArgs { passthrough, scope, include_ignored, color })
     }
 }
 
@@ -312,6 +350,27 @@ mod tests {
         assert_eq!(test_args.passthrough, ["--nocapture", "literal-pattern/"]);
         assert_eq!(test_args.scope, ["literal-pattern/"]);
         assert!(!test_args.include_ignored);
+        assert_eq!(test_args.color, ColorChoice::Always);
+    }
+
+    #[test]
+    fn color_choice_defaults_to_auto_and_accepts_both_spellings() {
+        let defaults = TestArgs::normalize(&[]).expect("test arguments normalize");
+        assert_eq!(defaults.color, ColorChoice::Auto);
+        let separate = TestArgs::normalize(&["--color".to_owned(), "never".to_owned()])
+            .expect("test arguments normalize");
+        assert_eq!(separate.color, ColorChoice::Never);
+        assert!(separate.passthrough.is_empty());
+        let attached =
+            TestArgs::normalize(&["--color=always".to_owned()]).expect("test arguments normalize");
+        assert_eq!(attached.color, ColorChoice::Always);
+        assert!(attached.passthrough.is_empty());
+    }
+
+    #[test]
+    fn invalid_color_choices_are_rejected() {
+        assert!(TestArgs::normalize(&["--color".to_owned(), "sometimes".to_owned()]).is_err());
+        assert!(TestArgs::normalize(&["--color".to_owned()]).is_err());
     }
 
     #[test]
