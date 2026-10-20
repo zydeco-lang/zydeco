@@ -34,6 +34,7 @@ fn rendered_wrappers_preserve_acceptance_and_rejection_through_formatting() {
                 stage: CaseStage::Check,
                 prelude: SourceCasePrelude::Core,
                 expectation,
+                ..CaseDirective::default()
             };
             case.assert(case.run(&source));
 

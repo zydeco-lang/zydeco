@@ -30,6 +30,12 @@ fn trial(root: &Path, path: PathBuf) -> Trial {
             .map_err(|error| format!("cannot read fixture: {error}"))?;
         let directive =
             CaseDirective::parse(&source).map_err(|error| format!("fixture {fixture}: {error}"))?;
+        if directive.requires_execution_runner() {
+            return Err(format!(
+                "fixture {fixture}: execution directives require the file-based test runner"
+            )
+            .into());
+        }
         directive.assert(directive.run(&source));
         Ok(())
     })

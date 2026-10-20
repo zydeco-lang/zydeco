@@ -373,9 +373,10 @@ let triv : Thk Top = {{ comatch end }} in
     }
 
     /// The outcome a case fixture asserts.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub enum CaseExpectation {
         /// The directed stage accepts the source; the default.
+        #[default]
         Accepted,
         /// Checking rejects the source with this diagnostic code.
         Rejected(TyckDiagnosticCode),
@@ -386,13 +387,42 @@ let triv : Thk Top = {{ comatch end }} in
     /// Directives parsed from the leading `--` comment lines of a case fixture.
     ///
     /// A fixture with no directives is checked against the core prelude and must
-    /// be accepted. Malformed directives are errors, never silently skipped:
-    /// a test whose stated expectation cannot be honored has no value.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    /// be accepted. Execution directives (`backends`, `input`, `args`, and
+    /// `setup`) require `stage: run` and are reserved for the file-based
+    /// standard-library runner; the inline case runner rejects them. Malformed
+    /// directives are errors, never silently skipped: a test whose stated
+    /// expectation cannot be honored has no value.
+    #[derive(Clone, Debug, Default, PartialEq, Eq)]
     pub struct CaseDirective {
         pub stage: CaseStage,
         pub prelude: SourceCasePrelude,
         pub expectation: CaseExpectation,
+        /// Backends selected by the fixture; `None` leaves selection to the caller.
+        pub backends: Option<CaseBackends>,
+        /// Declared arguments; `None` means unspecified and `Some` requires `stage: run`.
+        pub arguments: Option<Vec<String>>,
+        /// Standard input supplied to the fixture; requires `stage: run`.
+        pub input: Option<String>,
+        /// Setup hook that prepares the fixture's environment; requires `stage: run`.
+        pub setup: Option<CaseSetup>,
+    }
+
+    /// The execution targets a case fixture selects.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum CaseBackends {
+        /// Every supported execution target.
+        All,
+        /// The listed targets, in declaration order.
+        Only(Vec<ExecutionTarget>),
+    }
+
+    /// A setup hook a case fixture needs before execution.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum CaseSetup {
+        /// Provide an empty temporary directory as the final argument.
+        TempDir,
+        /// Provide a temporary directory populated with filesystem fixtures.
+        Filesystem,
     }
 
     /// A case fixture whose directives cannot be honored as written.
@@ -402,7 +432,9 @@ let triv : Thk Top = {{ comatch end }} in
         NotADirective { line: String },
         #[error("duplicate directive `{key}`")]
         Duplicate { key: &'static str },
-        #[error("unknown directive key `{key}`; expected `stage`, `prelude`, or `expect`")]
+        #[error(
+            "unknown directive key `{key}`; expected `stage`, `prelude`, `expect`, `backends`, `input`, `args`, or `setup`"
+        )]
         UnknownKey { key: String },
         #[error("unknown `{key}` spelling `{value}`; expected one of {expected}")]
         UnknownValue { key: &'static str, value: String, expected: &'static str },
@@ -410,9 +442,22 @@ let triv : Thk Top = {{ comatch end }} in
         MalformedRejection { text: String },
         #[error("unknown diagnostic code in `{text}`")]
         UnknownDiagnosticCode { text: String },
+        #[error("malformed string in `{key}`: {value}; expected a double-quoted string")]
+        MalformedString { key: &'static str, value: String },
+        #[error("unknown escape `\\{escape}` in `{key}`")]
+        UnknownEscape { key: &'static str, escape: char },
+        #[error("malformed list in `{key}`: {value}; expected `[\"first\", \"second\"]`")]
+        MalformedList { key: &'static str, value: String },
+        #[error("duplicate backend `{backend}` in `backends`")]
+        DuplicateBackend { backend: String },
+        #[error("`{key}` requires `stage: run`")]
+        ExecutionRequiresRun { key: &'static str },
         #[error("stage `lower` supports only the core prelude")]
         LowerRequiresCore,
     }
+
+    pub(crate) const BACKENDS_EXPECTED: &str = "`all` alone or a comma-separated list of `interpreter`, `exe` (`amd64`), `wasm-am`, or `wasm-sps`";
+    pub(crate) const SETUP_EXPECTED: &str = "`tempdir` or `filesystem`";
 
     impl CaseDirective {
         /// Parse the leading directive block of a fixture source.
@@ -424,6 +469,10 @@ let triv : Thk Top = {{ comatch end }} in
             let mut stage: Option<CaseStage> = None;
             let mut prelude: Option<SourceCasePrelude> = None;
             let mut expectation: Option<CaseExpectation> = None;
+            let mut backends: Option<CaseBackends> = None;
+            let mut arguments: Option<Vec<String>> = None;
+            let mut input: Option<String> = None;
+            let mut setup: Option<CaseSetup> = None;
 
             for line in source.lines() {
                 let trimmed = line.trim();
@@ -497,16 +546,60 @@ let triv : Thk Top = {{ comatch end }} in
                             }
                         });
                     }
+                    | "backends" => {
+                        duplicate(backends.is_none(), "backends")?;
+                        backends = Some(parse_backends(value)?);
+                    }
+                    | "input" => {
+                        duplicate(input.is_none(), "input")?;
+                        input = Some(parse_quoted("input", value)?);
+                    }
+                    | "args" => {
+                        duplicate(arguments.is_none(), "args")?;
+                        arguments = Some(parse_quoted_list("args", value)?);
+                    }
+                    | "setup" => {
+                        duplicate(setup.is_none(), "setup")?;
+                        setup = Some(match value {
+                            | "tempdir" => CaseSetup::TempDir,
+                            | "filesystem" => CaseSetup::Filesystem,
+                            | _ => {
+                                return Err(CaseDirectiveError::UnknownValue {
+                                    key: "setup",
+                                    value: value.to_owned(),
+                                    expected: SETUP_EXPECTED,
+                                });
+                            }
+                        });
+                    }
                     | _ => {
                         return Err(CaseDirectiveError::UnknownKey { key: key.to_owned() });
                     }
                 }
             }
 
+            let stage = stage.unwrap_or_default();
+            if stage != CaseStage::Run {
+                for (key, present) in [
+                    ("backends", backends.is_some()),
+                    ("input", input.is_some()),
+                    ("args", arguments.is_some()),
+                    ("setup", setup.is_some()),
+                ] {
+                    if present {
+                        return Err(CaseDirectiveError::ExecutionRequiresRun { key });
+                    }
+                }
+            }
+
             let directive = Self {
-                stage: stage.unwrap_or_default(),
+                stage,
                 prelude: prelude.unwrap_or_default(),
-                expectation: expectation.unwrap_or(CaseExpectation::Accepted),
+                expectation: expectation.unwrap_or_default(),
+                backends,
+                arguments,
+                input,
+                setup,
             };
             if directive.stage == CaseStage::Lower
                 && directive.prelude == SourceCasePrelude::Monadic
@@ -517,7 +610,7 @@ let triv : Thk Top = {{ comatch end }} in
         }
 
         /// Run the fixture source through the directed pipeline stage.
-        pub fn run(self, source: &str) -> Result<(), CaseError> {
+        pub fn run(&self, source: &str) -> Result<(), CaseError> {
             match (self.stage, self.prelude) {
                 | (CaseStage::Check, SourceCasePrelude::Core) => SourceCase::check(source),
                 | (CaseStage::Check, SourceCasePrelude::Monadic) => {
@@ -539,12 +632,126 @@ let triv : Thk Top = {{ comatch end }} in
         }
 
         /// Assert the directed outcome of running the fixture source.
-        pub fn assert(self, result: Result<(), CaseError>) {
+        pub fn assert(&self, result: Result<(), CaseError>) {
             match self.expectation {
                 | CaseExpectation::Accepted => SourceCase::assert_accepted(result),
                 | CaseExpectation::Rejected(code) => SourceCase::assert_rejected(result, code),
                 | CaseExpectation::ResolveError => SourceCase::assert_resolve_error(result),
             }
+        }
+
+        /// Whether this fixture declares metadata only the file-based runner can honor.
+        pub fn requires_execution_runner(&self) -> bool {
+            self.backends.is_some()
+                || self.arguments.is_some()
+                || self.input.is_some()
+                || self.setup.is_some()
+        }
+    }
+
+    fn parse_backends(value: &str) -> Result<CaseBackends, CaseDirectiveError> {
+        if value == "all" {
+            return Ok(CaseBackends::All);
+        }
+        let mut backends = Vec::new();
+        for name in value.split(',') {
+            let name = name.trim();
+            let backend = match name {
+                | "interpreter" => ExecutionTarget::Interpreter,
+                | "exe" | "amd64" => ExecutionTarget::Exe,
+                | "wasm-am" => ExecutionTarget::WasmAm,
+                | "wasm-sps" => ExecutionTarget::WasmSps,
+                | _ => {
+                    return Err(CaseDirectiveError::UnknownValue {
+                        key: "backends",
+                        value: name.to_owned(),
+                        expected: BACKENDS_EXPECTED,
+                    });
+                }
+            };
+            if backends.contains(&backend) {
+                return Err(CaseDirectiveError::DuplicateBackend { backend: name.to_owned() });
+            }
+            backends.push(backend);
+        }
+        Ok(CaseBackends::Only(backends))
+    }
+
+    fn parse_quoted(key: &'static str, value: &str) -> Result<String, CaseDirectiveError> {
+        let malformed = || CaseDirectiveError::MalformedString { key, value: value.to_owned() };
+        let mut characters = value.chars();
+        if characters.next() != Some('"') {
+            return Err(malformed());
+        }
+        let mut parsed = String::new();
+        loop {
+            match characters.next() {
+                | Some('"') => {
+                    return if characters.next().is_none() { Ok(parsed) } else { Err(malformed()) };
+                }
+                | Some('\\') => match characters.next() {
+                    | Some('\\') => parsed.push('\\'),
+                    | Some('"') => parsed.push('"'),
+                    | Some('n') => parsed.push('\n'),
+                    | Some('r') => parsed.push('\r'),
+                    | Some('t') => parsed.push('\t'),
+                    | Some(escape) => {
+                        return Err(CaseDirectiveError::UnknownEscape { key, escape });
+                    }
+                    | None => return Err(malformed()),
+                },
+                | Some(character) => parsed.push(character),
+                | None => return Err(malformed()),
+            }
+        }
+    }
+
+    fn parse_quoted_list(
+        key: &'static str, value: &str,
+    ) -> Result<Vec<String>, CaseDirectiveError> {
+        let malformed = || CaseDirectiveError::MalformedList { key, value: value.to_owned() };
+        let mut rest = value.trim();
+        let Some(after_open) = rest.strip_prefix('[') else {
+            return Err(malformed());
+        };
+        rest = after_open.trim_start();
+        let mut arguments = Vec::new();
+        if let Some(after_close) = rest.strip_prefix(']') {
+            return if after_close.trim().is_empty() { Ok(arguments) } else { Err(malformed()) };
+        }
+        loop {
+            let Some(after_quote) = rest.strip_prefix('"') else {
+                return Err(malformed());
+            };
+            let mut escaped = false;
+            let mut close = None;
+            for (index, character) in after_quote.char_indices() {
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == '"' {
+                    close = Some(index);
+                    break;
+                }
+            }
+            let Some(close) = close else {
+                return Err(malformed());
+            };
+            let quoted = format!("\"{}\"", &after_quote[..close]);
+            arguments.push(parse_quoted(key, &quoted)?);
+            rest = after_quote[close + 1..].trim_start();
+            if let Some(after_close) = rest.strip_prefix(']') {
+                return if after_close.trim().is_empty() {
+                    Ok(arguments)
+                } else {
+                    Err(malformed())
+                };
+            }
+            let Some(after_comma) = rest.strip_prefix(',') else {
+                return Err(malformed());
+            };
+            rest = after_comma.trim_start();
         }
     }
 
@@ -704,7 +911,8 @@ macro_rules! __source_io_test {
 #[cfg(test)]
 mod directive_tests {
     use crate::utils::{
-        CaseDirective, CaseDirectiveError, CaseExpectation, CaseStage, SourceCasePrelude,
+        BACKENDS_EXPECTED, CaseBackends, CaseDirective, CaseDirectiveError, CaseExpectation,
+        CaseSetup, CaseStage, ExecutionTarget, SETUP_EXPECTED, SourceCasePrelude,
     };
     use zydeco_statics::TyckDiagnosticCode;
 
@@ -718,6 +926,124 @@ mod directive_tests {
         assert_eq!(directive.stage, CaseStage::Check);
         assert_eq!(directive.prelude, SourceCasePrelude::Core);
         assert_eq!(directive.expectation, CaseExpectation::Accepted);
+        assert_eq!(directive.backends, None);
+        assert_eq!(directive.input, None);
+        assert_eq!(directive.arguments, None);
+        assert_eq!(directive.setup, None);
+    }
+
+    #[test]
+    fn execution_directives_require_the_file_runner() {
+        assert!(!parse(&["ret ()"]).unwrap().requires_execution_runner());
+        assert!(parse(&["-- stage: run", "-- args: []"]).unwrap().requires_execution_runner());
+    }
+
+    #[test]
+    fn parses_execution_directives() {
+        let directive = parse(&[
+            "-- stage: run",
+            "-- backends: all",
+            "-- input: \"123\\n\"",
+            "-- args: [\"alpha\", \"beta\"]",
+            "-- setup: filesystem",
+        ])
+        .unwrap();
+        assert_eq!(directive.backends, Some(CaseBackends::All));
+        assert_eq!(directive.input.as_deref(), Some("123\n"));
+        assert_eq!(directive.arguments, Some(vec!["alpha".to_owned(), "beta".to_owned()]));
+        assert_eq!(directive.setup, Some(CaseSetup::Filesystem));
+    }
+
+    #[test]
+    fn parses_specific_backends_and_quoted_escapes() {
+        let directive = parse(&[
+            "-- stage: run",
+            "-- backends: interpreter, amd64, wasm-am, wasm-sps",
+            "-- input: \"a\\nb\\t\\\"c\\\\d\"",
+        ])
+        .unwrap();
+        assert_eq!(
+            directive.backends,
+            Some(CaseBackends::Only(vec![
+                ExecutionTarget::Interpreter,
+                ExecutionTarget::Exe,
+                ExecutionTarget::WasmAm,
+                ExecutionTarget::WasmSps,
+            ]))
+        );
+        assert_eq!(directive.input.as_deref(), Some("a\nb\t\"c\\d"));
+    }
+
+    #[test]
+    fn rejects_execution_directives_outside_run() {
+        for (line, key) in [
+            ("-- backends: all", "backends"),
+            ("-- input: \"\"", "input"),
+            ("-- args: []", "args"),
+            ("-- setup: tempdir", "setup"),
+        ] {
+            assert_eq!(parse(&[line]), Err(CaseDirectiveError::ExecutionRequiresRun { key }));
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_execution_directives() {
+        assert_eq!(
+            parse(&["-- stage: run", "-- backends: gpu"]),
+            Err(CaseDirectiveError::UnknownValue {
+                key: "backends",
+                value: "gpu".into(),
+                expected: BACKENDS_EXPECTED,
+            })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- backends: exe, amd64"]),
+            Err(CaseDirectiveError::DuplicateBackend { backend: "amd64".into() })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- setup: network"]),
+            Err(CaseDirectiveError::UnknownValue {
+                key: "setup",
+                value: "network".into(),
+                expected: SETUP_EXPECTED,
+            })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- input: 123"]),
+            Err(CaseDirectiveError::MalformedString { key: "input", value: "123".into() })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- input: \"bad\\q\""]),
+            Err(CaseDirectiveError::UnknownEscape { key: "input", escape: 'q' })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- args: alpha"]),
+            Err(CaseDirectiveError::MalformedList { key: "args", value: "alpha".into() })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- args: [\"alpha\",]"]),
+            Err(CaseDirectiveError::MalformedList { key: "args", value: "[\"alpha\",]".into() })
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_execution_directives() {
+        assert_eq!(
+            parse(&["-- stage: run", "-- backends: all", "-- backends: all"]),
+            Err(CaseDirectiveError::Duplicate { key: "backends" })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- input: \"\"", "-- input: \"\""]),
+            Err(CaseDirectiveError::Duplicate { key: "input" })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- args: []", "-- args: []"]),
+            Err(CaseDirectiveError::Duplicate { key: "args" })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- setup: tempdir", "-- setup: tempdir"]),
+            Err(CaseDirectiveError::Duplicate { key: "setup" })
+        );
     }
 
     #[test]
