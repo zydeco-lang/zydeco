@@ -970,6 +970,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 | `cli/` | Source checking, shared backend execution, the bundled Node host, formatting, and compilation commands. |
 | `runtime/` | Runtime instances and process launcher, packaged with native executables and libraries. |
 | `tui/` | Ratatui REPL using the shared compiler session. |
+| `xtask/` | Repository tasks, including the resumable `cargo test-resume` runner. |
 | `editor/cajun/` | Language server, included in the Rust workspace. |
 | `editor/tree-sitter-zydeco/` | Editor grammar and its conformance checks. |
 | `editor/vscode/`, `editor/zed/` | Client integrations with their own build workflows. |

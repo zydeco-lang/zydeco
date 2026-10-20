@@ -19,6 +19,7 @@ members = [
     "tui",
     "cli",
     "editor/cajun",
+    "xtask",
 ]
 exclude = ["build"]
 

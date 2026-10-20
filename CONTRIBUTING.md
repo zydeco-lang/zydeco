@@ -59,6 +59,29 @@ cargo test-doc-all --release
 the [CI workflow](.github/workflows/rust.yml) records tool setup and checks.
 [AGENTS.md](AGENTS.md#validation-and-formatting) governs test selection for automated work.
 
+### Iterate with Resumable Tests
+
+`cargo test-all` always runs every test.
+While fixing a failure in the full suite, use the resumable runner instead:
+
+```sh
+cargo test-resume
+```
+
+It builds the same targets, runs them one by one, and saves each outcome under `target/xtask/test-resume/`.
+The next invocation reruns only tests that failed or never ran, so a fix continues from the previous failure.
+Cargo options such as `--release` or `-p CRATE`, and test options after `--` such as `--test-threads=2`
+or a name filter, are accepted.
+
+- `--force` discards saved results and runs everything.
+- `--status` prints the saved results; `--clear` deletes them for the invocation.
+- `--dry-run` prints which targets would run without executing any test.
+
+Saved passes are reused even when the build changed.
+That keeps the fix-and-rerun loop short but can hide a regression in a test that already passed.
+Validate the final state with `cargo test-all --release` (or `cargo test-resume --force`);
+doctests remain covered by `cargo test-doc-all`.
+
 ## Format and Lint
 
 ```sh

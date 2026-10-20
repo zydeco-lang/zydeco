@@ -84,6 +84,9 @@ Run focused tests for the affected crate or test target while iterating.
 Run the full workspace suite (`cargo test-all`, including flag variants) only when the user explicitly requests it:
 it is CPU-intensive, and native end-to-end tests may fetch runtime dependencies from crates.io.
 `--all-targets` excludes doctests; when changing doctests, run them separately with `cargo test-doc-all`.
+While iterating on a failure in the full suite, `cargo test-resume` reruns only failed
+or unrun tests (see [Run Tests](CONTRIBUTING.md#run-tests)); it reuses passes after a rebuild,
+so validate a finished change with `cargo test-all` or `cargo test-resume --force`.
 
 Format Rust with `cargo fmt --all`; lint with `cargo clippy-all`.
 For a repository-wide Zydeco formatting pass, supply all tracked source files explicitly:
