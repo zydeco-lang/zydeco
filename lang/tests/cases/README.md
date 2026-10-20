@@ -46,7 +46,7 @@ in Rust and leave its declared source-level expectation to this runner.
 The [compiler reference](../../../docs/references/compiler.md#source-fixtures-and-runtime-oracles) explains discovery,
 diagnostic-code ownership, runtime oracles, and the `.zy.in` template helper for long shared Rust-test skeletons.
 
-The parser reserves `backends`, `input`, `args`, and `setup` for the file-based standard-library runner;
+The parser reserves `backends`, `input`, `output`, `args`, and `setup` for the file-based standard-library runner;
 inline fixtures reject them until that runner lands.
 Expected exit codes and desugaring-rejection spellings remain deferred
 in [the fixture-directive notes](../../../docs/ideas/fixture-directives.md).

@@ -1,6 +1,7 @@
 # Source fixture directive extensions
 
-The directive parser accepts `backends`, `input`, `args`, and `setup` for the file-based standard-library runner.
+The directive parser accepts `backends`, `input`, `output`, `args`,
+and `setup` for the file-based standard-library runner.
 Those directives require `stage: run`, and the inline case runner rejects them until that runner lands.
 An inapplicable expectation must continue to fail the trial.
 

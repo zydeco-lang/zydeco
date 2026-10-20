@@ -387,8 +387,8 @@ let triv : Thk Top = {{ comatch end }} in
     /// Directives parsed from the leading `--` comment lines of a case fixture.
     ///
     /// A fixture with no directives is checked against the core prelude and must
-    /// be accepted. Execution directives (`backends`, `input`, `args`, and
-    /// `setup`) require `stage: run` and are reserved for the file-based
+    /// be accepted. Execution directives (`backends`, `input`, `output`, `args`,
+    /// and `setup`) require `stage: run` and are reserved for the file-based
     /// standard-library runner; the inline case runner rejects them. Malformed
     /// directives are errors, never silently skipped: a test whose stated
     /// expectation cannot be honored has no value.
@@ -403,6 +403,8 @@ let triv : Thk Top = {{ comatch end }} in
         pub arguments: Option<Vec<String>>,
         /// Standard input supplied to the fixture; requires `stage: run`.
         pub input: Option<String>,
+        /// Expected standard output; requires `stage: run`.
+        pub output: Option<String>,
         /// Setup hook that prepares the fixture's environment; requires `stage: run`.
         pub setup: Option<CaseSetup>,
     }
@@ -433,7 +435,7 @@ let triv : Thk Top = {{ comatch end }} in
         #[error("duplicate directive `{key}`")]
         Duplicate { key: &'static str },
         #[error(
-            "unknown directive key `{key}`; expected `stage`, `prelude`, `expect`, `backends`, `input`, `args`, or `setup`"
+            "unknown directive key `{key}`; expected `stage`, `prelude`, `expect`, `backends`, `input`, `output`, `args`, or `setup`"
         )]
         UnknownKey { key: String },
         #[error("unknown `{key}` spelling `{value}`; expected one of {expected}")]
@@ -472,6 +474,7 @@ let triv : Thk Top = {{ comatch end }} in
             let mut backends: Option<CaseBackends> = None;
             let mut arguments: Option<Vec<String>> = None;
             let mut input: Option<String> = None;
+            let mut output: Option<String> = None;
             let mut setup: Option<CaseSetup> = None;
 
             for line in source.lines() {
@@ -554,6 +557,10 @@ let triv : Thk Top = {{ comatch end }} in
                         duplicate(input.is_none(), "input")?;
                         input = Some(parse_quoted("input", value)?);
                     }
+                    | "output" => {
+                        duplicate(output.is_none(), "output")?;
+                        output = Some(parse_quoted("output", value)?);
+                    }
                     | "args" => {
                         duplicate(arguments.is_none(), "args")?;
                         arguments = Some(parse_quoted_list("args", value)?);
@@ -583,6 +590,7 @@ let triv : Thk Top = {{ comatch end }} in
                 for (key, present) in [
                     ("backends", backends.is_some()),
                     ("input", input.is_some()),
+                    ("output", output.is_some()),
                     ("args", arguments.is_some()),
                     ("setup", setup.is_some()),
                 ] {
@@ -599,6 +607,7 @@ let triv : Thk Top = {{ comatch end }} in
                 backends,
                 arguments,
                 input,
+                output,
                 setup,
             };
             if directive.stage == CaseStage::Lower
@@ -645,6 +654,7 @@ let triv : Thk Top = {{ comatch end }} in
             self.backends.is_some()
                 || self.arguments.is_some()
                 || self.input.is_some()
+                || self.output.is_some()
                 || self.setup.is_some()
         }
     }
@@ -928,6 +938,7 @@ mod directive_tests {
         assert_eq!(directive.expectation, CaseExpectation::Accepted);
         assert_eq!(directive.backends, None);
         assert_eq!(directive.input, None);
+        assert_eq!(directive.output, None);
         assert_eq!(directive.arguments, None);
         assert_eq!(directive.setup, None);
     }
@@ -936,6 +947,7 @@ mod directive_tests {
     fn execution_directives_require_the_file_runner() {
         assert!(!parse(&["ret ()"]).unwrap().requires_execution_runner());
         assert!(parse(&["-- stage: run", "-- args: []"]).unwrap().requires_execution_runner());
+        assert!(parse(&["-- stage: run", "-- output: \"\""]).unwrap().requires_execution_runner());
     }
 
     #[test]
@@ -944,12 +956,14 @@ mod directive_tests {
             "-- stage: run",
             "-- backends: all",
             "-- input: \"123\\n\"",
+            "-- output: \"done\\n\"",
             "-- args: [\"alpha\", \"beta\"]",
             "-- setup: filesystem",
         ])
         .unwrap();
         assert_eq!(directive.backends, Some(CaseBackends::All));
         assert_eq!(directive.input.as_deref(), Some("123\n"));
+        assert_eq!(directive.output.as_deref(), Some("done\n"));
         assert_eq!(directive.arguments, Some(vec!["alpha".to_owned(), "beta".to_owned()]));
         assert_eq!(directive.setup, Some(CaseSetup::Filesystem));
     }
@@ -979,6 +993,7 @@ mod directive_tests {
         for (line, key) in [
             ("-- backends: all", "backends"),
             ("-- input: \"\"", "input"),
+            ("-- output: \"\"", "output"),
             ("-- args: []", "args"),
             ("-- setup: tempdir", "setup"),
         ] {
@@ -1013,6 +1028,10 @@ mod directive_tests {
             Err(CaseDirectiveError::MalformedString { key: "input", value: "123".into() })
         );
         assert_eq!(
+            parse(&["-- stage: run", "-- output: 123"]),
+            Err(CaseDirectiveError::MalformedString { key: "output", value: "123".into() })
+        );
+        assert_eq!(
             parse(&["-- stage: run", "-- input: \"bad\\q\""]),
             Err(CaseDirectiveError::UnknownEscape { key: "input", escape: 'q' })
         );
@@ -1035,6 +1054,10 @@ mod directive_tests {
         assert_eq!(
             parse(&["-- stage: run", "-- input: \"\"", "-- input: \"\""]),
             Err(CaseDirectiveError::Duplicate { key: "input" })
+        );
+        assert_eq!(
+            parse(&["-- stage: run", "-- output: \"\"", "-- output: \"\""]),
+            Err(CaseDirectiveError::Duplicate { key: "output" })
         );
         assert_eq!(
             parse(&["-- stage: run", "-- args: []", "-- args: []"]),
