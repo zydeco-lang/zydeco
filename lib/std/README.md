@@ -96,10 +96,9 @@ Discovery exposes tests in that scope to project inspection.
 remains planned; select test files explicitly for execution.
 
 The package runner defaults to the interpreter and uses empty stdin and arguments on every selected backend.
-`arg-list.zy`, `filesystem.zy`, and `read-line-as-int.zy` need supplied arguments,
-fixtures, or input, so they have no standalone test annotation.
-Keep the [Rust registrations](../../lang/tests/tests/std.rs) for fixture setup;
-that harness shares the execution runner and explicitly selects the repository project too.
+Support programs that need supplied arguments, fixtures, or input live under `lib/tests/std/support/`;
+they have no standalone test annotation. The [Rust registrations](../../lang/tests/tests/std.rs)
+drive those programs and share the execution runner, explicitly selecting the repository project too.
 
 Use std from the same compiler release or revision, preserving its internal relative imports.
 There is no separate version resolver or hosted registry.

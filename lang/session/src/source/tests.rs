@@ -2067,7 +2067,7 @@ fn standard_library_reifies_foundational_splits_as_abstract_option() {
 
 #[test]
 fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
-    let root = repository_source("tests/std/read-line-as-int.zy");
+    let root = repository_source("tests/std/support/read-line-as-int.zy");
     let checked = TestPipeline::check(&root).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
@@ -2083,7 +2083,7 @@ fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
 
 #[test]
 fn standard_library_reifies_foundational_argument_fold_as_abstract_list() {
-    let root = repository_source("tests/std/arg-list.zy");
+    let root = repository_source("tests/std/support/arg-list.zy");
     let checked = TestPipeline::check(&root).unwrap();
     let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
     let mut input = std::io::empty();

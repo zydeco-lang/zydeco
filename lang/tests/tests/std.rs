@@ -21,7 +21,7 @@ impl FilesystemCase {
         let path = directory.path().join("roundtrip.bin");
         std::fs::write(path.with_extension("bin.invalid"), [0xff, 0xfe])
             .expect("invalid UTF-8 fixture");
-        SourceProgram::setup("tests/std/filesystem.zy")
+        SourceProgram::setup("tests/std/support/filesystem.zy")
             .with_args([path.to_string_lossy().into_owned()])
             .test(backend);
     }
@@ -51,7 +51,7 @@ struct ArgumentListCase;
 
 impl ArgumentListCase {
     fn run(backend: ExecutionTarget) {
-        SourceProgram::setup("tests/std/arg-list.zy").with_args(["alpha"]).test(backend);
+        SourceProgram::setup("tests/std/support/arg-list.zy").with_args(["alpha"]).test(backend);
     }
 }
 
@@ -70,7 +70,12 @@ fn argument_list_wasm_sps() {
     ArgumentListCase::run(ExecutionTarget::WasmSps);
 }
 
-zydeco_tests::e2e_io_source!(read_line_as_int, "tests/std/read-line-as-int.zy", "123\n", "");
+zydeco_tests::e2e_io_source!(
+    read_line_as_int,
+    "tests/std/support/read-line-as-int.zy",
+    "123\n",
+    ""
+);
 
 struct EitherCase;
 

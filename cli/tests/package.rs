@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     path::{Path, PathBuf},
     process::{Command, Output},
 };
@@ -55,29 +56,69 @@ impl Fixture {
     }
 }
 
-#[test]
-fn standard_library_test_files_run_with_explicit_selection() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize().unwrap();
+fn repository_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").canonicalize().unwrap()
+}
+
+fn standard_library_test_packages(root: &Path) -> BTreeSet<PathBuf> {
     let session = zydeco_session::CompilerSession::default();
     let project = session.project(&[root.join("workspace.zy")]).unwrap();
-    let tests = session
+    session
         .declarations(&project)
         .unwrap()
         .into_iter()
         .filter(|(_, package)| package.role == zydeco_session::source::PackageRole::Test)
         .map(|(_, package)| package.id.path)
-        .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(tests.len(), 29);
-    assert!(tests.iter().any(|path| path.ends_with("represented-call/main.zy")));
-    for harness_only in ["arg-list.zy", "filesystem.zy", "read-line-as-int.zy"] {
-        assert!(
-            !tests.iter().any(|path| path.ends_with(harness_only)),
-            "{harness_only} needs explicit test input or setup"
-        );
+        .collect()
+}
+
+fn zydeco_sources_below(root: &Path) -> BTreeSet<PathBuf> {
+    let mut sources = BTreeSet::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "zy") {
+                sources.insert(path.canonicalize().unwrap());
+            }
+        }
     }
-    for source in tests {
+    sources
+}
+
+#[test]
+fn standard_library_test_sources_are_classified() {
+    let root = repository_root();
+    let suite = root.join("lib/tests/std");
+    let support = suite.join("support");
+    let tests = standard_library_test_packages(&root);
+    let expected = zydeco_sources_below(&suite)
+        .into_iter()
+        .filter(|path| !path.starts_with(&support))
+        .collect::<BTreeSet<_>>();
+
+    assert!(!expected.is_empty(), "the standard library test tree is empty");
+    let missing = expected.difference(&tests).collect::<Vec<_>>();
+    let unexpected = tests.difference(&expected).collect::<Vec<_>>();
+    assert!(
+        missing.is_empty(),
+        "sources outside `lib/tests/std/support/` must declare test packages: {missing:?}"
+    );
+    assert!(
+        unexpected.is_empty(),
+        "test packages must come from `lib/tests/std/` outside `support/`: {unexpected:?}"
+    );
+}
+
+#[test]
+fn standard_library_test_files_run_with_explicit_selection() {
+    let root = repository_root();
+    for source in standard_library_test_packages(&root) {
         let output = Fixture::success_in(&root, &["test", source.to_str().unwrap()]);
-        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed."));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("1 passed; 0 failed."), "{source:?}: {stdout}");
     }
 }
 
