@@ -9,20 +9,20 @@ let Update = Thk (Addr -> Int -> Thk (Fault -> OS) -> Thk OS -> OS) in
 let fail : Update = { fn _ _ _ _ => ! process/exit 41 } in
 let update =
   match layout/int
-  | +Err(_) => fail
-  | +Ok(plan) =>
+  | +Left(_) => fail
+  | +Right(plan) =>
     let (#L = Length, length) = layout/realize Int plan in
     match layout/int64
-    | +Err(_) => fail
-    | +Ok(plan) =>
+    | +Left(_) => fail
+    | +Right(plan) =>
       let (#L = Element, element) = layout/realize Int64 plan in
       match arrays/make Element element/storage 4 16
-      | +Err(_) => fail
-      | +Ok(array) =>
+      | +Left(_) => fail
+      | +Right(array) =>
         let (/L = Array; /storage; /elements) = array in
         match records/product Length Array length/storage storage
-        | +Err(_) => fail
-        | +Ok(record) =>
+        | +Left(_) => fail
+        | +Right(record) =>
           let (/L; /left; /right) = record in
           let forms = headers/from_fields L Length Array Int length/codec left/path right/path in
           let (/H; /unsafe = inline) = forms/inline in
