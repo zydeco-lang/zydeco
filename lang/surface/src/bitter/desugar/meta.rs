@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::metadata::{
-    BuiltinMeta, FfiMeta, IntrinsicMeta, MetadataKind, MonadicMeta, PartialMeta, PreludeMeta,
-    TypeOfMeta,
+    BuiltinMeta, CorePrelude, FfiMeta, IntrinsicMeta, MetadataKind, MonadicMeta, PartialMeta,
+    PreludeMeta, TypeOfMeta,
 };
 use zydeco_syntax::{BuiltinRole, SpecializeMeta};
 
@@ -12,7 +12,7 @@ enum MetaAction {
     Intrinsic(IntrinsicRole),
     TypeOf,
     Monadic,
-    Prelude { decoded: PreludeMeta, source: t::MetaId },
+    Prelude { view: b::VarName, source: t::MetaId },
     Partial { meta: t::Meta, binders: Vec<t::PatId> },
 }
 
@@ -33,9 +33,14 @@ impl MetaRules<'_> {
                 let decoded = PreludeMeta::from_arguments(meta.arguments()).map_err(|source| {
                     DesugarError::InvalidPreludeMeta { term: annotation, source }
                 })?;
-                let from = self.textual.metas[&metadata].arguments()[1];
-                let source = self.textual.metas[&from].arguments()[0];
-                Ok(MetaAction::Prelude { decoded, source })
+                match decoded {
+                    | PreludeMeta::None => Ok(MetaAction::Preserve(meta)),
+                    | PreludeMeta::From(view) => {
+                        let from = self.textual.metas[&metadata].arguments()[0];
+                        let source = self.textual.metas[&from].arguments()[0];
+                        Ok(MetaAction::Prelude { view, source })
+                    }
+                }
             }
             | Some(MetadataKind::Partial) => {
                 PartialMeta::from_arguments(meta.arguments()).map_err(|source| {
@@ -173,13 +178,10 @@ impl DesugarFolder<'_> {
             .inspect(id, metadata, payload)
             .map_err(|error| self.report(error))?;
         match action {
-            | MetaAction::Prelude { decoded, source } => {
+            | MetaAction::Prelude { view, source } => {
                 let tail = self.term(payload)?;
-                let bindee =
-                    Alloc::alloc(&mut self.builder, b::Term::Var(decoded.source), source.into());
-                let patterns = decoded
-                    .profile
-                    .names()
+                let bindee = Alloc::alloc(&mut self.builder, b::Term::Var(view), source.into());
+                let patterns = CorePrelude::names()
                     .iter()
                     .map(|name| {
                         let definition = Alloc::alloc(

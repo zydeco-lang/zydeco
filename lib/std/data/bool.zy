@@ -1,3 +1,4 @@
+@[prelude(none)]
 begin
   let (/Unit) = @(import("../primitive.zy")) in
   let Bool =

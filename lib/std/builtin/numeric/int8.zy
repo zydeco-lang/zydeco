@@ -1,3 +1,4 @@
+@[prelude(none)]
 begin
   let VType = @(intrinsic(vtype)) in
   let CType = @(intrinsic(ctype)) in

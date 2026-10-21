@@ -1,6 +1,5 @@
 -- A manually managed byte builder. Copies of its handle do not track later state changes.
 
-let (/VType; /CType; /Thk; /Ret; /Int; /UInt8) = @(import("../primitive.zy")) in
 let (/BytesPackage) = @(import("../text/bytes.zy")) in
 let (/Alloc) = @(import("allocation.zy")) in
 begin

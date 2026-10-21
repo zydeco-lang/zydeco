@@ -1,4 +1,3 @@
-let (/VType; /CType; /Thk; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 begin
   let Codec (Uninit : VType) (Init : VType) (Ptr : VType -> VType -> VType) =

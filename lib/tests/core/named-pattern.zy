@@ -1,9 +1,6 @@
 -- Named components support payload annotations, opaque variable bindings,
 -- whole-pattern annotations, and holes alongside unnamed patterns.
 param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let int = numeric/int that
   let PatternTarget = (

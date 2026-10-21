@@ -1,11 +1,6 @@
 param (/OS = HostOS; /process; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-let again = make_prelude builtin in
-@[prelude(core, from(prelude))]
-let (/OS = SecondOS) = again in
-let forward : Thk (Thk OS -> SecondOS) = { fn next => ! next } in
-let same : Thk (Thk SecondOS -> HostOS) = { fn next => ! next } in
+let forward : Thk (Thk OS -> HostOS) = { fn next => ! next } in
+let same : Thk (Thk HostOS -> OS) = { fn next => ! next } in
 let stop : Thk (Int -> OS) = process/exit in
 let choice : Option Int = +Some(0) in
 match choice

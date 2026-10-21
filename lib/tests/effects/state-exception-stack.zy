@@ -1,8 +1,5 @@
 -- A single packed carrier supports both effects; catch rolls State back on failure.
 param (/numeric; /string; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
 let (/raise; /catch) = builtin |> (@(import("../../std/effect/exception.zy"))) in
 let (/modify) = builtin |> (@(import("../../std/effect/state.zy"))) in

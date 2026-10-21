@@ -41,6 +41,10 @@ pub struct TextArena {
     pub intentions: SurfaceIntentions,
     /// Source content retained without adding syntax variants.
     pub trivia: SurfaceTrivia,
+    /// Compiler-inserted projection groups supplying fallback lexical names.
+    pub default_prelude_binders: HashSet<PatId>,
+    /// Generated definitions point at their owning projection group, not an identifier token.
+    pub default_prelude_definitions: std::collections::HashMap<DefId, PatId>,
 }
 
 impl TextArena {

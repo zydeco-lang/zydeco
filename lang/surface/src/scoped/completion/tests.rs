@@ -75,6 +75,7 @@ fn shared_lookup_shadows_global_names_and_preserves_global_dependencies() {
         depth: 0,
         under_map: rpds::HashTrieMapSync::new_sync(),
         boundary: None,
+        prelude: Default::default(),
     }
     .bind_group([(same.clone(), visible_local)]);
     let scope = NameScope { local: &local, global: &global };

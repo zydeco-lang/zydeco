@@ -16,6 +16,7 @@ pub struct PackageInstance {
     pub contexts: HashMap<t::TermId, PackageContext>,
     pub imports: Vec<(t::TermId, PackageInstanceId)>,
     pub signature: Option<PackageInstanceId>,
+    pub prelude: Option<PackageInstanceId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -178,13 +179,7 @@ impl SourceGraph {
                     continue;
                 }
                 pending.push((source, true));
-                let file = &self.sources[&source];
-                pending.extend(
-                    file.signature
-                        .into_iter()
-                        .chain(file.imports.iter().map(|id| self.imports[id].imported))
-                        .map(|id| (id, false)),
-                );
+                pending.extend(self.dependency_sources(source).map(|id| (id, false)));
             }
         }
         let mut sources = ArenaDense::<SourceGraphScope, SourceId>::new();
@@ -210,7 +205,9 @@ impl SourceGraph {
                 .collect();
             let shape = shapes.source(file, &targets)?;
             let signature = file.signature.map(|id| merged[&id]);
-            let key = (shape, signature, file.kind() == crate::source::SourceKind::Signature);
+            let prelude = file.prelude.map(|id| merged[&id]);
+            let key =
+                (shape, signature, prelude, file.kind() == crate::source::SourceKind::Signature);
             let source = if let Some(source) = equivalence.get(&key) {
                 *source
             } else {
@@ -219,6 +216,7 @@ impl SourceGraph {
                     root: file.root,
                     imports: Vec::new(),
                     signature,
+                    prelude,
                     context: file.context.clone(),
                     contexts: file.contexts.clone(),
                     instances: Vec::new(),
@@ -307,6 +305,7 @@ impl SourceGraph {
                     })
                     .collect(),
                 signature: file.signature.map(|id| instance_ids[&id]),
+                prelude: file.prelude.map(|id| instance_ids[&id]),
             })
             .collect();
         self.root_instance = instance_ids[&self.root];

@@ -2,9 +2,6 @@
 param (/numeric; /process; builtin) : @(import(
   /std/builtin
 )) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let (/int64; /uint64; /bytes) = builtin |> (@(import(/std))) in
   let fail = { ! process/exit 1 } in

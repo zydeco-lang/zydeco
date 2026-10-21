@@ -70,11 +70,12 @@ Runtime callable contracts remain explicit computations behind `Thk`.
 ## Source Terms and Imports
 
 Every Zydeco source file contains exactly one complete term.
-A file contributes no surrounding context: all names are bound by forms in the term itself.
+A file receives the [default core vocabulary](docs/references/language.md#core-prelude);
+other names and provider dependencies are bound explicitly in its term.
 In particular, `param` and `param val` are ordinary term forms that construct abstractions;
 they do not declare file parameters.
 
-After its own imports and optional companion annotation have been assembled,
+After its default vocabulary, imports, and optional companion annotation have been assembled,
 a source root is resolved and type checked under an empty context and must synthesize its classifier.
 An expected classifier at an import site may be compared with that result, but it does not participate
 in elaborating the imported source.
@@ -84,7 +85,7 @@ Parenthesized metadata `@(meta)` abbreviates the bracket form whose payload is a
 so `@(import("library.zy"))` names the same import.
 A compiler session discovers the file dependency graph, orders providers before their consumers,
 and materializes each provider as one shared term node.
-The provider is resolved and checked once under its own empty context;
+The provider is resolved and checked once under its own context, independently of its importer;
 every import occurrence is an edge to that checked root.
 A source boundary prevents free names and mobile block bindings from crossing between the two terms.
 Sharing is static: an imported computation is still evaluated at every dynamic occurrence.

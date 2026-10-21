@@ -1,4 +1,3 @@
-let (/VType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Either) = @(import("../data/either.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
 begin

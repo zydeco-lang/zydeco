@@ -63,6 +63,42 @@ impl ScopedProgram {
     }
 }
 
+impl TextualProgram {
+    fn authored(
+        &self, root: zydeco_surface::textual::syntax::TermId,
+    ) -> zydeco_surface::textual::syntax::TermId {
+        use zydeco_surface::textual::syntax::Term;
+        match &self.arena.terms[&root] {
+            | Term::Let(binding)
+                if self.arena.default_prelude_binders.contains(&binding.binding.binder) =>
+            {
+                binding.tail
+            }
+            | _ => root,
+        }
+    }
+}
+
+struct AuthoredRoot;
+
+impl AuthoredRoot {
+    fn scoped(
+        arena: &zydeco_surface::scoped::arena::ScopedArena,
+        root: zydeco_surface::scoped::syntax::TermId,
+    ) -> zydeco_surface::scoped::syntax::TermId {
+        use zydeco_surface::{scoped::syntax::Term, textual::syntax::EntityId};
+        match &arena.terms[&root] {
+            | Term::Let(binding)
+                if matches!(arena.origins.source(&binding.binder.into()),
+                Some(EntityId::Pat(pattern)) if arena.default_prelude_binders.contains(&pattern)) =>
+            {
+                binding.tail
+            }
+            | _ => root,
+        }
+    }
+}
+
 impl CheckedProgram {
     fn dynamics(self) -> Result<SourceDynamics, TestPipelineError> {
         let zydeco_statics::syntax::TermAnnId::Compu(root, _) = self.root else {
@@ -326,6 +362,28 @@ impl RepositorySourceFiles {
 }
 
 impl SourceFixture {
+    /// Keep graph-shape assertions local to the fixture's explicit sources.
+    /// The shared implicit dependency is exercised by the prelude integration tests.
+    fn contains(&self, path: &Path) -> bool {
+        path.starts_with(self.directory.path().canonicalize().unwrap())
+    }
+
+    fn sources(&self, graph: &SourceGraph) -> usize {
+        graph.sources.iter().filter(|(_, source)| self.contains(&source.path)).count()
+    }
+
+    fn inputs(&self, graph: &SourceGraph) -> usize {
+        graph.source_inputs().filter(|source| self.contains(&source.path)).count()
+    }
+
+    fn imports(&self, graph: &SourceGraph) -> usize {
+        graph
+            .imports
+            .iter()
+            .filter(|(_, import)| self.contains(&graph.sources[&import.importer].path))
+            .count()
+    }
+
     fn parse_error(error: SourceLoadErrors) -> SourceParseError {
         let SourceLoadError::Parse(errors) = Self::single_error(error) else {
             panic!("expected source parse errors")
@@ -487,11 +545,12 @@ fn source_graph_loads_nested_relative_imports_in_provider_order() {
     let order = graph
         .provider_order()
         .into_iter()
+        .filter(|source| fixture.contains(&graph.sources[source].path))
         .map(|source| graph.sources[&source].path.file_name().unwrap().to_owned())
         .collect::<Vec<_>>();
 
-    assert_eq!(graph.sources.len(), 3);
-    assert_eq!(graph.imports.len(), 2);
+    assert_eq!(fixture.sources(&graph), 3);
+    assert_eq!(fixture.imports(&graph), 2);
     assert_eq!(order, ["leaf.zy", "library.zy", "main.zy"].map(std::ffi::OsString::from));
     assert!(graph.sources.iter().all(|(_, source)| source.path.is_absolute()));
 }
@@ -507,11 +566,12 @@ fn source_graph_accepts_parenthesized_metadata_sugar_for_hole_payloads() {
     let order = graph
         .provider_order()
         .into_iter()
+        .filter(|source| fixture.contains(&graph.sources[source].path))
         .map(|source| graph.sources[&source].path.file_name().unwrap().to_owned())
         .collect::<Vec<_>>();
 
-    assert_eq!(graph.sources.len(), 3);
-    assert_eq!(graph.imports.len(), 2);
+    assert_eq!(fixture.sources(&graph), 3);
+    assert_eq!(fixture.imports(&graph), 2);
     assert_eq!(order, ["leaf.zy", "library.zy", "main.zy"].map(std::ffi::OsString::from));
 }
 
@@ -527,10 +587,11 @@ fn source_graph_discovers_an_adjacent_signature_before_its_implementation() {
     let order = graph
         .provider_order()
         .into_iter()
+        .filter(|source| fixture.contains(&graph.sources[source].path))
         .map(|source| graph.sources[&source].path.file_name().unwrap().to_owned())
         .collect::<Vec<_>>();
 
-    assert_eq!(graph.sources.len(), 2);
+    assert_eq!(fixture.sources(&graph), 2);
     assert_eq!(graph.sources[&signature].kind(), SourceKind::Signature);
     assert_eq!(order, ["main.zyi", "main.zy"].map(std::ffi::OsString::from));
 }
@@ -543,7 +604,7 @@ fn source_graph_does_not_pair_program_roots_with_signatures() {
 
     let graph = SourceGraph::load(root).unwrap();
 
-    assert_eq!(graph.sources.len(), 1);
+    assert_eq!(fixture.sources(&graph), 1);
     assert_eq!(graph.sources[&graph.root].kind(), SourceKind::Program);
     assert!(graph.sources[&graph.root].signature.is_none());
 }
@@ -557,12 +618,15 @@ fn source_graph_reports_unique_sources_as_they_are_discovered() {
     let mut progress = Vec::new();
 
     let graph = SourceGraph::load_with_progress(&root, |update| progress.push(update)).unwrap();
+    assert!(progress.iter().enumerate().all(|(index, update)| update.discovered == index + 1));
     let progress = progress
         .into_iter()
-        .map(|update| (update.path.file_name().unwrap().to_owned(), update.discovered))
+        .filter(|update| fixture.contains(&update.path))
+        .enumerate()
+        .map(|(index, update)| (update.path.file_name().unwrap().to_owned(), index + 1))
         .collect::<Vec<_>>();
 
-    assert_eq!(graph.sources.len(), 3);
+    assert_eq!(fixture.sources(&graph), 3);
     assert_eq!(
         progress,
         [
@@ -591,9 +655,9 @@ fn source_graph_orders_a_diamond_after_its_shared_provider() {
         })
         .collect::<std::collections::HashMap<_, _>>();
 
-    assert_eq!(graph.sources.len(), 3);
-    assert_eq!(graph.source_inputs().count(), 4);
-    assert_eq!(graph.imports.len(), 3);
+    assert_eq!(fixture.sources(&graph), 3);
+    assert_eq!(fixture.inputs(&graph), 4);
+    assert_eq!(fixture.imports(&graph), 3);
     let position = |name| order[std::ffi::OsStr::new(name)];
     let shared = graph.imports[&graph.sources[&graph.root].imports[0]].imported;
     let shared_name = graph.sources[&shared].path.file_name().unwrap().to_str().unwrap();
@@ -615,7 +679,7 @@ fn source_graph_deduplicates_files_but_preserves_import_occurrences() {
     let imported =
         root_imports.iter().map(|import| graph.imports[import].imported).collect::<Vec<_>>();
 
-    assert_eq!(graph.sources.len(), 2);
+    assert_eq!(fixture.sources(&graph), 2);
     assert_eq!(root_imports.len(), 2);
     assert_eq!(imported, [library, library]);
     assert_ne!(root_imports[0], root_imports[1]);
@@ -635,7 +699,7 @@ fn source_graph_deduplicates_symlinked_source_paths() {
     let graph = SourceGraph::load(root).unwrap();
     let imports = &graph.sources[&graph.root].imports;
 
-    assert_eq!(graph.sources.len(), 2);
+    assert_eq!(fixture.sources(&graph), 2);
     assert_eq!(imports.len(), 2);
     assert_eq!(graph.imports[&imports[0]].imported, graph.imports[&imports[1]].imported);
 }
@@ -836,7 +900,7 @@ fn program_assembly_consumes_import_directives_and_preserves_a_source_boundary()
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     assert!(matches!(
-        program.arena.terms[&program.unit.root],
+        program.arena.terms[&program.authored(program.unit.root)],
         zydeco_surface::textual::syntax::Term::SourceBoundary(_)
     ));
     assert!(program.arena.terms.iter().all(|(_, term)| {
@@ -858,7 +922,8 @@ fn textual_program_ascribes_an_implementation_with_its_signature() {
     let root = fixture.write("library.zy", "()");
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::Ann(Ann { tm: _, ty }) = program.arena.terms[&program.unit.root] else {
+    let Term::Ann(Ann { tm: _, ty }) = program.arena.terms[&program.authored(program.unit.root)]
+    else {
         panic!("expected a root ascription")
     };
 
@@ -872,7 +937,8 @@ fn builtin_operation_roles_remain_specializable_through_name_resolution() {
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
-    let zydeco_surface::scoped::syntax::Term::Meta(term) = &resolved.arena.terms[&resolved.root]
+    let zydeco_surface::scoped::syntax::Term::Meta(term) =
+        &resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)]
     else {
         panic!("expected a Builtin metadata term")
     };
@@ -897,7 +963,8 @@ fn program_assembly_shares_one_source_root_across_import_occurrences() {
     let root = fixture.write("main.zy", r#"(@(import("library.zy")), @(import("library.zy")))"#);
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::Paren(Paren(imports)) = &program.arena.terms[&program.unit.root] else {
+    let Term::Paren(Paren(imports)) = &program.arena.terms[&program.authored(program.unit.root)]
+    else {
         panic!("expected a pair of imports")
     };
     let functions_and_definitions = imports
@@ -907,7 +974,8 @@ fn program_assembly_shares_one_source_root_across_import_occurrences() {
             else {
                 panic!("expected a source boundary")
             };
-            let Term::Abs(Abs(copattern, _)) = &program.arena.terms[function] else {
+            let Term::Abs(Abs(copattern, _)) = &program.arena.terms[&program.authored(*function)]
+            else {
                 panic!("expected an imported function")
             };
             let CoPattern::Pat(pattern) = program.arena.copats[copattern] else {
@@ -939,7 +1007,9 @@ fn repeated_imports_share_one_resolved_and_checked_term() {
         .terms
         .source(&typed_root)
         .expect("the checked product retains its source root");
-    let Term::Cons(imports) = &checked.scoped.terms[&source_root] else {
+    let Term::Cons(imports) =
+        &checked.scoped.terms[&AuthoredRoot::scoped(&checked.scoped, source_root)]
+    else {
         panic!("expected a resolved product of imports")
     };
     let providers = imports
@@ -971,7 +1041,7 @@ fn program_assembly_retains_importer_and_provider_spans() {
     let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let boundary = program.unit.root;
+    let boundary = program.authored(program.unit.root);
     let Term::SourceBoundary(SourceBoundary(provider)) = program.arena.terms[&boundary] else {
         panic!("expected a source boundary")
     };
@@ -994,7 +1064,9 @@ fn program_assembly_rebases_every_nested_metadata_span() {
     let source = r#"@(custom(name("root"),nested("value")))"#;
     let root = fixture.write("main.zy", source);
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::Meta(MetaTerm(metadata, _)) = &program.arena.terms[&program.unit.root] else {
+    let Term::Meta(MetaTerm(metadata, _)) =
+        &program.arena.terms[&program.authored(program.unit.root)]
+    else {
         panic!("expected metadata to remain in the assembled program")
     };
     let MetaNode::Apply { args, .. } = &program.arena.metas[metadata] else {
@@ -1031,15 +1103,18 @@ fn program_assembly_expands_nested_imports_recursively() {
     let root = fixture.write("main.zy", r#"@(import("library.zy"))"#);
 
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
-    let Term::SourceBoundary(SourceBoundary(library)) = program.arena.terms[&program.unit.root]
+    let Term::SourceBoundary(SourceBoundary(library)) =
+        program.arena.terms[&program.authored(program.unit.root)]
     else {
         panic!("expected the library boundary")
     };
-    let Term::SourceBoundary(SourceBoundary(leaf)) = program.arena.terms[&library] else {
+    let Term::SourceBoundary(SourceBoundary(leaf)) =
+        program.arena.terms[&program.authored(library)]
+    else {
         panic!("expected the nested leaf boundary")
     };
 
-    assert!(matches!(program.arena.terms[&leaf], Term::Lit(_)));
+    assert!(matches!(program.arena.terms[&program.authored(leaf)], Term::Lit(_)));
     assert_eq!(
         span_file(&program.spans, &program.spans[&leaf.into()]),
         Some(std::ffi::OsString::from("leaf.zy"))
@@ -1097,7 +1172,7 @@ fn a_self_contained_imported_term_resolves_normally() {
     let resolved = resolve_program(program).unwrap();
 
     assert!(matches!(
-        resolved.arena.terms[&resolved.root],
+        resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)],
         zydeco_surface::scoped::syntax::Term::SourceBoundary(_)
     ));
     let contexts =
@@ -1116,7 +1191,9 @@ fn importing_once_and_binding_once_shares_one_lexical_identity() {
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
 
     let resolved = resolve_program(program).unwrap();
-    let Term::Let(binding) = &resolved.arena.terms[&resolved.root] else {
+    let Term::Let(binding) =
+        &resolved.arena.terms[&AuthoredRoot::scoped(&resolved.arena, resolved.root)]
+    else {
         panic!("expected an explicit sharing binding")
     };
     let binder = binding.binder;
@@ -1148,7 +1225,7 @@ fn a_literal_splice_parses_to_a_string_literal() {
     let program = SourceGraph::load(root).unwrap().parse().unwrap();
     let zydeco_surface::textual::syntax::Term::Lit(
         zydeco_surface::textual::syntax::Literal::String(text),
-    ) = &program.arena.terms[&program.unit.root]
+    ) = &program.arena.terms[&program.authored(program.unit.root)]
     else {
         panic!("expected `@[literal]` to parse to a string literal")
     };
@@ -2405,8 +2482,8 @@ fn source_graph_collects_independent_imports_and_signatures_without_replaying_re
         session.set_overlay(path, "()".into()).unwrap();
     }
     let graph = session.graph(&root).unwrap();
-    assert_eq!(graph.source_inputs().count(), 7);
-    assert_eq!(graph.sources.len(), 4);
+    assert_eq!(fixture.inputs(&graph), 7);
+    assert_eq!(fixture.sources(&graph), 4);
     assert_eq!(graph.provider_order().last(), Some(&graph.root));
     session.set_overlay(&bad, "@(import(0))".into()).unwrap();
     assert_eq!(session.graph(&root).unwrap_err().diagnostics().len(), 1);

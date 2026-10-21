@@ -1,3 +1,4 @@
+@[prelude(none)]
 begin
   let (/VType; /Unit) = @(import("../primitive.zy")) in
   let Option (A : VType) =

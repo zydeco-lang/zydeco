@@ -1,8 +1,5 @@
 -- A monad structure that supports fail and print as well
 param (/text; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
 

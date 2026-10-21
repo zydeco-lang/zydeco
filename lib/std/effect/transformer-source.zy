@@ -1,6 +1,5 @@
 -- The closed source interface and implementation used by algebra translation.
 begin
-  let (/VType; /CType; /Thk; /Ret) = @(import("../primitive.zy")) in
   let (/Monad) = @(import("monad.zy")) in
   let Transformer (M : VType -> CType) (T : VType -> CType) =
     codata

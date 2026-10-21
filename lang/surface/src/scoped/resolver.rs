@@ -125,6 +125,12 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
 
     fn reference(&mut self, id: TermId, name: VarName, env: &ResolveEnv<'_>) -> Term<DefId> {
         let Some(binding) = env.scope().lookup(&name) else {
+            if env.local.prelude.enabled && name.0 == "OS" {
+                // The checker resolves this against witnesses from explicit package
+                // openings. It neither opens another package nor chooses between providers.
+                self.dependencies.implicit_provider(&env.local.under);
+                return Term::Internal(Internal::OS);
+            }
             self.report(ResolveError::UnboundVar(id.span(self).make(name)));
             return Term::Hole(Hole);
         };
@@ -198,6 +204,13 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
         // This classification is exhaustive: new constructors require a scope review.
         let term = match term {
             | Term::Meta(term) => {
+                let mut env = env;
+                if matches!(
+                    term.0.specialize::<crate::metadata::PreludeMeta>(),
+                    Ok(Some(crate::metadata::PreludeMeta::None))
+                ) {
+                    env.local.prelude.enabled = false;
+                }
                 self.term(term.1, env)?;
                 term.into()
             }
@@ -274,9 +287,24 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
             }
             | Term::Let(term) => {
                 let bindee = self.term(term.bindee, env.clone());
-                let binder = self.pattern(term.binder, env);
+                let binder = self.pattern(term.binder, env.clone());
                 bindee?;
-                let binder = binder?;
+                let mut binder = binder?;
+                if self.builder.origins.source(&term.binder.into()).is_some_and(|origin| {
+                    matches!(origin, crate::textual::syntax::EntityId::Pat(pattern)
+                        if self.bitter.default_prelude_binders.contains(&pattern))
+                }) {
+                    let definitions = binder
+                        .env
+                        .local
+                        .var_to_def
+                        .iter()
+                        .filter(|(_, binding)| binding.depth > env.local.depth)
+                        .map(|(name, binding)| (name.clone(), binding.definition))
+                        .collect();
+                    binder.env.local = env.local;
+                    binder.env.local.prelude.definitions = definitions;
+                }
                 self.term(term.tail, binder.env)?;
                 term.into()
             }

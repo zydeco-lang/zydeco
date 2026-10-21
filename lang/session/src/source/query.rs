@@ -300,7 +300,7 @@ impl SourceQueryDb for CompilerSession {
         Ok(match self.files.entry(canonical.clone()) {
             | Entry::Occupied(entry) => *entry.get(),
             | Entry::Vacant(entry) => {
-                let disk_text = match std::fs::read_to_string(&canonical) {
+                let disk_text = match super::prelude::DefaultPrelude::read(&canonical) {
                     | Ok(text) => Some(text),
                     | Err(source) if source.kind() == std::io::ErrorKind::NotFound => None,
                     | Err(source) => {
@@ -428,7 +428,7 @@ impl CompilerSession {
     ) -> Result<(), SourceLoadError> {
         let canonical = Self::path_identity(path.as_ref())?;
         let input = self.files.get(&canonical).map(|entry| *entry).unwrap_or_else(|| {
-            let disk_text = std::fs::read_to_string(&canonical).ok();
+            let disk_text = super::prelude::DefaultPrelude::read(&canonical).ok();
             let input = SourceInput::new(self, canonical.clone(), disk_text, None);
             self.files.insert(canonical, input);
             input
@@ -443,7 +443,7 @@ impl CompilerSession {
     pub fn refresh_disk(&mut self, path: impl AsRef<Path>) -> Result<(), SourceLoadError> {
         let input = self.source_input(path.as_ref().to_path_buf())?;
         let canonical = input.path(self);
-        let disk_text = match std::fs::read_to_string(&canonical) {
+        let disk_text = match super::prelude::DefaultPrelude::read(&canonical) {
             | Ok(text) => Some(text),
             | Err(source) if source.kind() == std::io::ErrorKind::NotFound => None,
             | Err(source) => {
@@ -460,7 +460,7 @@ impl CompilerSession {
     pub fn clear_overlay(&mut self, path: impl AsRef<Path>) -> Result<(), SourceLoadError> {
         let canonical = Self::path_identity(path.as_ref())?;
         if let Some(input) = self.files.get(&canonical).map(|entry| *entry) {
-            let disk_text = std::fs::read_to_string(&canonical).ok();
+            let disk_text = super::prelude::DefaultPrelude::read(&canonical).ok();
             if input.disk_text(self) != disk_text {
                 input.set_disk_text(self).to(disk_text);
             }
@@ -1024,7 +1024,16 @@ mod tests {
 
         let graph = session.graph(&root).unwrap();
 
-        assert_eq!(graph.sources.len(), 2);
+        assert_eq!(
+            graph
+                .sources
+                .iter()
+                .filter(|(_, source)| source
+                    .path
+                    .starts_with(fixture.directory.path().canonicalize().unwrap()))
+                .count(),
+            2
+        );
         assert!(
             graph
                 .sources
@@ -1050,7 +1059,16 @@ mod tests {
 
         let graph = session.graph(&root).unwrap();
 
-        assert_eq!(graph.sources.len(), 2);
+        assert_eq!(
+            graph
+                .sources
+                .iter()
+                .filter(|(_, source)| source
+                    .path
+                    .starts_with(fixture.directory.path().canonicalize().unwrap()))
+                .count(),
+            2
+        );
         assert!(
             graph
                 .sources

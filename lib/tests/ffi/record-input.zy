@@ -4,9 +4,6 @@ let (/BytesPackage) = @(import("../../std/text/bytes.zy")) in
 param val (/Addr; /numeric; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   param val (/Bytes; /bytes; byte_package) : BytesPackage Addr that
   let codecs = (builtin |> (@(import("../../std/numeric/codecs.zy")))) byte_package in

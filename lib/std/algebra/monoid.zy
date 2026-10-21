@@ -1,4 +1,3 @@
-let (/VType; /Thk; /Ret) = @(import("../primitive.zy")) in
 begin
   -- A lawful monoid has associative append and a two-sided identity.
   -- Writer additionally requires append to be total and observationally pure.

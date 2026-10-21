@@ -54,7 +54,7 @@ impl Completer {
         let map = FileMap::local(analysis.source.as_str(), None);
         let range = CompletionEdit::range(&map, analysis.replacement.clone())?;
         let semantics = analysis.semantics.as_ref();
-        let items = analysis
+        let mut items: Vec<_> = analysis
             .candidates
             .iter()
             .enumerate()
@@ -78,12 +78,10 @@ impl Completer {
                     kind: Some(class.completion_kind()),
                     detail: annotation,
                     documentation: semantics.and_then(|semantics| {
-                        matches!(
-                            semantics.scoped.origins.source(&candidate.definition.into()),
-                            Some(zydeco_surface::textual::syntax::EntityId::Meta(_))
-                        )
-                        .then(|| {
-                            Documentation::String("Introduced by prelude(core, from(...)).".into())
+                        semantics.scoped.is_prelude_definition(candidate.definition).then(|| {
+                            Documentation::String(
+                                "Provided by the core prelude (implicit by default).".into(),
+                            )
                         })
                     }),
                     sort_text: Some(format!("{rank:08}")),
@@ -96,6 +94,17 @@ impl Completer {
                 }
             })
             .collect();
+        if analysis.implicit_os {
+            items.push(CompletionItem {
+                label: "OS".into(), kind: Some(CompletionItemKind::CLASS),
+                detail: Some("CType".into()),
+                documentation: Some(Documentation::String(
+                    "The OS witness of an explicit provider opening; multiple witnesses require an explicit selection.".into())),
+                sort_text: Some(format!("{:08}", items.len())),
+                text_edit: Some(CompletionTextEdit::Edit(TextEdit { range, new_text: "OS".into() })),
+                ..CompletionItem::default()
+            });
+        }
         Some(CompletionResponse::Array(items))
     }
 
@@ -242,12 +251,16 @@ impl CompletionScope<'static> {
 
     fn for_argument(arguments: &'static MetadataArguments, call: &MetadataCall) -> Option<Self> {
         match arguments {
-            | MetadataArguments::Options(options) => Some(Self::Definitions(
-                options
-                    .iter()
-                    .filter(|option| !call.completed_names.iter().any(|name| name == option.name()))
-                    .collect(),
-            )),
+            | MetadataArguments::Options(options) | MetadataArguments::Choice(options) => {
+                Some(Self::Definitions(
+                    options
+                        .iter()
+                        .filter(|option| {
+                            !call.completed_names.iter().any(|name| name == option.name())
+                        })
+                        .collect(),
+                ))
+            }
             | MetadataArguments::Package if call.argument == 0 => Some(Self::PackageRole),
             | MetadataArguments::Library if call.argument == 0 => {
                 Some(Self::Identifiers(vec!["c"]))
@@ -313,7 +326,9 @@ impl<'definition> MetadataSignature<'definition> {
             | MetadataArguments::Export => "field(path) or root, symbol(name)".to_owned(),
             | MetadataArguments::Discovery => "include(glob), exclude(glob), ...".to_owned(),
             | MetadataArguments::Variadic(parameter) => format!("{}, ...", parameter.label()),
-            | MetadataArguments::Options(_) => "option, ...".to_owned(),
+            | MetadataArguments::Options(_) | MetadataArguments::Choice(_) => {
+                "option, ...".to_owned()
+            }
             | MetadataArguments::Positional(parameters) => parameters
                 .iter()
                 .map(|parameter| match parameter.value() {
@@ -356,7 +371,9 @@ impl MetadataSnippet {
             ),
             | MetadataArguments::Discovery => self.placeholder("include"),
             | MetadataArguments::Variadic(parameter) => self.parameter(parameter),
-            | MetadataArguments::Options(_) => self.placeholder("option"),
+            | MetadataArguments::Options(_) | MetadataArguments::Choice(_) => {
+                self.placeholder("option")
+            }
             | MetadataArguments::Positional(parameters) => parameters
                 .iter()
                 .map(|parameter| self.parameter(parameter))
@@ -629,13 +646,13 @@ mod tests {
     }
 
     #[test]
-    fn prelude_completion_requires_the_explicit_from_argument() {
+    fn prelude_completion_offers_only_default_exceptions() {
         let items = CompletionFixture::new("@[prel|] ()").items().unwrap();
         let [item] = items.as_slice() else { panic!() };
         let Some(CompletionTextEdit::Edit(edit)) = &item.text_edit else { panic!() };
-        assert_eq!(edit.new_text, "prelude(core, from(${1:view}))");
-        assert_eq!(CompletionFixture::new("@[prelude(co|)] ()").labels().unwrap(), ["core"]);
-        assert_eq!(CompletionFixture::new("@[prelude(core, fr|)] ()").labels().unwrap(), ["from"]);
+        assert_eq!(edit.new_text, "prelude(${1:option})");
+        assert_eq!(CompletionFixture::new("@[prelude(no|)] ()").labels().unwrap(), ["none"]);
+        assert_eq!(CompletionFixture::new("@[prelude(fr|)] ()").labels().unwrap(), ["from"]);
     }
 
     #[test]

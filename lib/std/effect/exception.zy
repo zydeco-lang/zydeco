@@ -1,5 +1,4 @@
 -- Exceptions and recovery, translated from one returned-Either implementation.
-let (/VType; /CType; /Thk; /Ret; /Unit) = @(import("../primitive.zy")) in
 let (/Monad; /Algebra; /WithMonad; /Top) = @(import("monad.zy")) in
 let (/Transformer) = @(import("transformer.zy")) in
 let (/Either) = @(import("../data/either.zy")) in
@@ -35,7 +34,6 @@ val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
         let translated = {
           (
             @[monadic] begin
-              let (/VType; /Thk; /Ret) = @(import("../primitive.zy")) in
               let (/with_lift) = @(import("transformer-source.zy")) in
               let Exception = ExceptionSource in
 

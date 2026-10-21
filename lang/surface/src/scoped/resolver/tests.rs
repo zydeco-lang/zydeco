@@ -65,6 +65,7 @@ fn composed_observers_share_visits_and_preserve_scope_timing() {
         terms: arena.terms.clone(),
         origins: arena.origins.clone(),
         partial_binders: arena.partial_binders.clone(),
+        default_prelude_binders: arena.default_prelude_binders.clone(),
     });
     let single =
         ResolveFolder::new(&fixture.spans, copy).with_observer(Audit::default()).run_observed(root);

@@ -137,7 +137,7 @@ fn separate_telescope_rules_reject_each_invalid_constructor() {
 
 #[test]
 fn prelude_is_exactly_one_projection_with_precise_origins() {
-    let source = "@[prelude(core, from(view))] ret ()";
+    let source = "@[prelude(from(view))] ret ()";
     let mut parser = t::Parser::new();
     let unit = StrictParser::source(source, &mut parser).unwrap();
     let result =
@@ -162,7 +162,7 @@ fn prelude_is_exactly_one_projection_with_precise_origins() {
             assert_eq!(field.0, result.arena.defs[&definition].0);
             let origin = result.arena.origins.source(&definition.into()).unwrap();
             assert!(matches!(origin, t::EntityId::Meta(_)));
-            assert_eq!(&source[parser.spans[&origin].range()], "prelude(core, from(view))");
+            assert_eq!(&source[parser.spans[&origin].range()], "prelude(from(view))");
             field.0.as_str()
         })
         .collect::<Vec<_>>();
@@ -178,20 +178,23 @@ fn prelude_is_exactly_one_projection_with_precise_origins() {
 }
 
 #[test]
-fn prelude_requires_one_profile_and_one_lexical_provider() {
+fn prelude_accepts_exactly_one_exception_to_the_default() {
     for arguments in [
         "",
         "core",
-        "other, from(view)",
-        "core, from",
-        "core, from()",
-        "core, from(a, b)",
-        "core, from(view), from(other)",
-        "core, source(view)",
-        "core, from(\"view\")",
-        "core, from(/std/prelude)",
-        "core, from(let)",
-        "core, from(1)",
+        "core, from(view)",
+        "from",
+        "from()",
+        "from(a, b)",
+        "from(view), from(other)",
+        "source(view)",
+        "from(\"view\")",
+        "from(/std/prelude)",
+        "from(let)",
+        "from(1)",
+        "none, from(view)",
+        "none, none",
+        "none(extra)",
     ] {
         let source = format!("@[prelude({arguments})] ()");
         let errors = Fixture::errors(&source);
@@ -202,8 +205,9 @@ fn prelude_requires_one_profile_and_one_lexical_provider() {
             format!("prelude({arguments})")
         );
     }
-    Fixture::accepted("@[prelude(core, from(view))] ()");
-    Fixture::accepted("@[prelude(core, from(View))] ()");
-    let errors = Fixture::errors("(@[prelude(core)] (), @[prelude(core, from(let))] ())");
+    Fixture::accepted("@[prelude(none)] ()");
+    Fixture::accepted("@[prelude(from(view))] ()");
+    Fixture::accepted("@[prelude(from(View))] ()");
+    let errors = Fixture::errors("(@[prelude(core)] (), @[prelude(from(let))] ())");
     assert_eq!(errors.len(), 2);
 }

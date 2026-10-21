@@ -1,8 +1,5 @@
 let (/BytesPackage) = @(import("../std/text/bytes.zy")) in
 param val (/Addr; builtin) : @(import("../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   param val (/Bytes; /bytes) : BytesPackage Addr in
   let Window = Addr in

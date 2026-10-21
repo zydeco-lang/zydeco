@@ -28,6 +28,8 @@ pub struct CompletionAnalysis {
     pub source: String,
     pub replacement: Range<usize>,
     pub candidates: Vec<VisibleDefinition>,
+    /// Contextual OS fallback; it has no fabricated definition identity.
+    pub implicit_os: bool,
     pub semantics: Option<CompletionSemantics>,
 }
 
@@ -160,13 +162,14 @@ fn complete_source(
     let Some(resolved) = resolved else {
         return Ok(None);
     };
+    let implicit_os = resolved.scope.implicit_os && "OS".starts_with(&prefix);
     let mut candidates = resolved
         .scope
         .definitions
         .into_iter()
         .filter(|definition| definition.name.0.starts_with(&prefix))
         .collect::<Vec<_>>();
-    let semantics = program.ok().filter(|_| !candidates.is_empty()).map(|program| {
+    let semantics = program.ok().filter(|_| implicit_os || !candidates.is_empty()).map(|program| {
         let data = ScopedData::new(
             db,
             Arc::new(spans.into_inner()),
@@ -187,6 +190,10 @@ fn complete_source(
             semantics.compatibility(candidate.definition) == AnnotationCompatibility::Mismatch
         })
     });
+    let implicit_os = implicit_os
+        && !semantics.as_ref().is_some_and(|semantics| {
+            semantics.typing.builtin_os_compatibility() == AnnotationCompatibility::Mismatch
+        });
     candidates.sort_by(|left, right| {
         let compatibility = |candidate: &VisibleDefinition| {
             semantics
@@ -205,6 +212,7 @@ fn complete_source(
         source,
         replacement: site.replacement,
         candidates,
+        implicit_os,
         semantics,
     })))
 }

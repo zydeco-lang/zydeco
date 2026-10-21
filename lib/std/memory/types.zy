@@ -1,4 +1,3 @@
-let (/VType) = @(import("../primitive.zy")) in
 begin
   let Types (Addr : VType) =
     exists
@@ -16,7 +15,6 @@ begin
   let make =
     -- State parameters and layout witnesses erase; a pointer has exactly Addr's representation.
     begin
-      let (/VType; /Unit) = @(import("../primitive.zy")) in
       param val Addr : VType in
       let Package = Types in
       let Uninit =

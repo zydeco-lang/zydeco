@@ -1,4 +1,3 @@
-let (/VType; /CType; /Thk; /Ret; /Int; /UInt8; /String) = @(import("../primitive.zy")) in
 let (/Fault) = @(import("../memory/fault.zy")) in
 begin
   -- Immutable bytes retain their backing allocations until runtime teardown.

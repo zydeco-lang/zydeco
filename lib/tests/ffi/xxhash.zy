@@ -2,9 +2,6 @@ let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 param (/numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let make_xxhash = @(import("../../ffi/xxhash.zy")) that
 

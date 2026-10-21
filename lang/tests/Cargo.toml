@@ -20,6 +20,7 @@ walkdir = { workspace = true }
 workspace = true
 
 [dev-dependencies]
+zydeco-surface = { workspace = true }
 libtest-mimic = { workspace = true }
 zydeco-assembly = { workspace = true }
 

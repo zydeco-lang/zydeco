@@ -1,6 +1,5 @@
 -- Geometry-only array construction; whole-value codecs are selected explicitly afterward.
 
-let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
 let (/Codec; /DynamicCodec) = @(import("codecs.zy")) in

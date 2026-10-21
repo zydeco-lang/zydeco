@@ -126,6 +126,8 @@ pub struct SourceFile {
     pub instances: Vec<super::PackageInstanceId>,
     /// The optional `.zyi` type annotation paired with this `.zy` implementation.
     pub signature: Option<SourceId>,
+    /// Closed standard names; this edge never acquires a runtime provider.
+    pub prelude: Option<SourceId>,
 }
 
 impl SourceFile {
@@ -191,6 +193,15 @@ impl SourceGraph {
                                 span: edge.span,
                             }
                         }
+                        | SourceDependency::Prelude { source, prelude } => {
+                            let file = &self.sources[&source];
+                            SourceCycleStep {
+                                kind: SourceDependencyKind::Prelude,
+                                dependent: file.path.clone(),
+                                dependency: self.sources[&prelude].path.clone(),
+                                span: file.spans[&file.root.into()],
+                            }
+                        }
                         | SourceDependency::Signature { implementation, signature } => {
                             let signature = &self.sources[&signature];
                             SourceCycleStep {
@@ -206,11 +217,18 @@ impl SourceGraph {
             .collect()
     }
 
+    pub(super) fn dependency_sources(
+        &self, source: SourceId,
+    ) -> impl Iterator<Item = SourceId> + '_ {
+        self.dependencies(source).into_iter().map(|dependency| dependency.target(self))
+    }
+
     fn dependencies(&self, source: SourceId) -> Vec<SourceDependency> {
         let file = &self.sources[&source];
         file.signature
             .map(|signature| SourceDependency::Signature { implementation: source, signature })
             .into_iter()
+            .chain(file.prelude.map(|prelude| SourceDependency::Prelude { source, prelude }))
             .chain(file.imports.iter().copied().map(SourceDependency::Import))
             .collect()
     }
@@ -220,6 +238,7 @@ impl SourceGraph {
 enum SourceDependency {
     Import(SourceImportId),
     Signature { implementation: SourceId, signature: SourceId },
+    Prelude { source: SourceId, prelude: SourceId },
 }
 
 impl SourceDependency {
@@ -227,6 +246,7 @@ impl SourceDependency {
         match self {
             | Self::Import(import) => graph.imports[&import].imported,
             | Self::Signature { signature, .. } => signature,
+            | Self::Prelude { prelude, .. } => prelude,
         }
     }
 }

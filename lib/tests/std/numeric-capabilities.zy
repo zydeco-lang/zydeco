@@ -2,9 +2,6 @@
 -- backends: all
 @[package(test(of(/std)))]
 param (/numeric; builtin) : @(import(/std/builtin)) in
-let (/make = make_prelude) = @(import(/std/prelude)) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let make_std = @(import(/std)) that
 

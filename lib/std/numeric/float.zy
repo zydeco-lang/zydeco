@@ -1,4 +1,3 @@
-let (/VType; /CType; /Thk; /Ret) = @(import("../primitive.zy")) in
 let (/BoolModule) = @(import("../data/package.zy")) in
 let (/Numeric) = @(import("dictionary.zy")) in
 begin

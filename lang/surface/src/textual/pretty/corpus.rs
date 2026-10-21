@@ -94,10 +94,10 @@ fn repository_programs_preserve_formatter_laws() {
 #[test]
 fn prelude_formatting_retains_sugar_and_equivalent_expansion() {
     let original =
-        ParsedSource::try_new("let view = p in @[prelude(core,from(view))] let x : Int = 0 in x")
+        ParsedSource::try_new("let view = p in @[prelude(from(view))] let x : Int = 0 in x")
             .unwrap();
     let formatted = original.format();
-    assert!(formatted.contains("@[prelude(core, from(view))]"));
+    assert!(formatted.contains("@[prelude(from(view))]"));
     assert!(!formatted.contains("/VType"));
     let reparsed = ParsedSource::try_new(&formatted).unwrap();
     assert_eq!(original.desugared_shape(), reparsed.desugared_shape());

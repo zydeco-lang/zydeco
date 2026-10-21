@@ -1,3 +1,4 @@
+@[prelude(none)]
 -- Raw operations require caller-established validity, initialization, and lifetime.
 begin
   let VType = @(intrinsic(vtype)) in

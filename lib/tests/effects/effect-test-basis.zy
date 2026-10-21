@@ -6,9 +6,6 @@ val
     ))
   )
 =>
-  let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-  let prelude = make_prelude builtin in
-  @[prelude(core, from(prelude))]
   begin
     def ! with_trace
       (body : Thk (Thk (Int -> Ret Unit) -> Thk (Ret Int) -> Thk (Ret Unit) -> Ret Int))

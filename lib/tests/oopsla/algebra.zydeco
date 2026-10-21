@@ -9,9 +9,6 @@ let monadic_basis = @(import("../../std/effect/monad.zy")) in
 param val (/stdio; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let (/Monad; /Algebra) =
     monadic_basis

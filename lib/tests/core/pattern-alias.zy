@@ -1,8 +1,5 @@
 -- Semicolon patterns observe one bindee repeatedly while preserving source order.
 param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let int = numeric/int that
   let Pair = Int * Int that

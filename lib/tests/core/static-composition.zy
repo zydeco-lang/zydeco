@@ -1,7 +1,4 @@
 param (/process; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let Transform = val pi (_ : Int) . Int that
   let val compose (first : Transform) (second : Transform) : Transform =

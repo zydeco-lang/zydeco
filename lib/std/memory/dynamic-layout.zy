@@ -1,12 +1,3 @@
-let (
-  /VType; /CType; /Thk; /Ret; /Unit;
-  /Int8; /Int16; /Int32; /Int64; /Int;
-  /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
-  /Float32; /Float64
-)
-=
-  @(import("../primitive.zy"))
-in
 let (/Representation) = @(import("codecs.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in

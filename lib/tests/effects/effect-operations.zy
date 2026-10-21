@@ -1,9 +1,6 @@
 param (/numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
 let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
 let reader = builtin |> (@(import("../../std/effect/reader.zy"))) in

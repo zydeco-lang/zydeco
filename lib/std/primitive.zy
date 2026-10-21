@@ -1,3 +1,4 @@
+@[prelude(none)]
 @[package(library, name(/std/primitive))]
 let VType = @(intrinsic(vtype)) in
 let CType = @(intrinsic(ctype)) in

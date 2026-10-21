@@ -1,5 +1,4 @@
 -- Optional computations, with short-circuiting translated from one ordinary implementation.
-let (/VType; /CType; /Thk; /Ret; /Unit) = @(import("../primitive.zy")) in
 let (/Monad; /Algebra; /Top) = @(import("monad.zy")) in
 let (/Transformer) = @(import("transformer.zy")) in
 let (/Option) = @(import("../data/option.zy")) in
@@ -28,7 +27,6 @@ val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
         let translated = {
           (
             @[monadic] begin
-              let (/Ret) = @(import("../primitive.zy")) in
               let (/with_lift) = @(import("transformer-source.zy")) in
               let Optional = OptionSource in
 

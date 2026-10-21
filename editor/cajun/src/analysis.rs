@@ -350,7 +350,7 @@ impl ProjectState {
                 .with_sealed_types(sealed_types)
                 .markdown();
         if self.is_implicit_definition(occurrence.definition) {
-            signature.push_str("\n\nIntroduced by `prelude(core, from(...))`.");
+            signature.push_str("\n\nProvided by the core prelude (implicit by default).");
         }
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
@@ -615,10 +615,13 @@ impl ProjectState {
 
     /// Prelude binders have annotation origins rather than editable identifier tokens.
     fn is_implicit_definition(&self, definition: DefId) -> bool {
-        matches!(self.scoped().origins.source(&definition.into()), Some(EntityId::Meta(_)))
+        self.scoped().is_prelude_definition(definition)
     }
 
     fn definition_location(&self, definition: DefId) -> Option<Location> {
+        if self.scoped().is_default_prelude_definition(definition) {
+            return None;
+        }
         let entity = self.scoped().origins.source(&definition.into())?;
         self.entity_location(&entity)
     }
@@ -950,25 +953,32 @@ mod tests {
         ProjectState::load_with_progress(&root, &HashMap::new(), |update| progress.push(update))
             .unwrap();
 
-        let [
-            AnalysisProgress::Loading(SourceDiscovery { path: first, discovered: 1 }),
-            AnalysisProgress::Loading(SourceDiscovery { path: second, discovered: 2 }),
-            phases @ ..,
-        ] = progress.as_slice()
-        else {
-            panic!("expected two source discoveries before compiler phases: {progress:?}")
-        };
-        assert_eq!(
-            std::collections::HashSet::from([first, second]),
-            std::collections::HashSet::from([&root, &library]),
-        );
+        let count = progress
+            .iter()
+            .take_while(|update| matches!(update, AnalysisProgress::Loading(_)))
+            .count();
+        assert_eq!(count, 7, "two explicit files plus the closed default dependency");
+        let paths = progress[..count]
+            .iter()
+            .enumerate()
+            .map(|(index, update)| {
+                let AnalysisProgress::Loading(SourceDiscovery { path, discovered }) = update else {
+                    unreachable!()
+                };
+                assert_eq!(*discovered, index + 1);
+                path
+            })
+            .collect::<std::collections::HashSet<_>>();
+        assert!(paths.contains(&root));
+        assert!(paths.contains(&library));
+        let phases = &progress[count..];
         assert_eq!(
             phases,
             vec![
-                AnalysisProgress::Parsing { source_count: 2 },
-                AnalysisProgress::Desugaring { source_count: 2 },
-                AnalysisProgress::Resolving { source_count: 2 },
-                AnalysisProgress::Tycking { source_count: 2 },
+                AnalysisProgress::Parsing { source_count: count },
+                AnalysisProgress::Desugaring { source_count: count },
+                AnalysisProgress::Resolving { source_count: count },
+                AnalysisProgress::Tycking { source_count: count },
                 AnalysisProgress::Highlighting { path: root },
             ]
         );
@@ -1007,6 +1017,32 @@ mod tests {
     }
 
     #[test]
+    fn default_names_have_no_editable_definition_or_document_symbol() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("main.zy");
+        std::fs::write(&root, "let value : Int = 0 in\nvalue\n").unwrap();
+        let (project, session) = ProjectState::load(&root, &HashMap::new()).unwrap();
+        let position = Position::new(0, 13);
+        assert_eq!(
+            project
+                .document_symbols(&root)
+                .iter()
+                .map(|symbol| symbol.name.as_str())
+                .collect::<Vec<_>>(),
+            ["value"]
+        );
+        assert_eq!(project.definition(&root, position), None);
+        assert_eq!(project.prepare_rename(&root, position), None);
+        assert!(matches!(
+            project.rename(&root, position, "Number"),
+            Err(RenameRejection::Synthesized)
+        ));
+        let hover = project.hover(&session, &root, position, HoverOptions::default()).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else { panic!() };
+        assert!(contents.value.contains("core prelude"));
+    }
+
+    #[test]
     fn prelude_symbols_keep_annotation_origins_without_renaming_generated_binders() {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path().join("main.zy");
@@ -1014,9 +1050,9 @@ mod tests {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std").canonicalize().unwrap();
         let source = format!(
             r#"param val (/process; builtin) : @(import("{}/builtin.zy")) in
-let (/make) = @(import("{}/prelude.zy")) in
-let prelude = make builtin in
-@[prelude(core, from(prelude))]
+let closed = @(import("{}/prelude.zy")) in
+let prelude = (closed, pack (= OS as OS) where () end) in
+@[prelude(from(prelude))]
 let value : Int = 0 in
 value
 "#,
@@ -1033,17 +1069,17 @@ value
             project.rename(&root, core_use, "Number"),
             Err(RenameRejection::Synthesized)
         ));
-        assert_eq!(project.definition(&root, Position::new(3, 10)), None);
+        assert_eq!(project.definition(&root, Position::new(3, 11)), None);
         let hover = project.hover(&session, &root, core_use, HoverOptions::default()).unwrap();
         let HoverContents::Markup(contents) = hover.contents else { panic!() };
-        assert!(contents.value.contains("Introduced by `prelude(core, from(...))`"));
-        let provider_use = Position::new(3, 23);
+        assert!(contents.value.contains("Provided by the core prelude (implicit by default)."));
+        let provider_use = Position::new(3, 17);
         let definition = project.definition(&root, provider_use).unwrap();
         assert_eq!(definition.range.start, Position::new(2, 4));
         let changes = project.rename(&root, provider_use, "view").unwrap().changes.unwrap();
         let edits = &changes[&Url::from_file_path(root.canonicalize().unwrap()).unwrap()];
         assert_eq!(edits.len(), 2);
-        assert_eq!(edits[1].range, Range::new(Position::new(3, 21), Position::new(3, 28)));
+        assert_eq!(edits[1].range, Range::new(Position::new(3, 15), Position::new(3, 22)));
         assert!(edits.iter().all(|edit| edit.new_text == "view"));
     }
 
@@ -1187,12 +1223,14 @@ value
             .canonicalize()
             .unwrap();
         let (project, _session) = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let edit = project.rename(&path, Position::new(1, 7), "Nat2").unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
+        let position = source_position(&source, "Nat : VType");
+        let edit = project.rename(&path, position, "Nat2").unwrap();
         let edits = &edit.changes.unwrap()[&Url::from_file_path(&path).unwrap()];
         assert_eq!(edits.len(), 5, "the definition plus four type uses: {edits:?}");
         assert!(edits.iter().all(|edit| edit.new_text == "Nat2"));
         assert_eq!(
-            project.rename(&path, Position::new(1, 7), "nat"),
+            project.rename(&path, position, "nat"),
             Err(RenameRejection::Lexical { proposed: "nat".to_owned(), class: NameClass::Upper })
         );
     }
@@ -1443,8 +1481,15 @@ value
             .canonicalize()
             .unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
-        let hover =
-            project.hover(&session, &path, Position::new(1, 7), HoverOptions::default()).unwrap();
+        let source = std::fs::read_to_string(&path).unwrap();
+        let hover = project
+            .hover(
+                &session,
+                &path,
+                source_position(&source, "Nat : VType"),
+                HoverOptions::default(),
+            )
+            .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -1471,8 +1516,9 @@ value
             .unwrap();
         let (project, session) = ProjectState::load(&path, &HashMap::new()).unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let hover =
-            project.hover(&session, &path, Position::new(13, 19), HoverOptions::default()).unwrap();
+        let hover = project
+            .hover(&session, &path, source_position(&source, "value\n"), HoverOptions::default())
+            .unwrap();
         let HoverContents::Markup(contents) = hover.contents else {
             panic!("type hover should use markup content")
         };
@@ -1670,10 +1716,10 @@ value
             })
         };
 
-        assert!(has("VType", "typeParameter", "kind"));
+        assert!(has("VType", "type", "kind"));
         assert!(has("A", "typeParameter", "valueType"));
-        assert!(has("Int", "typeParameter", "valueType"));
-        assert!(has("OS", "typeParameter", "computationType"));
+        assert!(has("Int", "type", "valueType"));
+        assert!(has("OS", "type", "computationType"));
         assert!(has("x", "variable", "value"));
         assert!(has("process", "parameter", "value"));
         assert!(
@@ -1782,7 +1828,10 @@ value
             .canonicalize()
             .unwrap();
         let source = std::fs::read_to_string(&path).unwrap();
-        let broken = source.replace("! id~ OS { ! process/exit x }", "x x");
+        let broken = source.replace(
+            "! id~ OS { ! process/exit x }",
+            "let stop : Thk (Int -> OS) = process/exit in x x",
+        );
         assert_ne!(source, broken);
         let overrides = HashMap::from([(path.clone(), broken.clone())]);
         let (project, _session) = ProjectState::load(&path, &overrides).unwrap();

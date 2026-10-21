@@ -1,6 +1,5 @@
 -- Internal array operations after geometry validation. The caller supplies matching extent and stride.
 
-let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/Codec; /DynamicCodec) = @(import("codecs.zy")) in
 let (/Alloc) = @(import("allocation.zy")) in

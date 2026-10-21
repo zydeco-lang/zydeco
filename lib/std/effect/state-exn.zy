@@ -1,5 +1,4 @@
 -- A combined State + Exception stack, built from the two effect interfaces.
-let (/VType; /CType; /Thk) = @(import("../primitive.zy")) in
 val
   (
     (/OS = _; builtin) : @(import("../builtin.zy"))

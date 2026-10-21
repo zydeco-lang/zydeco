@@ -127,6 +127,7 @@ impl<'graph> TextualProgramBuilder<'graph> {
         let kind = file.kind();
         let signature = file.signature;
         let body = self.term(source, root)?;
+        let body = self.default_prelude(source, body)?;
         let body = match kind {
             | SourceKind::Signature => self
                 .parser
@@ -146,6 +147,62 @@ impl<'graph> TextualProgramBuilder<'graph> {
         };
         self.roots.insert(source, root);
         Ok(root)
+    }
+
+    /// Lower the source's closed default view to an ordinary static projection group.
+    /// This is part of the existing source-DAG copier, not a second recursive pass.
+    fn default_prelude(
+        &mut self, source: SourceId, body: t::TermId,
+    ) -> Result<t::TermId, TextualProgramError> {
+        let file = &self.graph.sources[&source];
+        let span = self.span(source, file.root.into());
+        let Some(prelude) = file.prelude else {
+            // A selected declaration inherits its containing file's opt-out even
+            // when the annotation lies outside the selected syntax.
+            let none = self.parser.meta(span.make(t::MetaNode::Ident("none".into())));
+            let metadata = self
+                .parser
+                .meta(span.make(t::MetaNode::Apply { callee: "prelude".into(), args: vec![none] }));
+            return Ok(self.parser.term(span.make(t::MetaTerm(metadata, body).into())));
+        };
+        let prelude = self.source(prelude)?;
+        let bindee = self.parser.term(span.make(t::SourceBoundary(prelude).into()));
+        let patterns = zydeco_surface::metadata::CorePrelude::closed_names()
+            .map(|name| {
+                let definition = self.parser.def(span.make(t::VarName(name.into())));
+                let pattern = self.parser.pat(span.make(t::Pattern::Var(definition)));
+                self.parser
+                    .pat(span.make(t::ProjectionPattern(t::FieldName(name.into()), pattern).into()))
+            })
+            .collect();
+        let binder = self.parser.pat(
+            span.make(
+                t::Alias(t::ConsN::from_vec(patterns).expect("the default vocabulary is nonempty"))
+                    .into(),
+            ),
+        );
+        self.parser.arena.default_prelude_binders.insert(binder);
+        // Use the shared textual child relation to retain non-editable provenance.
+        for entity in self.parser.arena.reachable_from(binder.into()) {
+            if let t::EntityId::Def(definition) = entity {
+                self.parser.arena.default_prelude_definitions.insert(definition, binder);
+            }
+        }
+        Ok(self.parser.term(
+            span.make(
+                t::GenLet {
+                    binding: t::GenBind {
+                        flavor: t::BindingFlavor::Plain,
+                        binder,
+                        params: None,
+                        ty: None,
+                        bindee,
+                    },
+                    tail: body,
+                }
+                .into(),
+            ),
+        ))
     }
 
     fn span(&self, source: SourceId, entity: t::EntityId) -> Span {

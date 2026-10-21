@@ -170,6 +170,8 @@ pub struct ScopedArena {
     pub origins: TextualOrigins,
     /// Source binders explicitly opted in to refutable computation binding.
     pub partial_binders: std::collections::HashSet<crate::textual::syntax::PatId>,
+    /// Non-editable default definitions retain their generated projection-group origin.
+    pub default_prelude_binders: std::collections::HashSet<crate::textual::syntax::PatId>,
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
@@ -178,6 +180,19 @@ pub struct ScopedArena {
 }
 
 impl ScopedArena {
+    pub fn is_prelude_definition(&self, definition: DefId) -> bool {
+        match self.origins.source(&definition.into()) {
+            | Some(crate::textual::syntax::EntityId::Meta(_)) => true,
+            | _ => self.is_default_prelude_definition(definition),
+        }
+    }
+
+    pub fn is_default_prelude_definition(&self, definition: DefId) -> bool {
+        matches!(self.origins.source(&definition.into()),
+            Some(crate::textual::syntax::EntityId::Pat(pattern))
+                if self.default_prelude_binders.contains(&pattern))
+    }
+
     pub fn allows_partial_binding(&self, pattern: PatId) -> bool {
         match self.origins.source(&pattern.into()) {
             | Some(crate::textual::syntax::EntityId::Pat(source)) => {

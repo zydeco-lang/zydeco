@@ -1,6 +1,5 @@
 -- replace requires the same projected child after its state transition; aliases remain manual.
 
-let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/FieldOperations) = @(import("field.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in

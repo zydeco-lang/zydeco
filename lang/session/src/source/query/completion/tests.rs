@@ -39,8 +39,17 @@ impl Fixture {
         })
     }
 
-    fn names(&self) -> Vec<String> {
-        self.completion().candidates.iter().map(|candidate| candidate.name.0.clone()).collect()
+    fn local_names(&self) -> Vec<String> {
+        // These fixtures exercise authored scope; default vocabulary is checked separately below.
+        self.completion()
+            .candidates
+            .iter()
+            .filter(|candidate| {
+                !zydeco_surface::metadata::CorePrelude::closed_names()
+                    .any(|name| name == candidate.name.0)
+            })
+            .map(|candidate| candidate.name.0.clone())
+            .collect()
     }
 
     fn annotation(&self, name: &str) -> Option<String> {
@@ -69,7 +78,7 @@ impl Fixture {
 #[test]
 fn names_follow_lexical_proximity_and_shadowing() {
     let fixture = Fixture::new("let outer = 1 in let value = 2 in fn value => ¦");
-    assert_eq!(fixture.names(), ["value", "outer"]);
+    assert_eq!(fixture.local_names(), ["value", "outer"]);
     let completion = fixture.completion();
     let semantics = completion.semantics.as_ref().unwrap();
     let value = &completion.candidates[0];
@@ -87,7 +96,7 @@ fn package_annotation_preserves_its_cursor_and_enclosing_bindings() {
         r#"let outer = 1 in
         (#lib = @[package(library, name(lib))] val (inner : @(intrinsic(int))) => ¦)"#,
     );
-    assert_eq!(fixture.names(), ["inner", "outer"]);
+    assert_eq!(fixture.local_names(), ["inner", "outer"]);
     assert!(fixture.annotation("inner").is_some());
 }
 
@@ -99,22 +108,25 @@ fn sequential_bindees_and_annotations_exclude_the_new_binder() {
         "do earlier <- ret 1; do later <- ret ¦; ret later",
         "let earlier = 1 in exists (later as ¦) . later",
     ] {
-        assert_eq!(Fixture::new(source).names(), ["earlier"], "{source}");
+        assert_eq!(Fixture::new(source).local_names(), ["earlier"], "{source}");
     }
-    assert_eq!(Fixture::new("let earlier = 1 in let later = 2 in ¦").names(), ["later", "earlier"]);
+    assert_eq!(
+        Fixture::new("let earlier = 1 in let later = 2 in ¦").local_names(),
+        ["later", "earlier"]
+    );
 }
 
 #[test]
 fn dependent_parameters_see_only_preceding_parameters() {
-    assert_eq!(Fixture::new("fn first (second : ¦) third => first").names(), ["first"]);
-    assert_eq!(Fixture::new("pi First . pi (Second : ¦) . First").names(), ["First"]);
-    assert_eq!(Fixture::new("sigma First . sigma (Second : ¦) . First").names(), ["First"]);
+    assert_eq!(Fixture::new("fn first (second : ¦) third => first").local_names(), ["first"]);
+    assert_eq!(Fixture::new("pi First . pi (Second : ¦) . First").local_names(), ["First"]);
+    assert_eq!(Fixture::new("sigma First . sigma (Second : ¦) . First").local_names(), ["First"]);
 }
 
 #[test]
 fn recursive_binders_and_value_parameters_are_visible_in_their_bodies() {
-    assert_eq!(Fixture::new("fix recurse => ¦").names(), ["recurse"]);
-    assert_eq!(Fixture::new("val argument => ¦").names(), ["argument"]);
+    assert_eq!(Fixture::new("fix recurse => ¦").local_names(), ["recurse"]);
+    assert_eq!(Fixture::new("val argument => ¦").local_names(), ["argument"]);
 }
 
 #[test]
@@ -122,9 +134,9 @@ fn block_wide_bindings_include_later_definitions_but_not_nested_blocks() {
     let fixture = Fixture::new(
         "begin let alpha = ¦ that let beta = 1 that (begin let hidden = 2 that hidden end) end",
     );
-    assert_eq!(fixture.names(), ["alpha", "beta"]);
+    assert_eq!(fixture.local_names(), ["alpha", "beta"]);
     assert_eq!(
-        Fixture::new("begin let outer = 1 that begin let inner = 2 that ¦ end end").names(),
+        Fixture::new("begin let outer = 1 that begin let inner = 2 that ¦ end end").local_names(),
         ["inner", "outer"],
     );
 }
@@ -133,9 +145,9 @@ fn block_wide_bindings_include_later_definitions_but_not_nested_blocks() {
 fn branches_do_not_leak_their_binders_to_siblings_or_the_enclosing_scope() {
     let fixture =
         Fixture::new("let outer = 1 in match missing | +A left => left | +B right => ¦ end");
-    assert_eq!(fixture.names(), ["right", "outer"]);
+    assert_eq!(fixture.local_names(), ["right", "outer"]);
     assert_eq!(
-        Fixture::new("let outer = 1 in (match missing | +A left => left end, ¦)").names(),
+        Fixture::new("let outer = 1 in (match missing | +A left => left end, ¦)").local_names(),
         ["outer"],
     );
 }
@@ -148,7 +160,7 @@ fn unrelated_unbound_names_do_not_discard_the_cursor_scope() {
         "let broken = missing in let value = 1 in _¦",
     ] {
         let fixture = Fixture::new(source);
-        assert!(fixture.names().iter().any(|name| name == "value"), "{source}");
+        assert!(fixture.local_names().iter().any(|name| name == "value"), "{source}");
         assert!(matches!(
             fixture.session.analyze(&fixture.path),
             Err(AnalysisError::Resolve { .. })
@@ -160,16 +172,16 @@ fn unrelated_unbound_names_do_not_discard_the_cursor_scope() {
 fn recovered_syntax_and_type_errors_keep_visible_names() {
     for source in ["let value = 1 in (?, ¦)", "let value = (1 : ()) in ¦", "fn untyped => ¦"] {
         let fixture = Fixture::new(source);
-        assert_eq!(fixture.names().len(), 1, "{source}");
+        assert_eq!(fixture.local_names().len(), 1, "{source}");
         assert!(fixture.completion().semantics.is_some(), "{source}");
     }
-    assert_eq!(Fixture::new("fn untyped => ¦").names(), ["untyped"]);
+    assert_eq!(Fixture::new("fn untyped => ¦").local_names(), ["untyped"]);
 }
 
 #[test]
 fn a_later_fatal_resolution_error_preserves_an_already_captured_scope() {
     let fixture = Fixture::new("let value = 1 in (¦, param invalid that invalid)");
-    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.local_names(), ["value"]);
     assert!(fixture.completion().semantics.is_none());
     assert!(matches!(
         fixture.session.analyze(&fixture.path),
@@ -192,7 +204,7 @@ fn expected_annotations_rank_equal_names_and_filter_only_rigid_mismatches() {
     let fixture = Fixture::new(
         "let matching = 1 in let other = 'x' in val unknown => (_¦ : @[intrinsic(int)] _)",
     );
-    assert_eq!(fixture.names(), ["matching", "unknown"]);
+    assert_eq!(fixture.local_names(), ["matching", "unknown"]);
     assert_eq!(fixture.compatibility("matching"), Some(AnnotationCompatibility::Equal));
     assert_eq!(fixture.compatibility("unknown"), Some(AnnotationCompatibility::Unknown));
     assert_eq!(fixture.compatibility("other"), Some(AnnotationCompatibility::Mismatch));
@@ -207,7 +219,7 @@ fn unresolved_expected_types_keep_values_unknown_but_reject_type_names() {
     let fixture = Fixture::new(
         "let Number = @[intrinsic(int)] _ in let value = 1 in do result <- ret _¦; ret result",
     );
-    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.local_names(), ["value"]);
     assert_eq!(fixture.compatibility("value"), Some(AnnotationCompatibility::Unknown));
     assert_eq!(fixture.compatibility("Number"), Some(AnnotationCompatibility::Mismatch));
     assert!(matches!(
@@ -221,7 +233,7 @@ fn rigid_candidate_evidence_agrees_with_checking_the_inserted_name() {
     let mut fixture =
         Fixture::new("let matching = 1 in let other = 'x' in (_¦ : @[intrinsic(int)] _)");
     let completion = fixture.completion();
-    assert_eq!(fixture.names(), ["matching"]);
+    assert_eq!(fixture.local_names(), ["matching"]);
     for (candidate, accepted) in [("matching", true), ("other", false)] {
         let mut source = completion.source.clone();
         source.replace_range(completion.replacement.clone(), candidate);
@@ -241,7 +253,7 @@ fn transparent_aliases_preserve_expected_annotation_equality() {
     let fixture = Fixture::new(
         "let Number = @[intrinsic(int)] _ in let Alias = Number in let value = 1 in (_¦ : Alias)",
     );
-    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.local_names(), ["value"]);
     assert_eq!(fixture.compatibility("value"), Some(AnnotationCompatibility::Equal));
     assert_eq!(fixture.compatibility("Alias"), Some(AnnotationCompatibility::Mismatch));
 }
@@ -249,18 +261,18 @@ fn transparent_aliases_preserve_expected_annotation_equality() {
 #[test]
 fn cbpv_completion_checks_the_bare_name_without_implicit_return_or_force() {
     let bare = Fixture::new("let value = 1 in (_¦ : (@[intrinsic(ret)] _) (@[intrinsic(int)] _))");
-    assert!(bare.names().is_empty());
+    assert!(bare.local_names().is_empty());
     assert_eq!(bare.compatibility("value"), Some(AnnotationCompatibility::Mismatch));
 
     let returned =
         Fixture::new("let value = 1 in (ret _¦ : (@[intrinsic(ret)] _) (@[intrinsic(int)] _))");
-    assert_eq!(returned.names(), ["value"]);
+    assert_eq!(returned.local_names(), ["value"]);
     assert_eq!(returned.compatibility("value"), Some(AnnotationCompatibility::Equal));
 
     let forced = Fixture::new(
         "let suspended = { ret 1 } in (! _¦ : (@[intrinsic(ret)] _) (@[intrinsic(int)] _))",
     );
-    assert_eq!(forced.names(), ["suspended"]);
+    assert_eq!(forced.local_names(), ["suspended"]);
     assert_eq!(forced.compatibility("suspended"), Some(AnnotationCompatibility::Equal));
 }
 
@@ -268,9 +280,9 @@ fn cbpv_completion_checks_the_bare_name_without_implicit_return_or_force() {
 fn changing_the_current_expected_type_changes_completion_evidence() {
     let mut fixture =
         Fixture::new("let number = 1 in let letter = 'x' in (_¦ : @[intrinsic(int)] _)");
-    assert_eq!(fixture.names(), ["number"]);
+    assert_eq!(fixture.local_names(), ["number"]);
     fixture.edit("let number = 1 in let letter = 'x' in (_¦ : @[intrinsic(char)] _)");
-    assert_eq!(fixture.names(), ["letter"]);
+    assert_eq!(fixture.local_names(), ["letter"]);
     assert_eq!(fixture.compatibility("number"), Some(AnnotationCompatibility::Mismatch));
     assert_eq!(fixture.compatibility("letter"), Some(AnnotationCompatibility::Equal));
 }
@@ -278,7 +290,7 @@ fn changing_the_current_expected_type_changes_completion_evidence() {
 #[test]
 fn synthesis_sites_keep_every_visible_annotation_unknown() {
     let fixture = Fixture::new("let matching = 1 in let other = 'x' in _¦");
-    assert_eq!(fixture.names(), ["other", "matching"]);
+    assert_eq!(fixture.local_names(), ["other", "matching"]);
     assert_eq!(fixture.compatibility("matching"), Some(AnnotationCompatibility::Unknown));
     assert_eq!(fixture.compatibility("other"), Some(AnnotationCompatibility::Unknown));
     assert!(fixture.completion().semantics.as_ref().unwrap().typing.expectations().is_empty());
@@ -287,7 +299,7 @@ fn synthesis_sites_keep_every_visible_annotation_unknown() {
 #[test]
 fn exact_prefix_match_remains_primary_over_type_evidence() {
     let fixture = Fixture::new("let item_equal = 1 in val item => (item¦ : @[intrinsic(int)] _)");
-    assert_eq!(fixture.names(), ["item", "item_equal"]);
+    assert_eq!(fixture.local_names(), ["item", "item_equal"]);
     assert_eq!(fixture.compatibility("item"), Some(AnnotationCompatibility::Unknown));
     assert_eq!(fixture.compatibility("item_equal"), Some(AnnotationCompatibility::Equal));
 }
@@ -296,7 +308,7 @@ fn exact_prefix_match_remains_primary_over_type_evidence() {
 fn a_companion_signature_supplies_the_root_expectation() {
     let fixture = Fixture::new("let matching = 1 in let other = 'x' in _¦")
         .with_dependency("main.zyi", "@(intrinsic(int))");
-    assert_eq!(fixture.names(), ["matching"]);
+    assert_eq!(fixture.local_names(), ["matching"]);
     assert_eq!(fixture.compatibility("matching"), Some(AnnotationCompatibility::Equal));
     assert_eq!(fixture.compatibility("other"), Some(AnnotationCompatibility::Mismatch));
 }
@@ -306,7 +318,7 @@ fn source_graph_copying_preserves_the_cursor_without_exporting_imported_locals()
     let fixture = Fixture::new("let public = @[import(\"provider.zy\")] _ in ¦")
         .with_dependency("provider.zy", "let private = 1 in private")
         .with_dependency("provider.zyi", "@(intrinsic(int))");
-    assert_eq!(fixture.names(), ["public"]);
+    assert_eq!(fixture.local_names(), ["public"]);
     assert_eq!(fixture.annotation("public").as_deref(), Some("Int"));
 }
 
@@ -315,7 +327,7 @@ fn imported_sources_cannot_capture_the_importers_scope() {
     let fixture =
         Fixture::new("let secret = 1 in let imported = @[import(\"provider.zy\")] _ in ¦")
             .with_dependency("provider.zy", "secret");
-    assert_eq!(fixture.names(), ["imported", "secret"]);
+    assert_eq!(fixture.local_names(), ["imported", "secret"]);
     assert!(fixture.annotation("imported").is_none());
     assert!(matches!(
         fixture.session.analyze(&fixture.path),
@@ -333,13 +345,13 @@ fn discarded_import_payload_is_not_a_semantic_completion_site() {
 #[test]
 fn prefix_filtering_uses_the_whole_token_edit_and_exact_matches_rank_first() {
     let fixture = Fixture::new("let value = 1 in let value_long = 2 in val¦ue_suffix");
-    assert_eq!(fixture.names(), ["value_long", "value"]);
+    assert_eq!(fixture.local_names(), ["value_long", "value"]);
     let completion = fixture.completion();
     assert_eq!(&completion.source[completion.replacement.clone()], "value_suffix");
     let fixture = Fixture::new("let value = 1 in let value_long = 2 in value¦");
-    assert_eq!(fixture.names(), ["value", "value_long"]);
+    assert_eq!(fixture.local_names(), ["value", "value_long"]);
     let fixture = Fixture::new("let value = 1 in let other = 2 in val¦");
-    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.local_names(), ["value"]);
     let completion = fixture.completion();
     assert_eq!(&completion.source[completion.replacement.clone()], "val");
 }
@@ -347,7 +359,7 @@ fn prefix_filtering_uses_the_whole_token_edit_and_exact_matches_rank_first() {
 #[test]
 fn explicit_holes_are_replaced_and_do_not_become_a_name_prefix() {
     let fixture = Fixture::new("let value = 1 in _¦");
-    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.local_names(), ["value"]);
     let completion = fixture.completion();
     assert_eq!(&completion.source[completion.replacement.clone()], "_");
 }
@@ -392,7 +404,7 @@ fn invalid_and_opaque_cursors_are_rejected_without_affecting_valid_positions() {
             Err(CompletionError::Cursor(CompletionCursorError::OpaqueSource { .. }))
         ));
     }
-    assert_eq!(Fixture::new("let value = 1 in /- 🦀 -/ ¦").names(), ["value"]);
+    assert_eq!(Fixture::new("let value = 1 in /- 🦀 -/ ¦").local_names(), ["value"]);
 }
 
 #[test]
@@ -400,14 +412,14 @@ fn completion_does_not_replace_strict_analysis_or_accept_recovered_programs() {
     let fixture = Fixture::new("let value = 1 in val¦ue");
     let before = fixture.session.analyze(&fixture.path).unwrap();
     let source = fixture.session.source_text(&fixture.path).unwrap();
-    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.local_names(), ["value"]);
     let after = fixture.session.analyze(&fixture.path).unwrap();
     assert!(Arc::ptr_eq(&before, &after));
     assert_eq!(fixture.session.source_text(&fixture.path).unwrap(), source);
 
     let fixture = Fixture::new("let value = 1 in ¦");
     assert!(matches!(fixture.session.analyze(&fixture.path), Err(AnalysisError::Source { .. })));
-    assert_eq!(fixture.names(), ["value"]);
+    assert_eq!(fixture.local_names(), ["value"]);
     assert!(matches!(fixture.session.analyze(&fixture.path), Err(AnalysisError::Source { .. })));
 }
 
@@ -416,7 +428,7 @@ fn current_overlay_and_dependency_changes_invalidate_completion_results() {
     let mut fixture = Fixture::new("let old = 1 in ¦");
     let previous = fixture.completion();
     fixture.edit("let new = 2 in ¦");
-    assert_eq!(fixture.names(), ["new"]);
+    assert_eq!(fixture.local_names(), ["new"]);
     assert!(!Arc::ptr_eq(&previous, &fixture.completion()));
 
     let mut fixture = Fixture::new("let imported = @[import(\"provider.zy\")] _ in ¦")
@@ -448,4 +460,38 @@ fn completion_uses_the_selected_project_and_package_context() {
     );
     assert!(completion.semantics.is_some());
     assert!(fixture.session.complete(&fixture.path, fixture.offset).is_err());
+}
+
+#[test]
+fn default_names_are_available_ranked_after_authored_names_and_shadowable() {
+    let fixture = Fixture::new("let value = 1 in ¦");
+    let completion = fixture.completion();
+    assert_eq!(completion.candidates[0].name.0, "value");
+    let defaults = completion.candidates[1..]
+        .iter()
+        .map(|candidate| candidate.name.0.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(defaults, zydeco_surface::metadata::CorePrelude::closed_names().collect());
+    assert!(completion.implicit_os);
+    assert_eq!(fixture.annotation("Int").as_deref(), Some("VType"));
+    let shadow = Fixture::new("let Int = Unit in In¦");
+    let completion = shadow.completion();
+    let int = completion.candidates.iter().find(|candidate| candidate.name.0 == "Int").unwrap();
+    assert!(!completion.semantics.as_ref().unwrap().scoped.is_prelude_definition(int.definition));
+    assert_eq!(
+        completion.candidates.iter().filter(|candidate| candidate.name.0 == "Int").count(),
+        1
+    );
+}
+
+#[test]
+fn opt_out_removes_default_completions_but_preserves_authored_names() {
+    let fixture = Fixture::new("let Int = Unit in @[prelude(none)] ¦");
+    let completion = fixture.completion();
+    assert_eq!(
+        completion.candidates.iter().map(|candidate| candidate.name.0.as_str()).collect::<Vec<_>>(),
+        ["Int"]
+    );
+    assert!(!completion.implicit_os);
+    assert!(Fixture::new("@[prelude(none)] ¦").completion().candidates.is_empty());
 }

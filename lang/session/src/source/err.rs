@@ -253,7 +253,9 @@ impl SourceLoadError {
             | Self::Parse(errors) => errors.iter().find_map(SourceParseError::diagnostic_site),
             | Self::Cycle(cycle) => cycle.steps.first().map(|step| {
                 let path = match step.kind {
-                    | SourceDependencyKind::Import(_) => &step.dependent,
+                    | SourceDependencyKind::Import(_) | SourceDependencyKind::Prelude => {
+                        &step.dependent
+                    }
                     | SourceDependencyKind::Signature => &step.dependency,
                 };
                 SourceDiagnosticSite::new(path.clone(), step.span.range())
@@ -325,6 +327,7 @@ impl Display for CheckedRootSort {
 pub enum SourceDependencyKind {
     Import(SourceImportId),
     Signature,
+    Prelude,
 }
 
 /// One dependency edge in a reported source cycle.
@@ -353,6 +356,12 @@ impl Display for SourceCycle {
                 .map(|step| match step.kind {
                     | SourceDependencyKind::Import(_) => format!(
                         "  `{}` imports `{}` at {}",
+                        step.dependent.display(),
+                        step.dependency.display(),
+                        step.span
+                    ),
+                    | SourceDependencyKind::Prelude => format!(
+                        "  `{}` uses default prelude `{}` at {}",
                         step.dependent.display(),
                         step.dependency.display(),
                         step.span

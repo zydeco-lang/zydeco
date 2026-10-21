@@ -1,4 +1,3 @@
-let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/DataPackage) = @(import("../data/package.zy")) in
 let (/Monad; /Algebra; /WithMonad; /Top) = @(import("monad.zy")) in
 let (/Transformer) = @(import("transformer.zy")) in
@@ -37,7 +36,6 @@ begin
           let translated = {
             (
               @[monadic] begin
-                let (/Ret) = @(import("../primitive.zy")) in
                 let (/with_lift) = @(import("transformer-source.zy")) in
                 let NonDet = NonDetSource in
                 let Source =

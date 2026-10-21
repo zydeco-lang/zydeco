@@ -2,30 +2,25 @@
 
 ## Start with the types
 
-For host-independent kinds and types, open the primitive leaf directly:
+Common kinds and types are available without prelude setup:
 
 ```zydeco
-let (/VType; /Ret; /Thk; /Int) = @(import(/std/primitive)) in
 { fn (value : Int) => (ret value : Ret Int) }
 ```
 
 Run CLI commands from the repository root to use its automatically detected project.
-The leaf has no provider dependency. Provider-independent library definitions use it directly;
-programs with host operations build a core prelude view from their shared Builtin opening:
+Provider-independent libraries need no Builtin parameter.
+Programs using host operations select their provider explicitly:
 
 ```zydeco
 param (/process; builtin) : @(import(/std/builtin)) in
-let (/make = make_prelude) = @(import(/std/prelude)) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let stop : Thk (Int -> OS) = process/exit in
 ! stop 0
 ```
 
-The [core prelude contract](../../docs/references/language.md#core-prelude) defines the exact vocabulary,
-lexical expansion, and provider identity rules.
-The adapter supplies names, not host operations; keep dependent operations and its argument
-on the same retained opening.
+The [core prelude contract](../../docs/references/language.md#core-prelude) owns the vocabulary,
+lookup rules, and `@[prelude(none)]` / `@[prelude(from(view))]` exceptions.
+Keep dependent operations and the retained provider alias on one shared opening.
 
 The Builtin contract exposes these surface names:
 
@@ -96,7 +91,7 @@ See [explicit storage](#explicit-storage).
 ## Source packages and tests
 
 [`std.zy`](std.zy) declares the whole-file package `std`.
-The primitive leaf and prelude adapter are `std/primitive` and `std/prelude`.
+The primitive leaf and closed default view are `std/primitive` and `std/prelude`.
 Builtin is `std/builtin`; topic entries are `std/data`, `std/text`, `std/numeric`, `std/system`, and `std/memory`.
 These names identify source terms; fields and factory applications remain ordinary language structure.
 The [source-package rules](../../docs/references/language.md#source-packages) govern selection and relationships.
@@ -136,7 +131,7 @@ The current files are:
 ```text
 builtin.zy                 complete host ABI: surface kinds and types, operation groups
 primitive.zy               provider-independent canonical kinds and types
-prelude.zy                 core vocabulary adapted to one retained Builtin opening
+prelude.zy                 closed core vocabulary used by the implicit default
 std.zy                     wiring for the public packed value
 
 builtin/numeric/*.zy       primitive numeric operations
@@ -211,7 +206,7 @@ A composition root that must pass the dependency onward keeps the whole-alias `b
 The [primitive and capability rules](../../docs/references/language.md#13-primitive-values-and-capabilities)
 define these identity boundaries.
 The Builtin contracts and primitive leaf bootstrap their canonical types with `@(intrinsic(name))`.
-Higher-level libraries import the primitive leaf instead of repeating those type bindings.
+Higher-level libraries use the default vocabulary instead of repeating those bindings or importing the leaf.
 Value-level intrinsics used for static arithmetic remain explicit; the primitive leaf only supplies kinds and types.
 Focused tests of the complete Builtin signature and shared openings also retain explicit projections.
 
@@ -244,14 +239,12 @@ Named product values also synthesize their types, so naming fields alone does no
 Kind fields currently need an annotated packed value introduction rather than `pack`:
 
 ```zydeco
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
 let types =
-  pack (= Thk as @(intrinsic(thk)))
+  pack (= Thk as Thk)
   where () end
 in
 ((VType, CType, types) :
-  exists (VType as @(intrinsic(vtype))) (CType as @(intrinsic(ctype))) . @[typeof] types)
+  exists (VType as VType) (CType as CType) . @[typeof] types)
 ```
 
 The annotation discloses the kind equations, while the inner `pack` supplies a type constructor.
@@ -271,7 +264,6 @@ The result may depend on `X`, not on the arbitrary runtime value `x`.
 For example, both interfaces can expose codata methods:
 
 ```zydeco
-let (/VType; /Thk; /Ret; /Unit) = @(import("primitive.zy")) in
 let Box = exists (X : VType) . X in
 let Methods (X : VType) = codata
   | .get : Ret X
@@ -303,7 +295,6 @@ Moving it changes where payloads and witnesses are shared.
 When the provider chooses a hidden type, a polymorphic callback can give the consumer one scoped opening:
 
 ```zydeco
-let (/VType; /CType; /Thk; /Ret; /Int) = @(import("primitive.zy")) in
 let Entry = exists (X : VType) . X * Thk (X -> Ret Int) in
 let Hidden = codata
   | .open : forall (R : CType) . Thk (pi ((X, _, _) : Entry) . R) -> R
@@ -356,9 +347,6 @@ For example, StateT over Writer keeps state operations and base output at one tr
 
 ```zydeco
 param (/string; builtin) : @(import("builtin.zy")) in
-let (/make = make_prelude) = @(import("prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let writer = builtin |> (@(import("effect/writer.zy"))) in
 let state = builtin |> (@(import("effect/state.zy"))) in
 let (W, w) = writer/instance String (#empty = "", #append = string/append) in
@@ -400,9 +388,6 @@ This keeps `choose` inputs and list observations at the same `List` witness as t
 
 ```zydeco
 param (/OS = _; builtin) : @(import("builtin.zy")) in
-let (/make = make_prelude) = @(import("prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let (/make = make_data) = @(import("data/package.zy")) in
 let (/make = make_nondet) = @(import("effect/nondet.zy")) in
 let (/list; data_package) = make_data builtin in
@@ -466,9 +451,6 @@ The library introduces no lifetimes or borrow checker.
 
 ```zydeco
 param (/process; builtin) : @(import("builtin.zy")) in
-let (/make = make_prelude) = @(import("prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let (/Uninit; /Init; /Ptr; /fixed; /allocation; /codecs) = builtin |> (@(import("memory/package.zy"))) in
 let (= Plan, = Layout, layouts) = fixed in
 let (/Alloc; /heap) = allocation in
@@ -629,9 +611,6 @@ Generic code explicitly selects and passes one:
 
 ```zydeco
 param (/OS = _; builtin) : @(import("builtin.zy")) in
-let (/make = make_prelude) = @(import("prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let make_std = @(import("std.zy")) in
 let (/Additive; /dictionaries) = builtin |> make_std in
 let ! twice (A : VType) (operations : Additive A) (value : A) : Ret A =
@@ -652,9 +631,6 @@ and checks that the operations use that same carrier:
 
 ```zydeco
 param (/OS = _; builtin) : @(import("builtin.zy")) in
-let (/make = make_prelude) = @(import("prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let make_std = @(import("std.zy")) in
 let (/Bool; /Numeric; /dictionaries) = builtin |> make_std in
 let int_instance =

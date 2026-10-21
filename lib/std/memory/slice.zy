@@ -1,7 +1,6 @@
 -- A slice carries only a typed pointer and a runtime element count.
 -- The caller guarantees allocation extent, element stride, state, and alias validity.
 
-let (/VType; /CType; /Thk; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
 let (/Fault) = @(import("fault.zy")) in

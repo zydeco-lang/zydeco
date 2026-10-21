@@ -47,6 +47,7 @@ impl ScopedBuilder {
             origins: self.origins,
             users,
             partial_binders: bitter.partial_binders,
+            default_prelude_binders: bitter.default_prelude_binders,
         }
     }
 }

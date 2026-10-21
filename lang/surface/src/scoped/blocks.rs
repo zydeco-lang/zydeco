@@ -10,8 +10,8 @@ type FoldResult<T> = std::result::Result<T, ReportedError>;
 /// One syntactic contribution discovered within a `begin` boundary.
 #[derive(Clone, Debug)]
 pub(super) enum MobileCandidate {
-    Parameter { source: TermId, flavor: ParameterFlavor, binder: PatId },
-    Definition { source: TermId, binder: PatId, bindee: TermId },
+    Parameter { source: TermId, flavor: ParameterFlavor, binder: PatId, prelude: bool },
+    Definition { source: TermId, binder: PatId, bindee: TermId, prelude: bool },
 }
 
 impl MobileCandidate {
@@ -19,6 +19,21 @@ impl MobileCandidate {
         match self {
             | Self::Parameter { source, .. } | Self::Definition { source, .. } => *source,
         }
+    }
+
+    fn prelude(&self) -> bool {
+        match self {
+            | Self::Parameter { prelude, .. } | Self::Definition { prelude, .. } => *prelude,
+        }
+    }
+
+    fn without_prelude(mut self) -> Self {
+        match &mut self {
+            | Self::Parameter { prelude, .. } | Self::Definition { prelude, .. } => {
+                *prelude = false
+            }
+        }
+        self
     }
 
     fn binding_id(&self) -> BindingId {
@@ -30,6 +45,7 @@ impl MobileCandidate {
         source_order: usize,
     ) -> FoldResult<Binding> {
         let id = self.binding_id();
+        env.local.prelude.enabled &= self.prelude();
         env.local.under.push_back_mut(BindingSite { owner: block, id });
         let inner = match self {
             | Self::Parameter { flavor, binder, .. } => {
@@ -93,6 +109,7 @@ impl<'a> BlockCandidateCollector<'a> {
             | Term::MobileParam(b::MobileParam { flavor, binder, tail }) => {
                 std::iter::once(MobileCandidate::Parameter {
                     source: term,
+                    prelude: true,
                     flavor: *flavor,
                     binder: *binder,
                 })
@@ -104,6 +121,7 @@ impl<'a> BlockCandidateCollector<'a> {
                 let b::MobileBind { binder, bindee, tail } = &**binding;
                 std::iter::once(MobileCandidate::Definition {
                     source: term,
+                    prelude: true,
                     binder: *binder,
                     bindee: *bindee,
                 })
@@ -117,8 +135,16 @@ impl<'a> BlockCandidateCollector<'a> {
                 unreachable!("residual nodes are introduced only after candidate collection")
             }
             | Term::Meta(term) => {
-                let b::MetaT(_, inner) = &**term;
-                self.term(*inner)
+                let b::MetaT(meta, inner) = &**term;
+                let candidates = self.term(*inner);
+                if matches!(
+                    meta.specialize::<crate::metadata::PreludeMeta>(),
+                    Ok(Some(crate::metadata::PreludeMeta::None))
+                ) {
+                    candidates.into_iter().map(MobileCandidate::without_prelude).collect()
+                } else {
+                    candidates
+                }
             }
             | Term::TypeOf(b::TypeOf(inner))
             | Term::Sealed(b::Sealed(inner))

@@ -617,7 +617,7 @@ Competing claims to a reached name are resolved before that binding is accepted.
 
 The merge pass visits providers before consumers and interns structural syntax shapes.
 Shapes retain syntax variants, scalar data, attached text, relevant meta annotations,
-companion signatures, and merged import targets.
+companion signatures, the default-prelude dependency, and merged import targets.
 Package annotations contribute their typed roles and normalized relationship targets;
 names are retained with the namespace bindings and provenance.
 `SourceGraph.sources` stores the resulting nodes; `SourceGraph.instances` retains candidate contexts,
@@ -627,6 +627,18 @@ Namespace equality and structural equality are compared directly through domain 
 
 [Source assembly](../../lang/session/src/source/program.rs) allocates semantic input identities from the merged graph.
 Its source map preserves original file spans for diagnostics and editor queries.
+
+The [default prelude loader](../../lang/session/src/source/prelude.rs) records a separate `SourceFile.prelude` edge
+for the [language-level default](language.md#core-prelude), rather than inventing an authored import site.
+Provider ordering, structural merging, cycle checks, and revisioned inputs include that edge.
+Leading opt-out inspection follows only the selected root's annotation and grouping spine;
+it does not add another whole-source traversal.
+The existing source-DAG copier prefixes a closed projection group, or preserves an inherited file opt-out
+when copying an independently selected declaration.
+This local construction uses the copier's existing schedule and shared textual child relation for provenance.
+It does not require a separate reconstruction pass.
+The bundled closed bootstrap uses the same source identities as checkout files;
+existing files and overlays remain ordinary tracked inputs.
 
 Source graph and analysis queries include the project and selected entry in their keys.
 Every read template remains a tracked source input, including declarations used to establish availability.
@@ -911,24 +923,25 @@ Partial actions carry the header's textual binder identities and record them bef
 including when that payload has already been memoized.
 Existential parameter annotations use their own allowed-role validation and retain their precise annotation sites.
 
-The [core prelude](language.md#core-prelude) is a bounded construction inside this existing folder,
-not an additional source traversal or compiler environment.
-`PreludeMeta` validates the catalog's profile and lexical `from` argument independently of reconstruction.
-The action builds an ordinary value `let` with the fixed projection pattern and lowers the payload once.
-Resolution visits the lexical bindee before the new definitions; checking and every backend use the ordinary result.
-This local handler needs no separate `Explicit` traversal or resumable scheduler.
+`PreludeMeta` validates either `none` or a lexical `from` argument independently of reconstruction.
+The override action builds the ordinary fixed projection group and lowers the payload once;
+`none` survives to resolution because it changes fallback lookup.
+The [default source prefix](#source-loading-and-package-selection) is already present when this folder runs.
+These bounded actions need no separate `Explicit` traversal or resumable scheduler.
 
-Generated definitions, projections, and the opening retain the annotation's metadata origin;
+Override-generated definitions and projections retain the annotation's metadata origin;
 the bindee retains the exact identifier argument's origin.
-Ordinary binding provenance therefore carries provider identity into diagnostics and editor queries.
-Hover and body completion mark the implicit definitions, and go-to-definition points to their annotation.
-These generated binders are not editable declaration tokens: rename refuses them rather
-than replacing the annotation, while a rename of the supplied view includes its `from` reference.
-The textual formatter retains authored sugar; bitter inspection displays its explicit projection.
+Default-generated definitions instead retain the source prefix's pattern origin and an explicit generated-binder mark.
+Neither creates an editable declaration token.
+Hover and completion identify the prelude origin; rename refuses generated definitions,
+while renaming a supplied view includes its `from` reference.
+Go-to-definition for an override points to its annotation; a default binding has no fabricated declaration location.
+Contextual `OS` retains its authored term origin without inventing a `DefId`.
+The editor classifies that term from checked evidence and filters its completion using its `CType` classifier.
+The textual formatter preserves authored annotations rather than printing the inserted default prefix.
 [Surface tests](../../lang/surface/src/bitter/desugar/tests.rs),
-[composition regressions](../../lang/tests/tests/prelude.rs), and the CLI, REPL,
-and editor tests pair ordinary openings with the abbreviation, including rejected witness sharing
-and absent downstream artifacts.
+[composition regressions](../../lang/tests/tests/prelude.rs), and CLI, REPL, and editor tests cover opt-out
+and replacement, witness sharing, source independence, and rejected downstream publication.
 
 ### Name Resolution
 
@@ -946,6 +959,14 @@ and copattern spines thread environments left to right.
 Match arms receive independent environments. Monadic blocks resolve their basis before their body.
 An exhaustive constructor classification delegates ordinary reconstruction to the shared structural folder;
 constructors with binding, boundary, or scheduling effects have explicit semantic handlers.
+
+The generated default projection group installs a separate, lowest-priority `PreludeScope`.
+Ordinary lexical and block-wide definitions win before fallback lookup.
+A retained `none` annotation disables fallback in its payload; mobile candidates retain that policy when moved.
+Source boundaries start independent environments, and the source's own generated prefix establishes its defaults.
+An otherwise unresolved enabled `OS` becomes `Internal::OS`, using the existing checked `BuiltinTypeResolution`
+against the environment's visible witnesses.
+No provider package is opened or imported by that reference, and no successful definition-reference event is fabricated.
 
 Ordinary lexical bindings follow the [source-boundary rules](language.md#source-boundaries).
 Reuse between imported instances follows the [package-resolution model](language.md#copy-resolve-merge-analyze).
@@ -972,6 +993,10 @@ but is a required collaborator: each block needs its result before it can be ela
 `begin_block` seeds every candidate, including candidates with no edges.
 An event adds dependencies to every active binding whose owner matches the dependency's owner;
 nested block graphs remain separate.
+Contextual `OS` uses are recorded separately until ordinary edges are complete.
+At `finish_block`, the analyzer computes the reverse closure of those users and orders them after independent bindings,
+implementing the [provider dependency rule](language.md#explicit-providers-and-shared-openings).
+Existing edges remain intact, and dependent bindings cannot become new implicit back-edges.
 `finish_block` removes and returns the completed graph, while `abort_block` discards an incomplete graph
 before recovery continues outside that block.
 All graphs must be closed when resolution finishes.
@@ -1016,6 +1041,16 @@ and source occurrences are recorded in the [statics arena](../../lang/statics/sr
 | Packed values | `Exists`, manifest equations, `ManifestKind`, and static-prefix patterns |
 | Dependent computation functions | `PackPi` with canonical witnesses and a dependent codomain |
 | Products and named fields | Component vectors, labels, and resolved routes with physical product positions |
+
+`ValuePatternShape::is_static_opening` recognizes the checked form of a projection that binds only static components
+and discards its runtime payload, excluding value binders, refutable patterns, and view applications.
+The [static-only opening rule](language.md#3-bindings-and-scope) permits classifier continuations
+with ordinary witness-escape validation.
+Wholly manifest openings also return their checked value or computation continuation directly,
+introducing no runtime let or payload evaluation.
+An opening with fresh abstract witnesses retains its evidence for required static specialization.
+The prelude regressions compare interpreter-input node counts with opt-out counterparts
+and retain ordinary runtime-hole rejection, abstract-opening evidence, and the array-memory stack-overflow reproducer.
 
 ### Inference and Reuse
 

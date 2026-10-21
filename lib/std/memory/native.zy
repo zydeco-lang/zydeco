@@ -1,5 +1,4 @@
 -- Raw operations: callers establish lifetime, initialization, bounds, and allocator ownership.
-let (/CType; /Thk; /Int) = @(import("../primitive.zy")) in
 let (/Fault) = @(import("fault.zy")) in
 begin
   param val (/Addr; /memory; /numeric; builtin) : @(import("../builtin.zy")) that

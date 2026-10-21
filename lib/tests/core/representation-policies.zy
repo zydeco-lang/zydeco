@@ -1,8 +1,5 @@
 -- The recursive closure is opened locally; its captured wide scalar remains live.
 param (/process; /numeric; /int; /string; /args; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   def Chain : VType =
     data

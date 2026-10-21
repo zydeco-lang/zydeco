@@ -1,5 +1,4 @@
 -- Read-only environments, derived from ordinary Ret sequencing.
-let (/VType; /CType; /Thk; /Ret) = @(import("../primitive.zy")) in
 let (/Monad; /Algebra; /Top) = @(import("monad.zy")) in
 let (/Transformer) = @(import("transformer.zy")) in
 let MonadReader (R : VType) (M : VType -> CType) =
@@ -28,7 +27,6 @@ val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
         let translated = {
           (
             @[monadic] begin
-              let (/VType; /Ret) = @(import("../primitive.zy")) in
               let (/with_lift) = @(import("transformer-source.zy")) in
               let Reader = ReaderSource in
               let Source (R : VType) =

@@ -115,6 +115,39 @@ impl PatternVariableStandIn {
 pub(super) struct ValuePatternShape;
 
 impl ValuePatternShape {
+    /// A package opening that binds only static components, discarding its value body.
+    /// This recognizes the checked projection shape; value binders and views cannot
+    /// disappear merely because the continuation happens to be a classifier.
+    pub(super) fn is_static_opening(tycker: &Tycker<'_>, pattern: ss::VPatId) -> bool {
+        Self::static_opening_shape(tycker, pattern) == Some(true)
+    }
+
+    fn static_opening_shape(tycker: &Tycker<'_>, pattern: ss::VPatId) -> Option<bool> {
+        match &tycker.statics.vpats[&pattern] {
+            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Triv(_) => Some(false),
+            | ss::ValuePattern::Named(ss::Named(_, inner)) => {
+                Self::static_opening_shape(tycker, *inner)
+            }
+            | ss::ValuePattern::SCons(ss::ConsN(_, body)) => {
+                Self::static_opening_shape(tycker, *body).map(|_| true)
+            }
+            | ss::ValuePattern::VCons(patterns) => {
+                patterns.iter().try_fold(false, |opened, pattern| {
+                    Self::static_opening_shape(tycker, *pattern).map(|next| opened || next)
+                })
+            }
+            | ss::ValuePattern::Alias(ss::Alias(patterns)) => {
+                patterns.iter().try_fold(false, |opened, pattern| {
+                    Self::static_opening_shape(tycker, *pattern).map(|next| opened || next)
+                })
+            }
+            | ss::ValuePattern::Var(_)
+            | ss::ValuePattern::Ctor(_)
+            | ss::ValuePattern::Lit(_)
+            | ss::ValuePattern::View(_) => None,
+        }
+    }
+
     pub(super) fn require_binding_k(
         tycker: &mut Tycker<'_>, source: su::PatId, pattern: ss::VPatId,
     ) -> ResultKont<()> {

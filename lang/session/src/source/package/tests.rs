@@ -168,7 +168,13 @@ fn equal_definitions_share_a_binding_and_conflicts_retain_both_origins() {
     let p = f.project(&["first.zy", "second.zy"]);
     let g = f.load("main.zy", p.clone()).unwrap();
     assert_eq!(g.packages[0].source, g.packages[1].source);
-    assert_eq!(g.source_inputs().count(), 3, "both physical origins remain query inputs");
+    assert_eq!(
+        g.source_inputs()
+            .filter(|source| source.path.starts_with(f.directory.path().canonicalize().unwrap()))
+            .count(),
+        3,
+        "both physical origins remain query inputs"
+    );
     f.write("second.zy", "@[package(library, name(value))] 43");
     let error = f.load("main.zy", p).unwrap_err();
     assert!(error.iter().any(|error| matches!(error, SourceLoadError::Package(error) if matches!(error.as_ref(), PackageError::Conflict { site, first, .. } if site.path().ends_with("second.zy") && first.path().ends_with("first.zy")))));

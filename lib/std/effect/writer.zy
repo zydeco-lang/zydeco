@@ -1,5 +1,4 @@
 -- Ordered output. Append remains total and observationally pure across translation.
-let (/VType; /CType; /Thk; /Ret; /Unit) = @(import("../primitive.zy")) in
 let (/Monad; /Algebra; /Top) = @(import("monad.zy")) in
 let (/Monoid) = @(import("../algebra/monoid.zy")) in
 let (/Transformer) = @(import("transformer.zy")) in
@@ -32,7 +31,6 @@ val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
         let translated = {
           (
             @[monadic] begin
-              let (/VType; /Thk; /Ret) = @(import("../primitive.zy")) in
               let (/with_lift) = @(import("transformer-source.zy")) in
               let Writer = WriterSource in
 

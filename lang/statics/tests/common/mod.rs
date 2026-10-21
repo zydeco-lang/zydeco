@@ -48,15 +48,7 @@ pub struct TestFixture;
 impl TestFixture {
     pub fn run(test: impl FnOnce(&mut Tycker<'_>)) {
         let spans = SpanArena::new();
-        let mut scoped = ScopedArena {
-            partial_binders: Default::default(),
-            defs: Default::default(),
-            pats: Default::default(),
-            terms: Default::default(),
-            origins: Default::default(),
-            users: Default::default(),
-            blocks: Default::default(),
-        };
+        let mut scoped = ScopedArena::default();
         let db = TestDb::default();
         let root = IdAllocator::<zydeco_surface::scoped::arena::ScopedScope>::new().alloc();
         scoped.terms.insert_new(root, zydeco_surface::scoped::syntax::Hole.into());

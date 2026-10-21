@@ -1,3 +1,4 @@
+@[prelude(none)]
 begin
   let CType = @(intrinsic(ctype)) in
   let Thk = @(intrinsic(thk)) in

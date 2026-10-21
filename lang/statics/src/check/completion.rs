@@ -7,6 +7,7 @@ use zydeco_utils::arena::ArenaAccess;
 pub struct CompletionTyping {
     expectations: Vec<AnnId>,
     compatibility: ArenaAssoc<DefId, AnnotationCompatibility>,
+    builtin_os: AnnotationCompatibility,
 }
 
 impl CompletionTyping {
@@ -16,6 +17,11 @@ impl CompletionTyping {
 
     pub fn compatibility(&self, definition: DefId) -> AnnotationCompatibility {
         self.compatibility.get(&definition).copied().unwrap_or_default()
+    }
+
+    /// The contextual OS type has classifier CType, without an invented definition ID.
+    pub fn builtin_os_compatibility(&self) -> AnnotationCompatibility {
+        self.builtin_os
     }
 }
 
@@ -61,7 +67,14 @@ impl Tycker<'_> {
                 (definition, evidence)
             })
             .collect();
-        Some(CompletionTyping { expectations, compatibility })
+        let builtin_os = expectations
+            .iter()
+            .map(|expected| {
+                self.annotation_compatibility(AnnId::Kind(self.intrinsics.ctype), *expected)
+            })
+            .max()
+            .unwrap_or_default();
+        Some(CompletionTyping { expectations, compatibility, builtin_os })
     }
 }
 

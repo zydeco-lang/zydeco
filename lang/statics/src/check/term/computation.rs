@@ -343,6 +343,29 @@ impl TermChecker<'_> {
                     let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
                         .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
                     match tail_out_ann {
+                        | tail if ValuePatternShape::is_static_opening(tycker, binder_out)
+                            && (binder_elaboration.inner.opened.is_empty()
+                                || matches!(tail, TermAnnId::Kind(_) | TermAnnId::Type(_, _))) =>
+                        {
+                            // All selected components are static, and the runtime payload
+                            // is discarded. Preserve checking and witness escape validation,
+                            // but introduce no runtime let for a wholly manifest opening.
+                            // Fresh witnesses still need their opening evidence in runtime
+                            // terms until required static elaboration specializes them.
+                            match tail {
+                                | TermAnnId::Value(_, ty)
+                                | TermAnnId::Compu(_, ty)
+                                | TermAnnId::Type(ty, _) => {
+                                    binder_elaboration.close_scope_k(tycker, ty)?;
+                                }
+                                | TermAnnId::Kind(_) => {}
+                                | TermAnnId::Hole(_) => tycker.err_k(
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?,
+                            }
+                            tail
+                        }
                         | TermAnnId::Value(tail_out, tail_ty) => {
                             if !ValuePatternShape::is_irrefutable(tycker, binder_out) {
                                 tycker.err_k(

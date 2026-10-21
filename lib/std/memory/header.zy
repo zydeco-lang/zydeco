@@ -1,6 +1,5 @@
 -- Recover both handle conventions from paths in one finalized enclosing layout.
 
-let (/VType) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/FieldOperations) = @(import("field.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in

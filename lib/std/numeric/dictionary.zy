@@ -1,5 +1,4 @@
 -- Structural capabilities shared by integer and floating-point builders.
-let (/VType; /Thk; /Ret) = @(import("../primitive.zy")) in
 begin
   let Additive (A : VType) =
       (#zero :: A)

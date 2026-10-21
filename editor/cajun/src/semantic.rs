@@ -8,7 +8,7 @@ use tower_lsp::lsp_types::{
 };
 use zydeco_statics::{
     arena::StaticsArena,
-    syntax::{AnnId, Kind},
+    syntax::{AnnId, Kind, TermAnnId},
 };
 use zydeco_surface::{
     scoped::{
@@ -232,19 +232,16 @@ impl<'source> SemanticDocument<'source> {
         let classifier = NameClassifier::new(statics, &parameters);
         scoped.defs.iter().for_each(|(definition, name)| {
             let style = classifier.classify(*definition, name.0.as_str());
-            (!matches!(
-                scoped.origins.source(&(*definition).into()),
-                Some(zydeco_surface::textual::syntax::EntityId::Meta(_))
-            ))
-            .then(|| Self::entity_span(spans, scoped, (*definition).into()))
-            .flatten()
-            .and_then(|span| {
-                Self::same_file(spans, span, file_path)
-                    .then(|| ByteRange::from_span(spans, span))
-                    .flatten()
-            })
-            .into_iter()
-            .for_each(|range| self.overlay(range, style.with(SemanticModifier::Declaration)));
+            (!scoped.is_prelude_definition(*definition))
+                .then(|| Self::entity_span(spans, scoped, (*definition).into()))
+                .flatten()
+                .and_then(|span| {
+                    Self::same_file(spans, span, file_path)
+                        .then(|| ByteRange::from_span(spans, span))
+                        .flatten()
+                })
+                .into_iter()
+                .for_each(|range| self.overlay(range, style.with(SemanticModifier::Declaration)));
             scoped.users.forth(definition).iter().for_each(|term| {
                 Self::entity_span(spans, scoped, (*term).into())
                     .and_then(|span| {
@@ -256,6 +253,35 @@ impl<'source> SemanticDocument<'source> {
                     .for_each(|range| self.overlay(range, style));
             });
         });
+        // Contextual OS is a resolved internal term, not a fabricated lexical definition.
+        // Classify its authored occurrence from checked evidence like other type references.
+        scoped
+            .terms
+            .iter()
+            .filter(|(_, body)| {
+                matches!(body, Term::Internal(zydeco_surface::scoped::syntax::Internal::OS))
+            })
+            .for_each(|(term, _)| {
+                let Some(statics) = statics else {
+                    return;
+                };
+                let Some(TermAnnId::Type(_, kind)) = statics.term_annotation(term) else {
+                    return;
+                };
+                let Some(class) = NameClass::from_annotation(statics, AnnId::Kind(kind)) else {
+                    return;
+                };
+                Self::entity_span(spans, scoped, term.into())
+                    .and_then(|span| {
+                        Self::same_file(spans, span, file_path)
+                            .then(|| ByteRange::from_span(spans, span))
+                            .flatten()
+                    })
+                    .into_iter()
+                    .for_each(|range| {
+                        self.overlay(range, class.style(false).with(SemanticModifier::Readonly))
+                    });
+            });
         self
     }
 

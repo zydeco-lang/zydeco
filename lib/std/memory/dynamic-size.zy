@@ -1,5 +1,4 @@
 -- Pure checked arithmetic for runtime geometry; every public operand is validated.
-let (/Ret; /Int) = @(import("../primitive.zy")) in
 let (/Either) = @(import("../data/either.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
 begin

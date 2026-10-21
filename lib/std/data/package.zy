@@ -1,5 +1,4 @@
 @[package(library, name(std/data))]
-let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Bool) = @(import("bool.zy")) in
 let (/Option) = @(import("option.zy")) in
 let (/Either) = @(import("either.zy")) in

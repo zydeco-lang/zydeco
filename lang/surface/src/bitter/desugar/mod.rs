@@ -42,13 +42,9 @@ pub struct SourceUnitDesugarer<'a> {
 
 impl<'a> DesugarFolder<'a> {
     fn new(spans: &'a t::SpanArena, textual: &'a t::TextArena) -> Self {
-        Self {
-            spans,
-            textual,
-            builder: BitterBuilder::new(),
-            terms: HashMap::new(),
-            diagnostics: Vec::new(),
-        }
+        let mut builder = BitterBuilder::new();
+        builder.arena.default_prelude_binders = textual.default_prelude_binders.clone();
+        Self { spans, textual, builder, terms: HashMap::new(), diagnostics: Vec::new() }
     }
 }
 
@@ -78,7 +74,13 @@ impl DesugarFolder<'_> {
         // lookup def
         let def = self.lookup_def(id);
         // write new def
-        let res = Alloc::alloc(&mut self.builder, def, id.into());
+        let origin = self
+            .textual
+            .default_prelude_definitions
+            .get(&id)
+            .map(|pattern| (*pattern).into())
+            .unwrap_or_else(|| id.into());
+        let res = Alloc::alloc(&mut self.builder, def, origin);
         Ok(res)
     }
 }

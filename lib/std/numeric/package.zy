@@ -1,13 +1,4 @@
 @[package(library, name(std/numeric))]
-let (
-  /Int8; /Int16; /Int32; /Int64; /Int;
-  /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
-  /Float32; /Float64;
-  /String
-)
-=
-  @(import("../primitive.zy"))
-in
 let (/DataPackage) = @(import("../data/package.zy")) in
 begin
   param val (

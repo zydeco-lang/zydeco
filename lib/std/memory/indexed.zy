@@ -1,7 +1,6 @@
 -- Shared bounds and displacement checks for layout-bound counted views and arrays.
 -- The caller guarantees allocation extent, element stride, state, and alias validity.
 
-let (/VType; /CType; /Thk; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/Fault) = @(import("fault.zy")) in
 begin

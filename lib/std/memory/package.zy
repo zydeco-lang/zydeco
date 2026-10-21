@@ -1,5 +1,4 @@
 @[package(library, name(std/memory))]
-let (/VType) = @(import("../primitive.zy")) in
 let (/make = make_types) = @(import("types.zy")) in
 let (/make = make_storage) = @(import("storage.zy")) in
 let (/make = make_codecs) = @(import("codecs.zy")) in

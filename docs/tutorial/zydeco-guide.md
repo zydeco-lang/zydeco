@@ -7,9 +7,9 @@ to the [compiler reference](../references/compiler.md).
 
 Examples use complete source terms except where the surrounding prose describes an intentional rejection.
 Imports are relative to this guide's directory, `docs/tutorial/`; adjust them when copying an example elsewhere.
-Examples bind their names explicitly;
-the opt-in [core prelude](../references/language.md#core-prelude) can abbreviate an opening
-from an explicitly supplied view.
+The [core prelude](../references/language.md#core-prelude) supplies common kind and type names by default.
+Provider choices and operations remain explicit; the examples sometimes select fields explicitly
+to illustrate their package boundaries.
 Blocks marked `text` describe syntax or signatures with schematic names.
 
 ## 1. The core idea

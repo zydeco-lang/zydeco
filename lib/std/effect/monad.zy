@@ -1,6 +1,5 @@
 -- Closed relative-monad interfaces; no host capabilities are needed to open them.
 begin
-  let (/VType; /CType; /Thk) = @(import("../primitive.zy")) in
   let Top =
     codata
     end

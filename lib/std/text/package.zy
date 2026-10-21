@@ -1,5 +1,4 @@
 @[package(library, name(std/text))]
-let (/VType; /CType; /Thk; /Ret; /Int; /UInt8; /Char; /String) = @(import("../primitive.zy")) in
 let (/BytesPackage) = @(import("bytes.zy")) in
 let (/DataPackage) = @(import("../data/package.zy")) in
 begin

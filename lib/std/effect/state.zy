@@ -1,5 +1,4 @@
 -- State threading and its transformer, derived from ordinary Ret sequencing.
-let (/VType; /CType; /Thk; /Ret; /Unit) = @(import("../primitive.zy")) in
 let (/Monad; /Algebra; /WithMonad; /Top) = @(import("monad.zy")) in
 let (/Transformer) = @(import("transformer.zy")) in
 let MonadState
@@ -30,7 +29,6 @@ val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
         let translated = {
           (
             @[monadic] begin
-              let (/VType; /Ret) = @(import("../primitive.zy")) in
               let (/with_lift) = @(import("transformer-source.zy")) in
               let State = StateSource in
 

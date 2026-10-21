@@ -1,9 +1,6 @@
 -- `= field` expands to `field = field` without introducing a downstream
 -- syntax form. The inferred payload is resolved according to its context.
 param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 begin
   let int = numeric/int that
   let Slot (pun_value : VType) = (#pun_value :: pun_value) that

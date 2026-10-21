@@ -121,6 +121,8 @@ pub struct BitterArena {
     pub origins: TextualOrigins,
     /// Source binders explicitly opted in to refutable computation binding.
     pub partial_binders: std::collections::HashSet<t::PatId>,
+    /// Textual origins of compiler-inserted fallback projection groups.
+    pub default_prelude_binders: std::collections::HashSet<t::PatId>,
 }
 
 #[cfg(test)]

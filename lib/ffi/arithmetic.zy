@@ -5,9 +5,6 @@
   name(example/arithmetic)
 )]
 param val (/numeric; builtin) : @(import("../std/builtin.zy")) in
-let (/make = make_prelude) = @(import("../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 (
   #add = { fn x y => ! numeric/int/add x y } : Thk (Int -> Int -> Ret Int),
   #identity = { fn x => ret x } : Thk (Int -> Ret Int)

@@ -36,6 +36,19 @@ pub struct Local {
     pub(super) under_map: rpds::HashTrieMapSync<DefId, BindingSite>,
     /// The nearest block currently resolving its residual syntax.
     pub(super) boundary: Option<TermId>,
+    pub(super) prelude: PreludeScope,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct PreludeScope {
+    pub(super) enabled: bool,
+    pub(super) definitions: rpds::HashTrieMapSync<VarName, DefId>,
+}
+
+impl Default for PreludeScope {
+    fn default() -> Self {
+        Self { enabled: true, definitions: rpds::HashTrieMapSync::new_sync() }
+    }
 }
 
 impl Local {
@@ -46,6 +59,7 @@ impl Local {
             depth: 0,
             under_map: rpds::HashTrieMapSync::new_sync(),
             boundary: None,
+            prelude: PreludeScope::default(),
         }
     }
 
@@ -73,6 +87,7 @@ pub struct VisibleDefinition {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScopeSnapshot {
     pub definitions: Vec<VisibleDefinition>,
+    pub implicit_os: bool,
 }
 
 /// Shared lookup and enumeration over the resolver's environment layers.
@@ -104,6 +119,19 @@ impl NameScope<'_> {
                     distance: self.local.depth + 1,
                 })
             })
+            .or_else(|| {
+                self.local
+                    .prelude
+                    .enabled
+                    .then(|| {
+                        self.local.prelude.definitions.get(name).map(|definition| NameLookup {
+                            definition: *definition,
+                            dependency: None,
+                            distance: self.local.depth + 2,
+                        })
+                    })
+                    .flatten()
+            })
     }
 
     pub fn snapshot(&self) -> ScopeSnapshot {
@@ -113,6 +141,7 @@ impl NameScope<'_> {
             .var_to_def
             .keys()
             .chain(self.global.var_to_def.keys())
+            .chain(self.local.prelude.definitions.keys().filter(|_| self.local.prelude.enabled))
             .collect::<BTreeSet<_>>();
         let definitions = names
             .into_iter()
@@ -125,7 +154,10 @@ impl NameScope<'_> {
                 })
             })
             .collect();
-        ScopeSnapshot { definitions }
+        ScopeSnapshot {
+            definitions,
+            implicit_os: self.local.prelude.enabled && self.lookup(&VarName("OS".into())).is_none(),
+        }
     }
 }
 

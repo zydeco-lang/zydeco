@@ -1,14 +1,5 @@
 -- Sequence codecs compose scalar memory leaves with immutable source bytes.
 
-let (
-  /VType; /CType; /Thk; /Ret; /Unit;
-  /Int8; /Int16; /Int32; /Int64; /Int;
-  /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
-  /Float32; /Float64
-)
-=
-  @(import("../primitive.zy"))
-in
 let (/BytesPackage) = @(import("../text/bytes.zy")) in
 begin
   param val (/Addr; /numeric; builtin) : @(import("../builtin.zy")) that

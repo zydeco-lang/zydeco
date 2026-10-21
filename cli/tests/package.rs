@@ -925,13 +925,9 @@ fn prelude_package_check_run_and_rejected_build_share_one_frontend() {
     let source = format!(
         r#"@[package(binary, name(example/prelude))]
 param (/process; builtin) : @(import("{}/builtin.zy")) in
-let (/make) = @(import("{}/prelude.zy")) in
-let prelude = make builtin in
-@[prelude(core, from(prelude))]
 let stop : Thk (Int -> OS) = process/exit in
 ! stop 0
 "#,
-        std.display(),
         std.display()
     );
     fixture.write("main.zy", &source);
@@ -939,10 +935,10 @@ let stop : Thk (Int -> OS) = process/exit in
     fixture.success(&["run", "main.zy"]);
     fixture.success(&["build", "main.zy", "--target", "wasm-sps", "--build-dir", "accepted"]);
     assert!(fixture.directory.path().join("accepted/main.sps.wasm").exists());
-    fixture.write("main.zy", &source.replace("from(prelude)", "from(missing)"));
+    fixture.write("main.zy", &source.replace("let stop", "@[prelude(none)] let stop"));
     let rejected =
         fixture.command(&["build", "main.zy", "--target", "wasm-sps", "--build-dir", "rejected"]);
     assert!(!rejected.status.success());
-    assert!(String::from_utf8_lossy(&rejected.stderr).contains("missing"));
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("Thk"));
     assert!(!fixture.directory.path().join("rejected/main.sps.wasm").exists());
 }

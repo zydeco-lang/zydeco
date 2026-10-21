@@ -1,5 +1,4 @@
 @[package(library, name(std))]
-let (/VType) = @(import("primitive.zy")) in
 let (/make = make_bytes) = @(import("text/bytes.zy")) in
 let (/Additive; /Multiplicative; /PartialEquality; /PartialOrder; /Numeric) = @(import(
   "numeric/dictionary.zy"

@@ -84,7 +84,7 @@ impl MetadataKind {
             | Self::Monadic => {
                 "Translate a type, value, or computation using the lexical monadic basis."
             }
-            | Self::Prelude => "Open core names from an explicitly supplied lexical prelude view.",
+            | Self::Prelude => "Disable or replace the implicit core prelude.",
             | Self::TypeOf => "Extract an expression's type or kind without running it.",
             | Self::Partial => "Allow the annotated computation's own binding patterns to fail.",
             | Self::Format => "Override source formatting policy for an expression.",
@@ -326,7 +326,10 @@ impl MetadataDefinition {
             ])
             .map(|_| ())
             .map_err(MetadataValidationError::Package),
-            | MetadataArguments::Options(options) => {
+            | MetadataArguments::Options(options) | MetadataArguments::Choice(options) => {
+                if matches!(self.arguments, MetadataArguments::Choice(_)) {
+                    self.validate_arity(arguments, 1)?;
+                }
                 let mut seen = HashSet::new();
                 arguments.iter().try_for_each(|argument| {
                     let Some(name) = argument.callee() else {
@@ -385,6 +388,8 @@ pub enum MetadataArguments {
     Positional(Vec<MetadataParameter>),
     Variadic(MetadataParameter),
     Options(Vec<MetadataDefinition>),
+    /// Exactly one of the listed options.
+    Choice(Vec<MetadataDefinition>),
     /// A role followed by open-ended, typed source relationships.
     Package,
     Library,

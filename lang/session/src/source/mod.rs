@@ -4,6 +4,7 @@ mod graph;
 mod loader;
 mod package;
 mod program;
+mod prelude;
 mod query;
 mod pipeline;
 mod report;

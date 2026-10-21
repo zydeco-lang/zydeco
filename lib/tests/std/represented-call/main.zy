@@ -3,9 +3,6 @@ begin
   param (/numeric; /process; builtin) : @(import(
     /std/builtin
   )) in
-  let (/make = make_prelude) = @(import("../../../std/prelude.zy")) in
-  let prelude = make_prelude builtin in
-  @[prelude(core, from(prelude))]
   let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation) = builtin |> (
     @(import(/std/memory))
   ) in

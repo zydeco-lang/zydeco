@@ -2,9 +2,6 @@
 param (/numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
-let prelude = make_prelude builtin in
-@[prelude(core, from(prelude))]
 let state = builtin |> (@(import("../../std/effect/state.zy"))) in
 let exception = builtin |> (@(import("../../std/effect/exception.zy"))) in
 let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in

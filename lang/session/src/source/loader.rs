@@ -455,6 +455,7 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
             root,
             imports: Vec::new(),
             signature: None,
+            prelude: None,
             context,
             contexts: scope.contexts,
             instances: Vec::new(),
@@ -482,6 +483,15 @@ impl<Provider: SourceProvider> SourceGraphLoader<Provider> {
         for site in sites {
             match self.load_import(source, &template.path, site) {
                 | Ok(import) => self.sources[&source].imports.push(import),
+                | Err(error) => self.report(error),
+            }
+        }
+        if super::prelude::DefaultPrelude::enabled(&template.arena, template.unit.root)
+            && super::prelude::DefaultPrelude::enabled(&template.arena, root)
+        {
+            let path = super::prelude::DefaultPrelude::path();
+            match self.load_selection(&path, None, self.sources[&source].context.clone()) {
+                | Ok(prelude) => self.sources[&source].prelude = Some(prelude),
                 | Err(error) => self.report(error),
             }
         }
