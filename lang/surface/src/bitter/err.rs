@@ -33,6 +33,12 @@ pub enum DesugarError {
         #[source]
         source: IntrinsicMetaError,
     },
+    #[error("Invalid prelude annotation: {source}")]
+    InvalidPreludeMeta {
+        term: Sp<t::TermId>,
+        #[source]
+        source: MetadataValidationError,
+    },
     #[error("Invalid monadic annotation: {source}")]
     InvalidMonadicMeta {
         term: Sp<t::TermId>,
@@ -96,6 +102,7 @@ impl DesugarError {
             | Self::InvalidBuiltinMeta { term, .. }
             | Self::BuiltinTypeRoleOnTerm { term, .. }
             | Self::InvalidIntrinsicMeta { term, .. }
+            | Self::InvalidPreludeMeta { term, .. }
             | Self::InvalidMonadicMeta { term, .. }
             | Self::InvalidTypeOfMeta { term, .. }
             | Self::InvalidPartialMeta { term, .. }

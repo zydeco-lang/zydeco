@@ -134,3 +134,76 @@ fn separate_telescope_rules_reject_each_invalid_constructor() {
     );
     Fixture::accepted("(forall one two . _, val get => ())");
 }
+
+#[test]
+fn prelude_is_exactly_one_projection_with_precise_origins() {
+    let source = "@[prelude(core, from(view))] ret ()";
+    let mut parser = t::Parser::new();
+    let unit = StrictParser::source(source, &mut parser).unwrap();
+    let result =
+        SourceUnitDesugarer { spans: &parser.spans, textual: &parser.arena }.run(unit).unwrap();
+    let b::Term::Let(binding) = &result.arena.terms[&result.root] else { panic!() };
+    let b::Let { binder, bindee, tail } = **binding;
+    assert!(matches!(&result.arena.terms[&bindee], b::Term::Var(name) if name.0 == "view"));
+    let origin = result.arena.origins.source(&bindee.into()).unwrap();
+    assert_eq!(&source[parser.spans[&origin].range()], "view");
+    let origin = result.arena.origins.source(&tail.into()).unwrap();
+    assert_eq!(&source[parser.spans[&origin].range()], "ret ()");
+    let b::Pattern::Alias(b::Alias(patterns)) = &result.arena.pats[&binder] else { panic!() };
+    let names = patterns
+        .iter()
+        .map(|pattern| {
+            let b::Pattern::Project(b::ProjectionPattern(field, inner)) =
+                &result.arena.pats[pattern]
+            else {
+                panic!()
+            };
+            let b::Pattern::Var(definition) = result.arena.pats[inner] else { panic!() };
+            assert_eq!(field.0, result.arena.defs[&definition].0);
+            let origin = result.arena.origins.source(&definition.into()).unwrap();
+            assert!(matches!(origin, t::EntityId::Meta(_)));
+            assert_eq!(&source[parser.spans[&origin].range()], "prelude(core, from(view))");
+            field.0.as_str()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        [
+            "VType", "CType", "Thk", "Ret", "OS", "Unit", "Int8", "Int16", "Int32", "Int64", "Int",
+            "UInt8", "UInt16", "UInt32", "UInt64", "UInt", "Float32", "Float64", "Char", "String",
+            "Bool", "Option", "Either"
+        ]
+    );
+    assert!(!result.arena.terms.iter().any(|(_, term)| matches!(term, b::Term::Meta(_))));
+}
+
+#[test]
+fn prelude_requires_one_profile_and_one_lexical_provider() {
+    for arguments in [
+        "",
+        "core",
+        "other, from(view)",
+        "core, from",
+        "core, from()",
+        "core, from(a, b)",
+        "core, from(view), from(other)",
+        "core, source(view)",
+        "core, from(\"view\")",
+        "core, from(/std/prelude)",
+        "core, from(let)",
+        "core, from(1)",
+    ] {
+        let source = format!("@[prelude({arguments})] ()");
+        let errors = Fixture::errors(&source);
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(errors.iter().next().unwrap(), DesugarError::InvalidPreludeMeta { .. }));
+        assert_eq!(
+            &source[errors.iter().next().unwrap().span().range()],
+            format!("prelude({arguments})")
+        );
+    }
+    Fixture::accepted("@[prelude(core, from(view))] ()");
+    Fixture::accepted("@[prelude(core, from(View))] ()");
+    let errors = Fixture::errors("(@[prelude(core)] (), @[prelude(core, from(let))] ())");
+    assert_eq!(errors.len(), 2);
+}

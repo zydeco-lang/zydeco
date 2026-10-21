@@ -48,14 +48,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#build-the-cli) for release builds and addi
 ## Source Files and Libraries
 
 A source file contains one complete term.
-Imports are relative to the importing file; there is no implicit prelude or distinguished `main` declaration.
+Quoted imports are relative to the importing file; there is no ambient provider or distinguished `main` declaration.
+The opt-in [core prelude](docs/references/language.md#core-prelude) opens names from an explicitly supplied view.
 The example above explicitly accepts the host's Builtin value and selects the operations it needs.
 The launcher supplies it when running the program.
 
-Pure library terms select the foundational kinds and types directly from the Builtin contract:
+Host-independent library terms can select foundational kinds and types from the primitive leaf:
 
 ```zydeco
-param (/Ret; /Int) : @(import("lib/std/builtin.zy")) in
+let (/Ret; /Int) = @(import("lib/std/primitive.zy")) in
 fn (value : Int) => (ret value : Ret Int)
 ```
 

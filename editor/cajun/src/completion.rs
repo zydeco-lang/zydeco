@@ -77,6 +77,15 @@ impl Completer {
                     }),
                     kind: Some(class.completion_kind()),
                     detail: annotation,
+                    documentation: semantics.and_then(|semantics| {
+                        matches!(
+                            semantics.scoped.origins.source(&candidate.definition.into()),
+                            Some(zydeco_surface::textual::syntax::EntityId::Meta(_))
+                        )
+                        .then(|| {
+                            Documentation::String("Introduced by prelude(core, from(...)).".into())
+                        })
+                    }),
                     sort_text: Some(format!("{rank:08}")),
                     filter_text: Some(name.clone()),
                     text_edit: Some(CompletionTextEdit::Edit(TextEdit {
@@ -274,7 +283,10 @@ impl CompletionScope<'static> {
             }
             | MetadataValue::Call(definition) => Some(Self::Definitions(vec![definition.as_ref()])),
             | MetadataValue::Source { .. } => Some(Self::Source),
-            | MetadataValue::String | MetadataValue::Integer | MetadataValue::Glob => None,
+            | MetadataValue::Binding
+            | MetadataValue::String
+            | MetadataValue::Integer
+            | MetadataValue::Glob => None,
         }
     }
 }
@@ -307,6 +319,7 @@ impl<'definition> MetadataSignature<'definition> {
                 .map(|parameter| match parameter.value() {
                     | MetadataValue::Call(definition) => Self::call(definition),
                     | MetadataValue::Identifier(_)
+                    | MetadataValue::Binding
                     | MetadataValue::String
                     | MetadataValue::Glob
                     | MetadataValue::Integer
@@ -358,7 +371,7 @@ impl MetadataSnippet {
             | MetadataValue::Identifier(identifiers) if identifiers.len() == 1 => {
                 identifiers[0].clone()
             }
-            | MetadataValue::Identifier(_) | MetadataValue::Integer => {
+            | MetadataValue::Identifier(_) | MetadataValue::Binding | MetadataValue::Integer => {
                 self.placeholder(parameter.label())
             }
             | MetadataValue::String | MetadataValue::Glob => {
@@ -613,6 +626,16 @@ mod tests {
         fn labels(&self) -> Option<Vec<String>> {
             self.items().map(|items| items.into_iter().map(|item| item.label).collect())
         }
+    }
+
+    #[test]
+    fn prelude_completion_requires_the_explicit_from_argument() {
+        let items = CompletionFixture::new("@[prel|] ()").items().unwrap();
+        let [item] = items.as_slice() else { panic!() };
+        let Some(CompletionTextEdit::Edit(edit)) = &item.text_edit else { panic!() };
+        assert_eq!(edit.new_text, "prelude(core, from(${1:view}))");
+        assert_eq!(CompletionFixture::new("@[prelude(co|)] ()").labels().unwrap(), ["core"]);
+        assert_eq!(CompletionFixture::new("@[prelude(core, fr|)] ()").labels().unwrap(), ["from"]);
     }
 
     #[test]

@@ -1,0 +1,28 @@
+@[package(library, name(/std/primitive))]
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let types =
+  pack
+    (= Thk as @(intrinsic(thk)))
+    (= Ret as @(intrinsic(ret)))
+    (= Unit as @(intrinsic(unit)))
+    (= Int8 as @(intrinsic(i8)))
+    (= Int16 as @(intrinsic(i16)))
+    (= Int32 as @(intrinsic(i32)))
+    (= Int64 as @(intrinsic(i64)))
+    (= Int as @(intrinsic(int)))
+    (= UInt8 as @(intrinsic(u8)))
+    (= UInt16 as @(intrinsic(u16)))
+    (= UInt32 as @(intrinsic(u32)))
+    (= UInt64 as @(intrinsic(u64)))
+    (= UInt as @(intrinsic(uint)))
+    (= Float32 as @(intrinsic(f32)))
+    (= Float64 as @(intrinsic(f64)))
+    (= Char as @(intrinsic(char)))
+    (= String as @(intrinsic(string)))
+  where () end
+in
+(
+  (VType, CType, types) : exists (VType as @(intrinsic(vtype))) (CType as @(intrinsic(ctype))) .
+    @[typeof] types
+)

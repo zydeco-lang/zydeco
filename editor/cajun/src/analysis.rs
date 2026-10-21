@@ -269,6 +269,9 @@ impl ProjectState {
         &self, file_path: &Path, position: Position,
     ) -> Option<PrepareRenameResponse> {
         let occurrence = self.symbol_at(file_path, position)?;
+        if self.is_implicit_definition(occurrence.definition) {
+            return None;
+        }
         self.definition_location(occurrence.definition)?;
         let placeholder = self.scoped().defs[&occurrence.definition].0.clone();
         Some(PrepareRenameResponse::RangeWithPlaceholder { range: occurrence.range, placeholder })
@@ -280,6 +283,9 @@ impl ProjectState {
         &self, file_path: &Path, position: Position, new_name: &str,
     ) -> Result<WorkspaceEdit, RenameRejection> {
         let occurrence = self.symbol_at(file_path, position).ok_or(RenameRejection::Unresolved)?;
+        if self.is_implicit_definition(occurrence.definition) {
+            return Err(RenameRejection::Synthesized);
+        }
         let current = self.scoped().defs[&occurrence.definition].0.clone();
         let renamer = Renamer::adopt(&current, new_name)?;
         let declaration =
@@ -338,10 +344,14 @@ impl ProjectState {
                 self.statics().abst_hints.get(sealed).copied() != Some(occurrence.definition)
             })
             .filter_map(|sealed| self.sealed_type_equation(sealed, &formatter, line_width));
-        let signature = HoverSignature::with_definitions(&name.0, &annotation_text, definitions)
-            .with_definition(definition)
-            .with_sealed_types(sealed_types)
-            .markdown();
+        let mut signature =
+            HoverSignature::with_definitions(&name.0, &annotation_text, definitions)
+                .with_definition(definition)
+                .with_sealed_types(sealed_types)
+                .markdown();
+        if self.is_implicit_definition(occurrence.definition) {
+            signature.push_str("\n\nIntroduced by `prelude(core, from(...))`.");
+        }
         Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
@@ -446,6 +456,9 @@ impl ProjectState {
             .defs
             .iter()
             .filter_map(|(definition, name)| {
+                if self.is_implicit_definition(*definition) {
+                    return None;
+                }
                 let entity = self.scoped().origins.source(&(*definition).into())?;
                 let span = &self.analysis.spans()[&entity];
                 (self.span_file(span) == Some(file_path.clone()))
@@ -553,6 +566,9 @@ impl ProjectState {
         let file_path = Self::normalize_path(file_path);
         let offset = self.offset(&file_path, position)?;
         let definitions = self.scoped().defs.iter().filter_map(|(definition, _)| {
+            if self.is_implicit_definition(*definition) {
+                return None;
+            }
             let entity = self.scoped().origins.source(&(*definition).into())?;
             Some((*definition, &self.analysis.spans()[&entity]))
         });
@@ -561,6 +577,11 @@ impl ProjectState {
                 return None;
             };
             let entity = self.scoped().origins.source(&term.into())?;
+            if self.is_implicit_definition(*definition)
+                && self.scoped().origins.source(&(*definition).into()) == Some(entity)
+            {
+                return None;
+            }
             Some((*definition, &self.analysis.spans()[&entity]))
         });
         definitions
@@ -590,6 +611,11 @@ impl ProjectState {
             && range_end.contains(&bytes, offset))
         .then(|| self.span_range(span).map(|hit| (bytes.end.saturating_sub(bytes.start), hit)))
         .flatten()
+    }
+
+    /// Prelude binders have annotation origins rather than editable identifier tokens.
+    fn is_implicit_definition(&self, definition: DefId) -> bool {
+        matches!(self.scoped().origins.source(&definition.into()), Some(EntityId::Meta(_)))
     }
 
     fn definition_location(&self, definition: DefId) -> Option<Location> {
@@ -978,6 +1004,47 @@ mod tests {
             panic!("type hover should use markup content")
         };
         assert_eq!(contents.value, "```zydeco\nanswer : Unit\n```");
+    }
+
+    #[test]
+    fn prelude_symbols_keep_annotation_origins_without_renaming_generated_binders() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("main.zy");
+        let std =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std").canonicalize().unwrap();
+        let source = format!(
+            r#"param val (/process; builtin) : @(import("{}/builtin.zy")) in
+let (/make) = @(import("{}/prelude.zy")) in
+let prelude = make builtin in
+@[prelude(core, from(prelude))]
+let value : Int = 0 in
+value
+"#,
+            std.display(),
+            std.display()
+        );
+        std::fs::write(&root, &source).unwrap();
+        let (project, session) = ProjectState::load(&root, &HashMap::new()).unwrap();
+        let core_use = Position::new(4, 13);
+        let definition = project.definition(&root, core_use).unwrap();
+        assert_eq!(definition.range.start, Position::new(3, 2));
+        assert_eq!(project.prepare_rename(&root, core_use), None);
+        assert!(matches!(
+            project.rename(&root, core_use, "Number"),
+            Err(RenameRejection::Synthesized)
+        ));
+        assert_eq!(project.definition(&root, Position::new(3, 10)), None);
+        let hover = project.hover(&session, &root, core_use, HoverOptions::default()).unwrap();
+        let HoverContents::Markup(contents) = hover.contents else { panic!() };
+        assert!(contents.value.contains("Introduced by `prelude(core, from(...))`"));
+        let provider_use = Position::new(3, 23);
+        let definition = project.definition(&root, provider_use).unwrap();
+        assert_eq!(definition.range.start, Position::new(2, 4));
+        let changes = project.rename(&root, provider_use, "view").unwrap().changes.unwrap();
+        let edits = &changes[&Url::from_file_path(root.canonicalize().unwrap()).unwrap()];
+        assert_eq!(edits.len(), 2);
+        assert_eq!(edits[1].range, Range::new(Position::new(3, 21), Position::new(3, 28)));
+        assert!(edits.iter().all(|edit| edit.new_text == "view"));
     }
 
     #[test]

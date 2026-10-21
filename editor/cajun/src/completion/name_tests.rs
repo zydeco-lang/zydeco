@@ -173,3 +173,33 @@ fn ordinary_names_survive_invalid_surrounding_syntax() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].label, "value");
 }
+
+#[test]
+fn prelude_names_complete_in_the_expanded_lexical_scope() {
+    let std =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib/std").canonicalize().unwrap();
+    let fixture = Fixture::new(&format!(
+        r#"
+param val (/process; builtin) : @(import("{}/builtin.zy")) in
+let (/make) = @(import("{}/prelude.zy")) in
+let prelude = make builtin in
+@[prelude(core, from(prelude))]
+let value : Int = 0 in
+let other : In¦ = value in other
+"#,
+        std.display(),
+        std.display()
+    ));
+    let items = fixture.items(true).unwrap();
+    let labels = items.iter().map(|item| item.label.as_str()).collect::<Vec<_>>();
+    assert!(labels.contains(&"Int"));
+    assert!(labels.contains(&"Int8"));
+    let int = items.iter().find(|item| item.label == "Int").unwrap();
+    assert!(
+        matches!(&int.documentation, Some(Documentation::String(text)) if text.contains("prelude"))
+    );
+    let completed = fixture.apply(int);
+    let mut session = fixture.session;
+    session.set_overlay(&fixture.path, completed).unwrap();
+    assert!(session.analyze(&fixture.path).unwrap().outcome().root().is_some());
+}

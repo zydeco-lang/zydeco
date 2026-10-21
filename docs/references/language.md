@@ -1317,6 +1317,164 @@ By default it inspects kinds/types and evaluates values or directly returning co
 Explicit execution can supply Builtin.
 REPL evaluation captures output and uses empty stdin and arguments.
 
+### Core Prelude
+
+Common kind and type names can be opened together with `@[prelude(core, from(p))] e`.
+The governing rule is **implicit bindings, explicit provider, preserved opening**:
+`p` is an ordinary lexical identifier for a packed prelude view, and the annotation abbreviates exactly this code:
+
+```zydeco
+let (
+  /VType; /CType; /Thk; /Ret; /OS; /Unit;
+  /Int8; /Int16; /Int32; /Int64; /Int;
+  /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
+  /Float32; /Float64; /Char; /String;
+  /Bool; /Option; /Either
+) = p in
+e
+```
+
+The bindee resolves before the introduced bindings, so `from(Int)` can refer to an outer value named `Int`.
+The selected names then follow ordinary lexical shadowing.
+Every selected field comes from `p`, including the kinds; field spelling does not assign a compiler identity.
+Missing or ambiguous fields receive the ordinary projection diagnostics.
+The annotation adds no exports to the authored result and does not validate a special provider interface.
+
+Bind any import, provider selection, or adapter application explicitly before the annotation.
+Both `core` and one `from(identifier)` are required, in that order.
+Missing, duplicate, unknown, or malformed arguments are rejected; `from` accepts one lexical variable,
+not a string, keyword, package path, or arbitrary expression.
+There is no provider-free fallback, distinguished `builtin` variable, implicit import, or factory application.
+Without the annotation no prefix is inserted; there are no project defaults, inherited profiles, or `none` overrides.
+Nested annotations expand at their respective positions over the values they name.
+
+#### Provider-Relative Vocabulary
+
+Prelude membership is a convention for common names within a composition,
+not a claim that their meanings are independent of the provider.
+A view can combine compiler-canonical primitives with aliases to abstract capabilities.
+Each alias must retain the identity expected by the operations selected alongside it.
+Naming `OS` permits a signature such as `Thk OS`; it supplies neither a computation
+of that type nor an operation such as `exit`.
+Its static nature concerns binding names, not the purity of computations described by those names.
+`Ret` likewise retains its [ordinary protocol meaning](#ret-and-explicit-cps), rather than asserting purity.
+
+A provider can supply a view directly beneath its outer witness telescope.
+Select that view, dependent operations, and any whole-value alias in one projection group.
+Alternatively, the standard adapter constructs a view from an already retained Builtin opening:
+
+```zydeco
+param (/process; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
+let stop : Thk (Int -> OS) = process/exit in
+! stop 0
+```
+
+The whole-value alias `builtin` retains the opening that supplied `process`.
+The adapter's result discloses a manifest equation to that opening's `OS` witness,
+without disclosing its representation or opening a fresh witness.
+Repeated views derived from that retained opening share the witness.
+Independent openings can yield incompatible witnesses even when obtained from the same package;
+matching names, paths, and adapter sources do not establish equality.
+Forward the provider and dependent operations together across composition boundaries,
+following the [shared-opening rules](#module-interfaces-and-shared-openings).
+
+Builtin's abstract `SystemOS` witness, its `@[builtin(os)]` role, and its manifest `OS` export remain unchanged.
+The adapter neither reseals `OS` nor acquires another provider to populate the view.
+There is no canonical `intrinsic(os)`, and the ordinary host-operation and executable-entry checks still apply.
+Other providers can supply different views through their own interfaces and explicit adapters.
+
+#### Standard Views and Bootstrap
+
+[`primitive.zy`](../../lib/std/primitive.zy), package `/std/primitive`, supplies the host-independent leaf.
+[`prelude.zy`](../../lib/std/prelude.zy), package `/std/prelude`, exports the ordinary value function `make`.
+Importing that adapter does not select a host provider or construct a view.
+The caller explicitly passes a Builtin whole-value alias; its result supplies this vocabulary:
+
+| Names | Meaning in the standard view |
+| --- | --- |
+| `VType`, `CType` | Manifest value and computation kinds from the primitive leaf |
+| `Thk`, `Ret` | Manifest intrinsic constructors of kinds `CType -> VType` and `VType -> CType` |
+| `OS` | Manifest alias to the supplied opening's root computation protocol, of kind `CType` |
+| `Unit` | Manifest intrinsic unit value type |
+| `Int8`, `Int16`, `Int32`, `Int64`, `Int` | Manifest signed primitive value types |
+| `UInt8`, `UInt16`, `UInt32`, `UInt64`, `UInt` | Manifest unsigned primitive value types |
+| `Float32`, `Float64`, `Char`, `String` | Manifest floating-point and text primitive value types |
+| `Bool`, `Option`, `Either` | Manifest re-exports of the existing transparent data definitions, with kinds `VType`, `VType -> VType`, and `VType -> VType -> VType` |
+
+The primitive leaf binds kinds and types directly through existing `intrinsic` roles.
+It exports every listed name except `OS`, `Bool`, `Option`, and `Either`, followed by unit.
+It has no imports, companions, data declarations, abstract witnesses, host capabilities, operations, or parameters.
+The three data-definition sources import only that leaf for their primitive bindings;
+they do not depend on Builtin or the full adapter.
+The adapter imports the leaf and those definitions through relative file paths, and Builtin as its parameter contract.
+Builtin's raw contract keeps its bootstrap intrinsic bindings and does not depend on the adapter.
+This dependency graph is acyclic and needs no bootstrap override or loader policy.
+
+The leaf and view use existing annotated introductions to supply manifest kind witnesses,
+while `pack` supplies manifest type witnesses (§9).
+A reduced leaf demonstrates the distinction:
+
+```zydeco
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let types =
+  pack (= Thk as @(intrinsic(thk))) (= Ret as @(intrinsic(ret)))
+    (= Unit as @(intrinsic(unit))) (= Int as @(intrinsic(int)))
+  where () end
+in
+((VType, CType, types) :
+  exists (VType as @(intrinsic(vtype))) (CType as @(intrinsic(ctype))) . @[typeof] types)
+```
+
+The adapter uses the same introduction, adding `OS` as a manifest alias to its argument's witness
+and manifest aliases to the imported data definitions.
+Its result exports each core name once with a unit payload, without operation fields,
+thunks, fresh abstract fields, or hidden factory parameters.
+Ordinary typing checks these library contracts; the sugar does not impose them on other providers.
+Required static elimination removes this adapter application and opening, leaving no initialization computation,
+runtime dictionary, extra parameter, or runtime metadata attributable to the sugar.
+
+The fixed core set excludes `Addr`, `Reader`, `Writer`, `builtin`, stream and memory operations,
+numeric dictionaries and arithmetic intrinsics, `List`, `Bytes`, `Monad`, `Algebra`, and effect instances.
+Operations and other modules remain explicitly selected; data constructors follow ordinary data typing.
+Changing the core set changes lexical scope and requires review as a language change.
+
+#### Source Boundaries and Results
+
+Expansion preserves independent source inference. Imports, companions,
+and independently selected nested packages do not inherit an enclosing annotation or provider binding.
+They supply their dependencies through their own lexical bindings, parameters, or imports.
+Annotations compose at their authored positions: prelude handling neither moves another annotation
+across a binder nor supplies a monadic basis or changes monadic capture.
+Explicit dependencies use ordinary package resolution, cycle diagnostics, and incremental refresh.
+
+The expanded value `let` requires a value or computation body.
+A type-only export must therefore be packaged explicitly within its provider scope or a suitable dependent interface:
+
+```zydeco
+-- Assume prelude is already bound in the surrounding scope.
+@[prelude(core, from(prelude))]
+let Callback = Thk (Int -> OS) in
+pack (= Callback as Callback)
+where () end
+```
+
+Replacing that body with the raw type `Thk (Int -> OS)` is rejected with `tyck.sort-mismatch`.
+Packaging an alias also cannot make an abstract provider witness escape its opening.
+A raw type-root contract instead uses ordinary explicit type parameters or intrinsic aliases;
+opening the primitive leaf would impose the same value-`let` body constraint.
+The requirement that a `.zyi` source denote a type remains unchanged.
+Checking neither inserts a `pack` nor retries without expansion after a rejection.
+
+Compiler-canonical primitives retain their existing identities,
+and transparent data definitions share identity according to their resolved definitions
+and the [source sharing rules](#copy-resolve-merge-analyze).
+Neither fact makes a provider-specific witness canonical.
+Explicit identity boundaries for other library types remain unchanged.
+
 ### Source Packages
 
 A package is a term selected for distribution and reuse.
@@ -2439,6 +2597,7 @@ An ordinary layout descriptor is also a typed value; evaluating it during checki
 | `intrinsic(role)` | Supply a canonical kind/type (`vtype`, `ctype`, `thk`, `ret`, `unit`, `int`, `uint`, `i8`/`i16`/`i32`, `u8`/`u16`/`u32`, `f32`, `f64`, `char`, `string`) or an integer value function (§8) |
 | `builtin(role)` | Mark a host capability or operation in a typed Builtin interface (§13) |
 | `ffi(c, library("name"), symbol("name"))` | Supply a foreign thunk implementation at a hole (§14) |
+| `prelude(core, from(p))` | Open the fixed [core vocabulary](#core-prelude) from a lexical packed view |
 | `typeof` | Extract a synthesized classifier (§4); no arguments |
 | `monadic` | Algebra translation under the lexical basis (§11); no arguments |
 | `partial` | Permit the annotated computation header's binders to fail (§7); no arguments |

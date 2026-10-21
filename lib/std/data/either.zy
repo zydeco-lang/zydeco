@@ -1,5 +1,5 @@
 begin
-  let VType = @(intrinsic(vtype)) in
+  let (/VType) = @(import("../primitive.zy")) in
   let Either (L : VType) (R : VType) =
     data
     | +Left : L

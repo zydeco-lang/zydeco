@@ -917,3 +917,32 @@ fn discovery_ignores_symlinked_files_and_directories_until_explicitly_selected()
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("broken.zy") && stderr.contains("Unrecognized EOF"), "{stderr}");
 }
+
+#[test]
+fn prelude_package_check_run_and_rejected_build_share_one_frontend() {
+    let fixture = Fixture::new();
+    let std = repository_root().join("lib/std");
+    let source = format!(
+        r#"@[package(binary, name(example/prelude))]
+param (/process; builtin) : @(import("{}/builtin.zy")) in
+let (/make) = @(import("{}/prelude.zy")) in
+let prelude = make builtin in
+@[prelude(core, from(prelude))]
+let stop : Thk (Int -> OS) = process/exit in
+! stop 0
+"#,
+        std.display(),
+        std.display()
+    );
+    fixture.write("main.zy", &source);
+    fixture.success(&["check", "main.zy"]);
+    fixture.success(&["run", "main.zy"]);
+    fixture.success(&["build", "main.zy", "--target", "wasm-sps", "--build-dir", "accepted"]);
+    assert!(fixture.directory.path().join("accepted/main.sps.wasm").exists());
+    fixture.write("main.zy", &source.replace("from(prelude)", "from(missing)"));
+    let rejected =
+        fixture.command(&["build", "main.zy", "--target", "wasm-sps", "--build-dir", "rejected"]);
+    assert!(!rejected.status.success());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("missing"));
+    assert!(!fixture.directory.path().join("rejected/main.sps.wasm").exists());
+}

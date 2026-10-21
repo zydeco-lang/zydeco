@@ -1,0 +1,56 @@
+@[package(library, name(/std/prelude))]
+let (
+  /VType;
+  /CType;
+  /Thk;
+  /Ret;
+  /Unit;
+  /Int8;
+  /Int16;
+  /Int32;
+  /Int64;
+  /Int;
+  /UInt8;
+  /UInt16;
+  /UInt32;
+  /UInt64;
+  /UInt;
+  /Float32;
+  /Float64;
+  /Char;
+  /String
+)
+=
+  @(import("primitive.zy"))
+in
+let (/Bool) = @(import("data/bool.zy")) in
+let (/Option) = @(import("data/option.zy")) in
+let (/Either) = @(import("data/either.zy")) in
+let make = begin
+  param val (/OS) : @(import("builtin.zy")) that
+  let types = pack
+    (= Thk as Thk)
+    (= Ret as Ret)
+    (= OS as OS)
+    (= Unit as Unit)
+    (= Int8 as Int8)
+    (= Int16 as Int16)
+    (= Int32 as Int32)
+    (= Int64 as Int64)
+    (= Int as Int)
+    (= UInt8 as UInt8)
+    (= UInt16 as UInt16)
+    (= UInt32 as UInt32)
+    (= UInt64 as UInt64)
+    (= UInt as UInt)
+    (= Float32 as Float32)
+    (= Float64 as Float64)
+    (= Char as Char)
+    (= String as String)
+    (= Bool as Bool)
+    (= Option as Option)
+    (= Either as Either)
+  where () end in
+  ((VType, CType, types) : exists (VType as VType) (CType as CType) . @[typeof] types)
+end in
+(= make)

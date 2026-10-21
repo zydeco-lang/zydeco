@@ -12,6 +12,8 @@ mod package;
 mod path;
 pub use package::*;
 pub use path::*;
+mod prelude;
+pub use prelude::*;
 mod discovery;
 pub use discovery::*;
 
@@ -43,6 +45,7 @@ pub enum MetadataKind {
     Builtin,
     Ffi,
     Monadic,
+    Prelude,
     TypeOf,
     Partial,
     Format,
@@ -81,6 +84,7 @@ impl MetadataKind {
             | Self::Monadic => {
                 "Translate a type, value, or computation using the lexical monadic basis."
             }
+            | Self::Prelude => "Open core names from an explicitly supplied lexical prelude view.",
             | Self::TypeOf => "Extract an expression's type or kind without running it.",
             | Self::Partial => "Allow the annotated computation's own binding patterns to fail.",
             | Self::Format => "Override source formatting policy for an expression.",
@@ -92,6 +96,7 @@ impl MetadataKind {
                 "source",
                 MetadataValue::Source { inputs: true },
             )]),
+            | Self::Prelude => PreludeMeta::arguments(),
             | Self::Package => MetadataArguments::Package,
             | Self::Discover => MetadataArguments::Discovery,
             | Self::Literal | Self::Monadic | Self::TypeOf | Self::Partial => {
@@ -424,6 +429,13 @@ impl MetadataParameter {
                     found: argument.clone(),
                 }),
             },
+            | MetadataValue::Binding => match argument {
+                | Meta::Ident(value) if PreludeMeta::is_binding(value) => Ok(()),
+                | _ => Err(MetadataValidationError::ExpectedBinding {
+                    definition,
+                    found: argument.clone(),
+                }),
+            },
             | MetadataValue::String => match argument {
                 | Meta::String(_) => Ok(()),
                 | _ => Err(MetadataValidationError::ExpectedString {
@@ -474,6 +486,8 @@ impl MetadataParameter {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MetadataValue {
     Identifier(Vec<String>),
+    /// One ordinary lexical variable, excluding keywords and paths.
+    Binding,
     String,
     Integer,
     Glob,
@@ -493,6 +507,8 @@ pub enum MetadataValidationError {
     Discovery(#[from] DiscoveryAnnotationError),
     #[error("`{definition}` expects a quoted relative glob, but found `{found}`")]
     ExpectedGlob { definition: &'static str, found: Meta },
+    #[error("`{definition}` expects a lexical identifier, but found `{found}`")]
+    ExpectedBinding { definition: &'static str, found: Meta },
     #[error("`{definition}` expects {expected} arguments, but found {found}")]
     Arity { definition: &'static str, expected: usize, found: usize },
     #[error("`{definition}` parameter `{parameter}` expects an identifier, but found `{found}`")]

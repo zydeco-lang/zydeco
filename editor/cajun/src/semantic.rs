@@ -232,14 +232,19 @@ impl<'source> SemanticDocument<'source> {
         let classifier = NameClassifier::new(statics, &parameters);
         scoped.defs.iter().for_each(|(definition, name)| {
             let style = classifier.classify(*definition, name.0.as_str());
-            Self::entity_span(spans, scoped, (*definition).into())
-                .and_then(|span| {
-                    Self::same_file(spans, span, file_path)
-                        .then(|| ByteRange::from_span(spans, span))
-                        .flatten()
-                })
-                .into_iter()
-                .for_each(|range| self.overlay(range, style.with(SemanticModifier::Declaration)));
+            (!matches!(
+                scoped.origins.source(&(*definition).into()),
+                Some(zydeco_surface::textual::syntax::EntityId::Meta(_))
+            ))
+            .then(|| Self::entity_span(spans, scoped, (*definition).into()))
+            .flatten()
+            .and_then(|span| {
+                Self::same_file(spans, span, file_path)
+                    .then(|| ByteRange::from_span(spans, span))
+                    .flatten()
+            })
+            .into_iter()
+            .for_each(|range| self.overlay(range, style.with(SemanticModifier::Declaration)));
             scoped.users.forth(definition).iter().for_each(|term| {
                 Self::entity_span(spans, scoped, (*term).into())
                     .and_then(|span| {

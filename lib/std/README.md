@@ -2,24 +2,32 @@
 
 ## Start with the types
 
-Select the foundational kinds and types directly from the Builtin contract:
+For host-independent kinds and types, open the primitive leaf directly:
 
 ```zydeco
-param (/VType; /CType; /Ret; /Thk; /Int; /Float32; /Float64) : @(import(/std/builtin)) in
-...
+let (/VType; /Ret; /Thk; /Int) = @(import(/std/primitive)) in
+{ fn (value : Int) => (ret value : Ret Int) }
 ```
 
 Run CLI commands from the repository root to use its automatically detected project.
-The contract's surface carries the compiler-canonical kinds and types as manifest fields,
-so one field search reaches every public name and every selection shares one type identity.
-A pure library function states its interface with just this parameter:
+The leaf has no provider dependency. Programs already using Builtin can still select its foundational fields,
+or explicitly build a core prelude view from their shared opening:
 
 ```zydeco
-param (/Ret; /Int) : @(import(/std/builtin)) in
-fn (value : Int) => (ret value : Ret Int)
+param (/process; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
+let stop : Thk (Int -> OS) = process/exit in
+! stop 0
 ```
 
-The available surface names are:
+The [core prelude contract](../../docs/references/language.md#core-prelude) defines the exact vocabulary,
+lexical expansion, and provider identity rules.
+The adapter supplies names, not host operations; keep dependent operations and its argument
+on the same retained opening.
+
+The Builtin contract exposes these surface names:
 
 | Family | Names |
 | --- | --- |
@@ -86,6 +94,7 @@ See [explicit storage](#explicit-storage).
 ## Source packages and tests
 
 [`std.zy`](std.zy) declares the whole-file package `std`.
+The primitive leaf and prelude adapter are `std/primitive` and `std/prelude`.
 Builtin is `std/builtin`; topic entries are `std/data`, `std/text`, `std/numeric`, `std/system`, and `std/memory`.
 These names identify source terms; fields and factory applications remain ordinary language structure.
 The [source-package rules](../../docs/references/language.md#source-packages) govern selection and relationships.

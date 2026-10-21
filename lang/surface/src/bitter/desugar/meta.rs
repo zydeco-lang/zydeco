@@ -2,7 +2,8 @@
 
 use super::*;
 use crate::metadata::{
-    BuiltinMeta, FfiMeta, IntrinsicMeta, MetadataKind, MonadicMeta, PartialMeta, TypeOfMeta,
+    BuiltinMeta, FfiMeta, IntrinsicMeta, MetadataKind, MonadicMeta, PartialMeta, PreludeMeta,
+    TypeOfMeta,
 };
 use zydeco_syntax::{BuiltinRole, SpecializeMeta};
 
@@ -11,6 +12,7 @@ enum MetaAction {
     Intrinsic(IntrinsicRole),
     TypeOf,
     Monadic,
+    Prelude { decoded: PreludeMeta, source: t::MetaId },
     Partial { meta: t::Meta, binders: Vec<t::PatId> },
 }
 
@@ -27,6 +29,14 @@ impl MetaRules<'_> {
         let payload_site = payload.span(self.spans).clone().make(id);
         let meta = self.textual.semantic_meta(metadata);
         match MetadataKind::of(&meta) {
+            | Some(MetadataKind::Prelude) => {
+                let decoded = PreludeMeta::from_arguments(meta.arguments()).map_err(|source| {
+                    DesugarError::InvalidPreludeMeta { term: annotation, source }
+                })?;
+                let from = self.textual.metas[&metadata].arguments()[1];
+                let source = self.textual.metas[&from].arguments()[0];
+                Ok(MetaAction::Prelude { decoded, source })
+            }
             | Some(MetadataKind::Partial) => {
                 PartialMeta::from_arguments(meta.arguments()).map_err(|source| {
                     DesugarError::InvalidPartialMeta { term: annotation, source }
@@ -163,6 +173,43 @@ impl DesugarFolder<'_> {
             .inspect(id, metadata, payload)
             .map_err(|error| self.report(error))?;
         match action {
+            | MetaAction::Prelude { decoded, source } => {
+                let tail = self.term(payload)?;
+                let bindee =
+                    Alloc::alloc(&mut self.builder, b::Term::Var(decoded.source), source.into());
+                let patterns = decoded
+                    .profile
+                    .names()
+                    .iter()
+                    .map(|name| {
+                        let definition = Alloc::alloc(
+                            &mut self.builder,
+                            b::VarName((*name).into()),
+                            metadata.into(),
+                        );
+                        let pattern = Alloc::alloc(
+                            &mut self.builder,
+                            b::Pattern::Var(definition),
+                            metadata.into(),
+                        );
+                        Alloc::alloc(
+                            &mut self.builder,
+                            b::ProjectionPattern(b::FieldName((*name).into()), pattern).into(),
+                            metadata.into(),
+                        )
+                    })
+                    .collect();
+                let binder = Alloc::alloc(
+                    &mut self.builder,
+                    b::Alias(b::ConsN::from_vec(patterns).expect("core is nonempty")).into(),
+                    metadata.into(),
+                );
+                Ok(Alloc::alloc(
+                    &mut self.builder,
+                    b::Let { binder, bindee, tail }.into(),
+                    metadata.into(),
+                ))
+            }
             | MetaAction::Intrinsic(role) => Ok(self.builder.intrinsic(role, id.into())),
             | MetaAction::TypeOf => {
                 let operand = self.term(payload)?;

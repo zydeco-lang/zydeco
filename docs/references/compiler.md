@@ -903,13 +903,32 @@ Meta annotation inspection precedes payload lowering when its rule depends on au
 
 [`MetaRules`](../../lang/surface/src/bitter/desugar/meta.rs) inspects read-only textual syntax
 and selects one typed action: preserve an annotation, construct an intrinsic, query a classifier,
-build a monadic block, or record partial binders and preserve the annotation.
+build a monadic block, expand a prelude opening, or record partial binders and preserve the annotation.
 The catalog identifies the recognized kind once; arbitrary annotations retain their structure.
 Intrinsic and FFI payload checks inspect authored syntax before any lowering can erase grouping.
 Intrinsic construction skips its hole payload; classifier queries and monadic actions lower their payload once.
 Partial actions carry the header's textual binder identities and record them before visiting the payload,
 including when that payload has already been memoized.
 Existential parameter annotations use their own allowed-role validation and retain their precise annotation sites.
+
+The [core prelude](language.md#core-prelude) is a bounded construction inside this existing folder,
+not an additional source traversal or compiler environment.
+`PreludeMeta` validates the catalog's profile and lexical `from` argument independently of reconstruction.
+The action builds an ordinary value `let` with the fixed projection pattern and lowers the payload once.
+Resolution visits the lexical bindee before the new definitions; checking and every backend use the ordinary result.
+This local handler needs no separate `Explicit` traversal or resumable scheduler.
+
+Generated definitions, projections, and the opening retain the annotation's metadata origin;
+the bindee retains the exact identifier argument's origin.
+Ordinary binding provenance therefore carries provider identity into diagnostics and editor queries.
+Hover and body completion mark the implicit definitions, and go-to-definition points to their annotation.
+These generated binders are not editable declaration tokens: rename refuses them rather
+than replacing the annotation, while a rename of the supplied view includes its `from` reference.
+The textual formatter retains authored sugar; bitter inspection displays its explicit projection.
+[Surface tests](../../lang/surface/src/bitter/desugar/tests.rs),
+[composition regressions](../../lang/tests/tests/prelude.rs), and the CLI, REPL,
+and editor tests pair ordinary openings with the abbreviation, including rejected witness sharing
+and absent downstream artifacts.
 
 ### Name Resolution
 

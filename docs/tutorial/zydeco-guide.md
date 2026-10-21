@@ -7,7 +7,10 @@ to the [compiler reference](../references/compiler.md).
 
 Examples use complete source terms except where the surrounding prose describes an intentional rejection.
 Imports are relative to this guide's directory, `docs/tutorial/`; adjust them when copying an example elsewhere.
-There is no implicit prelude. Blocks marked `text` describe syntax or signatures with schematic names.
+Examples bind their names explicitly;
+the opt-in [core prelude](../references/language.md#core-prelude) can abbreviate an opening
+from an explicitly supplied view.
+Blocks marked `text` describe syntax or signatures with schematic names.
 
 ## 1. The core idea
 

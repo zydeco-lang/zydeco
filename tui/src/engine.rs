@@ -401,6 +401,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn prelude_inputs_use_the_same_expansion_without_leaking_to_later_inputs() {
+        let directory = tempfile::tempdir().unwrap();
+        let std =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/std").canonicalize().unwrap();
+        let mut engine = ReplEngine::new(directory.path().to_path_buf(), Arc::default());
+        let source = format!(
+            r#"param (/process; builtin) : @(import("{}/builtin.zy")) in
+let (/make) = @(import("{}/prelude.zy")) in
+let prelude = make builtin in
+@[prelude(core, from(prelude))]
+let stop : Thk (Int -> OS) = process/exit in
+! stop 0"#,
+            std.display(),
+            std.display()
+        );
+        let input = engine.install(SourceNumber::new(1).unwrap(), source).unwrap();
+        let result = engine.evaluate(&input, ExpressionMode::Run);
+        assert!(
+            matches!(result, EvaluationOutcome::Success(ref text) if text == "Program exited with code 0")
+        );
+        let later = engine
+            .install(SourceNumber::new(2).unwrap(), "@[prelude(core, from(prelude))] ()".into())
+            .unwrap();
+        assert!(
+            matches!(engine.evaluate(&later, ExpressionMode::Type), EvaluationOutcome::Error(ref text) if text.contains("prelude"))
+        );
+    }
+
+    #[test]
     fn named_imports_use_explicit_bindings_in_numbered_inputs() {
         let directory = tempfile::tempdir().unwrap();
         let library = directory.path().join("library.zy");

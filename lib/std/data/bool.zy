@@ -1,5 +1,5 @@
 begin
-  let Unit = @(intrinsic(unit)) in
+  let (/Unit) = @(import("../primitive.zy")) in
   let Bool =
     data
     | +False : Unit
