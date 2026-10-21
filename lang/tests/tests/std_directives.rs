@@ -16,7 +16,7 @@ fn main() {
     let arguments = Arguments::from_args();
     let lib = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib").canonicalize().unwrap();
     let root = lib.join("tests/std");
-    let trials = WalkDir::new(&root)
+    let mut trials = WalkDir::new(&root)
         .into_iter()
         .map(|entry| {
             entry.unwrap_or_else(|error| {
@@ -26,7 +26,59 @@ fn main() {
         .filter(|entry| entry.path().extension().is_some_and(|extension| extension == "zy"))
         .flat_map(|entry| trials(&root, &lib, entry.path()))
         .collect::<Vec<_>>();
+    trials.push(coverage_trial(root.clone()));
     run(&arguments, trials).exit();
+}
+
+/// Every discovered standard-library test package must enter this runner.
+///
+/// The classification test in `cli/tests/package.rs` requires one test package
+/// per source outside `support/`; this trial requires that each of those
+/// packages declares `-- stage: run`, so discovery cannot silently skip a test.
+fn coverage_trial(root: PathBuf) -> Trial {
+    Trial::test("std/coverage", move || {
+        let repository = root
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+            .expect("the standard library suite lives under lib/tests/std");
+        let workspace = repository.join("workspace.zy");
+        let session = zydeco_session::CompilerSession::default();
+        let project = session.project(&[workspace]).map_err(|error| {
+            Failed::from(format!("cannot load the repository project: {error}"))
+        })?;
+        let declarations = session.declarations(&project).map_err(|error| {
+            Failed::from(format!("cannot discover standard library packages: {error}"))
+        })?;
+        let mut missing = Vec::new();
+        for (_, package) in declarations {
+            if package.role != zydeco_session::source::PackageRole::Test {
+                continue;
+            }
+            let path = package.id.path;
+            if !path.starts_with(&root) {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).map_err(|error| {
+                Failed::from(format!("cannot read test package {}: {error}", path.display()))
+            })?;
+            if !declares_run(&source) {
+                missing.push(
+                    path.strip_prefix(&root)
+                        .expect("test packages live under the suite root")
+                        .display()
+                        .to_string(),
+                );
+            }
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+        Err(Failed::from(format!(
+            "test packages must declare `-- stage: run`:\n{}",
+            missing.join("\n")
+        )))
+    })
 }
 
 fn trials(root: &Path, lib: &Path, path: &Path) -> Vec<Trial> {

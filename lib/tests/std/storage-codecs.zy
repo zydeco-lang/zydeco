@@ -1,3 +1,5 @@
+-- stage: run
+-- backends: interpreter
 @[package(test(of(/std)))]
 param (/numeric; /process; builtin) : @(import(/std/builtin)) in
 begin
