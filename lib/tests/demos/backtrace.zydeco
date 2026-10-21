@@ -1,8 +1,11 @@
 -- a binary tree
+param (/stdio; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /Int) : @(import(
-    "../../std/builtin.zy"
-  )) that
   def Tree (A : VType) : VType =
     data
     | +Leaf : Unit

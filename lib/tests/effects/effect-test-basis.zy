@@ -1,11 +1,14 @@
 -- A bounded decimal trace records ambient effects without relying on stdout inside Ret.
 val
   (
-    (/Thk; /Ret; /Unit; /Int; /OS; /numeric; /memory; /process; builtin) : @(import(
+    (/numeric; /memory; /process; builtin) : @(import(
       "../../std/builtin.zy"
     ))
   )
 =>
+  let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+  let prelude = make_prelude builtin in
+  @[prelude(core, from(prelude))]
   begin
     def ! with_trace
       (body : Thk (Thk (Int -> Ret Unit) -> Thk (Ret Int) -> Thk (Ret Unit) -> Ret Int))

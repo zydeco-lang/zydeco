@@ -1,10 +1,11 @@
 @[package(library, name(std))]
+let (/VType) = @(import("primitive.zy")) in
 let (/make = make_bytes) = @(import("text/bytes.zy")) in
 let (/Additive; /Multiplicative; /PartialEquality; /PartialOrder; /Numeric) = @(import(
   "numeric/dictionary.zy"
 )) in
 begin
-  param val (/VType; builtin) : @(import("builtin.zy")) that
+  param val (/OS = _; builtin) : @(import("builtin.zy")) that
   let (/make = make_data) = @(import("data/package.zy")) that
   let make_text = @(import("text/package.zy")) that
   let make_system = @(import("system/package.zy")) that
@@ -21,18 +22,9 @@ begin
     (builtin |> make_system) byte_package base
   in
   let (
-    /int8;
-    /int16;
-    /int32;
-    /int64;
-    /int;
-    /uint8;
-    /uint16;
-    /uint32;
-    /uint64;
-    /uint;
-    /float32;
-    /float64;
+    /int8; /int16; /int32; /int64; /int;
+    /uint8; /uint16; /uint32; /uint64; /uint;
+    /float32; /float64;
     /dictionaries
   )
   =

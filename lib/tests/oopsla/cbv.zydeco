@@ -1,10 +1,13 @@
 --| This file implements an interpreter for a simple CBV language.
 
 --| As it is a CBV language, our syntax only contains expressions.
+param (/stdio; /process; /text; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; /text) : @(import(
-    "../../std/builtin.zy"
-  )) that
   let string = text/string that
   def Bool =
     data

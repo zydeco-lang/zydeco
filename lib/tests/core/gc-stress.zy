@@ -1,7 +1,11 @@
 -- The live row keeps a boxed Float64 payload reachable across collection.
+param (/numeric; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/Ret; /Int; /Float64; /numeric; /OS; builtin) : @(import("../../std/builtin.zy")) that
+
   let (/bool; /int; /process) = builtin |> make_std in
   let Row =
       Float64 * Int * Int * Int * Int * Int * Int * Int

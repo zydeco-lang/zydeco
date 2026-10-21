@@ -1,11 +1,15 @@
+let (
+  /VType; /CType; /Thk; /Ret; /Unit;
+  /Int8; /Int16; /Int32; /Int64; /Int;
+  /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
+  /Float32; /Float64
+)
+=
+  @(import("../primitive.zy"))
+in
 let (/Representation) = @(import("codecs.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
-let Thk = @(intrinsic(thk)) in
-let Unit = @(intrinsic(unit)) in
-let Int = @(intrinsic(int)) in
 let (/make = make_codecs) = @(import("codecs.zy")) in
 
 begin
@@ -27,26 +31,24 @@ begin
               forall (A : VType) (R : CType) . Layout A -> Thk R -> Thk (Representation A -> R) -> R
             )
           )
-        * (#int8 :: Layout (@(intrinsic(i8))))
-        * (#int16 :: Layout (@(intrinsic(i16))))
-        * (#int32 :: Layout (@(intrinsic(i32))))
-        * (#int64 :: Layout (@(intrinsic(i64))))
+        * (#int8 :: Layout Int8)
+        * (#int16 :: Layout Int16)
+        * (#int32 :: Layout Int32)
+        * (#int64 :: Layout Int64)
         * (#int :: Layout Int)
-        * (#uint8 :: Layout (@(intrinsic(u8))))
-        * (#uint16 :: Layout (@(intrinsic(u16))))
-        * (#uint32 :: Layout (@(intrinsic(u32))))
-        * (#uint64 :: Layout (@(intrinsic(u64))))
-        * (#uint :: Layout (@(intrinsic(uint))))
-        * (#float32 :: Layout (@(intrinsic(f32))))
-        * (#float64 :: Layout (@(intrinsic(f64))))
+        * (#uint8 :: Layout UInt8)
+        * (#uint16 :: Layout UInt16)
+        * (#uint32 :: Layout UInt32)
+        * (#uint64 :: Layout UInt64)
+        * (#uint :: Layout UInt)
+        * (#float32 :: Layout Float32)
+        * (#float64 :: Layout Float64)
         * (#addr :: Layout Addr)
     end
   in
 
   begin
-    param val (/Addr; /VType; /CType; /Thk; /Ret; /Unit;
-      /Int8; /Int16; /Int32; /Int64; /Int; /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
-      /Float32; /Float64; /numeric; /memory; builtin) : @(import("../builtin.zy")) in
+    param val (/Addr; /numeric; /memory; builtin) : @(import("../builtin.zy")) in
     param val (/Uninit; /Init; /Ptr; types) : Types Addr in
     param val (/DynamicStorage; /runtime; storage_api) : StoragePackage in
     let int = numeric/int in

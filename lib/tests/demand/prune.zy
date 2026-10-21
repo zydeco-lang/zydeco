@@ -1,5 +1,8 @@
+param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Ret; /process; /Int; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int in
   let fix helper (x : Int) : Ret Int =
     do one <- ret 1;

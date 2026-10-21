@@ -1,7 +1,8 @@
 -- The ambient relative monad, reusable as the base of a transformer.
 
+let (/Thk; /Ret) = @(import("../primitive.zy")) in
 let (/Monad) = @(import("monad.zy")) in
-val ((/Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
+val ((/OS = _; builtin) : @(import("../builtin.zy"))) =>
   begin
     let instance =
       pack (M as Ret)

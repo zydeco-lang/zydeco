@@ -1,6 +1,9 @@
 -- A `@[literal]` splice becomes a multi-line string value.
+param (/stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/stdio; /process; /String) : @(import("../../std/builtin.zy")) that
   let message : String =
     --| Hello literal
     --| second line

@@ -6,10 +6,13 @@
 --     Thk (M A) -> Thk (A -> R) -> R
 -- end
 let monadic_basis = @(import("../../std/effect/monad.zy")) in
+param val (/stdio; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param val (/VType; /CType; /Thk; /Ret; /OS; /stdio; /process; /String; builtin) : @(import(
-    "../../std/builtin.zy"
-  )) that
   let (/Monad; /Algebra) =
     monadic_basis
   in

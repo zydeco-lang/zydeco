@@ -1,7 +1,11 @@
 @[package(test(of(/std)))]
+param (/OS = _; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import(/std)) that
-  param (/Ret; /Int; /String; builtin) : @(import(/std/builtin)) that
+
   let (/option; /int; /string; /process) = builtin |> make_std in
   do present <- ! string/split_once "left:right" ':';
   do present_status <- ! option/fold

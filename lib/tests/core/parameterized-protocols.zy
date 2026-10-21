@@ -1,7 +1,9 @@
 -- One recursive interface instantiated with both value and computation arguments.
+param (/int; /char; /string; /args; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Int; /Char; /String; /Thk; /Ret;
-    /int; /char; /string; /args; /process) : @(import("../../std/builtin.zy")) that
   def Stream (A : VType) (R : CType) : CType =
     codata
     | .item : A -> Stream A R

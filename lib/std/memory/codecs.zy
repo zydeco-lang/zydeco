@@ -1,8 +1,5 @@
+let (/VType; /CType; /Thk; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
-let Thk = @(intrinsic(thk)) in
-
 begin
   let Codec (Uninit : VType) (Init : VType) (Ptr : VType -> VType -> VType) =
     begin
@@ -26,7 +23,7 @@ begin
   let make =
     -- Logical conversion is independent of allocation geometry and provider selection.
     begin
-      param val (/VType; /CType; /Thk; /Unit; /Int; /Addr; /memory; builtin) : @(import(
+      param val (/Addr; /memory; builtin) : @(import(
         "../builtin.zy"
       )) that
       param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in

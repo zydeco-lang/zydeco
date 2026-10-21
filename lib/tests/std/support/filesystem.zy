@@ -1,11 +1,15 @@
 -- stage: run
 -- backends: all
 -- setup: filesystem
+param (/Writer; builtin) : @(import(
+  "../../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import("../../../std/std.zy")) that
-  param (/VType; /Thk; /Unit; /Writer; /OS; /String; builtin) : @(import(
-    "../../../std/builtin.zy"
-  )) that
+
   let (
     /Bytes;
     /Bool; /Either; /Path; /IoError;

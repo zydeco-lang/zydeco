@@ -1,9 +1,13 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
+param (/system; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import(/std)) that
-  param (/system; /OS; builtin) : @(import(/std/builtin)) that
+
   let (/Bool; /bool; /process) = builtin |> make_std in
   do result <- ! bool/not (+False() : Bool);
   match result

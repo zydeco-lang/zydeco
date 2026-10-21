@@ -1,3 +1,7 @@
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   def Bool =
     data
@@ -5,7 +9,7 @@ begin
     | +True : Unit
     end
   that
-  param (/Unit; /process) : @(import("../../std/builtin.zy")) that
+
   let x : Bool = +False() in
   match x
   | +True(_) => ! process/exit 10

@@ -1,9 +1,6 @@
+let (/VType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Either) = @(import("../data/either.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
-let VType = @(intrinsic(vtype)) in
-let Ret = @(intrinsic(ret)) in
-let Thk = @(intrinsic(thk)) in
-let Int = @(intrinsic(int)) in
 begin
   let StoragePackage =
     begin
@@ -43,7 +40,7 @@ begin
   let make =
     -- Geometry is sealed after validation. A layout witness never identifies an allocation instance.
     begin
-      param val (/VType; /Ret; /Unit; /Int; builtin) : @(import("../builtin.zy")) in
+      param val (/OS = _; builtin) : @(import("../builtin.zy")) in
 
       let size = @(import("size.zy")) in
       let dynamic = builtin |> (@(import("dynamic-size.zy"))) in

@@ -1,7 +1,10 @@
 -- Static factories forward runtime State operations and their algebra evidence.
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+param (/numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let monadic_basis = @(import("../../std/effect/monad.zy")) in
 let (/Monad; /Algebra) = monadic_basis in
 let int = numeric/int in

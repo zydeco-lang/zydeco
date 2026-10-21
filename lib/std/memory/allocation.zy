@@ -1,11 +1,7 @@
+let (/VType; /CType; /Thk; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
 let (/Fault) = @(import("fault.zy")) in
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
-let Thk = @(intrinsic(thk)) in
-let Int = @(intrinsic(int)) in
-
 begin
   let Alloc =
     begin
@@ -35,7 +31,7 @@ begin
   let make =
     -- Allocator context is explicit. Free requires the same allocator and allocation layout.
     begin
-      param val (/VType; /CType; /Thk; /Unit; /Addr; /Int; /numeric; builtin) : @(import(
+      param val (/Addr; /numeric; builtin) : @(import(
         "../builtin.zy"
       )) that
       param val (/Uninit; /Ptr; /unsafe) : Types Addr that

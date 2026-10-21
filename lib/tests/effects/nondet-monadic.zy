@@ -1,9 +1,12 @@
 -- A closed translated client uses the same search operations as an explicit-bind client.
 let (/make = make_data) = @(import("../../std/data/package.zy")) in
 let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
-param (/VType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+param (/numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let (/List; /list; data_package) = builtin |> make_data in
 let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
 let (/Top) = @(import("../../std/effect/monad.zy")) in

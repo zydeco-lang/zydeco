@@ -1,6 +1,8 @@
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /Thk; /Ret; /Int; /process) : @(import("../../std/builtin.zy")) that
-
   let Box = exists (X : VType) . X that
   let Methods (X : VType) =
     codata

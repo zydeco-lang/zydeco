@@ -1,7 +1,8 @@
+param (/numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Thk; /Ret; /Unit; /OS; /Int8; /Int16; /Int32; /Int64; /Int;
-    /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /numeric; /process) :
-  @(import("../../std/builtin.zy")) that
   let fail = { ! process/exit 1 } in
   let echo_int8 = (
     @(ffi(c, library("zyffi_boundary"), symbol("zyffi_int8"))) : Thk (Int8 -> Ret Int8)

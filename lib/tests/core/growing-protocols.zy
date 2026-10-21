@@ -1,6 +1,9 @@
 -- Successive observations change the argument type; this is not a regular cycle.
+param (/int; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Int; /Ret; /int; /process) : @(import("../../std/builtin.zy")) that
   def Growing (A : VType) : CType =
     codata
     | .step : A -> Growing (A * A)

@@ -1,24 +1,10 @@
 @[package(library, name(/std/prelude))]
 let (
-  /VType;
-  /CType;
-  /Thk;
-  /Ret;
-  /Unit;
-  /Int8;
-  /Int16;
-  /Int32;
-  /Int64;
-  /Int;
-  /UInt8;
-  /UInt16;
-  /UInt32;
-  /UInt64;
-  /UInt;
-  /Float32;
-  /Float64;
-  /Char;
-  /String
+  /VType; /CType; /Thk; /Ret; /Unit;
+  /Int8; /Int16; /Int32; /Int64; /Int;
+  /UInt8; /UInt16; /UInt32; /UInt64; /UInt;
+  /Float32; /Float64;
+  /Char; /String
 )
 =
   @(import("primitive.zy"))

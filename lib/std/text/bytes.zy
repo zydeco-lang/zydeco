@@ -1,11 +1,5 @@
+let (/VType; /CType; /Thk; /Ret; /Int; /UInt8; /String) = @(import("../primitive.zy")) in
 let (/Fault) = @(import("../memory/fault.zy")) in
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
-let Thk = @(intrinsic(thk)) in
-let Ret = @(intrinsic(ret)) in
-let Int = @(intrinsic(int)) in
-let UInt8 = @(intrinsic(u8)) in
-let String = @(intrinsic(string)) in
 begin
   -- Immutable bytes retain their backing allocations until runtime teardown.
   let BytesPackage =
@@ -58,18 +52,7 @@ begin
   let make =
     -- Contiguous immutable bytes with explicit retention and no per-copy reference counting.
     begin
-      param val (
-        /CType;
-        /Thk;
-        /Ret;
-        /Addr;
-        /Int;
-        /UInt8;
-        /String;
-        /memory;
-        /numeric;
-        builtin
-      ) : @(import("../builtin.zy")) that
+      param val (/Addr; /memory; /numeric; builtin) : @(import("../builtin.zy")) that
       let Package = BytesPackage in
       let (/Fault; /allocate; /unsafe) = builtin |> (@(import("../memory/native.zy"))) in
       let int = numeric/int in

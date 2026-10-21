@@ -1,6 +1,9 @@
-param (/Thk; /Ret; /Unit; /Int; /OS; /numeric; /process) : @(import(
+param (/numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let Choice =
   data
   | +First : Int

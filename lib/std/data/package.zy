@@ -1,13 +1,8 @@
 @[package(library, name(std/data))]
+let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Bool) = @(import("bool.zy")) in
 let (/Option) = @(import("option.zy")) in
 let (/Either) = @(import("either.zy")) in
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
-let Thk = @(intrinsic(thk)) in
-let Ret = @(intrinsic(ret)) in
-let Unit = @(intrinsic(unit)) in
-let Int = @(intrinsic(int)) in
 begin
   let BoolModule (Bool : VType) =
       (#true :: Bool)
@@ -162,7 +157,7 @@ begin
   let make =
     val
       (
-        (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric) : @(import("../builtin.zy"))
+        (/numeric) : @(import("../builtin.zy"))
       )
     =>
       let int = numeric/int in

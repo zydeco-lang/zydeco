@@ -2,22 +2,11 @@
 --| Value Type and Computation Type
 --| Thunk Type and Return Type
 --| Primitive Base Types
+param val (/stdio; /process; /numeric; /text; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param val (
-    /VType;
-    /CType;
-    /Thk;
-    /Ret;
-    /Unit;
-    /OS;
-    /stdio;
-    /process;
-    /Char;
-    /String;
-    /Int;
-    /numeric;
-    /text
-  ) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let string = text/string that
   let Thunk (B : CType) = Thk B that

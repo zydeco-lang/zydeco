@@ -1,17 +1,8 @@
 -- Packed-pi clients use State and Exception without choosing their carriers.
-param (
-  /VType;
-  /Thk;
-  /Ret;
-  /Unit;
-  /Int;
-  /String;
-  /numeric;
-  /string;
-  /stdio;
-  /process;
-  builtin
-) : @(import("../../std/builtin.zy")) in
+param (/numeric; /string; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
 let (/IState; /instance = state_instance; /modify; /run_state; /eval_state) =
   builtin |> (@(import("../../std/effect/state.zy")))

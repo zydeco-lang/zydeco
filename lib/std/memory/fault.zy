@@ -1,5 +1,5 @@
 begin
-  let Unit = @(intrinsic(unit)) in
+  let (/Unit) = @(import("../primitive.zy")) in
   let Fault =
     data
     | +InvalidLayout : Unit

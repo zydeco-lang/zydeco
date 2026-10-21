@@ -1,8 +1,12 @@
+param (/process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
-  param (/VType; /CType; /Thk; /Ret; /process; /Int; builtin) : @(import(
-    "../../std/builtin.zy"
-  )) that
+
   let (/Monad; /Algebra) = monadic_basis in
   begin
     def With (B1 : CType) (B2 : CType) =

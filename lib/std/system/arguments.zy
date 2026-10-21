@@ -1,6 +1,7 @@
 -- Lazy folds use ordinary, reusable CBPV thunks over a stable host snapshot.
+let (/CType; /Thk; /Int; /String) = @(import("../primitive.zy")) in
 begin
-  param val (/CType; /Thk; /Int; /String; /args; /int) : @(import("../builtin.zy")) that
+  param val (/args; /int) : @(import("../builtin.zy")) that
   let ! fold (R : CType) (when_empty : Thk R)
     (when_item : Thk (String -> Thk R -> R))
   : R =

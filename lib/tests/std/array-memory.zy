@@ -1,9 +1,11 @@
 @[package(test(of(/std)))]
+param (/numeric; /process; builtin) : @(import(
+  /std/builtin
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Int; /UInt32; /OS; /numeric; /process; /Unit; builtin) :
-  @(import(
-    /std/builtin
-  )) that
   let (/storage; /codecs; /Uninit; /Init; /Ptr; /arrays; /fixed; /allocation) = builtin |> (
     @(import(/std/memory))
   ) in

@@ -1,5 +1,8 @@
+param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/OS; /process; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let uint = numeric/uint that
   do wrapped_min <- ! int/add 4611686018427387903 1;

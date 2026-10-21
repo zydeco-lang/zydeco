@@ -1,6 +1,8 @@
+param (/Addr; /numeric; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Thk; /Ret; /OS; /Addr; /UInt8; /UInt32; /UInt; /Int;
-    /numeric; /process; /Unit; builtin) : @(import("../../std/builtin.zy")) that
   let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
     @(import("../../std/memory/package.zy"))
   ) in

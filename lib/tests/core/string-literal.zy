@@ -1,5 +1,8 @@
+param (/process; /numeric; /text; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/OS; /process; /numeric; /text) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let string = text/string that
   do unicode_length <- ! string/length "λx";

@@ -1,9 +1,10 @@
 -- A manually managed byte builder. Copies of its handle do not track later state changes.
 
+let (/VType; /CType; /Thk; /Ret; /Int; /UInt8) = @(import("../primitive.zy")) in
 let (/BytesPackage) = @(import("../text/bytes.zy")) in
 let (/Alloc) = @(import("allocation.zy")) in
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /UInt8; /numeric; builtin) : @(import(
+  param val (/Addr; /numeric; builtin) : @(import(
     "../builtin.zy"
   )) that
   param val (/Bytes; /bytes) : BytesPackage Addr in

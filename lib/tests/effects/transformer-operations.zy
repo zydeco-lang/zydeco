@@ -1,9 +1,12 @@
 -- One MonadTrans client exercises every standard derivation, then checks State/Exception interaction.
 let (/make = make_data) = @(import("../../std/data/package.zy")) in
 let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+param (/numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
 let (/MonadTrans; /ITransformer) = @(import("../../std/effect/transformer.zy")) in
 let (/List; data_package) = builtin |> make_data in

@@ -1,8 +1,10 @@
 @[package(test(of(/std)))]
 let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
+param (/numeric; /process; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /Int;
-    /UInt8; /numeric; /process; builtin) : @(import(/std/builtin)) that
   let (/Bytes; /bytes) = builtin |> make_bytes in
   let (/storage; /codecs; /allocation; /dynamic) = builtin |> (@(import(/std/memory))) in
   let (= Layout, = Representation, memory) = dynamic in

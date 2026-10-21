@@ -1,9 +1,12 @@
 -- We can do good old object-oriented programming in here
 -- e.g. define a Counter that can incr and project out Int or String
+param (/stdio; /process; /numeric; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/CType; /Thk; /Ret; /stdio; /process; /String; /Int; /numeric) : @(import(
-    "../../std/builtin.zy"
-  )) that
   let int = numeric/int that
   def Counter : CType =
     codata

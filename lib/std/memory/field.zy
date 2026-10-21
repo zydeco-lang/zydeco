@@ -1,9 +1,5 @@
+let (/VType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
-let VType = @(intrinsic(vtype)) in
-let Thk = @(intrinsic(thk)) in
-let Ret = @(intrinsic(ret)) in
-let Int = @(intrinsic(int)) in
-
 begin
   let FieldOperations
     (Uninit : VType)
@@ -71,7 +67,7 @@ begin
   let make =
     -- Field witnesses describe layout relationships, never allocation identity or ownership.
     begin
-      param val (/VType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+      param val (/Addr; /numeric; /memory; builtin) : @(import(
         "../builtin.zy"
       )) that
       param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in

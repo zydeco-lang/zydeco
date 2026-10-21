@@ -1,5 +1,7 @@
-param (/Thk; /Ret; /OS; /process) : @(import("../../std/builtin.zy")) in
-let Int = @(intrinsic(int)) in
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let Exit = @[typeof] ! process/exit 73 that
   let Loop = @[typeof] fix (loop : Thk (Ret Int)) => ! loop that

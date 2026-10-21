@@ -1,4 +1,7 @@
-param (/OS; /stdio; /process; /numeric) : @(import("../../std/builtin.zy")) in
+param (/stdio; /process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let int = numeric/int in
 ! stdio/read_int
   { ! process/exit 1 }

@@ -1,6 +1,4 @@
-let VType = @(intrinsic(vtype)) in
-let Thk = @(intrinsic(thk)) in
-let Ret = @(intrinsic(ret)) in
+let (/VType; /Thk; /Ret) = @(import("../primitive.zy")) in
 begin
   -- A lawful monoid has associative append and a two-sided identity.
   -- Writer additionally requires append to be total and observationally pure.

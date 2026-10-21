@@ -1,7 +1,10 @@
+param (/stdio; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Thk; /Unit; /OS; /stdio; /process; /String) : @(import(
-    "../../std/builtin.zy"
-  )) that
   def List (A : VType) : VType =
     data
     | +Nil : Unit

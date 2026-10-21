@@ -1,10 +1,13 @@
 -- Don't defunctionalize the kontinuation, objectify the computation!
 -- Let's consider a simple example of a recursive function, summing up
 -- the numbers in a list.
+param (/stdio; /process; /numeric; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /Int; /numeric) : @(import(
-    "../../std/builtin.zy"
-  )) that
   let int = numeric/int that
   def List (A : VType) : VType =
     data

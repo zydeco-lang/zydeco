@@ -1,7 +1,5 @@
 -- Structural capabilities shared by integer and floating-point builders.
-let VType = @(intrinsic(vtype)) in
-let Thk = @(intrinsic(thk)) in
-let Ret = @(intrinsic(ret)) in
+let (/VType; /Thk; /Ret) = @(import("../primitive.zy")) in
 begin
   let Additive (A : VType) =
       (#zero :: A)

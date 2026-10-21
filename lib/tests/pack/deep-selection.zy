@@ -1,5 +1,8 @@
+param (/stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Thk; /String; /OS; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) that
   let deep =
     val ((/OS; /stdio; /process; _) : @(import("../../std/builtin.zy"))) =>
       (stdio/write_line, process/exit)

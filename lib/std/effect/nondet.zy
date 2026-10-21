@@ -1,10 +1,7 @@
+let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/DataPackage) = @(import("../data/package.zy")) in
 let (/Monad; /Algebra; /WithMonad; /Top) = @(import("monad.zy")) in
 let (/Transformer) = @(import("transformer.zy")) in
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
-let Thk = @(intrinsic(thk)) in
-
 begin
   let MonadNonDet (M : VType -> CType) =
     codata
@@ -15,7 +12,7 @@ begin
   let make =
     -- Ordered depth-first search. Success receives a suspended search for the remaining answers.
     begin
-      param val (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; builtin) : @(import(
+      param val (/numeric; builtin) : @(import(
         "../builtin.zy"
       )) in
       param val (/Bool; /Option; /List; /list) : DataPackage in
@@ -40,8 +37,7 @@ begin
           let translated = {
             (
               @[monadic] begin
-                let Ret = @(intrinsic(ret)) in
-
+                let (/Ret) = @(import("../primitive.zy")) in
                 let (/with_lift) = @(import("transformer-source.zy")) in
                 let NonDet = NonDetSource in
                 let Source =

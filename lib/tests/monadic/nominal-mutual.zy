@@ -1,7 +1,10 @@
 -- C captures A through D; constructing its thunk must not run the State effect.
-param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
+param (/numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let basis = @(import("../../std/effect/monad.zy")) in
 let (/Monad; /Algebra; /WithMonad) = basis in
 let state = @(import("../../std/effect/state.zy")) in

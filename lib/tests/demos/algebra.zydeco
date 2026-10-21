@@ -5,21 +5,13 @@
 --   | : forall (A: VType) .
 --     Thunk (M A) -> Thunk (A -> R) -> R
 -- end
+param (/numeric; /stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
-  param (
-    /numeric;
-    /VType;
-    /CType;
-    /Thk;
-    /Ret;
-    /OS;
-    /stdio;
-    /process;
-    /String;
-    /Int;
-    builtin
-  ) : @(import("../../std/builtin.zy")) that
+
   let int = numeric/int that
   let (/Monad; /Algebra) =
     monadic_basis

@@ -1,11 +1,12 @@
 -- Fixed recipes specialize before execution; dynamic views retain an explicit thunk.
 
+let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
 let (/Codec; /DynamicCodec) = @(import("codecs.zy")) in
 let (/Fault) = @(import("fault.zy")) in
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+  param val (/Addr; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) in
   param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in

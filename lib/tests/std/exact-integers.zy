@@ -1,8 +1,11 @@
 @[package(test(of(/std)))]
+param (/numeric; /process; builtin) : @(import(
+  /std/builtin
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Thk; /Ret; /Int; /UInt; /Int64; /UInt64; /OS; /numeric; /process; builtin) : @(import(
-    /std/builtin
-  )) that
   let (/int64; /uint64; /bytes) = builtin |> (@(import(/std))) in
   let fail = { ! process/exit 1 } in
   let ! check_int64_bytes (value : Int64) (next : Thk OS) : OS =

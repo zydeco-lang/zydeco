@@ -1,11 +1,14 @@
 -- Executable observations of both units, associativity, linearity, and transformer lift.
 val
   (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
+    (/numeric; /string; builtin) : @(import(
       "../../std/builtin.zy"
     ))
   )
 =>
+  let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+  let prelude = make_prelude builtin in
+  @[prelude(core, from(prelude))]
   begin
     let (/Monad) = @(import("../../std/effect/monad.zy")) in
     begin

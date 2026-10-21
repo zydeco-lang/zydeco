@@ -1,10 +1,14 @@
 --| A bunch of example of monads
 --| The program prints "Hello, world!" using the io monads and then exits.
+param (/stdio; /process; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
-  param (/VType; /CType; /Thk; /Ret; /Unit; /OS; /stdio; /process; /String; builtin) : @(import(
-    "../../std/builtin.zy"
-  )) that
+
   let (/Monad; /Algebra) =
     monadic_basis
   in

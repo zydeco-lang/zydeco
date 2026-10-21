@@ -1,8 +1,11 @@
 -- The eager returned-list dictionary typechecks but fails branching associativity.
 let (/make = make_data) = @(import("../../std/data/package.zy")) in
-param (/VType; /Thk; /Ret; /Int; /string; builtin) : @(import(
+param (/string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let (/List; /list; data_package) = builtin |> make_data in
 let (/Monad) = @(import("../../std/effect/monad.zy")) in
 let (/MonadNonDet) = @(import("../../std/effect/nondet.zy")) in

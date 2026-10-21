@@ -1,6 +1,9 @@
 -- Share the pointer types and CPS operations across a source-module boundary.
 begin
-  param val (/VType; /CType; /Thk; /UInt8; /UInt32; /numeric) : @(import("../../../std/builtin.zy")) in
+  param val (/numeric; builtin) : @(import("../../../std/builtin.zy")) in
+  let (/make = make_prelude) = @(import("../../../std/prelude.zy")) in
+  let prelude = make_prelude builtin in
+  @[prelude(core, from(prelude))]
   let Record = UInt8 * UInt32 in
   let val worker (Live : VType) (Vacant : VType)
     (take : Thk (forall (R : CType) . Live -> Thk (Vacant -> Record -> R) -> R))

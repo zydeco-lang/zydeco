@@ -1,9 +1,13 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
+param (/system; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import(/std)) that
-  param (/system; /Ret; /OS; /Int; /Float64; builtin) : @(import(/std/builtin)) that
+
   let (/bool; /float64; /int; /string; /process) = builtin |> make_std in
   do sum <- ! float64/add 1.25 2.75;
   do difference <- ! float64/sub sum 1.5;

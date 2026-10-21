@@ -3,8 +3,11 @@
 -- It then prints the sum of all numbers received so far, followed by a newline.
 -- Then it loops.
 -- If the input is not a number, the program exits.
+param (/stdio; /process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Thk; /OS; /stdio; /process; /Int; /numeric) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   (
     fix (loop : Thk (Int -> OS)) =>

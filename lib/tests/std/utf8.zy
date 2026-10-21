@@ -1,9 +1,13 @@
 -- stage: run
 -- backends: all
 @[package(test(of(/std)))]
+param (/OS = _; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import(/std)) that
-  param (/Ret; /Int; /Char; /String; builtin) : @(import(/std/builtin)) that
+
   let (/Bool; /bool; /option; /int; /char; /string; /process) = builtin |> make_std in
   let ! status (condition : Bool) : Ret Int = ! bool/if
     (Ret Int)

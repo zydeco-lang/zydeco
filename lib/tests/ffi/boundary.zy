@@ -1,19 +1,11 @@
 let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
+param (/Addr; /process; /numeric; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (
-    /Int;
-
-    /Addr;
-    /Thk;
-    /Ret;
-    /OS;
-    /process;
-    /UInt;
-    /numeric;
-    builtin
-  ) : @(import(
-    "../../std/builtin.zy"
-  )) that
   let (/Bytes; /bytes; byte_package) = builtin |> make_bytes in
 
   let uint = numeric/uint that

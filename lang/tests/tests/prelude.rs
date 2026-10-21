@@ -282,11 +282,33 @@ fn the_standard_view_contains_types_not_host_operations() {
         "let (/OS) = @(import(\"$std/primitive.zy\")) in ()",
         TyckDiagnosticCode::MissingNamedField,
     );
-    for name in ["bool", "option", "either"] {
-        let analysis =
-            Fixture::new().analyze(&format!("@(import(\"$std/data/{name}.zy\"))")).unwrap();
-        assert!(analysis.outcome().root().is_some());
-        assert_eq!(analysis.graph().source_inputs().count(), 3);
+}
+
+#[test]
+fn provider_independent_library_leaves_share_the_primitive_package() {
+    for name in [
+        "data/bool",
+        "data/option",
+        "data/either",
+        "algebra/monoid",
+        "effect/monad",
+        "numeric/dictionary",
+        "memory/types",
+        "memory/shape",
+        "memory/fault",
+        "memory/layout-error",
+    ] {
+        let analysis = Fixture::new().analyze(&format!("@(import(\"$std/{name}.zy\"))")).unwrap();
+        assert!(analysis.outcome().root().is_some(), "{name}: {:?}", analysis.outcome());
+        // Only the test root, the requested library, and the shared primitive leaf are loaded.
+        assert_eq!(analysis.graph().source_inputs().count(), 3, "{name}");
+        assert!(
+            analysis
+                .graph()
+                .source_inputs()
+                .any(|source| source.path.ends_with("std/primitive.zy")),
+            "{name} must obtain its canonical types from the primitive leaf"
+        );
     }
 }
 

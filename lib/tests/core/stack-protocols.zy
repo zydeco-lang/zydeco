@@ -1,7 +1,9 @@
 -- Ret describes an installed continuation; pending argument/tag depth is dynamic.
+param (/numeric; /int; /string; /args; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/CType; /Int; /String; /Thk; /Ret;
-    /numeric; /int; /string; /args; /process) : @(import("../../std/builtin.zy")) that
   def Stream : CType =
     codata
     | .item : Int -> Stream

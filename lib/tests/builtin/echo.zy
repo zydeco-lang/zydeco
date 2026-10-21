@@ -1,5 +1,8 @@
+param (/stdio; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Thk; /OS; /stdio) : @(import("../../std/builtin.zy")) that
   fix (loop : Thk OS) =>
     ! stdio/read_line {
       fn line => ! stdio/write_line line loop

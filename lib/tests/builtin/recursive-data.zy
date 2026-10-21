@@ -1,3 +1,7 @@
+param (/process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   def Nat : VType =
     data
@@ -18,7 +22,7 @@ begin
     | +S(_) => ret +True()
     end
   that
-  param (/VType; /Ret; /Unit; /process) : @(import("../../std/builtin.zy")) that
+
   do one <- ! successor +Z();
   do result <- ! is_nonzero one;
   match result

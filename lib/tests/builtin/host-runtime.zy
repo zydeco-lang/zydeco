@@ -1,7 +1,10 @@
+param (/process; /numeric; /text; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/Ret; /OS; /process; /Char; /Int; /numeric; /text; builtin) : @(import(
-    "../../std/builtin.zy"
-  )) that
   let make_arguments = @(import("../../std/system/arguments.zy")) in
   let arguments = builtin |> make_arguments in
   let int = numeric/int that

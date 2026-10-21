@@ -1,6 +1,10 @@
+param (/OS = _; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/OS; /Int; builtin) : @(import("../../std/builtin.zy")) that
+
   let (/process) = builtin |> make_std in
   begin
     let Num = Int that

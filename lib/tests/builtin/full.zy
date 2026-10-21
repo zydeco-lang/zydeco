@@ -1,34 +1,13 @@
 -- Keep every projection: this fixture checks the complete Builtin signature and its witness roles.
 param (
-  /VType;
-  /CType;
-  /Thk;
-  /Ret;
-  /Unit;
-  /Reader;
-  /Writer;
-  /OS;
-  /io;
-  /fs;
-  /stdio;
-  /args;
-  /random;
-  /process;
-  /Int8;
-  /Int16;
-  /Int32;
-  /Int;
-  /UInt8;
-  /UInt16;
-  /UInt32;
-  /UInt;
-  /Float32;
-  /Float64;
-  /Char;
-  /String;
-  /numeric;
-  /text;
-  /system
+  /VType; /CType; /Thk; /Ret; /Unit;
+  /Reader; /Writer; /OS;
+  /io; /fs; /stdio; /args; /random; /process;
+  /Int8; /Int16; /Int32; /Int;
+  /UInt8; /UInt16; /UInt32; /UInt;
+  /Float32; /Float64;
+  /Char; /String;
+  /numeric; /text; /system
 ) : @(import("../../std/builtin.zy")) in
 let int = numeric/int in
 let char = text/char in

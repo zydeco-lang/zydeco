@@ -1,12 +1,8 @@
+let (/VType; /CType; /Thk) = @(import("../primitive.zy")) in
 let (/Transformer) = @(import("transformer-source.zy")) in
 let (/Monad; /Algebra; /MonadInstance; /Top) = @(import("monad.zy")) in
-let VType = @(intrinsic(vtype)) in
-let CType = @(intrinsic(ctype)) in
-let Thk = @(intrinsic(thk)) in
-
 begin
-  let Ret = @(intrinsic(ret)) in
-
+  let (/Ret) = @(import("../primitive.zy")) in
   let MonadTrans (F : (VType -> CType) -> VType -> CType) =
     pi ((M, _) : MonadInstance) . Transformer M (F M)
   in

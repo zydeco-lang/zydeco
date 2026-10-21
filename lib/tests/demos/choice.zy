@@ -1,8 +1,12 @@
+param (/OS = _; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import("../../std/std.zy")) that
-  param (/VType; /CType; /Thk; /Unit; /OS; /String; builtin) : @(import(
-    "../../std/builtin.zy"
-  )) that
+
   def Tree (A : VType) : VType =
     data
     | +Fork : Tree A * Tree A

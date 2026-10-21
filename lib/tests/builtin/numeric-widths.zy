@@ -1,10 +1,8 @@
+param (/process; /numeric; /text; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (
-    /OS;
-    /process;
-    /numeric;
-    /text
-  ) : @(import("../../std/builtin.zy")) that
   let int8 = numeric/int8 that
   let int16 = numeric/int16 that
   let int32 = numeric/int32 that

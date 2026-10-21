@@ -4,8 +4,11 @@
 --| for `ExnK`, which is the church encoded version of the `Exn` monad.
 --|
 --| Check `exnt.zydeco` for detailed explanation.
+param val (/OS = _; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param val (/VType; /CType; /Thk; /Ret; builtin) : @(import("../../std/builtin.zy")) that
   let monadic_basis = @(import("../../std/effect/monad.zy")) that
   let (/Monad; /Algebra) =
     monadic_basis

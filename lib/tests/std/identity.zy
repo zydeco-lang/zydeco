@@ -1,7 +1,10 @@
 @[package(test(of(/std)))]
+param (/OS = _; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import(/std)) that
-  param (/VType; /CType; /Thk; /Ret; /Int; builtin) : @(import(/std/builtin)) that
 
   let (/process) = builtin |> make_std in
   let ! first : Ret Int = ret 0 in

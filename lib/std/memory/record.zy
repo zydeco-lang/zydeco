@@ -1,5 +1,6 @@
 -- replace requires the same projected child after its state transition; aliases remain manual.
 
+let (/VType; /CType; /Thk; /Ret; /Unit; /Int) = @(import("../primitive.zy")) in
 let (/Types) = @(import("types.zy")) in
 let (/FieldOperations) = @(import("field.zy")) in
 let (/StoragePackage) = @(import("storage.zy")) in
@@ -7,7 +8,7 @@ let (/Codec) = @(import("codecs.zy")) in
 let (/Either) = @(import("../data/either.zy")) in
 let (/Error) = @(import("layout-error.zy")) in
 begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /memory; builtin) : @(import(
+  param val (/Addr; /memory; builtin) : @(import(
     "../builtin.zy"
   )) in
   param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : Types Addr in

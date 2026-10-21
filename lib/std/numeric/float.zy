@@ -1,10 +1,6 @@
+let (/VType; /CType; /Thk; /Ret) = @(import("../primitive.zy")) in
 let (/BoolModule) = @(import("../data/package.zy")) in
 let (/Numeric) = @(import("dictionary.zy")) in
-let VType = @(intrinsic(vtype)) in
-let Thk = @(intrinsic(thk)) in
-let Ret = @(intrinsic(ret)) in
-let CType = @(intrinsic(ctype)) in
-
 begin
   let FloatModule (Bool : VType) (Floating : VType) (String : VType) =
       (#add :: Thk (Floating -> Floating -> Ret Floating))
@@ -47,8 +43,6 @@ begin
   in
   let Builder =
     begin
-      let VType = @(intrinsic(vtype)) in
-
       let Package
         (Bool : VType)
         (Scalar : VType)
@@ -62,7 +56,7 @@ begin
         (Scalar : VType)
         (String : VType)
         (
-          (/VType; builtin) : @(import("../builtin.zy")),
+          (/OS = _; builtin) : @(import("../builtin.zy")),
           _ : BoolModule Bool,
           _ : PrimitiveFloatModule Scalar String,
           _ : Scalar,
@@ -74,11 +68,11 @@ begin
   in
   let make : Builder =
     begin
-      param val Bool : @(intrinsic(vtype)) that
-      param val Scalar : @(intrinsic(vtype)) that
-      param val String : @(intrinsic(vtype)) that
+      param val Bool : VType that
+      param val Scalar : VType that
+      param val String : VType that
       param val (
-        (/CType; /Thk; /Ret) : @(import("../builtin.zy")),
+        (/OS = _) : @(import("../builtin.zy")),
         bool : BoolModule Bool,
         primitive : PrimitiveFloatModule Scalar String,
         zero : Scalar,

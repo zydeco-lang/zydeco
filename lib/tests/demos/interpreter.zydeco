@@ -2,10 +2,13 @@
 
 -- As it is a CBPV language, our syntax distinguishes between values
 -- and computations
+param (/stdio; /process; /text; builtin) : @(import(
+  "../../std/builtin.zy"
+)) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Thk; /Ret; /Unit; /stdio; /process; /String; /text) : @(import(
-    "../../std/builtin.zy"
-  )) that
   let string = text/string that
   def SynVal : VType =
     data

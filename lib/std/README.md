@@ -10,8 +10,8 @@ let (/VType; /Ret; /Thk; /Int) = @(import(/std/primitive)) in
 ```
 
 Run CLI commands from the repository root to use its automatically detected project.
-The leaf has no provider dependency. Programs already using Builtin can still select its foundational fields,
-or explicitly build a core prelude view from their shared opening:
+The leaf has no provider dependency. Provider-independent library definitions use it directly;
+programs with host operations build a core prelude view from their shared Builtin opening:
 
 ```zydeco
 param (/process; builtin) : @(import(/std/builtin)) in
@@ -41,7 +41,7 @@ The Builtin contract exposes these surface names:
 Host operations live in the same contract under the `numeric`, `text`, and `system` groups,
 and the search descends through them: `param (/stdio; /process) : @(import(/std/builtin)) in` selects two operations
 from the `system` group without naming it.
-The [integer example](../tests/std/minimal.zy) selects `Int` and `Ret` this way,
+The [integer example](../tests/std/minimal.zy) takes `Int` and `Ret` from the core prelude,
 then uses the assembled standard-library value for arithmetic.
 
 ## Library boundaries
@@ -60,11 +60,13 @@ A module with a reusable input or output contract exports that contract together
 For example, `data/package.zy` exports `DataPackage`, `BoolModule`, and `make`:
 
 ```zydeco
-param val builtin : @(import("builtin.zy")) in
+param val (/OS = _; builtin) : @(import("builtin.zy")) in
 let (/DataPackage; /make = make_data) = @(import("data/package.zy")) in
 (make_data builtin : DataPackage)
 ```
 
+The wildcard selection opens Builtin without introducing a local capability name;
+the whole-value alias retains the opening for the factory.
 The outer package makes the contract available before the factory is applied.
 Its `make` field assembles the data types and operations; the result retains its abstract `List` witness.
 `text/bytes.zy` and the memory modules use the same pattern for their independently reusable contracts.
@@ -133,6 +135,8 @@ The current files are:
 
 ```text
 builtin.zy                 complete host ABI: surface kinds and types, operation groups
+primitive.zy               provider-independent canonical kinds and types
+prelude.zy                 core vocabulary adapted to one retained Builtin opening
 std.zy                     wiring for the public packed value
 
 builtin/numeric/*.zy       primitive numeric operations
@@ -206,10 +210,10 @@ Opening the runtime-owned system capabilities introduces fresh abstract witnesse
 A composition root that must pass the dependency onward keeps the whole-alias `builtin` beside its selections.
 The [primitive and capability rules](../../docs/references/language.md#13-primitive-values-and-capabilities)
 define these identity boundaries.
-Compiler intrinsics are spliced inline as `@(intrinsic(name))` wherever a contract needs the canonical term,
-so no one-line indirection files sit between type expressions and the compiler metadata they name.
-Builtin leaves bind the intrinsic kinds and constructors they use at the top of the file,
-so their classifiers read as ordinary type expressions.
+The Builtin contracts and primitive leaf bootstrap their canonical types with `@(intrinsic(name))`.
+Higher-level libraries import the primitive leaf instead of repeating those type bindings.
+Value-level intrinsics used for static arithmetic remain explicit; the primitive leaf only supplies kinds and types.
+Focused tests of the complete Builtin signature and shared openings also retain explicit projections.
 
 ## Packed value composition
 
@@ -267,7 +271,7 @@ The result may depend on `X`, not on the arbitrary runtime value `x`.
 For example, both interfaces can expose codata methods:
 
 ```zydeco
-param (/VType; /Thk; /Ret; /Unit) : @(import("builtin.zy")) in
+let (/VType; /Thk; /Ret; /Unit) = @(import("primitive.zy")) in
 let Box = exists (X : VType) . X in
 let Methods (X : VType) = codata
   | .get : Ret X
@@ -299,7 +303,7 @@ Moving it changes where payloads and witnesses are shared.
 When the provider chooses a hidden type, a polymorphic callback can give the consumer one scoped opening:
 
 ```zydeco
-param (/VType; /CType; /Thk; /Ret; /Int) : @(import("builtin.zy")) in
+let (/VType; /CType; /Thk; /Ret; /Int) = @(import("primitive.zy")) in
 let Entry = exists (X : VType) . X * Thk (X -> Ret Int) in
 let Hidden = codata
   | .open : forall (R : CType) . Thk (pi ((X, _, _) : Entry) . R) -> R
@@ -351,7 +355,10 @@ the result indexed by the supplied carrier while the generated monadic interface
 For example, StateT over Writer keeps state operations and base output at one transformed carrier:
 
 ```zydeco
-param (/Int; /String; /Unit; /string; builtin) : @(import("builtin.zy")) in
+param (/string; builtin) : @(import("builtin.zy")) in
+let (/make = make_prelude) = @(import("prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let writer = builtin |> (@(import("effect/writer.zy"))) in
 let state = builtin |> (@(import("effect/state.zy"))) in
 let (W, w) = writer/instance String (#empty = "", #append = string/append) in
@@ -392,7 +399,10 @@ Open `make` from [NonDet](effect/nondet.zy), then apply it to Builtin and the sh
 This keeps `choose` inputs and list observations at the same `List` witness as the caller's other operations:
 
 ```zydeco
-param (/Int; builtin) : @(import("builtin.zy")) in
+param (/OS = _; builtin) : @(import("builtin.zy")) in
+let (/make = make_prelude) = @(import("prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let (/make = make_data) = @(import("data/package.zy")) in
 let (/make = make_nondet) = @(import("effect/nondet.zy")) in
 let (/list; data_package) = make_data builtin in
@@ -455,7 +465,10 @@ layout laws, unsafe obligations, and retention.
 The library introduces no lifetimes or borrow checker.
 
 ```zydeco
-param (/VType; /CType; /Thk; /OS; /UInt8; /Unit; /process; builtin) : @(import("builtin.zy")) in
+param (/process; builtin) : @(import("builtin.zy")) in
+let (/make = make_prelude) = @(import("prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let (/Uninit; /Init; /Ptr; /fixed; /allocation; /codecs) = builtin |> (@(import("memory/package.zy"))) in
 let (= Plan, = Layout, layouts) = fixed in
 let (/Alloc; /heap) = allocation in
@@ -615,7 +628,10 @@ from `int8_dictionary` through `float64_dictionary`.
 Generic code explicitly selects and passes one:
 
 ```zydeco
-param (/VType; /Ret; /Int; builtin) : @(import("builtin.zy")) in
+param (/OS = _; builtin) : @(import("builtin.zy")) in
+let (/make = make_prelude) = @(import("prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let make_std = @(import("std.zy")) in
 let (/Additive; /dictionaries) = builtin |> make_std in
 let ! twice (A : VType) (operations : Additive A) (value : A) : Ret A =
@@ -635,11 +651,14 @@ The following complete example names the disclosed type `Int`, renames it to `Ca
 and checks that the operations use that same carrier:
 
 ```zydeco
-param (/VType; builtin) : @(import("builtin.zy")) in
+param (/OS = _; builtin) : @(import("builtin.zy")) in
+let (/make = make_prelude) = @(import("prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let make_std = @(import("std.zy")) in
 let (/Bool; /Numeric; /dictionaries) = builtin |> make_std in
 let int_instance =
-  pack (= Int as @(intrinsic(int)))
+  pack (= Int as Int)
   where #operations = dictionaries/int_dictionary end
 in
 let (/Int = Carrier; /operations) = int_instance in
@@ -666,7 +685,7 @@ when operations must be dynamically selectable.
 
 - `bool`: constants, logical connectives, equality, and conditional elimination.
 - `option`: construction, elimination, mapping, chaining, defaults, and zipping.
-- `result`: successful and failed results, elimination, mapping, chaining, defaults, and predicates.
+- `either`: left and right alternatives, elimination, mapping, chaining, defaults, and predicates.
 - `list`: construction, right and left folds, append, map, reverse, length, safe indexing, head, and tail.
 - `dictionaries`: one explicitly passed capability dictionary per numeric representation.
 - `int8` through `int` and `uint8` through `uint`: arithmetic, complete comparisons, successor/predecessor,

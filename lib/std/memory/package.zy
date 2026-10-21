@@ -1,11 +1,12 @@
 @[package(library, name(std/memory))]
+let (/VType) = @(import("../primitive.zy")) in
 let (/make = make_types) = @(import("types.zy")) in
 let (/make = make_storage) = @(import("storage.zy")) in
 let (/make = make_codecs) = @(import("codecs.zy")) in
 let (/make = make_field) = @(import("field.zy")) in
 let (/make = make_allocation) = @(import("allocation.zy")) in
 begin
-  param val (/VType; /Addr; builtin) : @(import("../builtin.zy")) that
+  param val (/Addr; builtin) : @(import("../builtin.zy")) that
   let (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) = make_types Addr in
   let (
     /Storage;

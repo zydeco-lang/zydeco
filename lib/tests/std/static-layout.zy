@@ -1,19 +1,9 @@
 @[package(test(of(/std)))]
+param (/Addr; /numeric; /process; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (
-    /VType;
-    /CType;
-    /Thk;
-    /Addr;
-    /OS;
-    /UInt8;
-    /UInt32;
-    /Int;
-    /numeric;
-    /process;
-    /Unit;
-    builtin
-  ) : @(import(/std/builtin)) that
   let (/storage; /codecs; /Uninit; /Init; /Ptr; /fixed; /allocation; /pointer; /raw) = builtin |> (
     @(import(/std/memory))
   ) in

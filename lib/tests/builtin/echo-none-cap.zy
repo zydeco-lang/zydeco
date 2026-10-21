@@ -1,5 +1,8 @@
+param (/stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/OS; /stdio; /process; /Int) : @(import("../../std/builtin.zy")) that
   ! stdio/read_line {
     fn line =>
       let ! f (z : Int) : OS =

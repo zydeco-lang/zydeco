@@ -1,7 +1,11 @@
 @[package(test(of(/std)))]
+param (/OS = _; builtin) : @(import(/std/builtin)) in
+let (/make = make_prelude) = @(import(/std/prelude)) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
   let make_std = @(import(/std)) that
-  param (/Ret; /Int; builtin) : @(import(/std/builtin)) that
+
   let (/bool; /int; /string; /process) = builtin |> make_std in
   do equal <- ! int/eq 3 3;
   do equal_status <- ! bool/if

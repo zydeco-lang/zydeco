@@ -1,7 +1,9 @@
 -- One erased polymorphic worker is called at different value and stack protocols.
+param (/int; /char; /string; /args; /process; builtin) : @(import("../../std/builtin.zy")) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 begin
-  param (/VType; /CType; /Int; /Char; /String; /Thk; /Ret; /OS;
-    /int; /char; /string; /args; /process) : @(import("../../std/builtin.zy")) that
   def fix relay (A : VType) (R : CType) (remaining : Int)
     (first : A) (second : A) (next : Thk (A -> A -> R))
   : R =

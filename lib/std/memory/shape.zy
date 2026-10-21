@@ -1,7 +1,5 @@
 begin
-  let VType = @(intrinsic(vtype)) in
-  let Int = @(intrinsic(int)) in
-  let Unit = @(intrinsic(unit)) in
+  let (/VType; /Int; /Unit) = @(import("../primitive.zy")) in
   let Node (Form : VType) =
     (#size :: Int) * (#alignment :: Int) * (#form :: Form)
   in

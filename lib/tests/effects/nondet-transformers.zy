@@ -1,8 +1,11 @@
 let (/make = make_data) = @(import("../../std/data/package.zy")) in
 let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
-param (/Thk; /Ret; /Unit; /Int; /String; /string; /numeric; builtin) : @(import(
+param (/string; /numeric; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
+let (/make = make_prelude) = @(import("../../std/prelude.zy")) in
+let prelude = make_prelude builtin in
+@[prelude(core, from(prelude))]
 let (/Option; /List; /list; data_package) = builtin |> make_data in
 let nondet = (builtin |> make_nondet) data_package in
 let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
