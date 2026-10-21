@@ -17,7 +17,7 @@ import subprocess
 import time
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 OPTIMIZED_RUNTIME = {
     "CARGO_PROFILE_DEV_OPT_LEVEL": "3",
     "CARGO_PROFILE_DEV_DEBUG": "0",

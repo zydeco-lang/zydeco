@@ -20,7 +20,7 @@ import subprocess
 import tarfile
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SUPPORT = Path(__file__).with_suffix("")
 REVISIONS = {"original": "9c1d3000", "jobs": "8e508e36", "folder": "370195d8"}
 SOURCES = [

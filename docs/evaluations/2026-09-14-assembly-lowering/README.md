@@ -221,14 +221,15 @@ and [allocations](optimization/committed-allocations.csv) retain the final check
 
 ## Reproduction and evidence
 
-The [runner](../../../lang/tests/assembly-lowering-study.py) creates an archived checkout at the pinned revision,
+The [runner](assembly-lowering-study.py) creates an archived checkout at the pinned revision,
 injects the measurement boundary and historical lowerers, builds both profiles offline,
 and writes a manifest plus timing and allocation CSV files.
-The destination must be new. It needs Python with tar extraction filters, Rust, the pinned Git commits,
-and cached workspace dependencies.
+Run the commands below from the repository root. The destination must be new.
+It needs Python with tar extraction filters, Rust, the pinned Git commits, and cached workspace dependencies.
 
 ```sh
-python3 lang/tests/assembly-lowering-study.py --output /tmp/assembly-lowering-study
+python3 docs/evaluations/2026-09-14-assembly-lowering/assembly-lowering-study.py \
+  --output /tmp/assembly-lowering-study
 ```
 
 Use `--target-dir "$PWD/target"` to reuse the repository's Cargo cache, `--profiles release` to select one profile,
@@ -240,7 +241,8 @@ The generated examples pass focused Clippy with warnings denied.
 To include the optimized implementation and the pinned initial folder in the same executable, use:
 
 ```sh
-python3 lang/tests/assembly-lowering-study.py --candidate 823f223a --output /tmp/assembly-lowering-optimized
+python3 docs/evaluations/2026-09-14-assembly-lowering/assembly-lowering-study.py \
+  --candidate 823f223a --output /tmp/assembly-lowering-optimized
 ```
 
 This adds a fifth variant, `baseline`, and uses 40 rotating batches per run.

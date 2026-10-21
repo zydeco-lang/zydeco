@@ -152,13 +152,37 @@ and `a12d087a` (deferred compact captures).
 Recorded source hashes identify intermediate variants.
 Build historical compilers in separate source and target directories and use the model bundled by each compiler.
 
-[`runtime-study.py`](../../../lang/tests/runtime-study.py) compares the original capture/root variants;
-[`environment-study.py`](../../../lang/tests/environment-study.py) accepts explicit
-`--variant NAME COMPILER RUNTIME` pairs, with `--fragments` for compact comparisons.
+[`runtime-study.py`](runtime-study.py) compares the original capture/root variants;
+[`environment-study.py`](environment-study.py) accepts explicit `--variant NAME COMPILER RUNTIME` pairs,
+with `--fragments` for compact comparisons.
 Enable `compact-environments` in a separate runtime copy's default Cargo features for that variant.
 Both runners expose `--help` and record exact commands and output oracles.
-The executable layout checks are `frame_layouts` in `zydeco-machine`, and `environment_layouts`
-and `environment_fragments` in `zydeco-tests`; run them with `cargo run -p PACKAGE --example NAME`.
+Run the scripts from the repository root; for their full argument lists:
+
+```sh
+python3 docs/evaluations/2026-09-08-cbpv-runtime/runtime-study.py --help
+python3 docs/evaluations/2026-09-08-cbpv-runtime/environment-study.py --help
+```
+
+The executable traces are [frame storage accounting](frame_layouts.rs),
+[environment storage and collection](environment_layouts.rs), and [compact suspensions](environment_fragments.rs).
+The [trace runner](layout-traces.py) builds the current `zydeco-machine` library with Cargo,
+then compiles these standalone sources with `rustc` and saves their CSV output.
+The traces are evaluation tools, not Cargo examples or compiler test targets.
+Run all three from the repository root:
+
+```sh
+python3 docs/evaluations/2026-09-08-cbpv-runtime/layout-traces.py \
+  --release --output build/runtime-layout-traces
+```
+
+The output directory must be new.
+Use `--trace environment_fragments` to select one trace, or omit `--release` for a debug build.
+These commands exercise the current model; reproducing the historical measurements requires the recorded revisions
+and toolchains.
+Original evidence retains its recorded paths, commands, and hashes, including the former Cargo example locations.
+Correctness regressions remain in the [machine frame tests](../../../lang/machine/src/frames.rs)
+and [GC integration tests](../../../lang/tests/tests/native_gc.rs).
 
 ## Literature pointers
 

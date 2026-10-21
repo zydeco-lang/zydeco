@@ -1,5 +1,5 @@
 //! Compare the actual nested environments with identical transition/GC traces.
-//! Timings belong to environment-study.py; this example checks value survival,
+//! Timings belong to environment-study.py; this trace checks value survival,
 //! root updates, word storage, sharing, and bounded tail reuse.
 
 #[allow(dead_code)]

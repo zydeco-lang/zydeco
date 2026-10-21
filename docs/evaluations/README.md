@@ -5,7 +5,8 @@ This directory retains dated reports, measurements, and reproduction artifacts s
 that their methods, findings, and limits can be assessed together.
 Results describe the measured revisions; they do not establish a current performance ranking.
 
-Each study lives in a `YYYY-MM-DD-topic/` directory, with its report in `README.md` beside its evidence files.
+Each study lives in a `YYYY-MM-DD-topic/` directory, with its report in `README.md` beside its evidence files,
+reproduction scripts, and study-only supporting sources.
 Keep original measurements and manifests intact, including recorded commands, paths, and source hashes.
 The [references](../references/README.md) own current contracts and settled design rationale;
 concrete unfinished designs belong in [proposals](../proposals/README.md)
