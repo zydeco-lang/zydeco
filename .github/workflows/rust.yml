@@ -59,7 +59,9 @@ jobs:
     - name: Run Doc Tests
       run: cargo test-doc-all --release --verbose
     - name: Check generated completions are current
-      run: git diff --exit-code -- cli/completions
+      run: |
+        git add --intent-to-add --ignore-removal cli/completions
+        git diff --exit-code -- cli/completions
 
   tree-sitter:
 
@@ -84,4 +86,6 @@ jobs:
     - name: Check grammar, queries, and source corpus
       run: pnpm check
     - name: Check generated parser is current
-      run: git diff --exit-code -- src
+      run: |
+        git add --intent-to-add --ignore-removal src
+        git diff --exit-code -- src
