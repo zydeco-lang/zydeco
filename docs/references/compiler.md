@@ -3310,6 +3310,10 @@ Each option is a nested call taking one argument, except `verbatim`, which takes
 - `verbatim` copies the annotated expression's original source text unchanged, including its internal line breaks,
   indentation, and comments.
 
+All five options are implemented, validated, and exercised by formatter tests.
+Only `verbatim` appears in this repository's sources; `width`, `indent`, `layout`,
+and `parentheses` are retained as reserved policy knobs for downstream code rather than removed as unused.
+
 A directive applies to the annotated expression and everything inside it.
 Options without a directive keep their enclosing values, so nested annotations override enclosing options field
 by field and the innermost directive wins.
