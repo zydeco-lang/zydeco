@@ -9,6 +9,12 @@ pub struct InternedBindingIndex<'db> {
     pub index: u32,
 }
 
+impl<'db> InternedBindingIndex<'db> {
+    pub(crate) fn with_usize(db: &'db dyn TyckDb, index: usize) -> Self {
+        Self::new(db, u32::try_from(index).expect("recursive binding index range exhausted"))
+    }
+}
+
 /// The pre-introduction identities of one recursive-group binding: the
 /// abstract type and the two type-alias nodes the fixpoint introduces, derived
 /// at the group's site by the binding's index.
@@ -21,16 +27,16 @@ pub struct InternedBindingIndex<'db> {
 pub fn rec_group_abst_judgment_at<'db>(
     db: &'db dyn TyckDb, site: InternedSite<'db>, index: InternedBindingIndex<'db>,
 ) -> Option<(ss::AbstId, ss::TypeId, ss::TypeId)> {
-    let key_space = KeySpaceId::derive(
-        DerivationFamily::Query,
-        site.space(db),
-        site.raw(db),
-        site.occurrence(db),
-    );
-    let base = 3 * index.index(db);
+    let last = index
+        .index(db)
+        .checked_mul(3)
+        .and_then(|base| base.checked_add(2))
+        .expect("recursive binding slot range exhausted");
+    let base = last - 2;
+    let key_space = site.key_space(db);
     let abst: ss::AbstId = derived_id(key_space, base);
     let ty_1: ss::TypeId = derived_id(key_space, base + 1);
-    let ty_2: ss::TypeId = derived_id(key_space, base + 2);
+    let ty_2: ss::TypeId = derived_id(key_space, last);
     Some((abst, ty_1, ty_2))
 }
 

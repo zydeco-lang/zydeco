@@ -4,88 +4,10 @@
 //! which provides a type-safe approach to allocate in a post-type-check arena.
 
 use crate::*;
-use zydeco_utils::arena::{ArenaId, DerivationDomain, KeySpaceId, derived_id};
+use zydeco_utils::arena::ArenaId;
 
-/// Allocation families owned by static checking and its query producers.
-///
-/// The [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
-/// describes the derivation scheme and its collision limits.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub(crate) enum DerivationFamily {
-    /// Intermediate nodes allocated by the mutable type checker.
-    Checker,
-    /// Producer nodes, including IDs issued without retaining a Salsa query.
-    Query,
-}
-
-impl DerivationDomain for DerivationFamily {
-    fn tag(self) -> u64 {
-        match self {
-            | Self::Checker => u64::from_be_bytes(*b"ZYDECOQU"),
-            | Self::Query => u64::from_be_bytes(*b"ZYQUERY!"),
-        }
-    }
-}
-
-/// Issuer of derived identifiers for query-friendly type checking.
-///
-/// Each checking site pushes its `(entity, occurrence)` identity onto a stack;
-/// fresh identifiers derive their key space from the top site and take the
-/// site-local slot as their raw index, so re-checking a site reproduces its
-/// identifiers without a shared cursor. See the
-/// [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
-/// for the derivation scheme.
-#[derive(Debug)]
-pub struct DerivedAllocator {
-    sites: Vec<(u64, u32, u32, u32)>,
-}
-
-impl Default for DerivedAllocator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl DerivedAllocator {
-    /// Create an allocator with a root site for allocations outside any entity.
-    ///
-    /// The root uses a sentinel identity distinct from entity-site inputs.
-    pub fn new() -> Self {
-        Self { sites: vec![(u64::MAX, u32::MAX, u32::MAX, 0)] }
-    }
-
-    /// Enter one entity's checking site; the site-local slot restarts at zero.
-    pub fn enter(&mut self, entity_space: u64, entity_raw: u32, occurrence: u32) {
-        self.sites.push((entity_space, entity_raw, occurrence, 0));
-    }
-
-    /// The innermost site: `(entity space, entity raw, occurrence)`.
-    ///
-    /// Producer queries derive their identifiers from this triple under the
-    /// query derivation family, taking re-checking occurrences (fixpoint and
-    /// recursion retries) into account just as the checker's allocator does.
-    pub fn current_site(&self) -> (u64, u32, u32) {
-        let (entity_space, entity_raw, occurrence, _) =
-            *self.sites.last().expect("the root allocation site always exists");
-        (entity_space, entity_raw, occurrence)
-    }
-
-    /// Leave the innermost site, resuming the enclosing site's slots.
-    pub fn exit(&mut self) {
-        assert!(self.sites.len() > 1, "cannot leave the root allocation site");
-        self.sites.pop();
-    }
-
-    fn fresh<Id: ArenaId>(&mut self) -> Id {
-        let (entity_space, entity_raw, occurrence, slot) =
-            self.sites.last_mut().expect("the root allocation site always exists");
-        let key_space =
-            KeySpaceId::derive(DerivationFamily::Checker, *entity_space, *entity_raw, *occurrence);
-        let id: Id = derived_id(key_space, *slot);
-        *slot += 1;
-        id
-    }
-}
+mod identity;
+pub use identity::{DerivedAllocator, DerivedIdRegistry};
 
 /// Trait for allocating entities in [`StaticsArena`].
 /// The only method provided is [`Alloc::alloc`], which takes `&mut` [`Tycker`],
@@ -603,67 +525,4 @@ AllocComputation! {
     Match<ValueId, VPatId, CompuId>
     CoMatch<DtorName, CompuId>
     Dtor<CompuId, DtorName>
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn derivation_families_preserve_existing_key_spaces() {
-        let sites = [(0, 0, 0), (7, 42, 0), (u64::MAX, u32::MAX, u32::MAX)];
-        // Captured from the numeric-tag implementation before introducing families.
-        for (family, expected) in [
-            (
-                DerivationFamily::Checker,
-                [0xB193_A592_87A0_44C2, 0x7FDD_5A6F_0352_3980, 0x476A_298F_AE64_1563],
-            ),
-            (
-                DerivationFamily::Query,
-                [0xA737_660A_18FC_1300, 0x6232_716A_F6F9_3729, 0x873D_FA8A_5F50_5129],
-            ),
-        ] {
-            let actual = sites.map(|(space, raw, occurrence)| {
-                KeySpaceId::derive(family, space, raw, occurrence).as_u64()
-            });
-            assert_eq!(actual, expected, "the {family:?} encoding preserves issued key spaces");
-        }
-    }
-
-    #[test]
-    fn nested_sites_resume_checker_slots_and_replay_identifiers() {
-        let mut allocator = DerivedAllocator::new();
-        allocator.enter(7, 42, 0);
-        let first: TypeId = allocator.fresh();
-        assert_eq!(first, derived_id(KeySpaceId::derive(DerivationFamily::Checker, 7, 42, 0), 0));
-        let producer: TypeId = derived_id(KeySpaceId::derive(DerivationFamily::Query, 7, 42, 0), 0);
-        assert_ne!(first, producer);
-
-        allocator.enter(7, 43, 0);
-        let nested: TypeId = allocator.fresh();
-        assert_ne!(nested, first);
-        allocator.exit();
-        assert_eq!(allocator.current_site(), (7, 42, 0));
-        let next: TypeId = allocator.fresh();
-        assert_eq!(next, derived_id(first.key_space(), 1));
-        allocator.exit();
-
-        allocator.enter(7, 42, 0);
-        assert_eq!(allocator.fresh::<TypeId>(), first);
-        assert_eq!(allocator.fresh::<TypeId>(), next);
-        allocator.exit();
-        allocator.enter(7, 42, 1);
-        assert_ne!(allocator.fresh::<TypeId>(), first);
-    }
-
-    #[test]
-    fn leaving_the_root_is_rejected_without_losing_allocation_state() {
-        let mut allocator = DerivedAllocator::new();
-        let first: TypeId = allocator.fresh();
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| allocator.exit()));
-        let message = result.unwrap_err();
-        assert_eq!(message.downcast_ref::<&str>(), Some(&"cannot leave the root allocation site"));
-        assert_eq!(allocator.current_site(), (u64::MAX, u32::MAX, u32::MAX));
-        assert_eq!(allocator.fresh::<TypeId>(), derived_id(first.key_space(), 1));
-    }
 }

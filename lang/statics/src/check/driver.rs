@@ -1,7 +1,6 @@
 //! Checker lifecycle, allocation sites, finalization, and diagnostic guards.
 
 use super::*;
-use crate::alloc::DerivationFamily;
 use crate::check::judgment::Action;
 use crate::check::projection::DeferredEnvMaterializationCache;
 use crate::check::source::{
@@ -20,7 +19,7 @@ impl<'a> Tycker<'a> {
         let intrinsics = IntrinsicStatics::new(db, data, &mut statics);
         let source_contexts = TermContexts::collect(scoped, data.root(db));
         Self {
-            allocator: DerivedAllocator::new(),
+            allocator: DerivedAllocator::new(db.derived_ids().clone(), data.root(db)),
             db,
             data,
             spans,
@@ -94,25 +93,31 @@ impl<'a> Tycker<'a> {
         self.source_contexts.at(term)
     }
 
+    /// Reserve an occurrence before entering its local allocation frame.
+    pub(super) fn enter_site(&mut self, entity: su::EntityId) {
+        let occurrence = self.check_counts.get(&entity).copied().unwrap_or(0);
+        let next = occurrence.checked_add(1).expect("checking occurrence range exhausted");
+        self.allocator.enter(entity, occurrence);
+        let _ = self.check_counts.upsert(entity, next);
+    }
+
     /// The occurrence of the innermost allocation site, carried by the
     /// checker's allocator. Producer queries key their identifiers on it so
     /// re-checked entities derive distinct ids.
     pub fn site_occurrence(&self) -> u32 {
-        self.allocator.current_site().2
+        self.allocator.occurrence()
     }
 
     /// Derive one identifier in the producer allocation family without
     /// retaining a salsa query solely to own that identifier.
     pub(super) fn query_derived_id<Id: ArenaId>(&self, slot: u32) -> Id {
-        let (space, raw, occurrence) = self.allocator.current_site();
-        derived_id(KeySpaceId::derive(DerivationFamily::Query, space, raw, occurrence), slot)
+        derived_id(self.allocator.query_key_space(), slot)
     }
 
     /// The innermost allocation site as a salsa key, for queries of auxiliary
     /// entities that allocate at the enclosing entity's site.
     pub fn query_site(&self) -> crate::query::InternedSite<'a> {
-        let (space, raw, occurrence) = self.allocator.current_site();
-        crate::query::InternedSite::new(self.db, space, raw, occurrence)
+        crate::query::InternedSite::new(self.db, self.allocator.query_key_space())
     }
 
     /// Consume the checker and retain the typed identity of a complete source term.

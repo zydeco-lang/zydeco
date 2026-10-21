@@ -13,24 +13,6 @@ pub enum IntrinsicKey {
     Primitive(zydeco_syntax::PrimitiveType),
 }
 
-impl IntrinsicKey {
-    fn discriminant(self) -> u32 {
-        match self {
-            | Self::VType => 0,
-            | Self::CType => 1,
-            | Self::Thk => 2,
-            | Self::Ret => 3,
-            | Self::Unit => 4,
-            | Self::Primitive(primitive) => {
-                5 + zydeco_syntax::PrimitiveType::all()
-                    .position(|candidate| candidate == primitive)
-                    .expect("every primitive participates in the intrinsic singletons")
-                    as u32
-            }
-        }
-    }
-}
-
 /// An interned intrinsic key, for use as a salsa query key.
 #[salsa::interned]
 pub struct InternedIntrinsic<'db> {
@@ -50,26 +32,15 @@ pub enum IntrinsicSingleton {
 /// The singleton judgment of one intrinsic kind or type.
 ///
 /// The derived site is synthetic (not tied to any scoped term): the intrinsic
-/// belongs to the check, not to the term that first spells it. The key's
-/// discriminant supplies a distinct synthetic site input for each singleton.
+/// belongs to the check, not to the term that first spells it. The source
+/// root and full intrinsic key identify the singleton in the session registry.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn intrinsic_singleton<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, key: InternedIntrinsic<'db>,
 ) -> IntrinsicSingleton {
-    let _ = data;
-    let occurrence = key.key(db).discriminant();
-    let kind_id = |slot: u32| {
-        derived_id::<ss::KindId>(
-            KeySpaceId::derive(DerivationFamily::Query, 0, u32::MAX, occurrence),
-            slot,
-        )
-    };
-    let type_id = |slot: u32| {
-        derived_id::<ss::TypeId>(
-            KeySpaceId::derive(DerivationFamily::Query, 0, u32::MAX, occurrence),
-            slot,
-        )
-    };
+    let key_space = db.derived_ids().intrinsic_space(data.root(db), key.key(db));
+    let kind_id = |slot: u32| derived_id::<ss::KindId>(key_space, slot);
+    let type_id = |slot: u32| derived_id::<ss::TypeId>(key_space, slot);
     match key.key(db) {
         | IntrinsicKey::VType => {
             IntrinsicSingleton::Kind { id: kind_id(0), kind: ss::Kind::VType(ss::VType) }

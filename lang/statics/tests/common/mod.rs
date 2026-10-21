@@ -9,6 +9,7 @@ use zydeco_utils::prelude::IdAllocator;
 #[derive(Clone)]
 pub struct TestDb {
     storage: salsa::Storage<Self>,
+    derived_ids: std::sync::Arc<zydeco_statics::DerivedIdRegistry>,
     pending: std::sync::Arc<
         std::sync::Mutex<Option<std::sync::Arc<zydeco_statics::query::PendingParts>>>,
     >,
@@ -18,6 +19,7 @@ impl Default for TestDb {
     fn default() -> Self {
         Self {
             storage: salsa::Storage::default(),
+            derived_ids: Default::default(),
             pending: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
@@ -28,6 +30,10 @@ impl salsa::Database for TestDb {}
 
 #[salsa::db]
 impl zydeco_statics::query::TyckDb for TestDb {
+    fn derived_ids(&self) -> &std::sync::Arc<zydeco_statics::DerivedIdRegistry> {
+        &self.derived_ids
+    }
+
     fn pending_parts(
         &self,
     ) -> &std::sync::Arc<

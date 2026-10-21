@@ -278,14 +278,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back_mut(TyckTask::Pat(self.inner, action.switch));
-            let entity = su::EntityId::Pat(self.inner);
-            let occurrence = tycker.check_counts.get(&entity).copied().unwrap_or(0);
-            let _ = tycker.check_counts.upsert(entity, occurrence + 1);
-            tycker.allocator.enter(
-                self.inner.key_space().as_u64(),
-                self.inner.raw().into_u32(),
-                occurrence,
-            );
+            tycker.enter_site(su::EntityId::Pat(self.inner));
             let result = self.tyck_inner_k(tycker, action);
             tycker.allocator.exit();
             result

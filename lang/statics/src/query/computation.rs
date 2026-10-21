@@ -41,9 +41,7 @@ pub fn thunk_judgment<'db>(
         };
         id
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let thk_ty_id: ss::TypeId = derived_id(key_space, 0);
     let thunk_id: ss::ValueId = derived_id(key_space, 1);
     Some(ThunkSynOutcome {
@@ -94,9 +92,7 @@ pub fn ret_judgment<'db>(
         };
         id
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let ret_ty_id: ss::TypeId = derived_id(key_space, 0);
     let ret_id: ss::CompuId = derived_id(key_space, 1);
     Some(RetSynOutcome {
@@ -136,12 +132,7 @@ pub fn force_judgment<'db>(
     let su::Term::Force(su::Force(_)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::CompuId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(ForceSynOutcome {
         id,
         compu: ss::Computation::Force(ss::Force(input.body(db))),
@@ -179,12 +170,7 @@ pub fn do_judgment<'db>(
     let su::Term::Do(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::CompuId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(DoSynOutcome {
         id,
         compu: ss::Computation::Do(ss::Bind {
@@ -214,9 +200,7 @@ pub fn let_judgment<'db>(
     let su::Term::Let(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     match tail.id(db) {
         | ss::TermAnnId::Value(tail, ann) => {
             let id: ss::ValueId = derived_id(key_space, 0);
@@ -288,9 +272,7 @@ pub fn app_judgment<'db>(
     let su::Term::App(su::App(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     derive_app_outcome(db, key_space, input)
 }
 
@@ -302,12 +284,7 @@ pub fn app_judgment_at<'db>(
     input: InternedAppInput<'db>,
 ) -> Option<AppSynOutcome> {
     let _ = data;
-    let key_space = KeySpaceId::derive(
-        DerivationFamily::Query,
-        site.space(db),
-        site.raw(db),
-        site.occurrence(db),
-    );
+    let key_space = site.key_space(db);
     derive_app_outcome(db, key_space, input)
 }
 
@@ -374,12 +351,7 @@ pub fn fix_judgment<'db>(
     let su::Term::Fix(su::Fix(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::CompuId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(FixSynOutcome {
         id,
         compu: ss::Computation::Fix(ss::Fix(input.binder(db), input.body(db))),

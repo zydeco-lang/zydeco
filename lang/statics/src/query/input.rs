@@ -8,6 +8,9 @@ use super::*;
 /// declared in this module, so the queries join the session's salsa graph.
 #[salsa::db]
 pub trait TyckDb: salsa::Database {
+    /// Shared identity registry, retained across memo eviction and database clones.
+    fn derived_ids(&self) -> &std::sync::Arc<crate::DerivedIdRegistry>;
+
     /// The slot through which programs assembled outside the source pipeline
     /// cross into the query graph; salsa requires an active query to create
     /// tracked structs. See [`intern_pending`].
@@ -92,15 +95,11 @@ pub struct InternedAnn<'db> {
 ///
 /// Auxiliary checker entities (package-pi introductions and eliminations)
 /// allocate at the enclosing entity's site without being scoped entities
-/// themselves; this wrapper keys their queries on the site directly.
+/// themselves; this wrapper carries the site's registered producer key space.
 #[salsa::interned]
 pub struct InternedSite<'db> {
     #[returns(clone)]
-    pub space: u64,
-    #[returns(clone)]
-    pub raw: u32,
-    #[returns(clone)]
-    pub occurrence: u32,
+    pub key_space: KeySpaceId,
 }
 
 /// An interned scoped pattern, for use as a salsa query key.

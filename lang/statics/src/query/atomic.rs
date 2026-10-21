@@ -61,12 +61,7 @@ pub fn literal_syn_judgment<'db>(
         | Literal::String(s) => (Literal::String(s.clone()), primitive_ty(PrimitiveType::String)),
         | Literal::Char(c) => (Literal::Char(*c), primitive_ty(PrimitiveType::Char)),
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::ValueId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::ValueId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(LiteralSynOutcome::Value { id, value: ss::Value::Lit(lit), ty })
 }
 
@@ -79,12 +74,7 @@ pub fn term_hole_syn_judgment<'db>(
     let su::Term::Hole(su::Hole) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    Some(derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    ))
+    Some(derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0))
 }
 
 /// The synthesized judgment of a trivial term: the unit value whose type is
@@ -112,12 +102,7 @@ pub fn triv_syn_judgment<'db>(
     let IntrinsicSingleton::Type { ty: (ty, _), .. } = intrinsic_singleton(db, data, key) else {
         unreachable!("the unit singleton is type-producing")
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::ValueId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::ValueId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(TrivSynOutcome { id, value: ss::Value::Triv(ss::Triv), ty })
 }
 
@@ -155,12 +140,8 @@ pub fn var_syn_judgment<'db>(
             Some(VarSynOutcome::Kind { id: kd })
         }
         | ss::AnnId::Type(ty) => {
-            let site_space = term.id(db).key_space().as_u64();
-            let site_raw = term.id(db).raw().into_u32();
-            let id: ss::ValueId = derived_id(
-                KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-                0,
-            );
+            let id: ss::ValueId =
+                derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
             Some(VarSynOutcome::Value { id, value: ss::Value::Var(def), ty })
         }
         | ss::AnnId::Kind(_) => None,
@@ -206,9 +187,7 @@ pub fn hole_ana_judgment<'db>(
     let su::Term::Hole(su::Hole) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let fill: ss::FillId = derived_id(key_space, 0);
     match input.kind(db) {
         | HoleAnaKind::Type { kd } => {

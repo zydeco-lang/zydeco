@@ -286,7 +286,8 @@ A source binder, a particular checking occurrence, and an emitted runtime value 
 | Mechanism | Invariant |
 | --- | --- |
 | `IdAllocator<Scope>` | One non-cloneable sequential issuer owns a fresh key space and cursor. |
-| Derived allocation | Entity identity, checking occurrence, derivation family, and local slot reproduce an allocation site. |
+| `KeySpaceRegistry<Site>` | Complete site equality reuses an identity; distinct sites and independent registries receive fresh key spaces. |
+| Derived allocation | The session registry, entity identity, checking occurrence, derivation family, and local slot reproduce an allocation. |
 | `Allocates<Id>` | A capability declares which categories an operation may issue. |
 | `ArenaSchema<Id>` | An owning representation declares the item stored under an ID. |
 | Dense storage | The backing arena supplies the raw index and rejects another arena's key space. |
@@ -300,15 +301,31 @@ low syntax has a separate issuer and never reuses high syntax IDs.
 Statics producer queries derive occurrence IDs, while the checker materializes their returned fragments.
 Rechecking the same source entity in a distinct occurrence must not overwrite an earlier elaboration.
 
-Statics owns its typed `DerivationFamily`: `Checker` for the mutable checker's intermediate nodes,
-or `Query` for producer nodes, including those issued without retaining a Salsa query.
-The generic arena utilities accept caller-defined domains through `DerivationDomain`,
-without naming compiler-specific families.
-Each family's numeric tag feeds the deterministic 64-bit mixing function alongside the entity identity
-and checking occurrence; the local slot then selects an ID within that key space.
-These families are hash domains rather than reserved numeric ranges.
-The current implementation does not detect collisions between derived sites or reserve a range separate
-from sequential key spaces, so deterministic reproduction does not establish collision-free identity.
+Query replay must recover the identifiers held by retained semantic facts, even after an arena memo is evicted.
+The session therefore owns a `DerivedIdRegistry`, shared through `Arc` by its database clones and checking runs.
+Statics owns the registry's site types: `DerivationFamily` distinguishes checker intermediates from producer nodes,
+and an entity site includes the full `EntityId` category and identity together with its checking occurrence.
+Allocations outside an entity use a separate root-site variant keyed by the checked source root.
+Intrinsic singleton sites pair that root with the full intrinsic key.
+These structural variants replace numeric sentinel identities and domain tags.
+
+The generic `KeySpaceRegistry<Site>` interns those complete keys.
+Hashing accelerates lookup; full key equality establishes identity, including when hashes collide.
+A mutex makes lookup and first issuance atomic, and the same non-recycling process-wide issuer supplies both interned
+and sequential key spaces.
+Distinct registered sites therefore cannot collide with each other or with sequential allocators;
+separate registries also receive disjoint identities.
+Within a site, callers assign distinct local slots to distinct allocations of one ID category.
+The checker caches both allocation-family key spaces when entering the site
+and advances only a local cursor for individual allocations.
+Key-space, occurrence, and slot exhaustion fail rather than wrapping; recursive-binding index conversion
+and slot arithmetic are checked as well.
+
+Registry mappings survive query eviction and remain available until the last registry owner is dropped.
+They retain site identities rather than arena payloads, with memory proportional to the number of registered sites.
+Published arenas keep their numeric IDs without retaining the registry, and dropping a registry never recycles its IDs.
+Replay within the same registry preserves identity, while numeric values depend on first-registration order;
+they are not portable identities across independent sessions or processes.
 
 Provenance records the actual relation between representations.
 Surface-to-typed mappings are many-to-many because transparent syntax and repeated checking can share
@@ -687,7 +704,9 @@ A cached node must therefore be distinguished from a pure source-to-judgment fun
 Per-call arena snapshots would make query keys expensive and defeat reuse;
 a tracked mirror does not make an arbitrary table cell reconstructible from its site.
 A worklist redesign of the solver would be a separate algorithmic change.
-The current boundary gives producers deterministic identities while letting inference retain its sequential state.
+The current boundary gives producers replay-stable identities
+through the [session identity registry](#c2-compiler-data-identities-arenas-and-source-provenance)
+while letting inference retain its sequential state.
 C5 defines the publication boundary after that state stops changing.
 
 ### Analysis Facts and Materialization

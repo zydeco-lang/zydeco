@@ -199,7 +199,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
                 let index =
-                    crate::query::InternedBindingIndex::new(tycker.db, binding_index as u32);
+                    crate::query::InternedBindingIndex::with_usize(tycker.db, binding_index);
                 let Some((abst, abst_ty, next_abst_ty)) =
                     crate::query::rec_group_abst_judgment_at(tycker.db, tycker.query_site(), index)
                 else {

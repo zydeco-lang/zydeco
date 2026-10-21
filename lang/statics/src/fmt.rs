@@ -1019,7 +1019,10 @@ mod tests {
     impl Default for FormatterFixture {
         fn default() -> Self {
             Self {
-                allocator: DerivedAllocator::new(),
+                allocator: DerivedAllocator::new(
+                    Default::default(),
+                    IdAllocator::<BitterScope>::new().alloc(),
+                ),
                 statics: StaticsArena::default(),
                 defs: IdAllocator::new(),
                 scoped: ScopedArena::default(),

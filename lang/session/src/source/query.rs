@@ -257,6 +257,7 @@ trait SourceQueryDb: salsa::Database + zydeco_statics::query::TyckDb {
 #[derive(Clone)]
 pub struct CompilerSession {
     storage: Storage<Self>,
+    derived_ids: std::sync::Arc<zydeco_statics::DerivedIdRegistry>,
     files: DashMap<PathBuf, SourceInput>,
     pending: std::sync::Arc<
         std::sync::Mutex<Option<std::sync::Arc<zydeco_statics::query::PendingParts>>>,
@@ -267,6 +268,7 @@ impl Default for CompilerSession {
     fn default() -> Self {
         Self {
             storage: Storage::default(),
+            derived_ids: Default::default(),
             files: DashMap::new(),
             pending: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
@@ -278,6 +280,10 @@ impl salsa::Database for CompilerSession {}
 
 #[salsa::db]
 impl zydeco_statics::query::TyckDb for CompilerSession {
+    fn derived_ids(&self) -> &std::sync::Arc<zydeco_statics::DerivedIdRegistry> {
+        &self.derived_ids
+    }
+
     fn pending_parts(
         &self,
     ) -> &std::sync::Arc<
@@ -1075,6 +1081,84 @@ mod tests {
         let program = session.checked_program(&analysis).expect("checked program");
         assert!(!program.statics.types_pre.is_empty());
         assert!(program.statics.compus.len() > 0);
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct IdentitySnapshot {
+        kinds: std::collections::BTreeSet<zydeco_statics::KindId>,
+        types: std::collections::BTreeSet<zydeco_statics::TypeId>,
+        values: std::collections::BTreeSet<zydeco_statics::ValueId>,
+        compus: std::collections::BTreeSet<zydeco_statics::CompuId>,
+    }
+
+    impl IdentitySnapshot {
+        fn new(arena: &zydeco_statics::StaticsArena) -> Self {
+            Self {
+                kinds: arena.kinds_pre.iter().map(|(id, _)| *id).collect(),
+                types: arena.types_pre.iter().map(|(id, _)| id).collect(),
+                values: arena.values.iter().map(|(id, _)| *id).collect(),
+                compus: arena.compus.iter().map(|(id, _)| *id).collect(),
+            }
+        }
+    }
+
+    #[test]
+    fn derived_ids_replay_after_eviction_through_a_session_clone() {
+        let fixture = Fixture::new();
+        let first = fixture.write("first.zy", "ret 1");
+        let second = fixture.write("second.zy", "ret 2");
+        let mut session = CompilerSession::default();
+        let analysis = session.analyze(&first).unwrap();
+        let before = session.checked_program(&analysis).unwrap();
+        let identities = IdentitySnapshot::new(&before.statics);
+        let _ = session.analyze(&second).unwrap();
+        salsa::Database::trigger_lru_eviction(&mut session);
+
+        let cloned = session.clone();
+        assert!(Arc::ptr_eq(&session.derived_ids, &cloned.derived_ids));
+        let after = cloned.checked_program(&analysis).unwrap();
+        assert!(
+            !Arc::ptr_eq(&before.statics, &after.statics),
+            "eviction must force arena reconstruction"
+        );
+        assert_eq!(before.root, after.root);
+        assert_eq!(identities, IdentitySnapshot::new(&after.statics));
+    }
+
+    #[test]
+    fn independent_sessions_separate_identical_source_ids_and_release_their_registries() {
+        use zydeco_surface::scoped::{arena::ScopedScope, syntax as su};
+        use zydeco_utils::arena::{ArenaAccess, IdAllocator};
+        let root = IdAllocator::<ScopedScope>::new().alloc();
+        let mut scoped = su::ScopedArena::default();
+        scoped.terms.insert_new(root, su::Triv.into());
+        let session = CompilerSession::default();
+        let weak = Arc::downgrade(&session.derived_ids);
+        let cloned = session.clone();
+        let before = session
+            .check_resolved(su::SpanArena::default(), scoped.clone(), root)
+            .outcome
+            .into_result()
+            .unwrap();
+        drop(session);
+        assert!(weak.upgrade().is_some(), "the clone retains the session registry");
+        drop(cloned);
+        assert!(weak.upgrade().is_none(), "published arenas do not retain the registry");
+
+        let replacement = CompilerSession::default();
+        let after = replacement
+            .check_resolved(su::SpanArena::default(), scoped, root)
+            .outcome
+            .into_result()
+            .unwrap();
+        assert_ne!(before.root, after.root, "new sessions never recycle prior derived IDs");
+        let zydeco_statics::TermAnnId::Value(value, _) = before.root else {
+            panic!("expected a unit value")
+        };
+        assert!(
+            before.statics.values.get(&value).is_some(),
+            "old arenas remain usable after their registry is dropped"
+        );
     }
 
     #[test]

@@ -8,7 +8,10 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
     ops::AddAssign,
     ops::{Index, IndexMut},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 /* ---------------------------------- Index --------------------------------- */
@@ -28,87 +31,87 @@ pub trait ArenaId: Copy + Eq + Hash {
 
 /* ------------------------------ IdAllocator ------------------------------- */
 
-/// Caller-defined domain for deterministic key-space derivation.
-///
-/// Implement this trait on the caller's allocation-family type. Each family
-/// must have a stable tag, with distinct tags for distinct families even when
-/// they use different Rust types; the type itself is not a derivation input.
-/// Tags distinguish derivation inputs, not collision-free numeric ranges.
-/// The [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
-/// describes the derivation scheme and its collision limits.
-pub trait DerivationDomain {
-    /// The stable numeric encoding of this derivation domain.
-    fn tag(self) -> u64;
-}
-
 /// Opaque identity domain for arena IDs.
 #[derive(Copy, Clone, derive_more::Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[debug("{_0}")]
 pub struct KeySpaceId(NonZeroU64);
 
-impl KeySpaceId {
-    fn fresh() -> Self {
-        static NEXT_KEY_SPACE_ID: AtomicU64 = AtomicU64::new(0);
+/// The shared issuer for both sequential and interned key spaces.
+#[derive(Default)]
+struct KeySpaceIssuer {
+    last: AtomicU64,
+}
 
-        let id = NEXT_KEY_SPACE_ID
+impl KeySpaceIssuer {
+    fn fresh(&self) -> KeySpaceId {
+        let previous = self
+            .last
             .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
             .expect("key-space identity range exhausted");
-        let id = id.checked_add(1).expect("key-space identity range exhausted");
-        Self(NonZeroU64::new(id).expect("a fresh key-space identity is nonzero"))
+        KeySpaceId(NonZeroU64::new(previous + 1).expect("a fresh key-space identity is nonzero"))
+    }
+}
+
+impl KeySpaceId {
+    fn fresh() -> Self {
+        static ISSUER: KeySpaceIssuer = KeySpaceIssuer { last: AtomicU64::new(0) };
+        ISSUER.fresh()
     }
 
-    /// The numeric identity, exposed for deterministic derivation only.
+    /// The numeric identity, for compact storage and diagnostic rendering.
     pub fn as_u64(self) -> u64 {
         self.0.get()
     }
+}
 
-    /// Derive a deterministic key space for one allocation site.
-    ///
-    /// The full entity identity — `(entity_space, entity_raw)` — and an
-    /// occurrence distinguish repeated derivations at the same entity.
-    /// Reusing the same inputs reproduces the same identifiers without a shared
-    /// cursor. The caller supplies its own domain; this does not guarantee
-    /// collision-free key spaces. See the
-    /// [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
-    /// for the derivation scheme.
-    ///
-    /// ```
-    /// use zydeco_utils::arena::{DerivationDomain, KeySpaceId};
-    ///
-    /// struct ExampleDomain;
-    /// impl DerivationDomain for ExampleDomain {
-    ///     fn tag(self) -> u64 { 1 }
-    /// }
-    ///
-    /// let site = KeySpaceId::derive(ExampleDomain, 7, 42, 0);
-    /// assert_eq!(site, KeySpaceId::derive(ExampleDomain, 7, 42, 0));
-    /// ```
-    ///
-    /// Bare numeric tags do not implement the domain contract:
-    ///
-    /// ```compile_fail,E0277
-    /// use zydeco_utils::arena::KeySpaceId;
-    ///
-    /// let site = KeySpaceId::derive(1_u64, 7, 42, 0);
-    /// ```
-    pub fn derive(
-        domain: impl DerivationDomain, entity_space: u64, entity_raw: u32, occurrence: u32,
-    ) -> KeySpaceId {
-        fn mix(mut hash: u64) -> u64 {
-            hash ^= hash >> 33;
-            hash = hash.wrapping_mul(0xff51afd7ed558ccd);
-            hash ^= hash >> 33;
-            hash = hash.wrapping_mul(0xc4ceb9fe1a85ec53);
-            hash ^= hash >> 33;
-            hash
-        }
-        let derived =
-            mix(mix(mix(domain.tag() ^ entity_space) ^ u64::from(entity_raw))
-                ^ u64::from(occurrence));
-        KeySpaceId(
-            NonZeroU64::new(derived)
-                .unwrap_or_else(|| NonZeroU64::new(u64::MAX).expect("u64::MAX is nonzero")),
-        )
+/// Interns complete allocation-site keys into process-unique key spaces.
+///
+/// Equal sites in this registry reuse a key space. Distinct sites, independent
+/// registries, and sequential allocators receive different key spaces from one
+/// non-recycling issuer. Hashes only accelerate lookup; full equality decides
+/// identity. The lookup and first issuance are atomic with respect to other
+/// callers of this registry.
+///
+/// Share the registry with `Arc`, and retain it for as long as its sites may be
+/// replayed. Dropping it releases the site map without recycling any issued ID.
+/// See the [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance).
+///
+/// ```
+/// use zydeco_utils::arena::KeySpaceRegistry;
+///
+/// #[derive(Eq, PartialEq, Hash)]
+/// struct Site { entity: u32, occurrence: u32 }
+///
+/// let registry = KeySpaceRegistry::default();
+/// let first = registry.intern(Site { entity: 7, occurrence: 0 });
+/// assert_eq!(first, registry.intern(Site { entity: 7, occurrence: 0 }));
+/// assert_ne!(first, registry.intern(Site { entity: 7, occurrence: 1 }));
+/// ```
+///
+/// The registry accepts only its declared site type:
+///
+/// ```compile_fail,E0308
+/// use zydeco_utils::arena::KeySpaceRegistry;
+///
+/// let registry = KeySpaceRegistry::<(u32, u32)>::default();
+/// registry.intern(7_u64);
+/// ```
+#[derive(Debug)]
+pub struct KeySpaceRegistry<Site> {
+    sites: Mutex<HashMap<Site, KeySpaceId>>,
+}
+
+impl<Site> Default for KeySpaceRegistry<Site> {
+    fn default() -> Self {
+        Self { sites: Mutex::new(HashMap::default()) }
+    }
+}
+
+impl<Site: Eq + Hash> KeySpaceRegistry<Site> {
+    /// Reuse a site's key space or issue a new one, failing on issuer exhaustion.
+    pub fn intern(&self, site: Site) -> KeySpaceId {
+        let mut sites = self.sites.lock().expect("key-space registry poisoned");
+        *sites.entry(site).or_insert_with(KeySpaceId::fresh)
     }
 }
 
@@ -168,8 +171,8 @@ impl ArenaIdIdentity {
 /// Construct an arena identifier from a derived key space and a local slot.
 ///
 /// This is the sanctioned way to build identifiers without an [`IdAllocator`].
-/// Callers must preserve allocation-site identity; [`KeySpaceId::derive`]
-/// supplies deterministic key spaces subject to its documented collision limits.
+/// Obtain the key space from [`KeySpaceRegistry`] and assign a distinct local
+/// slot to each allocation at that site. Reusing both reconstructs the same ID.
 pub fn derived_id<Id: ArenaId>(key_space: KeySpaceId, slot: u32) -> Id {
     Id::from_raw_parts(ArenaIdToken(()), key_space, RawIdx::from_u32(slot))
 }
@@ -1520,14 +1523,6 @@ mod tests {
     use super::*;
     use std::panic::{AssertUnwindSafe, catch_unwind};
 
-    struct StorageTestDomain;
-
-    impl DerivationDomain for StorageTestDomain {
-        fn tag(self) -> u64 {
-            1
-        }
-    }
-
     crate::new_key_type! {
         struct DenseId;
         struct SparseId;
@@ -1563,7 +1558,7 @@ mod tests {
 
     #[test]
     fn generated_ids_store_key_space_and_raw_slot_without_tail_padding() {
-        let key_space = KeySpaceId::derive(StorageTestDomain, u64::MAX - 1, u32::MAX - 1, u32::MAX);
+        let key_space = KeySpaceId::fresh();
         let id: DenseId = derived_id(key_space, u32::MAX);
         let below_word_boundary = KeySpaceId(NonZeroU64::new(u64::from(u32::MAX)).unwrap());
         let above_word_boundary = KeySpaceId(NonZeroU64::new(1_u64 << 32).unwrap());
@@ -1635,13 +1630,12 @@ mod tests {
 
     #[test]
     fn indexed_storage_keeps_sparse_identity_and_dense_payloads() {
-        let left_space = KeySpaceId::derive(StorageTestDomain, 2, 3, 6);
-        let right_space = KeySpaceId::derive(StorageTestDomain, 6, 7, 10);
+        let left_space = KeySpaceId::fresh();
+        let right_space = KeySpaceId::fresh();
         let left_first = derived_id::<SparseId>(left_space, 0);
         let left_gap = derived_id::<SparseId>(left_space, 95);
         let right_first = derived_id::<SparseId>(right_space, 0);
-        let generated =
-            derived_id::<SparseId>(KeySpaceId::derive(StorageTestDomain, 10, 11, 14), 0);
+        let generated = derived_id::<SparseId>(KeySpaceId::fresh(), 0);
         let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
 
         arena.reserve_ids_with_additional(
@@ -1670,7 +1664,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "duplicate key in paged associative arena")]
     fn indexed_storage_rejects_duplicate_ids_without_appending_payloads() {
-        let id = derived_id::<SparseId>(KeySpaceId::derive(StorageTestDomain, 1, 1, 2), 0);
+        let id = derived_id::<SparseId>(KeySpaceId::fresh(), 0);
         let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
         arena.insert_new(id, "first");
         arena.insert_new(id, "second");
@@ -1678,7 +1672,7 @@ mod tests {
 
     #[test]
     fn paged_associations_preserve_sparse_gaps() {
-        let space = KeySpaceId::derive(StorageTestDomain, 10, 11, 12);
+        let space = KeySpaceId::fresh();
         let first = derived_id::<SparseId>(space, 1);
         let second = derived_id::<SparseId>(space, 4);
         let mut arena = ArenaPagedAssoc::new();
@@ -1695,7 +1689,7 @@ mod tests {
 
     #[test]
     fn paged_associations_use_known_id_extents_without_growth_slack() {
-        let space = KeySpaceId::derive(StorageTestDomain, 10, 11, 13);
+        let space = KeySpaceId::fresh();
         let first = derived_id::<SparseId>(space, 0);
         let last = derived_id::<SparseId>(space, 95);
         let mut arena = ArenaPagedAssoc::new();
@@ -1776,61 +1770,145 @@ mod tests {
 }
 
 #[cfg(test)]
-mod derived_id_tests {
-    use super::{ArenaId, DerivationDomain, KeySpaceId, derived_id};
+mod registry_tests {
+    use super::*;
+    use std::{
+        collections::HashSet,
+        panic::catch_unwind,
+        sync::{Arc, Barrier},
+    };
 
-    #[derive(Copy, Clone)]
-    enum TestDomain {
-        First,
-        Second,
+    new_key_type! { struct TestId; }
+    enum TestScope {}
+    impl Allocates<TestId> for TestScope {}
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct CollidingSite {
+        entity: u64,
+        occurrence: u32,
     }
 
-    impl DerivationDomain for TestDomain {
-        fn tag(self) -> u64 {
-            match self {
-                | Self::First => 1,
-                | Self::Second => 2,
-            }
+    impl Hash for CollidingSite {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            // Force every lookup into the same hash bucket.
+            0_u64.hash(state);
         }
     }
 
-    new_key_type! { struct DerivedTestId; }
-
     #[test]
-    fn sample_sites_distinguish_caller_domains_and_entity_identity() {
-        for domain in [TestDomain::First, TestDomain::Second] {
-            let site = KeySpaceId::derive(domain, 7, 42, 0);
-            assert_ne!(site, KeySpaceId::derive(domain, 8, 42, 0));
-            assert_ne!(site, KeySpaceId::derive(domain, 7, 43, 0));
+    fn registry_resolves_hash_collisions_by_full_site_equality() {
+        let registry = KeySpaceRegistry::default();
+        let sites = [
+            CollidingSite { entity: 7, occurrence: 0 },
+            CollidingSite { entity: 7, occurrence: 1 },
+            CollidingSite { entity: 8, occurrence: 0 },
+            CollidingSite { entity: u64::MAX, occurrence: u32::MAX },
+        ];
+        let spaces = sites.map(|site| registry.intern(site));
+        assert_eq!(spaces.into_iter().collect::<HashSet<_>>().len(), sites.len());
+        for (site, space) in sites.into_iter().zip(spaces) {
+            assert_eq!(registry.intern(site), space);
         }
-        assert_ne!(
-            KeySpaceId::derive(TestDomain::First, 7, 42, 0),
-            KeySpaceId::derive(TestDomain::Second, 7, 42, 0),
-        );
+        assert_eq!(registry.sites.lock().unwrap().len(), sites.len());
     }
 
     #[test]
-    fn derived_ids_replay_sites_and_distinguish_sample_occurrences_and_slots() {
-        let site_a = KeySpaceId::derive(TestDomain::First, 7, 42, 0);
-        let site_b = KeySpaceId::derive(TestDomain::First, 7, 42, 1);
-        let id_a0: DerivedTestId = derived_id(site_a, 0);
-        let id_a1: DerivedTestId = derived_id(site_a, 1);
-        let id_b0: DerivedTestId = derived_id(site_b, 0);
+    fn registry_keeps_old_xor_collision_inputs_distinct() {
+        #[derive(Eq, PartialEq, Hash)]
+        struct Site {
+            family: u64,
+            entity_space: u64,
+            entity_raw: u32,
+            occurrence: u32,
+        }
 
-        assert_ne!(id_a0, id_a1, "distinct slots share a key space");
-        assert_ne!(id_a0, id_b0, "distinct sites keep their identifiers apart");
-        assert_eq!(id_a0.key_space(), site_a);
-        assert_eq!(id_a0.raw().into_u32(), 0);
-        assert_eq!(
-            id_a0,
-            derived_id(KeySpaceId::derive(TestDomain::First, 7, 42, 0), 0),
-            "re-deriving a site reproduces its identifiers",
-        );
-        assert_ne!(id_a0.concise(), id_a1.concise(), "concise forms distinguish slots");
-        assert_ne!(
-            id_a0.concise_inner(),
-            id_b0.concise_inner(),
-            "inner concise forms distinguish sites"
-        );
+        let left = Site { family: 1, entity_space: 2, entity_raw: 42, occurrence: 0 };
+        let right = Site { family: 2, entity_space: 1, entity_raw: 42, occurrence: 0 };
+        // The removed mixer started with family ^ entity_space, losing this distinction.
+        assert_eq!(left.family ^ left.entity_space, right.family ^ right.entity_space);
+        let registry = KeySpaceRegistry::default();
+        assert_ne!(registry.intern(left), registry.intern(right));
+    }
+
+    #[test]
+    fn independent_registries_and_sequential_allocators_never_recycle_key_spaces() {
+        let mut sequential = IdAllocator::<TestScope>::new();
+        let before: TestId = sequential.alloc();
+        let first = KeySpaceRegistry::default();
+        let old = first.intern(0);
+        let second = KeySpaceRegistry::default();
+        let other_session = second.intern(0);
+        let other_site = second.intern(1);
+        drop(first);
+        let replacement = KeySpaceRegistry::default().intern(0);
+        let after: TestId = IdAllocator::<TestScope>::new().alloc();
+        let spaces =
+            [before.key_space(), old, other_session, other_site, replacement, after.key_space()];
+        assert_eq!(spaces.into_iter().collect::<HashSet<_>>().len(), spaces.len());
+    }
+
+    #[test]
+    fn concurrent_first_interns_share_one_identity_and_keep_distinct_keys_apart() {
+        let registry = KeySpaceRegistry::default();
+        let barrier = Barrier::new(8);
+        let ids = std::thread::scope(|scope| {
+            let handles = (0..8)
+                .map(|entity| {
+                    let registry = &registry;
+                    let barrier = &barrier;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        let shared = registry.intern(CollidingSite { entity: 8, occurrence: 0 });
+                        let own = registry.intern(CollidingSite { entity, occurrence: 0 });
+                        (shared, own)
+                    })
+                })
+                .collect::<Vec<_>>();
+            handles.into_iter().map(|handle| handle.join().unwrap()).collect::<Vec<_>>()
+        });
+        let shared = ids[0].0;
+        assert!(ids.iter().all(|(common, own)| *common == shared && *own != shared));
+        assert_eq!(ids.iter().map(|(_, own)| *own).collect::<HashSet<_>>().len(), 8);
+        assert_eq!(registry.sites.lock().unwrap().len(), 9);
+    }
+
+    #[test]
+    fn dropping_a_registry_releases_its_site_keys() {
+        let key = Arc::new(7_u32);
+        let registry = KeySpaceRegistry::default();
+        let id = registry.intern(key.clone());
+        assert_eq!(Arc::strong_count(&key), 2);
+        drop(registry);
+        assert_eq!(Arc::strong_count(&key), 1);
+        assert_ne!(KeySpaceRegistry::default().intern(key), id);
+    }
+
+    #[test]
+    fn key_space_exhaustion_rejects_repeated_issuance_without_wrapping() {
+        let issuer = KeySpaceIssuer { last: AtomicU64::new(u64::MAX - 1) };
+        assert_eq!(issuer.fresh().as_u64(), u64::MAX);
+        for _ in 0..2 {
+            let failure = catch_unwind(|| issuer.fresh()).unwrap_err();
+            let message = failure.downcast_ref::<String>().unwrap();
+            assert!(message.starts_with("key-space identity range exhausted"));
+            assert_eq!(issuer.last.load(Ordering::Relaxed), u64::MAX);
+        }
+    }
+
+    #[test]
+    fn interned_sites_replay_identifiers_and_keep_local_slots_distinct() {
+        let registry = KeySpaceRegistry::default();
+        let site = CollidingSite { entity: 7, occurrence: 0 };
+        let space = registry.intern(site);
+        let first: TestId = derived_id(space, 0);
+        let next: TestId = derived_id(space, 1);
+        let retry: TestId = derived_id(registry.intern(CollidingSite { occurrence: 1, ..site }), 0);
+        assert_eq!(first, derived_id(registry.intern(site), 0));
+        assert_eq!(first.key_space(), space);
+        assert_eq!(first.raw().into_u32(), 0);
+        assert_ne!(first, next);
+        assert_ne!(first, retry);
+        assert_ne!(first.concise(), next.concise());
+        assert_ne!(first.concise_inner(), retry.concise_inner());
     }
 }

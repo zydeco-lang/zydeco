@@ -36,9 +36,7 @@ pub fn sigma_syn_judgment<'db>(
     let su::Term::Sigma(su::Sigma(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let vtype = {
         let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
         let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
@@ -104,9 +102,7 @@ pub fn manifest_exists_syn_judgment<'db>(
     let su::Term::ManifestExists(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let vtype = {
         let key = InternedIntrinsic::new(db, IntrinsicKey::VType);
         let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
@@ -192,9 +188,7 @@ pub fn pack_syn_judgment<'db>(
     let su::Term::Pack(_) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     match input.arm(db) {
         | PackSynArm::Package { pattern, witness, definition, full_definition, body, body_ty } => {
             let exists_id: ss::TypeId = derived_id(key_space, 0);

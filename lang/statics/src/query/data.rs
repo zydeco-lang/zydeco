@@ -46,9 +46,7 @@ pub fn data_syn_judgment<'db>(
     let su::Term::Data(su::Data { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let data_id: ss::DataId = derived_id(key_space, 0);
     let ty_id: ss::TypeId = derived_id(key_space, 1);
     Some(DataSynOutcome {
@@ -70,9 +68,7 @@ pub fn codata_syn_judgment<'db>(
     let su::Term::CoData(su::CoData { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
+    let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let codata_id: ss::CoDataId = derived_id(key_space, 0);
     let ty_id: ss::TypeId = derived_id(key_space, 1);
     Some(CoDataSynOutcome {
@@ -113,12 +109,7 @@ pub fn match_syn_judgment<'db>(
     let su::Term::Match(su::Match { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::CompuId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(MatchSynOutcome {
         id,
         compu: ss::Computation::Match(ss::Match {
@@ -164,12 +155,7 @@ pub fn ctor_syn_judgment<'db>(
     let su::Term::Ctor(su::Ctor(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::ValueId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::ValueId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(CtorSynOutcome {
         id,
         value: ss::Value::Ctor(ss::Ctor(input.name(db), input.arg(db))),
@@ -203,12 +189,7 @@ pub fn comatch_syn_judgment<'db>(
     let su::Term::CoMatch(su::CoMatch { .. }) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::CompuId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(CoMatchSynOutcome {
         id,
         compu: ss::Computation::CoMatch(ss::CoMatch {
@@ -251,12 +232,7 @@ pub fn dtor_syn_judgment<'db>(
     let su::Term::Dtor(su::Dtor(_, _)) = data.scoped(db).terms.get(&term.id(db))? else {
         return None;
     };
-    let site_space = term.id(db).key_space().as_u64();
-    let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId = derived_id(
-        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
-        0,
-    );
+    let id: ss::CompuId = derived_id(db.derived_ids().query_space(term.id(db), occurrence), 0);
     Some(DtorSynOutcome {
         id,
         compu: ss::Computation::Dtor(ss::Dtor(input.body(db), input.dtor(db))),

@@ -401,29 +401,35 @@ impl TyEnvInterner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::alloc::DerivationFamily;
-    use zydeco_utils::arena::{KeySpaceId, derived_id};
+    use zydeco_utils::arena::IdAllocator;
 
-    fn def(slot: u32) -> DefId {
-        derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 0, 0), slot)
+    struct Fixture {
+        defs: [DefId; 2],
+        absts: [AbstId; 2],
+        types: [TypeId; 2],
     }
 
-    fn abst(slot: u32) -> AbstId {
-        derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 1, 0), slot)
-    }
+    impl Fixture {
+        fn new() -> Self {
+            let mut allocator = IdAllocator::<StaticsScope>::new();
+            Self {
+                defs: [allocator.alloc(), allocator.alloc()],
+                absts: [allocator.alloc(), allocator.alloc()],
+                types: [allocator.alloc(), allocator.alloc()],
+            }
+        }
 
-    fn sample() -> TyEnv {
-        TyEnv::from_iter([(
-            def(0),
-            AnnId::Type(derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 2, 0), 0)),
-        )])
-        .with_skolem(abst(0))
+        fn sample(&self) -> TyEnv {
+            TyEnv::from_iter([(self.defs[0], AnnId::Type(self.types[0]))])
+                .with_skolem(self.absts[0])
+        }
     }
 
     #[test]
     fn interning_shares_clones_and_preserves_content() {
         let mut interner = TyEnvInterner::default();
-        let env = sample();
+        let fixture = Fixture::new();
+        let env = fixture.sample();
 
         let first = interner.intern(&env);
         let clone = env.clone();
@@ -432,45 +438,42 @@ mod tests {
         // Clones of one environment intern to the same shared value...
         assert!(std::sync::Arc::ptr_eq(&first, &second));
         // ...and the stored value keeps the environment's exact content.
-        assert_eq!(
-            second.as_ref().get(&def(0)),
-            Some(&AnnId::Type(derived_id(
-                KeySpaceId::derive(DerivationFamily::Checker, 0, 2, 0),
-                0,
-            )))
-        );
-        assert!(second.skolem_scope().contains(&abst(0)));
+        assert_eq!(second.as_ref().get(&fixture.defs[0]), Some(&AnnId::Type(fixture.types[0])));
+        assert!(second.skolem_scope().contains(&fixture.absts[0]));
     }
 
     #[test]
     fn interning_dedupes_independently_built_equal_environments() {
         let mut interner = TyEnvInterner::default();
-        let env = sample();
+        let fixture = Fixture::new();
+        let env = fixture.sample();
 
         let first = interner.intern(&env);
         // The same content rebuilt from scratch shares no structure, but the
         // content comparison still interns it to the same shared value.
-        let rebuilt = sample();
+        let rebuilt = fixture.sample();
         let second = interner.intern(&rebuilt);
 
         assert_eq!(env, rebuilt);
         assert!(std::sync::Arc::ptr_eq(&first, &second));
-        assert_eq!(second.as_ref().get(&def(0)), first.as_ref().get(&def(0)));
+        assert_eq!(second.as_ref().get(&fixture.defs[0]), first.as_ref().get(&fixture.defs[0]));
     }
 
     #[test]
     fn environment_extensions_preserve_existing_bindings_and_skolems() {
-        let base = sample();
-        let added_type = derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 2, 0), 1);
-        let extension = (base.clone() + [(def(1), AnnId::Type(added_type))]).with_skolem(abst(1));
+        let fixture = Fixture::new();
+        let base = fixture.sample();
+        let added_type = fixture.types[1];
+        let extension = (base.clone() + [(fixture.defs[1], AnnId::Type(added_type))])
+            .with_skolem(fixture.absts[1]);
 
         assert!(extension.is_extension_of(&base));
         assert!(base.is_extension_of(&base));
 
-        let replaced = base.clone() + [(def(0), AnnId::Type(added_type))];
+        let replaced = base.clone() + [(fixture.defs[0], AnnId::Type(added_type))];
         assert!(!replaced.is_extension_of(&base));
 
-        let missing_definition = TyEnv::default().with_skolem(abst(0));
+        let missing_definition = TyEnv::default().with_skolem(fixture.absts[0]);
         assert!(!missing_definition.is_extension_of(&base));
 
         let missing_skolem = TyEnv::from_iter(base.clone());
