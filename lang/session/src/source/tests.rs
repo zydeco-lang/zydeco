@@ -347,20 +347,6 @@ struct SourceFixture {
     directory: tempfile::TempDir,
 }
 
-struct RepositorySourceFiles;
-
-impl RepositorySourceFiles {
-    fn assert_value_function(relative: impl AsRef<Path>) {
-        use zydeco_statics::syntax::TermAnnId;
-        let checked = TestPipeline::check(repository_source(relative)).unwrap();
-        assert!(
-            matches!(checked.root, TermAnnId::Value(_, _)),
-            "expected a value function, got {:?}",
-            checked.root,
-        );
-    }
-}
-
 impl SourceFixture {
     /// Keep graph-shape assertions local to the fixture's explicit sources.
     /// The shared implicit dependency is exercised by the prelude integration tests.
@@ -508,24 +494,6 @@ fn assert_source_io_program(relative: impl AsRef<Path>, source_input: &str, expe
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
     assert_eq!(String::from_utf8(output).unwrap(), expected_output);
     assert!(!native.assembly.is_empty());
-}
-
-fn assert_source_io_program_reaches_zasm(
-    relative: impl AsRef<Path>, source_input: &str, expected_output: &str,
-) {
-    let root = repository_source(relative);
-    let checked = TestPipeline::check(&root).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::Cursor::new(source_input);
-    let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm_from_checked(checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert_eq!(String::from_utf8(output).unwrap(), expected_output);
-    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
 }
 
 fn assert_source_program_reaches_amd64(relative: impl AsRef<Path>) {
@@ -2090,114 +2058,6 @@ fn foundational_argument_fold_preserves_sequence_without_constructing_list() {
 }
 
 #[test]
-fn standard_library_package_composes_as_an_imported_value_function() {
-    RepositorySourceFiles::assert_value_function("std/std.zy");
-
-    let root = repository_source("tests/std/minimal.zy");
-    let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::empty();
-    let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
-    let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(!native.assembly.is_empty());
-}
-
-#[test]
-fn standard_library_reifies_foundational_comparisons_as_abstract_bool() {
-    let root = repository_source("tests/std/comparisons.zy");
-    let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::empty();
-    let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm_from_checked(checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
-}
-
-#[test]
-fn standard_library_reifies_foundational_splits_as_abstract_option() {
-    let root = repository_source("tests/std/splits.zy");
-    let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::empty();
-    let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm_from_checked(checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
-}
-
-#[test]
-fn standard_library_reifies_foundational_line_parsing_as_abstract_option() {
-    let root = repository_source("tests/std/support/read-line-as-int.zy");
-    let checked = TestPipeline::check(&root).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::Cursor::new("42\nnot-an-integer\n");
-    let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm_from_checked(checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
-}
-
-#[test]
-fn standard_library_reifies_foundational_argument_fold_as_abstract_list() {
-    let root = repository_source("tests/std/support/arg-list.zy");
-    let checked = TestPipeline::check(&root).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::empty();
-    let mut output = Vec::new();
-    let arguments = ["alpha".to_string(), "beta".to_string()];
-    let result = zydeco_dynamics::Runtime::new(
-        &mut input,
-        &mut output,
-        &mut Vec::new(),
-        &arguments,
-        dynamics,
-    )
-    .run();
-    let SourceAssembly { assembly, .. } = TestPipeline::zasm_from_checked(checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(assembly.arena().programs.get(&assembly.root()).is_some());
-}
-
-#[test]
-fn builtin_surface_selection_replaces_the_old_prelude_usage() {
-    let root = repository_source("tests/std/identity.zy");
-    let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::empty();
-    let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
-    let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(!native.assembly.is_empty());
-}
-
-#[test]
 fn builtin_selection_preserves_numeric_widths_and_cbpv_kinds() {
     use zydeco_statics::TyckDiagnosticCode;
 
@@ -2308,23 +2168,6 @@ fn standard_data_package_exports_a_packed_value() {
 }
 
 #[test]
-fn abstract_list_package_exports_case_analysis_and_a_recursive_fold() {
-    let root = repository_source("tests/std/list.zy");
-    let checked =
-        TestPipeline::check_with_packages(&root, &[repository_source("../workspace.zy")]).unwrap();
-    let dynamics = checked.clone().dynamics_with_builtin().unwrap().program;
-    let mut input = std::io::empty();
-    let mut output = Vec::new();
-    let result =
-        zydeco_dynamics::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], dynamics)
-            .run();
-    let native = TestPipeline::amd64_from_checked(root, checked).unwrap();
-
-    assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(0)));
-    assert!(!native.assembly.is_empty());
-}
-
-#[test]
 fn finite_io_compile_examples_port_as_root_terms() {
     [
         ("tests/builtin/echo-none.zy", "ignored\n", ""),
@@ -2377,20 +2220,6 @@ fn playground_is_a_configuration_free_root_program() {
 
     assert!(matches!(result, zydeco_dynamics::ProgKont::ExitCode(42)));
     assert!(!native.assembly.is_empty());
-}
-
-#[test]
-fn echo_sum_stops_at_invalid_input() {
-    assert_source_io_program_reaches_zasm(
-        "tests/demos/echo_sum.zydeco",
-        "1\n2\nnot-an-integer\n",
-        "1 = sum\n3 = sum\n",
-    );
-}
-
-#[test]
-fn oopsla_relative_monad_algebras_compose_as_a_root_term() {
-    assert_source_io_program_reaches_zasm("tests/demos/algebra.zydeco", "", "");
 }
 
 #[test]

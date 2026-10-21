@@ -73,3 +73,12 @@ e2e_io_source!(
     "100 = sum\nsum >= 256\n",
     1
 );
+
+// End of input and an unparseable line stop each loop without an error.
+e2e_io_source!(
+    echo_sum_stops_at_invalid_input,
+    "tests/demos/echo_sum.zydeco",
+    "1\n2\nnot-an-integer\n",
+    "1 = sum\n3 = sum\n"
+);
+e2e_io_source!(algebra_exits_at_eof, "tests/demos/algebra.zydeco", "", "");
