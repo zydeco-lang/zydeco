@@ -1122,8 +1122,8 @@ in ! run {divisor}
 #[test]
 fn typed_memory_kernels_preserve_checked_header_updates() {
     for source in [
-        "docs/evaluations/2026-09-15-typed-memory/header-raw.zy",
-        "docs/evaluations/2026-09-15-typed-memory/header-typed.zy",
+        "cli/tests/fixtures/header-raw.zy",
+        "cli/tests/fixtures/header-typed.zy",
         "lib/tests/std/typed-memory-kernel.zy",
     ] {
         let fixture = Fixture::with_source(source);
