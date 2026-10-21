@@ -1,7 +1,6 @@
 //! Resumable test-run state, its journal, and test-input fingerprints.
 
 use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -35,15 +34,6 @@ pub enum TestStatus {
     Ignored,
     /// The test is known to exist but has no fresh outcome.
     Pending,
-}
-
-/// Canonical name of a test as saved and compared by the runner.
-///
-/// libtest appends ` - should panic` to the display name only when a test
-/// runs, while `--list` prints the bare name. Both forms normalize to the bare
-/// name so saved results, skip patterns, and freshly discovered tests agree.
-pub(crate) fn canonical_test_name(name: &str) -> &str {
-    name.strip_suffix(" - should panic").unwrap_or(name)
 }
 
 /// Size and modification time of a build artifact.
@@ -436,7 +426,7 @@ impl Store {
             };
             if let Some(target) = self.state.targets.get_mut(&entry.target) {
                 target.tests.insert(
-                    canonical_test_name(&entry.test).to_owned(),
+                    entry.test,
                     TestRecord { status: entry.status, last_run_unix_ms: entry.last_run_unix_ms },
                 );
                 applied = true;
@@ -475,38 +465,7 @@ fn load_state(path: &Path, key: RunKey) -> Result<ResumeState> {
     if state.version != STATE_VERSION || state.key != key {
         return Ok(ResumeState::empty(key));
     }
-    let mut state = state;
-    canonicalize_state(&mut state);
     Ok(state)
-}
-
-/// Rewrites legacy saved names that still carry the ` - should panic` suffix,
-/// keeping the freshest record when both forms exist.
-fn canonicalize_state(state: &mut ResumeState) {
-    for target in state.targets.values_mut() {
-        if !target.tests.keys().any(|name| canonical_test_name(name) != name) {
-            continue;
-        }
-        let mut canonical = BTreeMap::new();
-        for (name, record) in std::mem::take(&mut target.tests) {
-            match canonical.entry(canonical_test_name(&name).to_owned()) {
-                | Entry::Vacant(entry) => {
-                    entry.insert(record);
-                }
-                | Entry::Occupied(mut entry) => {
-                    let existing = entry.get();
-                    let replace = record.last_run_unix_ms > existing.last_run_unix_ms
-                        || (record.last_run_unix_ms == existing.last_run_unix_ms
-                            && existing.status == TestStatus::Pass
-                            && record.status != TestStatus::Pass);
-                    if replace {
-                        entry.insert(record);
-                    }
-                }
-            }
-        }
-        target.tests = canonical;
-    }
 }
 
 /// Takes the exclusive run lock, waiting for a concurrent invocation if needed.
@@ -854,41 +813,5 @@ mod tests {
         };
         assert!(lock_path.exists(), "the lock file is kept for stable inode locking");
         assert!(fs::read(&lock_path).expect("read lock").is_empty());
-    }
-
-    #[test]
-    fn legacy_should_panic_names_are_canonicalized_on_load() {
-        let temporary = tempfile::tempdir().expect("temp dir");
-        let root = temporary.path();
-        let target_dir = root.join("target");
-        let key = fixture_key(root);
-        let paths = StorePaths::new(&target_dir, &key).expect("paths");
-        fs::create_dir_all(&paths.directory).expect("create state directory");
-        let target = fixture(root);
-        let mut record = TargetRecord::from_target(&target);
-        record.tests.insert(
-            "probe::panics - should panic".into(),
-            TestRecord { status: TestStatus::Pass, last_run_unix_ms: 1 },
-        );
-        // A stale passing suffix record must not hide a newer bare-name result.
-        record.tests.insert(
-            "probe::merged - should panic".into(),
-            TestRecord { status: TestStatus::Pass, last_run_unix_ms: 1 },
-        );
-        record.tests.insert(
-            "probe::merged".into(),
-            TestRecord { status: TestStatus::Fail, last_run_unix_ms: 2 },
-        );
-        let mut state = ResumeState::empty(key.clone());
-        state.targets.insert(target.state_id(), record);
-        fs::write(&paths.state, serde_json::to_vec(&state).expect("serialize"))
-            .expect("write state");
-
-        let loaded = load_state(&paths.state, key).expect("load state");
-        let tests = &loaded.targets[&target.state_id()].tests;
-        assert_eq!(tests["probe::panics"].status, TestStatus::Pass);
-        assert!(!tests.contains_key("probe::panics - should panic"));
-        assert_eq!(tests["probe::merged"].status, TestStatus::Fail);
-        assert_eq!(tests.len(), 2);
     }
 }

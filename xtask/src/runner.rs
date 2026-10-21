@@ -6,9 +6,7 @@ use std::process::{Command, Stdio};
 
 use crate::cargo::{Cargo, TestTarget};
 use crate::cli::{Action, ColorChoice, Invocation, TestArgs};
-use crate::state::{
-    ResumeState, RunKey, Stamp, Store, TestStatus, canonical_test_name, now_unix_ms, source_stamp,
-};
+use crate::state::{ResumeState, RunKey, Stamp, Store, TestStatus, now_unix_ms, source_stamp};
 use crate::{Error, Result};
 
 /// Exit status of one xtask test run.
@@ -386,6 +384,15 @@ fn list_tests(target: &TestTarget, test_args: &TestArgs) -> Result<Vec<String>> 
         )));
     }
     Ok(String::from_utf8_lossy(&output.stdout).lines().filter_map(parse_list_line).collect())
+}
+
+/// Canonical name of a test as listed, run, and saved by the runner.
+///
+/// libtest appends ` - should panic` to the display name only when a test
+/// runs, while `--list` prints the bare name. Both forms normalize to the bare
+/// name so saved results, skip patterns, and freshly discovered tests agree.
+fn canonical_test_name(name: &str) -> &str {
+    name.strip_suffix(" - should panic").unwrap_or(name)
 }
 
 /// Parses one line of `--list` output (`name: test`), dropping a `[kind]` label.
