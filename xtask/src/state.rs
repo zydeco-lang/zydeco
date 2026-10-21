@@ -436,6 +436,19 @@ impl Store {
     }
 }
 
+impl Drop for Store {
+    fn drop(&mut self) {
+        // Closing the handle releases the operating-system lock. The lock file
+        // itself stays in place on purpose: removing it would let a waiter that
+        // already opened the same inode and a fresh invocation that recreates
+        // the path each acquire what they believe is an exclusive lock.
+        // Clearing the recorded owner keeps a finished run from looking busy.
+        if let Some(lock) = &self._lock {
+            let _ = lock.set_len(0);
+        }
+    }
+}
+
 /// Reads the saved state, treating a missing or incompatible file as empty.
 fn load_state(path: &Path, key: RunKey) -> Result<ResumeState> {
     let state = match fs::read(path) {
@@ -782,5 +795,23 @@ mod tests {
         let serialized = serde_json::to_string(&key).expect("serialize key");
         assert!(!serialized.contains("environment"));
         assert!(serialized.contains("\"workspace_root\""));
+    }
+
+    #[test]
+    fn the_lock_file_stays_on_disk_but_is_empty_after_the_run() {
+        let temporary = tempfile::tempdir().expect("temp dir");
+        let root = temporary.path();
+        let target_dir = root.join("target");
+        let lock_path = {
+            let store = Store::open(&target_dir, fixture_key(root)).expect("open store");
+            let lock_path = store.paths.lock.clone();
+            assert!(
+                !fs::read(&lock_path).expect("read lock").is_empty(),
+                "an active run records its owner"
+            );
+            lock_path
+        };
+        assert!(lock_path.exists(), "the lock file is kept for stable inode locking");
+        assert!(fs::read(&lock_path).expect("read lock").is_empty());
     }
 }

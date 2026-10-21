@@ -85,6 +85,8 @@ Concurrent invocations that share saved results wait for each other:
 the second one prints a waiting notice and continues when the first finishes.
 `--status` only reads a snapshot, so it stays available while a run is active,
 and runs with different Cargo arguments or test selections use separate saved results and do not wait.
+The advisory lock file stays under `target/xtask/test-resume/` after a run,
+but the operating system releases the lock when the process exits.
 
 The saved identity covers the workspace, target directory, toolchain, Cargo arguments,
 and test selection, but not process environment variables.
