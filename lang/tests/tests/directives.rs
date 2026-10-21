@@ -1,6 +1,6 @@
-//! File-based standard-library tests driven by fixture directives.
+//! File-based tests driven by leading fixture directives.
 //!
-//! Discovery is dynamic: a `.zy` file under `lib/tests/std/` enters this runner
+//! Discovery is dynamic: a `.zy` file under a suite root enters this runner
 //! only when its leading directive block declares `-- stage: run`. Backends,
 //! arguments, input, expected output, and setup hooks come from the same block.
 
@@ -12,22 +12,32 @@ use zydeco_tests::utils::{
     CaseBackends, CaseDirective, CaseSetup, CaseStage, ExecutionTarget, SourceProgram,
 };
 
+/// Suite roots relative to `lib/` whose fixtures may declare directives.
+const ROOTS: &[&str] = &["tests/std", "tests/builtin", "tests/monadic"];
+
 fn main() {
     let arguments = Arguments::from_args();
     let lib = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../lib").canonicalize().unwrap();
-    let root = lib.join("tests/std");
-    let mut trials = WalkDir::new(&root)
-        .into_iter()
-        .map(|entry| {
-            entry.unwrap_or_else(|error| {
-                panic!("cannot walk standard library tests below {}: {error}", root.display())
+    let mut all_trials = Vec::new();
+    for root in ROOTS {
+        let suite = Path::new(root).file_name().unwrap().to_str().unwrap();
+        let directory = lib.join(root);
+        let suite_trials = WalkDir::new(&directory)
+            .into_iter()
+            .map(|entry| {
+                entry.unwrap_or_else(|error| {
+                    panic!("cannot walk {suite} fixtures below {}: {error}", directory.display())
+                })
             })
-        })
-        .filter(|entry| entry.path().extension().is_some_and(|extension| extension == "zy"))
-        .flat_map(|entry| trials(&root, &lib, entry.path()))
-        .collect::<Vec<_>>();
-    trials.push(coverage_trial(root.clone()));
-    run(&arguments, trials).exit();
+            .filter(|entry| entry.path().extension().is_some_and(|extension| extension == "zy"))
+            .flat_map(|entry| directive_trials(suite, &directory, &lib, entry.path()))
+            .collect::<Vec<_>>();
+        all_trials.extend(suite_trials);
+        if suite == "std" {
+            all_trials.push(coverage_trial(directory));
+        }
+    }
+    run(&arguments, all_trials).exit();
 }
 
 /// Every discovered standard-library test package must enter this runner.
@@ -81,10 +91,9 @@ fn coverage_trial(root: PathBuf) -> Trial {
     })
 }
 
-fn trials(root: &Path, lib: &Path, path: &Path) -> Vec<Trial> {
-    let source = std::fs::read_to_string(path).unwrap_or_else(|error| {
-        panic!("cannot read standard library test {}: {error}", path.display())
-    });
+fn directive_trials(suite: &str, root: &Path, lib: &Path, path: &Path) -> Vec<Trial> {
+    let source = std::fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("cannot read {suite} fixture {}: {error}", path.display()));
     if !declares_run(&source) {
         return Vec::new();
     }
@@ -93,25 +102,23 @@ fn trials(root: &Path, lib: &Path, path: &Path) -> Vec<Trial> {
         | Ok(directive) if directive.stage == CaseStage::Run => directive,
         | Ok(_) => {
             return vec![failing_trial(
-                format!("std/{name}"),
+                format!("{suite}/{name}"),
                 "`-- stage: run` must lead the directive block".to_owned(),
             )];
         }
         | Err(error) => {
             return vec![failing_trial(
-                format!("std/{name}"),
+                format!("{suite}/{name}"),
                 format!("invalid directives: {error}"),
             )];
         }
     };
-    let relative = path
-        .strip_prefix(lib)
-        .expect("discovered standard library tests live below lib")
-        .to_path_buf();
+    let relative =
+        path.strip_prefix(lib).expect("discovered fixtures live below lib").to_path_buf();
     backends(&directive)
         .into_iter()
         .map(|backend| {
-            trial(format!("std/{name}/{backend}"), relative.clone(), directive.clone(), backend)
+            trial(format!("{suite}/{name}/{backend}"), relative.clone(), directive.clone(), backend)
         })
         .collect()
 }

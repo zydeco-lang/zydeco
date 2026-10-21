@@ -29,5 +29,5 @@ name = "cases"
 harness = false
 
 [[test]]
-name = "std_directives"
+name = "directives"
 harness = false
