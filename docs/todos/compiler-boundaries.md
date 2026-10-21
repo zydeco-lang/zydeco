@@ -187,3 +187,23 @@ and accepted single-header counterparts as inline Rust sources.
 
 Preserve nested headers when flattening would extend a meta annotation's scope.
 Add a formatter round-trip regression for this pair.
+
+## Concrete payload annotations during package introduction
+
+Sealing in `pack` rewrites the disclosed witness's occurrences in the payload type
+into the abstract binder, so a payload that speaks only in concrete primitive types produces
+a witness-independent body ([L9](../references/language.md#9-polymorphism-and-packed-values);
+[Packed Value Introduction](../../DESIGN.md#packed-value-introduction) gives the mechanism account).
+The payload is checked against the disclosed witness, so an explicit annotation naming the abstract binder is accepted
+without abstracting the synthesized body.
+Rechecked with the debug CLI on 2026-10-20,
+`pack (X : VType) is Int where 0 : X end` synthesizes `exists (X : VType) . Int`,
+while an expected `exists (X : VType) . X` rejects with `tyck.type-mismatch`.
+The [2026-09-07 audit](../evaluations/2026-09-07-bug-hunt/README.md#documented-behavior-retained-from-the-audit)
+observed that this difference is not reported.
+
+- [ ] Retain both probes and decide whether a concrete exported body should warn about the annotation
+  or whether the expected-existential spelling needs clearer documentation.
+  Accepted dependent payload annotations must keep working,
+  so the [existential cases](../../lang/tests/cases/existential) establish intended uses.
+  Any semantic change belongs in the package-introduction account, not in this item.

@@ -8,7 +8,7 @@ Remove resolved entries once their repair and durable rationale have reached the
 - [Reference drift](reference-drift.md): remaining formal-calculus disagreements and duplicate documentation accounts.
 - [Compiler boundaries](compiler-boundaries.md): product inference, computation-witness diagnostics,
   higher-order value-function inference, source-load error locations, unsupported ZASM execution,
-  monadic closure validation, and partial-annotation scope during formatting.
+  monadic closure validation, partial-annotation scope during formatting, and package-introduction payload annotations.
 
 ## Next pass, reviewed 2026-09-14
 
@@ -31,6 +31,10 @@ Its focused Wasm build regression passes with `RUST_MIN_STACK` removed from the 
 the worker-stack implementation was still uncommitted at review time.
 A larger stack is a bounded mitigation; deep checker recursion, library/editor entry points,
 and [residual-code growth](../ideas/residual-code-sharing.md) remain separate questions.
+The 2026-09-07 audit's approximate host-stack failure thresholds and their platform dependence are retained
+in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#checker-host-stack); they were not rerun.
+A chosen strategy must cover CLI, REPL, and editor entry points rather than relying on a launcher's stack size,
+and its regressions should run in child processes so an abort cannot take down the test harness.
 
 ## Work that needs a new baseline
 
@@ -46,11 +50,36 @@ and [residual-code growth](../ideas/residual-code-sharing.md) remain separate qu
   [Semantic values](../../lang/dynamics/src/syntax.rs) still recursively own constructor payloads
   and product components; [environment lookup](../../lang/dynamics/src/eval.rs) clones them.
   Reproduce lookup cost and deep teardown separately before choosing shared or arena-owned storage.
+  The representation decision must cover destruction as well as lookup, including recursive destruction,
+  closure environments, and cycles; list construction and traversal regressions should keep repeated references
+  to one value and check deep-value teardown separately.
+  The 2026-09-07 audit's scaling and deep-teardown observations are retained
+  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#interpreter-value-lookup);
+  they describe `e00b91f0` and were not rerun.
 - Evaluate long-running host-resource retention
   under the current [runtime-instance lifetime](../references/compiler.md#runtime-instances)
   and [memory extension questions](../proposals/bytes.md#remaining-questions).
   Normal native entry teardown now releases its host resources; the older claim
   of permanently leaked `HostString::leak` allocations no longer describes that boundary.
+  Any reclamation account must preserve live aliases, host callbacks, and the borrowed buffers
+  of the [C FFI contract](../proposals/c-ffi.md), treat strings and bytes separately,
+  and start from allocation and reclamation accounting plus workloads whose live result stays bounded.
+  Historical RSS figures from `e00b91f0` are retained
+  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#long-running-host-retention)
+  as background for the long-running case, not as evidence about entry teardown;
+  allocator retention makes immediate RSS reduction an unreliable sole assertion.
+- Exercise product-suffix layouts through the backend boundary.
+  [ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes physical arity
+  from logical stack elements, so a final element may point into an existing product suffix
+  ([C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)).
+  Source lowering currently emits only full-arity layouts, leaving the suffix branches
+  in the [ZASM interpreter](../../lang/assembly/src/interp.rs) and [AMD64 emitter](../../lang/amd64/src/emit.rs)
+  without end-to-end coverage even though [GC regressions](../../lang/tests/tests/native_gc.rs) cover interior pointers.
+  Construct the layouts explicitly in backend regressions before adding a source producer: cover field order,
+  packing and unpacking, a suffix retained after its original pointer is dropped,
+  collection while that suffix is live, interpreter/native agreement, and the corresponding WebAssembly lowering.
+  The audit's code-inspection finding and limits are
+  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#product-suffix-layouts).
 
 ## Changes to earlier findings
 
@@ -62,11 +91,11 @@ closure conversion reuses its variable facts, and the selected-pass regressions 
 The shared CLI/test execution runner also replaces the earlier duplicated execution path.
 Further generic traversal machinery needs a demonstrated consumer.
 
-The [September 7 follow-up](../logs/2026-09-07-bug-hunt-follow-up.md) is historical:
-its six-open-findings count is not today's backlog.
-The raw `ArgumentFold` host-root mechanism is gone, and native strings have entry-owned teardown.
-Interpreter recursive cloning, long-running resource retention,
-and suffix-layout coverage still need their own evidence.
+The September 7 bug-hunt follow-up is historical: its status table describes `3d458223`, not today's backlog.
+The reported `ArgumentFold` host-root mechanism is gone, and native strings are released at normal entry teardown.
+Interpreter recursive cloning, checker host-stack depth, long-running host retention,
+and suffix-layout coverage remain tracked above and retain their historical limits
+in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md).
 
 ## Verification for this review
 

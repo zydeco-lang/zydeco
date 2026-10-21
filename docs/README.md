@@ -43,5 +43,5 @@ Choose the corresponding reference section or design record below.
 | Repair an observed disagreement or duplicated account | [Reference drift](todos/reference-drift.md) |
 
 Exploratory questions live in [design ideas](ideas/README.md) until they develop into concrete proposals.
-Scratch records under [logs](logs) are temporary: extract durable evidence into its owner before deleting the record.
+Scratch records are temporary: extract durable evidence into its owner before deleting the record.
 Completed consolidation plans and repair histories remain available in version history.

@@ -118,6 +118,17 @@ Write `((#x = 1) : (#x :: Int))` to annotate the whole named value; `(#x = 1 : I
 Metadata in a juxtaposed application argument also needs parentheses; backward application admits it
 as a full right operand.
 
+The `#` marker keeps a field name from reading as a binder.
+`=` already marks binding boundaries and both introduces and eliminates named components,
+while field names draw on the same lexical space as variables.
+Without a marker, a name on the left of `=` or `::` could be told apart as a field only by sort information.
+Marking exactly those positions leaves announced positions bare: projections and puns carry `/`
+or a leading `=`, so their field name is already identified.
+The marker also completes the role-sigil family with `+Ctor` and `.dtor`.
+Marking every field occurrence, including projection and pun positions, was rejected as redundant;
+a distinct field connective would split the connective family; `.field` would collide with destructor lexing;
+and restricting field names by case would break field puns, whose public name follows the payload's naming convention.
+
 ## 3. Bindings and Scope
 
 `param p in e` introduces a type or computation abstraction; `param val p in v` introduces a value function.

@@ -3,8 +3,7 @@
 [Cajun](cajun) is Zydeco's Language Server Protocol implementation.
 It provides live syntax and name-resolution diagnostics, document symbols,
 and definition and reference lookup across imported source files.
-Renaming a resolved symbol rewrites its definition and every resolved use across the same files,
-preserving the name's lexical class and refusing words reserved by the grammar.
+Symbol rename rewrites a resolved definition and its resolved uses across the same files.
 Hovering over a resolved name shows its inferred kind or type, with source links for referenced type names.
 Cajun also provides semantic tokens whose name classes are refined by Zydeco's resolver and CBPV type checker.
 Inside `@[...]` and `@(...)`, Cajun completes compiler-recognized metadata names, nested options,
@@ -26,6 +25,36 @@ Editor integrations live in:
 
 Both clients start the same `cajun` executable over standard input and output.
 The Zed integration can combine the Tree-sitter syntax tree with Cajun's semantic information.
+
+## Symbol Rename
+
+Rename covers the symbols that name resolution binds: `let`, `def`, and `param` binders,
+pattern variables, type aliases, and type parameters.
+Constructor, destructor, and field names resolve during type checking instead,
+so they have no scoped binder identity and are refused as unresolved.
+A conformance test pins that boundary by asserting a constructor occurrence is unresolved;
+extending occurrence coverage for those names would start from the statics arena's definition hints.
+
+A rename rewrites the same set as find-references with the declaration included:
+the resolved definition and every resolved use across the analyzed import closure.
+Edits are grouped per file and applied only after a revision-gated refresh,
+so a stale buffer cannot contribute half-rewritten occurrences.
+`prepareRename` returns the identifier's range and the definition's stored name as the editable placeholder.
+
+Replacement names are validated with the compiler's own lexical classifier rather
+than a duplicated identifier regex or keyword list.
+A replacement must lex as exactly one identifier of the original name's lexical class.
+Capitalization is load-bearing: upper-case identifiers name types and lower-case identifiers name terms,
+so a class change would leave the new name unresolved at its uses.
+Keywords, number-like spellings, and marker-prefixed forms such as `+Ctor`, `.dtor`,
+and `#field` are refused by the same rules the parser applies.
+Refusals are typed and surfaced as LSP `RequestFailed` (`-32803`) with a message clients display;
+an empty replacement is refused as well.
+
+Rename does not yet analyze capture or shadowing conflicts for the new name:
+a colliding in-scope binding could capture a rewritten use.
+The resolver's per-use contexts are not retained in a queryable form,
+so that check needs occurrence-side scope information first.
 
 ## Runtime configuration
 
