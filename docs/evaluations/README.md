@@ -24,3 +24,4 @@ in [ideas](../ideas/README.md).
 | 2026-09-14 | [Memory abstraction comparison](2026-09-14-memory-abstractions/README.md) | Raw, fixed-view, and header-view code sites, interpreter checks, and reproducible limits of erasure. |
 | 2026-09-15 | [Bounded raw memory kernels](2026-09-15-memory-kernels/README.md) | Raw wide-scalar load–arithmetic–store kernels, allocation sites, ordinary fallbacks, and execution checks. |
 | 2026-09-15 | [Typed fields and header-array updates](2026-09-15-typed-memory/README.md) | Independent storage/codecs, allocation-free local kernels, checked raw/typed header comparison, and remaining whole-path allocation sites. |
+| 2026-10-21 | [Cleanup audit](2026-10-21-cleanup-audit/README.md) | Test-only features, redundant mechanisms, dead code, and documentation overlap at `7e5ee4c1`, measured against the OOPSLA claims and the SPS paper's two calculi. |
