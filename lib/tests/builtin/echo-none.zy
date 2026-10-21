@@ -1,3 +1,7 @@
+-- stage: run
+-- backends: interpreter, exe
+-- input: "ignored\n"
+-- output: ""
 param (/stdio; /process) : @(import("../../std/builtin.zy")) in
 ! stdio/read_line {
   fn _ => ! process/exit 0

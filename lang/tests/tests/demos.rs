@@ -82,3 +82,6 @@ e2e_io_source!(
     "1 = sum\n3 = sum\n"
 );
 e2e_io_source!(algebra_exits_at_eof, "tests/demos/algebra.zydeco", "", "");
+
+// The configuration-free root program reports its declared status.
+e2e_io_source!(playground, "playground/main.zydeco", "", "", 42);

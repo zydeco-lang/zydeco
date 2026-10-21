@@ -1,3 +1,7 @@
+-- stage: run
+-- backends: interpreter, exe
+-- input: "captured\n"
+-- output: ""
 param (/stdio; /process; builtin) : @(import("../../std/builtin.zy")) in
 begin
   ! stdio/read_line {

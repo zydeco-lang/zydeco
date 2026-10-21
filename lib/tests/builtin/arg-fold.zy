@@ -1,3 +1,6 @@
+-- stage: run
+-- backends: interpreter, exe
+-- args: ["alpha", "beta"]
 param (/process; /text; builtin) : @(import(
   "../../std/builtin.zy"
 )) in

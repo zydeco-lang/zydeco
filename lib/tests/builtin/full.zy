@@ -1,4 +1,6 @@
--- Keep every projection: this fixture checks the complete Builtin signature and its witness roles.
+-- stage: run
+-- backends: interpreter, exe
+-- | Keep every projection: this fixture checks the complete Builtin signature and its witness roles.
 param (
   /VType; /CType; /Thk; /Ret; /Unit;
   /Reader; /Writer; /OS;

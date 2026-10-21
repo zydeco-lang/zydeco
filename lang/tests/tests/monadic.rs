@@ -19,5 +19,14 @@ e2e_io_source!(
     "\\^o^/\n\\^o^/\n\\^o^/\n\\^o^/\n"
 );
 
-// `algtrans`, `monadic-int`, and `monadic-ret` are driven by the session
-// crate's port tests, and `shadow.zy` by its basis-shadowing check.
+// `algtrans`, `monadic-int`, and `monadic-ret` run through the directive suite.
+// `shadow.zy` has no execution contract, so it is checked directly: the inner
+// basis must win over the outer one without changing the root's meaning.
+#[test]
+fn nested_monadic_block_resolves_the_nearest_basis() {
+    let root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/tests/monadic/shadow.zy");
+    let compiler = zydeco_cli::CommandCompiler::default();
+    let analysis = compiler.analyze(&root).expect("the shadowing fixture loads");
+    compiler.checked_program(&analysis).expect("the shadowing fixture checks");
+}
