@@ -492,3 +492,56 @@ After this record was written, the implicit-prelude migration landed as `1cb3ab8
 including the `env!` prelude lookup noted as in progress.
 The measurements and the reproduction still describe `7e5ee4c1`; run the script on the clean extraction,
 because a working tree adds build artifacts and later sources to the scan.
+
+## Dispositions
+
+The repository kept or changed these tooling findings after the verification pass:
+
+- **Test runner.** `cargo test-resume` is retained.
+  It is documented in AGENTS.md and CONTRIBUTING.md, and it provides resume semantics that nextest does not;
+  the finding that CI does not use it stands, but removal was declined.
+- **Generated artifacts and editors.** The tracked shell completions and the tree-sitter parser are retained.
+  The CI workflow now verifies that `cli/completions` matches the CLI definition,
+  and the existing tree-sitter job already verifies its generated parser.
+  Dropping or merging an editor client was not attempted.
+- **Formatter options.** `width`, `indent`, `layout`, and `parentheses` are retained and documented
+  in the compiler reference as reserved options for downstream code; removing them would change approved surface syntax.
+- **Session test pipeline.** Whole-program cases moved to the shared test suites:
+  directive-driven fixtures for the builtin and monadic suites, the existing demo and standard-library suites,
+  and direct checks where a program has no execution contract.
+  Source-graph, loader, overlay, span, and arena assertions remain in the session crate,
+  so the pipeline now serves only crate-internal cases.
+- **Docs-dependent test.** `cli/tests/passes.rs` now reads fixtures under `cli/tests/fixtures/` instead
+  of sources under `docs/evaluations/`, keeping the evaluation record's evidence out of the test path.
+
+## SPS yardstick revision
+
+The audit measured the repository against the OOPSLA claims alone, but the next paper concerns stack-passing style,
+and `lang/stackir` implements its two main calculi.
+This revision compared the paper's SPS and `SPS_l` and its implementation claims with the code at `7e5ee4c1`.
+The compiled-path crates and the compiler reference's C1, C8, and C9 are unchanged from there through `7fe0caed`.
+The revision re-scoped these statements in place:
+
+- The [yardstick](#yardstick) gained an SPS half: SPS realized by high SPS in the branch-join fragment,
+  `SPS_l` realized by SPSLow, and the compiled path that the paper's implementation claim covers.
+- The [backend translation validators](#backend-translation-validators) became a choice
+  about checking `SPS_l` instead of removable scaffolding, and the deletion estimate now notes
+  that high lowering takes its destructor tags from the protocol extraction.
+- The [pass-framework finding](#pass-framework-for-one-pass) names the paper's before-and-after evidence
+  as a client of the normalization switch and dump option, and states when the plan catalog would gain clients.
+- The [systems-programming](#systems-programming-thread)
+  and [backend-scope](#backend-scope) findings note how each bears on the two IRs.
+- [Where the weight is](#where-the-weight-is) adds measured figures for the paper's executable path
+  and for `lang/stackir`.
+- The recurring pattern, the convention, the parallel visitors, the retained list, the suggested order,
+  and the limits reflect both halves of the yardstick.
+- The documentation findings record that no reference or guide states which calculus each IR realizes.
+
+The other findings concern the front end, the checker, tooling, the standard library,
+and backend mechanisms below `SPS_l` that the paper's claims do not name, such as representation policies
+and frame environments; the revision found no client for them in the paper.
+
+The compiler reference then gained the correspondence in [C8](../../references/compiler.md#correspondence-with-sps)
+and [C9](../../references/compiler.md#correspondence-with-sps_l), and the stack IR guide now points there,
+which resolves the documentation finding.
+
