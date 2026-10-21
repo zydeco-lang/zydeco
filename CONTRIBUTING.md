@@ -86,6 +86,11 @@ the second one prints a waiting notice and continues when the first finishes.
 `--status` only reads a snapshot, so it stays available while a run is active,
 and runs with different Cargo arguments or test selections use separate saved results and do not wait.
 
+The saved identity covers the toolchain, Cargo arguments, and test selection.
+It does not track the shell lookup path (`PATH`) or the `NODE` override for external tools,
+so switching the Node.js binary or C compiler through the environment keeps the saved results;
+rerun with `--force` if test behaviour changes after such a switch.
+
 Saved passes are reused even when the build changed.
 That keeps the fix-and-rerun loop short but can hide a regression in a test that already passed.
 Validate the final state with `cargo test-all --release` (or `cargo test-resume --force`);

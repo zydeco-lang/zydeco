@@ -22,8 +22,14 @@ const TEST_INPUT_DIRECTORIES: &[&str] =
 /// Individual files outside [`TEST_INPUT_DIRECTORIES`] that tests consume.
 const TEST_INPUT_FILES: &[&str] = &["workspace.zy"];
 
-/// Environment variables that can change how tests execute.
-const ENVIRONMENT_KEYS: &[&str] = &["NODE", "PATH", "RUSTFLAGS", "RUST_MIN_STACK"];
+/// Environment variables that belong to the run identity.
+///
+/// Shell tool lookup (`PATH`) and the Node.js override (`NODE`) are left out:
+/// they change between terminal sessions for cosmetic reasons and are assumed
+/// not to alter test outcomes. External tool changes are validated with
+/// `--force` instead. `RUSTFLAGS` changes compiled code and `RUST_MIN_STACK`
+/// changes test stacks, so both remain part of the identity.
+const ENVIRONMENT_KEYS: &[&str] = &["RUSTFLAGS", "RUST_MIN_STACK"];
 
 /// Outcome recorded for one test.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,7 +120,7 @@ impl TargetRecord {
 }
 
 /// Everything that defines one resumable run: a different toolchain, build
-/// configuration, environment, or test selection gets its own saved results.
+/// configuration, execution stack, or test selection gets its own saved results.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunKey {
     pub workspace_root: String,
@@ -769,5 +775,20 @@ mod tests {
         );
         drop(store);
         assert!(fs::read(&journal_path).expect("read journal").is_empty());
+    }
+
+    #[test]
+    fn the_resume_key_ignores_shell_tool_paths() {
+        let key = RunKey::new(
+            Path::new("/workspace"),
+            Path::new("/workspace/target"),
+            "toolchain",
+            &[],
+            &[],
+        );
+        assert!(!key.environment.contains_key("PATH"));
+        assert!(!key.environment.contains_key("NODE"));
+        assert!(key.environment.contains_key("RUSTFLAGS"));
+        assert!(key.environment.contains_key("RUST_MIN_STACK"));
     }
 }
