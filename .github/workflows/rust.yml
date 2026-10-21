@@ -58,6 +58,8 @@ jobs:
       run: cargo test-all --release --verbose
     - name: Run Doc Tests
       run: cargo test-doc-all --release --verbose
+    - name: Check generated completions are current
+      run: git diff --exit-code -- cli/completions
 
   tree-sitter:
 
