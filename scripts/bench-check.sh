@@ -15,7 +15,7 @@ cargo build --release --quiet --bin zydeco
 
 files=(
     lib/std/std.zy
-    lib/tests/oopsla/migrated/core.zy
+    lib/tests/oopsla/core.zydeco
     lib/tests/monadic/shadow.zy
     lib/tests/delimcc/try-catch.zy
 )

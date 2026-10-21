@@ -31,6 +31,6 @@ demo run lib/tests/oopsla/monads.zydeco "prints \"Hello, world!\" and then exits
 demo run lib/tests/oopsla/exn.zydeco "prints \"2 != 1\" and then exits with code 0"
 demo run lib/tests/oopsla/free.zydeco "reads a line from stdin, prints it, and then exits with code 0"
 demo check lib/tests/oopsla/algebra.zydeco "checks successfully and then exits with code 0"
-demo check lib/tests/oopsla/exnt.zydeco "checks successfully and then exits with code 0"
-demo check lib/tests/oopsla/exnkt.zydeco "checks successfully and then exits with code 0"
+demo check lib/tests/oopsla/exnt.zydeco "prints the original and generated code and then exits with code 0"
+demo check lib/tests/oopsla/exnkt.zydeco "prints the original and generated code and then exits with code 0"
 echo "Demo ends here."

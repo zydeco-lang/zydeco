@@ -217,7 +217,7 @@ A few crucial primitive functions related to the `OS` type are:
 To demonstrate that Zydeco is usable as a functional programming language,
 we provide a Rust implementation of a System-Fω-style type checker for Zydeco, a small-step interpreter,
 native-code backends, and a minimal [`standard library`](../../std).
-The migrated [`core.zydeco`](core.zydeco) preserves the artifact-facing names.
+The compatibility [`core.zydeco`](core.zydeco) preserves the artifact-facing names.
 
 The implementation of Zydeco is located in the [`lang`](../../../lang) directory in a modularized manner.
 Among all components, the most crucial modules are:
@@ -338,7 +338,7 @@ in the source code of this example, which demonstrates a general pattern that re
 
 In Section 4 of the paper, we demonstrated how to define relative monads in Zydeco.
 The current relative-monad interface is defined in [`lib/std/effect/monad.zy`](../../std/effect/monad.zy),
-while the migrated artifact encoding remains in [`core.zydeco`](core.zydeco).
+while the artifact encoding remains in [`core.zydeco`](core.zydeco).
 Three exception monads are defined in [`exn.zydeco`](exn.zydeco).
 Furthermore, common data structures that are relative monads are defined in [`monads.zydeco`](monads.zydeco).
 And finally, the free monad is defined in [`free.zydeco`](free.zydeco).
@@ -388,7 +388,7 @@ from user-implemented relative monads in Zydeco.
 #### Algebras of Relative Monads
 
 The definition of algebras of relative monads is shown in Definition 5.1.
-The migrated artifact interface is defined in [`core.zydeco`](core.zydeco) as follows:
+The artifact interface is defined in [`core.zydeco`](core.zydeco) as follows:
 
 ```zydeco
 alias Algebra (M: VType -> CType) (R: CType) : CType =
@@ -397,7 +397,7 @@ end
 ```
 
 In the paper, we claimed that the algebras of relative monads extend to all types (constructors).
-The migrated [`algebra.zydeco`](algebra.zydeco) fixture implements the crucial algebras listed in Section 5.1.
+The [`algebra.zydeco`](algebra.zydeco) fixture implements the crucial algebras listed in Section 5.1.
 Later on we'll demonstrate a systematic approach to derive algebras of relative monads
 in the [Algebra Translation](#algebra-translation) section.
 
@@ -528,7 +528,7 @@ Without this convenience, we would have to inline the definition of the monad in
 
 #### Deriving Relative Monad Transformers
 
-The migrated [`exnt.zydeco`](exnt.zydeco) and [`exnkt.zydeco`](exnkt.zydeco) fixtures contain generated
+The [`exnt.zydeco`](exnt.zydeco) and [`exnkt.zydeco`](exnkt.zydeco) fixtures contain generated
 and manual transformer implementations for the `Exn` and `ExnK` monads.
 The `@[debug(...)]` macros print the generated code during type checking so it can be compared
 with the manual implementations.
@@ -539,7 +539,7 @@ with the manual implementations.
 The artifact is designed to be reusable by other researchers and practitioners.
 Overall, it contains the following components:
 + The source code of `zydeco` can be compiled to interpret Zydeco programs and perform algebra translation.
-+ The migrated `core.zydeco` and `data.zydeco` files preserve the artifact's compact compatibility library.
++ The `core.zydeco` and `data.zydeco` files preserve the artifact's compact compatibility library.
 + Examples listed under [`lib`](../../) can be used as references to understand the implementation of Zydeco.
   They are also a good starting point to write new Zydeco programs, either as a library or as a starting point
   for standalone executables.

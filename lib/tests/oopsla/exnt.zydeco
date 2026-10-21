@@ -123,9 +123,14 @@ begin
     --| be used for all relative monads.
     def ! mt_exn (E : VType) : MonadTrans (ExnT E) =
       let ! mt' (M : VType -> CType) (mo : Thk (Monad M)) =
+        -- The @[debug(...)] macro prints the terms and their types during
+        -- type checking, exposing both the original monadic block and the term
+        -- the algebra translation produces from it.
+        @[debug("generated and applied")]
         (
           @[monadic] (
             fn (E : VType) =>
+              @[debug("original")]
               let ! mo_exn (E : VType) : Monad (Exn E) =
                 comatch
                 | .return A a => ret +Right(a)
