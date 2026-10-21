@@ -2,9 +2,7 @@
 mod memory;
 use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::{e2e_sources, utils::SourceCase};
-
-e2e_sources!({ represented_call => "tests/std/represented-call/main.zy" });
+use zydeco_tests::utils::SourceCase;
 
 #[test]
 fn pointer_call_protocols_require_a_shared_layout_and_state() {

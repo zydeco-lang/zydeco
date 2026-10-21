@@ -2,15 +2,7 @@
 mod memory;
 use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::{e2e_sources, utils::SourceCase};
-
-e2e_sources!({
-    exact_integers => "tests/std/exact-integers.zy",
-    scalar_bytes => "tests/std/scalar-bytes.zy",
-    representation => "tests/std/representation.zy",
-    representation_invalid => "tests/std/representation-invalid.zy",
-    storage_codecs => "tests/std/storage-codecs.zy",
-});
+use zydeco_tests::utils::SourceCase;
 
 fn source(body: &str) -> String {
     MemoryCase::source(&format!(

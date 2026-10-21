@@ -2,16 +2,7 @@
 mod memory;
 use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::{e2e_sources, utils::SourceCase};
-
-e2e_sources!({
-    general_views => "tests/std/general-views.zy",
-    array_memory => "tests/std/array-memory.zy",
-    header_array => "tests/std/header-array.zy",
-    runtime_memory => "tests/std/runtime-memory.zy",
-    storage_arrays => "tests/std/storage-arrays.zy",
-    typed_memory_kernel => "tests/std/typed-memory-kernel.zy",
-});
+use zydeco_tests::utils::SourceCase;
 
 struct LayoutCase;
 

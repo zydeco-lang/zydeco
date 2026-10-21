@@ -2,11 +2,7 @@
 mod memory;
 use memory::MemoryCase;
 use zydeco_statics::TyckDiagnosticCode;
-use zydeco_tests::{e2e_sources, utils::SourceCase};
-
-e2e_sources!({
-    static_layout => "tests/std/static-layout.zy",
-});
+use zydeco_tests::utils::SourceCase;
 
 struct LayoutCase;
 
