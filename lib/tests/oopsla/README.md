@@ -84,23 +84,19 @@ The maintained programs are complete, declaration-free source terms beside this 
 | ExnT | [`exnt.zydeco`](exnt.zydeco) |
 | ExnKT | [`exnkt.zydeco`](exnkt.zydeco) |
 
-We provide an interactive script to run the maintained terms.
+We provide an interactive script that exercises the maintained terms.
 From the repository root, run:
 
 ```sh
-./run.sh
+./lib/tests/oopsla/run.sh
 ```
 
-Alternatively, run any source path directly:
-
-```sh
-zydeco run <path-to-source-term>
-```
-
-For example:
+Alternatively, invoke the CLI on a source path directly.
+Executable terms use `run`, while library terms such as `exnt.zydeco` use `check`:
 
 ```sh
 zydeco run lib/tests/oopsla/polynomial.zydeco
+zydeco check lib/tests/oopsla/exnt.zydeco
 ```
 
 
@@ -232,7 +228,9 @@ Among all components, the most crucial modules are:
 + `lang/statics`: implements the static semantics of Zydeco with a type checker;
   the monadic blocks are implemented as a type-directed source-to-source translation during type checking
 + `lang/dynamics`: implements the operational semantics of Zydeco with a small-step interpreter
-+ `lang/driver`: includes utilities for simple Zydeco package management and driver for the pipeline
++ `lang/stackir` and `lang/assembly`: lower checked programs through Stack IR and ZASM before emitting native code
++ `lang/session`: loads the source graph and owns the revisioned compiler session shared by the CLI, TUI, and Cajun
++ `cli`: the `zydeco` command-line interface for checking, executing, and compiling source terms
 
 
 ### Programming with the Stack in Call-by-Push-Value
