@@ -8,6 +8,10 @@ Results describe the measured revisions; they do not establish a current perform
 Each study lives in a `YYYY-MM-DD-topic/` directory, with its report in `README.md` beside its evidence files,
 reproduction scripts, and study-only supporting sources.
 Keep original measurements and manifests intact, including recorded commands, paths, and source hashes.
+Reusable measurement tooling remains beside the code it exercises,
+such as the [pipeline comparison](../../cli/examples/pipelines.rs)
+and the [representation comparison](../../cli/examples/representations.rs);
+this directory keeps only the dated runs, evidence, and reproduction instructions.
 The [references](../references/README.md) own current contracts and settled design rationale;
 concrete unfinished designs belong in [proposals](../proposals/README.md) and open conceptual questions
 in [ideas](../ideas/README.md).
