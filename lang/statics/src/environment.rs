@@ -401,7 +401,8 @@ impl TyEnvInterner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zydeco_utils::arena::{DerivationFamily, KeySpaceId, derived_id};
+    use crate::alloc::DerivationFamily;
+    use zydeco_utils::arena::{KeySpaceId, derived_id};
 
     fn def(slot: u32) -> DefId {
         derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 0, 0), slot)

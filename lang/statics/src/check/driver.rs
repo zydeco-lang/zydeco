@@ -1,13 +1,13 @@
 //! Checker lifecycle, allocation sites, finalization, and diagnostic guards.
 
 use super::*;
+use crate::alloc::DerivationFamily;
 use crate::check::judgment::Action;
 use crate::check::projection::DeferredEnvMaterializationCache;
 use crate::check::source::{
     CheckedSource, CheckedTermRepository, InferenceRegion, RejectedSource, SourceCheckOutcome,
     TyckDiagnostics, TyckObservation,
 };
-use zydeco_utils::arena::DerivationFamily;
 
 impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.

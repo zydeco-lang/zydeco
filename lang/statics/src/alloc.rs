@@ -4,7 +4,28 @@
 //! which provides a type-safe approach to allocate in a post-type-check arena.
 
 use crate::*;
-use zydeco_utils::arena::{ArenaId, DerivationFamily, KeySpaceId, derived_id};
+use zydeco_utils::arena::{ArenaId, DerivationDomain, KeySpaceId, derived_id};
+
+/// Allocation families owned by static checking and its query producers.
+///
+/// The [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
+/// describes the derivation scheme and its collision limits.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub(crate) enum DerivationFamily {
+    /// Intermediate nodes allocated by the mutable type checker.
+    Checker,
+    /// Producer nodes, including IDs issued without retaining a Salsa query.
+    Query,
+}
+
+impl DerivationDomain for DerivationFamily {
+    fn tag(self) -> u64 {
+        match self {
+            | Self::Checker => u64::from_be_bytes(*b"ZYDECOQU"),
+            | Self::Query => u64::from_be_bytes(*b"ZYQUERY!"),
+        }
+    }
+}
 
 /// Issuer of derived identifiers for query-friendly type checking.
 ///
@@ -587,6 +608,27 @@ AllocComputation! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn derivation_families_preserve_existing_key_spaces() {
+        let sites = [(0, 0, 0), (7, 42, 0), (u64::MAX, u32::MAX, u32::MAX)];
+        // Captured from the numeric-tag implementation before introducing families.
+        for (family, expected) in [
+            (
+                DerivationFamily::Checker,
+                [0xB193_A592_87A0_44C2, 0x7FDD_5A6F_0352_3980, 0x476A_298F_AE64_1563],
+            ),
+            (
+                DerivationFamily::Query,
+                [0xA737_660A_18FC_1300, 0x6232_716A_F6F9_3729, 0x873D_FA8A_5F50_5129],
+            ),
+        ] {
+            let actual = sites.map(|(space, raw, occurrence)| {
+                KeySpaceId::derive(family, space, raw, occurrence).as_u64()
+            });
+            assert_eq!(actual, expected, "the {family:?} encoding preserves issued key spaces");
+        }
+    }
 
     #[test]
     fn nested_sites_resume_checker_slots_and_replay_identifiers() {

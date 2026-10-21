@@ -5,6 +5,7 @@
 //! live in `input`. Public query names are exported at this boundary.
 
 use crate::TyEnv;
+use crate::alloc::DerivationFamily;
 use crate::check::{
     CheckedSource, CompletionTyping, KontFailure, RejectedSource, SourceCheckOutcome, Tycker,
 };
@@ -12,7 +13,7 @@ use crate::surface_syntax as su;
 use crate::syntax as ss;
 use zydeco_surface::arena::ArenaId;
 use zydeco_utils::arena::ArenaAccess;
-use zydeco_utils::arena::{DerivationFamily, KeySpaceId, derived_id};
+use zydeco_utils::arena::{KeySpaceId, derived_id};
 
 mod input;
 pub use input::*;

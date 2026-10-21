@@ -28,26 +28,17 @@ pub trait ArenaId: Copy + Eq + Hash {
 
 /* ------------------------------ IdAllocator ------------------------------- */
 
-/// Allocation family used when deriving an arena key space.
+/// Caller-defined domain for deterministic key-space derivation.
 ///
-/// Keep families explicit at call sites and their numeric encoding private.
+/// Implement this trait on the caller's allocation-family type. Each family
+/// must have a stable tag, with distinct tags for distinct families even when
+/// they use different Rust types; the type itself is not a derivation input.
+/// Tags distinguish derivation inputs, not collision-free numeric ranges.
 /// The [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
 /// describes the derivation scheme and its collision limits.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum DerivationFamily {
-    /// Intermediate nodes allocated by the mutable type checker.
-    Checker,
-    /// Producer nodes, including IDs issued without retaining a Salsa query.
-    Query,
-}
-
-impl DerivationFamily {
-    const fn tag(self) -> u64 {
-        match self {
-            | Self::Checker => u64::from_be_bytes(*b"ZYDECOQU"),
-            | Self::Query => u64::from_be_bytes(*b"ZYQUERY!"),
-        }
-    }
+pub trait DerivationDomain {
+    /// The stable numeric encoding of this derivation domain.
+    fn tag(self) -> u64;
 }
 
 /// Opaque identity domain for arena IDs.
@@ -73,31 +64,35 @@ impl KeySpaceId {
 
     /// Derive a deterministic key space for one allocation site.
     ///
-    /// Query-based passes derive their fresh identifiers from the full identity
-    /// of the source entity — `(entity_space, entity_raw)` — plus `occurrence`,
-    /// the number of earlier checks of that entity. Re-executing a query
-    /// reproduces the same identifiers without a shared cursor. The family
-    /// selects the allocation mechanism; it does not guarantee collision-free
-    /// key spaces. See the
+    /// The full entity identity — `(entity_space, entity_raw)` — and an
+    /// occurrence distinguish repeated derivations at the same entity.
+    /// Reusing the same inputs reproduces the same identifiers without a shared
+    /// cursor. The caller supplies its own domain; this does not guarantee
+    /// collision-free key spaces. See the
     /// [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
     /// for the derivation scheme.
     ///
     /// ```
-    /// use zydeco_utils::arena::{DerivationFamily, KeySpaceId};
+    /// use zydeco_utils::arena::{DerivationDomain, KeySpaceId};
     ///
-    /// let site = KeySpaceId::derive(DerivationFamily::Checker, 7, 42, 0);
-    /// assert_eq!(site, KeySpaceId::derive(DerivationFamily::Checker, 7, 42, 0));
+    /// struct ExampleDomain;
+    /// impl DerivationDomain for ExampleDomain {
+    ///     fn tag(self) -> u64 { 1 }
+    /// }
+    ///
+    /// let site = KeySpaceId::derive(ExampleDomain, 7, 42, 0);
+    /// assert_eq!(site, KeySpaceId::derive(ExampleDomain, 7, 42, 0));
     /// ```
     ///
-    /// Arbitrary numeric tags are not allocation families:
+    /// Bare numeric tags do not implement the domain contract:
     ///
-    /// ```compile_fail,E0308
+    /// ```compile_fail,E0277
     /// use zydeco_utils::arena::KeySpaceId;
     ///
-    /// let site = KeySpaceId::derive(0x5A59_4445_434F_5155_u64, 7, 42, 0);
+    /// let site = KeySpaceId::derive(1_u64, 7, 42, 0);
     /// ```
     pub fn derive(
-        family: DerivationFamily, entity_space: u64, entity_raw: u32, occurrence: u32,
+        domain: impl DerivationDomain, entity_space: u64, entity_raw: u32, occurrence: u32,
     ) -> KeySpaceId {
         fn mix(mut hash: u64) -> u64 {
             hash ^= hash >> 33;
@@ -108,7 +103,7 @@ impl KeySpaceId {
             hash
         }
         let derived =
-            mix(mix(mix(family.tag() ^ entity_space) ^ u64::from(entity_raw))
+            mix(mix(mix(domain.tag() ^ entity_space) ^ u64::from(entity_raw))
                 ^ u64::from(occurrence));
         KeySpaceId(
             NonZeroU64::new(derived)
@@ -1525,6 +1520,14 @@ mod tests {
     use super::*;
     use std::panic::{AssertUnwindSafe, catch_unwind};
 
+    struct StorageTestDomain;
+
+    impl DerivationDomain for StorageTestDomain {
+        fn tag(self) -> u64 {
+            1
+        }
+    }
+
     crate::new_key_type! {
         struct DenseId;
         struct SparseId;
@@ -1560,8 +1563,7 @@ mod tests {
 
     #[test]
     fn generated_ids_store_key_space_and_raw_slot_without_tail_padding() {
-        let key_space =
-            KeySpaceId::derive(DerivationFamily::Checker, u64::MAX - 1, u32::MAX - 1, u32::MAX);
+        let key_space = KeySpaceId::derive(StorageTestDomain, u64::MAX - 1, u32::MAX - 1, u32::MAX);
         let id: DenseId = derived_id(key_space, u32::MAX);
         let below_word_boundary = KeySpaceId(NonZeroU64::new(u64::from(u32::MAX)).unwrap());
         let above_word_boundary = KeySpaceId(NonZeroU64::new(1_u64 << 32).unwrap());
@@ -1633,13 +1635,13 @@ mod tests {
 
     #[test]
     fn indexed_storage_keeps_sparse_identity_and_dense_payloads() {
-        let left_space = KeySpaceId::derive(DerivationFamily::Checker, 2, 3, 6);
-        let right_space = KeySpaceId::derive(DerivationFamily::Checker, 6, 7, 10);
+        let left_space = KeySpaceId::derive(StorageTestDomain, 2, 3, 6);
+        let right_space = KeySpaceId::derive(StorageTestDomain, 6, 7, 10);
         let left_first = derived_id::<SparseId>(left_space, 0);
         let left_gap = derived_id::<SparseId>(left_space, 95);
         let right_first = derived_id::<SparseId>(right_space, 0);
         let generated =
-            derived_id::<SparseId>(KeySpaceId::derive(DerivationFamily::Checker, 10, 11, 14), 0);
+            derived_id::<SparseId>(KeySpaceId::derive(StorageTestDomain, 10, 11, 14), 0);
         let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
 
         arena.reserve_ids_with_additional(
@@ -1668,7 +1670,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "duplicate key in paged associative arena")]
     fn indexed_storage_rejects_duplicate_ids_without_appending_payloads() {
-        let id = derived_id::<SparseId>(KeySpaceId::derive(DerivationFamily::Checker, 1, 1, 2), 0);
+        let id = derived_id::<SparseId>(KeySpaceId::derive(StorageTestDomain, 1, 1, 2), 0);
         let mut arena = ArenaIndexed::<TestScope, SparseId>::new();
         arena.insert_new(id, "first");
         arena.insert_new(id, "second");
@@ -1676,7 +1678,7 @@ mod tests {
 
     #[test]
     fn paged_associations_preserve_sparse_gaps() {
-        let space = KeySpaceId::derive(DerivationFamily::Checker, 10, 11, 12);
+        let space = KeySpaceId::derive(StorageTestDomain, 10, 11, 12);
         let first = derived_id::<SparseId>(space, 1);
         let second = derived_id::<SparseId>(space, 4);
         let mut arena = ArenaPagedAssoc::new();
@@ -1693,7 +1695,7 @@ mod tests {
 
     #[test]
     fn paged_associations_use_known_id_extents_without_growth_slack() {
-        let space = KeySpaceId::derive(DerivationFamily::Checker, 10, 11, 13);
+        let space = KeySpaceId::derive(StorageTestDomain, 10, 11, 13);
         let first = derived_id::<SparseId>(space, 0);
         let last = derived_id::<SparseId>(space, 95);
         let mut arena = ArenaPagedAssoc::new();
@@ -1775,48 +1777,42 @@ mod tests {
 
 #[cfg(test)]
 mod derived_id_tests {
-    use super::{ArenaId, DerivationFamily, KeySpaceId, derived_id};
+    use super::{ArenaId, DerivationDomain, KeySpaceId, derived_id};
+
+    #[derive(Copy, Clone)]
+    enum TestDomain {
+        First,
+        Second,
+    }
+
+    impl DerivationDomain for TestDomain {
+        fn tag(self) -> u64 {
+            match self {
+                | Self::First => 1,
+                | Self::Second => 2,
+            }
+        }
+    }
 
     new_key_type! { struct DerivedTestId; }
 
     #[test]
-    fn derivation_families_preserve_existing_key_spaces() {
-        let sites = [(0, 0, 0), (7, 42, 0), (u64::MAX, u32::MAX, u32::MAX)];
-        // Captured from the numeric-tag implementation before introducing families.
-        for (family, expected) in [
-            (
-                DerivationFamily::Checker,
-                [0xB193_A592_87A0_44C2, 0x7FDD_5A6F_0352_3980, 0x476A_298F_AE64_1563],
-            ),
-            (
-                DerivationFamily::Query,
-                [0xA737_660A_18FC_1300, 0x6232_716A_F6F9_3729, 0x873D_FA8A_5F50_5129],
-            ),
-        ] {
-            let actual = sites.map(|(space, raw, occurrence)| {
-                KeySpaceId::derive(family, space, raw, occurrence).as_u64()
-            });
-            assert_eq!(actual, expected, "the {family:?} encoding preserves issued key spaces");
-        }
-    }
-
-    #[test]
-    fn sample_sites_distinguish_families_and_entity_identity() {
-        for family in [DerivationFamily::Checker, DerivationFamily::Query] {
-            let site = KeySpaceId::derive(family, 7, 42, 0);
-            assert_ne!(site, KeySpaceId::derive(family, 8, 42, 0));
-            assert_ne!(site, KeySpaceId::derive(family, 7, 43, 0));
+    fn sample_sites_distinguish_caller_domains_and_entity_identity() {
+        for domain in [TestDomain::First, TestDomain::Second] {
+            let site = KeySpaceId::derive(domain, 7, 42, 0);
+            assert_ne!(site, KeySpaceId::derive(domain, 8, 42, 0));
+            assert_ne!(site, KeySpaceId::derive(domain, 7, 43, 0));
         }
         assert_ne!(
-            KeySpaceId::derive(DerivationFamily::Checker, 7, 42, 0),
-            KeySpaceId::derive(DerivationFamily::Query, 7, 42, 0),
+            KeySpaceId::derive(TestDomain::First, 7, 42, 0),
+            KeySpaceId::derive(TestDomain::Second, 7, 42, 0),
         );
     }
 
     #[test]
     fn derived_ids_replay_sites_and_distinguish_sample_occurrences_and_slots() {
-        let site_a = KeySpaceId::derive(DerivationFamily::Checker, 7, 42, 0);
-        let site_b = KeySpaceId::derive(DerivationFamily::Checker, 7, 42, 1);
+        let site_a = KeySpaceId::derive(TestDomain::First, 7, 42, 0);
+        let site_b = KeySpaceId::derive(TestDomain::First, 7, 42, 1);
         let id_a0: DerivedTestId = derived_id(site_a, 0);
         let id_a1: DerivedTestId = derived_id(site_a, 1);
         let id_b0: DerivedTestId = derived_id(site_b, 0);
@@ -1827,7 +1823,7 @@ mod derived_id_tests {
         assert_eq!(id_a0.raw().into_u32(), 0);
         assert_eq!(
             id_a0,
-            derived_id(KeySpaceId::derive(DerivationFamily::Checker, 7, 42, 0), 0),
+            derived_id(KeySpaceId::derive(TestDomain::First, 7, 42, 0), 0),
             "re-deriving a site reproduces its identifiers",
         );
         assert_ne!(id_a0.concise(), id_a1.concise(), "concise forms distinguish slots");
