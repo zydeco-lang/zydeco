@@ -45,7 +45,7 @@ pub fn pi_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     match input.arm(db) {
         | PiSynArm::KindArrow { kd_1, kd_2 } => {
             let id: ss::KindId = derived_id(key_space, 0);
@@ -155,7 +155,7 @@ pub fn abs_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     let ctype = |db: &dyn TyckDb, data: ScopedData<'_>| {
         let key = InternedIntrinsic::new(db, IntrinsicKey::CType);
         let IntrinsicSingleton::Kind { id, .. } = intrinsic_singleton(db, data, key) else {
@@ -272,8 +272,12 @@ pub fn pack_pi_intro_judgment<'db>(
         };
         id
     };
-    let key_space =
-        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
+    let key_space = KeySpaceId::derive(
+        DerivationFamily::Query,
+        site.space(db),
+        site.raw(db),
+        site.occurrence(db),
+    );
     let sig_id: ss::TypeId = derived_id(key_space, 0);
     let abs_id: ss::CompuId = derived_id(key_space, 1);
     Some(PackPiIntroOutcome {

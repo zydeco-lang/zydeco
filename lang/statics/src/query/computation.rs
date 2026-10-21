@@ -43,7 +43,7 @@ pub fn thunk_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     let thk_ty_id: ss::TypeId = derived_id(key_space, 0);
     let thunk_id: ss::ValueId = derived_id(key_space, 1);
     Some(ThunkSynOutcome {
@@ -96,7 +96,7 @@ pub fn ret_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     let ret_ty_id: ss::TypeId = derived_id(key_space, 0);
     let ret_id: ss::CompuId = derived_id(key_space, 1);
     Some(RetSynOutcome {
@@ -138,8 +138,10 @@ pub fn force_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::CompuId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     Some(ForceSynOutcome {
         id,
         compu: ss::Computation::Force(ss::Force(input.body(db))),
@@ -179,8 +181,10 @@ pub fn do_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::CompuId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     Some(DoSynOutcome {
         id,
         compu: ss::Computation::Do(ss::Bind {
@@ -212,7 +216,7 @@ pub fn let_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     match tail.id(db) {
         | ss::TermAnnId::Value(tail, ann) => {
             let id: ss::ValueId = derived_id(key_space, 0);
@@ -286,7 +290,7 @@ pub fn app_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     derive_app_outcome(db, key_space, input)
 }
 
@@ -298,8 +302,12 @@ pub fn app_judgment_at<'db>(
     input: InternedAppInput<'db>,
 ) -> Option<AppSynOutcome> {
     let _ = data;
-    let key_space =
-        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
+    let key_space = KeySpaceId::derive(
+        DerivationFamily::Query,
+        site.space(db),
+        site.raw(db),
+        site.occurrence(db),
+    );
     derive_app_outcome(db, key_space, input)
 }
 
@@ -368,8 +376,10 @@ pub fn fix_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let id: ss::CompuId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::CompuId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     Some(FixSynOutcome {
         id,
         compu: ss::Computation::Fix(ss::Fix(input.binder(db), input.body(db))),

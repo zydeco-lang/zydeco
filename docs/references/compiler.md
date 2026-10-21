@@ -300,6 +300,14 @@ low syntax has a separate issuer and never reuses high syntax IDs.
 Statics producer queries derive occurrence IDs, while the checker materializes their returned fragments.
 Rechecking the same source entity in a distinct occurrence must not overwrite an earlier elaboration.
 
+Derived allocation selects a typed `DerivationFamily`: `Checker` for the mutable checker's intermediate nodes,
+or `Query` for producer nodes, including those issued without retaining a Salsa query.
+Each family's private numeric tag feeds the deterministic 64-bit mixing function alongside the entity identity
+and checking occurrence; the local slot then selects an ID within that key space.
+These families are hash domains rather than reserved numeric ranges.
+The current implementation does not detect collisions between derived sites or reserve a range separate
+from sequential key spaces, so deterministic reproduction does not establish collision-free identity.
+
 Provenance records the actual relation between representations.
 Surface-to-typed mappings are many-to-many because transparent syntax and repeated checking can share
 or duplicate results; one typed node may produce several IR nodes.

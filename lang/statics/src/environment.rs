@@ -401,20 +401,20 @@ impl TyEnvInterner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zydeco_utils::arena::{KeySpaceId, derived_id};
+    use zydeco_utils::arena::{DerivationFamily, KeySpaceId, derived_id};
 
     fn def(slot: u32) -> DefId {
-        derived_id(KeySpaceId::derive(0xEE11_EE11, 0, 0, 0), slot)
+        derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 0, 0), slot)
     }
 
     fn abst(slot: u32) -> AbstId {
-        derived_id(KeySpaceId::derive(0xEE11_EE12, 0, 0, 0), slot)
+        derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 1, 0), slot)
     }
 
     fn sample() -> TyEnv {
         TyEnv::from_iter([(
             def(0),
-            AnnId::Type(derived_id(KeySpaceId::derive(0xEE11_EE13, 0, 0, 0), 0)),
+            AnnId::Type(derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 2, 0), 0)),
         )])
         .with_skolem(abst(0))
     }
@@ -433,7 +433,10 @@ mod tests {
         // ...and the stored value keeps the environment's exact content.
         assert_eq!(
             second.as_ref().get(&def(0)),
-            Some(&AnnId::Type(derived_id(KeySpaceId::derive(0xEE11_EE13, 0, 0, 0), 0,)))
+            Some(&AnnId::Type(derived_id(
+                KeySpaceId::derive(DerivationFamily::Checker, 0, 2, 0),
+                0,
+            )))
         );
         assert!(second.skolem_scope().contains(&abst(0)));
     }
@@ -457,7 +460,7 @@ mod tests {
     #[test]
     fn environment_extensions_preserve_existing_bindings_and_skolems() {
         let base = sample();
-        let added_type = derived_id(KeySpaceId::derive(0xEE11_EE13, 0, 0, 0), 1);
+        let added_type = derived_id(KeySpaceId::derive(DerivationFamily::Checker, 0, 2, 0), 1);
         let extension = (base.clone() + [(def(1), AnnId::Type(added_type))]).with_skolem(abst(1));
 
         assert!(extension.is_extension_of(&base));

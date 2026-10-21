@@ -7,6 +7,7 @@ use crate::check::source::{
     CheckedSource, CheckedTermRepository, InferenceRegion, RejectedSource, SourceCheckOutcome,
     TyckDiagnostics, TyckObservation,
 };
+use zydeco_utils::arena::DerivationFamily;
 
 impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
@@ -104,7 +105,7 @@ impl<'a> Tycker<'a> {
     /// retaining a salsa query solely to own that identifier.
     pub(super) fn query_derived_id<Id: ArenaId>(&self, slot: u32) -> Id {
         let (space, raw, occurrence) = self.allocator.current_site();
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, space, raw, occurrence), slot)
+        derived_id(KeySpaceId::derive(DerivationFamily::Query, space, raw, occurrence), slot)
     }
 
     /// The innermost allocation site as a salsa key, for queries of auxiliary

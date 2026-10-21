@@ -29,7 +29,7 @@ pub fn named_syn_judgment<'db>(
             let site_space = term.id(db).key_space().as_u64();
             let site_raw = term.id(db).raw().into_u32();
             let key_space =
-                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+                KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
             let kind_id: ss::KindId = derived_id(key_space, 0);
             let named_id: ss::TypeId = derived_id(key_space, 1);
             Some(NamedSynOutcome::Type {
@@ -75,7 +75,7 @@ pub fn label_syn_judgment<'db>(
             let site_space = term.id(db).key_space().as_u64();
             let site_raw = term.id(db).raw().into_u32();
             let id: ss::KindId = derived_id(
-                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence),
+                KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
                 0,
             );
             Some(LabelSynOutcome::Kind { id, kind: ss::Kind::Label(ss::Label(name, inner)) })
@@ -141,7 +141,7 @@ pub fn cons_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     let mut components = Vec::with_capacity(item_values.len() + 1);
     let mut component_tys = Vec::with_capacity(item_values.len() + 1);
     for (value, head_ty) in item_values {
@@ -190,8 +190,10 @@ pub fn proj_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let id: ss::ValueId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::ValueId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     let field = ss::ResolvedField {
         name: input.name(db),
         target: ss::ProjTarget {

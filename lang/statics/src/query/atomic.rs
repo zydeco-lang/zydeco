@@ -63,8 +63,10 @@ pub fn literal_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let id: ss::ValueId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::ValueId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     Some(LiteralSynOutcome::Value { id, value: ss::Value::Lit(lit), ty })
 }
 
@@ -79,7 +81,10 @@ pub fn term_hole_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    Some(derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0))
+    Some(derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    ))
 }
 
 /// The synthesized judgment of a trivial term: the unit value whose type is
@@ -109,8 +114,10 @@ pub fn triv_syn_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let id: ss::ValueId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::ValueId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     Some(TrivSynOutcome { id, value: ss::Value::Triv(ss::Triv), ty })
 }
 
@@ -151,7 +158,7 @@ pub fn var_syn_judgment<'db>(
             let site_space = term.id(db).key_space().as_u64();
             let site_raw = term.id(db).raw().into_u32();
             let id: ss::ValueId = derived_id(
-                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence),
+                KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
                 0,
             );
             Some(VarSynOutcome::Value { id, value: ss::Value::Var(def), ty })
@@ -201,7 +208,7 @@ pub fn hole_ana_judgment<'db>(
     };
     let site_space = term.id(db).key_space().as_u64();
     let site_raw = term.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     let fill: ss::FillId = derived_id(key_space, 0);
     match input.kind(db) {
         | HoleAnaKind::Type { kd } => {

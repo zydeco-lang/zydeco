@@ -25,8 +25,10 @@ pub fn pat_triv_syn_judgment<'db>(
     };
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
-    let id: ss::VPatId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::VPatId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     Some(PatTrivSynOutcome { id, value: ss::ValuePattern::Triv(ss::Triv), ty })
 }
 
@@ -57,7 +59,7 @@ pub fn pat_named_syn_judgment<'db>(
             let site_space = pat.id(db).key_space().as_u64();
             let site_raw = pat.id(db).raw().into_u32();
             let key_space =
-                KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+                KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
             let kind_id: ss::KindId = derived_id(key_space, 0);
             let named_id: ss::TPatId = derived_id(key_space, 1);
             Some(PatNamedSynOutcome::Type {
@@ -123,7 +125,7 @@ pub fn pat_cons_syn_judgment<'db>(
     };
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     let mut components = Vec::with_capacity(item_values.len() + 1);
     let mut component_tys = Vec::with_capacity(item_values.len() + 1);
     for (vpat, head_ty) in item_values {
@@ -198,8 +200,10 @@ pub fn pat_ctor_ana_judgment<'db>(
     };
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
-    let id: ss::VPatId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::VPatId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     Some(PatCtorOutcome {
         id,
         pat: ss::ValuePattern::Ctor(ss::Ctor(input.name(db), input.args(db))),
@@ -237,8 +241,10 @@ pub fn pat_alias_ana_judgment<'db>(
     };
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
-    let id: ss::VPatId =
-        derived_id(KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence), 0);
+    let id: ss::VPatId = derived_id(
+        KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence),
+        0,
+    );
     let patterns = ss::ConsN::from_vec(input.patterns(db))?;
     Some(PatAliasOutcome {
         id,
@@ -282,7 +288,7 @@ pub fn pat_named_ana_judgment<'db>(
     };
     let site_space = pat.id(db).key_space().as_u64();
     let site_raw = pat.id(db).raw().into_u32();
-    let key_space = KeySpaceId::derive(QUERY_DERIVATION_TAG, site_space, site_raw, occurrence);
+    let key_space = KeySpaceId::derive(DerivationFamily::Query, site_space, site_raw, occurrence);
     match input.arm(db) {
         | PatNamedAnaArm::Kind { name, inner, expected } => {
             let id: ss::TPatId = derived_id(key_space, 0);

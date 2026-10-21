@@ -21,8 +21,12 @@ pub struct InternedBindingIndex<'db> {
 pub fn rec_group_abst_judgment_at<'db>(
     db: &'db dyn TyckDb, site: InternedSite<'db>, index: InternedBindingIndex<'db>,
 ) -> Option<(ss::AbstId, ss::TypeId, ss::TypeId)> {
-    let key_space =
-        KeySpaceId::derive(QUERY_DERIVATION_TAG, site.space(db), site.raw(db), site.occurrence(db));
+    let key_space = KeySpaceId::derive(
+        DerivationFamily::Query,
+        site.space(db),
+        site.raw(db),
+        site.occurrence(db),
+    );
     let base = 3 * index.index(db);
     let abst: ss::AbstId = derived_id(key_space, base);
     let ty_1: ss::TypeId = derived_id(key_space, base + 1);

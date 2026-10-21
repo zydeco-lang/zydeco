@@ -51,7 +51,7 @@ pub enum IntrinsicSingleton {
 ///
 /// The derived site is synthetic (not tied to any scoped term): the intrinsic
 /// belongs to the check, not to the term that first spells it. The key's
-/// discriminant separates the singletons so their identifiers never collide.
+/// discriminant supplies a distinct synthetic site input for each singleton.
 #[salsa::tracked(returns(clone), no_eq, unsafe(non_salsa_values))]
 pub fn intrinsic_singleton<'db>(
     db: &'db dyn TyckDb, data: ScopedData<'db>, key: InternedIntrinsic<'db>,
@@ -60,13 +60,13 @@ pub fn intrinsic_singleton<'db>(
     let occurrence = key.key(db).discriminant();
     let kind_id = |slot: u32| {
         derived_id::<ss::KindId>(
-            KeySpaceId::derive(QUERY_DERIVATION_TAG, 0, u32::MAX, occurrence),
+            KeySpaceId::derive(DerivationFamily::Query, 0, u32::MAX, occurrence),
             slot,
         )
     };
     let type_id = |slot: u32| {
         derived_id::<ss::TypeId>(
-            KeySpaceId::derive(QUERY_DERIVATION_TAG, 0, u32::MAX, occurrence),
+            KeySpaceId::derive(DerivationFamily::Query, 0, u32::MAX, occurrence),
             slot,
         )
     };
