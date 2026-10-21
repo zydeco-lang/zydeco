@@ -2,11 +2,11 @@
 param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
 let (/IState; /MonadState; state) = builtin |> (@(import("../../std/effect/state.zy"))) in
 let (/IException; exception) = builtin |> (@(import("../../std/effect/exception.zy"))) in
 let combined = builtin |> (@(import("../../std/effect/state-exn.zy"))) in
-let Top = @(import("../../std/effect/top.type.zy")) in
+let (/Top) = @(import("../../std/effect/monad.zy")) in
 let Effects = WithMonad <| fn (M : VType -> CType) => IState Int M * IException String M in
 let client : Thk (pi ((M, _) : Effects) . M Int) = {
   fn (M, (/monad; /state; /exception; /catch)) =>

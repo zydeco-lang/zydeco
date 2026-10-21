@@ -8,7 +8,7 @@ val
     let monadic_basis = @(import("monad.zy")) that
     let state_basis = @(import("state.zy")) that
     let exception_basis = @(import("exception.zy")) that
-    let (/Monad; /WithMonad) = builtin |> monadic_basis in
+    let (/Monad; /WithMonad) = monadic_basis in
     let (/MonadState; /IState; /StateT; state_library) = builtin |> state_basis in
     let (/MonadThrow; /IException; /Exception; exception_library) = builtin |> exception_basis in
     begin

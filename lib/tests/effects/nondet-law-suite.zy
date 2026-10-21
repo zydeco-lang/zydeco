@@ -7,8 +7,8 @@ val
   )
 =>
   begin
-    let (/Monad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
-    let MonadNonDet = @(import("../../std/effect/nondet.type.zy")) in
+    let (/Monad) = @(import("../../std/effect/monad.zy")) in
+    let (/MonadNonDet) = @(import("../../std/effect/nondet.zy")) in
     let (/compare) = builtin |> (@(import("effect-law-suite.zy"))) in
     begin
       def ! branch_laws (M : VType -> CType)

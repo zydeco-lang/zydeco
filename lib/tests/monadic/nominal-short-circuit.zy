@@ -2,7 +2,7 @@
 param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/Monad; /Algebra) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
 let (/MonadState) = builtin |> (@(import("../../std/effect/state.zy"))) in
 let (/MonadThrow) = builtin |> (@(import("../../std/effect/exception.zy"))) in
 let (/IStateExn) = builtin |> (@(import("../../std/effect/state-exn.zy"))) in

@@ -1,3 +1,4 @@
+let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 begin
   param (
     /Int;
@@ -13,7 +14,7 @@ begin
   ) : @(import(
     "../../std/builtin.zy"
   )) that
-  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+  let (/Bytes; /bytes; byte_package) = builtin |> make_bytes in
 
   let uint = numeric/uint that
   let zero = (@(ffi(c, library("zyffi_boundary"), symbol("zyffi_zero"))) : Thk (Ret UInt)) that
@@ -53,7 +54,7 @@ begin
       UInt -> UInt -> UInt -> UInt -> UInt -> UInt -> Ret UInt
     )
   ) that
-  let Fault = @(import("../../std/memory/fault.zy")) in
+  let (/Fault) = @(import("../../std/memory/fault.zy")) in
   let fail : Thk (Fault -> Ret UInt) = {
     fn _ =>
       @[partial]

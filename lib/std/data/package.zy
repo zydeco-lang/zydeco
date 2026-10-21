@@ -1,412 +1,582 @@
 @[package(library, name(std/data))]
-val
-  (
-    (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric) : @(import("../builtin.zy"))
-  )
-=>
-  let int = numeric/int in
-  let Bool = @(import("bool.zy")) in
-  let Option = @(import("option.zy")) in
-  let Either = @(import("either.zy")) in
-  begin
-    def true : Bool = +True() that
-    def false : Bool = +False() that
-    def ! not (value : Bool) : Ret Bool =
-      match value
-      | +False(_) => ret true
-      | +True(_) => ret false
-      end
-    that
-    def ! and (left : Bool) (right : Bool) : Ret Bool =
-      match left
-      | +False(_) => ret false
-      | +True(_) => ret right
-      end
-    that
-    def ! or (left : Bool) (right : Bool) : Ret Bool =
-      match left
-      | +False(_) => ret right
-      | +True(_) => ret true
-      end
-    that
-    def ! eq (left : Bool) (right : Bool) : Ret Bool =
-      match left
-      | +False(_) => ! not right
-      | +True(_) => ret right
-      end
-    that
-    def ! xor (left : Bool) (right : Bool) : Ret Bool =
-      match left
-      | +False(_) => ret right
-      | +True(_) => ! not right
-      end
-    that
-    def ! nand (left : Bool) (right : Bool) : Ret Bool =
-      do both <- ! and left right;
-      ! not both
-    that
-    def ! nor (left : Bool) (right : Bool) : Ret Bool =
-      do either <- ! or left right;
-      ! not either
-    that
-    def ! if (B : CType) (condition : Bool) (when_true : Thk B) (when_false : Thk B) : B =
-      match condition
-      | +False(_) => ! when_false
-      | +True(_) => ! when_true
-      end
-    that
+let (/Bool) = @(import("bool.zy")) in
+let (/Option) = @(import("option.zy")) in
+let (/Either) = @(import("either.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Thk = @(intrinsic(thk)) in
+let Ret = @(intrinsic(ret)) in
+let Unit = @(intrinsic(unit)) in
+let Int = @(intrinsic(int)) in
+begin
+  let BoolModule (Bool : VType) =
+      (#true :: Bool)
+    * (#false :: Bool)
+    * (#not :: Thk (Bool -> Ret Bool))
+    * (#and :: Thk (Bool -> Bool -> Ret Bool))
+    * (#or :: Thk (Bool -> Bool -> Ret Bool))
+    * (#eq :: Thk (Bool -> Bool -> Ret Bool))
+    * (#xor :: Thk (Bool -> Bool -> Ret Bool))
+    * (#nand :: Thk (Bool -> Bool -> Ret Bool))
+    * (#nor :: Thk (Bool -> Bool -> Ret Bool))
+    * (
+        #if :: Thk (
+          forall (B : CType) . Bool -> Thk B -> Thk B -> B
+        )
+      )
+  in
+  let DataPackage =
+    begin
+      let OptionModule
+        (Bool : VType) (Option : VType -> VType)
+      =
+          (#none :: Thk (forall (A : VType) . Ret (Option A)))
+        * (#some :: Thk (forall (A : VType) . A -> Ret (Option A)))
+        * (
+            #fold :: Thk (
+              forall (A : VType) (B : CType) . Option A -> Thk B -> Thk (A -> B) -> B
+            )
+          )
+        * (
+            #map :: Thk (
+              forall (A : VType) (B : VType) . Option A -> Thk (A -> Ret B) -> Ret (Option B)
+            )
+          )
+        * (
+            #and_then :: Thk (
+              forall (A : VType) (B : VType) .
+                Option A -> Thk (A -> Ret (Option B)) -> Ret (Option B)
+            )
+          )
+        * (#unwrap_or :: Thk (forall (A : VType) . Option A -> A -> Ret A))
+        * (
+            #or_else :: Thk (
+              forall (A : VType) .
+                   Option A
+                -> Thk (Ret (Option A))
+                -> Ret (Option A)
+            )
+          )
+        * (
+            #zip :: Thk (
+              forall (A : VType) (B : VType) . Option A -> Option B -> Ret (Option (A * B))
+            )
+          )
+        * (#is_some :: Thk (forall (A : VType) . Option A -> Ret Bool))
+        * (#is_none :: Thk (forall (A : VType) . Option A -> Ret Bool))
+      in
 
-    def ! none (A : VType) : Ret (Option A) = ret +None() that
-    def ! some (A : VType) (value : A) : Ret (Option A) = ret +Some(value) that
-    def ! option_fold (A : VType)
-      (B : CType)
-      (option : Option A)
-      (when_none : Thk B)
-      (when_some : Thk (A -> B))
-    : B =
-        match option
-        | +None(_) => ! when_none
-        | +Some(value) => ! when_some value
-        end
-    that
-    def ! option_map (A : VType)
-      (B : VType)
-      (option : Option A)
-      (transform : Thk (A -> Ret B))
-    : Ret (Option B) =
-        match option
-        | +None(_) => ! none B
-        | +Some(value) =>
-          do transformed <- ! transform value;
-          ! some B transformed
-        end
-    that
-    def ! option_and_then (A : VType)
-      (B : VType)
-      (option : Option A)
-      (transform : Thk (A -> Ret (Option B)))
-    : Ret (Option B) =
-        match option
-        | +None(_) => ! none B
-        | +Some(value) => ! transform value
-        end
-    that
-    def ! option_unwrap_or (A : VType) (option : Option A) (default : A) : Ret A =
-      match option
-      | +None(_) => ret default
-      | +Some(value) => ret value
-      end
-    that
-    def ! or_else (A : VType)
-      (option : Option A)
-      (default : Thk (Ret (Option A)))
-    : Ret (Option A) =
-        match option
-        | +None(_) => ! default
-        | +Some(value) => ! some A value
-        end
-    that
-    def ! zip (A : VType)
-      (B : VType)
-      (left : Option A)
-      (right : Option B)
-    : Ret (Option (A * B)) =
-        match left
-        | +None(_) => ! none (A * B)
-        | +Some(left_value) =>
-          match right
-          | +None(_) => ! none (A * B)
-          | +Some(right_value) => ! some (A * B) (left_value, right_value)
+      let EitherModule
+        (Bool : VType)
+        (Either : VType -> VType -> VType)
+      =
+          (#left :: Thk (forall (L : VType) (R : VType) . L -> Ret (Either L R)))
+        * (#right :: Thk (forall (L : VType) (R : VType) . R -> Ret (Either L R)))
+        * (
+            #fold :: Thk (
+              forall (L : VType) (R : VType) (B : CType) .
+                Either L R -> Thk (L -> B) -> Thk (R -> B) -> B
+            )
+          )
+        * (
+            #map :: Thk (
+              forall (L : VType) (R : VType) (S : VType) .
+                Either L R -> Thk (R -> Ret S) -> Ret (Either L S)
+            )
+          )
+        * (
+            #map_left :: Thk (
+              forall (L : VType) (R : VType) (S : VType) .
+                Either L R -> Thk (L -> Ret S) -> Ret (Either S R)
+            )
+          )
+        * (
+            #and_then :: Thk (
+              forall (L : VType) (R : VType) (S : VType) .
+                Either L R -> Thk (R -> Ret (Either L S)) -> Ret (Either L S)
+            )
+          )
+        * (#unwrap_or :: Thk (forall (L : VType) (R : VType) . Either L R -> R -> Ret R))
+        * (#is_left :: Thk (forall (L : VType) (R : VType) . Either L R -> Ret Bool))
+        * (#is_right :: Thk (forall (L : VType) (R : VType) . Either L R -> Ret Bool))
+      in
+
+      let ListModule
+        (Bool : VType)
+        (Option : VType -> VType)
+        (List : VType -> VType)
+        (Int : VType)
+      =
+          (#nil :: Thk (forall (A : VType) . Ret (List A)))
+        * (#cons :: Thk (forall (A : VType) . A -> List A -> Ret (List A)))
+        * (
+            #case :: Thk (
+              forall (A : VType) (B : CType) . List A -> Thk B -> Thk (A -> List A -> B) -> B
+            )
+          )
+        * (
+            #fold :: Thk (
+              forall (A : VType) (B : CType) . List A -> Thk B -> Thk (A -> Thk B -> B) -> B
+            )
+          )
+        * (#singleton :: Thk (forall (A : VType) . A -> Ret (List A)))
+        * (#append :: Thk (forall (A : VType) . List A -> List A -> Ret (List A)))
+        * (
+            #map :: Thk (
+              forall (A : VType) (B : VType) . List A -> Thk (A -> Ret B) -> Ret (List B)
+            )
+          )
+        * (
+            #fold_left :: Thk (
+              forall (A : VType) (B : VType) . List A -> B -> Thk (B -> A -> Ret B) -> Ret B
+            )
+          )
+        * (#reverse :: Thk (forall (A : VType) . List A -> Ret (List A)))
+        * (#length :: Thk (forall (A : VType) . List A -> Ret Int))
+        * (#is_empty :: Thk (forall (A : VType) . List A -> Ret Bool))
+        * (#head :: Thk (forall (A : VType) . List A -> Ret (Option A)))
+        * (
+            #tail :: Thk (
+              forall (A : VType) . List A -> Ret (Option (List A))
+            )
+          )
+        * (
+            #get :: Thk (
+              forall (A : VType) . List A -> Int -> Ret (Option A)
+            )
+          )
+      in
+
+      exists
+        (= Bool as Bool)
+        (= Option as Option)
+        (= Either as Either)
+        (= List : VType -> VType)
+      .
+          (#bool :: BoolModule Bool)
+        * (#option :: OptionModule Bool Option)
+        * (#either :: EitherModule Bool Either)
+        * (#list :: ListModule Bool Option List Int)
+    end
+  in
+  let make =
+    val
+      (
+        (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric) : @(import("../builtin.zy"))
+      )
+    =>
+      let int = numeric/int in
+
+      begin
+        def true : Bool = +True() that
+        def false : Bool = +False() that
+        def ! not (value : Bool) : Ret Bool =
+          match value
+          | +False(_) => ret true
+          | +True(_) => ret false
           end
-        end
-    that
-    def ! is_some (A : VType) (value : Option A) : Ret Bool = ! option_fold
-      A
-      (Ret Bool)
-      value
-      { ret false }
-      {
-        fn _ => ret true
-      } that
-    def ! is_none (A : VType) (value : Option A) : Ret Bool =
-      do present <- ! is_some A value;
-      ! not present
-    that
+        that
+        def ! and (left : Bool) (right : Bool) : Ret Bool =
+          match left
+          | +False(_) => ret false
+          | +True(_) => ret right
+          end
+        that
+        def ! or (left : Bool) (right : Bool) : Ret Bool =
+          match left
+          | +False(_) => ret right
+          | +True(_) => ret true
+          end
+        that
+        def ! eq (left : Bool) (right : Bool) : Ret Bool =
+          match left
+          | +False(_) => ! not right
+          | +True(_) => ret right
+          end
+        that
+        def ! xor (left : Bool) (right : Bool) : Ret Bool =
+          match left
+          | +False(_) => ret right
+          | +True(_) => ! not right
+          end
+        that
+        def ! nand (left : Bool) (right : Bool) : Ret Bool =
+          do both <- ! and left right;
+          ! not both
+        that
+        def ! nor (left : Bool) (right : Bool) : Ret Bool =
+          do either <- ! or left right;
+          ! not either
+        that
+        def ! if (B : CType) (condition : Bool) (when_true : Thk B) (when_false : Thk B) : B =
+          match condition
+          | +False(_) => ! when_false
+          | +True(_) => ! when_true
+          end
+        that
 
-    def ! left (L : VType) (R : VType) (value : L) : Ret (Either L R) = ret +Left(value) that
-    def ! right (L : VType) (R : VType) (value : R) : Ret (Either L R) = ret +Right(value) that
-    def ! either_fold (L : VType)
-      (R : VType)
-      (B : CType)
-      (value : Either L R)
-      (when_left : Thk (L -> B))
-      (when_right : Thk (R -> B))
-    : B =
-        match value
-        | +Left(value) => ! when_left value
-        | +Right(value) => ! when_right value
-        end
-    that
-    def ! either_map (L : VType)
-      (R : VType)
-      (S : VType)
-      (value : Either L R)
-      (transform : Thk (R -> Ret S))
-    : Ret (Either L S) =
-        match value
-        | +Left(value) => ! left L S value
-        | +Right(value) =>
-          do transformed <- ! transform value;
-          ! right L S transformed
-        end
-    that
-    def ! map_left (L : VType)
-      (R : VType)
-      (S : VType)
-      (value : Either L R)
-      (transform : Thk (L -> Ret S))
-    : Ret (Either S R) =
-        match value
-        | +Left(value) =>
-          do transformed <- ! transform value;
-          ! left S R transformed
-        | +Right(value) => ! right S R value
-        end
-    that
-    def ! either_and_then (L : VType)
-      (R : VType)
-      (S : VType)
-      (value : Either L R)
-      (transform : Thk (R -> Ret (Either L S)))
-    : Ret (Either L S) =
-        match value
-        | +Left(value) => ! left L S value
-        | +Right(value) => ! transform value
-        end
-    that
-    def ! either_unwrap_or (L : VType)
-      (R : VType)
-      (value : Either L R)
-      (default : R)
-    : Ret R =
-        match value
-        | +Left(_) => ret default
-        | +Right(value) => ret value
-        end
-    that
-    def ! is_left (L : VType) (R : VType) (value : Either L R) : Ret Bool = ! either_fold
-      L
-      R
-      (Ret Bool)
-      value
-      { fn _ => ret true }
-      {
-        fn _ => ret false
-      } that
-    def ! is_right (L : VType) (R : VType) (value : Either L R) : Ret Bool =
-      do on_left <- ! is_left L R value;
-      ! not on_left
-    that
+        def ! none (A : VType) : Ret (Option A) = ret +None() that
+        def ! some (A : VType) (value : A) : Ret (Option A) = ret +Some(value) that
+        def ! option_fold (A : VType)
+          (B : CType)
+          (option : Option A)
+          (when_none : Thk B)
+          (when_some : Thk (A -> B))
+        : B =
+            match option
+            | +None(_) => ! when_none
+            | +Some(value) => ! when_some value
+            end
+        that
+        def ! option_map (A : VType)
+          (B : VType)
+          (option : Option A)
+          (transform : Thk (A -> Ret B))
+        : Ret (Option B) =
+            match option
+            | +None(_) => ! none B
+            | +Some(value) =>
+              do transformed <- ! transform value;
+              ! some B transformed
+            end
+        that
+        def ! option_and_then (A : VType)
+          (B : VType)
+          (option : Option A)
+          (transform : Thk (A -> Ret (Option B)))
+        : Ret (Option B) =
+            match option
+            | +None(_) => ! none B
+            | +Some(value) => ! transform value
+            end
+        that
+        def ! option_unwrap_or (A : VType) (option : Option A) (default : A) : Ret A =
+          match option
+          | +None(_) => ret default
+          | +Some(value) => ret value
+          end
+        that
+        def ! or_else (A : VType)
+          (option : Option A)
+          (default : Thk (Ret (Option A)))
+        : Ret (Option A) =
+            match option
+            | +None(_) => ! default
+            | +Some(value) => ! some A value
+            end
+        that
+        def ! zip (A : VType)
+          (B : VType)
+          (left : Option A)
+          (right : Option B)
+        : Ret (Option (A * B)) =
+            match left
+            | +None(_) => ! none (A * B)
+            | +Some(left_value) =>
+              match right
+              | +None(_) => ! none (A * B)
+              | +Some(right_value) => ! some (A * B) (left_value, right_value)
+              end
+            end
+        that
+        def ! is_some (A : VType) (value : Option A) : Ret Bool = ! option_fold
+          A
+          (Ret Bool)
+          value
+          { ret false }
+          {
+            fn _ => ret true
+          } that
+        def ! is_none (A : VType) (value : Option A) : Ret Bool =
+          do present <- ! is_some A value;
+          ! not present
+        that
 
-    def List (A : VType) : VType =
-      data
-      | +Nil : Unit
-      | +Cons : A * List A
-      end
-    that
-    def ! nil (A : VType) : Ret (List A) = ret +Nil() that
-    def ! cons (A : VType) (head : A) (tail : List A) : Ret (List A) = ret +Cons(head, tail) that
-    def ! case (A : VType)
-      (B : CType)
-      (list : List A)
-      (when_nil : Thk B)
-      (when_cons : Thk (A -> List A -> B))
-    : B =
-        match list
-        | +Nil(_) => ! when_nil
-        | +Cons(head, tail) => ! when_cons head tail
-        end
-    that
-    def fix list_fold (A : VType)
-      (B : CType)
-      (list : List A)
-      (when_nil : Thk B)
-      (when_cons : Thk (A -> Thk B -> B))
-    : B =
-        match list
-        | +Nil(_) => ! when_nil
-        | +Cons(head, tail) => ! when_cons head { ! list_fold A B tail when_nil when_cons }
-        end
-    that
-    def ! singleton (A : VType) (value : A) : Ret (List A) =
-      do empty <- ! nil A;
-      ! cons A value empty
-    that
-    def fix append (A : VType) (left : List A) (right : List A) : Ret (List A) =
-      match left
-      | +Nil(_) => ret right
-      | +Cons(head, tail) =>
-        do rest <- ! append A tail right;
-        ! cons A head rest
-      end
-    that
-    def fix list_map (A : VType)
-      (B : VType)
-      (list : List A)
-      (transform : Thk (A -> Ret B))
-    : Ret (List B) =
-        match list
-        | +Nil(_) => ! nil B
-        | +Cons(head, tail) =>
-          do transformed <- ! transform head;
-          do rest <- ! list_map A B tail transform;
-          ! cons B transformed rest
-        end
-    that
-    def fix fold_left (A : VType)
-      (B : VType)
-      (list : List A)
-      (initial : B)
-      (combine : Thk (B -> A -> Ret B))
-    : Ret B =
-        match list
-        | +Nil(_) => ret initial
-        | +Cons(head, tail) =>
-          do next <- ! combine initial head;
-          ! fold_left A B tail next combine
-        end
-    that
-    def ! reverse (A : VType) (list : List A) : Ret (List A) =
-      do empty <- ! nil A;
-      ! fold_left A (List A) list empty {
-        fn reversed value => ! cons A value reversed
-      }
-    that
-    def ! length (A : VType) (list : List A) : Ret Int = ! fold_left A Int list 0 {
-      fn count _ => ! int/add count 1
-    } that
-    def ! is_empty (A : VType) (values : List A) : Ret Bool = ! case
-      A
-      (Ret Bool)
-      values
-      { ret true }
-      {
-        fn _ _ => ret false
-      } that
-    def ! head (A : VType) (values : List A) : Ret (Option A) = ! case
-      A
-      (Ret (Option A))
-      values
-      { ! none A }
-      {
-        fn first _ => ! some A first
-      } that
-    def ! tail (A : VType) (values : List A) : Ret (Option (List A)) = ! case
-      A
-      (Ret (Option (List A)))
-      values
-      { ! none (List A) }
-      {
-        fn _ rest => ! some (List A) rest
-      } that
+        def ! left (L : VType) (R : VType) (value : L) : Ret (Either L R) = ret +Left(value) that
+        def ! right (L : VType) (R : VType) (value : R) : Ret (Either L R) = ret +Right(value) that
+        def ! either_fold (L : VType)
+          (R : VType)
+          (B : CType)
+          (value : Either L R)
+          (when_left : Thk (L -> B))
+          (when_right : Thk (R -> B))
+        : B =
+            match value
+            | +Left(value) => ! when_left value
+            | +Right(value) => ! when_right value
+            end
+        that
+        def ! either_map (L : VType)
+          (R : VType)
+          (S : VType)
+          (value : Either L R)
+          (transform : Thk (R -> Ret S))
+        : Ret (Either L S) =
+            match value
+            | +Left(value) => ! left L S value
+            | +Right(value) =>
+              do transformed <- ! transform value;
+              ! right L S transformed
+            end
+        that
+        def ! map_left (L : VType)
+          (R : VType)
+          (S : VType)
+          (value : Either L R)
+          (transform : Thk (L -> Ret S))
+        : Ret (Either S R) =
+            match value
+            | +Left(value) =>
+              do transformed <- ! transform value;
+              ! left S R transformed
+            | +Right(value) => ! right S R value
+            end
+        that
+        def ! either_and_then (L : VType)
+          (R : VType)
+          (S : VType)
+          (value : Either L R)
+          (transform : Thk (R -> Ret (Either L S)))
+        : Ret (Either L S) =
+            match value
+            | +Left(value) => ! left L S value
+            | +Right(value) => ! transform value
+            end
+        that
+        def ! either_unwrap_or (L : VType)
+          (R : VType)
+          (value : Either L R)
+          (default : R)
+        : Ret R =
+            match value
+            | +Left(_) => ret default
+            | +Right(value) => ret value
+            end
+        that
+        def ! is_left (L : VType) (R : VType) (value : Either L R) : Ret Bool = ! either_fold
+          L
+          R
+          (Ret Bool)
+          value
+          { fn _ => ret true }
+          {
+            fn _ => ret false
+          } that
+        def ! is_right (L : VType) (R : VType) (value : Either L R) : Ret Bool =
+          do on_left <- ! is_left L R value;
+          ! not on_left
+        that
 
-    def ! compare
-      (predicate : Thk (forall (B : CType) . Int -> Int -> Thk B -> Thk B -> B))
-      (left : Int)
-      (right : Int)
-    : Ret Bool = ! predicate
-        (Ret Bool)
-        left
-        right
-        { ret true }
-        { ret false }
-    that
-    def ! int_eq (left : Int) (right : Int) : Ret Bool = ! compare int/eq left right that
-    def ! int_lt (left : Int) (right : Int) : Ret Bool = ! compare int/lt left right that
-    def fix get (A : VType) (values : List A) (index : Int) : Ret (Option A) =
-      do negative <- ! int_lt index 0;
-      ! if
-        (Ret (Option A))
-        negative
-        { ! none A }
-        {
-          ! case
-            A
+        def List (A : VType) : VType =
+          data
+          | +Nil : Unit
+          | +Cons : A * List A
+          end
+        that
+        def ! nil (A : VType) : Ret (List A) = ret +Nil() that
+        def ! cons (A : VType) (head : A) (tail : List A) : Ret (List A) = ret +Cons(
+          head,
+          tail
+        ) that
+        def ! case (A : VType)
+          (B : CType)
+          (list : List A)
+          (when_nil : Thk B)
+          (when_cons : Thk (A -> List A -> B))
+        : B =
+            match list
+            | +Nil(_) => ! when_nil
+            | +Cons(head, tail) => ! when_cons head tail
+            end
+        that
+        def fix list_fold (A : VType)
+          (B : CType)
+          (list : List A)
+          (when_nil : Thk B)
+          (when_cons : Thk (A -> Thk B -> B))
+        : B =
+            match list
+            | +Nil(_) => ! when_nil
+            | +Cons(head, tail) => ! when_cons head { ! list_fold A B tail when_nil when_cons }
+            end
+        that
+        def ! singleton (A : VType) (value : A) : Ret (List A) =
+          do empty <- ! nil A;
+          ! cons A value empty
+        that
+        def fix append (A : VType) (left : List A) (right : List A) : Ret (List A) =
+          match left
+          | +Nil(_) => ret right
+          | +Cons(head, tail) =>
+            do rest <- ! append A tail right;
+            ! cons A head rest
+          end
+        that
+        def fix list_map (A : VType)
+          (B : VType)
+          (list : List A)
+          (transform : Thk (A -> Ret B))
+        : Ret (List B) =
+            match list
+            | +Nil(_) => ! nil B
+            | +Cons(head, tail) =>
+              do transformed <- ! transform head;
+              do rest <- ! list_map A B tail transform;
+              ! cons B transformed rest
+            end
+        that
+        def fix fold_left (A : VType)
+          (B : VType)
+          (list : List A)
+          (initial : B)
+          (combine : Thk (B -> A -> Ret B))
+        : Ret B =
+            match list
+            | +Nil(_) => ret initial
+            | +Cons(head, tail) =>
+              do next <- ! combine initial head;
+              ! fold_left A B tail next combine
+            end
+        that
+        def ! reverse (A : VType) (list : List A) : Ret (List A) =
+          do empty <- ! nil A;
+          ! fold_left A (List A) list empty {
+            fn reversed value => ! cons A value reversed
+          }
+        that
+        def ! length (A : VType) (list : List A) : Ret Int = ! fold_left A Int list 0 {
+          fn count _ => ! int/add count 1
+        } that
+        def ! is_empty (A : VType) (values : List A) : Ret Bool = ! case
+          A
+          (Ret Bool)
+          values
+          { ret true }
+          {
+            fn _ _ => ret false
+          } that
+        def ! head (A : VType) (values : List A) : Ret (Option A) = ! case
+          A
+          (Ret (Option A))
+          values
+          { ! none A }
+          {
+            fn first _ => ! some A first
+          } that
+        def ! tail (A : VType) (values : List A) : Ret (Option (List A)) = ! case
+          A
+          (Ret (Option (List A)))
+          values
+          { ! none (List A) }
+          {
+            fn _ rest => ! some (List A) rest
+          } that
+
+        def ! compare
+          (predicate : Thk (forall (B : CType) . Int -> Int -> Thk B -> Thk B -> B))
+          (left : Int)
+          (right : Int)
+        : Ret Bool = ! predicate
+            (Ret Bool)
+            left
+            right
+            { ret true }
+            { ret false }
+        that
+        def ! int_eq (left : Int) (right : Int) : Ret Bool = ! compare int/eq left right that
+        def ! int_lt (left : Int) (right : Int) : Ret Bool = ! compare int/lt left right that
+        def fix get (A : VType) (values : List A) (index : Int) : Ret (Option A) =
+          do negative <- ! int_lt index 0;
+          ! if
             (Ret (Option A))
-            values
+            negative
             { ! none A }
             {
-              fn first rest =>
-                do zero <- ! int_eq index 0;
-                ! if
-                  (Ret (Option A))
-                  zero
-                  { ! some A first }
-                  {
-                    do previous <- ! int/sub index 1;
-                    ! get A rest previous
-                  }
+              ! case
+                A
+                (Ret (Option A))
+                values
+                { ! none A }
+                {
+                  fn first rest =>
+                    do zero <- ! int_eq index 0;
+                    ! if
+                      (Ret (Option A))
+                      zero
+                      { ! some A first }
+                      {
+                        do previous <- ! int/sub index 1;
+                        ! get A rest previous
+                      }
+                }
             }
-        }
-    that
+        that
 
-    pack
-      (= Bool as Bool)
-      (= Option as Option)
-      (= Either as Either)
-      (= List : VType -> VType) is List
-    where
-      #bool = (
-        = true,
-        = false,
-        = not,
-        = and,
-        = or,
-        = eq,
-        = xor,
-        = nand,
-        = nor,
-        = if
-      ),
-      #option = (
-        = none,
-        = some,
-        #fold = option_fold,
-        #map = option_map,
-        #and_then = option_and_then,
-        #unwrap_or = option_unwrap_or,
-        = or_else,
-        = zip,
-        = is_some,
-        = is_none
-      ),
-      #either = (
-        = left,
-        = right,
-        #fold = either_fold,
-        #map = either_map,
-        = map_left,
-        #and_then = either_and_then,
-        #unwrap_or = either_unwrap_or,
-        = is_left,
-        = is_right
-      ),
-      #list = (
-        = nil,
-        = cons,
-        = case,
-        #fold = list_fold,
-        = singleton,
-        = append,
-        #map = list_map,
-        = fold_left,
-        = reverse,
-        = length,
-        = is_empty,
-        = head,
-        = tail,
-        = get
-      )
-    end
+        pack
+          (= Bool as Bool)
+          (= Option as Option)
+          (= Either as Either)
+          (= List : VType -> VType) is List
+        where
+          #bool = (
+            = true,
+            = false,
+            = not,
+            = and,
+            = or,
+            = eq,
+            = xor,
+            = nand,
+            = nor,
+            = if
+          ),
+          #option = (
+            = none,
+            = some,
+            #fold = option_fold,
+            #map = option_map,
+            #and_then = option_and_then,
+            #unwrap_or = option_unwrap_or,
+            = or_else,
+            = zip,
+            = is_some,
+            = is_none
+          ),
+          #either = (
+            = left,
+            = right,
+            #fold = either_fold,
+            #map = either_map,
+            = map_left,
+            #and_then = either_and_then,
+            #unwrap_or = either_unwrap_or,
+            = is_left,
+            = is_right
+          ),
+          #list = (
+            = nil,
+            = cons,
+            = case,
+            #fold = list_fold,
+            = singleton,
+            = append,
+            #map = list_map,
+            = fold_left,
+            = reverse,
+            = length,
+            = is_empty,
+            = head,
+            = tail,
+            = get
+          )
+        end
+      end
+  in
+  -- end module Data
+  pack
+    (= BoolModule as BoolModule)
+    (= DataPackage as DataPackage)
+  where
+    = make
   end
--- end module Data
+end

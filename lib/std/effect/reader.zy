@@ -1,16 +1,25 @@
 -- Read-only environments, derived from ordinary Ret sequencing.
+let (/Monad; /Algebra; /Top) = @(import("monad.zy")) in
+let (/Transformer) = @(import("transformer.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Thk = @(intrinsic(thk)) in
+
+let MonadReader (R : VType) (M : VType -> CType) =
+  codata
+  | .ask : M R
+  | .local : forall (A : VType) . R -> Thk (M A) -> M A
+  end
+in
 val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad; /Algebra) = builtin |> (@(import("monad.zy"))) in
-    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
-      let Top = @(import("top.type.zy")) that
       let triv : Thk Top = {
         comatch
         end
       } that
-      let MonadReader = @(import("reader.type.zy")) that
       let ReaderSource (R : VType) (A : VType) = R -> Ret A that
       let ReaderT (R : VType) (M : VType -> CType) =
         (@[monadic] ReaderSource) M R
@@ -24,9 +33,8 @@ val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
             @[monadic] begin
               let VType = @(intrinsic(vtype)) in
               let Ret = @(intrinsic(ret)) in
-              let Transformer = @(import("transformer-inner.type.zy")) in
-              let MonadReader = @(import("reader.type.zy")) in
-              let with_lift = { @(import("transformer-source.zy")) } in
+
+              let (/with_lift) = @(import("transformer-source.zy")) in
               let Reader = ReaderSource in
               let Source (R : VType) =
                 codata

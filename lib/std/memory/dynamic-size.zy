@@ -1,8 +1,9 @@
 -- Pure checked arithmetic for runtime geometry; every public operand is validated.
+let (/Either) = @(import("../data/either.zy")) in
+let (/Error) = @(import("layout-error.zy")) in
 begin
   param val (/Ret; /Int; /numeric; builtin) : @(import("../builtin.zy")) in
-  let Either = @(import("../data/either.zy")) in
-  let Error = @(import("layout-error.zy")) in
+
   let Checked = Either Error Int in
   let int = numeric/int in
   let ! size (value : Int) : Ret Checked =

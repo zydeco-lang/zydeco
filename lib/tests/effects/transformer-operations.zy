@@ -1,10 +1,12 @@
 -- One MonadTrans client exercises every standard derivation, then checks State/Exception interaction.
+let (/make = make_data) = @(import("../../std/data/package.zy")) in
+let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
 param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
-let (/MonadTrans; /ITransformer) = builtin |> (@(import("../../std/effect/transformer.zy"))) in
-let (/List; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
+let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
+let (/MonadTrans; /ITransformer) = @(import("../../std/effect/transformer.zy")) in
+let (/List; data_package) = builtin |> make_data in
 let (/ReaderT; reader) = builtin |> (@(import("../../std/effect/reader.zy"))) in
 let (/Monoid; /WriterT; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
 let (/OptionT; optional) = builtin |> (@(import("../../std/effect/option.zy"))) in
@@ -12,7 +14,7 @@ let (/IState; /StateT; state) = builtin |> (@(import("../../std/effect/state.zy"
 let (/IException; /ExceptionT; exception) = builtin |> (
   @(import("../../std/effect/exception.zy"))
 ) in
-let (/NonDetT; nondet) = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let (/NonDetT; nondet) = (builtin |> make_nondet) data_package in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (/render; /check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
 let output : Monoid String = (#empty = "", #append = string/append) in

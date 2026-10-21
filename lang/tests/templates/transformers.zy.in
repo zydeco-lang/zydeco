@@ -1,14 +1,16 @@
-let (/Monad; /Algebra; /MonadInstance; /WithMonad) = builtin |> (@(import("${std}/effect/monad.zy"))) in
+let (/make = make_data) = @(import("${std}/data/package.zy")) in
+let (/make = make_nondet) = @(import("${std}/effect/nondet.zy")) in
+let (/Monad; /Algebra; /MonadInstance; /WithMonad) = @(import("${std}/effect/monad.zy")) in
 let (/MonadTrans; /Transformer; /Lift; /ITransformer; /from_monadic) =
-  builtin |> (@(import("${std}/effect/transformer.zy"))) in
+  @(import("${std}/effect/transformer.zy")) in
 let (/instance = ret_instance) = builtin |> (@(import("${std}/effect/ret.zy"))) in
 let (/StateT; /IState; state) = builtin |> (@(import("${std}/effect/state.zy"))) in
 let (/ExceptionT; /IException; exception) = builtin |> (@(import("${std}/effect/exception.zy"))) in
 let (/ReaderT; reader) = builtin |> (@(import("${std}/effect/reader.zy"))) in
 let (/WriterT; /Monoid; writer) = builtin |> (@(import("${std}/effect/writer.zy"))) in
 let (/Option; /OptionT; optional) = builtin |> (@(import("${std}/effect/option.zy"))) in
-let (/List; data_package) = builtin |> (@(import("${std}/data/package.zy"))) in
-let (/NonDetT; nondet) = (builtin |> (@(import("${std}/effect/nondet.zy")))) data_package in
+let (/List; data_package) = builtin |> make_data in
+let (/NonDetT; nondet) = (builtin |> make_nondet) data_package in
 let output : Monoid Int = (#empty = 0, #append = numeric/int/add) in
 let (W, w) = writer/instance Int output in
 let (SW, sw) = state/transformer_instance Int W w/monad in
@@ -24,8 +26,8 @@ let identity : Thk (MonadTrans IdentityT) = {
         let CType = @(intrinsic(ctype)) in
         let Thk = @(intrinsic(thk)) in
         let Ret = @(intrinsic(ret)) in
-        let Monad = @(import("${std}/effect/monad.type.zy")) in
-        let with_lift = { @(import("${std}/effect/transformer-source.zy")) } in
+        let (/Monad) = @(import("${std}/effect/monad.zy")) in
+        let (/with_lift) = @(import("${std}/effect/transformer-source.zy")) in
         ! with_lift Ret ({
           comatch
           | .return A a => ret a

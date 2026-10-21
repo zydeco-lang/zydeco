@@ -1,19 +1,19 @@
 @[package(library, name(std))]
+let (/make = make_bytes) = @(import("text/bytes.zy")) in
+let (/Additive; /Multiplicative; /PartialEquality; /PartialOrder; /Numeric) = @(import(
+  "numeric/dictionary.zy"
+)) in
 begin
   param val (/VType; builtin) : @(import("builtin.zy")) that
-  let make_data = @(import("data/package.zy")) that
+  let (/make = make_data) = @(import("data/package.zy")) that
   let make_text = @(import("text/package.zy")) that
   let make_system = @(import("system/package.zy")) that
   let make_numeric = @(import("numeric/package.zy")) that
-  let Additive = @(import("numeric/additive.type.zy")) in
-  let Multiplicative = @(import("numeric/multiplicative.type.zy")) in
-  let PartialEquality = @(import("numeric/partial-equality.type.zy")) in
-  let PartialOrder = @(import("numeric/partial-order.type.zy")) in
-  let Numeric = @(import("numeric/numeric.type.zy")) in
+
   let (/Bool; /Option; /Either; /List; /bool; /option; /either; /list; base) =
     builtin |> make_data
   in
-  let (/Bytes; byte_package) = builtin |> (@(import("text/bytes.zy"))) in
+  let (/Bytes; byte_package) = builtin |> make_bytes in
   let codecs = (builtin |> (@(import("numeric/codecs.zy")))) byte_package in
   let (= Buffer, buffer) = (builtin |> (@(import("memory/buffer.zy")))) byte_package in
   let (/char; /string; /bytes; text) = (builtin |> make_text) byte_package base in

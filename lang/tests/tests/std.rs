@@ -8,8 +8,8 @@ impl EitherCase {
         let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
         format!(
             r#"
-let DataPackage = @(import("{library}/data/package.type.zy")) in
-let data_package : DataPackage = builtin |> (@(import("{library}/data/package.zy"))) in
+let (/DataPackage; /make = make_data) = @(import("{library}/data/package.zy")) in
+let data_package : DataPackage = make_data builtin in
 let (/Either; /either) = data_package in
 {body}
 "#,
@@ -29,7 +29,7 @@ fn either_shares_its_carrier_with_exception_and_the_data_signature() {
     let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
     let source = EitherCase::source(&format!(
         r#"
-let DirectEither = @(import("{library}/data/either.zy")) in
+let (/Either = DirectEither) = @(import("{library}/data/either.zy")) in
 let (/ExceptionT) = builtin |> (@(import("{library}/effect/exception.zy"))) in
 let _ = val (L : VType) (R : VType) (value : Either L R) =>
   (
@@ -83,4 +83,88 @@ do _ <- ! either/fold String Int (Ret Int) (+Left("error") : Either String Int)
     ] {
         EitherCase::reject(body, TyckDiagnosticCode::TypeMismatch);
     }
+}
+
+struct RepresentationCase;
+
+impl RepresentationCase {
+    fn source(body: &str) -> String {
+        let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+        format!(
+            r#"
+let (/BytesPackage; /make = make_bytes) = @(import("{library}/text/bytes.zy")) in
+let byte_package : BytesPackage Addr = make_bytes builtin in
+let (/Bytes; /bytes) = byte_package in
+let (/Types; /make = make_types) = @(import("{library}/memory/types.zy")) in
+let type_package : Types Addr = make_types Addr in
+let (/Uninit; /Init; /Ptr; types) = type_package in
+let (/StoragePackage; /make = make_storage) = @(import("{library}/memory/storage.zy")) in
+let storage_package : StoragePackage = make_storage builtin in
+let (/Storage; /DynamicStorage; /SizeAlign) = storage_package in
+let (/FieldOperations; /make = make_fields) = @(import("{library}/memory/field.zy")) in
+let (= Field, = DynamicField, field_operations) = make_fields builtin types in
+let _ : FieldOperations Uninit Init Ptr Field DynamicField = field_operations in
+{body}
+"#,
+            library = library.display(),
+        )
+    }
+}
+
+#[test]
+fn colocated_contracts_preserve_representation_opacity() {
+    for (abstract_type, representation) in [
+        ("Bytes", "Addr * Int"),
+        ("Ptr Int Init", "Addr"),
+        ("Storage Int", "val pi (_ : Unit) . SizeAlign"),
+        ("DynamicStorage Int", "SizeAlign"),
+        ("Field Int Int", "val pi (_ : Unit) . Int"),
+        ("DynamicField Int Int", "Int"),
+    ] {
+        let accepted = RepresentationCase::source(&format!(
+            "let _ = val (value : {abstract_type}) => (value : {abstract_type}) in ! exit 0"
+        ));
+        SourceCase::assert_accepted(SourceCase::check_linted(&accepted));
+        let rejected = RepresentationCase::source(&format!(
+            "let _ = val (value : {abstract_type}) => (value : {representation}) in ! exit 0"
+        ));
+        SourceCase::assert_rejected(SourceCase::check(&rejected), TyckDiagnosticCode::TypeMismatch);
+        SourceCase::assert_rejected(SourceCase::lower(&rejected), TyckDiagnosticCode::TypeMismatch);
+    }
+}
+
+#[test]
+fn colocated_factories_keep_independent_openings_distinct() {
+    SourceCase::assert_accepted(SourceCase::check_linted(&RepresentationCase::source(
+        "let _ : Thk (Ret Bytes) = bytes/empty in ! exit 0",
+    )));
+    SourceCase::assert_rejected(
+        SourceCase::check(&RepresentationCase::source(
+            "let (/Bytes = OtherBytes) = byte_package in \
+             let _ = val (value : Bytes) => (value : OtherBytes) in ! exit 0",
+        )),
+        TyckDiagnosticCode::TypeMismatch,
+    );
+}
+
+#[test]
+fn shared_dictionary_contracts_remain_manifest_and_constructible() {
+    let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+    let source = |zero: &str| {
+        format!(
+            r#"
+let (/Additive) = @(import("{library}/numeric/dictionary.zy")) in
+let (/Additive = SameAdditive) = @(import("{library}/numeric/dictionary.zy")) in
+let dictionary : Additive Int = (
+  #zero = {zero}, #add = int/add, #sub = int/sub,
+  #negate = {{ fn (value : Int) => ! int/sub 0 value }}
+) in
+let _ : SameAdditive Int = dictionary in
+! exit 0
+"#,
+            library = library.display(),
+        )
+    };
+    SourceCase::assert_accepted(SourceCase::check_linted(&source("0")));
+    SourceCase::assert_rejected(SourceCase::check(&source("()")), TyckDiagnosticCode::TypeMismatch);
 }

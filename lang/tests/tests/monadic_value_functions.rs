@@ -14,7 +14,7 @@ impl MonadicCase {
         format!(
             r#"
 let monadic_basis = @(import("{}")) in
-let (/Monad; /Algebra) = builtin |> monadic_basis in
+let (/Monad; /Algebra) = monadic_basis in
 {body}
 "#,
             basis.display()

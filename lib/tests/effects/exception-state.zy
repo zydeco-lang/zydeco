@@ -12,7 +12,7 @@ param (
   /process;
   builtin
 ) : @(import("../../std/builtin.zy")) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
 let (/IState; /instance = state_instance; /modify; /run_state; /eval_state) =
   builtin |> (@(import("../../std/effect/state.zy")))
 in

@@ -1,4 +1,4 @@
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("${effect}/monad.zy"))) in
+let (/Monad; /Algebra; /WithMonad) = @(import("${effect}/monad.zy")) in
 let (/IReader; reader) = builtin |> (@(import("${effect}/reader.zy"))) in
 let (/Monoid; /IWriter; writer) = builtin |> (@(import("${effect}/writer.zy"))) in
 let (/Option; /IOption; optional) = builtin |> (@(import("${effect}/option.zy"))) in

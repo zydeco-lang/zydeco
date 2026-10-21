@@ -330,3 +330,47 @@ fn desynchronizing_a_thunk_shape_is_reported() {
         )
     });
 }
+
+#[test]
+fn manifest_constructor_structures_keep_anonymous_witnesses_in_scope() {
+    let library = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lib/std");
+    let source = format!(
+        r#"
+let (/Monad; /Algebra) = @(import("{}/effect/monad.zy")) in
+let exported = @[monadic] pack (= Interface as Monad) where () end in
+ret ()
+"#,
+        library.display(),
+    );
+    let (mut statics, root) = SourceCase::checked_arena(&source).unwrap();
+    let errors = LintChecker::new(&statics).validate(root);
+    assert!(errors.is_empty(), "manifest constructor structures must lint cleanly: {errors:?}");
+    let (signature, witness, body) = statics
+        .types_pre
+        .iter()
+        .find_map(|(id, _)| {
+            let Type::Forall(zydeco_statics::syntax::Forall(binder, body)) =
+                statics.normalized_at(id)?
+            else {
+                return None;
+            };
+            let kind = statics.annotations_abst[&binder.witness];
+            (statics.abst_hints.get(&binder.witness).is_none()
+                && matches!(
+                    statics.normalized_kind_at(kind),
+                    Some(zydeco_statics::syntax::Kind::Arrow(_))
+                ))
+            .then_some((id, binder.witness, *body))
+        })
+        .expect("a constructor structure quantifies an anonymous carrier");
+    // Removing that quantifier must expose the now-free witness in the codata
+    // arms, rather than silently accepting all declaration bodies as ambient.
+    let body = statics.normalized_at(body).unwrap().clone();
+    statics.types_pre.replace_existing(signature, Fillable::Done(body.clone()));
+    let _ = statics.types_normalized.upsert(signature, body);
+    assert_reports(
+        &statics,
+        root,
+        |error| matches!(error, LintError::WitnessEscape { witness: found, .. } if *found == witness),
+    );
+}

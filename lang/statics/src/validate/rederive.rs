@@ -940,7 +940,8 @@ impl<'a> RederiveChecker<'a> {
         match root {
             | TermAnnId::Value(value, _) => self.check_value(value, ambient),
             | TermAnnId::Compu(compu, _) => self.check_computation(compu, ambient),
-            | _ => {}
+            | TermAnnId::Type(ty, _) => self.check_type_scope(ty, ambient),
+            | TermAnnId::Kind(_) | TermAnnId::Hole(_) => {}
         }
     }
 
@@ -965,24 +966,16 @@ impl<'a> RederiveChecker<'a> {
         for value in inlinables {
             self.check_value(value, &scope);
         }
-        let type_roots: Vec<TypeId> =
-            self.statics
-                .type_definitions
-                .iter()
-                .map(|(_, ty)| *ty)
-                .chain(self.statics.seals.iter().map(|(_, ty)| *ty))
-                .chain(
-                    self.statics
-                        .datas
-                        .iter()
-                        .flat_map(|(_, data)| data.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
-                )
-                .chain(
-                    self.statics.codatas.iter().flat_map(|(_, codata)| {
-                        codata.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()
-                    }),
-                )
-                .collect();
+        // Data and codata arms inherit the scope of their enclosing type.
+        // Walking them as standalone roots loses anonymous binders introduced
+        // by signatures such as the structure of a manifest type constructor.
+        let type_roots: Vec<TypeId> = self
+            .statics
+            .type_definitions
+            .iter()
+            .map(|(_, ty)| *ty)
+            .chain(self.statics.seals.iter().map(|(_, ty)| *ty))
+            .collect();
         for ty in type_roots {
             self.check_type_scope(ty, &scope);
         }
@@ -1397,9 +1390,21 @@ impl<'a> RederiveChecker<'a> {
             | Type::Unit(_)
             | Type::Opaque(_)
             | Type::Primitive(_)
-            | Type::OS(_)
-            | Type::Data(_)
-            | Type::CoData(_) => {}
+            | Type::OS(_) => {}
+            | Type::Data(data) => {
+                if let Some(arms) = self.statics.datas.get(data).cloned() {
+                    for (_, arm) in arms.iter() {
+                        self.check_type_scope(*arm, scope);
+                    }
+                }
+            }
+            | Type::CoData(codata) => {
+                if let Some(arms) = self.statics.codatas.get(codata).cloned() {
+                    for (_, arm) in arms.iter() {
+                        self.check_type_scope(*arm, scope);
+                    }
+                }
+            }
             | Type::ValPi(inner) => match inner.as_ref() {
                 | ValPi { binder, codomain } => match binder {
                     | ValPiBinder::Type(binder) => {

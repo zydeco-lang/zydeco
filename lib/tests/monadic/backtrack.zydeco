@@ -3,9 +3,19 @@ param (/Thk; /Ret; /Unit; /Int; /OS; /numeric; /stdio; /process; builtin) : @(im
   "../../std/builtin.zy"
 )) in
 let (/Bool; /List; /list; /bool; data_package) = builtin |> (
-  @(import("../../std/data/package.zy"))
+  (
+    let (/make = make_data) = @(import("../../std/data/package.zy")) in
+    make_data
+  )
 ) in
-let nondet = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let nondet = (
+  builtin |> (
+    (
+      let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
+      make_nondet
+    )
+  )
+) data_package in
 let (N, n) = nondet/instance in
 do empty <- ! list/nil Int;
 do xs_tail <- ! list/cons Int 2 empty;

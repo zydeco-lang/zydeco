@@ -1,6 +1,7 @@
+let (/BytesPackage) = @(import("../std/text/bytes.zy")) in
 begin
   param val (/Thk; /Ret; /UInt32; /UInt64; /Int; /Addr; builtin) : @(import("../std/builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("../std/text/bytes.type.zy"))) Addr in
+  param val (/Bytes; /bytes) : BytesPackage Addr in
   let Window = Addr in
   let hash32 : Thk (Window -> Int -> UInt32 -> Ret UInt32) =
     @(ffi(c, library("xxhash"), symbol("XXH32")))
@@ -11,7 +12,7 @@ begin
   let hash3 : Thk (Window -> Int -> Ret UInt64) =
     @(ffi(c, library("xxhash"), symbol("XXH3_64bits")))
   in
-  let Fault = @(import("../std/memory/fault.zy")) in
+  let (/Fault) = @(import("../std/memory/fault.zy")) in
   let fail32 : Thk (Fault -> Ret UInt32) = {
     fn _ =>
       @[partial]

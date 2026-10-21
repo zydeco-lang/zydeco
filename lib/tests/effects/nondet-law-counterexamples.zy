@@ -1,10 +1,11 @@
 -- The eager returned-list dictionary typechecks but fails branching associativity.
+let (/make = make_data) = @(import("../../std/data/package.zy")) in
 param (/VType; /Thk; /Ret; /Int; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
-let (/Monad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
-let MonadNonDet = @(import("../../std/effect/nondet.type.zy")) in
+let (/List; /list; data_package) = builtin |> make_data in
+let (/Monad) = @(import("../../std/effect/monad.zy")) in
+let (/MonadNonDet) = @(import("../../std/effect/nondet.zy")) in
 let (/render) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (/branch_laws) = builtin |> (@(import("nondet-law-suite.zy"))) in

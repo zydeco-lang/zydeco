@@ -69,7 +69,7 @@ At `a12537a0`, this complete term passes checking even though `B` is free in the
 ```zydeco
 param (/CType; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
 let basis = @(import("../../lib/std/effect/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> basis in
+let (/Monad; /Algebra) = basis in
 fn (B : CType) => @[monadic] fn (k : Thk B) => ! k
 ```
 

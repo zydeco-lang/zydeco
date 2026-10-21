@@ -6,5 +6,6 @@ begin
     | +Right : R
     end
   in
-  Either
+  pack (= Either as Either)
+  where () end
 end

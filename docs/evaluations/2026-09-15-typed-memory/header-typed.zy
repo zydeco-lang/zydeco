@@ -4,7 +4,7 @@ let (/Ptr; /Init; /fixed; /arrays; /records; /headers; /views; /codecs) =
   builtin |> (@(import("../../../lib/std/memory/package.zy")))
 in
 let (= Plan, = Layout, layout) = fixed in
-let Fault = @(import("../../../lib/std/memory/fault.zy")) in
+let (/Fault) = @(import("../../../lib/std/memory/fault.zy")) in
 let Update = Thk (Addr -> Int -> Thk (Fault -> OS) -> Thk OS -> OS) in
 let fail : Update = { fn _ _ _ _ => ! process/exit 41 } in
 let update =

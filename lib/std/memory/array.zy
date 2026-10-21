@@ -1,21 +1,27 @@
 -- Geometry-only array construction; whole-value codecs are selected explicitly afterward.
+
+let (/Types) = @(import("types.zy")) in
+let (/StoragePackage) = @(import("storage.zy")) in
+let (/Codec; /DynamicCodec) = @(import("codecs.zy")) in
+let (/Alloc) = @(import("allocation.zy")) in
+let (/Fault) = @(import("fault.zy")) in
+let (/Error) = @(import("layout-error.zy")) in
+let (/Either) = @(import("../data/either.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; builtin) : @(import(
     "../builtin.zy"
   )) in
-  param val (/Uninit; /Init; /Ptr; types) : (@(import("types.type.zy"))) Addr in
-  param val (/Storage; /DynamicStorage; /constant; /runtime) : @(import("storage.type.zy")) in
-  let Fault = @(import("fault.zy")) in
-  let Error = @(import("layout-error.zy")) in
-  let Either = @(import("../data/either.zy")) in
+  param val (/Uninit; /Init; /Ptr; types) : Types Addr in
+  param val (/Storage; /DynamicStorage; /constant; /runtime) : StoragePackage in
+
   let size = @(import("size.zy")) in
   let dynamic_size = builtin |> (@(import("dynamic-size.zy"))) in
   let (/Array; /make = fixed_core) = (builtin |> (@(import("array-core.zy")))) types Storage in
   let (/Array = RuntimeParts; /make = dynamic_core) = (builtin |> (@(import("array-core.zy"))))
     types DynamicStorage in
-  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
-  let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
-  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let Codec = Codec Uninit Init Ptr in
+  let DynamicCodec = DynamicCodec Uninit Init Ptr in
+  let Alloc = Alloc Addr in
   let DynamicArray (Element : VType) =
     exists (= L : VType) (= Build : VType) (= Values : VType -> VType) .
         (#capacity :: Int) * (#stride :: Int) * (#storage :: DynamicStorage L)

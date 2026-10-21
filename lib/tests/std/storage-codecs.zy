@@ -5,7 +5,7 @@ begin
   let (/Storage; /DynamicStorage; /Uninit; /Init; /Ptr; /storage; /codecs; /allocation) =
     builtin |> (@(import(/std/memory)))
   in
-  let Fault = @(import("../../std/memory/fault.zy")) in
+  let (/Fault) = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
   let ! dynamic (count : Int) (boundary : Int) : OS =

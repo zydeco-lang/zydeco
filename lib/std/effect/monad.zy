@@ -1,21 +1,31 @@
-param val (/VType; /CType; /Thk; builtin) : @(import("../builtin.zy")) in
+-- Closed relative-monad interfaces; no host capabilities are needed to open them.
 begin
-  -- Shared Monad and algebra type constructors, and the packed base interface.
-  let Monad = @(import("monad.type.zy")) that
-  let Algebra = @(import("algebra.type.zy")) that
-  let MonadInstance = @(import("monad-instance.type.zy")) that
-
-  -- Compose carrier-indexed operations before packaging one carrier and its monad.
+  let VType = @(intrinsic(vtype)) in
+  let CType = @(intrinsic(ctype)) in
+  let Thk = @(intrinsic(thk)) in
+  let Top =
+    codata
+    end
+  in
+  let Monad (M : VType -> CType) =
+    codata
+    | .return : forall (A : VType) . A -> M A
+    | .bind : forall (A : VType) (B : VType) . Thk (M A) -> Thk (A -> M B) -> M B
+    end
+  in
+  let Algebra (M : VType -> CType) (R : CType) =
+    forall (A : VType) . Thk (M A) -> Thk (A -> R) -> R
+  in
+  -- One base carrier and its dictionary, without additional effect operations.
+  let MonadInstance = exists (M : VType -> CType) . Thk (Monad M) in
   let WithMonad (I : (VType -> CType) -> VType) =
     exists (M : VType -> CType) . (#monad :: Thk (Monad M)) * I M
-  that
-
+  in
   pack
+    (= Top as Top)
     (= Monad as Monad)
     (= Algebra as Algebra)
     (= MonadInstance as MonadInstance)
     (= WithMonad as WithMonad)
-  where
-    ()
-  end
+  where () end
 end

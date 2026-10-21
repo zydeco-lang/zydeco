@@ -1,17 +1,28 @@
 -- Ordered output. Append remains total and observationally pure across translation.
+let (/Monad; /Algebra; /Top) = @(import("monad.zy")) in
+let (/Monoid) = @(import("../algebra/monoid.zy")) in
+let (/Transformer) = @(import("transformer.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Thk = @(intrinsic(thk)) in
+let Unit = @(intrinsic(unit)) in
+
+let MonadWriter (W : VType) (M : VType -> CType) =
+  codata
+  | .tell : W -> M Unit
+  | .listen : forall (A : VType) . Thk (M A) -> M (A * W)
+  end
+in
 val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad; /Algebra) = builtin |> (@(import("monad.zy"))) in
-    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
-      let Top = @(import("top.type.zy")) that
       let triv : Thk Top = {
         comatch
         end
       } that
-      let Monoid = @(import("../algebra/monoid.type.zy")) that
-      let MonadWriter = @(import("writer.type.zy")) that
+
       let WriterSource (W : VType) (A : VType) = Ret (A * W) that
       let WriterT (W : VType) (M : VType -> CType) =
         (@[monadic] WriterSource) M W
@@ -28,10 +39,10 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
               let VType = @(intrinsic(vtype)) in
               let Thk = @(intrinsic(thk)) in
               let Ret = @(intrinsic(ret)) in
-              let Transformer = @(import("transformer-inner.type.zy")) in
-              let with_lift = { @(import("transformer-source.zy")) } in
+
+              let (/with_lift) = @(import("transformer-source.zy")) in
               let Writer = WriterSource in
-              let MonadWriter = @(import("writer.type.zy")) in
+
               let Source (W : VType) =
                 codata
                 | .core : Transformer Ret (Writer W)

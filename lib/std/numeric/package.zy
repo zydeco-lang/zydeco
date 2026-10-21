@@ -1,4 +1,6 @@
 @[package(library, name(std/numeric))]
+
+let (/DataPackage) = @(import("../data/package.zy")) in
 begin
   param val (
     (/String;
@@ -8,10 +10,10 @@ begin
       /numeric;
       builtin
     ) : @(import("../builtin.zy")),
-    (/Bool; /bool) : @(import("../data/package.type.zy"))
+    (/Bool; /bool) : DataPackage
   ) that
-  let make_integer = @(import("integer.zy")) that
-  let make_float = @(import("float.zy")) that
+  let (/make = make_integer) = @(import("integer.zy")) that
+  let (/make = make_float) = @(import("float.zy")) that
   let int8 = numeric/int8 in
   let int16 = numeric/int16 in
   let int32 = numeric/int32 in

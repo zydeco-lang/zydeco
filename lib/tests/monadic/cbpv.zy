@@ -15,9 +15,8 @@ begin
     builtin
   ) : @(import("../../std/builtin.zy")) that
   let string = text/string that
-  let (/Monad; /Algebra) = builtin |> monadic_basis in
+  let (/Monad; /Algebra) = monadic_basis in
   begin
-
     def Bool =
       data
       | +True : Unit

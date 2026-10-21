@@ -1,105 +1,193 @@
+let (/BoolModule) = @(import("../data/package.zy")) in
+let (/Numeric) = @(import("dictionary.zy")) in
+let VType = @(intrinsic(vtype)) in
+let Thk = @(intrinsic(thk)) in
+let Ret = @(intrinsic(ret)) in
+let CType = @(intrinsic(ctype)) in
+
 begin
-  param val Bool : @(intrinsic(vtype)) that
-  param val Scalar : @(intrinsic(vtype)) that
-  param val String : @(intrinsic(vtype)) that
-  param val (
-    (/CType; /Thk; /Ret) : @(import("../builtin.zy")),
-    bool : (@(import("../data/bool.type.zy"))) Bool,
-    primitive : (@(import("primitive-integer.type.zy"))) Scalar String,
-    zero : Scalar,
-    one : Scalar
-  ) that
-  let Numeric = @(import("numeric.type.zy")) in
-  let IntegerModule = @(import("integer.type.zy")) in
-  let zero : Scalar = zero in
-  let one : Scalar = one in
-  let ! compare
-    (
-      predicate : Thk (
-        forall (B : CType) . Scalar -> Scalar -> Thk B -> Thk B -> B
-      )
-    )
-    (left : Scalar)
-    (right : Scalar)
-  : Ret Bool = ! predicate
-      (Ret Bool)
-      left
-      right
-      { ret bool/true }
-      { ret bool/false }
+  let IntegerModule (Bool : VType) (Integer : VType) (String : VType) =
+      (#add :: Thk (Integer -> Integer -> Ret Integer))
+    * (#sub :: Thk (Integer -> Integer -> Ret Integer))
+    * (#mul :: Thk (Integer -> Integer -> Ret Integer))
+    * (#div :: Thk (Integer -> Integer -> Ret Integer))
+    * (#mod :: Thk (Integer -> Integer -> Ret Integer))
+    * (#eq :: Thk (Integer -> Integer -> Ret Bool))
+    * (#ne :: Thk (Integer -> Integer -> Ret Bool))
+    * (#lt :: Thk (Integer -> Integer -> Ret Bool))
+    * (#le :: Thk (Integer -> Integer -> Ret Bool))
+    * (#gt :: Thk (Integer -> Integer -> Ret Bool))
+    * (#ge :: Thk (Integer -> Integer -> Ret Bool))
+    * (#increment :: Thk (Integer -> Ret Integer))
+    * (#decrement :: Thk (Integer -> Ret Integer))
+    * (#negate :: Thk (Integer -> Ret Integer))
+    * (#min :: Thk (Integer -> Integer -> Ret Integer))
+    * (#max :: Thk (Integer -> Integer -> Ret Integer))
+    * (#to_string :: Thk (Integer -> Ret String))
   in
-  let operations : IntegerModule Bool Scalar String = (
-    #add = primitive/add,
-    #sub = primitive/sub,
-    #mul = primitive/mul,
-    #div = primitive/div,
-    #mod = primitive/mod,
-    #eq = {
-      fn left right => ! compare primitive/eq left right
-    },
-    #ne = {
-      fn left right =>
-        do equal <- ! compare primitive/eq left right;
-        ! bool/not equal
-    },
-    #lt = {
-      fn left right => ! compare primitive/lt left right
-    },
-    #le = {
-      fn left right =>
-        do greater <- ! compare primitive/gt left right;
-        ! bool/not greater
-    },
-    #gt = {
-      fn left right => ! compare primitive/gt left right
-    },
-    #ge = {
-      fn left right =>
-        do less <- ! compare primitive/lt left right;
-        ! bool/not less
-    },
-    #increment = {
-      fn value => ! primitive/add value one
-    },
-    #decrement = {
-      fn value => ! primitive/sub value one
-    },
-    #negate = {
-      fn value => ! primitive/sub zero value
-    },
-    #min = {
-      fn left right =>
-        do less <- ! compare primitive/lt left right;
-        ! bool/if (Ret Scalar) less { ret left } { ret right }
-    },
-    #max = {
-      fn left right =>
-        do greater <- ! compare primitive/gt left right;
-        ! bool/if (Ret Scalar) greater { ret left } { ret right }
-    },
-    #to_string = primitive/to_string
-  ) in
-  let dictionary : Numeric Bool Scalar = (
-    #additive = (
-      = zero,
-      #add = operations/add,
-      #sub = operations/sub,
-      #negate = operations/negate
-    ),
-    #multiplicative = (
-      = one,
-      #mul = operations/mul
-    ),
-    #order = (
-      #equality = (
-        #eq = operations/eq,
-        #ne = operations/ne
-      ),
-      #lt = operations/lt,
-      #le = operations/le,
-      #gt = operations/gt,
-      #ge = operations/ge
-    )
-  ) in
-  (= operations, = dictionary)
+  let PrimitiveIntegerModule (Integer : VType) (String : VType) =
+      (#add :: Thk (Integer -> Integer -> Ret Integer))
+    * (#sub :: Thk (Integer -> Integer -> Ret Integer))
+    * (#mul :: Thk (Integer -> Integer -> Ret Integer))
+    * (#div :: Thk (Integer -> Integer -> Ret Integer))
+    * (#mod :: Thk (Integer -> Integer -> Ret Integer))
+    * (
+        #eq :: Thk (
+          forall (R : CType) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        #lt :: Thk (
+          forall (R : CType) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        #gt :: Thk (
+          forall (R : CType) .
+            Integer -> Integer -> Thk R -> Thk R -> R
+        )
+      )
+    * (#to_string :: Thk (Integer -> Ret String))
+  in
+  let Builder =
+    begin
+      let VType = @(intrinsic(vtype)) in
+
+      let Package
+        (Bool : VType)
+        (Scalar : VType)
+        (String : VType)
+      =
+          (#operations :: IntegerModule Bool Scalar String)
+        * (#dictionary :: Numeric Bool Scalar)
+      in
+      val pi
+        (Bool : VType)
+        (Scalar : VType)
+        (String : VType)
+        (
+          (/VType; builtin) : @(import("../builtin.zy")),
+          _ : BoolModule Bool,
+          _ : PrimitiveIntegerModule Scalar String,
+          _ : Scalar,
+          _ : Scalar
+        )
+      .
+        Package Bool Scalar String
+    end
+  in
+  let make : Builder =
+    begin
+      param val Bool : @(intrinsic(vtype)) that
+      param val Scalar : @(intrinsic(vtype)) that
+      param val String : @(intrinsic(vtype)) that
+      param val (
+        (/CType; /Thk; /Ret) : @(import("../builtin.zy")),
+        bool : BoolModule Bool,
+        primitive : PrimitiveIntegerModule Scalar String,
+        zero : Scalar,
+        one : Scalar
+      ) that
+
+      let zero : Scalar = zero in
+      let one : Scalar = one in
+      let ! compare
+        (
+          predicate : Thk (
+            forall (B : CType) . Scalar -> Scalar -> Thk B -> Thk B -> B
+          )
+        )
+        (left : Scalar)
+        (right : Scalar)
+      : Ret Bool = ! predicate
+          (Ret Bool)
+          left
+          right
+          { ret bool/true }
+          { ret bool/false }
+      in
+      let operations : IntegerModule Bool Scalar String = (
+        #add = primitive/add,
+        #sub = primitive/sub,
+        #mul = primitive/mul,
+        #div = primitive/div,
+        #mod = primitive/mod,
+        #eq = {
+          fn left right => ! compare primitive/eq left right
+        },
+        #ne = {
+          fn left right =>
+            do equal <- ! compare primitive/eq left right;
+            ! bool/not equal
+        },
+        #lt = {
+          fn left right => ! compare primitive/lt left right
+        },
+        #le = {
+          fn left right =>
+            do greater <- ! compare primitive/gt left right;
+            ! bool/not greater
+        },
+        #gt = {
+          fn left right => ! compare primitive/gt left right
+        },
+        #ge = {
+          fn left right =>
+            do less <- ! compare primitive/lt left right;
+            ! bool/not less
+        },
+        #increment = {
+          fn value => ! primitive/add value one
+        },
+        #decrement = {
+          fn value => ! primitive/sub value one
+        },
+        #negate = {
+          fn value => ! primitive/sub zero value
+        },
+        #min = {
+          fn left right =>
+            do less <- ! compare primitive/lt left right;
+            ! bool/if (Ret Scalar) less { ret left } { ret right }
+        },
+        #max = {
+          fn left right =>
+            do greater <- ! compare primitive/gt left right;
+            ! bool/if (Ret Scalar) greater { ret left } { ret right }
+        },
+        #to_string = primitive/to_string
+      ) in
+      let dictionary : Numeric Bool Scalar = (
+        #additive = (
+          = zero,
+          #add = operations/add,
+          #sub = operations/sub,
+          #negate = operations/negate
+        ),
+        #multiplicative = (
+          = one,
+          #mul = operations/mul
+        ),
+        #order = (
+          #equality = (
+            #eq = operations/eq,
+            #ne = operations/ne
+          ),
+          #lt = operations/lt,
+          #le = operations/le,
+          #gt = operations/gt,
+          #ge = operations/ge
+        )
+      ) in
+      (= operations, = dictionary)
+    end
+  in
+  pack
+    (= IntegerModule as IntegerModule)
+    (= PrimitiveIntegerModule as PrimitiveIntegerModule)
+  where
+    = make
+  end
 end

@@ -1,9 +1,11 @@
 -- Sequence codecs compose scalar memory leaves with immutable source bytes.
+
+let (/BytesPackage) = @(import("../text/bytes.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret; /Int; /Addr;
     /Int8; /Int16; /Int32; /Int64; /UInt8; /UInt16; /UInt32; /UInt64; /UInt; /Float32; /Float64;
     /numeric; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr that
+  param val (/Bytes; /bytes) : BytesPackage Addr that
   let int = numeric/int in
   -- The high storage byte must preserve the sign bit (Int), or leave bit 63 clear (UInt).
   let any_bytes = { fn (R : CType) (_ : Bytes) (_ : Thk R) (yes : Thk R) => ! yes } in

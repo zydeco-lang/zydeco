@@ -1,10 +1,11 @@
 -- An example foreign decoder for the native little-endian record in contracts.c.
 -- It accepts arbitrary padding and returns logical fields for canonical storage construction.
+let (/BytesPackage) = @(import("../../std/text/bytes.zy")) in
 begin
   param val (/Addr; /CType; /Thk; /UInt8; /UInt32; /numeric; builtin) : @(import(
     "../../std/builtin.zy"
   )) that
-  param val (/Bytes; /bytes; byte_package) : (@(import("../../std/text/bytes.type.zy"))) Addr that
+  param val (/Bytes; /bytes; byte_package) : BytesPackage Addr that
   let codecs = (builtin |> (@(import("../../std/numeric/codecs.zy")))) byte_package in
 
   let (/fixed) = builtin |> (@(import("../../std/memory/package.zy"))) in

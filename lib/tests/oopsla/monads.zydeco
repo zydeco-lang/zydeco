@@ -6,10 +6,9 @@ begin
     "../../std/builtin.zy"
   )) that
   let (/Monad; /Algebra) =
-    builtin |> monadic_basis
+    monadic_basis
   in
   begin
-
     --| The continuation monad
     def Kont (R : CType) (A : VType) =
       codata

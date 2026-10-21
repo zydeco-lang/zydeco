@@ -40,7 +40,8 @@ impl ForeignExamples {
         let library = Self::library();
         format!(
             r#"
-let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{library}/std/text/bytes.zy"))) in
+let (/make = make_bytes) = @(import("{library}/std/text/bytes.zy")) in
+let (/Bytes; /bytes; byte_package) = make_bytes builtin in
 let (/Uninit; /Init; /Ptr; /fixed; /allocation; /pointer) = builtin |> (@(import("{library}/std/memory/package.zy"))) in
 let (= Plan, = Layout, memory) = fixed in
 let (/Alloc; /heap) = allocation in

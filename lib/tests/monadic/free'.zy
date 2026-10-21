@@ -17,9 +17,8 @@ begin
   ) : @(import("../../std/builtin.zy")) that
   let int = numeric/int that
   let string = text/string that
-  let (/Monad; /Algebra) = builtin |> monadic_basis in
+  let (/Monad; /Algebra) = monadic_basis in
   begin
-
     let Kont (R : CType) (A : VType) = Thk (A -> R) -> R that
     def Bool =
       data

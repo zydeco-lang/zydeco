@@ -7,7 +7,7 @@ val
   )
 =>
   begin
-    let (/Monad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
+    let (/Monad) = @(import("../../std/effect/monad.zy")) in
     begin
       def ! compare (M : VType -> CType)
         (observe : Thk (Thk (M Int) -> Ret String))

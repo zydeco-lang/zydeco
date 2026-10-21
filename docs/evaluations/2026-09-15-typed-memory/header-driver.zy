@@ -3,7 +3,7 @@ begin
   param val (/Addr; /Int; /Int64; /OS; /Thk; /numeric; /system; /process; builtin) : @(import(
     "../../../lib/std/builtin.zy"
   )) in
-  let Fault = @(import("../../../lib/std/memory/fault.zy")) in
+  let (/Fault) = @(import("../../../lib/std/memory/fault.zy")) in
   val (update : Thk (Addr -> Int -> Thk (Fault -> OS) -> Thk OS -> OS)) =>
     {
       let fail = { ! process/exit 41 } in

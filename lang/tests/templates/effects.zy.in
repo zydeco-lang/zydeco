@@ -1,4 +1,4 @@
-let (/Monad; /WithMonad) = builtin |> (@(import("${effect}/monad.zy"))) in
+let (/Monad; /WithMonad) = @(import("${effect}/monad.zy")) in
 let (/IState; /instance = state_instance; /modify) =
   builtin |> (@(import("${effect}/state.zy"))) in
 let (/IException; /instance = exception_instance; /raise; /catch) =

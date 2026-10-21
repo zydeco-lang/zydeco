@@ -6,7 +6,7 @@ let (
 ) = builtin |> (@(import("${directory}/package.zy"))) in
 let (= Plan, = Layout, memory) = fixed in
 let (/Alloc; /heap) = allocation in
-let Fault = @(import("${directory}/fault.zy")) in
+let (/Fault) = @(import("${directory}/fault.zy")) in
 let size = @(import("${directory}/size.zy")) in
 let fail = { ! exit 1 } in
 let no = { fn (_ : Fault) => ! fail } in

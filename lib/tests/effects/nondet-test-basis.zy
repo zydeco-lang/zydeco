@@ -1,8 +1,9 @@
 -- Shared observations for the search regressions; the caller forwards one List opening.
+let (/DataPackage) = @(import("../../std/data/package.zy")) in
 begin
   param val (/Thk; /Ret; /Unit; /Int; /String; /numeric; /string) :
   @(import("../../std/builtin.zy")) in
-  param val (/List; /list) : @(import("../../std/data/package.type.zy")) in
+  param val (/List; /list) : DataPackage in
   begin
     def ! render (values : List Int) : Ret String =
       ! list/fold Int (Ret String) values { ret "" } {

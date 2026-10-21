@@ -1,11 +1,14 @@
 -- A manually managed byte builder. Copies of its handle do not track later state changes.
+
+let (/BytesPackage) = @(import("../text/bytes.zy")) in
+let (/Alloc) = @(import("allocation.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret; /Addr; /Int; /UInt8; /numeric; builtin) : @(import(
     "../builtin.zy"
   )) that
-  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr in
+  param val (/Bytes; /bytes) : BytesPackage Addr in
   let (/Fault; /unsafe; native) = builtin |> (@(import("native.zy"))) in
-  let Alloc = (@(import("allocator.type.zy"))) Addr in
+  let Alloc = Alloc Addr in
   let Buffer = Addr * Int * Int in
   let int = numeric/int in
   let allocate : Thk (

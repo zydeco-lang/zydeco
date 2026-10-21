@@ -440,8 +440,8 @@ The `Ret` instance implements the operations with ordinary `ret` and `do`:
 
 ```zydeco
 param (/Ret; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_monad = @(import("../../lib/std/effect/monad.zy")) in
-let (/Monad) = builtin |> make_monad in
+let monad_basis = @(import("../../lib/std/effect/monad.zy")) in
+let (/Monad) = monad_basis in
 let ! mo_ret : Monad Ret = comatch
   | .return A value => ret value
   | .bind A B computation continuation =>
@@ -462,8 +462,8 @@ Open the basis in the annotation's scope:
 
 ```zydeco
 param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_monad = @(import("../../lib/std/effect/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> make_monad in
+let monad_basis = @(import("../../lib/std/effect/monad.zy")) in
+let (/Monad; /Algebra) = monad_basis in
 let mo_ret : Thk (Monad Ret) = {
   comatch
   | .return A value => ret value
@@ -560,8 +560,8 @@ This example reads the old state, replaces it, and returns both the old and fina
 
 ```zydeco
 param (/VType; /Thk; /Ret; /Unit; /Int; builtin) : @(import("../../lib/std/builtin.zy")) in
-let make_monad = @(import("../../lib/std/effect/monad.zy")) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> make_monad in
+let monad_basis = @(import("../../lib/std/effect/monad.zy")) in
+let (/Monad; /Algebra; /WithMonad) = monad_basis in
 let make_state = @(import("../../lib/std/effect/state.zy")) in
 let (/IState; /instance; /run_state) = builtin |> make_state in
 let program : Thk (pi ((M, _) : WithMonad (IState Int)) . Int -> M Int) = {

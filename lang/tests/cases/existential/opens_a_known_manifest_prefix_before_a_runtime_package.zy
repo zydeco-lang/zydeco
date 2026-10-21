@@ -1,0 +1,10 @@
+-- stage: run
+
+let finish = {
+  fn (package : exists (= Output as Int) . (#value :: Int)) =>
+    let library = pack (= Input as Int) where package end in
+    let (/Input; /Output; /value) = library in
+    let result : Input = (value : Output) in
+    ! exit result
+} in
+! finish pack (= Output as Int) where #value = 0 end

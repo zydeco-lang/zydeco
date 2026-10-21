@@ -27,7 +27,9 @@ if it shares the checker's faulty derivation rule.
 - Determine whether a finished arena may legitimately retain `Type::Var`.
   Bound variables usually become abstract witnesses and definition-backed variables are substituted;
   an absence invariant needs evidence across source and generated roots.
-- Reconstruct parameter telescopes for `Data` and `CoData` heads; current integrity checks establish their existence.
+- Recover declaration telescopes before checking orphan `Data` and `CoData` arms for witness scope.
+  Reachable arms inherit the enclosing classifier's scope; treating every arm
+  as a standalone root loses anonymous binders introduced by generated signatures.
 - Decide how optional lint should interact with deliberate source holes.
   Ordinary checking supports their inspection, while the current lint permits only recorded foreign placeholders.
   A broader interactive gate needs a typed distinction between intentional incompleteness and corrupt finalization.

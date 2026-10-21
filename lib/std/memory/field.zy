@@ -1,77 +1,161 @@
--- Field witnesses describe layout relationships, never allocation identity or ownership.
+let (/Types) = @(import("types.zy")) in
+let VType = @(intrinsic(vtype)) in
+let Thk = @(intrinsic(thk)) in
+let Ret = @(intrinsic(ret)) in
+let Int = @(intrinsic(int)) in
+
 begin
-  param val (/VType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
-    "../builtin.zy"
-  )) that
-  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
-  let Field (P : VType) (C : VType) = val pi (_ : Unit) . Int in
-  let val offset (P : VType) (C : VType) (field : Field P C) : Int =
-    (@(intrinsic(int_add))) (field ()) 0
+  let FieldOperations
+    (Uninit : VType)
+    (Init : VType)
+    (Ptr : VType -> VType -> VType)
+    (Field : VType -> VType -> VType)
+    (DynamicField : VType -> VType -> VType)
+  =
+      (
+        #constant ::
+          (#offset :: val pi (P : VType) (C : VType) (field : Field P C) . Int)
+        * (
+            #compose :: val pi (P : VType) (C : VType) (D : VType)
+              (outer : Field P C) (inner : Field C D)
+            .
+              Field P D
+          )
+        * (
+            #initialized :: val pi (P : VType) (C : VType) (field : Field P C)
+              (pointer : Ptr P Init)
+            .
+              Thk (Ret (Ptr C Init))
+          )
+        * (
+            #uninitialized :: val pi (P : VType) (C : VType) (field : Field P C)
+              (pointer : Ptr P Uninit)
+            .
+              Thk (Ret (Ptr C Uninit))
+          )
+        * (#unsafe :: #from_offset :: val pi (P : VType) (C : VType) (offset : Int) . Field P C)
+        * (#materialize :: val pi (P : VType) (C : VType) (field : Field P C) . DynamicField P C)
+      )
+    * (
+        #runtime ::
+          (#offset :: Thk (forall (P : VType) (C : VType) . DynamicField P C -> Ret Int))
+        * (
+            #compose :: Thk (
+              forall (P : VType) (C : VType) (D : VType) .
+                DynamicField P C -> DynamicField C D -> Ret (DynamicField P D)
+            )
+          )
+        * (
+            #initialized :: Thk (
+              forall (P : VType) (C : VType) .
+                DynamicField P C -> Ptr P Init -> Ret (Ptr C Init)
+            )
+          )
+        * (
+            #uninitialized :: Thk (
+              forall (P : VType) (C : VType) .
+                DynamicField P C -> Ptr P Uninit -> Ret (Ptr C Uninit)
+            )
+          )
+        * (
+            #unsafe :: (
+              #from_offset :: Thk (forall (P : VType) (C : VType) . Int -> Ret (DynamicField P C))
+            )
+          )
+      )
   in
-  let val from_offset (P : VType) (C : VType) (offset : Int) : Field P C =
-    let known = (@(intrinsic(int_add))) offset 0 in
-    val () => known
+  let FieldPackage (Uninit : VType) (Init : VType) (Ptr : VType -> VType -> VType) =
+    exists (= Field : VType -> VType -> VType) (= DynamicField : VType -> VType -> VType) .
+      FieldOperations Uninit Init Ptr Field DynamicField
   in
-  let val compose (P : VType) (C : VType) (D : VType)
-    (outer : Field P C) (inner : Field C D)
-  : Field P D =
-      let known = (@(intrinsic(int_add))) (outer ()) (inner ()) in
-      val () => known
+  let make =
+    -- Field witnesses describe layout relationships, never allocation identity or ownership.
+    begin
+      param val (/VType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
+        "../builtin.zy"
+      )) that
+      param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
+      let Field (P : VType) (C : VType) = val pi (_ : Unit) . Int in
+      let val offset (P : VType) (C : VType) (field : Field P C) : Int =
+        (@(intrinsic(int_add))) (field ()) 0
+      in
+      let val from_offset (P : VType) (C : VType) (offset : Int) : Field P C =
+        let known = (@(intrinsic(int_add))) offset 0 in
+        val () => known
+      in
+      let val compose (P : VType) (C : VType) (D : VType)
+        (outer : Field P C) (inner : Field C D)
+      : Field P D =
+          let known = (@(intrinsic(int_add))) (outer ()) (inner ()) in
+          val () => known
+      in
+      let val project (P : VType) (C : VType) (S : VType) (field : Field P C)
+        (pointer : Ptr P S)
+      : Thk (Ret (Ptr C S)) =
+          let offset = offset P C field in
+          {
+            do address <- ! memory/offset (unsafe/address P S pointer) offset;
+            ret (unsafe/from_address C S address)
+          }
+      in
+      let val initialized (P : VType) (C : VType) (field : Field P C) (pointer : Ptr P Init) : Thk (
+        Ret (Ptr C Init)
+      ) =
+        project P C Init field pointer
+      in
+      let val uninitialized (P : VType) (C : VType) (field : Field P C) (pointer : Ptr P Uninit) :
+        Thk (
+          Ret (Ptr C Uninit)
+        )
+      = project P C Uninit field pointer in
+      let DynamicField (P : VType) (C : VType) = Int in
+      let val materialize (P : VType) (C : VType) (field : Field P C) : DynamicField P C = offset P
+        C
+        field in
+      let dynamic = (
+        #offset = { fn (P : VType) (C : VType) (field : DynamicField P C) => ret field },
+        #compose = {
+          fn
+            (P : VType)
+            (C : VType)
+            (D : VType)
+            (outer : DynamicField P C)
+            (inner : DynamicField C D)
+          =>
+            ! numeric/int/add outer inner
+        },
+        #initialized = {
+          fn (P : VType) (C : VType) (field : DynamicField P C) (pointer : Ptr P Init) =>
+            do address <- ! memory/offset (unsafe/address P Init pointer) field;
+            (ret (unsafe/from_address C Init address) : Ret (Ptr C Init))
+        },
+        #uninitialized = {
+          fn (P : VType) (C : VType) (field : DynamicField P C) (pointer : Ptr P Uninit) =>
+            do address <- ! memory/offset (unsafe/address P Uninit pointer) field;
+            (ret (unsafe/from_address C Uninit address) : Ret (Ptr C Uninit))
+        },
+        #unsafe = #from_offset = { fn (P : VType) (C : VType) (offset : Int) => ret offset }
+      ) in
+      (
+        (
+          = Field,
+          = DynamicField,
+          #constant = (
+            = offset,
+            = compose,
+            = initialized,
+            = uninitialized,
+            #unsafe = = from_offset,
+            = materialize
+          ),
+          #runtime = dynamic
+        ) : FieldPackage Uninit Init Ptr
+      )
+    end
   in
-  let val project (P : VType) (C : VType) (S : VType) (field : Field P C)
-    (pointer : Ptr P S)
-  : Thk (Ret (Ptr C S)) =
-      let offset = offset P C field in
-      {
-        do address <- ! memory/offset (unsafe/address P S pointer) offset;
-        ret (unsafe/from_address C S address)
-      }
-  in
-  let val initialized (P : VType) (C : VType) (field : Field P C) (pointer : Ptr P Init) : Thk (
-    Ret (Ptr C Init)
-  ) =
-    project P C Init field pointer
-  in
-  let val uninitialized (P : VType) (C : VType) (field : Field P C) (pointer : Ptr P Uninit) : Thk (
-    Ret (Ptr C Uninit)
-  ) =
-    project P C Uninit field pointer
-  in
-  let DynamicField (P : VType) (C : VType) = Int in
-  let val materialize (P : VType) (C : VType) (field : Field P C) : DynamicField P C = offset P C
-    field in
-  let dynamic = (
-    #offset = { fn (P : VType) (C : VType) (field : DynamicField P C) => ret field },
-    #compose = {
-      fn (P : VType) (C : VType) (D : VType) (outer : DynamicField P C) (inner : DynamicField C D)
-      =>
-        ! numeric/int/add outer inner
-    },
-    #initialized = {
-      fn (P : VType) (C : VType) (field : DynamicField P C) (pointer : Ptr P Init) =>
-        do address <- ! memory/offset (unsafe/address P Init pointer) field;
-        (ret (unsafe/from_address C Init address) : Ret (Ptr C Init))
-    },
-    #uninitialized = {
-      fn (P : VType) (C : VType) (field : DynamicField P C) (pointer : Ptr P Uninit) =>
-        do address <- ! memory/offset (unsafe/address P Uninit pointer) field;
-        (ret (unsafe/from_address C Uninit address) : Ret (Ptr C Uninit))
-    },
-    #unsafe = #from_offset = { fn (P : VType) (C : VType) (offset : Int) => ret offset }
-  ) in
-  (
-    (
-      = Field,
-      = DynamicField,
-      #constant = (
-        = offset,
-        = compose,
-        = initialized,
-        = uninitialized,
-        #unsafe = = from_offset,
-        = materialize
-      ),
-      #runtime = dynamic
-    ) : (@(import("field.type.zy"))) Uninit Init Ptr
-  )
+  pack
+    (= FieldOperations as FieldOperations)
+  where
+    = make
+  end
 end

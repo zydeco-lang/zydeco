@@ -135,7 +135,7 @@ by a [negative law fixture](../../lib/tests/effects/nondet-law-counterexamples.z
 
 This foundation makes the later comparisons concrete: a candidate can be tested over an existing effectful base,
 through a closed monadic block, and with the same carrier-indexed packaging.
-The shared [Monoid classifier](../../lib/std/algebra/monoid.type.zy) is available for subsequent output
+The shared [Monoid classifier](../../lib/std/algebra/monoid.zy) is available for subsequent output
 and warning abstractions, subject to the [Writer output contract](../references/language.md#writer-output-contract).
 
 ## 5. Subsequent Library Directions

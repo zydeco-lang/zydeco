@@ -1,17 +1,23 @@
 -- replace requires the same projected child after its state transition; aliases remain manual.
+
+let (/Types) = @(import("types.zy")) in
+let (/FieldOperations) = @(import("field.zy")) in
+let (/StoragePackage) = @(import("storage.zy")) in
+let (/Codec) = @(import("codecs.zy")) in
+let (/Either) = @(import("../data/either.zy")) in
+let (/Error) = @(import("layout-error.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /memory; builtin) : @(import(
     "../builtin.zy"
   )) in
-  param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  param val (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) : Types Addr in
   param val Field : VType -> VType -> VType in
   param val DynamicField : VType -> VType -> VType in
-  param val (/constant = /unsafe = field_unsafe) : (@(import("field-operations.type.zy"))) Uninit
+  param val (/constant = /unsafe = field_unsafe) : FieldOperations Uninit
     Init Ptr Field DynamicField in
-  param val (/Storage; /constant) : @(import("storage.type.zy")) in
-  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
-  let Either = @(import("../data/either.zy")) in
-  let Error = @(import("layout-error.zy")) in
+  param val (/Storage; /constant) : StoragePackage in
+  let Codec = Codec Uninit Init Ptr in
+
   let size = @(import("size.zy")) in
   let compare = @(intrinsic(int_compare)) in
   let bits = @(intrinsic(int_and)) in

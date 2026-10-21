@@ -1,22 +1,45 @@
--- State parameters and layout witnesses erase; a pointer has exactly Addr's representation.
+let VType = @(intrinsic(vtype)) in
 begin
-  let VType = @(intrinsic(vtype)) in
-  let Unit = @(intrinsic(unit)) in
-  param val Addr : VType in
-  let Package = @(import("types.type.zy")) in
-  let Uninit =
-    data
-    | +Uninit : Unit
+  let Types (Addr : VType) =
+    exists
+      (= Uninit : VType)
+      (= Init : VType)
+      (= Fields : VType -> VType -> VType)
+      (= Ptr : VType -> VType -> VType)
+    .
+      (
+        #unsafe ::
+          (#address :: val pi (L : VType) (S : VType) (pointer : Ptr L S) . Addr)
+        * (#from_address :: val pi (L : VType) (S : VType) (address : Addr) . Ptr L S)
+      )
+  in
+  let make =
+    -- State parameters and layout witnesses erase; a pointer has exactly Addr's representation.
+    begin
+      let VType = @(intrinsic(vtype)) in
+      let Unit = @(intrinsic(unit)) in
+      param val Addr : VType in
+      let Package = Types in
+      let Uninit =
+        data
+        | +Uninit : Unit
+        end
+      in
+      let Init =
+        data
+        | +Init : Unit
+        end
+      in
+      let Fields (Left : VType) (Right : VType) = Left * Right in
+      let Ptr (L : VType) (S : VType) = Addr in
+      let val address (L : VType) (S : VType) (pointer : Ptr L S) : Addr = pointer in
+      let val from_address (L : VType) (S : VType) (address : Addr) : Ptr L S = address in
+      ((= Uninit, = Init, = Fields, = Ptr, #unsafe = (= address, = from_address)) : Package Addr)
     end
   in
-  let Init =
-    data
-    | +Init : Unit
-    end
-  in
-  let Fields (Left : VType) (Right : VType) = Left * Right in
-  let Ptr (L : VType) (S : VType) = Addr in
-  let val address (L : VType) (S : VType) (pointer : Ptr L S) : Addr = pointer in
-  let val from_address (L : VType) (S : VType) (address : Addr) : Ptr L S = address in
-  ((= Uninit, = Init, = Fields, = Ptr, #unsafe = (= address, = from_address)) : Package Addr)
+  pack
+    (= Types as Types)
+  where
+    = make
+  end
 end

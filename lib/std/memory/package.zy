@@ -1,7 +1,12 @@
 @[package(library, name(std/memory))]
+let (/make = make_types) = @(import("types.zy")) in
+let (/make = make_storage) = @(import("storage.zy")) in
+let (/make = make_codecs) = @(import("codecs.zy")) in
+let (/make = make_field) = @(import("field.zy")) in
+let (/make = make_allocation) = @(import("allocation.zy")) in
 begin
   param val (/VType; /Addr; builtin) : @(import("../builtin.zy")) that
-  let (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) = (@(import("types.zy"))) Addr in
+  let (/Uninit; /Init; /Fields; /Ptr; /unsafe; types) = make_types Addr in
   let (
     /Storage;
     /DynamicStorage;
@@ -11,12 +16,12 @@ begin
     storage
   )
   =
-    builtin |> (@(import("storage.zy")))
+    builtin |> make_storage
   in
   let (/Codec; /DynamicCodec; /materialize = materialize_codec; /unsafe = codec_unsafe) = (
-    builtin |> (@(import("codecs.zy")))
+    builtin |> make_codecs
   ) types in
-  let (= Field, = DynamicField, field_ops) = (builtin |> (@(import("field.zy")))) types in
+  let (= Field, = DynamicField, field_ops) = (builtin |> make_field) types in
   let fields = field_ops/constant in
   let runtime_fields = field_ops/runtime in
   let headers = (builtin |> (@(import("header.zy")))) types Field DynamicField field_ops storage in
@@ -27,7 +32,7 @@ begin
   let views = (builtin |> (@(import("view.zy")))) types storage in
   let fixed = (builtin |> (@(import("layout.zy")))) types storage in
   let dynamic = (builtin |> (@(import("dynamic-layout.zy")))) types storage in
-  let allocation = (builtin |> (@(import("allocation.zy")))) types storage in
+  let allocation = (builtin |> make_allocation) types storage in
   let (= Slice, slices) = (builtin |> (@(import("slice.zy")))) types storage in
   let raw = builtin |> (@(import("native.zy"))) in
   pack

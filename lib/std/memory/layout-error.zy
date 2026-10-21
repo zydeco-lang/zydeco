@@ -1,11 +1,15 @@
 begin
   let Unit = @(intrinsic(unit)) in
-  data
-  | +NegativeSize : Unit
-  | +InvalidAlignment : Unit
-  | +SizeOverflow : Unit
-  | +MisalignedField : Unit
-  | +OverlappingFields : Unit
-  | +InvalidExtent : Unit
-  end
+  let Error =
+    data
+    | +NegativeSize : Unit
+    | +InvalidAlignment : Unit
+    | +SizeOverflow : Unit
+    | +MisalignedField : Unit
+    | +OverlappingFields : Unit
+    | +InvalidExtent : Unit
+    end
+  in
+  pack (= Error as Error)
+  where () end
 end

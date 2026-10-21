@@ -1,0 +1,10 @@
+-- stage: run
+
+let library : exists (= Input as Int) (= Output as Int) .
+  (
+    #make :: val pi (value : Int) . Int
+  ) = (#Input = Int, #Output = Int, #make = val (value : Int) => value) in
+let (= Input, rest) = library in
+let (/Output; /make) = rest in
+let result : Output = make (0 : Input) in
+! exit result

@@ -1,17 +1,27 @@
 -- Optional computations, with short-circuiting translated from one ordinary implementation.
+let (/Monad; /Algebra; /Top) = @(import("monad.zy")) in
+let (/Transformer) = @(import("transformer.zy")) in
+let (/Option) = @(import("../data/option.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Thk = @(intrinsic(thk)) in
+
+let MonadOption (M : VType -> CType) =
+  codata
+  | .none : forall (A : VType) . M A
+  | .or_else : forall (A : VType) . Thk (M A) -> Thk (M A) -> M A
+  end
+in
 val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad; /Algebra) = builtin |> (@(import("monad.zy"))) in
-    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
-      let Top = @(import("top.type.zy")) that
       let triv : Thk Top = {
         comatch
         end
       } that
-      let Option = @(import("../data/option.zy")) that
-      let MonadOption = @(import("option.type.zy")) that
+
       let OptionSource (A : VType) = Ret (Option A) that
       let OptionT = @[monadic] OptionSource that
       let Optional = OptionT Ret that
@@ -22,10 +32,10 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
           (
             @[monadic] begin
               let Ret = @(intrinsic(ret)) in
-              let Transformer = @(import("transformer-inner.type.zy")) in
-              let with_lift = { @(import("transformer-source.zy")) } in
+
+              let (/with_lift) = @(import("transformer-source.zy")) in
               let Optional = OptionSource in
-              let MonadOption = @(import("option.type.zy")) in
+
               let Source =
                 codata
                 | .core : Transformer Ret Optional

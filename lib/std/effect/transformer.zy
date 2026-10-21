@@ -1,51 +1,56 @@
--- Shared interface adaptation for transformers derived by algebra translation.
-val ((/VType; /CType; /Thk; /Ret; builtin) : @(import("../builtin.zy"))) =>
-  begin
-    let Monad = @(import("monad.type.zy")) that
-    let Algebra = @(import("algebra.type.zy")) that
-    let Transformer = @(import("transformer-inner.type.zy")) that
-    let MonadTrans = @(import("transformer.type.zy")) that
-    let Top = @(import("top.type.zy")) that
-    let triv : Thk Top = {
-      comatch
-      end
-    } that
-    let Lift (M : VType -> CType) (T : VType -> CType) =
-      forall (A : VType) . Thk (M A) -> T A
-    that
-    let ITransformer (M : VType -> CType) (T : VType -> CType) =
-      (#lift :: Thk (Lift M T))
-    that
-    let MonadicTransformer =
-      @[monadic] fn (T : VType -> CType) => Transformer Ret T
-    that
-    -- Supply only trivial value-type structure; carrier-internal algebras remain intact.
-    def ! from_monadic (M : VType -> CType) (T : VType -> CType)
-      (translated : Thk (MonadicTransformer M T))
-    : Transformer M T =
-        comatch
-        | .monad =>
-          comatch
-          | .return A => ! translated .monad .return A triv
-          | .bind A B => ! translated .monad .bind A triv B triv
-          end
-        | .lift A => ! translated .lift A triv
-        end
-    that
-    def ! from_instance (M : VType -> CType) (T : VType -> CType)
-      ((/monad; /lift) : (#monad :: Thk (Monad T)) * ITransformer M T)
-    : Transformer M T =
-        comatch
-        | .monad => ! monad
-        | .lift => ! lift
-        end
-    that
-    pack
-      (= Transformer as Transformer)
-      (= MonadTrans as MonadTrans)
-      (= Lift as Lift)
-      (= ITransformer as ITransformer)
-    where
-      = from_monadic, = from_instance
+let (/Transformer) = @(import("transformer-source.zy")) in
+let (/Monad; /Algebra; /MonadInstance; /Top) = @(import("monad.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Thk = @(intrinsic(thk)) in
+
+begin
+  let Ret = @(intrinsic(ret)) in
+
+  let MonadTrans (F : (VType -> CType) -> VType -> CType) =
+    pi ((M, _) : MonadInstance) . Transformer M (F M)
+  in
+
+  let triv : Thk Top = {
+    comatch
     end
+  } in
+  let Lift (M : VType -> CType) (T : VType -> CType) =
+    forall (A : VType) . Thk (M A) -> T A
+  in
+  let ITransformer (M : VType -> CType) (T : VType -> CType) =
+    (#lift :: Thk (Lift M T))
+  in
+  let MonadicTransformer =
+    @[monadic] fn (T : VType -> CType) => Transformer Ret T
+  in
+  -- Supply only trivial value-type structure; carrier-internal algebras remain intact.
+  def ! from_monadic (M : VType -> CType) (T : VType -> CType)
+    (translated : Thk (MonadicTransformer M T))
+  : Transformer M T =
+      comatch
+      | .monad =>
+        comatch
+        | .return A => ! translated .monad .return A triv
+        | .bind A B => ! translated .monad .bind A triv B triv
+        end
+      | .lift A => ! translated .lift A triv
+      end
+  in
+  def ! from_instance (M : VType -> CType) (T : VType -> CType)
+    ((/monad; /lift) : (#monad :: Thk (Monad T)) * ITransformer M T)
+  : Transformer M T =
+      comatch
+      | .monad => ! monad
+      | .lift => ! lift
+      end
+  in
+  pack
+    (= Transformer as Transformer)
+    (= MonadTrans as MonadTrans)
+    (= Lift as Lift)
+    (= ITransformer as ITransformer)
+  where
+    = from_monadic, = from_instance
   end
+end

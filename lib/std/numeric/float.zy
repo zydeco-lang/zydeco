@@ -1,90 +1,172 @@
+let (/BoolModule) = @(import("../data/package.zy")) in
+let (/Numeric) = @(import("dictionary.zy")) in
+let VType = @(intrinsic(vtype)) in
+let Thk = @(intrinsic(thk)) in
+let Ret = @(intrinsic(ret)) in
+let CType = @(intrinsic(ctype)) in
+
 begin
-  param val Bool : @(intrinsic(vtype)) that
-  param val Scalar : @(intrinsic(vtype)) that
-  param val String : @(intrinsic(vtype)) that
-  param val (
-    (/CType; /Thk; /Ret) : @(import("../builtin.zy")),
-    bool : (@(import("../data/bool.type.zy"))) Bool,
-    primitive : (@(import("primitive-float.type.zy"))) Scalar String,
-    zero : Scalar,
-    one : Scalar
-  ) that
-  let Numeric = @(import("numeric.type.zy")) in
-  let FloatModule = @(import("float.type.zy")) in
-  let zero : Scalar = zero in
-  let one : Scalar = one in
-  let ! compare
-    (
-      predicate : Thk (
-        forall (B : CType) . Scalar -> Scalar -> Thk B -> Thk B -> B
-      )
-    )
-    (left : Scalar)
-    (right : Scalar)
-  : Ret Bool = ! predicate
-      (Ret Bool)
-      left
-      right
-      { ret bool/true }
-      { ret bool/false }
+  let FloatModule (Bool : VType) (Floating : VType) (String : VType) =
+      (#add :: Thk (Floating -> Floating -> Ret Floating))
+    * (#sub :: Thk (Floating -> Floating -> Ret Floating))
+    * (#mul :: Thk (Floating -> Floating -> Ret Floating))
+    * (#div :: Thk (Floating -> Floating -> Ret Floating))
+    * (#eq :: Thk (Floating -> Floating -> Ret Bool))
+    * (#ne :: Thk (Floating -> Floating -> Ret Bool))
+    * (#lt :: Thk (Floating -> Floating -> Ret Bool))
+    * (#le :: Thk (Floating -> Floating -> Ret Bool))
+    * (#gt :: Thk (Floating -> Floating -> Ret Bool))
+    * (#ge :: Thk (Floating -> Floating -> Ret Bool))
+    * (#negate :: Thk (Floating -> Ret Floating))
+    * (#to_string :: Thk (Floating -> Ret String))
   in
-  let operations : FloatModule Bool Scalar String = (
-    #add = primitive/add,
-    #sub = primitive/sub,
-    #mul = primitive/mul,
-    #div = primitive/div,
-    #eq = {
-      fn left right => ! compare primitive/eq left right
-    },
-    #ne = {
-      fn left right =>
-        do equal <- ! compare primitive/eq left right;
-        ! bool/not equal
-    },
-    #lt = {
-      fn left right => ! compare primitive/lt left right
-    },
-    #le = {
-      fn left right =>
-        do less <- ! compare primitive/lt left right;
-        do equal <- ! compare primitive/eq left right;
-        ! bool/or less equal
-    },
-    #gt = {
-      fn left right => ! compare primitive/gt left right
-    },
-    #ge = {
-      fn left right =>
-        do greater <- ! compare primitive/gt left right;
-        do equal <- ! compare primitive/eq left right;
-        ! bool/or greater equal
-    },
-    #negate = {
-      fn value => ! primitive/sub zero value
-    },
-    #to_string = primitive/to_string
-  ) in
-  let dictionary : Numeric Bool Scalar = (
-    #additive = (
-      = zero,
-      #add = operations/add,
-      #sub = operations/sub,
-      #negate = operations/negate
-    ),
-    #multiplicative = (
-      = one,
-      #mul = operations/mul
-    ),
-    #order = (
-      #equality = (
-        #eq = operations/eq,
-        #ne = operations/ne
-      ),
-      #lt = operations/lt,
-      #le = operations/le,
-      #gt = operations/gt,
-      #ge = operations/ge
-    )
-  ) in
-  (= operations, = dictionary)
+  let PrimitiveFloatModule (Floating : VType) (String : VType) =
+      (#add :: Thk (Floating -> Floating -> Ret Floating))
+    * (#sub :: Thk (Floating -> Floating -> Ret Floating))
+    * (#mul :: Thk (Floating -> Floating -> Ret Floating))
+    * (#div :: Thk (Floating -> Floating -> Ret Floating))
+    * (
+        #eq :: Thk (
+          forall (R : CType) .
+            Floating -> Floating -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        #lt :: Thk (
+          forall (R : CType) .
+            Floating -> Floating -> Thk R -> Thk R -> R
+        )
+      )
+    * (
+        #gt :: Thk (
+          forall (R : CType) .
+            Floating -> Floating -> Thk R -> Thk R -> R
+        )
+      )
+    * (#to_string :: Thk (Floating -> Ret String))
+  in
+  let Builder =
+    begin
+      let VType = @(intrinsic(vtype)) in
+
+      let Package
+        (Bool : VType)
+        (Scalar : VType)
+        (String : VType)
+      =
+          (#operations :: FloatModule Bool Scalar String)
+        * (#dictionary :: Numeric Bool Scalar)
+      in
+      val pi
+        (Bool : VType)
+        (Scalar : VType)
+        (String : VType)
+        (
+          (/VType; builtin) : @(import("../builtin.zy")),
+          _ : BoolModule Bool,
+          _ : PrimitiveFloatModule Scalar String,
+          _ : Scalar,
+          _ : Scalar
+        )
+      .
+        Package Bool Scalar String
+    end
+  in
+  let make : Builder =
+    begin
+      param val Bool : @(intrinsic(vtype)) that
+      param val Scalar : @(intrinsic(vtype)) that
+      param val String : @(intrinsic(vtype)) that
+      param val (
+        (/CType; /Thk; /Ret) : @(import("../builtin.zy")),
+        bool : BoolModule Bool,
+        primitive : PrimitiveFloatModule Scalar String,
+        zero : Scalar,
+        one : Scalar
+      ) that
+
+      let zero : Scalar = zero in
+      let one : Scalar = one in
+      let ! compare
+        (
+          predicate : Thk (
+            forall (B : CType) . Scalar -> Scalar -> Thk B -> Thk B -> B
+          )
+        )
+        (left : Scalar)
+        (right : Scalar)
+      : Ret Bool = ! predicate
+          (Ret Bool)
+          left
+          right
+          { ret bool/true }
+          { ret bool/false }
+      in
+      let operations : FloatModule Bool Scalar String = (
+        #add = primitive/add,
+        #sub = primitive/sub,
+        #mul = primitive/mul,
+        #div = primitive/div,
+        #eq = {
+          fn left right => ! compare primitive/eq left right
+        },
+        #ne = {
+          fn left right =>
+            do equal <- ! compare primitive/eq left right;
+            ! bool/not equal
+        },
+        #lt = {
+          fn left right => ! compare primitive/lt left right
+        },
+        #le = {
+          fn left right =>
+            do less <- ! compare primitive/lt left right;
+            do equal <- ! compare primitive/eq left right;
+            ! bool/or less equal
+        },
+        #gt = {
+          fn left right => ! compare primitive/gt left right
+        },
+        #ge = {
+          fn left right =>
+            do greater <- ! compare primitive/gt left right;
+            do equal <- ! compare primitive/eq left right;
+            ! bool/or greater equal
+        },
+        #negate = {
+          fn value => ! primitive/sub zero value
+        },
+        #to_string = primitive/to_string
+      ) in
+      let dictionary : Numeric Bool Scalar = (
+        #additive = (
+          = zero,
+          #add = operations/add,
+          #sub = operations/sub,
+          #negate = operations/negate
+        ),
+        #multiplicative = (
+          = one,
+          #mul = operations/mul
+        ),
+        #order = (
+          #equality = (
+            #eq = operations/eq,
+            #ne = operations/ne
+          ),
+          #lt = operations/lt,
+          #le = operations/le,
+          #gt = operations/gt,
+          #ge = operations/ge
+        )
+      ) in
+      (= operations, = dictionary)
+    end
+  in
+  pack
+    (= FloatModule as FloatModule)
+    (= PrimitiveFloatModule as PrimitiveFloatModule)
+  where
+    = make
+  end
 end

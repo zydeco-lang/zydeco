@@ -1,10 +1,13 @@
 @[package(library, name(std/text))]
+
+let (/BytesPackage) = @(import("bytes.zy")) in
+let (/DataPackage) = @(import("../data/package.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret;
     /Char; /String; /UInt8; /Int; /Addr;
     /numeric; /char; /string; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("bytes.type.zy"))) Addr in
-  param val (/Bool; /Option; /List; /bool; /option; /list) : @(import("../data/package.type.zy")) in
+  param val (/Bytes; /bytes) : BytesPackage Addr in
+  param val (/Bool; /Option; /List; /bool; /option; /list) : DataPackage in
   let int = numeric/int in
   let ! compare (A : VType)
     (

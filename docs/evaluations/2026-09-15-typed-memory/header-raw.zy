@@ -1,7 +1,7 @@
 param (/Addr; /Int; /Int64; /OS; /Thk; /numeric; /system; /process; builtin) : @(import(
   "../../../lib/std/builtin.zy"
 )) in
-let Fault = @(import("../../../lib/std/memory/fault.zy")) in
+let (/Fault) = @(import("../../../lib/std/memory/fault.zy")) in
 let fix update (base : Addr) (index : Int) (no : Thk (Fault -> OS)) (done : Thk OS) : OS =
   ! numeric/int/load_le OS base {
     fn count =>

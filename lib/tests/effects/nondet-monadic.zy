@@ -1,11 +1,13 @@
 -- A closed translated client uses the same search operations as an explicit-bind client.
+let (/make = make_data) = @(import("../../std/data/package.zy")) in
+let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
 param (/VType; /Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/List; /list; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
-let Top = @(import("../../std/effect/top.type.zy")) in
-let (/INonDet; nondet) = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let (/List; /list; data_package) = builtin |> make_data in
+let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
+let (/Top) = @(import("../../std/effect/monad.zy")) in
+let (/INonDet; nondet) = (builtin |> make_nondet) data_package in
 let (/Monoid; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in
 let (/check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in

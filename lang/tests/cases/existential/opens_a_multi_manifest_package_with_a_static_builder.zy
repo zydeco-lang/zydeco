@@ -1,0 +1,9 @@
+-- stage: run
+
+let library =
+  pack (= Input as Int) (= Output as Int)
+  where #make = val (value : Int) => value end
+in
+let (/Input; /Output; /make) = library in
+let result : Output = make (0 : Input) in
+! exit result

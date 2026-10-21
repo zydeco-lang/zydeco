@@ -277,7 +277,8 @@ let failed = { fn (_ : Int) (_ : String) => ! process/exit 42 } in
 }
 "#;
     let body = format!(
-        "let (/Bytes; /bytes) = builtin |> (@(import(\"{}\"))) in {body}",
+        "let (/make = make_bytes) = @(import(\"{}\")) in \
+         let (/Bytes; /bytes) = make_bytes builtin in {body}",
         fixture.workspace.join("lib/std/text/bytes.zy").display(),
     );
     for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
@@ -405,7 +406,8 @@ fn integer_decoding_rejects_noncanonical_storage_on_every_backend() {
     for (integer, high) in [("int", 64), ("int", 191), ("uint", 128)] {
         let body = format!(
             r#"
-let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{root}/lib/std/text/bytes.zy"))) in
+let (/make = make_bytes) = @(import("{root}/lib/std/text/bytes.zy")) in
+let (/Bytes; /bytes; byte_package) = make_bytes builtin in
 let codecs = (builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
 do prefix <- ! bytes/from_string "1234567";
 do high <- ! bytes/singleton {high};
@@ -447,7 +449,8 @@ fn integer_parsing_and_byte_codecs_reject_out_of_range_values() {
     }
     let body = format!(
         r#"
-let (/Bytes; /bytes; byte_package) = builtin |> (@(import("{root}/lib/std/text/bytes.zy"))) in
+let (/make = make_bytes) = @(import("{root}/lib/std/text/bytes.zy")) in
+let (/Bytes; /bytes; byte_package) = make_bytes builtin in
 let codecs = (builtin |> (@(import("{root}/lib/std/numeric/codecs.zy")))) byte_package in
 do prefix <- ! bytes/from_string "1234567";
 {tail}

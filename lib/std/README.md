@@ -45,16 +45,28 @@ but never construct library-defined `Bool`, `Option`, `Either`, `List`, or `Byte
 [`std.zy`](std.zy) applies the factories supplied by topic packages and assembles the public packed value,
 whose sealed type its final `pack` introduction synthesizes.
 
-Each topic owns exactly one implementation: `data`, `text`, `system`, and `numeric` each provide `package.zy`,
-sealed by a final `pack` introduction whose existential type the checker synthesizes,
-so importers splice the implementation without a companion annotation.
-Implementations annotate their parameters in place: the Builtin group through `builtin.zy`,
-and the shared data package through `data/package.type.zy`.
-The implementation defines its topic's data types and operations in one dependency-scheduled block,
-so derived operations sit next to the types they observe and no per-module contract split remains for those topics.
-`data/package.type.zy` names that shared base type directly, carrying the data topic's existential witnesses
-and module telescopes in one declaration.
-Type files bind `VType` and `CType` once at the top of the file and use those aliases in every classifier below.
+Types and the definitions that use them live in the same source package.
+The [organization rule](../../docs/references/language.md#standard-library-organization)
+distinguishes manifest structural interfaces from abstract representation witnesses.
+A module with a reusable input or output contract exports that contract together with its `make` value function.
+For example, `data/package.zy` exports `DataPackage`, `BoolModule`, and `make`:
+
+```zydeco
+param val builtin : @(import("builtin.zy")) in
+let (/DataPackage; /make = make_data) = @(import("data/package.zy")) in
+(make_data builtin : DataPackage)
+```
+
+The outer package makes the contract available before the factory is applied.
+Its `make` field assembles the data types and operations; the result retains its abstract `List` witness.
+`text/bytes.zy` and the memory modules use the same pattern for their independently reusable contracts.
+Explicit signatures remain local to their implementations wherever they prescribe abstraction;
+colocation does not replace those signatures with inferred interfaces.
+
+The `text`, `system`, and `numeric` topic entries remain value-function factories,
+and `std.zy` opens and applies the necessary factories to assemble its public packed value.
+Shared representation packages such as `data/either.zy` expose manifest type fields with a `()` payload.
+The host-independent `effect/monad.zy` and `algebra/monoid.zy` use that same type-only packaging convention.
 
 This separation keeps algebraic data in the language.
 The interpreter and native runtime only need to agree on the small Builtin ABI,
@@ -118,23 +130,22 @@ builtin/numeric/*.zy       primitive numeric operations
 builtin/text/*.zy          Char and String host operations
 builtin/system/*.zy        I/O, filesystem, streams, arguments, randomness, process
 
-data/package.zy            Bool, Option, Either, List, and every derived operation
-data/package.type.zy       DataPackage existential wrapper with the module telescopes
-data/bool.type.zy          BoolModule telescope shared with the numeric builders
+data/package.zy            DataPackage and BoolModule contracts, plus the data factory
+                           Bool, Option, Either, List, and every derived operation
 data/either.zy             shared binary sum for data, effects, I/O, and memory APIs
 
-numeric/{integer,float}.zy explicitly polymorphic derived numeric builders
+numeric/{integer,float}.zy module contracts and explicitly polymorphic make builders
+numeric/dictionary.zy      shared numeric capability constructors, with a unit payload
 numeric/package.zy         the twelve numeric modules and their capability dictionaries
 numeric/codecs.zy          source byte codecs over scalar memory leaves
 
-text/bytes.zy              abstract immutable byte sequences over retained raw allocations
-text/bytes.type.zy         shared byte-type witness and primitive-free sequence API
+text/bytes.zy              BytesPackage contract and abstract immutable byte-sequence factory
 text/package.zy            text conveniences and byte collection operations
 
 memory/package.zy          manual-memory interface and shared pointer/state witnesses
 memory/types.zy            erased Ptr<L,S> abstraction and state markers
 memory/storage.zy          sealed fixed/runtime geometry
-memory/codecs.zy           independent fixed/runtime scalar codecs
+memory/codecs.zy           fixed/runtime scalar codecs and the Representation constructor
 memory/layout.zy           static layout plans and typed destination operations
 memory/dynamic-layout.zy   explicitly dynamic placement and realization
 memory/size.zy             checked static size and alignment calculations
@@ -143,28 +154,24 @@ memory/buffer.zy           incremental byte construction, snapshots, retention, 
 memory/allocation.zy       explicit allocator services
 memory/slice.zy            counted typed pointers and checked index arithmetic
 memory/native.zy           raw memory adapter and source fault values
-memory/representation.type.zy  witness with separate storage and codec components
 
 system/package.zy          system data types and capability-preserving assembly
 
-algebra/monoid.type.zy      general-purpose monoid dictionary
+algebra/monoid.zy          general-purpose monoid dictionary
 
-effect/monad.zy            Monad, Algebra, MonadInstance, and WithMonad
+effect/monad.zy            Top, Monad, Algebra, MonadInstance, and WithMonad; no host argument
 effect/{ret,reader,writer,option}.zy  elementary carriers and derived transformers
 effect/transformer*.zy              shared transformer interfaces and derivation adapters
 effect/{state,exception,state-exn}.zy  state, exceptions, and their combination
-effect/nondet.zy           ordered depth-first search and result observers
-effect/*.type.zy           relative-monad basis and carrier-indexed operation interfaces
-
-**/*.type.zy               reusable type terms imported by implementations and companions
+effect/nondet.zy           MonadNonDet interface and make factory for ordered search and observers
 ```
 
 The public `Either` type
 and `either` operation bundle follow the [shared binary-sum contract](../../docs/references/language.md#either-values).
 Fallible APIs put errors on the left and successful values on the right.
 
-Topic implementations are independently checkable module factories.
-Import `algebra/monoid.type.zy` and the `effect/` modules directly; `std.zy` does not assemble them.
+Topic implementations are independently checkable source terms; open `make` from entries that also export contracts.
+Import `algebra/monoid.zy` and the `effect/` modules directly; `std.zy` does not assemble them.
 The public packed value keeps one opening for `Reader`, `Writer`, and `OS`;
 splitting that opening would give related I/O operations incompatible abstract types.
 No compatibility forwarding files remain at the old flat paths.
@@ -210,7 +217,8 @@ do value <- ! bytes/empty;
 
 Here `Reader` and primitive `io` come from one Builtin opening; `builtin` forwards that packed value.
 `Bytes`, convenient `bytes`, and `fs` share the std opening.
-For low-level memory composition, instantiate `text/bytes.zy` once and pass that packed value to dependent builders.
+For low-level memory composition, open `make` from `text/bytes.zy`, instantiate it once,
+and pass that packed value to dependent builders.
 Slash selection follows the [language rules](../../docs/references/language.md#9-polymorphism-and-packed-values),
 including nested products and ambiguity.
 A view such as `make_std ~> (/bytes; /fs)` combines application and opening.
@@ -371,13 +379,15 @@ remain a separate implementation contract.
 
 ### Ordered depth-first search
 
-Apply [NonDet](effect/nondet.zy) to Builtin and then the shared data package.
+Open `make` from [NonDet](effect/nondet.zy), then apply it to Builtin and the shared data package.
 This keeps `choose` inputs and list observations at the same `List` witness as the caller's other operations:
 
 ```zydeco
 param (/Int; builtin) : @(import("builtin.zy")) in
-let (/list; data_package) = builtin |> (@(import("data/package.zy"))) in
-let nondet = (builtin |> (@(import("effect/nondet.zy")))) data_package in
+let (/make = make_data) = @(import("data/package.zy")) in
+let (/make = make_nondet) = @(import("effect/nondet.zy")) in
+let (/list; data_package) = make_data builtin in
+let nondet = make_nondet builtin data_package in
 let (N, n) = nondet/instance in
 do answers <- ! nondet/observe_many Int 2 {
   ! n/nondet .choice Int { ! n/monad .return Int 3 } { ! n/monad .return Int 1 }
@@ -440,7 +450,7 @@ param (/VType; /CType; /Thk; /OS; /UInt8; /Unit; /process; builtin) : @(import("
 let (/Uninit; /Init; /Ptr; /fixed; /allocation; /codecs) = builtin |> (@(import("memory/package.zy"))) in
 let (= Plan, = Layout, layouts) = fixed in
 let (/Alloc; /heap) = allocation in
-let Fault = @(import("memory/fault.zy")) in
+let (/Fault) = @(import("memory/fault.zy")) in
 let fail = { ! process/exit 1 } in
 let no = { fn (_ : Fault) => ! fail } in
 match layouts/uint8
@@ -479,8 +489,8 @@ costs, and caller obligations.
 | Thin, fat, header, and indirect views | [view.zy](memory/view.zy), [header and payload composition](../tests/std/header-array.zy) |
 | Runtime field paths, views, and arrays | [runtime example](../tests/std/runtime-memory.zy) |
 | Runtime placement | [dynamic-layout.zy](memory/dynamic-layout.zy), [example](../tests/std/representation.zy) |
-| Explicit allocation service | [allocation.zy](memory/allocation.zy) and [Alloc](memory/allocator.type.zy) |
-| Typed pointer access | [representation interface](memory/representation.type.zy) |
+| Explicit allocation service | [allocation.zy](memory/allocation.zy) and [Alloc](memory/allocation.zy) |
+| Typed pointer access | [representation interface](memory/codecs.zy) |
 | Expose/assert a raw pointer interpretation | `pointer/unsafe/address` and `pointer/unsafe/from_address` |
 | Counted pointers with layout-derived indexing | `slices/for_layout` in [slice.zy](memory/slice.zy), [example](../tests/std/memory-views.zy) |
 | Raw memory effects | [native.zy](memory/native.zy) |
@@ -582,11 +592,11 @@ The public packed value exposes five capability type constructors; their linked 
 
 | Interface | Fields |
 | --- | --- |
-| [Additive A](numeric/additive.type.zy) | `zero`, `add`, `sub`, `negate` |
-| [Multiplicative A](numeric/multiplicative.type.zy) | `one`, `mul` |
-| [PartialEquality Bool A](numeric/partial-equality.type.zy) | `eq`, `ne`, returning the supplied `Bool` |
-| [PartialOrder Bool A](numeric/partial-order.type.zy) | `equality`, `lt`, `le`, `gt`, `ge` |
-| [Numeric Bool A](numeric/numeric.type.zy) | `additive`, `multiplicative`, `order` |
+| [Additive A](numeric/dictionary.zy) | `zero`, `add`, `sub`, `negate` |
+| [Multiplicative A](numeric/dictionary.zy) | `one`, `mul` |
+| [PartialEquality Bool A](numeric/dictionary.zy) | `eq`, `ne`, returning the supplied `Bool` |
+| [PartialOrder Bool A](numeric/dictionary.zy) | `equality`, `lt`, `le`, `gt`, `ge` |
+| [Numeric Bool A](numeric/dictionary.zy) | `additive`, `multiplicative`, `order` |
 
 Larger dictionaries contain smaller ones as named fields.
 This preserves paths such as `dictionary/additive/add` and `dictionary/order/equality/eq`,
@@ -668,7 +678,7 @@ EOF is represented as `Option` by line reads; it is not conflated with an empty 
 The [stream guide](#streams-and-files) gives the operations and lifecycle contract;
 [filesystem design](../../docs/proposals/filesystem.md) retains the rationale and extension questions.
 
-The topic files are independently importable value functions.
+The topic files are independently importable terms exposing their factories directly or through `make`.
 `std.zy` is the composition root used by most programs; its public packed value carries the library-defined types
 and modules, while the Builtin contract remains the home of every host type and capability.
 Its public record nests one sub-record per topic, and its sealed type is synthesized from the final `pack` introduction,

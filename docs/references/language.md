@@ -726,7 +726,7 @@ Likewise, `(@[monadic] { ret 1 }) M mo` is a value of type `Thk (M Int)`.
 ```zydeco
 param (/Ret; /Thk; builtin) : @(import("../../lib/std/builtin.zy")) in
 let basis = @(import("../../lib/std/effect/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> basis in
+let (/Monad; /Algebra) = basis in
 let mo : Thk (Monad Ret) = {
   comatch
   | .return A value => ret value
@@ -921,7 +921,7 @@ These operations make no fairness or distributivity promise.
 
 #### Writer Output Contract
 
-[`Monoid W`](../../lib/std/algebra/monoid.type.zy) contains `empty : W` and `append : Thk (W -> W -> Ret W)`.
+[`Monoid W`](../../lib/std/algebra/monoid.zy) contains `empty : W` and `append : Thk (W -> W -> Ret W)`.
 For Writer, append must be total and observationally pure, associative, and have `empty` as a two-sided identity.
 Commutativity is unnecessary: output order is significant. The computational operation supports runtime-selectable
 and recursive implementations beyond the current total value-function fragment,
@@ -1009,8 +1009,8 @@ so bind can explore the descendants of one answer before requesting another.
 The standard instances preserve branch order and duplicates and use depth-first traversal.
 They provide neither fair interleaving nor implicit pruning or deduplication.
 
-The module is a value-function factory taking Builtin
-and then the caller's shared [`DataPackage`](../../lib/std/data/package.type.zy).
+The module exports a `make` value-function factory taking Builtin
+and then the caller's shared [`DataPackage`](../../lib/std/data/package.zy).
 Its list inputs and observations use that package's `List` witness and operations;
 the factory does not create a separate list type.
 The carriers are:
@@ -1216,7 +1216,7 @@ For example, the type parameter and recursive constructor below both belong to t
 ```zydeco
 param (/VType; /Unit; builtin) : @(import("../../lib/std/builtin.zy")) in
 let basis = @(import("../../lib/std/effect/monad.zy")) in
-let (/Monad; /Algebra) = builtin |> basis in
+let (/Monad; /Algebra) = basis in
 @[monadic] fn (A : VType) (item : A) =>
   begin
     def List (X : VType) : VType =
@@ -1547,8 +1547,18 @@ The directories under `lib/std/` have these responsibilities:
 
 `Algebra M R` belongs to `effect/`: it describes an algebra for a particular relative monad,
 whereas `Monoid W` describes an operation and identity on a value type independently of a monad.
-Each effect's concrete carrier and transformer stay in the same module,
-with an adjacent `.type.zy` file for its operation interface when needed.
+Standard-library modules define related type constructors and operations together.
+A reusable structural contract is a manifest export, alongside the factory or operations that use it;
+a type-only package carries its exports with a `()` payload.
+Consumers open these packages with projection patterns (§9), including before defining local type aliases.
+A consumer that exports only a derived type packages that result as a manifest field as well.
+The Builtin ABI declarations remain type terms because they prescribe the host-supplied interface.
+
+Explicit signatures remain at representation boundaries: colocating a signature
+and its implementation must preserve the abstract witnesses and disclosed equations of the public contract.
+A separate interface-only package is appropriate when it has an independent dependency boundary,
+as with the numeric dictionaries shared by both numeric builders.
+Each effect's operation interface, concrete carrier, and transformer stay in the same module.
 The Writer effect is distinct from the host stream `Writer` capability.
 
 The root `builtin.zy` remains the host contract, and `std.zy` remains the assembled public value.
@@ -1748,9 +1758,9 @@ Independently opened witnesses remain distinct even with equal geometry.
 For dynamic instances, the caller retains the matching geometry until release.
 Size and indexing remain bounded by nonnegative `Int`; full pointer-width sizes remain proposed work.
 
-[Codec](../../lib/std/memory/codec.type.zy) supplies value functions `init pointer value : Thk (Cps (Ptr L Init))`
+[Codec](../../lib/std/memory/codecs.zy) supplies value functions `init pointer value : Thk (Cps (Ptr L Init))`
 and `read pointer : Thk (Cps A)`.
-The [dynamic form](../../lib/std/memory/dynamic-codec.type.zy) carries ordinary thunks:
+The [dynamic form](../../lib/std/memory/codecs.zy) carries ordinary thunks:
 `init : Thk (Ptr L Uninit -> A -> Cps (Ptr L Init))` and `read : Thk (Ptr L Init -> Cps A)`.
 `codecs/materialize L A` selects that form explicitly.
 `codecs/unsafe/scalar L A write read` associates scalar accesses with a caller-established layout.
@@ -1759,7 +1769,7 @@ and the value; `dynamic_take` does the same through a dynamic codec.
 Neither clears bytes nor invalidates aliases. A codec carries no implicit allocator.
 Its stored format is independent of the compiler's representation of `A`.
 
-[StaticAlloc](../../lib/std/memory/static-allocator.type.zy) selects allocator code using value functions,
+[StaticAlloc](../../lib/std/memory/allocation.zy) selects allocator code using value functions,
 with explicit `Context`, byte size, and alignment; its `free` also takes the original base.
 `allocation/static_heap` uses `Unit` context, and `materialize Context allocator context` produces `Alloc`.
 `reserve L Context allocator context storage` produces a CPS allocation recipe yielding `Ptr L Uninit`;
@@ -1774,7 +1784,7 @@ to establish valid nonoverlapping offsets and a compatible parent layout; they p
 
 ### Allocation and Release
 
-The [allocator interface](../../lib/std/memory/allocator.type.zy) receives byte size and alignment explicitly.
+The [allocator interface](../../lib/std/memory/allocation.zy) receives byte size and alignment explicitly.
 `allocation/heap` uses the host allocator; `allocation/limited maximum parent` rejects oversized requests
 before calling its parent.
 Runtime selection of an allocator is ordinary source dispatch.
@@ -1800,7 +1810,7 @@ There is no runtime initialization check and no implicit initialization of paddi
 
 Selecting a fixed representation produces `exists L. (#storage :: Storage L) * (#codec :: Codec L A)`.
 Its dynamic counterpart substitutes `DynamicStorage` and `DynamicCodec` in that same packed value shape.
-The [representation alias](../../lib/std/memory/representation.type.zy) is parameterized by these component families.
+The [representation alias](../../lib/std/memory/codecs.zy) is parameterized by these component families.
 [Ptr](../../lib/std/memory/types.zy) privately aliases `Addr` and has no runtime wrapper.
 Allocate and release using the selected storage and provider; initialize, observe, or take using the selected codec.
 The [independent interfaces](#independent-storage-and-codecs) give the exact call order and protocols.
@@ -1839,7 +1849,7 @@ only a `Right` plan can be realized.
 The caller handles that static result explicitly.
 Unknown runtime inputs to placement or fixed realization produce a `StaticElimination` diagnostic.
 
-`realize A plan` introduces `L` with the [representation interface](../../lib/std/memory/representation.type.zy).
+`realize A plan` introduces `L` with the [representation interface](../../lib/std/memory/codecs.zy).
 Size and alignment are known constants at this boundary.
 The source recipes specialize field offsets and selected accesses; the pointer carries none of this evidence.
 Explicit queries can materialize size or alignment as an `Int`, and allocation receives those constants.

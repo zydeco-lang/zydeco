@@ -1,16 +1,21 @@
 -- Fixed recipes specialize before execution; dynamic views retain an explicit thunk.
+
+let (/Types) = @(import("types.zy")) in
+let (/StoragePackage) = @(import("storage.zy")) in
+let (/Codec; /DynamicCodec) = @(import("codecs.zy")) in
+let (/Fault) = @(import("fault.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) in
-  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
-  param val (/Storage; /DynamicStorage; /constant; /runtime) : @(import("storage.type.zy")) in
+  param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
+  param val (/Storage; /DynamicStorage; /constant; /runtime) : StoragePackage in
   let Cps (A : VType) = forall (R : CType) . Thk (A -> R) -> R in
   let Checked (E : VType) (A : VType) = forall (R : CType) . Thk (E -> R) -> Thk (A -> R) -> R in
   let View (P : VType -> CType) (H : VType) (A : VType) = val pi (handle : H) . Thk (P A) in
   let Dynamic (P : VType -> CType) (H : VType) (A : VType) = Thk (H -> P A) in
-  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
-  let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
+  let Codec = Codec Uninit Init Ptr in
+  let DynamicCodec = DynamicCodec Uninit Init Ptr in
   let size = @(import("size.zy")) in
   let dynamic_size = builtin |> (@(import("dynamic-size.zy"))) in
   let val identity (A : VType) : View Ret A A = val value => { ret value } in
@@ -121,7 +126,7 @@ begin
           ! yes (unsafe/from_address Payload S payload, value)
       }
   } in
-  let Fault = @(import("fault.zy")) in
+
   let indexed = (builtin |> (@(import("indexed.zy")))) types in
   let val as_checked (E : VType) (H : VType) (A : VType) (view : View Cps H A) : View (Checked E) H
     A =

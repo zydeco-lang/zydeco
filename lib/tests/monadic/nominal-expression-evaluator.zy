@@ -3,7 +3,7 @@ param (/VType; /Thk; /Ret; /Unit; /Int; /numeric; /process; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
 let basis = @(import("../../std/effect/monad.zy")) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> basis in
+let (/Monad; /Algebra; /WithMonad) = basis in
 let state = @(import("../../std/effect/state.zy")) in
 let (/IState; /instance = state_instance) = builtin |> state in
 let exception = @(import("../../std/effect/exception.zy")) in

@@ -23,7 +23,7 @@ begin
   let (= Plan, = Layout, layout) = fixed in
   let (/Cps; /DynamicView; /unsafe = view_unsafe) = views in
   let (/heap) = allocation in
-  let Fault = @(import("../../std/memory/fault.zy")) in
+  let (/Fault) = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
   let int = numeric/int in

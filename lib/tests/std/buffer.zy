@@ -1,4 +1,5 @@
 @[package(test(of(/std)))]
+let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 begin
   param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /UInt32; /Addr; /OS;
     /numeric; /process; builtin) : @(import(/std/builtin)) that
@@ -7,11 +8,11 @@ begin
   in
   let (= Plan, = Layout, layout) = fixed in
   let (/Alloc; /heap) = allocation in
-  let Fault = @(import("../../std/memory/fault.zy")) in
+  let (/Fault) = @(import("../../std/memory/fault.zy")) in
   let fail = { ! process/exit 1 } in
   let no = { fn (_ : Fault) => ! fail } in
 
-  let (/Bytes; /bytes; byte_package) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+  let (/Bytes; /bytes; byte_package) = builtin |> make_bytes in
   let (= Buffer, buffer) = (builtin |> (@(import("../../std/memory/buffer.zy")))) byte_package in
   do first <- ! bytes/from_string "ab";
   do expected <- ! bytes/from_string "abc";

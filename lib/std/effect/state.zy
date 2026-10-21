@@ -1,16 +1,27 @@
 -- State threading and its transformer, derived from ordinary Ret sequencing.
+let (/Monad; /Algebra; /WithMonad; /Top) = @(import("monad.zy")) in
+let (/Transformer) = @(import("transformer.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Unit = @(intrinsic(unit)) in
+
+let MonadState
+  (S : VType) (M : VType -> CType)
+=
+  codata
+  | .get : M S
+  | .put : S -> M Unit
+  end
+in
 val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("monad.zy"))) in
-    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
-      let Top = @(import("top.type.zy")) that
       let triv : Thk Top = {
         comatch
         end
       } that
-      let MonadState = @(import("state.type.zy")) that
       let StateSource (S : VType) (A : VType) = S -> Ret (A * S) that
       let StateT (S : VType) (M : VType -> CType) =
         (@[monadic] StateSource) M S
@@ -24,10 +35,10 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
             @[monadic] begin
               let VType = @(intrinsic(vtype)) in
               let Ret = @(intrinsic(ret)) in
-              let Transformer = @(import("transformer-inner.type.zy")) in
-              let with_lift = { @(import("transformer-source.zy")) } in
+
+              let (/with_lift) = @(import("transformer-source.zy")) in
               let State = StateSource in
-              let MonadState = @(import("state.type.zy")) in
+
               let Source (S : VType) =
                 codata
                 | .core : Transformer Ret (State S)

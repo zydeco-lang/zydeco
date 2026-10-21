@@ -1,10 +1,14 @@
 begin
   let Unit = @(intrinsic(unit)) in
-  data
-  | +InvalidLayout : Unit
-  | +AllocationFailed : Unit
-  | +InvalidEncoding : Unit
-  | +Bounds : Unit
-  | +Overflow : Unit
-  end
+  let Fault =
+    data
+    | +InvalidLayout : Unit
+    | +AllocationFailed : Unit
+    | +InvalidEncoding : Unit
+    | +Bounds : Unit
+    | +Overflow : Unit
+    end
+  in
+  pack (= Fault as Fault)
+  where () end
 end

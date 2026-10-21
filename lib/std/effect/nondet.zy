@@ -1,179 +1,204 @@
--- Ordered depth-first search. Success receives a suspended search for the remaining answers.
-begin
-  param val (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; builtin) :
-  @(import("../builtin.zy")) in
-  param val (/Bool; /Option; /List; /list) : @(import("../data/package.type.zy")) in
-  let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("monad.zy"))) in
-  let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
-  let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
-  begin
-    let Top = @(import("top.type.zy")) that
-    let triv : Thk Top = {
-      comatch
-      end
-    } that
-    let MonadNonDet = @(import("nondet.type.zy")) that
-    -- Translation supplies the answer-type algebra; the source has none.
-    let NonDetSource (A : VType) =
-      forall (R : CType) . Thk (A -> Thk R -> R) -> Thk R -> R
-    that
-    let NonDetT = @[monadic] NonDetSource that
-    let NonDet = NonDetT Ret that
-    let INonDet (M : VType -> CType) = (#nondet :: Thk (MonadNonDet M)) that
+let (/DataPackage) = @(import("../data/package.zy")) in
+let (/Monad; /Algebra; /WithMonad; /Top) = @(import("monad.zy")) in
+let (/Transformer) = @(import("transformer.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Thk = @(intrinsic(thk)) in
 
-    let val transformer_instance (M : VType -> CType) (base : Thk (Monad M)) =
-      let translated = {
-        (
-          @[monadic] begin
-            let Ret = @(intrinsic(ret)) in
-            let Transformer = @(import("transformer-inner.type.zy")) in
-            let MonadNonDet = @(import("nondet.type.zy")) in
-            let with_lift = { @(import("transformer-source.zy")) } in
-            let NonDet = NonDetSource in
-            let Source =
-              codata
-              | .core : Transformer Ret NonDet
-              | .nondet : MonadNonDet NonDet
-              end
-            in
+begin
+  let MonadNonDet (M : VType -> CType) =
+    codata
+    | .empty : forall (A : VType) . M A
+    | .choice : forall (A : VType) . Thk (M A) -> Thk (M A) -> M A
+    end
+  in
+  let make =
+    -- Ordered depth-first search. Success receives a suspended search for the remaining answers.
+    begin
+      param val (/VType; /CType; /Thk; /Ret; /Unit; /Int; /numeric; builtin) : @(import(
+        "../builtin.zy"
+      )) in
+      param val (/Bool; /Option; /List; /list) : DataPackage in
+
+      let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
+      let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
+      begin
+        let triv : Thk Top = {
+          comatch
+          end
+        } that
+
+        -- Translation supplies the answer-type algebra; the source has none.
+        let NonDetSource (A : VType) =
+          forall (R : CType) . Thk (A -> Thk R -> R) -> Thk R -> R
+        that
+        let NonDetT = @[monadic] NonDetSource that
+        let NonDet = NonDetT Ret that
+        let INonDet (M : VType -> CType) = (#nondet :: Thk (MonadNonDet M)) that
+
+        let val transformer_instance (M : VType -> CType) (base : Thk (Monad M)) =
+          let translated = {
             (
-              comatch
-              | .core => ! with_lift NonDet {
+              @[monadic] begin
+                let Ret = @(intrinsic(ret)) in
+
+                let (/with_lift) = @(import("transformer-source.zy")) in
+                let NonDet = NonDetSource in
+                let Source =
+                  codata
+                  | .core : Transformer Ret NonDet
+                  | .nondet : MonadNonDet NonDet
+                  end
+                in
+                (
+                  comatch
+                  | .core => ! with_lift NonDet {
+                    comatch
+                    | .return A a => fn R success failure => ! success a failure
+                    | .bind A B m f =>
+                      fn R success failure =>
+                        ! m R { fn a rest => ! f a R success rest } failure
+                    end
+                  }
+                  | .nondet =>
+                    comatch
+                    | .empty A => fn R success failure => ! failure
+                    | .choice A left right =>
+                      fn R success failure => ! left R success { ! right R success failure }
+                    end
+                  end : Source
+                )
+              end
+            ) M base
+          } in
+          let core = { ! from_monadic M (NonDetT M) { ! translated .core } } in
+          pack (T as NonDetT M)
+          where
+            #monad = { ! core .monad },
+            #lift = { ! core .lift },
+            #nondet = (
+              {
                 comatch
-                | .return A a => fn R success failure => ! success a failure
-                | .bind A B m f =>
-                  fn R success failure =>
-                    ! m R { fn a rest => ! f a R success rest } failure
+                | .empty A => ! translated .nondet .empty A triv
+                | .choice A => ! translated .nondet .choice A triv
                 end
-              }
-              | .nondet =>
-                comatch
-                | .empty A => fn R success failure => ! failure
-                | .choice A left right =>
-                  fn R success failure => ! left R success { ! right R success failure }
-                end
-              end : Source
+              } : Thk (MonadNonDet (NonDetT M))
             )
           end
-        ) M base
-      } in
-      let core = { ! from_monadic M (NonDetT M) { ! translated .core } } in
-      pack (T as NonDetT M)
-      where
-        #monad = { ! core .monad },
-        #lift = { ! core .lift },
-        #nondet = (
-          {
-            comatch
-            | .empty A => ! translated .nondet .empty A triv
-            | .choice A => ! translated .nondet .choice A triv
-            end
-          } : Thk (MonadNonDet (NonDetT M))
-        )
-      end
-    that
-    let instance =
-      let (T, operations) = transformer_instance Ret ret_instance/monad in
-      pack (M as NonDet)
-      where
-        #monad = operations/monad, #nondet = operations/nondet end
-    that
+        that
+        let instance =
+          let (T, operations) = transformer_instance Ret ret_instance/monad in
+          pack (M as NonDet)
+          where
+            #monad = operations/monad, #nondet = operations/nondet end
+        that
 
-    def ! transformer : MonadTrans NonDetT =
-      fn (M, base) =>
-        let (T, (/monad; /lift)) = transformer_instance M base in
-        ! from_instance M T (= monad, = lift)
-    that
+        def ! transformer : MonadTrans NonDetT =
+          fn (M, base) =>
+            let (T, (/monad; /lift)) = transformer_instance M base in
+            ! from_instance M T (= monad, = lift)
+        that
 
-    def ! choose ((M, (/monad; /nondet)) : WithMonad INonDet)
-      (A : VType) (values : List A)
-    : M A =
-        ! list/fold A (M A) values { ! nondet .empty A } {
-          fn head rest => ! nondet .choice A { ! monad .return A head } rest
-        }
-    that
-    def ! guard ((M, (/monad; /nondet)) : WithMonad INonDet) (condition : Bool) : M Unit =
-      match condition
-      | +True() => ! monad .return Unit ()
-      | +False() => ! nondet .empty Unit
-      end
-    that
+        def ! choose ((M, (/monad; /nondet)) : WithMonad INonDet)
+          (A : VType) (values : List A)
+        : M A =
+            ! list/fold A (M A) values { ! nondet .empty A } {
+              fn head rest => ! nondet .choice A { ! monad .return A head } rest
+            }
+        that
+        def ! guard ((M, (/monad; /nondet)) : WithMonad INonDet) (condition : Bool) : M Unit =
+          match condition
+          | +True() => ! monad .return Unit ()
+          | +False() => ! nondet .empty Unit
+          end
+        that
 
-    def ! observe_first_t (M : VType -> CType) (base : Thk (Monad M))
-      (A : VType) (m : Thk (NonDetT M A))
-    : M (Option A) =
-        ! m (M (Option A))
-          { fn X computation continuation => ! base .bind X (Option A) computation continuation }
-          { fn a rest => ! base .return (Option A) +Some(a) }
-          { ! base .return (Option A) +None() }
-    that
-
-    def ! observe_all_t (M : VType -> CType) (base : Thk (Monad M))
-      (A : VType) (m : Thk (NonDetT M A))
-    : M (List A) =
-        do initial <- ! list/nil A;
-        ! m (List A -> M (List A)) {
-          fn X computation continuation reversed =>
-            ! base .bind X (List A) computation { fn x => ! continuation x reversed }
-        } {
-          fn a rest reversed =>
-            do next <- ! list/cons A a reversed;
-            ! rest next
-        } {
-          fn reversed =>
-            do values <- ! list/reverse A reversed;
-            ! base .return (List A) values
-        } initial
-    that
-
-    def ! observe_many_t (M : VType -> CType) (base : Thk (Monad M))
-      (A : VType) (limit : Int) (m : Thk (NonDetT M A))
-    : M (List A) =
-        do initial <- ! list/nil A;
-        ! numeric/int/lt (M (List A)) limit 1 {
-          ! base .return (List A) initial
-        } {
-          let R = Int -> List A -> M (List A) in
-          let done : Thk R = {
-            fn remaining reversed =>
-              do values <- ! list/reverse A reversed;
-              ! base .return (List A) values
-          } in
-          ! m R {
-            fn X computation continuation remaining reversed =>
-              ! base .bind X (List A) computation { fn x => ! continuation x remaining reversed }
-          } {
-            fn a rest remaining reversed =>
-              do next <- ! list/cons A a reversed;
-              ! numeric/int/eq (M (List A)) remaining 1 {
-                ! done 0 next
-              } {
-                do fewer <- ! numeric/int/sub remaining 1;
-                ! rest fewer next
+        def ! observe_first_t (M : VType -> CType) (base : Thk (Monad M))
+          (A : VType) (m : Thk (NonDetT M A))
+        : M (Option A) =
+            ! m (M (Option A))
+              {
+                fn X computation continuation => ! base .bind X (Option A) computation continuation
               }
-          } done limit initial
-        }
-    that
+              { fn a rest => ! base .return (Option A) +Some(a) }
+              { ! base .return (Option A) +None() }
+        that
 
-    def ! observe_first (A : VType) (m : Thk (NonDet A)) : Ret (Option A) =
-      ! observe_first_t Ret ret_instance/monad A m
-    that
-    def ! observe_all (A : VType) (m : Thk (NonDet A)) : Ret (List A) =
-      ! observe_all_t Ret ret_instance/monad A m
-    that
-    def ! observe_many (A : VType) (limit : Int) (m : Thk (NonDet A)) : Ret (List A) =
-      ! observe_many_t Ret ret_instance/monad A limit m
-    that
+        def ! observe_all_t (M : VType -> CType) (base : Thk (Monad M))
+          (A : VType) (m : Thk (NonDetT M A))
+        : M (List A) =
+            do initial <- ! list/nil A;
+            ! m (List A -> M (List A)) {
+              fn X computation continuation reversed =>
+                ! base .bind X (List A) computation { fn x => ! continuation x reversed }
+            } {
+              fn a rest reversed =>
+                do next <- ! list/cons A a reversed;
+                ! rest next
+            } {
+              fn reversed =>
+                do values <- ! list/reverse A reversed;
+                ! base .return (List A) values
+            } initial
+        that
 
-    pack
-      (= NonDet as NonDet)
-      (= NonDetT as NonDetT)
-      (= MonadNonDet as MonadNonDet)
-      (= INonDet as INonDet)
-    where
-      = instance, = transformer_instance, = transformer, = choose, = guard,
-      = observe_first, = observe_all, = observe_many,
-      = observe_first_t, = observe_all_t, = observe_many_t
+        def ! observe_many_t (M : VType -> CType) (base : Thk (Monad M))
+          (A : VType) (limit : Int) (m : Thk (NonDetT M A))
+        : M (List A) =
+            do initial <- ! list/nil A;
+            ! numeric/int/lt (M (List A)) limit 1 {
+              ! base .return (List A) initial
+            } {
+              let R = Int -> List A -> M (List A) in
+              let done : Thk R = {
+                fn remaining reversed =>
+                  do values <- ! list/reverse A reversed;
+                  ! base .return (List A) values
+              } in
+              ! m R {
+                fn X computation continuation remaining reversed =>
+                  ! base .bind X (List A) computation {
+                    fn x => ! continuation x remaining reversed
+                  }
+              } {
+                fn a rest remaining reversed =>
+                  do next <- ! list/cons A a reversed;
+                  ! numeric/int/eq (M (List A)) remaining 1 {
+                    ! done 0 next
+                  } {
+                    do fewer <- ! numeric/int/sub remaining 1;
+                    ! rest fewer next
+                  }
+              } done limit initial
+            }
+        that
+
+        def ! observe_first (A : VType) (m : Thk (NonDet A)) : Ret (Option A) =
+          ! observe_first_t Ret ret_instance/monad A m
+        that
+        def ! observe_all (A : VType) (m : Thk (NonDet A)) : Ret (List A) =
+          ! observe_all_t Ret ret_instance/monad A m
+        that
+        def ! observe_many (A : VType) (limit : Int) (m : Thk (NonDet A)) : Ret (List A) =
+          ! observe_many_t Ret ret_instance/monad A limit m
+        that
+
+        pack
+          (= NonDet as NonDet)
+          (= NonDetT as NonDetT)
+          (= MonadNonDet as MonadNonDet)
+          (= INonDet as INonDet)
+        where
+          = instance, = transformer_instance, = transformer, = choose, = guard,
+          = observe_first, = observe_all, = observe_many,
+          = observe_first_t, = observe_all_t, = observe_many_t
+        end
+      end
     end
+  in
+  pack
+    (= MonadNonDet as MonadNonDet)
+  where
+    = make
   end
 end

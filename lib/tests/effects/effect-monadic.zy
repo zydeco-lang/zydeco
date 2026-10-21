@@ -1,8 +1,8 @@
 -- Closed translated clients consume only carrier-indexed operations.
 param (/VType; /Thk; /Ret; /Unit; /Int; /String; /OS; /string; /stdio; /process; builtin) :
 @(import("../../std/builtin.zy")) in
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("../../std/effect/monad.zy"))) in
-let Top = @(import("../../std/effect/top.type.zy")) in
+let (/Monad; /Algebra; /WithMonad) = @(import("../../std/effect/monad.zy")) in
+let (/Top) = @(import("../../std/effect/monad.zy")) in
 let (/instance = ret_instance) = builtin |> (@(import("../../std/effect/ret.zy"))) in
 let (/IReader; reader) = builtin |> (@(import("../../std/effect/reader.zy"))) in
 let (/Monoid; /IWriter; writer) = builtin |> (@(import("../../std/effect/writer.zy"))) in

@@ -1,7 +1,8 @@
 @[package(test(of(/std)))]
+let (/make = make_bytes) = @(import("../../std/text/bytes.zy")) in
 param (/VType; /CType; /Thk; /Ret; /Unit; /Int; /UInt8; /String; /Addr; /OS;
   /numeric; /process; builtin) : @(import(/std/builtin)) in
-let (/Bytes; /bytes) = builtin |> (@(import("../../std/text/bytes.zy"))) in
+let (/Bytes; /bytes) = builtin |> make_bytes in
 let (/Fault; native) = builtin |> (@(import("../../std/memory/native.zy"))) in
 let int = numeric/int in
 let exit = process/exit in

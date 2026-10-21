@@ -2218,8 +2218,16 @@ fn recursive_nominal_types_port_to_a_declaration_free_block() {
 }
 
 #[test]
-fn standard_data_package_exports_a_value_function() {
-    RepositorySourceFiles::assert_value_function("std/data/package.zy");
+fn standard_data_package_exports_a_packed_value() {
+    use zydeco_statics::syntax::{ExistsMode, TermAnnId, Type};
+    let checked = TestPipeline::check(repository_source("std/data/package.zy")).unwrap();
+    let TermAnnId::Value(_, ty) = checked.root else {
+        panic!("the data module exports a value package");
+    };
+    let Some(Type::Exists(contract)) = checked.statics.normalized_at(ty) else {
+        panic!("the data module exports its contracts before factory application");
+    };
+    assert!(matches!(contract.mode, ExistsMode::Manifest(_)));
 }
 
 #[test]

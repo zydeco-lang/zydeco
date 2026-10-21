@@ -13,6 +13,7 @@ begin
       | +Product : (#offset :: Int) * (#left :: Node Form) * (#right :: Node Form)
       end
     that
-    Node Form
+    pack (= Shape as Node Form)
+    where () end
   end
 end

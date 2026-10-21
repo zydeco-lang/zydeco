@@ -1,17 +1,28 @@
 -- Exceptions and recovery, translated from one returned-Either implementation.
+let (/Monad; /Algebra; /WithMonad; /Top) = @(import("monad.zy")) in
+let (/Transformer) = @(import("transformer.zy")) in
+let (/Either) = @(import("../data/either.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+
+let MonadThrow
+  (E : VType) (M : VType -> CType)
+=
+  codata
+  | .throw :
+    forall (A : VType) . E -> M A
+  end
+in
 val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) =>
   begin
-    let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("monad.zy"))) in
-    let (/MonadTrans; /from_monadic; /from_instance) = builtin |> (@(import("transformer.zy"))) in
+    let (/MonadTrans; /from_monadic; /from_instance) = @(import("transformer.zy")) in
     let (/instance = ret_instance) = builtin |> (@(import("ret.zy"))) in
     begin
-      let Top = @(import("top.type.zy")) that
       let triv : Thk Top = {
         comatch
         end
       } that
-      let Either = @(import("../data/either.zy")) that
-      let MonadThrow = @(import("exception.type.zy")) that
+
       let ExceptionSource (E : VType) (A : VType) = Ret (Either E A) that
       let ExceptionT (E : VType) (M : VType -> CType) =
         (@[monadic] ExceptionSource) M E
@@ -29,10 +40,10 @@ val ((/VType; /CType; /Thk; /Ret; /Unit; builtin) : @(import("../builtin.zy"))) 
               let VType = @(intrinsic(vtype)) in
               let Thk = @(intrinsic(thk)) in
               let Ret = @(intrinsic(ret)) in
-              let Transformer = @(import("transformer-inner.type.zy")) in
-              let with_lift = { @(import("transformer-source.zy")) } in
+
+              let (/with_lift) = @(import("transformer-source.zy")) in
               let Exception = ExceptionSource in
-              let MonadThrow = @(import("exception.type.zy")) in
+
               let Source (E : VType) =
                 codata
                 | .core : Transformer Ret (Exception E)

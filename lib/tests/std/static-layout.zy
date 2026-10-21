@@ -20,7 +20,7 @@ begin
   let (= Plan, = Layout, layout) = fixed in
   let (/Alloc; /heap) = allocation in
   let fail = { ! process/exit 1 } in
-  let Fault = @(import("../../std/memory/fault.zy")) in
+  let (/Fault) = @(import("../../std/memory/fault.zy")) in
   let error = { fn (_ : Fault) => ! fail } in
   let ! check_padding (address : Addr) (next : Thk OS) : OS =
     do gap <- ! raw/unsafe/offset address 1;

@@ -1,0 +1,13 @@
+let VType = @(intrinsic(vtype)) in
+let Thk = @(intrinsic(thk)) in
+let Ret = @(intrinsic(ret)) in
+begin
+  -- A lawful monoid has associative append and a two-sided identity.
+  -- Writer additionally requires append to be total and observationally pure.
+  let Monoid (W : VType) =
+      (#empty :: W)
+    * (#append :: Thk (W -> W -> Ret W))
+  in
+  pack (= Monoid as Monoid)
+  where () end
+end

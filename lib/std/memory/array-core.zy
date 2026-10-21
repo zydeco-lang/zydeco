@@ -1,15 +1,20 @@
 -- Internal array operations after geometry validation. The caller supplies matching extent and stride.
+
+let (/Types) = @(import("types.zy")) in
+let (/Codec; /DynamicCodec) = @(import("codecs.zy")) in
+let (/Alloc) = @(import("allocation.zy")) in
+let (/Fault) = @(import("fault.zy")) in
+let (/Either) = @(import("../data/either.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
-  param val (/Uninit; /Init; /Ptr; /unsafe; types) : (@(import("types.type.zy"))) Addr in
+  param val (/Uninit; /Init; /Ptr; /unsafe; types) : Types Addr in
   param val Geometry : VType -> VType in
-  let Codec = (@(import("codec.type.zy"))) Uninit Init Ptr in
-  let DynamicCodec = (@(import("dynamic-codec.type.zy"))) Uninit Init Ptr in
-  let Alloc = (@(import("allocator.type.zy"))) Addr in
-  let Fault = @(import("fault.zy")) in
-  let Either = @(import("../data/either.zy")) in
+  let Codec = Codec Uninit Init Ptr in
+  let DynamicCodec = DynamicCodec Uninit Init Ptr in
+  let Alloc = Alloc Addr in
+
   let indexed = (builtin |> (@(import("indexed.zy")))) types in
   let int = numeric/int in
   def Contents (A : VType) : VType =

@@ -5,10 +5,9 @@ begin
     "../../std/builtin.zy"
   )) that
   let (/Monad; /Algebra) =
-    builtin |> monadic_basis
+    monadic_basis
   in
   begin
-
     def Empty =
       data
       end

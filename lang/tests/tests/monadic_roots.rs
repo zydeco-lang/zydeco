@@ -18,11 +18,9 @@ let Thk = @(intrinsic(thk)) in
 let Ret = @(intrinsic(ret)) in
 let Int = @(intrinsic(int)) in
 let Unit = @(intrinsic(unit)) in
-let Monad = @(import("{}/monad.type.zy")) in
-let Algebra = @(import("{}/algebra.type.zy")) in
+let (/Monad; /Algebra) = @(import("{}/monad.zy")) in
 {body}
 "#,
-            library.display(),
             library.display(),
         )
     }
@@ -38,8 +36,8 @@ let Algebra = @(import("{}/algebra.type.zy")) in
 }
 
 #[test]
-fn monadic_preserves_each_supported_root_sort() {
-    for source in ["Int", "Ret", "Ret Int", "1", "{ ret 1 }", "val (x : Int) => x", "ret 1"] {
+fn monadic_preserves_value_and_computation_root_sorts() {
+    for source in ["1", "{ ret 1 }", "val (x : Int) => x", "ret 1"] {
         let before = MonadicRootCase::check(source);
         let after = MonadicRootCase::check(&format!("@[monadic] ({source})"));
         assert_eq!(
@@ -51,14 +49,26 @@ fn monadic_preserves_each_supported_root_sort() {
 }
 
 #[test]
+fn monadic_type_results_are_manifest_exports() {
+    for source in ["Int", "Ret", "Ret Int"] {
+        for body in [source.to_owned(), format!("@[monadic] ({source})")] {
+            let checked =
+                MonadicRootCase::check(&format!("pack (= Result as ({body})) where () end"));
+            assert!(matches!(checked.root, TermAnnId::Value(_, _)));
+            assert_eq!(checked.statics.compus.iter().count(), 0, "type exports require no code");
+        }
+    }
+}
+
+#[test]
 fn nominal_type_roots_do_not_generate_a_runtime_dictionary() {
     let checked = MonadicRootCase::check(
-        r#"@[monadic] begin
+        r#"pack (= StreamFamily as (@[monadic] begin
   def Stream : CType = codata | .head : Ret Int | .tail : Stream end that
   Stream
-end"#,
+end)) where () end"#,
     );
-    assert!(matches!(checked.root, TermAnnId::Type(_, _)));
+    assert!(matches!(checked.root, TermAnnId::Value(_, _)));
     assert_eq!(checked.statics.seals.iter().count(), 2, "source and translated nominal family");
     assert_eq!(checked.statics.compus.iter().count(), 0, "type roots only construct types");
 }

@@ -1,8 +1,10 @@
+let (/make = make_data) = @(import("../../std/data/package.zy")) in
+let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
 param (/Thk; /Ret; /Unit; /Int; /String; /numeric; /string; builtin) : @(import(
   "../../std/builtin.zy"
 )) in
-let (/List; /list; /bool; data_package) = builtin |> (@(import("../../std/data/package.zy"))) in
-let nondet = (builtin |> (@(import("../../std/effect/nondet.zy")))) data_package in
+let (/List; /list; /bool; data_package) = builtin |> make_data in
+let nondet = (builtin |> make_nondet) data_package in
 let (/with_trace) = builtin |> (@(import("effect-test-basis.zy"))) in
 let (/render; /check) = (builtin |> (@(import("nondet-test-basis.zy")))) data_package in
 let (N, n) = nondet/instance in

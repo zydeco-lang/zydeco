@@ -1,12 +1,13 @@
 @[package(library, name(std/system))]
+
+let (/BytesPackage) = @(import("../text/bytes.zy")) in
+let (/DataPackage) = @(import("../data/package.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Ret; /Unit;
     /Int; /String; /Addr; /Reader; /Writer; /OS;
     /io; /fs; /stdio; /random; /process; /int; builtin) : @(import("../builtin.zy")) that
-  param val (/Bytes; /bytes) : (@(import("../text/bytes.type.zy"))) Addr in
-  param val (/Bool; /Option; /Either; /List; /bool; /option; /either; /list) : @(import(
-    "../data/package.type.zy"
-  )) in
+  param val (/Bytes; /bytes) : BytesPackage Addr in
+  param val (/Bool; /Option; /Either; /List; /bool; /option; /either; /list) : DataPackage in
   let make_arguments = @(import("arguments.zy")) in
   let arguments = builtin |> make_arguments in
   begin

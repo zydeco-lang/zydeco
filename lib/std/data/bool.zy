@@ -6,5 +6,6 @@ begin
     | +True : Unit
     end
   in
-  Bool
+  pack (= Bool as Bool)
+  where () end
 end

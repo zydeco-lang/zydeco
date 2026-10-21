@@ -7,5 +7,6 @@ begin
     | +Some : A
     end
   in
-  Option
+  pack (= Option as Option)
+  where () end
 end

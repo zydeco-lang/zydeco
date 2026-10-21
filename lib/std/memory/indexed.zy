@@ -1,11 +1,14 @@
 -- Shared bounds and displacement checks for layout-bound counted views and arrays.
 -- The caller guarantees allocation extent, element stride, state, and alias validity.
+
+let (/Types) = @(import("types.zy")) in
+let (/Fault) = @(import("fault.zy")) in
 begin
   param val (/VType; /CType; /Thk; /Addr; /Int; /numeric; /memory; builtin) : @(import(
     "../builtin.zy"
   )) that
-  param val (/Uninit; /Init; /Ptr; /unsafe) : (@(import("types.type.zy"))) Addr in
-  let Fault = @(import("fault.zy")) in
+  param val (/Uninit; /Init; /Ptr; /unsafe) : Types Addr in
+
   let int = numeric/int in
   let at : Thk (
     forall (L : VType) (S : VType) (R : CType) .

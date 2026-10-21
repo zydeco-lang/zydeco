@@ -21,7 +21,7 @@ begin
   let int = numeric/int that
   let char = text/char that
   let string = text/string that
-  let (/Monad; /Algebra) = builtin |> monadic_basis in
+  let (/Monad; /Algebra) = monadic_basis in
   begin
     let Ret = F that
     def Bool =

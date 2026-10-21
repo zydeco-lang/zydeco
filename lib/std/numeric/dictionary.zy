@@ -1,0 +1,41 @@
+-- Structural capabilities shared by integer and floating-point builders.
+let VType = @(intrinsic(vtype)) in
+let Thk = @(intrinsic(thk)) in
+let Ret = @(intrinsic(ret)) in
+begin
+  let Additive (A : VType) =
+      (#zero :: A)
+    * (#add :: Thk (A -> A -> Ret A))
+    * (#sub :: Thk (A -> A -> Ret A))
+    * (#negate :: Thk (A -> Ret A))
+  in
+  let Multiplicative (A : VType) =
+      (#one :: A)
+    * (#mul :: Thk (A -> A -> Ret A))
+  in
+  let PartialEquality (Bool : VType) (A : VType) =
+      (#eq :: Thk (A -> A -> Ret Bool))
+    * (#ne :: Thk (A -> A -> Ret Bool))
+  in
+  let PartialOrder (Bool : VType) (A : VType) =
+      (#equality :: PartialEquality Bool A)
+    * (#lt :: Thk (A -> A -> Ret Bool))
+    * (#le :: Thk (A -> A -> Ret Bool))
+    * (#gt :: Thk (A -> A -> Ret Bool))
+    * (#ge :: Thk (A -> A -> Ret Bool))
+  in
+  let Numeric (Bool : VType) (A : VType) =
+      (#additive :: Additive A)
+    * (#multiplicative :: Multiplicative A)
+    * (#order :: PartialOrder Bool A)
+  in
+  pack
+    (= Additive as Additive)
+    (= Multiplicative as Multiplicative)
+    (= PartialEquality as PartialEquality)
+    (= PartialOrder as PartialOrder)
+    (= Numeric as Numeric)
+  where
+    ()
+  end
+end

@@ -1,7 +1,9 @@
-let (/Monad; /Algebra; /WithMonad) = builtin |> (@(import("${std}/effect/monad.zy"))) in
-let (/List; /list; data_package) = builtin |> (@(import("${std}/data/package.zy"))) in
+let (/make = make_data) = @(import("${std}/data/package.zy")) in
+let (/make = make_nondet) = @(import("${std}/effect/nondet.zy")) in
+let (/Monad; /Algebra; /WithMonad) = @(import("${std}/effect/monad.zy")) in
+let (/List; /list; data_package) = builtin |> make_data in
 let (/NonDet; /NonDetT; /MonadNonDet; /INonDet; nondet) =
-  (builtin |> (@(import("${std}/effect/nondet.zy")))) data_package in
+  (builtin |> make_nondet) data_package in
 let optional = builtin |> (@(import("${std}/effect/option.zy"))) in
 let (N, n) = nondet/instance in
 let (O, o) = optional/instance in

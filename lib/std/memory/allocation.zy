@@ -1,82 +1,127 @@
--- Allocator context is explicit. Free requires the same allocator and allocation layout.
+let (/Types) = @(import("types.zy")) in
+let (/StoragePackage) = @(import("storage.zy")) in
+let (/Fault) = @(import("fault.zy")) in
+let VType = @(intrinsic(vtype)) in
+let CType = @(intrinsic(ctype)) in
+let Thk = @(intrinsic(thk)) in
+let Int = @(intrinsic(int)) in
+
 begin
-  param val (/VType; /CType; /Thk; /Unit; /Addr; /Int; /numeric; builtin) : @(import(
-    "../builtin.zy"
-  )) that
-  param val (/Uninit; /Ptr; /unsafe) : (@(import("types.type.zy"))) Addr that
-  param val (/Storage; /DynamicStorage; /constant; /runtime) : @(import("storage.type.zy")) in
-  let Alloc = (@(import("allocator.type.zy"))) Addr in
-  let StaticAlloc = (@(import("static-allocator.type.zy"))) Addr in
-  let (/Fault; native) = builtin |> (@(import("native.zy"))) in
-  let static_heap : StaticAlloc Unit = (
-    #allocate = val () size alignment =>
-      { fn R no yes => ! native/allocate R size alignment no yes },
-    #free = val () base size alignment =>
-      { fn R no done => ! native/unsafe/free R base size alignment no done }
-  ) in
-  let val materialize (Context : VType) (allocator : StaticAlloc Context) (context : Context) :
-    Alloc = (
-      #allocate = {
-        fn R size alignment no yes => ! (allocator/allocate context size alignment) R no yes
-      },
-      #free = {
-        fn R base size alignment no done => ! (allocator/free context base size alignment) R no done
-      }
-    )
+  let Alloc =
+    begin
+      param Addr : VType in
+        (
+          #allocate :: Thk (
+            forall (R : CType) . Int -> Int -> Thk (Fault -> R) -> Thk (Addr -> R) -> R
+          )
+        )
+      * (#free :: Thk (forall (R : CType) . Addr -> Int -> Int -> Thk (Fault -> R) -> Thk R -> R))
+    end
   in
-  let heap : Alloc = materialize Unit static_heap () in
-  let val limited (maximum : Int) (parent : Alloc) : Alloc =
-    (
-      #allocate = {
-        fn R size alignment no yes =>
-          ! numeric/int/gt R size maximum { ! no +AllocationFailed() } {
-            ! parent/allocate R size alignment no yes
+  let StaticAlloc =
+    begin
+      param Addr : VType in
+      fn (Context : VType) =>
+          (
+            #allocate :: val pi (context : Context) (size : Int) (alignment : Int) .
+              Thk (forall (R : CType) . Thk (Fault -> R) -> Thk (Addr -> R) -> R)
+          )
+        * (
+            #free :: val pi (context : Context) (base : Addr) (size : Int) (alignment : Int) .
+              Thk (forall (R : CType) . Thk (Fault -> R) -> Thk R -> R)
+          )
+    end
+  in
+  let make =
+    -- Allocator context is explicit. Free requires the same allocator and allocation layout.
+    begin
+      param val (/VType; /CType; /Thk; /Unit; /Addr; /Int; /numeric; builtin) : @(import(
+        "../builtin.zy"
+      )) that
+      param val (/Uninit; /Ptr; /unsafe) : Types Addr that
+      param val (/Storage; /DynamicStorage; /constant; /runtime) : StoragePackage in
+      let Alloc = Alloc Addr in
+      let StaticAlloc = StaticAlloc Addr in
+      let (/Fault; native) = builtin |> (@(import("native.zy"))) in
+      let static_heap : StaticAlloc Unit = (
+        #allocate = val () size alignment =>
+          { fn R no yes => ! native/allocate R size alignment no yes },
+        #free = val () base size alignment =>
+          { fn R no done => ! native/unsafe/free R base size alignment no done }
+      ) in
+      let val materialize (Context : VType) (allocator : StaticAlloc Context) (context : Context) :
+        Alloc = (
+          #allocate = {
+            fn R size alignment no yes => ! (allocator/allocate context size alignment) R no yes
+          },
+          #free = {
+            fn R base size alignment no done =>
+              ! (allocator/free context base size alignment) R no done
           }
-      },
-      #free = parent/free
-    )
-  in
-  let val allocate (L : VType) (Context : VType) (allocator : StaticAlloc Context)
-    (context : Context) (layout : Storage L)
-  : Thk (
-      forall (R : CType) . Thk (Fault -> R) -> Thk (Ptr L Uninit -> R) -> R
-    )
-  =
-    let geometry = constant/query L layout in
-    {
-      fn R no yes =>
-        ! (allocator/allocate context geometry/size geometry/alignment) R no {
-          fn address => ! yes (unsafe/from_address L Uninit address)
+        )
+      in
+      let heap : Alloc = materialize Unit static_heap () in
+      let val limited (maximum : Int) (parent : Alloc) : Alloc =
+        (
+          #allocate = {
+            fn R size alignment no yes =>
+              ! numeric/int/gt R size maximum { ! no +AllocationFailed() } {
+                ! parent/allocate R size alignment no yes
+              }
+          },
+          #free = parent/free
+        )
+      in
+      let val allocate (L : VType) (Context : VType) (allocator : StaticAlloc Context)
+        (context : Context) (layout : Storage L)
+      : Thk (
+          forall (R : CType) . Thk (Fault -> R) -> Thk (Ptr L Uninit -> R) -> R
+        )
+      =
+        let geometry = constant/query L layout in
+        {
+          fn R no yes =>
+            ! (allocator/allocate context geometry/size geometry/alignment) R no {
+              fn address => ! yes (unsafe/from_address L Uninit address)
+            }
         }
-    }
+      in
+      let val free (L : VType) (Context : VType) (allocator : StaticAlloc Context)
+        (context : Context) (layout : Storage L) (pointer : Ptr L Uninit)
+      : Thk (
+          forall (R : CType) . Thk (Fault -> R) -> Thk R -> R
+        )
+      =
+        let geometry = constant/query L layout in
+        allocator/free context (unsafe/address L Uninit pointer) geometry/size geometry/alignment
+      in
+      let ! dynamic_allocate (L : VType) (R : CType) (allocator : Alloc) (layout : DynamicStorage L)
+        (no : Thk (Fault -> R)) (yes : Thk (Ptr L Uninit -> R))
+      : R =
+          let geometry = runtime/query L layout in
+          ! allocator/allocate R geometry/size geometry/alignment no {
+            fn address => ! yes (unsafe/from_address L Uninit address)
+          }
+      in
+      let ! dynamic_free (L : VType) (R : CType) (allocator : Alloc) (layout : DynamicStorage L)
+        (pointer : Ptr L Uninit) (no : Thk (Fault -> R)) (done : Thk R)
+      : R =
+          let geometry = runtime/query L layout in
+          ! allocator/free R (unsafe/address L Uninit pointer) geometry/size geometry/alignment no
+            done
+      in
+      pack (= Alloc as Alloc) (= StaticAlloc as StaticAlloc)
+      where
+        (= heap, = limited, = static_heap, = materialize,
+          #reserve = allocate, #dynamic_reserve = dynamic_allocate,
+          #unsafe = (#release = free, #dynamic_release = dynamic_free))
+      end
+    end
   in
-  let val free (L : VType) (Context : VType) (allocator : StaticAlloc Context)
-    (context : Context) (layout : Storage L) (pointer : Ptr L Uninit)
-  : Thk (
-      forall (R : CType) . Thk (Fault -> R) -> Thk R -> R
-    )
-  =
-    let geometry = constant/query L layout in
-    allocator/free context (unsafe/address L Uninit pointer) geometry/size geometry/alignment
-  in
-  let ! dynamic_allocate (L : VType) (R : CType) (allocator : Alloc) (layout : DynamicStorage L)
-    (no : Thk (Fault -> R)) (yes : Thk (Ptr L Uninit -> R))
-  : R =
-      let geometry = runtime/query L layout in
-      ! allocator/allocate R geometry/size geometry/alignment no {
-        fn address => ! yes (unsafe/from_address L Uninit address)
-      }
-  in
-  let ! dynamic_free (L : VType) (R : CType) (allocator : Alloc) (layout : DynamicStorage L)
-    (pointer : Ptr L Uninit) (no : Thk (Fault -> R)) (done : Thk R)
-  : R =
-      let geometry = runtime/query L layout in
-      ! allocator/free R (unsafe/address L Uninit pointer) geometry/size geometry/alignment no done
-  in
-  pack (= Alloc as Alloc) (= StaticAlloc as StaticAlloc)
+  pack
+    (= Alloc as Alloc)
+    (= StaticAlloc as StaticAlloc)
   where
-    (= heap, = limited, = static_heap, = materialize,
-      #reserve = allocate, #dynamic_reserve = dynamic_allocate,
-      #unsafe = (#release = free, #dynamic_release = dynamic_free))
+    = make
   end
 end

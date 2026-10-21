@@ -1,9 +1,10 @@
 -- Total value calculations for nonnegative byte counts and power-of-two alignments.
+let (/Either) = @(import("../data/either.zy")) in
+let (/Error) = @(import("layout-error.zy")) in
 begin
   let VType = @(intrinsic(vtype)) in
   let Int = @(intrinsic(int)) in
-  let Either = @(import("../data/either.zy")) in
-  let Error = @(import("layout-error.zy")) in
+
   let add_bits = @(intrinsic(int_add)) in
   let sub_bits = @(intrinsic(int_sub)) in
   let bit_and = @(intrinsic(int_and)) in

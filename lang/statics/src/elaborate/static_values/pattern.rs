@@ -185,39 +185,55 @@ impl StaticElaborator<'_, '_> {
         &mut self, pattern: VPatId, prefix: Vec<StaticPatId>, tail: VPatId, value: StaticValue,
         env: &mut Environment, bindings: &mut Vec<Binding>,
     ) -> ResultKont<StaticValue> {
-        let value = value.unnamed();
-        match &value.0.form {
-            | ValueForm::Package(ConsN(witnesses, payload)) => {
-                self.bind_witnesses(pattern, &prefix, witnesses, env)?;
-                if self.purpose == Purpose::Inspect
-                    && matches!(payload.0.form, ValueForm::Runtime(_))
-                {
-                    let ty = self.ty(self.tycker.statics.annotations_vpat[&tail], env)?;
-                    return Ok(StaticValue::with_form(
-                        payload.0.source,
-                        ty,
-                        payload.0.form.clone(),
-                    ));
+        let mut value = value.unnamed();
+        let mut witnesses = Vec::with_capacity(prefix.len());
+        // A projection pattern can open a whole telescope even when `pack`
+        // introduced its entries as nested singleton packages. Consume exactly
+        // the pattern's prefix, retaining any unopened package structure.
+        while witnesses.len() < prefix.len() {
+            match &value.0.form {
+                | ValueForm::Package(ConsN(arguments, payload)) => {
+                    let remaining = prefix.len() - witnesses.len();
+                    witnesses.extend(arguments.iter().take(remaining).copied());
+                    if arguments.len() > remaining {
+                        self.bind_witnesses(pattern, &prefix, &witnesses, env)?;
+                        let ty = self.ty(self.tycker.statics.annotations_vpat[&tail], env)?;
+                        return Ok(StaticValue::with_form(
+                            value.0.source,
+                            ty,
+                            ValueForm::Package(ConsN(
+                                arguments[remaining..].to_vec(),
+                                payload.clone(),
+                            )),
+                        ));
+                    }
+                    value = payload.clone();
                 }
-                Ok(payload.clone())
+                | ValueForm::Runtime(_) => break,
+                | _ => unreachable!("package pattern has a package value"),
             }
-            | ValueForm::Runtime(_) => {
-                let ty = self.ty(self.tycker.statics.annotations_vpat[&tail], env)?;
-                if self.purpose == Purpose::Inspect {
-                    return Ok(StaticValue::with_form(value.0.source, ty, value.0.form.clone()));
-                }
-                let (payload_pattern, payload) = self.variable(Some(value.0.source), ty);
-                let binder = self.alloc_pattern(
-                    pattern,
-                    ValuePattern::SCons(ConsN(prefix, payload_pattern)),
-                    value.0.ty,
-                );
-                let bindee = self.reify(&value)?;
-                bindings.push(Binding { binder, bindee });
-                Ok(payload)
-            }
-            | _ => unreachable!("package pattern has a package value"),
         }
+        self.bind_witnesses(pattern, &prefix, &witnesses, env)?;
+        if witnesses.len() == prefix.len() {
+            if self.purpose == Purpose::Inspect && matches!(value.0.form, ValueForm::Runtime(_)) {
+                let ty = self.ty(self.tycker.statics.annotations_vpat[&tail], env)?;
+                return Ok(StaticValue::with_form(value.0.source, ty, value.0.form.clone()));
+            }
+            return Ok(value);
+        }
+        let ty = self.ty(self.tycker.statics.annotations_vpat[&tail], env)?;
+        if self.purpose == Purpose::Inspect {
+            return Ok(StaticValue::with_form(value.0.source, ty, value.0.form.clone()));
+        }
+        let (payload_pattern, payload) = self.variable(Some(value.0.source), ty);
+        let binder = self.alloc_pattern(
+            pattern,
+            ValuePattern::SCons(ConsN(prefix[witnesses.len()..].to_vec(), payload_pattern)),
+            value.0.ty,
+        );
+        let bindee = self.reify(&value)?;
+        bindings.push(Binding { binder, bindee });
+        Ok(payload)
     }
 
     pub(super) fn pattern_witness(&self, pattern: TPatId) -> Option<AbstId> {

@@ -1,0 +1,7 @@
+-- expect: reject(tyck.static-elimination)
+
+let library =
+  pack (= Input as Int) (= Output as Int)
+  where #make = val (value : Int) => value end
+in
+ret library
