@@ -22,15 +22,6 @@ const TEST_INPUT_DIRECTORIES: &[&str] =
 /// Individual files outside [`TEST_INPUT_DIRECTORIES`] that tests consume.
 const TEST_INPUT_FILES: &[&str] = &["workspace.zy"];
 
-/// Environment variables that belong to the run identity.
-///
-/// Shell tool lookup (`PATH`) and the Node.js override (`NODE`) are left out:
-/// they change between terminal sessions for cosmetic reasons and are assumed
-/// not to alter test outcomes. External tool changes are validated with
-/// `--force` instead. `RUSTFLAGS` changes compiled code and `RUST_MIN_STACK`
-/// changes test stacks, so both remain part of the identity.
-const ENVIRONMENT_KEYS: &[&str] = &["RUSTFLAGS", "RUST_MIN_STACK"];
-
 /// Outcome recorded for one test.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -120,7 +111,13 @@ impl TargetRecord {
 }
 
 /// Everything that defines one resumable run: a different toolchain, build
-/// configuration, execution stack, or test selection gets its own saved results.
+/// configuration, or test selection gets its own saved results.
+///
+/// Process environment variables are deliberately not part of the identity:
+/// there are too many of them to enumerate, they change between terminal
+/// sessions for cosmetic reasons, and the ones that alter compiled code are
+/// already visible through the test-executable stamps. Rerun with `--force`
+/// after an environment change that should invalidate old passes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunKey {
     pub workspace_root: String,
@@ -128,7 +125,6 @@ pub struct RunKey {
     pub toolchain: String,
     pub cargo_args: Vec<String>,
     pub test_scope: Vec<String>,
-    pub environment: BTreeMap<String, String>,
 }
 
 impl RunKey {
@@ -137,17 +133,12 @@ impl RunKey {
         workspace_root: &Path, target_directory: &Path, toolchain: &str, cargo_args: &[String],
         test_scope: &[String],
     ) -> Self {
-        let environment = ENVIRONMENT_KEYS
-            .iter()
-            .map(|name| ((*name).to_owned(), std::env::var(name).unwrap_or_default()))
-            .collect();
         Self {
             workspace_root: workspace_root.display().to_string(),
             target_directory: target_directory.display().to_string(),
             toolchain: toolchain.to_owned(),
             cargo_args: cargo_args.to_vec(),
             test_scope: test_scope.to_vec(),
-            environment,
         }
     }
 
@@ -778,7 +769,9 @@ mod tests {
     }
 
     #[test]
-    fn the_resume_key_ignores_shell_tool_paths() {
+    fn the_resume_key_has_no_environment_inputs() {
+        // Changing the process environment cannot produce a different key;
+        // the remaining fields are the repository, toolchain, and arguments.
         let key = RunKey::new(
             Path::new("/workspace"),
             Path::new("/workspace/target"),
@@ -786,9 +779,8 @@ mod tests {
             &[],
             &[],
         );
-        assert!(!key.environment.contains_key("PATH"));
-        assert!(!key.environment.contains_key("NODE"));
-        assert!(key.environment.contains_key("RUSTFLAGS"));
-        assert!(key.environment.contains_key("RUST_MIN_STACK"));
+        let serialized = serde_json::to_string(&key).expect("serialize key");
+        assert!(!serialized.contains("environment"));
+        assert!(serialized.contains("\"workspace_root\""));
     }
 }
