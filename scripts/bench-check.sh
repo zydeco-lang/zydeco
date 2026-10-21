@@ -3,17 +3,15 @@
 #
 # Usage: scripts/bench-check.sh [runs]
 #
-# Builds the release CLI if the binary is missing, then prints the best wall
-# time of `runs` runs per file. Used to track `zydeco check` latency.
+# Rebuilds the release CLI from this checkout, then prints the best wall time
+# of `runs` runs per file. Used to track `zydeco check` latency.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 runs="${1:-3}"
 bin="target/release/zydeco"
-if [[ ! -x "$bin" ]]; then
-    cargo build --release --bin zydeco
-fi
+cargo build --release --quiet --bin zydeco
 
 files=(
     lib/std/std.zy

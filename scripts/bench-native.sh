@@ -44,6 +44,14 @@ fi
 bin="target/release/zydeco"
 cargo build --release --bin zydeco
 
+build_dirs=()
+cleanup() {
+    if (( ${#build_dirs[@]} > 0 )); then
+        rm -rf -- "${build_dirs[@]}"
+    fi
+}
+trap cleanup EXIT
+
 for file in "${files[@]}"; do
     if [[ ! -f "$file" ]]; then
         echo "skipping missing file: $file" >&2
@@ -51,7 +59,7 @@ for file in "${files[@]}"; do
     fi
 
     build_dir="$(mktemp -d)"
-    trap 'rm -rf "$build_dir"' EXIT
+    build_dirs+=("$build_dir")
 
     asm_file="$build_dir/out.s"
     if ! "$bin" build -t asm --representation "$representation" --target-arch x86-64 "$file" -b "$build_dir" >"$asm_file" 2>/dev/null; then
