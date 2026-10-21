@@ -6,7 +6,9 @@ use std::process::{Command, Stdio};
 
 use crate::cargo::{Cargo, TestTarget};
 use crate::cli::{Action, ColorChoice, Invocation, TestArgs};
-use crate::state::{ResumeState, RunKey, Stamp, Store, TestStatus, now_unix_ms, source_stamp};
+use crate::state::{
+    ResumeState, RunKey, Stamp, Store, TestStatus, canonical_test_name, now_unix_ms, source_stamp,
+};
 use crate::{Error, Result};
 
 /// Exit status of one xtask test run.
@@ -389,7 +391,7 @@ fn list_tests(target: &TestTarget, test_args: &TestArgs) -> Result<Vec<String>> 
 /// Parses one line of `--list` output (`name: test`), dropping a `[kind]` label.
 fn parse_list_line(line: &str) -> Option<String> {
     let label = line.trim_end().strip_suffix(": test")?;
-    Some(strip_kind_prefix(label.trim_end()).to_owned())
+    Some(canonical_test_name(strip_kind_prefix(label.trim_end())).to_owned())
 }
 
 fn strip_kind_prefix(label: &str) -> &str {
@@ -414,7 +416,7 @@ fn parse_test_line(line: &str) -> Option<(String, TestStatus)> {
     } else {
         return None;
     };
-    Some((strip_kind_prefix(label.trim_end()).to_owned(), status))
+    Some((canonical_test_name(strip_kind_prefix(label.trim_end())).to_owned(), status))
 }
 
 /// One execution of one test executable.
@@ -498,7 +500,7 @@ impl<'a> TargetRunner<'a> {
                 "warning: `{label}` exited without a test summary ({status}); unfinished tests stay pending"
             );
         } else if let Some(expected) = expected {
-            let missing = expected
+            let missing: Vec<&String> = expected
                 .iter()
                 .filter(|test| {
                     matches!(
@@ -506,10 +508,16 @@ impl<'a> TargetRunner<'a> {
                         Some(TestStatus::Pending) | None
                     )
                 })
-                .count();
-            if missing > 0 {
+                .collect();
+            if !missing.is_empty() {
                 report.crashed += 1;
-                eprintln!("warning: {missing} pending test(s) of `{label}` reported no result");
+                let examples: Vec<&str> =
+                    missing.iter().take(3).map(|test| test.as_str()).collect();
+                eprintln!(
+                    "warning: {} pending test(s) of `{label}` reported no result (e.g. {})",
+                    missing.len(),
+                    examples.iter().map(|test| format!("`{test}`")).collect::<Vec<_>>().join(", ")
+                );
             }
         } else if !status.success() && target_failed == 0 {
             report.crashed += 1;
@@ -701,7 +709,25 @@ mod tests {
             parse_test_line("test ignored_case ... ignored, not on this backend"),
             Some(("ignored_case".into(), TestStatus::Ignored))
         );
+        assert_eq!(
+            parse_test_line("test arena::insert - should panic ... ok"),
+            Some(("arena::insert".into(), TestStatus::Pass))
+        );
         assert_eq!(parse_test_line("test result: ok. 1 passed; 0 failed"), None);
+    }
+
+    #[test]
+    fn list_and_run_names_agree_for_should_panic_tests() {
+        // libtest lists the bare name but displays the suffix when running.
+        let listed = parse_list_line("arena::insert: test").expect("list line");
+        let (ran, status) =
+            parse_test_line("test arena::insert - should panic ... ok").expect("result line");
+        assert_eq!(listed, ran);
+        assert_eq!(status, TestStatus::Pass);
+        assert_eq!(
+            parse_list_line("arena::insert - should panic: test").as_deref(),
+            Some("arena::insert")
+        );
     }
 
     #[test]
