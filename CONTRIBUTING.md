@@ -81,6 +81,11 @@ Harness output keeps its colors when the runner's stdout is a terminal.
 Pass `--color=never` or `--color=always` after `--` to override that detection,
 for example when redirecting a run into a file.
 
+Concurrent invocations that share saved results wait for each other:
+the second one prints a waiting notice and continues when the first finishes.
+`--status` only reads a snapshot, so it stays available while a run is active,
+and runs with different Cargo arguments or test selections use separate saved results and do not wait.
+
 Saved passes are reused even when the build changed.
 That keeps the fix-and-rerun loop short but can hide a regression in a test that already passed.
 Validate the final state with `cargo test-all --release` (or `cargo test-resume --force`);

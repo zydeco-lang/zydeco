@@ -1,7 +1,7 @@
 //! Resumable test-run state, its journal, and test-input fingerprints.
 
 use std::collections::BTreeMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -177,45 +177,66 @@ struct JournalEntry {
     last_run_unix_ms: u64,
 }
 
+/// Paths of the files that make up the saved results for one [`RunKey`].
+#[derive(Debug)]
+struct StorePaths {
+    directory: PathBuf,
+    state: PathBuf,
+    journal: PathBuf,
+    lock: PathBuf,
+}
+
+impl StorePaths {
+    fn new(target_dir: &Path, key: &RunKey) -> Result<Self> {
+        let directory = target_dir.join("xtask").join("test-resume");
+        let digest = key.digest()?;
+        Ok(Self {
+            state: directory.join(format!("state-{digest:016x}.json")),
+            journal: directory.join(format!("journal-{digest:016x}.jsonl")),
+            lock: directory.join(format!("lock-{digest:016x}.lock")),
+            directory,
+        })
+    }
+}
+
 /// Ownership of the saved results for one invocation.
 #[derive(Debug)]
 pub struct Store {
-    state_path: PathBuf,
-    journal_path: PathBuf,
+    paths: StorePaths,
     state: ResumeState,
+    /// Held for the lifetime of the store so concurrent invocations sharing
+    /// the same saved results serialize instead of overwriting each other.
+    _lock: Option<File>,
 }
 
 impl Store {
-    /// Opens (or creates) the saved results for `key`.
+    /// Opens (or creates) the saved results for `key` and takes the run lock.
+    ///
+    /// If another invocation already holds the lock, this waits for it to
+    /// finish before reading or writing anything.
     pub fn open(target_dir: &Path, key: RunKey) -> Result<Self> {
-        let directory = target_dir.join("xtask").join("test-resume");
-        fs::create_dir_all(&directory).map_err(|error| {
-            Error::State(format!("cannot create `{}`: {error}", directory.display()))
+        let paths = StorePaths::new(target_dir, &key)?;
+        fs::create_dir_all(&paths.directory).map_err(|error| {
+            Error::State(format!("cannot create `{}`: {error}", paths.directory.display()))
         })?;
-        let digest = key.digest()?;
-        let state_path = directory.join(format!("state-{digest:016x}.json"));
-        let journal_path = directory.join(format!("journal-{digest:016x}.jsonl"));
-        let mut state = match fs::read(&state_path) {
-            | Ok(bytes) => {
-                serde_json::from_slice(&bytes).unwrap_or_else(|_| ResumeState::empty(key.clone()))
-            }
-            | Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                ResumeState::empty(key.clone())
-            }
-            | Err(error) => {
-                return Err(Error::State(format!(
-                    "cannot read `{}`: {error}",
-                    state_path.display()
-                )));
-            }
-        };
-        if state.version != STATE_VERSION || state.key != key {
-            state = ResumeState::empty(key);
-        }
-        let mut store = Self { state_path, journal_path, state };
+        let lock = acquire_lock(&paths.lock)?;
+        let state = load_state(&paths.state, key)?;
+        let mut store = Self { paths, state, _lock: Some(lock) };
         if store.replay_journal()? {
             store.save()?;
         }
+        Ok(store)
+    }
+
+    /// Opens the saved results for display without locking or writing anything.
+    ///
+    /// Journal entries are replayed in memory only, so `--status` cannot
+    /// truncate the journal or replace state that a concurrent run owns.
+    pub fn open_read_only(target_dir: &Path, key: RunKey) -> Result<Self> {
+        let paths = StorePaths::new(target_dir, &key)?;
+        let state = load_state(&paths.state, key)?;
+        let mut store = Self { paths, state, _lock: None };
+        store.replay_journal()?;
         Ok(store)
     }
 
@@ -224,7 +245,7 @@ impl Store {
     }
 
     pub fn state_path(&self) -> &Path {
-        &self.state_path
+        &self.paths.state
     }
 
     pub fn saved_targets(&self) -> usize {
@@ -316,13 +337,15 @@ impl Store {
         };
         let mut line = serde_json::to_string(&entry)?;
         line.push('\n');
-        let mut journal = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.journal_path)
-            .map_err(|error| {
-                Error::State(format!("cannot append to `{}`: {error}", self.journal_path.display()))
-            })?;
+        let mut journal =
+            OpenOptions::new().create(true).append(true).open(&self.paths.journal).map_err(
+                |error| {
+                    Error::State(format!(
+                        "cannot append to `{}`: {error}",
+                        self.paths.journal.display()
+                    ))
+                },
+            )?;
         journal.write_all(line.as_bytes())?;
         Ok(())
     }
@@ -349,15 +372,15 @@ impl Store {
     pub fn save(&mut self) -> Result<()> {
         self.state.updated_unix_ms = now_unix_ms();
         let bytes = serde_json::to_vec_pretty(&self.state)?;
-        let temporary = self.state_path.with_extension("json.tmp");
+        let temporary = self.paths.state.with_extension("json.tmp");
         fs::write(&temporary, bytes).map_err(|error| {
             Error::State(format!("cannot write `{}`: {error}", temporary.display()))
         })?;
-        fs::rename(&temporary, &self.state_path).map_err(|error| {
-            Error::State(format!("cannot replace `{}`: {error}", self.state_path.display()))
+        fs::rename(&temporary, &self.paths.state).map_err(|error| {
+            Error::State(format!("cannot replace `{}`: {error}", self.paths.state.display()))
         })?;
-        fs::write(&self.journal_path, b"").map_err(|error| {
-            Error::State(format!("cannot clear `{}`: {error}", self.journal_path.display()))
+        fs::write(&self.paths.journal, b"").map_err(|error| {
+            Error::State(format!("cannot clear `{}`: {error}", self.paths.journal.display()))
         })?;
         Ok(())
     }
@@ -366,7 +389,7 @@ impl Store {
     pub fn clear(&mut self) -> Result<bool> {
         let mut removed = false;
         for path in
-            [&self.state_path, &self.journal_path, &self.state_path.with_extension("json.tmp")]
+            [&self.paths.state, &self.paths.journal, &self.paths.state.with_extension("json.tmp")]
         {
             match fs::remove_file(path) {
                 | Ok(()) => removed = true,
@@ -384,13 +407,13 @@ impl Store {
     }
 
     fn replay_journal(&mut self) -> Result<bool> {
-        let file = match File::open(&self.journal_path) {
+        let file = match File::open(&self.paths.journal) {
             | Ok(file) => file,
             | Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
             | Err(error) => {
                 return Err(Error::State(format!(
                     "cannot read `{}`: {error}",
-                    self.journal_path.display()
+                    self.paths.journal.display()
                 )));
             }
         };
@@ -414,6 +437,74 @@ impl Store {
         }
         Ok(applied)
     }
+}
+
+/// Reads the saved state, treating a missing or incompatible file as empty.
+fn load_state(path: &Path, key: RunKey) -> Result<ResumeState> {
+    let state = match fs::read(path) {
+        | Ok(bytes) => {
+            serde_json::from_slice(&bytes).unwrap_or_else(|_| ResumeState::empty(key.clone()))
+        }
+        | Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            ResumeState::empty(key.clone())
+        }
+        | Err(error) => {
+            return Err(Error::State(format!("cannot read `{}`: {error}", path.display())));
+        }
+    };
+    if state.version != STATE_VERSION || state.key != key {
+        return Ok(ResumeState::empty(key));
+    }
+    Ok(state)
+}
+
+/// Takes the exclusive run lock, waiting for a concurrent invocation if needed.
+fn acquire_lock(path: &Path) -> Result<File> {
+    let mut lock =
+        OpenOptions::new().create(true).truncate(false).read(true).write(true).open(path).map_err(
+            |error| Error::State(format!("cannot open the run lock `{}`: {error}", path.display())),
+        )?;
+    match lock.try_lock() {
+        | Ok(()) => {}
+        | Err(TryLockError::WouldBlock) => {
+            match lock_owner(path) {
+                | Some(owner) => eprintln!(
+                    "waiting for another `cargo test-resume` invocation ({owner}) with the same saved results to finish..."
+                ),
+                | None => eprintln!(
+                    "waiting for another `cargo test-resume` invocation with the same saved results to finish..."
+                ),
+            }
+            lock.lock().map_err(|error| {
+                Error::State(format!("cannot lock `{}`: {error}", path.display()))
+            })?;
+        }
+        | Err(TryLockError::Error(error)) if error.kind() == std::io::ErrorKind::Unsupported => {
+            eprintln!(
+                "warning: this filesystem does not support file locks; concurrent runs may overwrite each other's saved results"
+            );
+            return Ok(lock);
+        }
+        | Err(TryLockError::Error(error)) => {
+            return Err(Error::State(format!("cannot lock `{}`: {error}", path.display())));
+        }
+    }
+    // Record the holder so that a contender's wait message identifies it.
+    let owner = format!("pid {}\n", std::process::id());
+    lock.set_len(0)
+        .and_then(|()| lock.write_all(owner.as_bytes()))
+        .and_then(|()| lock.flush())
+        .map_err(|error| {
+            Error::State(format!("cannot write the run lock `{}`: {error}", path.display()))
+        })?;
+    Ok(lock)
+}
+
+/// Best-effort owner description for a contended lock.
+fn lock_owner(path: &Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    let line = content.lines().map(str::trim).find(|line| !line.is_empty())?;
+    Some(line.to_owned())
 }
 
 /// Fingerprints every file tests can read without going through a test binary.
@@ -608,5 +699,75 @@ mod tests {
         let before = source_stamp(root).expect("stamp");
         fs::write(&documentation, b"second").expect("rewrite documentation");
         assert_eq!(before, source_stamp(root).expect("stamp"));
+    }
+
+    #[test]
+    fn the_run_lock_records_its_holder() {
+        let temporary = tempfile::tempdir().expect("temp dir");
+        let root = temporary.path();
+        let target_dir = root.join("target");
+        let store = Store::open(&target_dir, fixture_key(root)).expect("open store");
+        let owner = fs::read_to_string(&store.paths.lock).expect("read lock file");
+        assert_eq!(owner.trim(), format!("pid {}", std::process::id()));
+    }
+
+    #[test]
+    fn concurrent_invocations_with_different_keys_use_different_locks() {
+        let temporary = tempfile::tempdir().expect("temp dir");
+        let root = temporary.path();
+        let target_dir = root.join("target");
+        let key = fixture_key(root);
+        let release = RunKey::new(root, &target_dir, "toolchain 1", &["--release".into()], &[]);
+        let debug = Store::open(&target_dir, key).expect("open debug store");
+        // Different saved results must not wait for each other.
+        let release = Store::open(&target_dir, release).expect("open release store");
+        assert_ne!(debug.paths.lock, release.paths.lock);
+    }
+
+    #[test]
+    fn read_only_view_does_not_touch_disk() {
+        let temporary = tempfile::tempdir().expect("temp dir");
+        let root = temporary.path();
+        let target_dir = root.join("target");
+        let store =
+            Store::open_read_only(&target_dir, fixture_key(root)).expect("open read-only view");
+        assert!(store.state().targets.is_empty());
+        assert!(!target_dir.exists(), "a read-only view must not create the state directory");
+    }
+
+    #[test]
+    fn read_only_view_replays_the_journal_without_truncating_it() {
+        let temporary = tempfile::tempdir().expect("temp dir");
+        let root = temporary.path();
+        let target = fixture(root);
+        let target_dir = root.join("target");
+        let key = fixture_key(root);
+        let (state_path, journal_path) = {
+            let mut store = Store::open(&target_dir, key.clone()).expect("open store");
+            store.upsert_target(&target).expect("record target");
+            store.save().expect("save state");
+            store.record(&target.state_id(), "probe::journaled", TestStatus::Pass).expect("record");
+            // Dropping without `save` leaves the entry for the next opener.
+            (store.paths.state.clone(), store.paths.journal.clone())
+        };
+
+        let view = Store::open_read_only(&target_dir, key.clone()).expect("open read-only view");
+        assert_eq!(
+            view.state().targets[&target.state_id()].tests["probe::journaled"].status,
+            TestStatus::Pass
+        );
+        let on_disk: ResumeState =
+            serde_json::from_slice(&fs::read(&state_path).expect("read state")).expect("parse");
+        assert!(!on_disk.targets[&target.state_id()].tests.contains_key("probe::journaled"));
+        assert!(!fs::read(&journal_path).expect("read journal").is_empty());
+
+        // An exclusively locked open merges the journal and clears it.
+        let store = Store::open(&target_dir, key).expect("open store");
+        assert_eq!(
+            store.state().targets[&target.state_id()].tests["probe::journaled"].status,
+            TestStatus::Pass
+        );
+        drop(store);
+        assert!(fs::read(&journal_path).expect("read journal").is_empty());
     }
 }

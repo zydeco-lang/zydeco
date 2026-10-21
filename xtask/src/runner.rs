@@ -62,13 +62,18 @@ pub fn run(invocation: Invocation) -> Result<Outcome> {
         &cargo_args,
         &test_args.scope,
     );
-    let mut store = Store::open(&workspace.target_dir, key)?;
     match invocation.action {
         | Action::Status => {
+            // Read-only: never takes the run lock so it cannot disturb an
+            // active run, and never rewrites the state or journal.
+            let store = Store::open_read_only(&workspace.target_dir, key)?;
             print_status(&store);
             return Ok(Outcome::default());
         }
         | Action::Clear => {
+            // Deletion waits for an active run, otherwise that run would
+            // recreate the state as it finishes.
+            let mut store = Store::open(&workspace.target_dir, key)?;
             let removed = store.clear()?;
             if removed {
                 println!("Removed the saved test results for this invocation.");
@@ -79,6 +84,7 @@ pub fn run(invocation: Invocation) -> Result<Outcome> {
         }
         | Action::Run => {}
     }
+    let mut store = Store::open(&workspace.target_dir, key)?;
 
     cargo.build_tests(&cargo_args)?;
     let targets = cargo.test_targets(&cargo_args, &workspace.package_names)?;
