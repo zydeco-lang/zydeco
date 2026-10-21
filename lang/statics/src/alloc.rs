@@ -20,7 +20,8 @@ pub(crate) const QUERY_DERIVATION_TAG: u64 = 0x5A59_5155_4552_5921;
 /// Each checking site pushes its `(entity, occurrence)` identity onto a stack;
 /// fresh identifiers derive their key space from the top site and take the
 /// site-local slot as their raw index, so re-checking a site reproduces its
-/// identifiers without a shared cursor. See `docs/logs/query-based-tyck.md`
+/// identifiers without a shared cursor. See the
+/// [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
 /// for the derivation scheme.
 #[derive(Debug)]
 pub struct DerivedAllocator {

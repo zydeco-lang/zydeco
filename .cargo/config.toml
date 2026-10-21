@@ -1,5 +1,6 @@
 [env]
-# Raised for residual programs produced by static composition; see docs/proposals/value-pi.md.
+# Raised for residual programs produced by static composition; see
+# docs/ideas/residual-code-sharing.md for residual code growth.
 # Factoring repeated residual code into direct blocks remains a backend optimization.
 RUST_MIN_STACK = "16777216"
 

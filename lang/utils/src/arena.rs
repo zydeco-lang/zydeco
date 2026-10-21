@@ -54,8 +54,9 @@ impl KeySpaceId {
     /// Query-based passes derive their fresh identifiers from the full identity
     /// of the source entity — `(entity_space, entity_raw)` — plus `occurrence`,
     /// the number of earlier checks of that entity. Re-executing a query
-    /// reproduces the same identifiers without a shared cursor. See
-    /// `docs/logs/query-based-tyck.md` for the derivation scheme.
+    /// reproduces the same identifiers without a shared cursor. See the
+    /// [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance)
+    /// for the derivation scheme.
     pub fn derive(tag: u64, entity_space: u64, entity_raw: u32, occurrence: u32) -> KeySpaceId {
         fn mix(mut hash: u64) -> u64 {
             hash ^= hash >> 33;

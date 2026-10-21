@@ -4,8 +4,7 @@
 # Usage: scripts/bench-check.sh [runs]
 #
 # Builds the release CLI if the binary is missing, then prints the best wall
-# time of `runs` runs per file. Used to track the query-based type checking
-# migration's overhead (see docs/logs/query-based-tyck.md, P7).
+# time of `runs` runs per file. Used to track `zydeco check` latency.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
