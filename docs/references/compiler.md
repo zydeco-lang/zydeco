@@ -1520,6 +1520,59 @@ These optimizations are optional consequences of known runtime structure;
 they do not relax L10's source elimination boundary.
 The normalizer preserves definition identities while allocating fresh syntax for the surviving lexical tree.
 
+### Correspondence with SPS
+
+SPS separates values, stacks, and programs.
+Continuations, argument pushes, and tag pushes build stacks; each program consumes one ambient stack `•` exactly once
+on every path, and no value captures it, because closures receive their stack at each call.
+The branch-join shape above is the paper's fragment `SPS_br`, whose stack lets occur exactly
+around value-coproduct matches, and high lowering follows the paper's branch-join compilation.
+Indexed by the consuming stack, it pushes an argument for each application and a tag for each destructor,
+installs a continuation for each `do`, and names the stack with a let at each value case split.
+
+| SPS form | High SPS node | Printed |
+| --- | --- | --- |
+| Variable `x`, literal `n` | `Value::Var`, `Value::Literal` | `x`, `n` |
+| Closure `λ_c •. M` | `Value::Closure` | `{ • -> M }` |
+| Tuple `(V_i)_i` | `Value::Triv`, `Value::VCons` | `()`, `(V, W)` |
+| Injection `σ_c(V)` | `Value::Ctor` | `c(V)` |
+| Stack variable `•` | `Stack::Var` | `•` |
+| Continuation `λ_k x. M` | `Stack::Kont` | `kont p -> M` |
+| Argument push `V :: S` | `Stack::Arg` | `arg(V) :: S` |
+| Tag push `π_d :: S` | `Stack::Tag` | `tag(d) :: S` |
+| Call `V ! S` | `Computation::Force` | `V ! S` |
+| Return `S @ V` | `Computation::Ret` | `S @ V` |
+| Argument match `match_⊘ S {x :: • => M}` | `Computation::LetArg` | `let arg(p) :: • = S in M` |
+| Tag match `match_⊕ S {π_d :: • => M_d}` | `Computation::CoCase` | `cocase S \| d -> M end` |
+| Value let `let x = V in M` | `LetJoin::Value` | `let p = V in M` |
+| Stack let `let • = S in M` | `LetJoin::Stack` | `let • = S in M` |
+| Product match `match_Π V {(x_i)_i => M}` | `Computation::ProductMatch` | `match-product V as p in M` |
+| Coproduct match `match_Σ V {σ_c(x_c) => M_c}` | `Computation::CoprodMatch` | `case V \| c(p) -> M end` |
+| Fixed point `fix (g : Closure B). M` | `Computation::Fix` | `fix g ! S -> M` |
+
+The implementation departs from SPS where Zydeco's source language or its backends need more:
+
+- Types are erased; [partial source protocols](#partial-source-protocols) retain part of the SPS types
+  that the paper's type translation assigns.
+- Binders are irrefutable value patterns rather than variables, which SPS expresses with product matches;
+  refutable source patterns lower to [ordered pattern plans](#residual-lowering-folder) built from one-level matches,
+  scalar comparisons, and fallback closures.
+- A fixed point carries the stack it runs on and binds a fresh `•` for its body,
+  so stack substitution stops at it as it does at closures.
+- Primitives, address offsets, scalar comparisons, external calls, memory steps, and holes extend the calculus.
+  A scalar comparison is a second branching form, and the branch-join verifier requires its stack let as well.
+
+Normalization orients part of the paper's equational theory as rewrites.
+The [local reductions](#local-reductions) orient its β- and η-equations: closure β is inlining,
+continuation β is call elimination, continuation η removes a forwarding continuation
+as tail-call optimization, closure η forwards a closure that only calls another,
+and argument, tag, product, and coproduct β select known components.
+[Sharing and discardability](#sharing-and-discardability) orient the two let equations,
+the paper's join points: a value let is substituted only under the occurrence and discardability conditions,
+and a stack let disappears only when its branch is selected.
+Rewrites apply only where sharing, effects, and stack movement permit; recursion is never unfolded,
+and normalization does not compute βη normal forms.
+
 ### Residual Lowering Folder
 
 Static composition can produce thousands of nested bindings from a small authored program.
@@ -1922,6 +1975,47 @@ A single-occurrence syntax tree means runtime sharing is explicit in variables;
 it is not a proof that a continuation is dynamically used once.
 Native preparation must establish the stronger lifetime facts in C11.
 Structured Wasm can consume this representation directly because block boundaries and residual stacks are explicit.
+
+### Correspondence with `SPS_l`
+
+`SPS_l`, the paper's first-order target of closure conversion, keeps the three sorts
+of SPS and replaces closures and continuations with labeled blocks, jumps, and existential packages.
+A block `λ[l](• : B). M` is closed except for its own label `l`, and a jump `V !! S` enters a block with stack `S`.
+A closure becomes a value package of type `Cl_B = ∃X. X × Label(X ⊘ B)`, which hides its environment type,
+and a continuation becomes a stack package of type `Ko_A = ∃•Y. Label(A ⊘ Y) ⊘ Y`, which hides its residual stack.
+
+| `SPS_l` form | SPSLow node | Printed |
+| --- | --- | --- |
+| Block `λ[l](• : B). M` | `Value::Block` | `block [l](environment: p) • -> M` |
+| Jump `V !! S` | `Computation::Jump` | `jump V(environment: E) ! S` |
+| Closure package of type `Cl_B` | `Value::ClosurePackage` | `pack-closure(E, V)` |
+| Opening a closure package | `Computation::OpenClosure` | `open-closure V as (p, q) in M` |
+| Continuation package of type `Ko_A` | `Stack::ContinuationPackage` | `pack-continuation(V, S)` |
+| Opening a continuation package | `Computation::OpenContinuation` | `open-continuation S as q :: • in M` |
+
+Continuation blocks list `result: p` before their environment, and returns jump with `result: V`.
+The remaining forms are those of high SPS without closures, continuations, calls, returns, and fixed points.
+Conversion follows the paper's translation: a call opens the closure package and jumps
+to its code with the environment above the caller's stack; a return opens the continuation package and jumps
+to its code with the result above the restored residual stack, which begins with the saved environment;
+and the structural forms translate homomorphically.
+
+The implementation departs from `SPS_l` in these respects:
+
+- Only the two package shapes that conversion builds exist.
+  Opening a package also binds its code, and a closure's environment, which the paper's eliminator reaches
+  through a further product or argument match.
+- Entry words are explicit: the environment and result
+  that the paper's block patterns consume become [entry parameters](#word-entry-contracts),
+  and each jump supplies the corresponding word.
+- An environment captures the free variables of the converted body, ordered by definition identity,
+  rather than every variable in scope.
+- A fixed point becomes a closure block whose body first rebuilds its own package from its label and environment,
+  the paper's self-referential block.
+- Types are erased; entry kinds, [entry contracts](#word-entry-contracts),
+  and [partial source protocols](#partial-source-protocols) check part of the paper's typing.
+- No pass rewrites SPSLow, so the `SPS_l` equations, including the package laws
+  that relate packages hiding different environments, justify conversion without being oriented as passes.
 
 ### Closure Conversion Folders
 

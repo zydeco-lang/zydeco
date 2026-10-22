@@ -53,5 +53,7 @@ Both representations have one computation root rather than a top-level declarati
 - `SpsLowPipeline`:
   [high-SPS pass composition](../../../docs/references/compiler.md#built-in-plans-and-phase-boundaries).
 
-The paper correspondence and the phase invariants are summarized in the implementation architecture section
-of [`DESIGN.md`](../../../DESIGN.md); the stack-passing-style paper remains authoritative for the formal presentations.
+High SPS and SPSLow implement the stack-passing-style paper's SPS and `SPS_l`.
+The compiler reference relates each IR to its calculus
+in [C8](../../../docs/references/compiler.md#correspondence-with-sps)
+and [C9](../../../docs/references/compiler.md#correspondence-with-sps_l), which also own the phase invariants.
