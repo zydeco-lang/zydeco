@@ -16,11 +16,9 @@ use crate::{HOST_MODULE, Limits, WORD_BYTES, WasmEmitError};
 #[repr(i32)]
 pub enum RuntimeFailure {
     PatternMatch = 1,
-    StackOverflow = 2,
-    StackUnderflow = 3,
-    IntegerDivisionByZero = 4,
-    IntegerRemainderByZero = 5,
-    IntegerRange = 6,
+    IntegerDivisionByZero = 2,
+    IntegerRemainderByZero = 3,
+    IntegerRange = 4,
 }
 
 impl RuntimeFailure {

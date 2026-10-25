@@ -108,7 +108,7 @@ Thirteen focused Rust tests passed:
 cargo test -p zydeco-session --lib monadic_block_lifts_builtin_literals_with_trivial_value_structures
 cargo test -p zydeco-stackir --lib high::traverse::tests
 cargo test -p zydeco-stackir --lib passes::tests
-cargo test -p zydeco-cli --test source_build the_wasm_targets_write_distinct_valid_core_modules
+cargo test -p zydeco-cli --test source_build the_wasm_target_writes_a_valid_core_module
 cargo test -p zydeco-cli --lib library::tests
 ```
 

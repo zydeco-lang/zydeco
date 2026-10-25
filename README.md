@@ -80,7 +80,7 @@ Select a test explicitly, for example `zydeco test lib/tests/std/bool.zy`.
 [Suite selection from relationships](docs/proposals/package-management.md#validation-and-operation-planning)
 remains planned.
 Both `run` and `test` default to the interpreter; `-t` (`--target`) selects a backend.
-Repeat it for a test matrix: `zydeco test lib/tests/std/bool.zy -t interpreter -t wasm-am -t wasm-sps`.
+Repeat it for a test matrix: `zydeco test lib/tests/std/bool.zy -t interpreter -t wasm-sps`.
 Use `zydeco test lib/tests/std/bool.zy -t all` to include every backend, including native `exe`.
 Quoted file imports and direct CLI paths also work without named package declarations.
 See the [CLI guide](cli/README.md#run-and-test-programs) for command examples
@@ -102,18 +102,16 @@ See the [REPL workflow](cli/README.md#interactive-repl) for submission keys and 
 
 ## Compiling Programs
 
-The two experimental WebAssembly targets can be built side by side:
+Build the experimental WebAssembly target:
 
 ```sh
-zydeco build hello-world.zy --target wasm-am --build-dir build
 zydeco build hello-world.zy --target wasm-sps --build-dir build
 ```
 
-These commands produce `build/hello-world.am.wasm` and `build/hello-world.sps.wasm`.
-The modules require imports from the `zydeco` host namespace.
+The command produces `build/hello-world.wasm`, a module that requires imports from the `zydeco` host namespace.
 `zydeco run hello-world.zy -t wasm-sps` compiles and executes with the bundled host, requiring Node.js.
 The [compilation workflow](cli/README.md#build-artifacts) explains native targets and execution with the Node.js host.
-[DESIGN.md](DESIGN.md#webassembly-backend) describes the two lowering strategies, shared ABI, and limitations.
+[DESIGN.md](DESIGN.md#webassembly-backend) describes the lowering strategy, host ABI, and limitations.
 
 ## Editor Support
 

@@ -10,7 +10,6 @@ pub enum BuildTarget {
     Object,
     Staticlib,
     Sharedlib,
-    WasmAm,
     WasmSps,
     #[default]
     Exe,
@@ -22,7 +21,6 @@ pub enum ExecutionTarget {
     #[default]
     Interpreter,
     Exe,
-    WasmAm,
     WasmSps,
 }
 

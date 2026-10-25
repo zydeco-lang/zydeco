@@ -74,11 +74,6 @@ mod host_arguments {
     }
 
     #[test]
-    fn wasm_am() {
-        program().test(ExecutionTarget::WasmAm);
-    }
-
-    #[test]
     fn wasm_sps() {
         program().test(ExecutionTarget::WasmSps);
     }
@@ -99,11 +94,6 @@ mod argument_contract {
     #[test]
     fn amd64() {
         program().test(ExecutionTarget::Exe);
-    }
-
-    #[test]
-    fn wasm_am() {
-        program().test(ExecutionTarget::WasmAm);
     }
 
     #[test]

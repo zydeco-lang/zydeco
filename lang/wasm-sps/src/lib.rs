@@ -8,9 +8,9 @@
 //!
 //! Runtime values are 64-bit tagged words, including block handles encoded as
 //! immediate table indices. Products, closures, continuations, and persistent
-//! stack frames live in linear memory. Unlike the ZASM backend, there is no
-//! mutable environment array or operand/control stack, and there is no
-//! WebAssembly function for each assembly instruction.
+//! stack frames live in linear memory. The backend never lowers through ZASM,
+//! so there is no mutable environment array, operand/control stack, or
+//! WebAssembly function per assembly instruction.
 //!
 //! [`SpsLowProgram`]: zydeco_stackir::SpsLowProgram
 //! [`Block`]: zydeco_stackir::low::syntax::Block

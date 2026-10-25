@@ -2689,7 +2689,6 @@ dependencies = [
  "zydeco-syntax",
  "zydeco-tui",
  "zydeco-utils",
- "zydeco-wasm-am",
  "zydeco-wasm-sps",
 ]
 
@@ -2867,17 +2866,6 @@ dependencies = [
  "la-arena",
  "rustc-hash",
  "thiserror",
-]
-
-[[package]]
-name = "zydeco-wasm-am"
-version = "0.3.0"
-dependencies = [
- "thiserror",
- "wasm-encoder",
- "zydeco-assembly",
- "zydeco-syntax",
- "zydeco-wasm-common",
 ]
 
 [[package]]

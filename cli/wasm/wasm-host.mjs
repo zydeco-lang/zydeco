@@ -349,11 +349,9 @@ class ZydecoHost {
     functions.set("runtime_error", (code) => {
       const messages = {
         1: "pattern match failed",
-        2: "operand/control stack overflow",
-        3: "operand/control stack underflow",
-        4: "integer division by zero",
-        5: "integer remainder by zero",
-        6: "integer exceeds the tagged payload range",
+        2: "integer division by zero",
+        3: "integer remainder by zero",
+        4: "integer exceeds the tagged payload range",
       };
       const message = messages[code] ?? `unknown runtime error ${code}`;
       ZydecoHost.fail(message);

@@ -56,7 +56,7 @@ impl<'a> ExecutionRunner<'a> {
             {
                 return Err(crate::library::LibraryError::UnitTarget.into());
             }
-            if matches!(target, ExecutionTarget::WasmAm | ExecutionTarget::WasmSps) {
+            if *target == ExecutionTarget::WasmSps {
                 return Err(crate::library::LibraryError::Target.into());
             }
             let interpreter = *target == ExecutionTarget::Interpreter;
@@ -91,10 +91,7 @@ impl<'a> ExecutionRunner<'a> {
             }
         }
         let node = PathBuf::from(std::env::var_os("NODE").unwrap_or_else(|| "node".into()));
-        if unique
-            .iter()
-            .any(|target| matches!(target, ExecutionTarget::WasmAm | ExecutionTarget::WasmSps))
-        {
+        if unique.contains(&ExecutionTarget::WasmSps) {
             let output = Command::new(&node)
                 .arg("--version")
                 .output()
@@ -156,12 +153,8 @@ impl<'a> ExecutionRunner<'a> {
                         )?;
                         Command::new(executable.path())
                     }
-                    | ExecutionTarget::WasmAm | ExecutionTarget::WasmSps => {
-                        let module = if target == ExecutionTarget::WasmAm {
-                            backend.emit_wasm_am()?
-                        } else {
-                            backend.emit_wasm_sps()?
-                        };
+                    | ExecutionTarget::WasmSps => {
+                        let module = backend.emit_wasm_sps()?;
                         let path = directory.path().join("program.wasm");
                         std::fs::write(&path, module)?;
                         for (name, source) in [

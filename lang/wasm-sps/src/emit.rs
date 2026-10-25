@@ -221,7 +221,7 @@ impl LocalPlan {
 
     /// The pointer temporary shared by the word-emission sequences.
     fn pointer(&self) -> PointerLocal {
-        PointerLocal::I64(self.scratch_word)
+        PointerLocal(self.scratch_word)
     }
 }
 

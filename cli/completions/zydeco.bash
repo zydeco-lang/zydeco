@@ -118,11 +118,11 @@ _zydeco() {
                     return 0
                     ;;
                 --target)
-                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-sps exe" -- "${cur}"))
                     return 0
                     ;;
                 -t)
-                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "zir zasm asm object staticlib sharedlib wasm-sps exe" -- "${cur}"))
                     return 0
                     ;;
                 --representation)
@@ -392,11 +392,11 @@ _zydeco() {
                     return 0
                     ;;
                 --target)
-                    COMPREPLY=($(compgen -W "interpreter exe wasm-am wasm-sps" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "interpreter exe wasm-sps" -- "${cur}"))
                     return 0
                     ;;
                 -t)
-                    COMPREPLY=($(compgen -W "interpreter exe wasm-am wasm-sps" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "interpreter exe wasm-sps" -- "${cur}"))
                     return 0
                     ;;
                 --runtime-dir)
@@ -464,11 +464,11 @@ _zydeco() {
                     return 0
                     ;;
                 --target)
-                    COMPREPLY=($(compgen -W "interpreter exe wasm-am wasm-sps all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "interpreter exe wasm-sps all" -- "${cur}"))
                     return 0
                     ;;
                 -t)
-                    COMPREPLY=($(compgen -W "interpreter exe wasm-am wasm-sps all" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "interpreter exe wasm-sps all" -- "${cur}"))
                     return 0
                     ;;
                 --runtime-dir)

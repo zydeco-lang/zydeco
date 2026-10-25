@@ -30,9 +30,9 @@ impl WasmModule {
     }
 }
 
-/// The core sections every backend module shares.
+/// The core sections every generated module shares.
 ///
-/// The section order is fixed by the emitters: types and imports, functions, table,
+/// The section order is fixed by the emitter: types and imports, functions, table,
 /// memory, globals, exports, elements, code, data, and the name section. These helpers
 /// cover the sections whose shape does not depend on the backend's IR.
 pub struct WasmSections;
@@ -103,7 +103,7 @@ impl WasmSections {
     }
 }
 
-/// The one-word bump allocator helper shared by the backends.
+/// The one-word bump allocator helper installed in every generated module.
 ///
 /// Parameter 0 is the requested word count; locals 1 and 2 are the old and new heap
 /// cursors. The returned pointer is the old cursor; growth beyond the current memory

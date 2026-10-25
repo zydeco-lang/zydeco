@@ -548,7 +548,7 @@ It need not imitate native heap addresses or reinterpret Rust enums as ABI struc
 Wasm bindings use module-owned values and dispatch, with explicit conversion between host references
 and module carriers.
 A native pointer, a Wasm module offset, and a host handle are distinct address domains.
-The [existing Wasm host ABI](../references/compiler.md#c13-webassembly-backends-and-embedding) is a starting point,
+The [existing Wasm host ABI](../references/compiler.md#c13-webassembly-backend-and-embedding) is a starting point,
 not a portable binary layout shared with AMD64.
 
 The same exported source classifier can therefore have several target implementations of the runtime binding interface.

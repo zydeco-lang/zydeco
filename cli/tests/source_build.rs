@@ -33,7 +33,6 @@ fn typed_holes_are_inspectable_but_rejected_before_execution_or_lowering() {
             vec!["run"],
             vec!["run", "--dry"],
             vec!["build", "--target", "zir"],
-            vec!["build", "--target", "wasm-am"],
             vec!["build", "--target", "wasm-sps"],
         ] {
             // Successful builds only need the IR target; failures must stop before emission.
@@ -94,7 +93,7 @@ fn partial_patterns_report_runtime_failure_across_backends() {
             ),
         )
         .unwrap();
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             let mut command = Command::new(env!("CARGO_BIN_EXE_zydeco"));
             command.arg("build").arg(&source).args(["--target", target, "--build-dir"]).arg(&build);
             if target == "exe" {
@@ -106,10 +105,9 @@ fn partial_patterns_report_runtime_failure_across_backends() {
             let mut output = command.output().unwrap();
             if target != "exe" {
                 assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-                let extension = if target == "wasm-am" { "am" } else { "sps" };
                 output = Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
                     .arg(workspace.join("cli/wasm/wasm-host.mjs"))
-                    .arg(build.join(format!("partial.{extension}.wasm")))
+                    .arg(build.join("partial.wasm"))
                     .output()
                     .unwrap();
             }
@@ -180,44 +178,24 @@ fn a_root_term_builds_without_project_configuration() {
 }
 
 #[test]
-fn the_wasm_targets_write_distinct_valid_core_modules() {
+fn the_wasm_target_writes_a_valid_core_module() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib/tests/core/fact.zy");
     let build = tempfile::tempdir().unwrap();
-    let build_target = |target: &str, filename: &str| {
-        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-            // Exercise the CLI on its normal main-thread stack, including outside Cargo.
-            .env_remove("RUST_MIN_STACK")
-            .arg("build")
-            .arg(&root)
-            .args(["--target", target, "--build-dir"])
-            .arg(build.path())
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{target} build failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+    let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+        // Exercise the CLI on its normal main-thread stack, including outside Cargo.
+        .env_remove("RUST_MIN_STACK")
+        .arg("build")
+        .arg(&root)
+        .args(["--target", "wasm-sps", "--build-dir"])
+        .arg(build.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
 
-        let module_path = build.path().join(filename);
-        let module = std::fs::read(&module_path).unwrap();
-        wasmparser::validate(&module).unwrap();
-        assert_eq!(
-            String::from_utf8_lossy(&output.stdout).trim(),
-            module_path.display().to_string()
-        );
-        module
-    };
-
-    let am = build_target("wasm-am", "fact.am.wasm");
-    let sps = build_target("wasm-sps", "fact.sps.wasm");
-    let function_bodies = |module: &[u8]| {
-        wasmparser::Parser::new(0)
-            .parse_all(module)
-            .filter(|payload| matches!(payload, Ok(wasmparser::Payload::CodeSectionEntry(_))))
-            .count()
-    };
-    assert!(function_bodies(&sps) < function_bodies(&am));
+    let module_path = build.path().join("fact.wasm");
+    let module = std::fs::read(&module_path).unwrap();
+    wasmparser::validate(&module).unwrap();
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), module_path.display().to_string());
 }
 
 #[test]

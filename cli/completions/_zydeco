@@ -61,8 +61,8 @@ _arguments "${_arguments_options[@]}" : \
 '*-p+[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '*--pkg=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
-'-t+[Execution backend]:TARGET:(interpreter exe wasm-am wasm-sps)' \
-'--target=[Execution backend]:TARGET:(interpreter exe wasm-am wasm-sps)' \
+'-t+[Execution backend]:TARGET:(interpreter exe wasm-sps)' \
+'--target=[Execution backend]:TARGET:(interpreter exe wasm-sps)' \
 '-r+[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
 '--runtime-dir=[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
 '*--link-library=[Resolve a compiled library through its checked artifact manifest (repeatable)]:MANIFEST:_files' \
@@ -90,8 +90,8 @@ _arguments "${_arguments_options[@]}" : \
 '*-p+[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '*--pkg=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
-'*-t+[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-am wasm-sps all)' \
-'*--target=[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-am wasm-sps all)' \
+'*-t+[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-sps all)' \
+'*--target=[Execution backend or all; repeat to test multiple backends in order]:TARGETS:(interpreter exe wasm-sps all)' \
 '-r+[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
 '--runtime-dir=[Native runtime sources, used by exe]:RUNTIME_DIR:_files' \
 '*--link-library=[Resolve a compiled library through its checked artifact manifest (repeatable)]:MANIFEST:_files' \
@@ -115,8 +115,8 @@ _arguments "${_arguments_options[@]}" : \
 '*--package=[Select declared packages by name; repeat for multiple packages]:NAME:_default' \
 '--target-os=[Target OS (defaults to host OS)]:TARGET_OS:(linux macos)' \
 '--target-arch=[Target architecture (defaults to host architecture)]:TARGET_ARCH:(x86-64 aarch64)' \
-'-t+[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe)' \
-'--target=[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-am wasm-sps exe)' \
+'-t+[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-sps exe)' \
+'--target=[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-sps exe)' \
 '--representation=[Local representation policy for native, ZASM, and Wasm targets]:REPRESENTATION:(boxed direct local shared)' \
 '--sps-passes=[High-SPS passes\: default, none, or a comma-separated list; order and duplicates are preserved]:PLAN:_default' \
 '-b+[Build Directory]:BUILD_DIR:_files' \

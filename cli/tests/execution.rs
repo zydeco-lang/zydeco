@@ -110,12 +110,7 @@ fn execution_flags_default_to_interpreter_and_only_test_accepts_multiple_targets
     assert_eq!(targets, [TestTarget::All]);
     assert_eq!(
         targets[0].expand(),
-        [
-            ExecutionTarget::Interpreter,
-            ExecutionTarget::Exe,
-            ExecutionTarget::WasmAm,
-            ExecutionTarget::WasmSps
-        ]
+        [ExecutionTarget::Interpreter, ExecutionTarget::Exe, ExecutionTarget::WasmSps]
     );
     for command in ["run", "build"] {
         let error = Cli::try_parse_from(["zydeco", command, "example", "-t", "all"])
@@ -123,10 +118,9 @@ fn execution_flags_default_to_interpreter_and_only_test_accepts_multiple_targets
             .expect("all is a test-only selection");
         assert_eq!(error.kind(), ErrorKind::InvalidValue);
     }
-    let error =
-        Cli::try_parse_from(["zydeco", "run", "example", "-t", "wasm-am", "-t", "wasm-sps"])
-            .err()
-            .expect("run selects one backend");
+    let error = Cli::try_parse_from(["zydeco", "run", "example", "-t", "exe", "-t", "wasm-sps"])
+        .err()
+        .expect("run selects one backend");
     assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
 }
 
@@ -136,7 +130,17 @@ fn test_backends_replace_the_default_and_deduplicate_in_request_order() {
     fixture.suite(&Fixture::program("! process/exit 7"), &Fixture::program("! process/exit 0"));
     let output = fixture
         .command(&[
-            "test", "-p", "a", "-p", "b", "-t", "wasm-sps", "-t", "wasm-am", "-t", "wasm-sps",
+            "test",
+            "-p",
+            "a",
+            "-p",
+            "b",
+            "-t",
+            "wasm-sps",
+            "-t",
+            "interpreter",
+            "-t",
+            "wasm-sps",
         ])
         .output()
         .unwrap();
@@ -148,10 +152,9 @@ fn test_backends_replace_the_default_and_deduplicate_in_request_order() {
         .collect::<Vec<_>>();
     assert_eq!(
         results,
-        ["FAIL [wasm-sps] a", "FAIL [wasm-am] a", "PASS [wasm-sps] b", "PASS [wasm-am] b"]
+        ["FAIL [wasm-sps] a", "FAIL [interpreter] a", "PASS [wasm-sps] b", "PASS [interpreter] b"]
     );
     assert!(stdout.contains("2 passed; 2 failed."), "{stdout}");
-    assert!(!stdout.contains("interpreter"));
     assert!(!fixture.directory.path().join("build").exists());
 }
 
@@ -163,27 +166,15 @@ fn runtime_failures_report_each_backend_and_do_not_stop_the_suite() {
         &Fixture::program("! process/exit 0"),
     );
     let output = fixture
-        .command(&[
-            "test",
-            "-p",
-            "a",
-            "-p",
-            "b",
-            "-t",
-            "interpreter",
-            "-t",
-            "wasm-am",
-            "-t",
-            "wasm-sps",
-        ])
+        .command(&["test", "-p", "a", "-p", "b", "-t", "interpreter", "-t", "wasm-sps"])
         .output()
         .unwrap();
     let stdout = Fixture::stdout(&output, 1);
-    for target in ["interpreter", "wasm-am", "wasm-sps"] {
+    for target in ["interpreter", "wasm-sps"] {
         assert!(stdout.contains(&format!("FAIL [{target}] a")), "{stdout}");
         assert!(stdout.contains(&format!("PASS [{target}] b")), "{stdout}");
     }
-    assert!(stdout.contains("3 passed; 3 failed."), "{stdout}");
+    assert!(stdout.contains("2 passed; 2 failed."), "{stdout}");
     assert!(String::from_utf8_lossy(&output.stderr).contains("pattern match failed"));
 }
 
@@ -205,7 +196,7 @@ fn test_uses_empty_input_and_arguments_and_displays_output_on_failure() {
             )
         ),
     );
-    for target in ["interpreter", "wasm-am", "wasm-sps"] {
+    for target in ["interpreter", "wasm-sps"] {
         let mut child = fixture
             .command(&["test", "case.zy", "-t", target])
             .stdin(Stdio::piped())
@@ -327,7 +318,7 @@ fn dry_run_needs_no_backend_tools_and_does_not_execute() {
         "main.zy",
         &Fixture::program("! system/stdio/write_line \"effect\" { ! process/exit 7 }"),
     );
-    for target in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+    for target in ["interpreter", "exe", "wasm-sps"] {
         let output = fixture
             .command(&["run", "main.zy", "--dry", "-t", target, "-r", "missing-runtime"])
             .env("NODE", fixture.directory.path().join("missing-node"))
@@ -338,7 +329,7 @@ fn dry_run_needs_no_backend_tools_and_does_not_execute() {
         assert!(!fixture.directory.path().join("build").exists());
     }
     fixture.write("main.zy", "42");
-    let output = fixture.command(&["run", "main.zy", "--dry", "-t", "wasm-am"]).output().unwrap();
+    let output = fixture.command(&["run", "main.zy", "--dry", "-t", "wasm-sps"]).output().unwrap();
     assert!(Fixture::stdout(&output, 1).is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("classified as a value"));
 }
@@ -360,7 +351,7 @@ fn run_forwards_arguments_and_line_input_without_waiting_for_stdin_eof() {
     "#,
         ),
     );
-    for target in ["interpreter", "wasm-am", "wasm-sps"] {
+    for target in ["interpreter", "wasm-sps"] {
         let mut child = fixture
             .command(&["run", "main.zy", "-t", target, "--", "--argument"])
             .stdin(Stdio::piped())
@@ -403,10 +394,10 @@ fn native_run_and_all_backend_tests_share_the_runner() {
     assert_eq!(Fixture::stdout(&output, 7), "native\n");
     fixture.write("case.zy", &format!("@[package(test)] {}", Fixture::program("! process/exit 0")));
     for (targets, expected) in [
-        (vec!["-t", "all"], ["[interpreter]", "[exe]", "[wasm-am]", "[wasm-sps]"]),
+        (vec!["-t", "all"], ["[interpreter]", "[exe]", "[wasm-sps]"]),
         (
             vec!["-t", "wasm-sps", "-t", "all", "--target", "interpreter", "-t", "all"],
-            ["[wasm-sps]", "[interpreter]", "[exe]", "[wasm-am]"],
+            ["[wasm-sps]", "[interpreter]", "[exe]"],
         ),
     ] {
         let output = fixture
@@ -423,7 +414,7 @@ fn native_run_and_all_backend_tests_share_the_runner() {
             .map(|line| line.split_whitespace().nth(1).unwrap())
             .collect::<Vec<_>>();
         assert_eq!(backends, expected, "{stdout}");
-        assert!(stdout.contains("4 passed; 0 failed."), "{stdout}");
+        assert!(stdout.contains("3 passed; 0 failed."), "{stdout}");
     }
     assert!(!fixture.directory.path().join("build").exists());
 }
@@ -454,21 +445,18 @@ fn wasm_random_integers_use_the_host_generator_and_wrap_to_payload_width() {
         "#
             ),
         );
-        for target in ["wasm-am", "wasm-sps"] {
-            let output = fixture
-                .command(&["run", "main.zy", "-t", target])
-                .env(
-                    "NODE_OPTIONS",
-                    format!("--require={:?}", fixture.directory.path().join("random.cjs")),
-                )
-                .output()
-                .unwrap();
-            assert_eq!(
-                Fixture::stdout(&output, 0),
-                zydeco_syntax::word::RuntimeWord::wrap_signed(value).to_string(),
-                "{target}"
-            );
-        }
+        let output = fixture
+            .command(&["run", "main.zy", "-t", "wasm-sps"])
+            .env(
+                "NODE_OPTIONS",
+                format!("--require={:?}", fixture.directory.path().join("random.cjs")),
+            )
+            .output()
+            .unwrap();
+        assert_eq!(
+            Fixture::stdout(&output, 0),
+            zydeco_syntax::word::RuntimeWord::wrap_signed(value).to_string()
+        );
     }
 }
 
@@ -486,7 +474,7 @@ fn line_integer_input_accepts_payload_limits_and_rejects_carrier_overflow() {
         ),
     );
     let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime");
-    for target in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+    for target in ["interpreter", "exe", "wasm-sps"] {
         for (input, expected) in [
             ("-4611686018427387904", "-4611686018427387904"),
             ("4611686018427387903", "4611686018427387903"),

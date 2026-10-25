@@ -21,7 +21,7 @@ pub use crate::{
     diagnostics::DiagnosticRenderer,
     execution::{ExecutionError, ExecutionRunner, PreparedExecution},
     format::{SourceFormatError, SourceFormatOutcome, SourceFormatter},
-    native::{BuildOptions, Executable, NativeError, WasmArtifact, WasmBackendKind},
+    native::{BuildOptions, Executable, NativeError, WasmArtifact},
 };
 
 impl From<RepresentationChoice> for RepresentationStrategy {

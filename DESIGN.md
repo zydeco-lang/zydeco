@@ -559,7 +559,7 @@ ZASM makes the control-flow graph explicit for assembly-derived targets.
 | High SPS, demand, and closure conversion | [C8–C9](docs/references/compiler.md#c8-high-sps-lowering-normalization-and-demand) | `lang/stackir/src/{high,low}` |
 | ZASM and representation analysis | [C10](docs/references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) | `lang/assembly/src` |
 | Native preparation, emission, and runtime | [C11–C12](docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) | `lang/{assembly,amd64,machine}`, `runtime` |
-| WebAssembly emission and embedding | [C13](docs/references/compiler.md#c13-webassembly-backends-and-embedding) | `lang/{wasm-am,wasm-sps,wasm-common}` |
+| WebAssembly emission and embedding | [C13](docs/references/compiler.md#c13-webassembly-backend-and-embedding) | `lang/{wasm-sps,wasm-common}` |
 
 Each completed representation has one selected program root and the storage needed by its syntax.
 Phase-owned builders publish immutable products; later metadata lives in phase-local deltas.
@@ -889,7 +889,7 @@ An address supplies one C pointer; the binding supplies any length separately an
 The C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
-Both WebAssembly backends reject native foreign imports.
+The WebAssembly backend rejects native foreign imports.
 The [foreign-interface reference](docs/references/language.md#14-foreign-interfaces) owns the supported ABI
 and borrowing obligations.
 The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record,
@@ -900,20 +900,17 @@ Aggregate and code-pointer transport remain proposed extensions.
 
 ## WebAssembly backend
 
-WebAssembly emission forks at first-order SPSLow so the repository can compare two implementation strategies.
-The `wasm-sps` target consumes SPSLow directly.
-The `wasm-am` target first lowers SPSLow to ZASM, then embeds that abstract machine in WebAssembly.
-Their explicit names keep the architectural choice visible while neither implementation is
-yet the preferred unqualified WebAssembly target.
-The CLI caches assembly lowering on demand, so selecting `wasm-sps` does not construct an unused ZASM program.
-The [WebAssembly backend strategies proposal](docs/proposals/wasm-backends.md) records the alternatives,
-prototype evidence, open runtime questions, and criteria for choosing a future `wasm` default.
+The `wasm-sps` target emits WebAssembly directly from first-order SPSLow,
+so selecting it never constructs a ZASM program.
+Its qualified name records the lowering it relies on while the unqualified `wasm` target remains undecided;
+the [WebAssembly backend proposal](docs/proposals/wasm-backends.md) records the criteria for that default
+and the open runtime questions.
 
 ### Structured SPS backend
 
 SPSLow has already made closures and continuations first order: code is represented by explicit blocks,
 closure records pair an environment with code, and continuation records pair code with a residual stack.
-The structured backend maps the root and each SPSLow block to one WebAssembly function.
+The backend maps the root and each SPSLow block to one WebAssembly function.
 Lexical computations inside a block become structured instructions in that function,
 and value bindings become WebAssembly locals instead of entries in a global environment array.
 
@@ -922,26 +919,13 @@ The backend assigns tagged table-index handles to blocks and uses a trampoline b
 so recursive Zydeco calls do not consume the host call stack.
 Products, closure records, boxed scalars, and persistent stack frames live in linear memory.
 This retains SPSLow's block granularity without reconstructing the instruction-level ZASM machine.
-
-### Abstract-machine backend
-
-The abstract-machine backend consumes ZASM, the same first-order stack machine used by the native emitters.
-It assigns every ZASM program point a private table index and emits each point as a `() -> ()` WebAssembly function.
-The exported `entry` function repeatedly dispatches the current index through that table.
-Direct jumps, dynamic continuation jumps, and branches all update the machine's program counter,
-so higher-order control does not require tail-call or function-reference proposal features.
-
-The reusable variable environment, one-megabyte operand/control stack, products,
-closure records, and boxed 64-bit scalars live in linear memory.
-Exhausting or underflowing this stack reports a runtime error through the shared host ABI.
 Products currently use a growing bump heap rather than a collector.
 
-### Shared runtime ABI
+### Runtime ABI
 
-Both backends use `i64` runtime data words and retain the native low-bit convention:
+The backend uses `i64` runtime data words and retains the native low-bit convention:
 odd words are immediate values and aligned even words are pointer-shaped.
-The SPS backend encodes its block handles as tagged immediates;
-the abstract-machine backend keeps ZASM code addresses as backend-private table indices.
+Block handles are encoded as tagged immediates.
 Generated modules import builtins from the `zydeco` namespace through these typed forms:
 
 - A returning builtin accepts its Zydeco arguments as `i64` parameters and returns one `i64` runtime word.
@@ -954,9 +938,8 @@ Generated modules import builtins from the `zydeco` namespace through these type
 The additional `string_literal(i32, i32) -> i64` import receives an offset and UTF-8 byte length
 in exported memory and returns the host's opaque string value.
 The mandatory `runtime_error(i32) -> ()` import reports fatal language errors.
-Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`:
-`1` means pattern-match failure, `2` operand/control stack overflow, `3` stack underflow,
-`4` integer division by zero, and `5` integer remainder by zero.
+Its codes are defined by `RuntimeFailure` in `lang/wasm-common/src/host.rs`: `1` means pattern-match failure,
+`2` integer division by zero, `3` integer remainder by zero, and `4` an integer outside the tagged payload range.
 The host must report the error and stop execution unsuccessfully.
 Generated code traps if the host returns. Each module exports `entry`, the conventional `_start` alias,
 and `memory`, but the embedding must supply the imports before invoking either function.
@@ -991,9 +974,8 @@ and `memory`, but the embedding must supply the imports before invoking either f
   `build` defaults to the host architecture, so an ARM host needs explicit AMD64 target selection.
   `run -t exe` and `test -t exe` select AMD64 directly; execution still requires appropriate tools and host support.
 - WebAssembly requires a `zydeco` host embedding.
-  Both variants have growing, non-collecting heaps.
-  The abstract-machine variant has a fixed one-megabyte operand/control stack;
-  the SPS variant allocates persistent stack frames and boxes products without ZASM's local-unboxing analysis.
+  The heap grows without collection, and the backend allocates persistent stack frames
+  and boxes products without ZASM's local-unboxing analysis.
   CLI Wasm execution uses the bundled Node.js host; standalone WASI execution is not implemented.
 - Native interoperability includes the explicit [C boundary](docs/references/language.md#14-foreign-interfaces)
   and [Zydeco unit initializers](docs/references/language.md#native-zydeco-units);

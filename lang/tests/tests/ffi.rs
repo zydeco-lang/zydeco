@@ -97,12 +97,9 @@ fn xxhash_binding_reaches_the_native_c_call_boundary() {
 }
 
 #[test]
-fn unsupported_backends_report_the_native_import() {
+fn the_wasm_backend_reports_the_native_import() {
     let backend = CommandCompiler::default().lower(&FfiCase::path("xxhash.zy")).unwrap();
 
-    let abstract_machine = backend.emit_wasm_am().unwrap_err();
-    assert!(abstract_machine.to_string().contains("XXH"));
-    assert!(matches!(abstract_machine, CompileError::WasmAm(_)));
     let stack_passing = backend.emit_wasm_sps().unwrap_err();
     assert!(stack_passing.to_string().contains("XXH"));
     assert!(matches!(stack_passing, CompileError::WasmSps(_)));

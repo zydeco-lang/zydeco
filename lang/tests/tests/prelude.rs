@@ -496,9 +496,7 @@ fn implicit_and_explicit_programs_have_the_same_runtime_result() {
         [("implicit.zy", source.clone()), ("explicit.zy", Fixture::explicit(&source))]
     {
         let path = fixture.write(name, &source);
-        for backend in
-            [ExecutionTarget::Interpreter, ExecutionTarget::WasmAm, ExecutionTarget::WasmSps]
-        {
+        for backend in [ExecutionTarget::Interpreter, ExecutionTarget::WasmSps] {
             SourceProgram::setup(path.clone()).test(backend);
         }
     }

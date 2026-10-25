@@ -549,13 +549,6 @@ impl BackendProgram {
         Amd64Artifact { assembly, foreign_libraries, foreign_imports, unit_imports }
     }
 
-    pub fn emit_wasm_am(&self) -> Result<Vec<u8>, CompileError> {
-        zydeco_wasm_am::Emitter::new(self.assembly())
-            .run()
-            .map(zydeco_wasm_am::WasmModule::into_bytes)
-            .map_err(CompileError::WasmAm)
-    }
-
     pub fn emit_wasm_sps(&self) -> Result<Vec<u8>, CompileError> {
         use zydeco_assembly::representation::RepresentationPolicy as _;
         zydeco_wasm_sps::Emitter::new(&self.sps_low)
@@ -595,8 +588,6 @@ pub enum CompileError {
     SpsLower(SpsLowerFailure),
     #[error(transparent)]
     Runtime(zydeco_dynamics::syntax::RuntimeError),
-    #[error(transparent)]
-    WasmAm(zydeco_wasm_am::EmitError),
     #[error(transparent)]
     WasmSps(zydeco_wasm_sps::EmitError),
     #[error("source test expected exit code 0, got {0:?}")]

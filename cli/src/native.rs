@@ -166,11 +166,9 @@ impl BuildOptions {
         Ok(())
     }
 
-    pub fn write_wasm(
-        &self, artifact: &str, backend: WasmBackendKind, module: &[u8],
-    ) -> Result<WasmArtifact, NativeError> {
+    pub fn write_wasm(&self, artifact: &str, module: &[u8]) -> Result<WasmArtifact, NativeError> {
         std::fs::create_dir_all(&self.build_dir).map_err(NativeError::PrepareBuildDirectory)?;
-        let path = self.build_dir.join(format!("{artifact}.{}.wasm", backend.artifact_label()));
+        let path = self.build_dir.join(format!("{artifact}.wasm"));
         std::fs::write(&path, module).map_err(NativeError::WriteBackendOutput)?;
         Ok(WasmArtifact { path })
     }
@@ -259,22 +257,6 @@ mod tests {
             );
             assert!(matches!(options.prepare(), Err(NativeError::RuntimeModelDependency)));
             assert!(!build.join("machine").exists());
-        }
-    }
-}
-
-/// WebAssembly lowering strategy used to disambiguate side-by-side artifacts.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum WasmBackendKind {
-    AbstractMachine,
-    SpsLow,
-}
-
-impl WasmBackendKind {
-    fn artifact_label(self) -> &'static str {
-        match self {
-            | Self::AbstractMachine => "am",
-            | Self::SpsLow => "sps",
         }
     }
 }

@@ -59,7 +59,7 @@ The first fixture loses one two-word closure cell in its recursive walker;
 the maximum-one-field policy declines that expansion.
 It retains a runtime-derived wide integer and a second captured scalar across repeated traversal,
 with enough environment allocations to exceed the native semispace capacity.
-Native and AM Wasm tests check all four enum policies against the interpreter's result.
+Native and Wasm tests check all four enum policies against the interpreter's result.
 Local IR tests separately cover cases that earlier source normalization usually removes,
 and block expansion when a value is passed, aliased, captured, or retained by a continuation.
 
@@ -146,7 +146,7 @@ A modular extension needs the following boundaries in order:
    separate callers cannot independently infer a different number of stack slots.
 3. **Target placement and tracing.** Derive register/stack placement and exact live-reference maps together.
    Raw integer bits cannot enter scanned tagged-word slots merely because they have the same machine width.
-   Native stack scanning and frame maps, and both Wasm backends, must consume the same component contract.
+   Native stack scanning and frame maps, and the Wasm backend, must consume the same component contract.
 4. **Explicit conversion boundaries.** Specify when ordinary values are encoded,
    decoded, boxed, or copied at generic calls and escaped closures.
    A direct specialized call can then remove conversion only when both ends retain the same evidence.

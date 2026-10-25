@@ -69,19 +69,18 @@ impl Fixture {
     }
 
     fn execute_options(&self, selection: &str, target: &str, extra: &[&str]) -> Output {
-        if target == "exe" || target == "zasm" {
+        if target == "exe" {
             let extra = extra.iter().copied().chain(["--execute"]).collect::<Vec<_>>();
             return self.build(selection, target, &extra);
         }
         let compiled = self.build(selection, target, extra);
         Self::assert_success(&compiled);
-        let extension = if target == "wasm-am" { "am" } else { "sps" };
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
             .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
-            .arg(self.build_dir().join(format!(
-                "{}.{extension}.wasm",
-                self.source.file_stem().unwrap().to_string_lossy()
-            )))
+            .arg(
+                self.build_dir()
+                    .join(format!("{}.wasm", self.source.file_stem().unwrap().to_string_lossy())),
+            )
             .output()
             .unwrap()
     }
@@ -190,7 +189,7 @@ fn changing_command_selection_produces_independent_frozen_backend_products() {
 #[test]
 fn every_build_target_accepts_the_high_sps_selection() {
     let fixture = Fixture::arithmetic();
-    for target in ["zir", "zasm", "asm", "wasm-am", "wasm-sps"] {
+    for target in ["zir", "zasm", "asm", "wasm-sps"] {
         Fixture::assert_success(&fixture.build("none", target, &[]));
     }
 }
@@ -218,9 +217,8 @@ fn selected_sequences_preserve_sharing_effects_and_results_across_backends() {
     Fixture::assert_success(&reference);
     assert_eq!(reference.stdout, b"before\n42\n42\n");
     for plan in ["default", "none", "normalize,normalize"] {
-        // ZASM's interpreter has no external-call dispatch; the target-selection
-        // test covers its lowering, while these backends execute host effects.
-        for target in ["wasm-am", "wasm-sps", "exe"] {
+        // The zasm target only renders lowering; these backends execute host effects.
+        for target in ["wasm-sps", "exe"] {
             let output = fixture.execute(plan, target);
             Fixture::assert_success(&output);
             assert_eq!(output.stdout, reference.stdout, "{plan}/{target}");
@@ -242,7 +240,7 @@ do wrapped <- ret (+Wrap(37) : Wrapped);
 "#,
     );
     for plan in ["none", "default", "normalize,normalize"] {
-        for target in ["wasm-am", "wasm-sps", "exe"] {
+        for target in ["wasm-sps", "exe"] {
             let output = fixture.execute_options(plan, target, &["--verify-passes"]);
             assert_eq!(
                 output.status.code(),
@@ -259,7 +257,7 @@ do wrapped <- ret (+Wrap(37) : Wrapped);
 fn nested_constructor_patterns_work_with_and_without_normalization() {
     let fixture = Fixture::with_source("lib/tests/core/nested-constructor-patterns.zy");
     for plan in ["none", "default", "normalize,normalize"] {
-        for target in ["wasm-am", "wasm-sps", "exe"] {
+        for target in ["wasm-sps", "exe"] {
             let output = fixture.execute_options(plan, target, &["--verify-passes"]);
             Fixture::assert_success(&output);
             assert!(output.stdout.is_empty(), "{plan}/{target}");
@@ -281,7 +279,7 @@ let fix divide (x : Int) (y : Int) : Ret Int = ! numeric/int/div x y in
 "#,
     );
     for plan in ["default", "none", "normalize,normalize"] {
-        for target in ["wasm-am", "wasm-sps", "exe"] {
+        for target in ["wasm-sps", "exe"] {
             let output = fixture.execute(plan, target);
             assert!(!output.status.success(), "{plan}/{target}");
             assert_eq!(output.stdout, b"before\n", "{plan}/{target}");
@@ -350,7 +348,7 @@ fn unoptimized_numeric_imports_match_primitive_execution() {
             .output()
             .unwrap();
         Fixture::assert_success(&reference);
-        for target in ["wasm-am", "wasm-sps", "exe"] {
+        for target in ["wasm-sps", "exe"] {
             if target == "exe" && !cfg!(any(target_os = "linux", target_os = "macos")) {
                 continue;
             }
@@ -365,7 +363,7 @@ fn unoptimized_numeric_imports_match_primitive_execution() {
 
 #[test]
 fn unoptimized_integer_zero_divisors_fail_before_the_continuation() {
-    for target in ["wasm-am", "wasm-sps", "exe"] {
+    for target in ["wasm-sps", "exe"] {
         if target == "exe" && !cfg!(any(target_os = "linux", target_os = "macos")) {
             continue;
         }
@@ -444,7 +442,7 @@ let fail = { fn (_ : Int) => ! process/exit 41 } in
                 ..
             }))
         )));
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             Fixture::assert_success(&fixture.execute(selection, target));
         }
     }
@@ -501,7 +499,7 @@ let no = { fn (_ : Int) => ! fail } in
 "#,
     );
     for selection in ["none", "default"] {
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             Fixture::assert_success(&fixture.execute(selection, target));
         }
     }
@@ -581,7 +579,7 @@ let bad = {{ ! process/exit 42 }} in
                 .unwrap(),
         );
         for selection in ["none", "default"] {
-            for target in ["exe", "wasm-am", "wasm-sps"] {
+            for target in ["exe", "wasm-sps"] {
                 Fixture::assert_success(&fixture.execute(selection, target));
             }
         }
@@ -668,7 +666,7 @@ in
                 .unwrap(),
         );
         for selection in ["none", "default"] {
-            for target in ["exe", "wasm-am", "wasm-sps"] {
+            for target in ["exe", "wasm-sps"] {
                 Fixture::assert_success(&fixture.execute(selection, target));
             }
         }
@@ -695,7 +693,7 @@ let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
 "#
         ));
         for selection in ["none", "default"] {
-            for target in ["exe", "wasm-am", "wasm-sps"] {
+            for target in ["exe", "wasm-sps"] {
                 let output = fixture.execute(selection, target);
                 assert_eq!(output.status.code(), Some(1));
                 assert_eq!(output.stdout, b"before\n");
@@ -769,7 +767,7 @@ do text <- ! numeric/int64/to_string z;
     Fixture::assert_success(&reference);
     assert_eq!(reference.stdout, b"4096\n8190\n62\n");
     for policy in ["boxed", "local"] {
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             let output = fixture.execute_options("default", target, &["--representation", policy]);
             Fixture::assert_success(&output);
             assert_eq!(output.stdout, reference.stdout, "{policy}/{target}");
@@ -818,7 +816,7 @@ do result <- ! churn 100000 ({initial} : {ty});
 "#,
     );
     for policy in ["boxed", "local"] {
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             let output = fixture.execute_options("default", target, &["--representation", policy]);
             assert!(!output.status.success());
             assert_eq!(output.stdout, b"before\n", "{policy}/{target}");
@@ -899,7 +897,7 @@ in
         assert!(!kernel.contains("alloc"));
         assert!(kernel.contains("mov QWORD [rcx], rax"), "one final exact-width store: {kernel}");
         for policy in ["boxed", "local"] {
-            for target in ["exe", "wasm-am", "wasm-sps"] {
+            for target in ["exe", "wasm-sps"] {
                 Fixture::assert_success(&fixture.execute_options(
                     "default",
                     target,
@@ -949,7 +947,7 @@ in
         1
     );
     for policy in ["boxed", "local"] {
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             let output = fixture.execute_options("default", target, &["--representation", policy]);
             assert_eq!(output.status.code(), Some(1));
             assert_eq!(output.stdout, b"before\n");
@@ -993,7 +991,7 @@ in
             program,
             Program::Instruction(Instruction::MemoryKernel(_), _)
         )));
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             Fixture::assert_success(&fixture.execute("default", target));
         }
     }
@@ -1043,7 +1041,7 @@ let fail = {{ fn (_ : Int) => ! process/exit 41 }} in
                 .count(),
             expected_kernels
         );
-        for target in ["exe", "wasm-am", "wasm-sps"] {
+        for target in ["exe", "wasm-sps"] {
             Fixture::assert_success(&fixture.execute("default", target));
         }
     }
@@ -1100,7 +1098,7 @@ in ! run {divisor}
             expected_kernels
         );
         for policy in ["boxed", "local"] {
-            for target in ["exe", "wasm-am", "wasm-sps"] {
+            for target in ["exe", "wasm-sps"] {
                 let output =
                     fixture.execute_options("default", target, &["--representation", policy]);
                 if fails {
@@ -1142,7 +1140,7 @@ fn typed_memory_kernels_preserve_checked_header_updates() {
                 assert!(!kernel.contains("alloc"), "{source}: {kernel}");
                 assert_eq!(kernel.matches("mov QWORD [rcx], rax").count(), 1);
             }
-            for target in ["exe", "wasm-am", "wasm-sps"] {
+            for target in ["exe", "wasm-sps"] {
                 Fixture::assert_success(&fixture.execute_options(
                     "default",
                     target,

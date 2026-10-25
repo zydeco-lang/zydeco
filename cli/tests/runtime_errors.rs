@@ -46,10 +46,9 @@ impl RuntimeFixture {
         }
         let output = command.output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        let extension = if backend == "wasm-am" { "am" } else { "sps" };
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
             .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
-            .arg(build.join(format!("runtime.{extension}.wasm")))
+            .arg(build.join("runtime.wasm"))
             .output()
             .unwrap()
     }
@@ -141,7 +140,7 @@ fn inline_arithmetic_executes_at_every_numeric_width() {
         );
         let expected =
             cases.iter().map(|(_, _, _, _, text)| format!("{text}\n")).collect::<String>();
-        for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+        for backend in ["interpreter", "exe", "wasm-sps"] {
             let output = fixture.run(&body, backend);
             assert!(
                 output.status.success(),
@@ -211,18 +210,17 @@ fn arithmetic_modules_import_only_their_remaining_host_calls() {
         "let fix add (x : Int) (y : Int) : Ret Int = ! numeric/int/add x y in do result <- ! add 20 22; ! process/exit result",
     );
     let backend = zydeco_cli::CommandCompiler::default().lower(&source).unwrap();
-    for module in [backend.emit_wasm_am().unwrap(), backend.emit_wasm_sps().unwrap()] {
-        let imports = wasmparser::Parser::new(0)
-            .parse_all(&module)
-            .filter_map(|payload| match payload.unwrap() {
-                | wasmparser::Payload::ImportSection(imports) => Some(imports),
-                | _ => None,
-            })
-            .flat_map(|imports| imports.into_imports())
-            .map(|import| import.unwrap().name)
-            .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(imports, ["exit", "runtime_error"].into_iter().collect());
-    }
+    let module = backend.emit_wasm_sps().unwrap();
+    let imports = wasmparser::Parser::new(0)
+        .parse_all(&module)
+        .filter_map(|payload| match payload.unwrap() {
+            | wasmparser::Payload::ImportSection(imports) => Some(imports),
+            | _ => None,
+        })
+        .flat_map(|imports| imports.into_imports())
+        .map(|import| import.unwrap().name)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(imports, ["exit", "runtime_error"].into_iter().collect());
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -249,7 +247,7 @@ fn float_text_agrees_across_runtime_backends() {
         )
     });
     let expected = cases.iter().map(|(_, _, text)| format!("{text}\n")).collect::<String>();
-    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+    for backend in ["interpreter", "exe", "wasm-sps"] {
         let output = fixture.run(&body, backend);
         assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected, "{backend}");
@@ -281,7 +279,7 @@ let failed = { fn (_ : Int) (_ : String) => ! process/exit 42 } in
          let (/Bytes; /bytes) = make_bytes builtin in {body}",
         fixture.workspace.join("lib/std/text/bytes.zy").display(),
     );
-    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+    for backend in ["interpreter", "exe", "wasm-sps"] {
         let output = fixture.run(&body, backend);
         assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(String::from_utf8_lossy(&output.stdout), "stdout only\n", "{backend}");
@@ -293,22 +291,6 @@ let failed = { fn (_ : Int) (_ : String) => ! process/exit 42 } in
     assert_eq!(captured.code, 0);
     assert_eq!(captured.output, "stdout only\n");
     assert_eq!(captured.stderr, "stderr only\n");
-}
-
-#[test]
-fn wasm_machine_stack_overflow_has_a_runtime_diagnostic() {
-    let fixture = RuntimeFixture::new();
-    for depth in [200, 100_000] {
-        let body = format!(
-            "let fix count (n : Int) : Ret Int = ! numeric/int/eq (Ret Int) n 0 {{ ret 0 }} {{ do next <- ! numeric/int/sub n 1; do result <- ! count next; ! numeric/int/add result 1 }} in do result <- ! count {depth}; ! process/exit 0"
-        );
-        let output = fixture.run(&body, "wasm-am");
-        if depth == 200 {
-            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        } else {
-            RuntimeFixture::assert_failure(output, "operand/control stack overflow", "wasm-am");
-        }
-    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -323,7 +305,7 @@ fn integer_zero_divisors_are_runtime_errors_at_every_width() {
         {
             let body =
                 format!("do result <- ! numeric/{integer}/{operation} 7 0; ! process/exit 0");
-            for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+            for backend in ["interpreter", "exe", "wasm-sps"] {
                 RuntimeFixture::assert_failure(
                     fixture.run(&body, backend),
                     message,
@@ -345,7 +327,7 @@ let fix divide (x : Int) (y : Int) : Ret Int = ! numeric/int/div x y in
   ! system/stdio/write_line "after" { ! process/exit 0 }
 }
 "#;
-    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+    for backend in ["interpreter", "exe", "wasm-sps"] {
         let mut output = fixture.run(body, backend);
         assert_eq!(String::from_utf8_lossy(&output.stdout), "before\n", "{backend}");
         output.stdout.clear();
@@ -393,7 +375,7 @@ fn integer_division_and_remainder_preserve_wrapping_at_every_width() {
     let body = cases.into_iter().fold("! process/exit 0".to_owned(), |tail, (integer, first, second, quotient, remainder)| {
         format!("do q <- ! numeric/{integer}/div {first} {second}; do r <- ! numeric/{integer}/mod {first} {second}; ! numeric/{integer}/eq OS q {quotient} {{ ! numeric/{integer}/eq OS r {remainder} {{ {tail} }} {{ ! process/exit 42 }} }} {{ ! process/exit 42 }}")
     });
-    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+    for backend in ["interpreter", "exe", "wasm-sps"] {
         let output = fixture.run(&body, backend);
         assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
         assert!(output.stdout.is_empty());
@@ -418,7 +400,7 @@ do invalid <- ! bytes/append prefix high;
 "#,
             root = fixture.workspace.display()
         );
-        for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+        for backend in ["interpreter", "exe", "wasm-sps"] {
             RuntimeFixture::assert_failure(
                 fixture.run(&body, backend),
                 "integer exceeds the tagged payload range",
@@ -457,7 +439,7 @@ do prefix <- ! bytes/from_string "1234567";
 "#,
         root = fixture.workspace.display()
     );
-    for backend in ["interpreter", "exe", "wasm-am", "wasm-sps"] {
+    for backend in ["interpreter", "exe", "wasm-sps"] {
         let output = fixture.run(&body, backend);
         assert!(output.status.success(), "{backend}: {}", String::from_utf8_lossy(&output.stderr));
         assert!(output.stdout.is_empty());

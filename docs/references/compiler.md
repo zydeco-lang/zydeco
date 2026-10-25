@@ -25,7 +25,7 @@ when locating failures.
 10. [ZASM and Local Representations](#c10-zasm-stack-analysis-and-local-representation-choices)
 11. [Native Preparation and Emission](#c11-native-preparation-activation-frames-and-amd64-emission)
 12. [Native Runtime and Collection](#c12-shared-native-model-allocation-and-collection)
-13. [WebAssembly](#c13-webassembly-backends-and-embedding)
+13. [WebAssembly](#c13-webassembly-backend-and-embedding)
 14. [Builtin and Foreign Contracts](#c14-builtin-contracts-primitive-operations-and-foreign-calls)
 15. [Tooling](#c15-diagnostics-formatting-documentation-and-interactive-tooling)
 16. [Validation and Extension](#c16-validation-debugging-and-extending-the-implementation)
@@ -50,8 +50,7 @@ flowchart TD
     High --> Normalize[Selected high-SPS passes: normalization by default]
     Normalize --> Low[SpsLowProgram: closure conversion]
     Low --> SPS[Structured WebAssembly]
-    Low --> Portable[Portable ZASM and stack analysis]
-    Portable --> AM[Abstract-machine WebAssembly]
+    Low --> Portable[Portable ZASM, stack analysis, and rendering]
     Low --> Native[Native ZASM and checked frame preparation]
     Native --> AMD64[AMD64 emission and runtime linking]
 ```
@@ -67,7 +66,7 @@ The main boundaries are concrete program types:
 | `DynamicsProgram` | [BuiltinRootLinker](../../lang/dynamics/src/link.rs) | Reference interpreter |
 | `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | Selected high-SPS transformations, then closure conversion |
 | `SpsLowProgram` | [SpsLowPipeline::run](../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
-| `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | AM Wasm |
+| `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | ZASM rendering and representation analysis |
 | `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
 
 Checked-root lowering, SPSLow conversion, and assembly lowering compose through typed compiler passes;
@@ -272,7 +271,7 @@ cargo test -p zydeco-cli --test passes
 ```
 
 The `zasm` target renders lowering without executing host effects, while the native
-and both WebAssembly backends execute them.
+and WebAssembly backends execute them.
 Numeric imports retained by an empty selection use the same arithmetic contracts as normalized primitive instructions,
 including trapping operations and wide scalar boxes, as described under [primitive calls](#primitive-calls).
 
@@ -1260,7 +1259,7 @@ Translated terms retain source provenance so residualization failures identify t
 [Source fixtures](../../lang/tests/cases/monadic-value-functions) cover signatures, witness scope, and rejection;
 [Rust assertions](../../lang/tests/tests/monadic_value_functions.rs) retain typed-arena lint and lowering checks.
 The [State fixture](../../lib/tests/monadic/value-functions.zy) checks effect order through the interpreter
-and both Wasm backends.
+and the Wasm backend.
 
 #### Nominal Algebra Construction
 
@@ -1311,7 +1310,7 @@ scoped and higher-kinded dependencies, packages, nested translation, and applica
 [Rust regressions](../../lang/tests/tests/monadic_nominal.rs) retain typed-arena lint,
 lowering, source sharing, and bounded family counts on a 160-declaration cycle.
 The [State fixture](../../lib/tests/monadic/nominal-types.zy) checks runtime dictionary selection,
-finite protocol observations, and absence of eager effects in the interpreter, native backend, and both Wasm backends.
+finite protocol observations, and absence of eager effects in the interpreter, native backend, and Wasm backend.
 
 #### Copattern Elaboration
 
@@ -1686,7 +1685,7 @@ They cover sharing, branch demands, primitive folding, and preservation of poten
 Additional comparisons cover empty and wide product, match, and comatch child sequences.
 [Depth tests](../../lang/stackir/src/high/normalize/depth_tests.rs) use a 512 KiB stack for discarded
 and retained bindings, suspended bodies, ambient substitutions, argument stacks, alias parameters, and unknown branches.
-The [CLI regression](../../cli/tests/source_build.rs) builds the factorial source through both Wasm backends
+The [CLI regression](../../cli/tests/source_build.rs) builds the factorial source through the Wasm backend
 without a compiler worker or Cargo's `RUST_MIN_STACK` environment setting.
 These tests cover reconstruction depth; recursively structured semantic facts, demands, and protocol evidence,
 as well as later compiler passes, remain separate concerns.
@@ -1832,7 +1831,7 @@ Closure conversion retains the comparison and its shared stack.
 ZASM evaluates the second operand before the first, then its comparison terminator consumes both
 and selects one successor.
 AMD64 emits signed or unsigned conditional jumps, with an explicit unordered check for floating-point comparisons.
-Both Wasm backends emit typed comparison instructions and structured branches.
+The Wasm backend emits typed comparison instructions and structured branches.
 The comparison itself allocates no result and makes no host call.
 It consumes ordinary scalar values, decoding existing wide scalar boxes at that boundary;
 raw scalar regions do not yet extend through comparisons.
@@ -1840,7 +1839,7 @@ Source library wrappers that return `Bool` still use the ordinary return and cop
 
 The [comparison regressions](../../cli/tests/comparisons.rs) cover all numeric widths, NaNs, infinities,
 signed zero, escaping functions, argument stacks, shared continuations, and generated instruction/import checks.
-Native code and both Wasm backends execute with normalization enabled and disabled.
+Native code and the Wasm backend execute with normalization enabled and disabled.
 Folder regressions compare reconstruction under both drivers, preserve trap ordering,
 and pair valid branches with ownership and protocol errors.
 
@@ -1866,14 +1865,13 @@ trapping operand evaluation remains at its original position.
 Closure conversion preserves the operation.
 Its ZASM instruction consumes the address and tagged displacement and produces one address word.
 AMD64 decodes the signed `Int` and adds it directly to the address bits;
-both Wasm backends use wrapping 64-bit arithmetic on their virtual addresses.
+the Wasm backend uses wrapping 64-bit arithmetic on its virtual addresses.
 The operation itself allocates nothing and makes no host call.
 Its operands evaluate displacement first, then base, matching argument-stack construction.
 This does not remove ordinary call or continuation costs at unknown boundaries.
 
-The [address-offset regressions](../../cli/tests/passes.rs) check zero-offset elimination, signed offsets,
-wrapping without invalid dereferences, and execution with normalization enabled and disabled in native code
-and both Wasm backends.
+The [address-offset regressions](../../cli/tests/passes.rs) check zero-offset elimination, signed offsets, wrapping
+without invalid dereferences, and execution with normalization enabled and disabled in native code and the Wasm backend.
 
 ### Ordered Scalar Memory Accesses
 
@@ -1905,7 +1903,7 @@ Their raw bits remain outside the GC root range across that allocation; existing
 Stores decode their ordinary input before writing.
 [Raw memory kernels](#raw-memory-kernels) remove these conversions when a bounded local chain closes at a store.
 
-Both Wasm backends call `raw_*` memory imports with virtual 64-bit addresses and raw bits:
+The Wasm backend calls `raw_*` memory imports with virtual 64-bit addresses and raw bits:
 loads return one `i64`, and stores return nothing.
 No source callback or spare box crosses these imports.
 Generated code performs the ordinary value conversions and carrier validation.
@@ -2294,7 +2292,7 @@ Its low mutation test rejects conflicting arguments for one parameter.
 [Assembly lowering](../../lang/assembly/src/lower.rs) consumes SPSLow into a control-flow graph
 with explicit operand and control stacks, environment variables, labels, and instructions.
 [StackAnalyzer](../../lang/assembly/src/analyze.rs) assigns the stack/environment locations needed by that graph.
-The portable result is an `AssemblyProgram` for AM Wasm.
+The portable result is an `AssemblyProgram` for ZASM rendering and representation analysis.
 Native lowering selects a distinct frame-aware path before preparation.
 
 ### CPS Assembly Lowering
@@ -2433,7 +2431,7 @@ Custom Rust policies can restrict selection by reason or width without replacing
 `CommandCompiler::with_representation` and `BackendProgram::with_representation` provide per-compilation enum selection.
 Changing a backend program's strategy invalidates its cached portable assembly.
 Native frame preparation consumes the same policy before establishing its frame and root maps.
-The CLI's `build --representation` applies to ZASM, AMD64 assembly/executables, and both Wasm backends.
+The CLI's `build --representation` applies to ZASM, AMD64 assembly/executables, and the Wasm backend.
 SPS Wasm consumes its [scalar choice](#scalar-value-boundaries); product policies remain assembly-specific.
 Zir rejects an explicit selection because it precedes physical representation lowering.
 The old process-wide `ZYDECO_DISABLE_UNBOXING` switch has been removed; select `Boxed` explicitly instead.
@@ -2776,7 +2774,7 @@ Native preparation assigns checked, distinct homes for value words and raw bits.
 The [AMD64 emitter](../../lang/amd64/src/emit/primitive.rs) initializes additional value homes
 before allocation and places raw homes below an explicit collector root cursor.
 Live box pointers can therefore move during collection while raw numeric bits remain unchanged.
-The [Wasm emitter](../../lang/wasm-common/src/word.rs) uses distinct locals; its heaps currently do not collect.
+The [Wasm emitter](../../lang/wasm-common/src/word.rs) uses distinct locals; its heap currently does not collect.
 Signed minimum divided by `-1` is handled before target overflow traps.
 Host builtins still receive spare boxes before decoding arguments, so their conversion helpers do not collect.
 
@@ -2897,35 +2895,29 @@ Raw borrowed C argument frames are discarded before any result-box allocation th
 aliasing, cycles, capacity failure, and allocation after collection.
 Frame storage reclamation and managed-value liveness are separate obligations.
 
-## C13. WebAssembly Backends and Embedding
+## C13. WebAssembly Backend and Embedding
 
-Both emitters produce core `wasm32` modules with `memory`, `entry`, and `_start` exports.
+The [wasm-sps](../../lang/wasm-sps/src/emit.rs) emitter produces core `wasm32` modules
+with `memory`, `entry`, and `_start` exports.
 An embedding supplies the `zydeco` import namespace; the module is not a standalone WASI program.
-[wasm-common](../../lang/wasm-common/src) owns shared role and word conventions.
+[wasm-common](../../lang/wasm-common/src) owns the runtime contract: the tagged-word encoding, the host-call ABI,
+the allocator body, and the module scaffolding.
 
-The pipeline forks after shared closure conversion: SPSLow still retains lexical blocks,
-while ZASM has decomposed them into machine program points.
-Starting at high SPS would duplicate closure conversion; recovering structure
-from ZASM would require reconstructing lexical regions and stack effects.
-Direct SPS emission can use structured Wasm and locals within a block and remains independent
-of lazy ZASM construction and native preparation.
-AM emission reuses ZASM's local representation and stack work, at the cost of one emitted function per program point.
-Both use module-owned dispatch because recursive host calls would consume the engine's stack
-on unbounded source transfers.
-
-| Backend | Input and control representation | Storage consequences |
-| --- | --- | --- |
-| [wasm-sps](../../lang/wasm-sps/src/emit.rs) | One function for the root and each SPSLow block; structured code and locals inside blocks; a trampoline between blocks | Persistent `[head, tail]` stack frames, boxed products, and a bump heap |
-| [wasm-am](../../lang/wasm-am/src/emit.rs) | Portable ZASM program points, a private program counter, instruction functions, and a dispatch loop | Reusable indexed environment, fixed 1 MiB operand/control stack, and a bump heap |
-
-Neither path uses recursive host calls to realize unbounded Zydeco control transfers.
-SPS closure code handles are tagged table indices; AM program counters are private untagged indices.
-Both heaps grow without collection.
-SPS partial products use a pointer into the product suffix; constructors use `[tag, payload]`.
+Emission starts from SPSLow, after shared closure conversion and before ZASM lowering.
+Starting at high SPS would duplicate closure conversion, and recovering structure
+from ZASM would require reconstructing lexical regions and stack effects from machine program points.
+SPSLow still retains lexical blocks, so the emitter uses structured Wasm and locals
+within a block and remains independent of lazy ZASM construction and native preparation.
+The root and each SPSLow block become one function: structured code
+and locals carry the block's lexical computations, and a trampoline transfers control between blocks,
+because recursive host calls would consume the engine's stack on unbounded source transfers.
+Closure code handles are tagged table indices. Persistent `[head, tail]` stack frames,
+boxed products, and closure records live in a bump heap that grows without collection.
+Partial products use a pointer into the product suffix; constructors use `[tag, payload]`.
 Emission sorts arena-derived IDs before assigning functions, imports, locals,
 and static-data offsets; unsupported forms report typed emission errors.
-The SPS path retains lexical structure but currently uses a whole-program local plan and uniform product boxing.
-The AM path reuses ZASM representation work but emits at machine-program-point granularity.
+The emitter currently uses a whole-program local plan and uniform product boxing,
+without ZASM's local-unboxing analysis.
 
 ### Module and Host ABI
 
@@ -2941,15 +2933,16 @@ module-created closures and stack records remain opaque to the host except throu
 
 Control arity is at most two. Spare boxes belong to the module's allocation protocol;
 the host must not invent closure layouts or return unregistered control code.
-Native C imports are rejected by both emitters.
+Native C imports are rejected by the emitter.
 
 The [Node host](../../cli/wasm/wasm-host.mjs) supplies I/O, resources, random integers, and scalar adapters.
 The CLI bundles it with its numeric and checked-memory helpers for source execution outside the checkout.
 `run` inherits terminal streams; `test` captures output with explicit input through the shared execution runner.
 Argument lookup uses the invocation's supplied sequence; lazy folds use module-created source closures,
 so multi-argument traversal needs no host-created closure layout.
-[Backend strategy questions](../proposals/wasm-backends.md) retain default-target criteria and historical comparisons.
-Conformance tests should distinguish module emission, embedding failures, stack exhaustion, and source runtime failures.
+[Backend questions](../proposals/wasm-backends.md) retain default-target criteria and reclamation questions.
+Conformance tests should distinguish module emission, embedding failures, memory exhaustion,
+and source runtime failures.
 
 ## C14. Builtin Contracts, Primitive Operations, and Foreign Calls
 
@@ -3616,7 +3609,7 @@ For a source feature, follow textual syntax and metadata through bitter/scoped f
 static elaboration, interpreter linking, high lowering, and every consuming backend.
 For an optimization, identify its required input invariant and every representation or root map it changes.
 For a primitive, update the role catalog, checked signature, materializers, interpreter,
-native runtime/emitter, Wasm emitters/host, and conformance cases.
+native runtime/emitter, Wasm emitter/host, and conformance cases.
 For foreign interfaces or package resolution,
 follow the [shared compilation-unit design](#compilation-unit-preparation-and-artifacts).
 Prefer existing domain types and shared declarations at each common boundary.

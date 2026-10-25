@@ -12,12 +12,12 @@ fn policies_preserve_native_execution_and_live_wide_captures() {
 }
 
 #[test]
-fn policies_preserve_am_wasm_execution() {
+fn policies_preserve_wasm_execution() {
     for &strategy in RepresentationStrategy::ALL {
         SourceProgram::setup("tests/core/representation-policies.zy")
             .with_args(["alpha"])
             .with_representation(strategy)
-            .test_io(ExecutionTarget::WasmAm, "", 0);
+            .test_io(ExecutionTarget::WasmSps, "", 0);
     }
 }
 

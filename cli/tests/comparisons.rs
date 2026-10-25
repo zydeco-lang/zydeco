@@ -43,10 +43,9 @@ impl Fixture {
         }
         let output = command.output().unwrap();
         assert!(output.status.success(), "{target}: {}", String::from_utf8_lossy(&output.stderr));
-        let extension = if target == "wasm-am" { "am" } else { "sps" };
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
             .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
-            .arg(build.join(format!("comparison.{extension}.wasm")))
+            .arg(build.join("comparison.wasm"))
             .output()
             .unwrap()
     }
@@ -58,7 +57,7 @@ impl Fixture {
 
     fn execute_all(&self) {
         Self::success(self.run("interpreter", "default"), "interpreter");
-        for target in ["wasm-am", "wasm-sps", "exe"] {
+        for target in ["wasm-sps", "exe"] {
             if target == "exe" && !cfg!(any(target_os = "linux", target_os = "macos")) {
                 continue;
             }
@@ -186,22 +185,18 @@ fn comparisons_emit_instructions_without_host_imports() {
                 );
                 assert!(!Fixture::is_comparison_import(&assembly));
             }
-            for module in [backend.emit_wasm_am().unwrap(), backend.emit_wasm_sps().unwrap()] {
-                wasmparser::Validator::new().validate_all(&module).unwrap();
-                let imports = wasmparser::Parser::new(0)
-                    .parse_all(&module)
-                    .filter_map(|payload| match payload.unwrap() {
-                        | wasmparser::Payload::ImportSection(imports) => Some(imports),
-                        | _ => None,
-                    })
-                    .flat_map(|imports| imports.into_imports())
-                    .map(|import| import.unwrap().name)
-                    .collect::<std::collections::BTreeSet<_>>();
-                assert!(
-                    imports.iter().all(|name| !Fixture::is_comparison_import(name)),
-                    "{imports:?}"
-                );
-            }
+            let module = backend.emit_wasm_sps().unwrap();
+            wasmparser::Validator::new().validate_all(&module).unwrap();
+            let imports = wasmparser::Parser::new(0)
+                .parse_all(&module)
+                .filter_map(|payload| match payload.unwrap() {
+                    | wasmparser::Payload::ImportSection(imports) => Some(imports),
+                    | _ => None,
+                })
+                .flat_map(|imports| imports.into_imports())
+                .map(|import| import.unwrap().name)
+                .collect::<std::collections::BTreeSet<_>>();
+            assert!(imports.iter().all(|name| !Fixture::is_comparison_import(name)), "{imports:?}");
         }
     }
 }

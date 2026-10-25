@@ -115,11 +115,6 @@ mod gc_stress {
     }
 
     #[test]
-    fn wasm_am() {
-        program().test(ExecutionTarget::WasmAm);
-    }
-
-    #[test]
     fn wasm_sps() {
         program().test(ExecutionTarget::WasmSps);
     }

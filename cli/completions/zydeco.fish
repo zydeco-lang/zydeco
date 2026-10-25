@@ -48,7 +48,6 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -s h -l help -d 'Prin
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s p -l pkg -l package -d 'Select declared packages by name; repeat for multiple packages' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s t -l target -d 'Execution backend' -r -f -a "interpreter\t''
 exe\t''
-wasm-am\t''
 wasm-sps\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s r -l runtime-dir -d 'Native runtime sources, used by exe' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F
@@ -61,7 +60,6 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s h -l help -d 'Pr
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s p -l pkg -l package -d 'Select declared packages by name; repeat for multiple packages' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s t -l target -d 'Execution backend or all; repeat to test multiple backends in order' -r -f -a "interpreter\t''
 exe\t''
-wasm-am\t''
 wasm-sps\t''
 all\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand test" -s r -l runtime-dir -d 'Native runtime sources, used by exe' -r -F
@@ -81,7 +79,6 @@ asm\t''
 object\t''
 staticlib\t''
 sharedlib\t''
-wasm-am\t''
 wasm-sps\t''
 exe\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l representation -d 'Local representation policy for native, ZASM, and Wasm targets' -r -f -a "boxed\t''

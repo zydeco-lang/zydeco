@@ -63,7 +63,7 @@ repeated effects, and captured execution.
 | `zasm` | ZASM on stdout. |
 | `asm` | AMD64 assembly on stdout. |
 | `exe` (default) | AMD64 executable. |
-| `wasm-am`, `wasm-sps` | WebAssembly module. |
+| `wasm-sps` | WebAssembly module. |
 | `object` | Native Zydeco unit or C library with interfaces and manifest. |
 | `staticlib`, `sharedlib` | C library with interfaces and manifest. |
 
@@ -99,20 +99,17 @@ The `native_model` integration target checks default and release runtime linking
 
 ### WebAssembly
 
-Build a module with either lowering strategy:
+Build a module from first-order SPSLow:
 
 ```sh
-zydeco build path/to/main.zy --target wasm-am --build-dir build
 zydeco build path/to/main.zy --target wasm-sps --build-dir build
 ```
 
-These commands write `build/main.am.wasm` and `build/main.sps.wasm`.
-Use `run -t wasm-am` or `run -t wasm-sps` for compilation and execution, or run an existing module
-with the bundled host:
+The command writes `build/main.wasm`.
+Use `run -t wasm-sps` for compilation and execution, or run an existing module with the bundled host:
 
 ```sh
-node cli/wasm/wasm-host.mjs build/main.am.wasm
-node cli/wasm/wasm-host.mjs build/main.sps.wasm
+node cli/wasm/wasm-host.mjs build/main.wasm
 ```
 
 CI uses Node.js 24. The [WebAssembly ABI](../DESIGN.md#webassembly-backend) describes the embedding interface.
@@ -225,7 +222,7 @@ Select a representation strategy per build:
 
 ```sh
 zydeco build lib/tests/core/representation-policies.zy --target asm --target-arch x86-64 --representation shared
-zydeco build lib/tests/core/representation-policies.zy --target wasm-am --representation boxed
+zydeco build lib/tests/core/representation-policies.zy --target wasm-sps --representation boxed
 ```
 
 [Policy selection](../docs/references/compiler.md#policy-selection) defines the strategies and target scope.

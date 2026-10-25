@@ -2553,14 +2553,13 @@ The native layout is an implementation ABI, not source-level control over addres
 | --- | --- | --- |
 | Interpreter | Explicit evaluator state; Rust-owned values and environments | CLI/REPL I/O; returning C imports on Unix |
 | Native AMD64 | Machine control stack; growable retained environments; two fixed 1 MiB copying semispaces | Supplied runtime, Linux/macOS toolchain, returning C imports and scalar exports |
-| `wasm-am` | Trampoline over ZASM; fixed 1 MiB operand/control stack; growing non-collecting heap | Imports from a `zydeco` embedding |
-| `wasm-sps` | Block trampoline and persistent stack frames; growing non-collecting heap | The same host operation contract |
+| `wasm-sps` | Block trampoline and persistent stack frames; growing non-collecting heap | Imports from a `zydeco` embedding |
 
 Native managed live values must fit in one semispace, including headers.
 Host-owned strings and byte buffers remain allocated within their runtime instance, independently of managed collection.
 Environment growth and managed-heap capacity are distinct limits.
 Native tail transfers reclaim dead activations, but live continuations and escaping values can retain storage;
-Wasm trampolines avoid growth of the host call stack without guaranteeing constant heap use.
+The Wasm trampoline avoids growth of the host call stack without guaranteeing constant heap use.
 
 Static value-function application expands residual bodies and can increase code size.
 Product and thunk allocation depends on optimization.
@@ -2578,13 +2577,13 @@ Runtime-managed capabilities provide the current resource boundary.
 ### Selecting an Execution Backend
 
 Backend selection is command-line execution policy, independent of package meta annotations.
-`run SOURCE -t TARGET` selects one of `interpreter`, `exe` (AMD64), `wasm-am`, or `wasm-sps`.
+`run SOURCE -t TARGET` selects one of `interpreter`, `exe` (AMD64), or `wasm-sps`.
 `--target` is the long spelling; omitting it selects `interpreter`.
 `run` inherits terminal streams, forwards arguments after `--`, and returns the program's exit status.
 `--dry` checks and selects the executable root without linking, emitting code, or requiring backend tools.
 
 `test SOURCE` accepts the same targets and allows repeated `-t` options.
-The test-only selection `-t all` expands in place to `interpreter`, `exe`, `wasm-am`, and `wasm-sps`, in that order.
+The test-only selection `-t all` expands in place to `interpreter`, `exe`, and `wasm-sps`, in that order.
 Explicit choices replace the interpreter default; duplicates are removed, keeping first-occurrence order.
 Discovery and source checking are shared across backends, with one lowering per test for compiled targets.
 All selected tests and requested backend artifacts are prepared before any test executes.

@@ -1,4 +1,4 @@
-//! Bounded scalar regions shared by native and both Wasm lowering paths.
+//! Bounded scalar regions shared by the native and Wasm lowering paths.
 //!
 //! A region can contain a primitive tree or adjacent single-use primitive bindings.
 //! Calls, branches, captures, shared bindings, and other value constructions end it.

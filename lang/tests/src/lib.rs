@@ -105,7 +105,7 @@ pub mod utils {
             self
         }
 
-        /// Select the representation policy for AMD64 and AM Wasm execution.
+        /// Select the representation policy for compiled execution.
         pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
             self.representation = strategy;
             self
@@ -457,7 +457,8 @@ let triv : Thk Top = {{ comatch end }} in
         LowerRequiresCore,
     }
 
-    pub(crate) const BACKENDS_EXPECTED: &str = "`all` alone or a comma-separated list of `interpreter`, `exe` (`amd64`), `wasm-am`, or `wasm-sps`";
+    pub(crate) const BACKENDS_EXPECTED: &str =
+        "`all` alone or a comma-separated list of `interpreter`, `exe` (`amd64`), or `wasm-sps`";
     pub(crate) const SETUP_EXPECTED: &str = "`tempdir` or `filesystem`";
 
     impl CaseDirective {
@@ -668,7 +669,6 @@ let triv : Thk Top = {{ comatch end }} in
             let backend = match name {
                 | "interpreter" => ExecutionTarget::Interpreter,
                 | "exe" | "amd64" => ExecutionTarget::Exe,
-                | "wasm-am" => ExecutionTarget::WasmAm,
                 | "wasm-sps" => ExecutionTarget::WasmSps,
                 | _ => {
                     return Err(CaseDirectiveError::UnknownValue {
@@ -813,7 +813,6 @@ macro_rules! runtime_source {
                 $source,
                 $crate::utils::ExecutionTarget::Interpreter
             );
-            $crate::__source_test!(wasm_am, $source, $crate::utils::ExecutionTarget::WasmAm);
             $crate::__source_test!(wasm_sps, $source, $crate::utils::ExecutionTarget::WasmSps);
         }
     };
@@ -853,16 +852,6 @@ macro_rules! e2e_sources {
             )*
         }
 
-        mod wasm_am {
-            $(
-                $crate::__source_test!(
-                    $name,
-                    $source,
-                    $crate::utils::ExecutionTarget::WasmAm
-                );
-            )*
-        }
-
         mod wasm_sps {
             $(
                 $crate::__source_test!(
@@ -888,10 +877,6 @@ macro_rules! e2e_io_source {
             $crate::__source_io_test!(
                 amd64, $source, $stdin, $output $(, $code)?,
                 $crate::utils::ExecutionTarget::Exe
-            );
-            $crate::__source_io_test!(
-                wasm_am, $source, $stdin, $output $(, $code)?,
-                $crate::utils::ExecutionTarget::WasmAm
             );
             $crate::__source_io_test!(
                 wasm_sps, $source, $stdin, $output $(, $code)?,
@@ -971,7 +956,7 @@ mod directive_tests {
     fn parses_specific_backends_and_quoted_escapes() {
         let directive = parse(&[
             "-- stage: run",
-            "-- backends: interpreter, amd64, wasm-am, wasm-sps",
+            "-- backends: interpreter, amd64, wasm-sps",
             "-- input: \"a\\nb\\t\\\"c\\\\d\"",
         ])
         .unwrap();
@@ -980,7 +965,6 @@ mod directive_tests {
             Some(CaseBackends::Only(vec![
                 ExecutionTarget::Interpreter,
                 ExecutionTarget::Exe,
-                ExecutionTarget::WasmAm,
                 ExecutionTarget::WasmSps,
             ]))
         );

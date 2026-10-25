@@ -17,45 +17,24 @@ pub use zydeco_syntax::word::{EncodedScalar, RuntimeWord, ScalarRepresentation, 
 
 use crate::{Limits, WORD_BYTES, WORD_MEMORY, WasmEmitError};
 
-/// A pointer temporary's local index and the word representation it holds.
+/// The `i64` local holding the tagged pointer word of a freshly allocated box.
 ///
-/// Backends whose locals store raw `i32` addresses bind allocations into an `I32` local;
-/// backends that keep tagged `i64` words in locals bind into an `I64` local. The emitted
-/// sequences differ only in the conversions around the local.
+/// The emitted sequences extend the allocator's `i32` address into this local and wrap
+/// it back for the store, so the local always holds a complete runtime word.
 #[derive(Clone, Copy)]
-pub enum PointerLocal {
-    /// A local holding the raw `i32` address.
-    I32(u32),
-    /// A local holding the tagged `i64` pointer word.
-    I64(u32),
-}
+pub struct PointerLocal(pub u32);
 
 impl PointerLocal {
     /// Bind the pointer of a freshly allocated box and expose its store address.
     fn bind_allocation(&self, function: &mut Function) {
-        match self {
-            | PointerLocal::I32(local) => {
-                function.instruction(&WasmInstruction::LocalTee(*local));
-            }
-            | PointerLocal::I64(local) => {
-                function.instruction(&WasmInstruction::I64ExtendI32U);
-                function.instruction(&WasmInstruction::LocalTee(*local));
-                function.instruction(&WasmInstruction::I32WrapI64);
-            }
-        }
+        function.instruction(&WasmInstruction::I64ExtendI32U);
+        function.instruction(&WasmInstruction::LocalTee(self.0));
+        function.instruction(&WasmInstruction::I32WrapI64);
     }
 
     /// Push the pointer as a tagged word.
     fn push_word(&self, function: &mut Function) {
-        match self {
-            | PointerLocal::I32(local) => {
-                function.instruction(&WasmInstruction::LocalGet(*local));
-                function.instruction(&WasmInstruction::I64ExtendI32U);
-            }
-            | PointerLocal::I64(local) => {
-                function.instruction(&WasmInstruction::LocalGet(*local));
-            }
-        }
+        function.instruction(&WasmInstruction::LocalGet(self.0));
     }
 }
 

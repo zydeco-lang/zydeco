@@ -162,12 +162,7 @@ do foreign <- ! bytes/from_string "{literal}";
         ),
     )
     .unwrap();
-    for backend in [
-        ExecutionTarget::Interpreter,
-        ExecutionTarget::Exe,
-        ExecutionTarget::WasmAm,
-        ExecutionTarget::WasmSps,
-    ] {
+    for backend in [ExecutionTarget::Interpreter, ExecutionTarget::Exe, ExecutionTarget::WasmSps] {
         SourceProgram::setup(&program).test(backend);
     }
 }

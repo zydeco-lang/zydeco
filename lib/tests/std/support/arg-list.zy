@@ -1,5 +1,5 @@
 -- stage: run
--- backends: interpreter, wasm-am, wasm-sps
+-- backends: interpreter, wasm-sps
 -- args: ["alpha"]
 param (/OS = _; builtin) : @(import("../../../std/builtin.zy")) in
 begin

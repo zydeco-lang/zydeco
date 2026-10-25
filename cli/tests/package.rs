@@ -240,7 +240,7 @@ fn concluding_files_register_existing_files_and_named_binaries_build_distinct_ar
     assert_eq!(String::from_utf8_lossy(&built.stdout).lines().count(), 2);
     for name in ["tools/first", "tools-first"] {
         let wasm = std::fs::read(
-            fixture.directory.path().join(format!("build/{}.sps.wasm", name.replace('/', "."))),
+            fixture.directory.path().join(format!("build/{}.wasm", name.replace('/', "."))),
         )
         .unwrap();
         wasmparser::Validator::new().validate_all(&wasm).unwrap();
@@ -321,7 +321,7 @@ fn whole_files_need_no_names_and_library_tests_import_the_library_normally() {
     fixture.success(&["check", "main.zy"]);
     fixture.success(&["run", "main.zy"]);
     fixture.success(&["build", "main.zy", "--target", "wasm-sps", "--build-dir", "build"]);
-    let wasm = std::fs::read(fixture.directory.path().join("build/main.sps.wasm")).unwrap();
+    let wasm = std::fs::read(fixture.directory.path().join("build/main.wasm")).unwrap();
     wasmparser::Validator::new().validate_all(&wasm).unwrap();
     for source in ["plain.zy#", "main.zy#"] {
         let output = fixture.command(&["check", source]);
@@ -820,7 +820,7 @@ fn code_cycles_reject_before_execution_or_replacing_existing_build_artifacts() {
     fixture.success(&["test", "smoke"]);
     let build = ["build", "main", "-t", "wasm-sps", "--build-dir", "build"];
     fixture.success(&build);
-    let artifact = fixture.directory.path().join("build/main.sps.wasm");
+    let artifact = fixture.directory.path().join("build/main.wasm");
     let original = std::fs::read(&artifact).unwrap();
     wasmparser::Validator::new().validate_all(&original).unwrap();
 
@@ -934,11 +934,11 @@ let stop : Thk (Int -> OS) = process/exit in
     fixture.success(&["check", "main.zy"]);
     fixture.success(&["run", "main.zy"]);
     fixture.success(&["build", "main.zy", "--target", "wasm-sps", "--build-dir", "accepted"]);
-    assert!(fixture.directory.path().join("accepted/main.sps.wasm").exists());
+    assert!(fixture.directory.path().join("accepted/main.wasm").exists());
     fixture.write("main.zy", &source.replace("let stop", "@[prelude(none)] let stop"));
     let rejected =
         fixture.command(&["build", "main.zy", "--target", "wasm-sps", "--build-dir", "rejected"]);
     assert!(!rejected.status.success());
     assert!(String::from_utf8_lossy(&rejected.stderr).contains("Thk"));
-    assert!(!fixture.directory.path().join("rejected/main.sps.wasm").exists());
+    assert!(!fixture.directory.path().join("rejected/main.wasm").exists());
 }

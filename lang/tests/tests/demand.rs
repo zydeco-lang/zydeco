@@ -83,9 +83,4 @@ mod prune_program {
     fn wasm_sps() {
         SourceProgram::setup("tests/demand/prune.zy").test(ExecutionTarget::WasmSps);
     }
-
-    #[test]
-    fn wasm_am() {
-        SourceProgram::setup("tests/demand/prune.zy").test(ExecutionTarget::WasmAm);
-    }
 }

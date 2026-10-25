@@ -1,10 +1,10 @@
-//! Support shared by the Zydeco WebAssembly backends.
+//! The runtime contract of the Zydeco WebAssembly backend.
 //!
-//! Both wasm backends compile to the same runtime contract: an OCaml-style tagged-word
+//! Generated modules follow one runtime contract: an OCaml-style tagged-word
 //! representation with one-word boxes, a bump allocator over linear memory, host imports
 //! under one namespace, and a `string_literal` import for static string data. This crate
-//! owns that contract once — the word encoding, the host-call ABI, the allocator body,
-//! and the module scaffolding — so the backends only decide how their IR drives it.
+//! owns that contract — the word encoding, the host-call ABI, the allocator body,
+//! and the module scaffolding — so the emitter only decides how its IR drives it.
 
 pub mod host;
 pub mod module;

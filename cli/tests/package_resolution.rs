@@ -65,12 +65,12 @@ fn normalized_package_selection_builds_distinct_named_artifacts() {
         "-p",
         "/tools/./two",
         "--target",
-        "wasm-am",
+        "wasm-sps",
         "-b",
         "build",
     ]);
-    assert!(f.0.path().join("build/tools.one.am.wasm").exists());
-    assert!(f.0.path().join("build/tools.two.am.wasm").exists());
+    assert!(f.0.path().join("build/tools.one.wasm").exists());
+    assert!(f.0.path().join("build/tools.two.wasm").exists());
 }
 
 #[test]

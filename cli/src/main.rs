@@ -7,7 +7,7 @@ use zydeco_cli::{
     Executable, ExecutionError, ExecutionRunner, ExecutionTarget, HighSpsInspection, HighSpsPass,
     HighSpsPlan, HighSpsPlanError, NativeError, RepresentationStrategy, SourceFormatError,
     SourceFormatOutcome, SourceFormatter, SourceSelection, TargetArchitecture, TargetOs,
-    TestTarget, WasmBackendKind,
+    TestTarget,
 };
 use zydeco_session::source::{
     Package, PackageId, PackagePath, PackageRole, SourceLoadError, SourceReference,
@@ -336,9 +336,7 @@ impl Application {
         if dry && libraries.is_empty() {
             return Ok(0);
         }
-        if !libraries.is_empty()
-            && matches!(target, ExecutionTarget::WasmAm | ExecutionTarget::WasmSps)
-        {
+        if !libraries.is_empty() && target == ExecutionTarget::WasmSps {
             return Err(LibraryError::Target.into());
         }
         let runner =
@@ -473,17 +471,10 @@ impl Application {
                     }
                     println!("{}", backend.emit_amd64(options.operating_system).assembly);
                 }
-                | BuildTarget::WasmAm => {
-                    let artifact = self.artifact_name(path)?;
-                    let module = backend.emit_wasm_am()?;
-                    let module =
-                        options.write_wasm(&artifact, WasmBackendKind::AbstractMachine, &module)?;
-                    println!("{}", module.path().display());
-                }
                 | BuildTarget::WasmSps => {
                     let artifact = self.artifact_name(path)?;
                     let module = backend.emit_wasm_sps()?;
-                    let module = options.write_wasm(&artifact, WasmBackendKind::SpsLow, &module)?;
+                    let module = options.write_wasm(&artifact, &module)?;
                     println!("{}", module.path().display());
                 }
                 | BuildTarget::Exe => {
@@ -577,7 +568,7 @@ enum ApplicationError {
     #[error(transparent)]
     PipelinePlan(#[from] HighSpsPlanError),
     #[error(
-        "--representation applies to zasm, asm, exe, wasm-am, wasm-sps, object, staticlib, and sharedlib; this target does not select physical representations"
+        "--representation applies to zasm, asm, exe, wasm-sps, object, staticlib, and sharedlib; this target does not select physical representations"
     )]
     RepresentationTarget,
     #[error(transparent)]
