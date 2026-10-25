@@ -60,12 +60,15 @@ repeated effects, and captured execution.
 | Target | Output |
 | --- | --- |
 | `zir` | First-order SPSLow on stdout. |
-| `zasm` | ZASM on stdout; `--execute` runs its interpreter. |
+| `zasm` | ZASM on stdout. |
 | `asm` | AMD64 assembly on stdout. |
 | `exe` (default) | AMD64 executable. |
 | `wasm-am`, `wasm-sps` | WebAssembly module. |
 | `object` | Native Zydeco unit or C library with interfaces and manifest. |
 | `staticlib`, `sharedlib` | C library with interfaces and manifest. |
+
+`--execute` runs the linked `exe` artifact; every other target rejects it, so use `run -t TARGET`
+to execute a program on the interpreter or WebAssembly.
 
 ### Native Executables
 

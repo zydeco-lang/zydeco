@@ -889,7 +889,7 @@ An address supplies one C pointer; the binding supplies any length separately an
 The C call admits at most six arguments.
 The checker records one typed call plan used by the Unix interpreter's libffi path and the AMD64 emitter.
 Checking a declaration does not load its library or validate the real C symbol's signature.
-Both WebAssembly backends and the ZASM interpreter reject native foreign imports.
+Both WebAssembly backends reject native foreign imports.
 The [foreign-interface reference](docs/references/language.md#14-foreign-interfaces) owns the supported ABI
 and borrowing obligations.
 The [FFI design](docs/proposals/c-ffi.md#examples-and-observed-gaps) uses concrete record,

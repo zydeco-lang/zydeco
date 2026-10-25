@@ -140,36 +140,6 @@ Replacing the child's import with `()` passes.
   Pair missing imports and cycles with an imported source containing non-ASCII text;
   compare each reported location with its owning source.
 
-## ZASM execution panics
-
-[C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) owns ZASM;
-the [CLI](../../cli/src/main.rs) exposes its interpreter through `build -t zasm -x`.
-The [interpreter](../../lang/assembly/src/interp.rs) still has `todo!()` branches
-for `Terminator::Extern` and `Instruction::AllocContext`.
-The first is reachable from a valid process exit, without foreign libraries or native tools.
-
-This source uses a path relative to `lib/std/`:
-
-```zydeco
-param (/process) : @(import("builtin.zy")) in
-! process/exit 0
-```
-
-The audit placed the program in a temporary directory and used the absolute path to `lib/std/builtin.zy`.
-With `PROGRAM` naming that file and the commands run from the repository root,
-the freshly built CLI produces these results:
-
-| Command | Result |
-| --- | --- |
-| `target/debug/zydeco run "$PROGRAM"` | Exits 0. |
-| `target/debug/zydeco build "$PROGRAM" -t zasm` | Exits 0 and renders `<extern:exit/1:Control>`. |
-| `target/debug/zydeco build "$PROGRAM" -t zasm -x` | Panics at the unimplemented external terminator and exits 101. |
-
-The bounded repair is to reject unsupported ZASM execution explicitly before running the program.
-Completing host operations and context allocation is a larger alternative.
-Retain the successful interpreter/rendering counterparts and a subprocess rejection regression;
-check that unsupported execution neither panics nor performs earlier program effects.
-
 ## Partial annotation scope during formatting
 
 The [formatter's semantic-identity law](../references/compiler.md#semantic-identity)

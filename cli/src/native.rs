@@ -396,8 +396,4 @@ pub enum NativeError {
     PublishExecutable(#[source] std::io::Error),
     #[error("cannot run the executable: {0}")]
     RunExecutable(#[source] std::io::Error),
-    #[error(
-        "build --execute is not supported for WebAssembly; use run --target wasm-am or wasm-sps"
-    )]
-    WasmBuildExecution,
 }

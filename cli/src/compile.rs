@@ -474,23 +474,6 @@ impl BackendProgram {
         output
     }
 
-    pub fn execute_assembly(self) -> Result<AssemblyOutcome, CompileError> {
-        let Self { spans, scoped, statics, sps_low, assembly, representation, .. } = self;
-        let assembly = assembly.into_inner().unwrap_or_else(|| {
-            LoweringPipeline::new(&spans, &scoped, &statics)
-                .with_representation(representation)
-                .run_infallible(&sps_low)
-        });
-        Self::validate_no_foreign_imports(&assembly, "ZASM interpreter")?;
-        match zydeco_assembly::interp::Interpret
-            .run(assembly)
-            .map_err(CompileError::AssemblyInterpreter)?
-        {
-            | zydeco_assembly::interp::Output::Exit => Ok(AssemblyOutcome::Exit),
-            | zydeco_assembly::interp::Output::Panic => Ok(AssemblyOutcome::Panic),
-        }
-    }
-
     pub fn emit_amd64(&self, operating_system: TargetOs) -> Amd64Artifact {
         self.emit_native(operating_system, zydeco_amd64::emit::NativeEntry::Process)
     }
@@ -590,42 +573,6 @@ impl BackendProgram {
                 .run_infallible(&self.sps_low)
         })
     }
-
-    fn validate_no_foreign_imports(
-        assembly: &AssemblyProgram, backend: &'static str,
-    ) -> Result<(), CompileError> {
-        assembly
-            .arena()
-            .externs
-            .iter()
-            .find_map(|external| match external {
-                | zydeco_assembly::syntax::Extern::Foreign(import) => {
-                    Some(import.target.symbol.clone())
-                }
-                | zydeco_assembly::syntax::Extern::Unit(import) => {
-                    Some(import.target.symbol.clone())
-                }
-                | zydeco_assembly::syntax::Extern::Host { .. } => None,
-            })
-            .map_or(Ok(()), |symbol| {
-                Err(CompileError::ForeignImportUnsupported { backend, symbol })
-            })
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AssemblyOutcome {
-    Exit,
-    Panic,
-}
-
-impl std::fmt::Display for AssemblyOutcome {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(match self {
-            | Self::Exit => "Program exited with code 0",
-            | Self::Panic => "Program panicked",
-        })
-    }
 }
 
 #[derive(Debug, Error)]
@@ -649,13 +596,9 @@ pub enum CompileError {
     #[error(transparent)]
     Runtime(zydeco_dynamics::syntax::RuntimeError),
     #[error(transparent)]
-    AssemblyInterpreter(zydeco_assembly::interp::Error),
-    #[error(transparent)]
     WasmAm(zydeco_wasm_am::EmitError),
     #[error(transparent)]
     WasmSps(zydeco_wasm_sps::EmitError),
     #[error("source test expected exit code 0, got {0:?}")]
     TestFailure(ProgKont),
-    #[error("{backend} backend cannot import native foreign symbol `{symbol}`")]
-    ForeignImportUnsupported { backend: &'static str, symbol: zydeco_syntax::ForeignSymbolName },
 }

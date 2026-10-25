@@ -7,8 +7,8 @@ Remove resolved entries once their repair and durable rationale have reached the
 
 - [Reference drift](reference-drift.md): remaining formal-calculus disagreements and duplicate documentation accounts.
 - [Compiler boundaries](compiler-boundaries.md): product inference, computation-witness diagnostics,
-  higher-order value-function inference, source-load error locations, unsupported ZASM execution,
-  monadic closure validation, partial-annotation scope during formatting, and package-introduction payload annotations.
+  higher-order value-function inference, source-load error locations, monadic closure validation,
+  partial-annotation scope during formatting, and package-introduction payload annotations.
 
 ## Next pass, reviewed 2026-09-14
 
@@ -20,11 +20,10 @@ they do not change the references.
 | Order | Work | Evidence and completion criterion |
 | --- | --- | --- |
 | 1 | [Repair product-shape inference](compiler-boundaries.md#n-ary-product-inference-refinement) | Inferred triples reject while pairs and explicitly typed triples pass. Infer the source arity and retain all three cases. |
-| 2 | [Bound unsupported ZASM execution](compiler-boundaries.md#zasm-execution-panics) | A valid exit-only program panics under `build -t zasm -x`. Return a deliberate unsupported-operation error before execution, or complete the advertised execution boundary. |
-| 3 | [Repair witness diagnostics](compiler-boundaries.md#nested-witness-diagnostic) and [load locations](compiler-boundaries.md#source-load-diagnostic-locations) | Explain the unsupported witness route; render imports and cycles against their owning source. Preserve the supported counterparts and independent failures. |
-| 4 | [Finish package diagnostic collection](../proposals/traversals.md#diagnostic-collection-and-recovery) | Two malformed discovered files currently require two correction cycles. Report both while withholding the project and execution. |
-| 5 | [Complete SPSLow recovery](../proposals/traversals.md#diagnostic-collection-and-recovery) | Structural, free-variable, entry, and protocol checks still stop at the first failure. Collect independent failures only where prerequisite structure remains valid. |
-| 6 | [Repair reference drift](reference-drift.md) | Reconcile the formal calculus with supported source cases and retire obsolete accounts after preserving their evidence. |
+| 2 | [Repair witness diagnostics](compiler-boundaries.md#nested-witness-diagnostic) and [load locations](compiler-boundaries.md#source-load-diagnostic-locations) | Explain the unsupported witness route; render imports and cycles against their owning source. Preserve the supported counterparts and independent failures. |
+| 3 | [Finish package diagnostic collection](../proposals/traversals.md#diagnostic-collection-and-recovery) | Two malformed discovered files currently require two correction cycles. Report both while withholding the project and execution. |
+| 4 | [Complete SPSLow recovery](../proposals/traversals.md#diagnostic-collection-and-recovery) | Structural, free-variable, entry, and protocol checks still stop at the first failure. Collect independent failures only where prerequisite structure remains valid. |
+| 5 | [Repair reference drift](reference-drift.md) | Reconcile the formal calculus with supported source cases and retire obsolete accounts after preserving their evidence. |
 
 The CLI stack mitigation is already in progress.
 Its focused Wasm build regression passes with `RUST_MIN_STACK` removed from the child process;
@@ -73,8 +72,8 @@ and its regressions should run in child processes so an abort cannot take down t
   from logical stack elements, so a final element may point into an existing product suffix
   ([C10](../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices)).
   Source lowering currently emits only full-arity layouts, leaving the suffix branches
-  in the [ZASM interpreter](../../lang/assembly/src/interp.rs) and [AMD64 emitter](../../lang/amd64/src/emit.rs)
-  without end-to-end coverage even though [GC regressions](../../lang/tests/tests/native_gc.rs) cover interior pointers.
+  in the [AMD64 emitter](../../lang/amd64/src/emit.rs) without end-to-end coverage even
+  though [GC regressions](../../lang/tests/tests/native_gc.rs) cover interior pointers.
   Construct the layouts explicitly in backend regressions before adding a source producer: cover field order,
   packing and unpacking, a suffix retained after its original pointer is dropped,
   collection while that suffix is live, interpreter/native agreement, and the corresponding WebAssembly lowering.

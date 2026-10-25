@@ -50,7 +50,7 @@ impl Fixture {
         } else {
             [fixture.integer(first), fixture.integer(second)]
         };
-        // Distinct failures make the chosen successor observable in the ZASM interpreter.
+        // Distinct failures keep the two successors distinguishable in the lowered graph.
         let [when_true, when_false] =
             [sk::IntegerArithmetic::Div, sk::IntegerArithmetic::Mod].map(|operation| {
                 let value = fixture.trap(operation);
@@ -520,13 +520,8 @@ fn drivers_preserve_observation_tables_literals_primitives_and_external_discover
 }
 
 #[test]
-fn comparisons_preserve_driver_output_operand_order_and_successor_selection() {
-    use zydeco_utils::pass::CompilerPass as _;
-    for (first, second, operand_traps, expected) in [
-        (1, 2, false, sk::PrimitiveError::DivisionByZero),
-        (3, 2, false, sk::PrimitiveError::RemainderByZero),
-        (1, 2, true, sk::PrimitiveError::RemainderByZero),
-    ] {
+fn comparisons_lower_identically_under_both_drivers() {
+    for (first, second, operand_traps) in [(1, 2, false), (3, 2, false), (1, 2, true)] {
         let program = Fixture::comparison(first, second, operand_traps);
         for native in [false, true] {
             let explicit =
@@ -537,12 +532,6 @@ fn comparisons_preserve_driver_output_operand_order_and_successor_selection() {
                 Fixture::snapshot(&explicit, program.arena()),
                 Fixture::snapshot(&recursive, program.arena())
             );
-            if !native {
-                let result = crate::interp::Interpret.run(explicit.finish());
-                assert!(
-                    matches!(result, Err(crate::interp::Error::Primitive(found)) if found == expected)
-                );
-            }
         }
         let explicit = Fixture::native::<Explicit>(&program, RepresentationStrategy::Local);
         let recursive = Fixture::native::<Recursive>(&program, RepresentationStrategy::Local);

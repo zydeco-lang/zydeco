@@ -17,10 +17,7 @@ pub use crate::{
         BuildTarget, Cli, Commands, ExecutionOptions, ExecutionTarget, RepresentationChoice,
         SourceSelection, TargetArchitecture, TargetOs, TestTarget,
     },
-    compile::{
-        Amd64Artifact, AssemblyOutcome, BackendProgram, CommandCompiler, CompileError,
-        TestInteraction,
-    },
+    compile::{Amd64Artifact, BackendProgram, CommandCompiler, CompileError, TestInteraction},
     diagnostics::DiagnosticRenderer,
     execution::{ExecutionError, ExecutionRunner, PreparedExecution},
     format::{SourceFormatError, SourceFormatOutcome, SourceFormatter},

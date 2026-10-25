@@ -2372,8 +2372,7 @@ An import may enter a separate compiled library under its [entry discipline](#co
 Checking validates the declared classifier without loading libraries or inspecting headers.
 The Unix interpreter loads symbols lazily; AMD64 links the named library.
 Missing libraries or symbols fail at loading or linking.
-Wasm and the ZASM interpreter reject native imports.
-Callbacks, pointer results, floating-point and aggregate ABI values,
+Wasm rejects native imports. Callbacks, pointer results, floating-point and aggregate ABI values,
 and larger signatures remain [extensions](../proposals/c-ffi.md).
 C exports currently admit only scalar arguments and scalar or unit results.
 The `zydeco` convention instead names a [native unit initializer](#native-zydeco-units).

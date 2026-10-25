@@ -52,7 +52,6 @@ flowchart TD
     Low --> SPS[Structured WebAssembly]
     Low --> Portable[Portable ZASM and stack analysis]
     Portable --> AM[Abstract-machine WebAssembly]
-    Portable --> ZInterp[ZASM interpreter]
     Low --> Native[Native ZASM and checked frame preparation]
     Native --> AMD64[AMD64 emission and runtime linking]
 ```
@@ -68,7 +67,7 @@ The main boundaries are concrete program types:
 | `DynamicsProgram` | [BuiltinRootLinker](../../lang/dynamics/src/link.rs) | Reference interpreter |
 | `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | Selected high-SPS transformations, then closure conversion |
 | `SpsLowProgram` | [SpsLowPipeline::run](../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
-| `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | ZASM interpreter or AM Wasm |
+| `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | AM Wasm |
 | `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
 
 Checked-root lowering, SPSLow conversion, and assembly lowering compose through typed compiler passes;
@@ -272,8 +271,8 @@ cargo test -p zydeco-utils -p zydeco-stackir --lib
 cargo test -p zydeco-cli --test passes
 ```
 
-The ZASM interpreter has no external-call dispatch; its coverage checks lowering,
-while native and both WebAssembly backends execute host effects.
+The `zasm` target renders lowering without executing host effects, while the native
+and both WebAssembly backends execute them.
 Numeric imports retained by an empty selection use the same arithmetic contracts as normalized primitive instructions,
 including trapping operations and wide scalar boxes, as described under [primitive calls](#primitive-calls).
 
@@ -1827,7 +1826,7 @@ Trapping operand or stack construction remains at its original position.
 The [numeric semantics](language.md#13-primitive-values-and-capabilities) apply at the declared width:
 integer ordering follows signedness, floating-point equality treats signed zeros as equal,
 and all three predicates are false when either float is NaN.
-Constant folding and both interpreters share `ComparisonOp::evaluate`.
+Constant folding and the interpreter share `ComparisonOp::evaluate`.
 
 Closure conversion retains the comparison and its shared stack.
 ZASM evaluates the second operand before the first, then its comparison terminator consumes both
@@ -2295,7 +2294,7 @@ Its low mutation test rejects conflicting arguments for one parameter.
 [Assembly lowering](../../lang/assembly/src/lower.rs) consumes SPSLow into a control-flow graph
 with explicit operand and control stacks, environment variables, labels, and instructions.
 [StackAnalyzer](../../lang/assembly/src/analyze.rs) assigns the stack/environment locations needed by that graph.
-The portable result is an `AssemblyProgram` for the [ZASM interpreter](../../lang/assembly/src/interp.rs) or AM Wasm.
+The portable result is an `AssemblyProgram` for AM Wasm.
 Native lowering selects a distinct frame-aware path before preparation.
 
 ### CPS Assembly Lowering
@@ -2825,8 +2824,6 @@ check full-width wrapping and runtime operands across all backends, preserve err
 and exercise the size limit, overlapping unaligned addresses, and retained pure address bindings.
 The [typed field update](../../lib/tests/std/typed-memory-kernel.zy) composes record state transitions,
 field projection, and a fixed view with these same scalar operations.
-The [assembly interpreter check](../../lang/assembly/src/interp.rs) pairs a successful write
-with arithmetic failure and verifies unchanged destination bytes on failure.
 The [dated probe](../evaluations/2026-09-15-memory-kernels/README.md) records whole-program allocation sites separately
 from the allocation-free kernel.
 The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) exercises this boundary
@@ -2912,8 +2909,7 @@ Starting at high SPS would duplicate closure conversion; recovering structure
 from ZASM would require reconstructing lexical regions and stack effects.
 Direct SPS emission can use structured Wasm and locals within a block and remains independent
 of lazy ZASM construction and native preparation.
-AM emission reuses ZASM's local representation and stack work and closely matches its interpreter,
-at the cost of one emitted function per program point.
+AM emission reuses ZASM's local representation and stack work, at the cost of one emitted function per program point.
 Both use module-owned dispatch because recursive host calls would consume the engine's stack
 on unbounded source transfers.
 
@@ -2973,7 +2969,7 @@ and [module interfaces](language.md#module-interfaces-and-shared-openings) expla
 Returning and continuation-selecting operations have distinct host call plans.
 C8 owns [arithmetic exposure](#primitive-calls) and [scalar comparisons](#scalar-comparisons);
 C11–C13 own the resulting target words and calls.
-The dynamic and ZASM interpreters share scalar evaluation with constant folding.
+The interpreter shares scalar evaluation with constant folding.
 
 Strings are immutable UTF-8 text. `Bytes` is a source-defined abstraction
 whose [owning design](language.md#immutable-owners-and-source-bytes) specifies its representation and operations.
@@ -3075,7 +3071,7 @@ The `Ret` classifier alone establishes neither termination nor a cleanup scope.
 Callbacks into the active instance remain unsupported. Explicit compiled-library manifests select exact artifacts
 through the [unit linker](#compilation-unit-preparation-and-artifacts);
 otherwise native linking uses the library's linker name and interpreter loading uses platform shared-library names.
-Native foreign imports are unsupported in Wasm and the ZASM interpreter.
+Native foreign imports are unsupported in Wasm.
 
 [Foreign signature tests](../../lang/statics/tests/foreign.rs)
 and [FFI integration tests](../../lang/tests/tests/ffi.rs) pair valid shapes with unsupported arities,
