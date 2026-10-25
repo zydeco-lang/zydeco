@@ -45,7 +45,7 @@ impl Fixture {
         assert!(output.status.success(), "{target}: {}", String::from_utf8_lossy(&output.stderr));
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
             .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
-            .arg(build.join("comparison.wasm"))
+            .arg(build.join("comparison.sps.wasm"))
             .output()
             .unwrap()
     }

@@ -291,10 +291,13 @@ fn native_preparation_failure_does_not_execute_already_prepared_interpreter_prog
 }
 
 #[test]
-fn build_execute_requires_the_native_executable_target() {
+fn build_execute_outside_exe_is_rejected_or_ignored_without_running() {
     let fixture = Fixture::new();
     fixture.write("main.zy", &Fixture::file_effect());
-    for target in ["zir", "zasm", "asm", "wasm-sps"] {
+    for (target, message) in [
+        ("zasm", "build --execute is not supported for zasm"),
+        ("wasm-sps", "build --execute is not supported for WebAssembly"),
+    ] {
         let output = fixture
             .command(&["build", "main.zy", "-t", target, "--execute", "-b", "build"])
             .output()
@@ -302,13 +305,20 @@ fn build_execute_requires_the_native_executable_target() {
         assert_eq!(output.status.code(), Some(1), "{target}");
         assert!(output.stdout.is_empty(), "{target}: {}", String::from_utf8_lossy(&output.stdout));
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains("build --execute requires --target exe"), "{target}: {stderr}");
+        assert!(stderr.contains(message), "{target}: {stderr}");
         assert!(!stderr.contains("panicked"), "{target}: {stderr}");
-        assert!(!fixture.directory.path().join("executed.marker").exists(), "{target}");
-        assert!(!fixture.directory.path().join("build").exists(), "{target}");
     }
-    let output = fixture.command(&["build", "main.zy", "-t", "zasm"]).output().unwrap();
-    assert!(!Fixture::stdout(&output, 0).is_empty());
+    let none: &[&str] = &[];
+    for (target, architecture) in [("zir", none), ("asm", &["--target-arch", "x86-64"])] {
+        let output = fixture
+            .command(&["build", "main.zy", "-t", target, "--execute", "-b", "build"])
+            .args(architecture)
+            .output()
+            .unwrap();
+        assert!(!Fixture::stdout(&output, 0).is_empty(), "{target}");
+    }
+    assert!(!fixture.directory.path().join("executed.marker").exists());
+    assert!(!fixture.directory.path().join("build").exists());
 }
 
 #[test]

@@ -437,8 +437,8 @@ impl Application {
         if representation.is_some() && matches!(target, BuildTarget::Zir) {
             return Err(ApplicationError::RepresentationTarget);
         }
-        if execute && target != BuildTarget::Exe {
-            return Err(ApplicationError::BuildExecution);
+        if execute && target == BuildTarget::Zasm {
+            return Err(ApplicationError::ZasmExecution);
         }
         if execute && sources.len() != 1 {
             return Err(ApplicationError::SingleExecution);
@@ -472,6 +472,9 @@ impl Application {
                     println!("{}", backend.emit_amd64(options.operating_system).assembly);
                 }
                 | BuildTarget::WasmSps => {
+                    if execute {
+                        return Err(NativeError::WasmBuildExecution.into());
+                    }
                     let artifact = self.artifact_name(path)?;
                     let module = backend.emit_wasm_sps()?;
                     let module = options.write_wasm(&artifact, &module)?;
@@ -553,10 +556,8 @@ enum ApplicationError {
     LibraryExecution,
     #[error("--link-library requires --target exe, object, staticlib, or sharedlib")]
     LibraryLinkTarget,
-    #[error(
-        "build --execute requires --target exe; use run -t interpreter or -t wasm-sps to execute other backends"
-    )]
-    BuildExecution,
+    #[error("build --execute is not supported for zasm; use --target exe")]
+    ZasmExecution,
     #[error("run and build --execute require exactly one selected package")]
     SingleExecution,
     #[error("cannot read the working directory: {0}")]

@@ -67,8 +67,8 @@ repeated effects, and captured execution.
 | `object` | Native Zydeco unit or C library with interfaces and manifest. |
 | `staticlib`, `sharedlib` | C library with interfaces and manifest. |
 
-`--execute` runs the linked `exe` artifact; every other target rejects it, so use `run -t TARGET`
-to execute a program on the interpreter or WebAssembly.
+`--execute` runs the linked `exe` artifact.
+`zasm` and `wasm-sps` reject it; use `run -t TARGET` to execute a program on the interpreter or WebAssembly.
 
 ### Native Executables
 
@@ -105,11 +105,11 @@ Build a module from first-order SPSLow:
 zydeco build path/to/main.zy --target wasm-sps --build-dir build
 ```
 
-The command writes `build/main.wasm`.
+The command writes `build/main.sps.wasm`.
 Use `run -t wasm-sps` for compilation and execution, or run an existing module with the bundled host:
 
 ```sh
-node cli/wasm/wasm-host.mjs build/main.wasm
+node cli/wasm/wasm-host.mjs build/main.sps.wasm
 ```
 
 CI uses Node.js 24. The [WebAssembly ABI](../DESIGN.md#webassembly-backend) describes the embedding interface.

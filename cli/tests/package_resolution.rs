@@ -69,8 +69,8 @@ fn normalized_package_selection_builds_distinct_named_artifacts() {
         "-b",
         "build",
     ]);
-    assert!(f.0.path().join("build/tools.one.wasm").exists());
-    assert!(f.0.path().join("build/tools.two.wasm").exists());
+    assert!(f.0.path().join("build/tools.one.sps.wasm").exists());
+    assert!(f.0.path().join("build/tools.two.sps.wasm").exists());
 }
 
 #[test]

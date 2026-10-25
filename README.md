@@ -108,7 +108,7 @@ Build the experimental WebAssembly target:
 zydeco build hello-world.zy --target wasm-sps --build-dir build
 ```
 
-The command produces `build/hello-world.wasm`, a module that requires imports from the `zydeco` host namespace.
+The command produces `build/hello-world.sps.wasm`, a module that requires imports from the `zydeco` host namespace.
 `zydeco run hello-world.zy -t wasm-sps` compiles and executes with the bundled host, requiring Node.js.
 The [compilation workflow](cli/README.md#build-artifacts) explains native targets and execution with the Node.js host.
 [DESIGN.md](DESIGN.md#webassembly-backend) describes the lowering strategy, host ABI, and limitations.

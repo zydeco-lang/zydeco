@@ -107,7 +107,7 @@ fn partial_patterns_report_runtime_failure_across_backends() {
                 assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
                 output = Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
                     .arg(workspace.join("cli/wasm/wasm-host.mjs"))
-                    .arg(build.join("partial.wasm"))
+                    .arg(build.join("partial.sps.wasm"))
                     .output()
                     .unwrap();
             }
@@ -192,7 +192,7 @@ fn the_wasm_target_writes_a_valid_core_module() {
         .unwrap();
     assert!(output.status.success(), "build failed: {}", String::from_utf8_lossy(&output.stderr));
 
-    let module_path = build.path().join("fact.wasm");
+    let module_path = build.path().join("fact.sps.wasm");
     let module = std::fs::read(&module_path).unwrap();
     wasmparser::validate(&module).unwrap();
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), module_path.display().to_string());

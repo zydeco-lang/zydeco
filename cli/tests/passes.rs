@@ -78,8 +78,10 @@ impl Fixture {
         Command::new(std::env::var_os("NODE").unwrap_or_else(|| "node".into()))
             .arg(self.workspace.join("cli/wasm/wasm-host.mjs"))
             .arg(
-                self.build_dir()
-                    .join(format!("{}.wasm", self.source.file_stem().unwrap().to_string_lossy())),
+                self.build_dir().join(format!(
+                    "{}.sps.wasm",
+                    self.source.file_stem().unwrap().to_string_lossy()
+                )),
             )
             .output()
             .unwrap()

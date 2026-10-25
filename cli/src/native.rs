@@ -168,7 +168,7 @@ impl BuildOptions {
 
     pub fn write_wasm(&self, artifact: &str, module: &[u8]) -> Result<WasmArtifact, NativeError> {
         std::fs::create_dir_all(&self.build_dir).map_err(NativeError::PrepareBuildDirectory)?;
-        let path = self.build_dir.join(format!("{artifact}.wasm"));
+        let path = self.build_dir.join(format!("{artifact}.sps.wasm"));
         std::fs::write(&path, module).map_err(NativeError::WriteBackendOutput)?;
         Ok(WasmArtifact { path })
     }
@@ -378,4 +378,6 @@ pub enum NativeError {
     PublishExecutable(#[source] std::io::Error),
     #[error("cannot run the executable: {0}")]
     RunExecutable(#[source] std::io::Error),
+    #[error("build --execute is not supported for WebAssembly; use run --target wasm-sps")]
+    WasmBuildExecution,
 }
