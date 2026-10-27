@@ -236,12 +236,13 @@ zydeco passes --sps-scheme dup
 Every `build` target accepts `--sps-passes` and `--sps-scheme`.
 The source interpreter (`run`), `check`, and the REPL do not execute this backend phase and do not accept the options.
 For example, disable optional SPS transformations, select repeated normalization,
-or compare how the schemes name the stack of a value case split:
+or compare how the schemes name stacks:
 
 ```sh
 zydeco build lib/tests/core/representation-policies.zy --target zir --sps-passes none
 zydeco build lib/tests/core/representation-policies.zy --target wasm-sps --sps-passes normalize,normalize
 zydeco build lib/tests/core/dispatch.zy --target zir --sps-passes none --sps-scheme dup
+zydeco build lib/tests/core/dispatch.zy --target zir --sps-passes none --sps-scheme full
 ```
 
 Use `--trace-passes` to report occurrences and timings, `--verify-passes` to check SPS invariants before
@@ -1516,7 +1517,8 @@ which records the [compilation scheme](../../lang/stackir/src/scheme.rs) whose f
 SPS retains lexical values, closures, continuations, arguments, and explicit ambient stacks.
 Under the default branch-join scheme, stack lets guard value-coproduct matches
 and scalar comparisons so every branch shares one supplied stack; under the duplicating scheme,
-no stack let occurs and every arm consumes its own copy of the stack.
+no stack let occurs and every arm consumes its own copy of the stack; under the full scheme,
+a stack let names every pushed frame and every consumer receives `•`.
 The [SPS verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
 and the placement rule of the program's scheme.
 
@@ -1533,13 +1535,16 @@ SPS separates values, stacks, and programs.
 Continuations, argument pushes, and tag pushes build stacks; each program consumes one ambient stack `•` exactly once
 on every path, and no value captures it, because closures receive their stack at each call.
 SPS lowering follows the paper's stack-passing compilation in the scheme that `--sps-scheme` selects.
-Indexed by the consuming stack, it pushes an argument for each application and a tag for each destructor
-and installs a continuation for each `do`; the schemes differ at a value case split:
+Indexed by the consuming stack, it pushes an argument for each application and a tag
+for each destructor and installs a continuation for each `do`.
+The branch-join and duplicating schemes extend the consuming stack with each frame and differ at a value case split;
+the full scheme names each frame with a stack let as it is pushed, so every consumer receives `•`:
 
-| Scheme | Paper fragment | At a value case split or scalar comparison |
-| --- | --- | --- |
-| `br` (default) | `SPS_br`, whose stack lets occur exactly around value-coproduct matches | one stack let names the stack that the arms share |
-| `dup` | `SPS_dup`, which has no stack let | each arm consumes its own [copy](../../lang/stackir/src/high/copy.rs) of the stack |
+| Scheme | Paper fragment | Pushing a frame | At a value case split or scalar comparison |
+| --- | --- | --- | --- |
+| `br` (default) | `SPS_br`, whose stack lets occur exactly around value-coproduct matches | extends the stack | one stack let names the stack that the arms share |
+| `dup` | `SPS_dup`, which has no stack let | extends the stack | each arm consumes its own [copy](../../lang/stackir/src/high/copy.rs) of the stack |
+| `full` | `SPS_full`, whose stack lets each bind one frame and whose consumers receive `•` | `let • = frame :: • in …` | the arms consume `•`, which the lets above the branch name |
 
 One [placement rule](../../lang/stackir/src/scheme.rs) per scheme checks its fragment in SPS and SPSLow.
 
@@ -1591,6 +1596,9 @@ Rewrites apply only where sharing, effects, and stack movement permit; recursion
 and normalization does not compute βη normal forms.
 Normalization preserves its input's scheme: at an unknown branch, branch-join rebuilds the guard's stack once,
 while the duplicating scheme rebuilds a delayed consumer in every arm.
+Under the full scheme, normalization delays a frame let whose frame is movable, so reductions see through it,
+and keeps a let whose argument may trap; a consumer or an unknown branch then names the frames it receives above itself,
+one let per frame, deepest first.
 
 ### Residual Lowering Folder
 
@@ -1989,7 +1997,8 @@ Administrative definition allocation continues from the consumed SPS program as 
 `SpsLowProgram` has one root and first-order closed blocks.
 Its [verifier](../../lang/stackir/src/low/check.rs) checks reference closure, lexical node ownership,
 the stack placement of its scheme, and the word entry contracts below.
-Conversion is homomorphic on stack lets, so SPSLow records and keeps the scheme of its SPS input.
+Conversion is homomorphic on stack lets, so SPSLow records and keeps the scheme of its SPS input;
+under the full scheme, a continuation package, whose residual is the saved environment over `•`, binds as one frame.
 A single-occurrence syntax tree means runtime sharing is explicit in variables;
 it is not a proof that a continuation is dynamically used once.
 Native preparation must establish the stronger lifetime facts in C11.

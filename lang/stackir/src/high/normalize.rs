@@ -101,6 +101,15 @@ struct Residual<T> {
     demands: Demands,
 }
 
+/// A rebuilt stack. Under the full scheme, `node` is the ambient stack, one frame over it, or a
+/// continuation, and `spine` holds the frames beneath it, deepest first, which the consuming
+/// computation names with stack let-bindings; the other schemes keep `spine` empty.
+struct StackResidual {
+    node: StackId,
+    spine: Vec<StackId>,
+    demands: Demands,
+}
+
 /// Consume a lexical program and rebuild its normalized tree with fresh nodes.
 /// Shared bodies stay bound, so moving a body preserves its definition IDs.
 #[derive(AsRef, AsMut)]
@@ -402,6 +411,12 @@ impl Normalization {
         let id = ScopedStackId(self.delayed_stacks.len());
         self.delayed_stacks.push(stack);
         id
+    }
+
+    /// Whether a delayed stack resolves to the ambient stack of the output.
+    fn ambient(&self, stack: &ScopedStack) -> bool {
+        let resolved = self.resolve_stack(stack.clone());
+        matches!(self.source.inner.stacks[&resolved.node], Stack::Var(_))
     }
 
     fn resolve_stack(&self, mut stack: ScopedStack) -> ScopedStack {
@@ -1084,6 +1099,98 @@ mod tests {
                 .any(|(_, node)| matches!(node, Computation::Join(LetJoin::Stack(_))))
         );
         assert!(!inner.values.iter().any(|(_, value)| matches!(value, Value::Closure(_))));
+    }
+
+    #[test]
+    fn full_scheme_reductions_see_through_movable_frame_lets() {
+        // let • = arg(()) :: • in { • -> let arg(x) :: • = • in • @ x } ! •
+        let mut fixture = Fixture { scheme: SpsScheme::Full, ..Fixture::default() };
+        let x = fixture.def("x");
+        let returned = fixture.build(x);
+        let body = fixture.ret(returned);
+        let binder = fixture.build(x);
+        let ambient = fixture.build(StackVar);
+        let body =
+            fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail: body });
+        let thunk = fixture.build(Closure { stack: StackVar, body });
+        let call = fixture.force(thunk);
+        let argument: ValueId = fixture.build(Triv);
+        let ambient = fixture.build(StackVar);
+        let bindee: StackId = fixture.build(Cons(argument, ambient));
+        let root = fixture.build(Let { binder: StackVar, bindee, tail: call });
+        let program = fixture.normalize(root);
+        let inner = &program.arena().inner;
+        assert!(matches!(inner.compus[&program.root()], Computation::Ret(_)));
+        assert!(
+            !inner
+                .compus
+                .iter()
+                .any(|(_, node)| matches!(node, Computation::Join(LetJoin::Stack(_))))
+        );
+    }
+
+    #[test]
+    fn full_scheme_keeps_a_trapping_frame_named_where_it_was_pushed() {
+        // let • = arg(1 / 0) :: • in h ! •
+        let mut fixture = Fixture { scheme: SpsScheme::Full, ..Fixture::default() };
+        let h = fixture.def("h");
+        let thunk = fixture.build(h);
+        let call = fixture.force(thunk);
+        let argument = fixture.trap("left");
+        let ambient = fixture.build(StackVar);
+        let bindee = fixture.build(Cons(argument, ambient));
+        let tail = fixture.build(Let { binder: StackVar, bindee, tail: call });
+        let binder = fixture.build(h);
+        let ambient = fixture.build(StackVar);
+        let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
+        let program = fixture.normalize(root);
+        let inner = &program.arena().inner;
+        let Computation::LetArg(Let { tail, .. }) = inner.compus[&program.root()] else {
+            panic!("the argument pop survives")
+        };
+        let Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) = inner.compus[&tail]
+        else {
+            panic!("the trapping frame keeps its stack let")
+        };
+        assert!(matches!(inner.stacks[&bindee], Stack::Arg(_)));
+        let Computation::Force(SForce { stack, .. }) = inner.compus[&tail] else { panic!("call") };
+        assert!(matches!(inner.stacks[&stack], Stack::Var(_)));
+    }
+
+    #[test]
+    fn full_scheme_names_a_bare_branch_consumer_above_the_branch() {
+        // let • = kont _ -> write_line • in case c | C0(_) -> • @ () | C1(_) -> • @ () end
+        let mut fixture = Fixture { scheme: SpsScheme::Full, ..Fixture::default() };
+        let condition = fixture.def("condition");
+        let scrut = fixture.build(condition);
+        let arms = (0..2)
+            .map(|index| {
+                let payload = fixture.build(Hole);
+                let binder = fixture.build(Ctor(Fixture::ctor(index), payload));
+                let unit = fixture.build(Triv);
+                let tail = fixture.ret(unit);
+                Matcher { binder, tail }
+            })
+            .collect();
+        let branch = fixture.build(SCoprodMatch { scrut, arms });
+        let after = fixture.external(BuiltinValueRole::WriteLine);
+        let hole = fixture.build(Hole);
+        let bindee = fixture.build(Kont { binder: hole, body: after });
+        let tail = fixture.build(Let { binder: StackVar, bindee, tail: branch });
+        let ambient = fixture.build(StackVar);
+        let binder = fixture.build(condition);
+        let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
+        let program = fixture.normalize(root);
+        let inner = &program.arena().inner;
+        let count = |matches: fn(&Computation<LetJoin>) -> bool| {
+            inner.compus.iter().filter(|(_, node)| matches(node)).count()
+        };
+        assert_eq!(
+            inner.stacks.iter().filter(|(_, stack)| matches!(stack, Stack::Kont(_))).count(),
+            1
+        );
+        assert_eq!(count(|node| matches!(node, Computation::Join(LetJoin::Stack(_)))), 1);
+        assert_eq!(count(|node| matches!(node, Computation::ExternCall(_))), 1);
     }
 
     #[test]

@@ -32,6 +32,7 @@ impl From<SpsSchemeChoice> for SpsScheme {
         match choice {
             | SpsSchemeChoice::Duplicating => Self::Duplicating,
             | SpsSchemeChoice::BranchJoin => Self::BranchJoin,
+            | SpsSchemeChoice::Full => Self::Full,
         }
     }
 }

@@ -126,6 +126,13 @@ pub(super) enum Work {
         demands: Demands,
         site: Option<ss::TermId>,
     },
+    StackLetBody {
+        bindee: ScopedStack,
+        site: Option<ss::TermId>,
+    },
+    FinishStackLet {
+        site: Option<ss::TermId>,
+    },
     PrimitiveValue {
         operation: PrimitiveOp,
         operands: [ScopedValue; 2],
@@ -169,7 +176,7 @@ pub(super) struct NormalizationFolder<'a, D> {
     norm: &'a mut Normalization,
     driver: PhantomData<D>,
     values: Vec<Residual<ValueId>>,
-    stacks: Vec<Residual<StackId>>,
+    stacks: Vec<StackResidual>,
     computations: Vec<Residual<CompuId>>,
     arms: Vec<(Matcher<VPatId, CompuId>, Demands, Demand)>,
 }
@@ -198,22 +205,59 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         self.values.pop().expect("completed value child")
     }
 
-    fn stack(&mut self) -> Residual<StackId> {
+    fn stack(&mut self) -> StackResidual {
         self.stacks.pop().expect("completed stack child")
+    }
+
+    /// The stack a consumer or a pushed frame receives, the frames to name above it, and the
+    /// stack's demands. Under the full scheme a consumer receives the ambient stack, so a rebuilt
+    /// frame moves onto the spine.
+    fn consumed(&mut self, stack: StackResidual) -> (StackId, Vec<StackId>, Demands) {
+        let StackResidual { node, mut spine, demands } = stack;
+        if self.norm.scheme.names_frames()
+            && !matches!(self.norm.arena.inner.stacks[&node], Stack::Var(_))
+        {
+            spine.push(node);
+            (StackVar.build(self.norm, None), spine, demands)
+        } else {
+            (node, spine, demands)
+        }
+    }
+
+    /// Every frame of a rebuilt stack, deepest first, for naming above a computation that keeps
+    /// consuming the ambient stack.
+    fn spine_of(&self, stack: StackResidual) -> (Vec<StackId>, Demands) {
+        let StackResidual { node, mut spine, demands } = stack;
+        if !matches!(self.norm.arena.inner.stacks[&node], Stack::Var(_)) {
+            spine.push(node);
+        }
+        (spine, demands)
+    }
+
+    /// Wrap a computation in stack let-bindings naming `spine`, the deepest frame outermost.
+    fn name_spine(
+        &mut self, spine: Vec<StackId>, tail: CompuId, site: Option<ss::TermId>,
+    ) -> CompuId {
+        spine.into_iter().rev().fold(tail, |tail, frame| {
+            Let { binder: StackVar, bindee: frame, tail }.build(self.norm, site)
+        })
     }
 
     fn computation(&mut self) -> Residual<CompuId> {
         self.computations.pop().expect("completed computation child")
     }
 
+    /// Finish a rebuilt computation at its source site, naming `spine` above it.
     fn finish_computation(
-        &mut self, source: CompuId, compu: impl Into<Computation<LetJoin>>, demands: Demands,
+        &mut self, source: CompuId, compu: impl Into<Computation<LetJoin>>, spine: Vec<StackId>,
+        demands: Demands,
     ) {
         let site = self.norm.source.admin.terms.back(&TermId::Compu(source)).copied();
         let node = compu.into().build(self.norm, site);
         if let Some(protocol) = self.norm.source.inner.compu_protocols.get(&source) {
             self.norm.arena.inner.compu_protocols.insert_new(node, protocol.clone());
         }
+        let node = self.name_spine(spine, node, site);
         self.computations.push(Residual { node, demands });
     }
 
@@ -311,8 +355,9 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         match self.norm.source.inner.stacks[&id].clone() {
             | Stack::Var(stack_var) => {
                 let site = self.norm.source.admin.terms.back(&TermId::Stack(id)).copied();
-                self.stacks.push(Residual {
+                self.stacks.push(StackResidual {
                     node: stack_var.build(self.norm, site),
+                    spine: Vec::new(),
                     demands: Demands::default(),
                 });
             }
@@ -437,7 +482,11 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 })
             }
             | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => {
-                self.branch(tail, scope, Some(bindee), site)
+                if self.norm.scheme.names_frames() {
+                    self.stack_let(bindee, tail, scope, site)
+                } else {
+                    self.branch(tail, scope, Some(bindee), site)
+                }
             }
             | Computation::Compare(_) | Computation::CoprodMatch(_) => {
                 self.branch(id, scope, None, site)
@@ -514,7 +563,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     scope,
                 ));
             }
-            let (arms, join) = Self::unknown(guard, scope);
+            let (arms, join) = self.unknown(guard, scope);
             return Step::TailCall(Work::ComparisonChildren {
                 source: branch,
                 position: 0,
@@ -558,8 +607,25 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 }
             }
         }
-        let (arms, join) = Self::unknown(guard, scope);
+        let (arms, join) = self.unknown(guard, scope);
         Step::TailCall(Work::BranchArms { source: branch, position: 0, known, arms, join, site })
+    }
+
+    /// Normalize a full-scheme stack let-binding, which names one frame. A movable frame is
+    /// delayed, so reductions see through the let; a frame whose argument may trap keeps its let,
+    /// and the frames delayed beneath it are named above it, so the trap stays where it was pushed.
+    fn stack_let(
+        &mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<ss::TermId>,
+    ) -> Step<Self> {
+        let bindee = ScopedStack { node: bindee, scope: scope.clone() };
+        if self.norm.movable_stack(bindee.node) {
+            let stack = Some(self.norm.delay_stack(bindee));
+            return Step::TailCall(Work::Computation(tail, Scope { stack, ..scope }));
+        }
+        Step::Call {
+            input: Work::Computation(tail, Scope { values: scope.values, stack: None }),
+            frame: Work::StackLetBody { bindee, site },
+        }
     }
 
     /// The scope a selected successor or arm continues in: a guard's stack is delayed into it,
@@ -592,14 +658,22 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         }
     }
 
-    /// The scope unknown arms run in, and the stack a rebuilt guard names. The arms of a guarded
-    /// branch consume the guard's `•`; the arms of a bare branch inherit the delayed stack.
-    fn unknown(guard: Option<StackId>, scope: Scope) -> (Scope, Option<ScopedStack>) {
+    /// The scope unknown arms run in, and the stack a rebuilt branch names above it. The arms of
+    /// a guarded branch consume the guard's `•`. The full scheme names a bare branch's delayed
+    /// consumer above it, while the duplicating scheme lets every arm rebuild that consumer.
+    fn unknown(&self, guard: Option<StackId>, scope: Scope) -> (Scope, Option<ScopedStack>) {
         match guard {
             | Some(bindee) => (
                 Scope { values: scope.values, stack: None },
                 Some(ScopedStack { node: bindee, scope }),
             ),
+            | None if self.norm.scheme.names_frames() => {
+                let join = scope
+                    .stack
+                    .map(|id| self.norm.delayed_stacks[id.0].clone())
+                    .filter(|stack| !self.norm.ambient(stack));
+                (Scope { values: scope.values, stack: None }, join)
+            }
             | None => (scope, None),
         }
     }
@@ -718,7 +792,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         }
                     }
                 };
-                self.finish_computation(source, step, next.demands);
+                self.finish_computation(source, step, Vec::new(), next.demands);
             }
             | Work::ValueChildren { source, position, env, demand, protocol } => {
                 let Value::VCons(VCons { items, layout }) = &self.norm.source.inner.values[&source]
@@ -910,16 +984,18 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             | Work::FinishStack(id) => {
                 let site = self.norm.source.admin.terms.back(&TermId::Stack(id)).copied();
                 let tail = self.stack();
+                let (rest, spine, rest_demands) = self.consumed(tail);
                 let (stack, demands): (Stack, _) = match self.norm.source.inner.stacks[&id].clone()
                 {
                     | Stack::Arg(_) => {
                         let value = self.value();
-                        (Cons(value.node, tail.node).into(), value.demands.join(tail.demands))
+                        (Cons(value.node, rest).into(), value.demands.join(rest_demands))
                     }
-                    | Stack::Tag(Cons(tag, _)) => (Cons(tag, tail.node).into(), tail.demands),
+                    | Stack::Tag(Cons(tag, _)) => (Cons(tag, rest).into(), rest_demands),
                     | _ => unreachable!("stack with scheduled tail"),
                 };
-                self.stacks.push(Residual { node: stack.build(self.norm, site), demands });
+                let node = stack.build(self.norm, site);
+                self.stacks.push(StackResidual { node, spine, demands });
             }
             | Work::ContinuationBody { source, binder } => {
                 let mut body = self.computation();
@@ -929,39 +1005,46 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 let binder = self.norm.pattern::<D>(binder);
                 let site = self.norm.source.admin.terms.back(&TermId::Stack(source)).copied();
                 let node = Kont { binder, body: body.node }.build(self.norm, site);
-                self.stacks.push(Residual { node, demands: body.demands });
+                self.stacks.push(StackResidual { node, spine: Vec::new(), demands: body.demands });
             }
             | Work::FinishComputation(id) => match self.norm.source.inner.compus[&id].clone() {
                 | Computation::Hole(_) => {
                     let stack = self.stack();
-                    self.finish_computation(id, SHole(stack.node), stack.demands);
+                    let (stack, spine, demands) = self.consumed(stack);
+                    self.finish_computation(id, SHole(stack), spine, demands);
                 }
                 | Computation::Force(_) => {
                     let thunk = self.value();
                     let stack = self.stack();
+                    let (stack, spine, demands) = self.consumed(stack);
                     self.finish_computation(
                         id,
-                        SForce { thunk: thunk.node, stack: stack.node },
-                        thunk.demands.join(stack.demands),
+                        SForce { thunk: thunk.node, stack },
+                        spine,
+                        thunk.demands.join(demands),
                     );
                 }
                 | Computation::Ret(_) => {
                     let value = self.value();
                     let stack = self.stack();
+                    let (stack, spine, demands) = self.consumed(stack);
                     self.finish_computation(
                         id,
-                        SReturn { stack: stack.node, value: value.node },
-                        stack.demands.join(value.demands),
+                        SReturn { stack, value: value.node },
+                        spine,
+                        demands.join(value.demands),
                     );
                 }
                 | Computation::LetArg(Let { binder: Cons(binder, StackVar), .. }) => {
                     let tail = self.computation();
                     let bindee = self.stack();
+                    let (bindee, spine, demands) = self.consumed(bindee);
                     let binder = Cons(self.norm.pattern::<D>(binder), StackVar);
                     self.finish_computation(
                         id,
-                        Let { binder, bindee: bindee.node, tail: tail.node },
-                        bindee.demands.join(tail.demands),
+                        Let { binder, bindee, tail: tail.node },
+                        spine,
+                        demands.join(tail.demands),
                     );
                 }
                 | Computation::CoCase(SCoMatch { arms, .. }) => {
@@ -974,10 +1057,12 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         })
                         .unzip();
                     let scrut = self.stack();
+                    let (scrut, spine, scrut_demands) = self.consumed(scrut);
                     self.finish_computation(
                         id,
-                        SCoMatch { scrut: scrut.node, arms },
-                        demands.into_iter().fold(scrut.demands, Demands::join),
+                        SCoMatch { scrut, arms },
+                        spine,
+                        demands.into_iter().fold(scrut_demands, Demands::join),
                     );
                 }
                 | _ => unreachable!("computation with ordinary reconstruction"),
@@ -993,10 +1078,12 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 let mut body = self.computation();
                 body.demands.remove(&param);
                 let stack = self.stack();
+                let (stack, spine, demands) = self.consumed(stack);
                 self.finish_computation(
                     source,
-                    SFix { param, stack: stack.node, body: body.node },
-                    stack.demands.join(body.demands),
+                    SFix { param, stack, body: body.node },
+                    spine,
+                    demands.join(body.demands),
                 );
             }
             | Work::ArgumentBody { source, binder, stack } => {
@@ -1098,9 +1185,31 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             }
             | Work::BranchStack { tail, demands, site } => {
                 let stack = self.stack();
-                let node =
-                    Let { binder: StackVar, bindee: stack.node, tail }.build(self.norm, site);
-                self.computations.push(Residual { node, demands: demands.join(stack.demands) });
+                // Under the full scheme the delayed consumer of a bare branch is named frame by
+                // frame above it; a branch-join guard names the whole stack its arms share.
+                let (node, stack_demands) = if self.norm.scheme.names_frames() {
+                    let (spine, stack_demands) = self.spine_of(stack);
+                    (self.name_spine(spine, tail, site), stack_demands)
+                } else {
+                    let node =
+                        Let { binder: StackVar, bindee: stack.node, tail }.build(self.norm, site);
+                    (node, stack.demands)
+                };
+                self.computations.push(Residual { node, demands: demands.join(stack_demands) });
+            }
+            | Work::StackLetBody { bindee, site } => {
+                return Step::Call {
+                    input: Work::Stack(bindee),
+                    frame: Work::FinishStackLet { site },
+                };
+            }
+            | Work::FinishStackLet { site } => {
+                let bindee = self.stack();
+                let tail = self.computation();
+                let (spine, bindee_demands) = self.spine_of(bindee);
+                let node = self.name_spine(spine, tail.node, site);
+                self.computations
+                    .push(Residual { node, demands: tail.demands.join(bindee_demands) });
             }
             | Work::PrimitiveValue { operation, operands, site } => {
                 if let Some(literal) = self.norm.fold_primitive(operation, operands) {
@@ -1145,12 +1254,14 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             | Work::PrimitiveReturn { site } => {
                 let value = self.value();
                 let stack = self.stack();
-                let node = SReturn { stack: stack.node, value: value.node }.build(self.norm, site);
-                self.computations
-                    .push(Residual { node, demands: stack.demands.join(value.demands) });
+                let (stack, spine, demands) = self.consumed(stack);
+                let node = SReturn { stack, value: value.node }.build(self.norm, site);
+                let node = self.name_spine(spine, node, site);
+                self.computations.push(Residual { node, demands: demands.join(value.demands) });
             }
             | Work::PrimitiveStack { operation, site } => {
                 let stack = self.stack();
+                let (stack, spine, demands) = self.consumed(stack);
                 let defs = ["__primitive_first__", "__primitive_second__"].map(|name| {
                     let def = self.norm.arena.admin.fresh();
                     self.norm.arena.admin.insert_def(def, VarName(name.into()));
@@ -1165,14 +1276,17 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 let tail = Let { binder: Cons(second, StackVar), bindee: ambient, tail }
                     .build(self.norm, site);
                 let first = defs[0].build(self.norm, None);
-                let node = Let { binder: Cons(first, StackVar), bindee: stack.node, tail }
+                let node = Let { binder: Cons(first, StackVar), bindee: stack, tail }
                     .build(self.norm, site);
-                self.computations.push(Residual { node, demands: stack.demands });
+                let node = self.name_spine(spine, node, site);
+                self.computations.push(Residual { node, demands });
             }
             | Work::ExternalStack { function, site } => {
                 let stack = self.stack();
-                let node = ExternCall { function, stack: stack.node }.build(self.norm, site);
-                self.computations.push(Residual { node, demands: stack.demands });
+                let (stack, spine, demands) = self.consumed(stack);
+                let node = ExternCall { function, stack }.build(self.norm, site);
+                let node = self.name_spine(spine, node, site);
+                self.computations.push(Residual { node, demands });
             }
         }
         Step::Return(())

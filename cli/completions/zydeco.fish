@@ -41,7 +41,8 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand show" -l lint-types -d 'Re
 complete -c zydeco -n "__fish_zydeco_using_subcommand show" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l sps-passes -d 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l sps-scheme -d 'Explain the selection under this stack-passing scheme' -r -f -a "dup\t'Copy the consumer stack into every arm of a branch'
-br\t'Name the consumer stack once at each branch (default)'"
+br\t'Name the consumer stack once at each branch (default)'
+full\t'Name every frame as it is pushed'"
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l check -d 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
@@ -89,7 +90,8 @@ local\t''
 shared\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l sps-passes -d 'SPS passes: default, none, or a comma-separated list; order and duplicates are preserved' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l sps-scheme -d 'Where SPS lowering names the current stack' -r -f -a "dup\t'Copy the consumer stack into every arm of a branch'
-br\t'Name the consumer stack once at each branch (default)'"
+br\t'Name the consumer stack once at each branch (default)'
+full\t'Name every frame as it is pushed'"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F

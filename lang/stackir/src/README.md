@@ -12,7 +12,8 @@ textual -> bitter -> scoped -> tyck -> stack
 The stack IR is built from one checked typed expression.
 High-level lowering is indexed by the consuming stack and constructs the fragment of its scheme directly:
 under branch-join, stack lets occur exactly around value-coproduct matches and scalar comparisons;
-under duplicating, no stack let occurs and every arm consumes its own copy of the stack.
+under duplicating, no stack let occurs and every arm consumes its own copy of the stack; under full,
+a stack let names every pushed frame and every consumer receives the ambient stack.
 Normalization combines local β/η-reductions with field-sensitive demand analysis,
 resolving known calls and pruning unused bindings and package fields before allocation.
 Known arithmetic calls become typed primitive values with direct result bindings,

@@ -6,7 +6,7 @@
 use super::syntax::*;
 use super::traverse::{Edge, Node, Occurrence, Traversal, Visitor};
 use super::variables::FreeVars;
-use crate::scheme::{PlacementError, SpsScheme, StackUse};
+use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackUse};
 use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
 use zydeco_surface::diagnostic::Diagnostics;
 
@@ -102,13 +102,36 @@ impl<'a> FragmentValidator<'a> {
 
     fn usage(&self, computation: &Computation<LetJoin>, edge: Edge) -> StackUse {
         match computation {
-            | Computation::Join(LetJoin::Stack(Let { tail, .. })) => {
-                StackUse::Let { tail_branch: self.arena.compus[tail].is_branch() }
-            }
+            | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => StackUse::Let {
+                bindee: self.shape(*bindee),
+                tail_branch: self.arena.compus[tail].is_branch(),
+            },
             | computation if computation.is_branch() => {
                 StackUse::Branch { guarded: matches!(edge, Edge::StackLetTail(_)) }
             }
+            | Computation::Hole(SHole(stack))
+            | Computation::ExternCall(ExternCall { stack, .. })
+            | Computation::Force(SForce { stack, .. })
+            | Computation::Ret(SReturn { stack, .. })
+            | Computation::Fix(SFix { stack, .. })
+            | Computation::LetArg(Let { bindee: stack, .. })
+            | Computation::CoCase(SCoMatch { scrut: stack, .. }) => {
+                StackUse::Consumer(self.shape(*stack))
+            }
             | _ => StackUse::Other,
+        }
+    }
+
+    fn shape(&self, stack: StackId) -> FrameShape {
+        match &self.arena.stacks[&stack] {
+            | Stack::Var(_) => FrameShape::Ambient,
+            | Stack::Kont(_) => FrameShape::Frame,
+            | Stack::Arg(Cons(_, rest)) | Stack::Tag(Cons(_, rest))
+                if matches!(self.arena.stacks[rest], Stack::Var(_)) =>
+            {
+                FrameShape::Frame
+            }
+            | Stack::Arg(_) | Stack::Tag(_) => FrameShape::Compound,
         }
     }
 }
@@ -279,6 +302,57 @@ mod tests {
             FragmentError::Placement { compu: root, error: PlacementError::UnexpectedStackLet }
                 .into()
         );
+    }
+
+    #[test]
+    fn full_accepts_single_frame_lets_and_rejects_other_stack_shapes() {
+        let full = SpsScheme::Full;
+        let program = |arena: SpsArena, root| {
+            FragmentProgram::try_new(SpsProgram::new(arena, root), full)
+                .map(drop)
+                .map_err(|errors| errors.into_iter().next().unwrap())
+        };
+        let consumer = |arena: &mut SpsArena, stack: StackId| -> CompuId {
+            let thunk: ValueId = Triv.build(arena, None);
+            SForce { thunk, stack }.build(arena, None)
+        };
+        let frame = |arena: &mut SpsArena, rest: StackId| -> StackId {
+            let value: ValueId = Triv.build(arena, None);
+            Cons(value, rest).build(arena, None)
+        };
+
+        let mut arena = SpsArena::default();
+        let ambient = StackVar.build(&mut arena, None);
+        let tail = consumer(&mut arena, ambient);
+        let ambient = StackVar.build(&mut arena, None);
+        let bindee = frame(&mut arena, ambient);
+        let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
+        assert_eq!(program(arena, root), Ok(()));
+
+        let mut arena = SpsArena::default();
+        let ambient = StackVar.build(&mut arena, None);
+        let tail = consumer(&mut arena, ambient);
+        let bindee = StackVar.build(&mut arena, None);
+        let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
+        let error = PlacementError::IdentityStackLet;
+        assert_eq!(program(arena, root), Err(FragmentError::Placement { compu: root, error }));
+
+        let mut arena = SpsArena::default();
+        let ambient = StackVar.build(&mut arena, None);
+        let tail = consumer(&mut arena, ambient);
+        let ambient = StackVar.build(&mut arena, None);
+        let deeper = frame(&mut arena, ambient);
+        let bindee = frame(&mut arena, deeper);
+        let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
+        let error = PlacementError::CompoundStackLet;
+        assert_eq!(program(arena, root), Err(FragmentError::Placement { compu: root, error }));
+
+        let mut arena = SpsArena::default();
+        let ambient = StackVar.build(&mut arena, None);
+        let stack = frame(&mut arena, ambient);
+        let root = consumer(&mut arena, stack);
+        let error = PlacementError::NonAmbientConsumer;
+        assert_eq!(program(arena, root), Err(FragmentError::Placement { compu: root, error }));
     }
 
     #[test]

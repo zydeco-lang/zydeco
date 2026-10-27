@@ -134,7 +134,7 @@ _zydeco() {
                     return 0
                     ;;
                 --sps-scheme)
-                    COMPREPLY=($(compgen -W "dup br" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "dup br full" -- "${cur}"))
                     return 0
                     ;;
                 --build-dir)
@@ -356,7 +356,7 @@ _zydeco() {
                     return 0
                     ;;
                 --sps-scheme)
-                    COMPREPLY=($(compgen -W "dup br" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "dup br full" -- "${cur}"))
                     return 0
                     ;;
                 *)

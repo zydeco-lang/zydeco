@@ -3,7 +3,7 @@
 use super::syntax::*;
 use super::traverse::{Edge, Node, Occurrence, Together, Traversal, Visitor};
 use super::variables::Variables;
-use crate::scheme::{PlacementError, SpsScheme, StackUse};
+use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackUse};
 use std::collections::HashSet;
 use zydeco_utils::fold::{Driver, Explicit};
 
@@ -221,13 +221,36 @@ impl<'a> SpsLowValidator<'a> {
 
     fn usage(&self, computation: &Computation, edge: Edge) -> StackUse {
         match computation {
-            | Computation::LetStack(LetStack { tail, .. }) => {
-                StackUse::Let { tail_branch: self.arena.compus[tail].is_branch() }
-            }
+            | Computation::LetStack(LetStack { bindee, tail, .. }) => StackUse::Let {
+                bindee: self.shape(*bindee),
+                tail_branch: self.arena.compus[tail].is_branch(),
+            },
             | computation if computation.is_branch() => {
                 StackUse::Branch { guarded: matches!(edge, Edge::StackLetTail(_)) }
             }
+            | Computation::Hole(SHole(stack))
+            | Computation::ExternCall(ExternCall { stack, .. })
+            | Computation::Jump(Jump { stack, .. })
+            | Computation::OpenContinuation(OpenContinuation { package: stack, .. })
+            | Computation::LetArg(LetArg { bindee: stack, .. })
+            | Computation::CoCase(SCoMatch { scrut: stack, .. }) => {
+                StackUse::Consumer(self.shape(*stack))
+            }
             | _ => StackUse::Other,
+        }
+    }
+
+    fn shape(&self, stack: StackId) -> FrameShape {
+        let ambient = |stack: &StackId| matches!(self.arena.stacks[stack], Stack::Var(_));
+        match &self.arena.stacks[&stack] {
+            | Stack::Var(_) => FrameShape::Ambient,
+            | Stack::Arg(Cons(_, rest)) | Stack::Tag(Cons(_, rest)) if ambient(rest) => {
+                FrameShape::Frame
+            }
+            | Stack::ContinuationPackage(ContinuationPackage { residual, .. }) if matches!(&self.arena.stacks[residual], Stack::Arg(Cons(_, rest)) if ambient(rest)) => {
+                FrameShape::Frame
+            }
+            | Stack::Arg(_) | Stack::Tag(_) | Stack::ContinuationPackage(_) => FrameShape::Compound,
         }
     }
 }
@@ -419,6 +442,42 @@ mod tests {
                 compu: root,
                 error: PlacementError::UnexpectedStackLet,
             }
+        );
+    }
+
+    #[test]
+    fn full_programs_name_continuation_packages_and_jump_with_the_ambient_stack() {
+        let full = SpsScheme::Full;
+        let mut arena = SpsLowArena::default();
+        let label = arena.admin.fresh_def();
+        let result = Hole.build(&mut arena, None);
+        let body_stack = StackVar.build(&mut arena, None);
+        let body = SHole(body_stack).build(&mut arena, None);
+        let entry =
+            EntryParameters::Continuation { result, environment: Hole.build(&mut arena, None) };
+        let code = Block { label, entry, body }.build(&mut arena, None);
+        let environment: ValueId = Triv.build(&mut arena, None);
+        let ambient = StackVar.build(&mut arena, None);
+        let residual = Cons(environment, ambient).build(&mut arena, None);
+        let package = ContinuationPackage { code, residual }.build(&mut arena, None);
+        let ambient = StackVar.build(&mut arena, None);
+        let tail = SHole(ambient).build(&mut arena, None);
+        let root = LetStack { binder: StackVar, bindee: package, tail }.build(&mut arena, None);
+        assert_eq!(
+            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root, full).err(),
+            None
+        );
+
+        let ambient = StackVar.build(&mut arena, None);
+        let value: ValueId = Triv.build(&mut arena, None);
+        let stack = Cons(value, ambient).build(&mut arena, None);
+        let root = SHole(stack).build(&mut arena, None);
+        assert_eq!(
+            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root, full).err(),
+            Some(SpsLowValidationError::Placement {
+                compu: root,
+                error: PlacementError::NonAmbientConsumer,
+            })
         );
     }
 

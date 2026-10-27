@@ -145,6 +145,14 @@ impl<T> ValuePlan<T> {
     }
 }
 
+/// How lowering continues after pushing one frame onto the stack it consumes.
+enum Pushed {
+    /// The frame extends the stack, which the next computation consumes directly.
+    Extended(StackId),
+    /// A stack let-binding names the frame, and the next computation consumes the fresh `ambient`.
+    Named { frame: StackId, ambient: StackId },
+}
+
 /// Stateful lowering pass from typed syntax into stack IR.
 #[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
@@ -299,6 +307,39 @@ impl<'a> Lowerer<'a> {
         }
     }
 
+    /// Push a frame built over the consuming stack. The full scheme names it with a stack
+    /// let-binding; the other schemes extend the consuming stack with it.
+    fn push(&mut self, frame: StackId, site: Option<ss::TermId>) -> Pushed {
+        if self.scheme.names_frames() {
+            Pushed::Named { frame, ambient: StackVar.build(self, site) }
+        } else {
+            Pushed::Extended(frame)
+        }
+    }
+
+    /// Push a frame, collecting it in `named` when the scheme names it, and return the stack
+    /// that the consuming computation receives.
+    fn push_onto(
+        &mut self, frame: StackId, named: &mut Vec<StackId>, site: Option<ss::TermId>,
+    ) -> StackId {
+        match self.push(frame, site) {
+            | Pushed::Extended(stack) => stack,
+            | Pushed::Named { frame, ambient } => {
+                named.push(frame);
+                ambient
+            }
+        }
+    }
+
+    /// Wrap a computation in stack let-bindings naming `frames`, the first outermost.
+    fn name_frames(
+        &mut self, frames: Vec<StackId>, tail: CompuId, site: Option<ss::TermId>,
+    ) -> CompuId {
+        frames.into_iter().rev().fold(tail, |tail, frame| {
+            Let { binder: StackVar, bindee: frame, tail }.build(self, site)
+        })
+    }
+
     /// Guard a branch with the stack its arms share, when the scheme names it.
     /// `None` names the ambient stack itself.
     fn join(
@@ -362,11 +403,14 @@ impl RootLowerer<'_> {
         let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics, self.scheme);
         let root = self.statics.execution_compu(root);
         let mut stack = StackVar.build(&mut lowerer, None);
+        let mut named = Vec::new();
         if let Some(plan) = builtin {
             let package = D::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
-            stack = Cons(package, stack).build(&mut lowerer, None);
+            let frame = Cons(package, stack).build(&mut lowerer, None);
+            stack = lowerer.push_onto(frame, &mut named, None);
         }
         let root = LoweringFolder::new(&mut lowerer).lower::<D>(root, stack);
+        let root = lowerer.name_frames(named, root, None);
         lowerer.finish(root)
     }
 }

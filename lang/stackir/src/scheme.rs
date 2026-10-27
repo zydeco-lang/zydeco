@@ -13,15 +13,18 @@ pub enum SpsScheme {
     /// Name the consumer stack once at each branch, so that the arms share it.
     #[default]
     BranchJoin,
+    /// Name every frame as it is pushed, so that every consumer receives the ambient stack.
+    Full,
 }
 
 impl SpsScheme {
-    pub const ALL: &'static [Self] = &[Self::Duplicating, Self::BranchJoin];
+    pub const ALL: &'static [Self] = &[Self::Duplicating, Self::BranchJoin, Self::Full];
 
     pub fn name(self) -> &'static str {
         match self {
             | Self::Duplicating => "dup",
             | Self::BranchJoin => "br",
+            | Self::Full => "full",
         }
     }
 
@@ -29,6 +32,7 @@ impl SpsScheme {
         match self {
             | Self::Duplicating => "copy the consumer stack into every arm of a branch",
             | Self::BranchJoin => "name the consumer stack once at each branch",
+            | Self::Full => "name every frame as it is pushed",
         }
     }
 
@@ -36,8 +40,17 @@ impl SpsScheme {
     /// Otherwise every arm consumes its own copy of the stack the branch receives.
     pub(crate) fn shares_branch_stack(self) -> bool {
         match self {
-            | Self::Duplicating => false,
+            | Self::Duplicating | Self::Full => false,
             | Self::BranchJoin => true,
+        }
+    }
+
+    /// Whether pushing a frame names it with a stack let-binding, so that the computation
+    /// consuming the pushed stack receives the ambient stack.
+    pub(crate) fn names_frames(self) -> bool {
+        match self {
+            | Self::Duplicating | Self::BranchJoin => false,
+            | Self::Full => true,
         }
     }
 
@@ -46,13 +59,23 @@ impl SpsScheme {
         match (self, usage) {
             | (Self::Duplicating, StackUse::Let { .. }) => Some(PlacementError::UnexpectedStackLet),
             | (Self::Duplicating, _) => None,
-            | (Self::BranchJoin, StackUse::Let { tail_branch: false }) => {
+            | (Self::BranchJoin, StackUse::Let { tail_branch: false, .. }) => {
                 Some(PlacementError::NonBranchStackLet)
             }
             | (Self::BranchJoin, StackUse::Branch { guarded: false }) => {
                 Some(PlacementError::UnguardedBranch)
             }
             | (Self::BranchJoin, _) => None,
+            | (Self::Full, StackUse::Let { bindee: FrameShape::Ambient, .. }) => {
+                Some(PlacementError::IdentityStackLet)
+            }
+            | (Self::Full, StackUse::Let { bindee: FrameShape::Compound, .. }) => {
+                Some(PlacementError::CompoundStackLet)
+            }
+            | (Self::Full, StackUse::Consumer(FrameShape::Frame | FrameShape::Compound)) => {
+                Some(PlacementError::NonAmbientConsumer)
+            }
+            | (Self::Full, _) => None,
         }
     }
 }
@@ -72,15 +95,36 @@ pub enum PlacementError {
     NonBranchStackLet,
     #[error("the duplicating scheme names no stack, so it admits no stack let-binding")]
     UnexpectedStackLet,
+    #[error("the full scheme names frames, so a stack let-binding cannot name the ambient stack")]
+    IdentityStackLet,
+    #[error(
+        "the full scheme names one frame at a time, so a stack let-binding binds a single frame"
+    )]
+    CompoundStackLet,
+    #[error("the full scheme names every frame, so a consumer receives the ambient stack")]
+    NonAmbientConsumer,
 }
 
 /// What the placement rules observe about one computation.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum StackUse {
-    /// A stack let-binding, recording whether its tail is a branch.
-    Let { tail_branch: bool },
+    /// A stack let-binding, recording the shape it binds and whether its tail is a branch.
+    Let { bindee: FrameShape, tail_branch: bool },
     /// A value case split or scalar comparison, recording whether a stack let-binding owns it.
     Branch { guarded: bool },
+    /// A computation that consumes a stack it receives, such as a call, a return, or a stack match.
+    Consumer(FrameShape),
     /// Any other computation.
     Other,
+}
+
+/// How much of a stack the placement rules observe.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum FrameShape {
+    /// The ambient stack `•` itself.
+    Ambient,
+    /// One frame: a continuation, or an argument or tag pushed onto `•`.
+    Frame,
+    /// Several frames.
+    Compound,
 }

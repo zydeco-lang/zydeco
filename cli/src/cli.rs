@@ -88,6 +88,9 @@ pub enum SpsSchemeChoice {
     /// Name the consumer stack once at each branch (default)
     #[value(name = "br")]
     BranchJoin,
+    /// Name every frame as it is pushed
+    #[value(name = "full")]
+    Full,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]

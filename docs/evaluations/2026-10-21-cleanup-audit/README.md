@@ -544,4 +544,6 @@ and frame environments; the revision found no client for them in the paper.
 The compiler reference then gained the correspondence in [C8](../../references/compiler.md#correspondence-with-sps)
 and [C9](../../references/compiler.md#correspondence-with-sps_l), and the stack IR guide now points there,
 which resolves the documentation finding.
+The compiler then implemented the paper's duplicating and full schemes beside branch-join,
+selected with `--sps-scheme`, so the scheme exclusion in the [yardstick](#yardstick) describes `7e5ee4c1` only.
 

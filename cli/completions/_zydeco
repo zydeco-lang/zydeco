@@ -43,7 +43,8 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '--sps-passes=[Explain \`default\`, \`none\`, or a comma-separated list such as normalize,normalize]:PLAN:_default' \
 '--sps-scheme=[Explain the selection under this stack-passing scheme]:SCHEME:((dup\:"Copy the consumer stack into every arm of a branch"
-br\:"Name the consumer stack once at each branch (default)"))' \
+br\:"Name the consumer stack once at each branch (default)"
+full\:"Name every frame as it is pushed"))' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
@@ -122,7 +123,8 @@ _arguments "${_arguments_options[@]}" : \
 '--representation=[Local representation policy for native, ZASM, and Wasm targets]:REPRESENTATION:(boxed direct local shared)' \
 '--sps-passes=[SPS passes\: default, none, or a comma-separated list; order and duplicates are preserved]:PLAN:_default' \
 '--sps-scheme=[Where SPS lowering names the current stack]:SCHEME:((dup\:"Copy the consumer stack into every arm of a branch"
-br\:"Name the consumer stack once at each branch (default)"))' \
+br\:"Name the consumer stack once at each branch (default)"
+full\:"Name every frame as it is pushed"))' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \
 '-r+[Runtime directory]:RUNTIME_DIR:_files' \

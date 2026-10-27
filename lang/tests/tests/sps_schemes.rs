@@ -63,6 +63,24 @@ schemes_agree! {
 }
 
 #[test]
+fn full_compilation_names_every_frame_and_consumes_only_the_ambient_stack() {
+    let branch_join = Fixture::unnormalized("dispatch.zy", SpsScheme::BranchJoin);
+    let full = Fixture::unnormalized("dispatch.zy", SpsScheme::Full);
+    let continuations = |low: &str| low.matches("pack-continuation(").count();
+    assert_eq!(continuations(&full), continuations(&branch_join), "{full}");
+    // Branch-join guards tail-position branches with `let • = • in`; full names frames instead.
+    let frame_lets =
+        |low: &str| low.matches("let • = ").count() - low.matches("let • = • in").count();
+    assert!(!full.contains("let • = • in"), "{full}");
+    assert!(frame_lets(&full) > frame_lets(&branch_join), "{full}");
+    let ambient_jumps = |low: &str| (low.matches("jump ").count(), low.matches(") ! •").count());
+    let (jumps, ambient) = ambient_jumps(&full);
+    assert_eq!(jumps, ambient, "{full}");
+    let (jumps, ambient) = ambient_jumps(&branch_join);
+    assert!(ambient < jumps, "{branch_join}");
+}
+
+#[test]
 fn duplicating_compilation_copies_the_consumer_that_branch_join_names_once() {
     let branch_join = Fixture::unnormalized("dispatch.zy", SpsScheme::BranchJoin);
     let duplicating = Fixture::unnormalized("dispatch.zy", SpsScheme::Duplicating);

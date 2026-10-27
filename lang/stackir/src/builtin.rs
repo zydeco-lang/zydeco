@@ -97,7 +97,7 @@ impl ExternalFunction {
         if let ExternalFunction::Host(role) = self
             && let Some(access) = memory::MemoryAccess::from_builtin(role)
         {
-            return MemoryStep::make_function(arena, access);
+            return MemoryStep::make_function(arena, access, scheme);
         }
         let stack = StackVar.build(arena, None);
         let body = ExternCall { function: self, stack }.build(arena, None);
@@ -163,7 +163,7 @@ impl CompareBranch {
 
 impl MemoryStep {
     fn make_function<Arena: AsMut<SpsArena>>(
-        arena: &mut Arena, access: memory::MemoryAccess,
+        arena: &mut Arena, access: memory::MemoryAccess, scheme: SpsScheme,
     ) -> ValueId {
         use crate::protocol::ValueProtocol;
         use memory::AccessKind;
@@ -177,13 +177,20 @@ impl MemoryStep {
             });
         let thunk = success.build(arena, None);
         let stack = StackVar.build(arena, None);
-        let stack = if access.kind == AccessKind::Load {
+        let next = if access.kind == AccessKind::Load {
             let value: ValueId = value.build(arena, None);
-            Cons(value, stack).build(arena, None)
+            let frame = Cons(value, stack).build(arena, None);
+            // The full scheme names the loaded value's frame before resuming the success thunk.
+            if scheme.names_frames() {
+                let ambient = StackVar.build(arena, None);
+                let tail = SForce { thunk, stack: ambient }.build(arena, None);
+                Let { binder: StackVar, bindee: frame, tail }.build(arena, None)
+            } else {
+                SForce { thunk, stack: frame }.build(arena, None)
+            }
         } else {
-            stack
+            SForce { thunk, stack }.build(arena, None)
         };
-        let next = SForce { thunk, stack }.build(arena, None);
         let address_value = address.build(arena, None);
         let body = match access.kind {
             | AccessKind::Load => {

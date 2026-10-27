@@ -50,6 +50,12 @@ pub(super) enum Work {
         site: Option<ss::TermId>,
     },
     ValueSteps(Vec<ValueStep>),
+    /// Name a pushed frame around the lowered body, binding the frame's value steps outside it.
+    NameStack {
+        frame: StackId,
+        steps: Vec<ValueStep>,
+        site: Option<ss::TermId>,
+    },
     Bind(ValueBinding),
     Abstraction {
         stack: StackId,
@@ -549,8 +555,14 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             | ss::Computation::Dtor(Dtor(body, name)) => {
                 let codata = self.lo.statics.codata_hints[&body];
                 let tag = self.lo.protocols.tag(codata, name);
-                let stack = Cons(tag, stack).build(self.lo, site);
-                return Step::TailCall(Work::Computation(body, stack));
+                let frame = Cons(tag, stack).build(self.lo, site);
+                return match self.lo.push(frame, site) {
+                    | Pushed::Extended(stack) => Step::TailCall(Work::Computation(body, stack)),
+                    | Pushed::Named { frame, ambient } => Step::Call {
+                        input: Work::Computation(body, ambient),
+                        frame: Work::NameStack { frame, steps: Vec::new(), site },
+                    },
+                };
             }
         }
         Step::Return(())
@@ -806,11 +818,22 @@ impl Folder for LoweringFolder<'_, '_> {
             }
             | Work::Application { body, stack, site } => {
                 let arg = self.value();
-                let stack = Cons(arg.value, stack).build(self.lo, site);
-                return Step::Call {
-                    input: Work::Computation(body, stack),
-                    frame: Work::ValueSteps(arg.steps),
+                let frame = Cons(arg.value, stack).build(self.lo, site);
+                return match self.lo.push(frame, site) {
+                    | Pushed::Extended(stack) => Step::Call {
+                        input: Work::Computation(body, stack),
+                        frame: Work::ValueSteps(arg.steps),
+                    },
+                    | Pushed::Named { frame, ambient } => Step::Call {
+                        input: Work::Computation(body, ambient),
+                        frame: Work::NameStack { frame, steps: arg.steps, site },
+                    },
                 };
+            }
+            | Work::NameStack { frame, steps, site } => {
+                let tail = self.computation();
+                let named = self.lo.name_frames(vec![frame], tail, site);
+                self.computations.push(ValuePlan { steps, value: () }.bind(self.lo, named));
             }
             | Work::Fix { source, param, stack } => {
                 let body = self.computation();
@@ -837,8 +860,14 @@ impl Folder for LoweringFolder<'_, '_> {
             | Work::Do { bindee, site } => {
                 let binder = self.pattern();
                 let body = self.computation();
-                let stack = Kont { binder, body }.build(self.lo, site);
-                return Step::TailCall(Work::Computation(bindee, stack));
+                let frame = Kont { binder, body }.build(self.lo, site);
+                return match self.lo.push(frame, site) {
+                    | Pushed::Extended(stack) => Step::TailCall(Work::Computation(bindee, stack)),
+                    | Pushed::Named { frame, ambient } => Step::Call {
+                        input: Work::Computation(bindee, ambient),
+                        frame: Work::NameStack { frame, steps: Vec::new(), site },
+                    },
+                };
             }
             | Work::LetBindee { binder, tail, stack, site } => {
                 let bindee = self.value();
@@ -1032,11 +1061,14 @@ impl Folder for LoweringFolder<'_, '_> {
                 let scrut: ValueId = scrutinee.build(self.lo, site);
                 let literal: ValueId =
                     zydeco_syntax::Literal::Integer(integer).build(self.lo, site);
-                let stack = Cons(otherwise, stack).build(self.lo, site);
-                let stack = Cons(then, stack).build(self.lo, site);
-                let stack = Cons(literal, stack).build(self.lo, site);
-                let stack = Cons(scrut, stack).build(self.lo, site);
-                self.computations.push(SForce { thunk: operator, stack }.build(self.lo, site));
+                let mut named = Vec::new();
+                let stack =
+                    [otherwise, then, literal, scrut].into_iter().fold(stack, |stack, value| {
+                        let frame = Cons(value, stack).build(self.lo, site);
+                        self.lo.push_onto(frame, &mut named, site)
+                    });
+                let call = SForce { thunk: operator, stack }.build(self.lo, site);
+                self.computations.push(self.lo.name_frames(named, call, site));
             }
         }
         Step::Return(())
