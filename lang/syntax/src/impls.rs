@@ -71,16 +71,11 @@ macro_rules! impl_name {
     };
 }
 #[inline]
-fn add_prefix(prefix: &'static str, name: &str) -> String {
-    format!("{}{}", prefix, name)
-}
-#[inline]
 fn remove_prefix(name: &str) -> String {
     name[1..].to_string()
 }
 
 impl_name!(VarName, str::to_string);
 impl_name!(FieldName, str::to_string);
-impl_name!(SymName, |name| add_prefix("%", name));
 impl_name!(CtorName, remove_prefix);
 impl_name!(DtorName, remove_prefix);

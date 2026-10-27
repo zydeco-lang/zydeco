@@ -28,8 +28,6 @@ use strum::{IntoEnumIterator, VariantArray as _};
 pub struct VarName(pub String);
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FieldName(pub String);
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SymName(pub String);
 /// `+C`, including the plus
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CtorName(pub String);
