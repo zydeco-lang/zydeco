@@ -110,7 +110,7 @@ impl CopatternElaborator {
                 let found =
                     self.clauses.first().map(ClauseState::next_step).unwrap_or(CopatternStep::End);
                 tycker.err_k(
-                    TyckError::CopatternStepMismatch { expected: CopatternStepKind::Body, found },
+                    TyckError::CopatternStepMismatch { expected: CopatternStepShape::Body, found },
                     std::panic::Location::caller(),
                 )
             }
@@ -252,7 +252,7 @@ impl CopatternElaborator {
                 let su::CoPatternItem::Dtor(dtor) = item else {
                     return tycker.err_k(
                         TyckError::CopatternStepMismatch {
-                            expected: CopatternStepKind::Destructor,
+                            expected: CopatternStepShape::Destructor,
                             found,
                         },
                         std::panic::Location::caller(),
@@ -321,7 +321,7 @@ impl CopatternElaborator {
                 let su::CoPatternItem::Pat(pattern) = item else {
                     return tycker.err_k(
                         TyckError::CopatternStepMismatch {
-                            expected: CopatternStepKind::Pattern,
+                            expected: CopatternStepShape::Pattern,
                             found,
                         },
                         std::panic::Location::caller(),
@@ -392,7 +392,7 @@ impl CopatternElaborator {
                 let su::CoPatternItem::Pat(pattern) = item else {
                     return tycker.err_k(
                         TyckError::CopatternStepMismatch {
-                            expected: CopatternStepKind::Pattern,
+                            expected: CopatternStepShape::Pattern,
                             found,
                         },
                         std::panic::Location::caller(),
@@ -449,7 +449,7 @@ impl CopatternElaborator {
         let (item, mut clause) = clause.pop();
         let su::CoPatternItem::Pat(pattern) = item else {
             return tycker.err_k(
-                TyckError::CopatternStepMismatch { expected: CopatternStepKind::Pattern, found },
+                TyckError::CopatternStepMismatch { expected: CopatternStepShape::Pattern, found },
                 std::panic::Location::caller(),
             );
         };

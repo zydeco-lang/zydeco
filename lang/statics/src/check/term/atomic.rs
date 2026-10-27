@@ -31,7 +31,7 @@ impl TermChecker<'_> {
                     let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input = crate::query::InternedHoleAna::new(
                         tycker.db,
-                        crate::query::HoleAnaKind::Type { kd },
+                        crate::query::HoleAnaShape::Type { kd },
                     );
                     let Some(crate::query::HoleAnaOutcome::Type { fill, ty, kd }) =
                         crate::query::hole_ana_judgment(
@@ -67,7 +67,7 @@ impl TermChecker<'_> {
                             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedHoleAna::new(
                                 tycker.db,
-                                crate::query::HoleAnaKind::Value { ty },
+                                crate::query::HoleAnaShape::Value { ty },
                             );
                             let Some(crate::query::HoleAnaOutcome::Value { fill, id, value, ann }) =
                                 crate::query::hole_ana_judgment(
@@ -95,7 +95,7 @@ impl TermChecker<'_> {
                             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedHoleAna::new(
                                 tycker.db,
-                                crate::query::HoleAnaKind::Compu { ty },
+                                crate::query::HoleAnaShape::Compu { ty },
                             );
                             let Some(crate::query::HoleAnaOutcome::Compu { fill, id, compu, ann }) =
                                 crate::query::hole_ana_judgment(

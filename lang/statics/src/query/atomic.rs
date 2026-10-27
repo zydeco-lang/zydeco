@@ -151,7 +151,7 @@ pub fn var_syn_judgment<'db>(
 /// The shape of a hole's analyzed annotation: a kind (a type hole), a value
 /// type (a value hole), or a computation type (a computation hole).
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum HoleAnaKind {
+pub enum HoleAnaShape {
     Type { kd: ss::KindId },
     Value { ty: ss::TypeId },
     Compu { ty: ss::TypeId },
@@ -161,7 +161,7 @@ pub enum HoleAnaKind {
 #[salsa::interned]
 pub struct InternedHoleAna<'db> {
     #[returns(clone)]
-    pub kind: HoleAnaKind,
+    pub shape: HoleAnaShape,
 }
 
 /// The allocation result of an analyzed hole: the stand-in fill, and either a
@@ -189,16 +189,16 @@ pub fn hole_ana_judgment<'db>(
     };
     let key_space = db.derived_ids().query_space(term.id(db), occurrence);
     let fill: ss::FillId = derived_id(key_space, 0);
-    match input.kind(db) {
-        | HoleAnaKind::Type { kd } => {
+    match input.shape(db) {
+        | HoleAnaShape::Type { kd } => {
             let ty: ss::TypeId = derived_id(key_space, 1);
             Some(HoleAnaOutcome::Type { fill, ty, kd })
         }
-        | HoleAnaKind::Value { ty } => {
+        | HoleAnaShape::Value { ty } => {
             let id: ss::ValueId = derived_id(key_space, 1);
             Some(HoleAnaOutcome::Value { fill, id, value: ss::Value::Hole(ss::Hole), ann: ty })
         }
-        | HoleAnaKind::Compu { ty } => {
+        | HoleAnaShape::Compu { ty } => {
             let id: ss::CompuId = derived_id(key_space, 1);
             Some(HoleAnaOutcome::Compu {
                 fill,

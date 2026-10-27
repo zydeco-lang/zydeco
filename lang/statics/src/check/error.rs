@@ -12,13 +12,13 @@ use nominal::NominalMismatch;
 
 /// The shape required at the next step of a generalized copattern clause.
 #[derive(Debug, Clone, Copy)]
-pub enum CopatternStepKind {
+pub enum CopatternStepShape {
     Pattern,
     Destructor,
     Body,
 }
 
-impl std::fmt::Display for CopatternStepKind {
+impl std::fmt::Display for CopatternStepShape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             | Self::Pattern => write!(f, "an abstraction pattern"),
@@ -74,7 +74,7 @@ pub enum TyckError {
     RefutableFieldProjectionPattern,
     UnknownDataConstructor(CtorName),
     UnknownCoDataDestructor(DtorName),
-    CopatternStepMismatch { expected: CopatternStepKind, found: CopatternStep },
+    CopatternStepMismatch { expected: CopatternStepShape, found: CopatternStep },
     OverlappingCopatternClauses,
     MultiplePackPiCopatternClauses,
     NonExhaustiveCopattern { expected: TypeId },

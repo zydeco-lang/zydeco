@@ -233,7 +233,7 @@ pub fn let_judgment<'db>(
 /// The shape of an application judgment: which sorts the function and
 /// argument were checked as.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum AppKind {
+pub enum AppShape {
     Value { function: ss::ValueId, argument: ss::ValArgument },
     CompuValue { function: ss::CompuId, argument: ss::ValueId },
     CompuType { function: ss::CompuId, argument: ss::TypeId },
@@ -243,7 +243,7 @@ pub enum AppKind {
 #[salsa::interned]
 pub struct InternedAppInput<'db> {
     #[returns(clone)]
-    pub kind: AppKind,
+    pub shape: AppShape,
     /// The annotation recorded on the application node.
     #[returns(clone)]
     pub ann: ss::TypeId,
@@ -292,8 +292,8 @@ pub fn app_judgment_at<'db>(
 fn derive_app_outcome<'db>(
     db: &'db dyn TyckDb, key_space: KeySpaceId, input: InternedAppInput<'db>,
 ) -> Option<AppSynOutcome> {
-    match input.kind(db) {
-        | AppKind::Value { function, argument } => {
+    match input.shape(db) {
+        | AppShape::Value { function, argument } => {
             let id: ss::ValueId = derived_id(key_space, 0);
             Some(AppSynOutcome::Value {
                 id,
@@ -302,7 +302,7 @@ fn derive_app_outcome<'db>(
                 reported: input.reported(db),
             })
         }
-        | AppKind::CompuValue { function, argument } => {
+        | AppShape::CompuValue { function, argument } => {
             let id: ss::CompuId = derived_id(key_space, 0);
             Some(AppSynOutcome::Compu {
                 id,
@@ -311,7 +311,7 @@ fn derive_app_outcome<'db>(
                 reported: input.reported(db),
             })
         }
-        | AppKind::CompuType { function, argument } => {
+        | AppShape::CompuType { function, argument } => {
             let id: ss::CompuId = derived_id(key_space, 0);
             Some(AppSynOutcome::Compu {
                 id,

@@ -384,7 +384,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
         };
         let input = crate::query::InternedAppInput::new(
             tycker.db,
-            crate::query::AppKind::CompuValue { function: *function, argument },
+            crate::query::AppShape::CompuValue { function: *function, argument },
             codomain,
             codomain,
         );

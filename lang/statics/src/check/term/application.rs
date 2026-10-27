@@ -113,7 +113,7 @@ impl TermChecker<'_> {
                     let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input = crate::query::InternedAppInput::new(
                         tycker.db,
-                        crate::query::AppKind::Value { function, argument },
+                        crate::query::AppShape::Value { function, argument },
                         result,
                         result,
                     );
@@ -166,7 +166,7 @@ impl TermChecker<'_> {
                             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedAppInput::new(
                                 tycker.db,
-                                crate::query::AppKind::CompuValue {
+                                crate::query::AppShape::CompuValue {
                                     function: f_out,
                                     argument: a_out,
                                 },
@@ -224,7 +224,7 @@ impl TermChecker<'_> {
                             let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedAppInput::new(
                                 tycker.db,
-                                crate::query::AppKind::CompuType {
+                                crate::query::AppShape::CompuType {
                                     function: f_out,
                                     argument: a_ty,
                                 },
