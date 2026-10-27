@@ -1,10 +1,10 @@
-use crate::{BranchJoinProgram, SpsLowConverter, SpsLowProgram};
+use crate::{FragmentProgram, SpsLowConverter, SpsLowProgram};
 use std::convert::Infallible;
 use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_utils::{pass::CompilerPass, pipeline};
 
-/// Convert branch-join SPS into first-order SPSLow.
+/// Convert SPS in its scheme's fragment into first-order SPSLow.
 pub struct SpsLowPipeline<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
@@ -14,11 +14,11 @@ impl SpsLowPipeline<'_> {
     /// Select the optional SPS transformations.
     pub fn with_optimizations<P>(
         self, optimizations: P,
-    ) -> impl CompilerPass<BranchJoinProgram, Output = SpsLowProgram, Error = P::Error>
+    ) -> impl CompilerPass<FragmentProgram, Output = SpsLowProgram, Error = P::Error>
     where
-        P: CompilerPass<BranchJoinProgram, Output = BranchJoinProgram>,
+        P: CompilerPass<FragmentProgram, Output = FragmentProgram>,
     {
-        let check = move |program: BranchJoinProgram| {
+        let check = move |program: FragmentProgram| {
             crate::high::check::check(program.as_program(), self.scoped, self.statics);
             Ok::<_, P::Error>(program)
         };
@@ -31,11 +31,11 @@ impl SpsLowPipeline<'_> {
     }
 }
 
-impl CompilerPass<BranchJoinProgram> for SpsLowPipeline<'_> {
+impl CompilerPass<FragmentProgram> for SpsLowPipeline<'_> {
     type Output = SpsLowProgram;
     type Error = Infallible;
 
-    fn run(&mut self, stackir: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
+    fn run(&mut self, stackir: FragmentProgram) -> Result<Self::Output, Self::Error> {
         Self { scoped: self.scoped, statics: self.statics }
             .with_optimizations(crate::high::normalize::Normalizer)
             .run(stackir)
@@ -45,7 +45,7 @@ impl CompilerPass<BranchJoinProgram> for SpsLowPipeline<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{high::syntax::*, low::syntax as low};
+    use crate::{SpsScheme, high::syntax::*, low::syntax as low};
 
     #[derive(Default)]
     struct PrimitiveFixture {
@@ -53,12 +53,13 @@ mod tests {
     }
 
     impl PrimitiveFixture {
-        fn closed_program() -> BranchJoinProgram {
+        fn closed_program() -> FragmentProgram {
             let mut fixture = Self::default();
             let value = fixture.build(Triv);
             let stack = fixture.build(StackVar);
             let root = fixture.build(SReturn { value, stack });
-            BranchJoinProgram::try_new(SpsProgram::new(fixture.arena, root)).unwrap()
+            FragmentProgram::try_new(SpsProgram::new(fixture.arena, root), SpsScheme::BranchJoin)
+                .unwrap()
         }
 
         fn build<U, S, T>(&mut self, node: U) -> T
@@ -107,7 +108,9 @@ mod tests {
         }
 
         fn compile(self, root: CompuId) -> SpsLowProgram {
-            let program = BranchJoinProgram::try_new(SpsProgram::new(self.arena, root)).unwrap();
+            let program =
+                FragmentProgram::try_new(SpsProgram::new(self.arena, root), SpsScheme::BranchJoin)
+                    .unwrap();
             SpsLowPipeline { scoped: &ScopedArena::default(), statics: &StaticsArena::default() }
                 .run_infallible(program)
         }
@@ -167,7 +170,7 @@ mod tests {
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let calls = Cell::new(0);
-        let visit = |program: BranchJoinProgram| {
+        let visit = |program: FragmentProgram| {
             calls.set(calls.get() + 1);
             Ok::<_, Infallible>(program)
         };
@@ -183,7 +186,7 @@ mod tests {
         enum Error {
             Rejected,
         }
-        let reject = |_: BranchJoinProgram| Err::<BranchJoinProgram, _>(Error::Rejected);
+        let reject = |_: FragmentProgram| Err::<FragmentProgram, _>(Error::Rejected);
         let completed = Cell::new(false);
         let mut lowering = pipeline![
             SpsLowPipeline { scoped: &scoped, statics: &statics }.with_optimizations(reject),

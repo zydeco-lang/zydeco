@@ -38,19 +38,31 @@ impl Fixture {
         id
     }
 
-    fn lower(&self, root: ss::CompuId) -> BranchJoinProgram {
+    fn lower(&self, root: ss::CompuId) -> FragmentProgram {
         let spans = SpanArena::default();
         let scoped = ScopedArena::default();
-        RootLowerer { spans: &spans, scoped: &scoped, statics: &self.statics }.run(root).unwrap()
+        RootLowerer {
+            spans: &spans,
+            scoped: &scoped,
+            statics: &self.statics,
+            scheme: SpsScheme::BranchJoin,
+        }
+        .run(root)
+        .unwrap()
     }
 
     fn snapshot<D: Driver>(&self, root: ss::CompuId) -> Snapshot {
         let spans = SpanArena::default();
         let scoped = ScopedArena::default();
-        let program = RootLowerer { spans: &spans, scoped: &scoped, statics: &self.statics }
-            .run_with_driver::<D>(root, None)
-            .unwrap()
-            .into_program();
+        let program = RootLowerer {
+            spans: &spans,
+            scoped: &scoped,
+            statics: &self.statics,
+            scheme: SpsScheme::BranchJoin,
+        }
+        .run_with_driver::<D>(root, None)
+        .unwrap()
+        .into_program();
         let arena = program.arena();
         let formatter =
             super::super::fmt::Formatter::new(&arena.admin, &arena.inner, &scoped, &self.statics);
@@ -125,7 +137,7 @@ fn only_structural_payloads_use_direct_constructor_arms() {
     let literal_payload = fixture.pattern(Ctor(CtorName("+Outer".into()), literal));
     let spans = SpanArena::default();
     let scoped = ScopedArena::default();
-    let lowerer = Lowerer::new(&spans, &scoped, &fixture.statics);
+    let lowerer = Lowerer::new(&spans, &scoped, &fixture.statics, SpsScheme::BranchJoin);
 
     for pattern in [hole, product] {
         assert!(!lowerer.pattern_needs_match_plan(pattern));
@@ -304,12 +316,22 @@ fn independent_invalid_values_are_collected_without_publishing_a_program() {
     let root = fixture.computation(Let { binder: hole, bindee: first, tail });
     let spans = SpanArena::default();
     let scoped = ScopedArena::default();
-    let errors = RootLowerer { spans: &spans, scoped: &scoped, statics: &fixture.statics }
-        .run(root)
-        .unwrap_err();
-    let recursive = RootLowerer { spans: &spans, scoped: &scoped, statics: &fixture.statics }
-        .run_with_driver::<Recursive>(root, None)
-        .unwrap_err();
+    let errors = RootLowerer {
+        spans: &spans,
+        scoped: &scoped,
+        statics: &fixture.statics,
+        scheme: SpsScheme::BranchJoin,
+    }
+    .run(root)
+    .unwrap_err();
+    let recursive = RootLowerer {
+        spans: &spans,
+        scoped: &scoped,
+        statics: &fixture.statics,
+        scheme: SpsScheme::BranchJoin,
+    }
+    .run_with_driver::<Recursive>(root, None)
+    .unwrap_err();
     assert_eq!(
         errors.iter().map(SpsLoweringError::value).collect::<Vec<_>>(),
         recursive.iter().map(SpsLoweringError::value).collect::<Vec<_>>()
@@ -331,7 +353,7 @@ fn deeply_nested_builtin_products_lower_on_a_small_stack() {
         let spans = SpanArena::default();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::new(&spans, &scoped, &statics);
+        let mut lowerer = Lowerer::new(&spans, &scoped, &statics, SpsScheme::BranchJoin);
         let value = Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, value);
         let stack = StackVar.build(&mut lowerer, None);
         let root = SReturn { stack, value }.build(&mut lowerer, None);
@@ -347,7 +369,7 @@ fn builtin_folder_drivers_preserve_product_order_and_materialization() {
         let spans = SpanArena::default();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::new(&spans, &scoped, &statics);
+        let mut lowerer = Lowerer::new(&spans, &scoped, &statics, SpsScheme::BranchJoin);
         let input = BuiltinPackageValue::Product(vec![
             BuiltinPackageValue::Unit,
             BuiltinPackageValue::Operation(BuiltinValueRole::Integer(
@@ -391,7 +413,7 @@ fn builtin_folder_drivers_reject_empty_product_plans() {
         let spans = SpanArena::default();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
-        let mut lowerer = Lowerer::new(&spans, &scoped, &statics);
+        let mut lowerer = Lowerer::new(&spans, &scoped, &statics, SpsScheme::BranchJoin);
         D::run(
             &mut BuiltinPackageFolder { lowerer: &mut lowerer },
             BuiltinPackageValue::Product(vec![]),
@@ -421,8 +443,14 @@ fn computation_roots_lower_as_single_program_roots() {
     let spans = SpanArena::default();
     let scoped = ScopedArena::default();
 
-    let stackir =
-        RootLowerer { spans: &spans, scoped: &scoped, statics: &statics }.run(root).unwrap();
+    let stackir = RootLowerer {
+        spans: &spans,
+        scoped: &scoped,
+        statics: &statics,
+        scheme: SpsScheme::BranchJoin,
+    }
+    .run(root)
+    .unwrap();
     let stackir = stackir.as_program();
 
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());
@@ -447,7 +475,12 @@ fn residual_value_functions_report_an_internal_invariant_failure() {
     let scoped = ScopedArena::default();
 
     let mut passes = zydeco_utils::pipeline![
-        RootLowerer { spans: &spans, scoped: &scoped, statics: &statics },
+        RootLowerer {
+            spans: &spans,
+            scoped: &scoped,
+            statics: &statics,
+            scheme: SpsScheme::BranchJoin
+        },
         crate::SpsLowPipeline { scoped: &scoped, statics: &statics }.with_error(),
     ];
     let before = passes.run(valid_root).expect("a complete root reaches SPSLow");

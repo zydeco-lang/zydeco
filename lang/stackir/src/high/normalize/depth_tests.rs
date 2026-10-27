@@ -15,7 +15,8 @@ impl Depth {
     }
 
     fn normalize(arena: SpsArena, root: CompuId) -> SpsProgram {
-        let program = BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap();
+        let program =
+            FragmentProgram::try_new(SpsProgram::new(arena, root), SpsScheme::BranchJoin).unwrap();
         Normalizer.run(program).unwrap().into_program()
     }
 }

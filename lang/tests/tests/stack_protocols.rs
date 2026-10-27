@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use zydeco_cli::CommandCompiler;
 use zydeco_stackir::{
-    SpsLowProgram, SpsLowValidationError,
+    SpsLowProgram, SpsLowValidationError, SpsScheme,
     low::{protocols::ProtocolError, syntax::*},
     protocol::{
         CodataProtocolId, ProtocolGraphError, ProtocolParameterId, ProtocolParameterKind,
@@ -161,7 +161,7 @@ fn an_instantiated_recursive_transfer_checks_arguments_after_the_first_observati
     arena.inner.values[&value] = Value::Literal(Literal::Char('x'));
     let graph = arena.inner.protocols.clone();
     let SpsLowValidationError::Protocol(ProtocolError::Stack { compu, expected, found }) =
-        SpsLowProgram::try_new(arena, root).unwrap_err()
+        SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err()
     else {
         panic!("the recursive application must retain its known payload requirement")
     };
@@ -243,7 +243,7 @@ fn erased_polymorphic_calls_check_repeated_value_parameters_together() {
         .expect("the generic relay receives two concrete integer arguments");
     arena.inner.values[&second] = Value::Literal(Literal::Char('x'));
     let SpsLowValidationError::Protocol(ProtocolError::Stack { compu, expected, found }) =
-        SpsLowProgram::try_new(arena, root).unwrap_err()
+        SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err()
     else {
         panic!("conflicting instantiations of the same parameter must reject the transfer")
     };
@@ -275,7 +275,7 @@ fn low_publication_checks_parameter_kinds_before_transfers() {
     arena.inner.entry_protocols[&block] =
         EntryProtocol::Closure(StackProtocol::Parameter(parameter));
     assert_eq!(
-        SpsLowProgram::try_new(arena, root).unwrap_err(),
+        SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err(),
         SpsLowValidationError::Protocol(ProtocolError::Graph(ProtocolGraphError::ParameterKind {
             parameter,
             expected: ProtocolParameterKind::Stack,
@@ -366,7 +366,7 @@ fn recursive_observations_check_tags_payloads_and_residual_protocols() {
             }
         }
         let SpsLowValidationError::Protocol(ProtocolError::Stack { compu, expected, found }) =
-            SpsLowProgram::try_new(arena, root).unwrap_err()
+            SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err()
         else {
             panic!("a malformed recursive transfer must fail its protocol check")
         };
@@ -435,7 +435,7 @@ fn codata_cases_retain_branch_protocols_and_complete_observations() {
             ProtocolError::Parameter { pattern: parameter, expected, found: Fixture::integer() }
         };
         assert_eq!(
-            SpsLowProgram::try_new(arena, root).unwrap_err(),
+            SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err(),
             SpsLowValidationError::Protocol(expected)
         );
     }
@@ -447,7 +447,7 @@ fn low_publication_rejects_a_missing_protocol_graph() {
     let graph = std::mem::take(&mut arena.inner.protocols);
     // Removing the graph leaves both codata and parameter references dangling;
     // either kind can be visited first during validation.
-    match SpsLowProgram::try_new(arena, root).unwrap_err() {
+    match SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err() {
         | SpsLowValidationError::Protocol(ProtocolError::Graph(
             ProtocolGraphError::MissingDefinition(id),
         )) => {
@@ -516,7 +516,7 @@ fn a_known_result_must_match_the_installed_continuation() {
         .unwrap();
     arena.inner.values[&result] = Value::Literal(Literal::Char('x'));
     assert_eq!(
-        SpsLowProgram::try_new(arena, root).unwrap_err(),
+        SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err(),
         SpsLowValidationError::Protocol(ProtocolError::Value {
             value: result,
             expected: Fixture::integer(),
@@ -555,7 +555,7 @@ fn entry_protocols_agree_with_their_roles_and_result_parameters() {
             ProtocolError::Parameter { pattern: result, expected: Fixture::integer(), found }
         };
         assert_eq!(
-            SpsLowProgram::try_new(arena, root).unwrap_err(),
+            SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err(),
             SpsLowValidationError::Protocol(expected)
         );
     }
@@ -585,7 +585,7 @@ fn an_indirect_worker_rejects_an_incompatible_argument_prefix() {
     let Computation::Jump(transfer) = &mut arena.inner.compus[&jump] else { unreachable!() };
     transfer.stack = stack;
     let SpsLowValidationError::Protocol(ProtocolError::Stack { compu, expected, found }) =
-        SpsLowProgram::try_new(arena, root).unwrap_err()
+        SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap_err()
     else {
         panic!("expected a stack protocol mismatch")
     };

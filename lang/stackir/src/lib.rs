@@ -12,6 +12,10 @@ pub mod arena;
 pub mod builtin;
 pub use builtin::*;
 
+/// Stack-passing compilation schemes and their fragments' placement rules.
+pub mod scheme;
+pub use scheme::{PlacementError, SpsScheme};
+
 mod pipeline;
 pub use pipeline::SpsLowPipeline;
 
@@ -27,6 +31,6 @@ pub mod high;
 
 pub use high::{
     arena::*,
-    check::{BranchJoinError, BranchJoinErrors, BranchJoinProgram},
+    check::{FragmentError, FragmentErrors, FragmentProgram},
     lower::{BuiltinRootLowerError, BuiltinRootLowerer, Lowerer, RootLowerer, SpsLoweringError},
 };

@@ -3,22 +3,22 @@
 use super::syntax::*;
 use super::traverse::{Edge, Node, Occurrence, Together, Traversal, Visitor};
 use super::variables::Variables;
+use crate::scheme::{PlacementError, SpsScheme, StackUse};
 use std::collections::HashSet;
 use zydeco_utils::fold::{Driver, Explicit};
 
-/// A lexical first-order SPS tree whose joins remain attached to coproduct and scalar-comparison branches.
+/// A lexical first-order SPS tree that keeps the stack placement of its scheme's fragment.
 #[derive(Debug)]
 pub struct SpsLowProgram {
     arena: FrozenArena<SpsLowArena>,
     root: CompuId,
+    scheme: SpsScheme,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum SpsLowValidationError {
-    #[error("branch {compu:?} is not immediately guarded by a stack let-binding")]
-    UnguardedBranch { compu: CompuId },
-    #[error("stack let-binding {compu:?} has body {body:?}, which is not a branch")]
-    NonBranchStackLet { compu: CompuId, body: CompuId },
+    #[error("computation {compu:?} leaves its scheme's fragment: {error}")]
+    Placement { compu: CompuId, error: PlacementError },
     #[error("computation node {compu:?} occurs more than once in lexical SPSLow")]
     SharedComputation { compu: CompuId },
     #[error("stack node {stack:?} occurs more than once in lexical SPSLow")]
@@ -42,8 +42,10 @@ pub enum SpsLowValidationError {
 }
 
 impl SpsLowProgram {
-    pub fn try_new(arena: SpsLowArena, root: CompuId) -> Result<Self, SpsLowValidationError> {
-        let facts = SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root)?;
+    pub fn try_new(
+        arena: SpsLowArena, root: CompuId, scheme: SpsScheme,
+    ) -> Result<Self, SpsLowValidationError> {
+        let facts = SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root, scheme)?;
         let mut variables = facts
             .free_variables(root.into())
             .expect("validated syntax")
@@ -57,7 +59,12 @@ impl SpsLowProgram {
         drop(facts);
         super::contracts::EntryValidator::validate(&arena.inner, root)?;
         super::protocols::ProtocolValidator::validate(&arena.inner, root)?;
-        Ok(Self { arena: FrozenArena::new(arena), root })
+        Ok(Self { arena: FrozenArena::new(arena), root, scheme })
+    }
+
+    /// The scheme whose converted fragment contains this program.
+    pub fn scheme(&self) -> SpsScheme {
+        self.scheme
     }
 
     pub fn arena(&self) -> &SpsLowArena {
@@ -79,8 +86,9 @@ impl AsRef<SpsLowArena> for SpsLowProgram {
     }
 }
 
-#[derive(Default)]
-struct SpsLowValidator {
+struct SpsLowValidator<'a> {
+    scheme: SpsScheme,
+    arena: &'a SpsLowInnerArena,
     error: Option<SpsLowValidationError>,
     stacks: HashSet<StackId>,
     labels: HashSet<DefId>,
@@ -139,11 +147,19 @@ impl ContinuationEntry {
     }
 }
 
-impl SpsLowValidator {
+impl<'a> SpsLowValidator<'a> {
     fn validate_with_driver<D: Driver>(
-        arena: &SpsLowInnerArena, root: CompuId,
+        arena: &'a SpsLowInnerArena, root: CompuId, scheme: SpsScheme,
     ) -> Result<Variables, SpsLowValidationError> {
-        let mut analyses = Together { first: Self::default(), second: Variables::default() };
+        let validator = Self {
+            scheme,
+            arena,
+            error: None,
+            stacks: HashSet::new(),
+            labels: HashSet::new(),
+            blocks: Vec::new(),
+        };
+        let mut analyses = Together { first: validator, second: Variables::default() };
         Traversal { arena }.run_with_driver::<D>(root.into(), &mut analyses);
         let Together { first: validator, second: variables } = analyses;
         if let Some(error) = validator.error {
@@ -195,20 +211,28 @@ impl SpsLowValidator {
                 self.stacks.insert(id);
             }
             | Node::Computation(id, computation) => {
-                if let Edge::BranchJoin(compu) = edge {
-                    if !computation.is_branch() {
-                        return Err(SpsLowValidationError::NonBranchStackLet { compu, body: id });
-                    }
-                } else if computation.is_branch() {
-                    return Err(SpsLowValidationError::UnguardedBranch { compu: id });
+                if let Some(error) = self.scheme.check(self.usage(computation, edge)) {
+                    return Err(SpsLowValidationError::Placement { compu: id, error });
                 }
             }
         }
         Ok(())
     }
+
+    fn usage(&self, computation: &Computation, edge: Edge) -> StackUse {
+        match computation {
+            | Computation::LetStack(LetStack { tail, .. }) => {
+                StackUse::Let { tail_branch: self.arena.compus[tail].is_branch() }
+            }
+            | computation if computation.is_branch() => {
+                StackUse::Branch { guarded: matches!(edge, Edge::StackLetTail(_)) }
+            }
+            | _ => StackUse::Other,
+        }
+    }
 }
 
-impl Visitor for SpsLowValidator {
+impl Visitor for SpsLowValidator<'_> {
     fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
         if self.error.is_none() {
             self.error = self.check(node, edge, occurrence).err();
@@ -227,10 +251,13 @@ mod tests {
         fn program(
             arena: SpsLowArena, root: CompuId,
         ) -> Result<SpsLowProgram, SpsLowValidationError> {
-            let explicit = SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root);
-            let recursive = SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, root);
+            let scheme = SpsScheme::BranchJoin;
+            let explicit =
+                SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root, scheme);
+            let recursive =
+                SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, root, scheme);
             assert_eq!(explicit.err(), recursive.err());
-            SpsLowProgram::try_new(arena, root)
+            SpsLowProgram::try_new(arena, root, scheme)
         }
 
         fn argument(arena: &mut SpsLowArena) -> EntryArgument {
@@ -338,15 +365,22 @@ mod tests {
     }
 
     #[test]
-    fn branch_join_edges_accept_only_an_immediate_coproduct_body() {
+    fn branch_join_stack_lets_accept_only_an_immediate_coproduct_body() {
         let mut arena = SpsLowArena::default();
         let scrut = Triv.build(&mut arena, None);
         let branch = SCoprodMatch { scrut, arms: vec![] }.build(&mut arena, None);
+        let scheme = SpsScheme::BranchJoin;
         for error in [
-            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch).err(),
-            SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch).err(),
+            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch, scheme).err(),
+            SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch, scheme).err(),
         ] {
-            assert_eq!(error, Some(SpsLowValidationError::UnguardedBranch { compu: branch }));
+            assert_eq!(
+                error,
+                Some(SpsLowValidationError::Placement {
+                    compu: branch,
+                    error: PlacementError::UnguardedBranch,
+                })
+            );
         }
         let stack = StackVar.build(&mut arena, None);
         let root =
@@ -357,7 +391,10 @@ mod tests {
         arena.inner.compus[&branch] = SHole(stack).into();
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowValidationError::NonBranchStackLet { compu: root, body: branch }
+            SpsLowValidationError::Placement {
+                compu: root,
+                error: PlacementError::NonBranchStackLet,
+            }
         );
     }
 
@@ -377,11 +414,18 @@ mod tests {
             when_false,
         }
         .build(&mut arena, None);
+        let scheme = SpsScheme::BranchJoin;
         for error in [
-            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch).err(),
-            SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch).err(),
+            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch, scheme).err(),
+            SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch, scheme).err(),
         ] {
-            assert_eq!(error, Some(SpsLowValidationError::UnguardedBranch { compu: branch }));
+            assert_eq!(
+                error,
+                Some(SpsLowValidationError::Placement {
+                    compu: branch,
+                    error: PlacementError::UnguardedBranch,
+                })
+            );
         }
         let bindee = StackVar.build(&mut arena, None);
         let root = LetStack { binder: StackVar, bindee, tail: branch }.build(&mut arena, None);
@@ -436,8 +480,12 @@ mod tests {
                 let ambient = StackVar.build(&mut arena, None);
                 let stack = Cons(block, ambient).build(&mut arena, None);
                 let root = SHole(stack).build(&mut arena, None);
-                let variables =
-                    SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root).unwrap();
+                let variables = SpsLowValidator::validate_with_driver::<Explicit>(
+                    &arena.inner,
+                    root,
+                    SpsScheme::BranchJoin,
+                )
+                .unwrap();
                 assert!(variables.free_variables(root.into()).unwrap().is_empty());
             })
             .unwrap()

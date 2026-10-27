@@ -1,4 +1,5 @@
 use super::*;
+use crate::SpsScheme;
 
 #[derive(Default)]
 struct Fixture {
@@ -51,7 +52,12 @@ impl Fixture {
         }
         let binder = sum.build(&mut fixture.arena, None);
         let root = LetValue { binder, bindee: first, tail }.build(&mut fixture.arena, None);
-        (SpsLowProgram::try_new(fixture.arena, root).unwrap(), root, first, second)
+        (
+            SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap(),
+            root,
+            first,
+            second,
+        )
     }
 }
 
@@ -120,7 +126,7 @@ fn long_chains_split_at_the_region_bound() {
         let binder = definition.build(&mut fixture.arena, None);
         root = LetValue { binder, bindee, tail: root }.build(&mut fixture.arena, None);
     }
-    let program = SpsLowProgram::try_new(fixture.arena, root).unwrap();
+    let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
     let plans = ScalarPlans::new(&program, ScalarBoxing::Eliminate);
     assert_eq!(plans.elided.len(), 38);
     for (value, operations) in [(values[31], 32), (values[39], 8)] {

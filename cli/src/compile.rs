@@ -11,9 +11,9 @@ use zydeco_session::{
     ProgramAnalysis,
 };
 use zydeco_stackir::{
-    BranchJoinProgram, BuiltinRootLowerError, RootLowerer, SpsLowPipeline, SpsLowProgram,
+    BuiltinRootLowerError, FragmentProgram, RootLowerer, SpsLowPipeline, SpsLowProgram,
     SpsLoweringError,
-    passes::{SpsFailure, SpsInspection, SpsObserver, SpsPlan},
+    passes::{SpsFailure, SpsInspection, SpsObserver, SpsPlan, SpsSelection},
 };
 use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
@@ -26,7 +26,7 @@ pub struct CommandCompiler {
     project: Arc<zydeco_session::source::Project>,
     lint_types: bool,
     representation: RepresentationStrategy,
-    sps_passes: SpsPlan,
+    sps: SpsSelection,
     pass_inspection: SpsInspection,
 }
 
@@ -68,7 +68,7 @@ impl CommandCompiler {
 
     /// Select optional SPS transformations for subsequent compilations.
     pub fn with_sps_passes(mut self, plan: SpsPlan) -> Self {
-        self.sps_passes = plan;
+        self.sps.plan = plan;
         self
     }
 
@@ -158,7 +158,7 @@ impl CommandCompiler {
             program.library.statics.clone(),
             export.root,
             export.builtin.clone(),
-            &self.sps_passes,
+            &self.sps,
             self.pass_inspection,
         )
         .map(|program| program.with_representation(self.representation))
@@ -179,7 +179,7 @@ impl CommandCompiler {
             program.unit.statics.clone(),
             program.unit.initializer.root,
             program.unit.initializer.builtin.clone(),
-            &self.sps_passes,
+            &self.sps,
             self.pass_inspection,
         )
         .map(|program| program.with_representation(self.representation))
@@ -307,7 +307,7 @@ impl CommandCompiler {
     pub fn lower_executable(
         &self, executable: ExecutableProgram,
     ) -> Result<BackendProgram, CompileError> {
-        BackendProgram::lower_with_passes(executable, &self.sps_passes, self.pass_inspection)
+        BackendProgram::lower_with_selection(executable, &self.sps, self.pass_inspection)
             .map(|program| program.with_representation(self.representation))
     }
 }
@@ -366,25 +366,26 @@ enum BackendLowerError {
 
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
-        Self::lower_with_passes(executable, &SpsPlan::Default, SpsInspection::default())
+        Self::lower_with_selection(executable, &SpsSelection::default(), SpsInspection::default())
     }
 
-    /// Lower and freeze an executable under the selected pass plan.
-    pub fn lower_with_passes(
-        executable: ExecutableProgram, plan: &SpsPlan, inspection: SpsInspection,
+    /// Lower and freeze an executable under the selected scheme and pass plan.
+    pub fn lower_with_selection(
+        executable: ExecutableProgram, selection: &SpsSelection, inspection: SpsInspection,
     ) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
         let builtin = zydeco_statics::BuiltinPackagePlan::for_executable(&statics, &signature)
             .map_err(CompileError::BuiltinLower)?;
-        Self::lower_boundary(spans, scoped, statics, root, Some(builtin), plan, inspection)
+        Self::lower_boundary(spans, scoped, statics, root, Some(builtin), selection, inspection)
     }
 
     fn lower_boundary(
         spans: Arc<SpanArena>, scoped: Arc<ScopedArena>, statics: Arc<StaticsArena>,
         root: zydeco_statics::CompuId, builtin: Option<zydeco_statics::BuiltinPackagePlan>,
-        plan: &SpsPlan, inspection: SpsInspection,
+        selection: &SpsSelection, inspection: SpsInspection,
     ) -> Result<Self, CompileError> {
-        let lower_sps = |program: BranchJoinProgram| {
+        let SpsSelection { scheme, plan } = selection;
+        let lower_sps = |program: FragmentProgram| {
             let mut pipeline = SpsLowPipeline { scoped: &scoped, statics: &statics };
             if inspection.enabled() {
                 let mut observer = SpsObserver {
@@ -405,9 +406,14 @@ impl BackendProgram {
             }
         };
         let lowered = pipeline![
-            |root| RootLowerer { spans: &spans, scoped: &scoped, statics: &statics }
-                .run_with_builtin(root, builtin.clone())
-                .map_err(|errors| BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))),
+            |root| RootLowerer {
+                spans: &spans,
+                scoped: &scoped,
+                statics: &statics,
+                scheme: *scheme
+            }
+            .run_with_builtin(root, builtin.clone())
+            .map_err(|errors| BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))),
             lower_sps,
         ]
         .run(root);

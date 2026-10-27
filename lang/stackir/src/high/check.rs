@@ -1,26 +1,26 @@
 //! Sanity checks for the stack-passing style ZIR.
 //!
-//! The closed-root check is intended for debugging. [`BranchJoinProgram`](crate::high::check::BranchJoinProgram)
-//! additionally exposes the paper's stack-join placement as a checked boundary.
+//! The closed-root check is intended for debugging. [`FragmentProgram`](crate::high::check::FragmentProgram)
+//! additionally exposes the compiling scheme's stack placement as a checked boundary.
 
 use super::syntax::*;
 use super::traverse::{Edge, Node, Occurrence, Traversal, Visitor};
 use super::variables::FreeVars;
+use crate::scheme::{PlacementError, SpsScheme, StackUse};
 use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
 use zydeco_surface::diagnostic::Diagnostics;
 
-/// A lexical Stack IR tree whose stack joins occur exactly at coproduct and scalar-comparison branches.
+/// A lexical Stack IR tree that lies in the fragment of the scheme that compiled it.
 #[derive(Debug)]
-pub struct BranchJoinProgram {
+pub struct FragmentProgram {
     program: SpsProgram,
+    scheme: SpsScheme,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-pub enum BranchJoinError {
-    #[error("branch {compu:?} is not immediately guarded by a stack let-binding")]
-    UnguardedBranch { compu: CompuId },
-    #[error("stack let-binding {compu:?} has body {body:?}, which is not a branch")]
-    NonBranchStackLet { compu: CompuId, body: CompuId },
+pub enum FragmentError {
+    #[error("computation {compu:?} leaves its scheme's fragment: {error}")]
+    Placement { compu: CompuId, error: PlacementError },
     #[error("computation node {compu:?} occurs more than once in lexical Stack IR")]
     SharedComputation { compu: CompuId },
     #[error("stack node {stack:?} occurs more than once in lexical Stack IR")]
@@ -31,15 +31,20 @@ pub enum BranchJoinError {
     SharedPattern { pattern: VPatId },
 }
 
-impl BranchJoinProgram {
-    /// Recheck lexical ownership and branch joins without rebuilding the program.
-    pub fn validate(&self) -> Result<(), BranchJoinErrors> {
-        BranchJoinValidator::validate(&self.program)
+impl FragmentProgram {
+    /// Recheck lexical ownership and stack placement without rebuilding the program.
+    pub fn validate(&self) -> Result<(), FragmentErrors> {
+        FragmentValidator::validate(&self.program, self.scheme)
     }
 
-    pub fn try_new(program: SpsProgram) -> Result<Self, BranchJoinErrors> {
-        BranchJoinValidator::validate(&program)?;
-        Ok(Self { program })
+    pub fn try_new(program: SpsProgram, scheme: SpsScheme) -> Result<Self, FragmentErrors> {
+        FragmentValidator::validate(&program, scheme)?;
+        Ok(Self { program, scheme })
+    }
+
+    /// The scheme whose fragment contains this program.
+    pub fn scheme(&self) -> SpsScheme {
+        self.scheme
     }
 
     pub fn as_program(&self) -> &SpsProgram {
@@ -51,73 +56,76 @@ impl BranchJoinProgram {
     }
 }
 
-impl AsRef<SpsProgram> for BranchJoinProgram {
+impl AsRef<SpsProgram> for FragmentProgram {
     fn as_ref(&self) -> &SpsProgram {
         self.as_program()
     }
 }
 
-impl TryFrom<SpsProgram> for BranchJoinProgram {
-    type Error = BranchJoinErrors;
-
-    fn try_from(program: SpsProgram) -> Result<Self, Self::Error> {
-        Self::try_new(program)
-    }
-}
-
-impl From<BranchJoinProgram> for SpsProgram {
-    fn from(program: BranchJoinProgram) -> Self {
+impl From<FragmentProgram> for SpsProgram {
+    fn from(program: FragmentProgram) -> Self {
         program.into_program()
     }
 }
 
-pub type BranchJoinErrors = Diagnostics<BranchJoinError>;
+pub type FragmentErrors = Diagnostics<FragmentError>;
 
-/// Independent observer of ownership and immediate branch-join placement.
-#[derive(Default)]
-pub struct BranchJoinValidator {
-    errors: Vec<BranchJoinError>,
+/// Independent observer of ownership and of stack placement in one scheme's fragment.
+pub struct FragmentValidator<'a> {
+    scheme: SpsScheme,
+    arena: &'a SpsInnerArena,
+    errors: Vec<FragmentError>,
 }
 
-impl BranchJoinValidator {
-    fn validate(program: &SpsProgram) -> Result<(), BranchJoinErrors> {
-        let mut validator = Self::default();
-        Traversal { arena: &program.arena().inner }.run(program.root().into(), &mut validator);
+impl<'a> FragmentValidator<'a> {
+    pub fn new(scheme: SpsScheme, arena: &'a SpsInnerArena) -> Self {
+        Self { scheme, arena, errors: Vec::new() }
+    }
+
+    fn validate(program: &SpsProgram, scheme: SpsScheme) -> Result<(), FragmentErrors> {
+        let arena = &program.arena().inner;
+        let mut validator = FragmentValidator::new(scheme, arena);
+        Traversal { arena }.run(program.root().into(), &mut validator);
         validator.into_result()
     }
 
-    pub fn errors(&self) -> &[BranchJoinError] {
+    pub fn errors(&self) -> &[FragmentError] {
         &self.errors
     }
 
-    pub fn into_result(self) -> Result<(), BranchJoinErrors> {
+    pub fn into_result(self) -> Result<(), FragmentErrors> {
         match Diagnostics::with_errors(self.errors) {
             | Some(errors) => Err(errors),
             | None => Ok(()),
         }
     }
+
+    fn usage(&self, computation: &Computation<LetJoin>, edge: Edge) -> StackUse {
+        match computation {
+            | Computation::Join(LetJoin::Stack(Let { tail, .. })) => {
+                StackUse::Let { tail_branch: self.arena.compus[tail].is_branch() }
+            }
+            | computation if computation.is_branch() => {
+                StackUse::Branch { guarded: matches!(edge, Edge::StackLetTail(_)) }
+            }
+            | _ => StackUse::Other,
+        }
+    }
 }
 
-impl Visitor for BranchJoinValidator {
+impl Visitor for FragmentValidator<'_> {
     fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
-        if let Edge::BranchJoin(parent) = edge
-            && let Node::Computation(body, computation) = node
-            && !computation.is_branch()
-        {
-            self.errors.push(BranchJoinError::NonBranchStackLet { compu: parent, body });
-        }
         if occurrence != Occurrence::First {
             self.errors.push(match node {
-                | Node::Pattern(pattern, _) => BranchJoinError::SharedPattern { pattern },
-                | Node::Value(value, _) => BranchJoinError::SharedValue { value },
-                | Node::Stack(stack, _) => BranchJoinError::SharedStack { stack },
-                | Node::Computation(compu, _) => BranchJoinError::SharedComputation { compu },
+                | Node::Pattern(pattern, _) => FragmentError::SharedPattern { pattern },
+                | Node::Value(value, _) => FragmentError::SharedValue { value },
+                | Node::Stack(stack, _) => FragmentError::SharedStack { stack },
+                | Node::Computation(compu, _) => FragmentError::SharedComputation { compu },
             });
         } else if let Node::Computation(compu, computation) = node
-            && computation.is_branch()
-            && !matches!(edge, Edge::BranchJoin(_))
+            && let Some(error) = self.scheme.check(self.usage(computation, edge))
         {
-            self.errors.push(BranchJoinError::UnguardedBranch { compu });
+            self.errors.push(FragmentError::Placement { compu, error });
         }
     }
 }
@@ -196,7 +204,7 @@ mod tests {
         let root = Let { binder: StackVar, bindee, tail: body }.build(&mut fixture.arena, None);
 
         let program = SpsProgram::new(fixture.arena, root);
-        assert!(BranchJoinProgram::try_new(program).is_ok());
+        assert!(FragmentProgram::try_new(program, SpsScheme::BranchJoin).is_ok());
     }
 
     #[test]
@@ -206,8 +214,8 @@ mod tests {
         let program = SpsProgram::new(fixture.arena, root);
 
         assert_eq!(
-            BranchJoinProgram::try_new(program).unwrap_err(),
-            BranchJoinError::UnguardedBranch { compu: root }.into()
+            FragmentProgram::try_new(program, SpsScheme::BranchJoin).unwrap_err(),
+            FragmentError::Placement { compu: root, error: PlacementError::UnguardedBranch }.into()
         );
     }
 
@@ -215,16 +223,17 @@ mod tests {
     fn comparisons_require_a_join_and_distinct_successor_occurrences() {
         let mut fixture = Fixture::new();
         let branch = fixture.comparison();
-        let mut validator = BranchJoinValidator::default();
+        let mut validator = FragmentValidator::new(SpsScheme::BranchJoin, &fixture.arena.inner);
         Traversal { arena: &fixture.arena.inner }.run(branch.into(), &mut validator);
         assert_eq!(
             validator.into_result().unwrap_err(),
-            BranchJoinError::UnguardedBranch { compu: branch }.into()
+            FragmentError::Placement { compu: branch, error: PlacementError::UnguardedBranch }
+                .into()
         );
         let mut arena = fixture.arena;
         let bindee = StackVar.build(&mut arena, None);
         let root = Let { binder: StackVar, bindee, tail: branch }.build(&mut arena, None);
-        let mut validator = BranchJoinValidator::default();
+        let mut validator = FragmentValidator::new(SpsScheme::BranchJoin, &arena.inner);
         Traversal { arena: &arena.inner }.run(root.into(), &mut validator);
         validator.into_result().unwrap();
         let Computation::Compare(compare) = &mut arena.inner.compus[&branch] else {
@@ -232,8 +241,9 @@ mod tests {
         };
         compare.when_false = compare.when_true;
         assert_eq!(
-            BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap_err(),
-            BranchJoinError::SharedComputation { compu: fixture.branch }.into()
+            FragmentProgram::try_new(SpsProgram::new(arena, root), SpsScheme::BranchJoin)
+                .unwrap_err(),
+            FragmentError::SharedComputation { compu: fixture.branch }.into()
         );
     }
 
@@ -246,8 +256,9 @@ mod tests {
         let program = SpsProgram::new(fixture.arena, root);
 
         assert_eq!(
-            BranchJoinProgram::try_new(program).unwrap_err(),
-            BranchJoinError::NonBranchStackLet { compu: root, body: fixture.branch }.into()
+            FragmentProgram::try_new(program, SpsScheme::BranchJoin).unwrap_err(),
+            FragmentError::Placement { compu: root, error: PlacementError::NonBranchStackLet }
+                .into()
         );
     }
 
@@ -262,8 +273,8 @@ mod tests {
         let program = SpsProgram::new(fixture.arena, root);
 
         assert_eq!(
-            BranchJoinProgram::try_new(program).unwrap_err(),
-            BranchJoinError::SharedValue { value }.into()
+            FragmentProgram::try_new(program, SpsScheme::BranchJoin).unwrap_err(),
+            FragmentError::SharedValue { value }.into()
         );
     }
 }

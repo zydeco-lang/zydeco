@@ -6,7 +6,7 @@ use zydeco_utils::pass::{Identity, PassFailureCause};
 struct Fixture;
 
 impl Fixture {
-    fn program(open: bool) -> BranchJoinProgram {
+    fn program(open: bool) -> FragmentProgram {
         let mut arena = SpsArena::default();
         let value = if open {
             let def = arena.admin.fresh();
@@ -17,7 +17,7 @@ impl Fixture {
         };
         let stack = StackVar.build(&mut arena, None);
         let root = SReturn { value, stack }.build(&mut arena, None);
-        BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap()
+        FragmentProgram::try_new(SpsProgram::new(arena, root), SpsScheme::BranchJoin).unwrap()
     }
 }
 
@@ -79,7 +79,7 @@ fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
         let observed =
             plan.instantiate_observed(&mut observer).run(Fixture::program(false)).unwrap();
         let direct = Normalizer.repeat(2).run_infallible(Fixture::program(false));
-        let format = |program: &BranchJoinProgram| {
+        let format = |program: &FragmentProgram| {
             let program = program.as_program();
             let arena = program.arena();
             let formatter =
@@ -109,7 +109,7 @@ fn verification_identifies_the_stage_that_introduced_an_open_root() {
         output: Vec::new(),
     };
     let executed = Cell::new(false);
-    let pass = |_: BranchJoinProgram| {
+    let pass = |_: FragmentProgram| {
         executed.set(true);
         Ok::<_, Infallible>(Fixture::program(true))
     };

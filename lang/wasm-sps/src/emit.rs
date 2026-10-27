@@ -1126,7 +1126,7 @@ impl<'a> CaseEncoder<'a> {
 mod tests {
     use super::*;
     use wasmparser::{Parser, Payload, Validator};
-    use zydeco_stackir::{arena::Construct as _, low::SpsLowArena};
+    use zydeco_stackir::{SpsScheme, arena::Construct as _, low::SpsLowArena};
 
     struct Fixture {
         arena: SpsLowArena,
@@ -1149,7 +1149,7 @@ mod tests {
                 let binder = sps::Hole.build(&mut self.arena, None);
                 body = sps::LetValue { binder, bindee, tail: body }.build(&mut self.arena, None);
             }
-            SpsLowProgram::try_new(self.arena, body).unwrap()
+            SpsLowProgram::try_new(self.arena, body, SpsScheme::BranchJoin).unwrap()
         }
     }
 
@@ -1168,7 +1168,7 @@ mod tests {
             Literal::Float(zydeco_syntax::FloatLiteral::from(1.5)).build(&mut fixture.arena, None);
         let binder = sps::Hole.build(&mut fixture.arena, None);
         let root = sps::LetValue { binder, bindee, tail: body }.build(&mut fixture.arena, None);
-        let program = SpsLowProgram::try_new(fixture.arena, root).unwrap();
+        let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
         let module = Emitter::new(&program).run().unwrap();
 
         Validator::new().validate_all(module.as_bytes()).unwrap();

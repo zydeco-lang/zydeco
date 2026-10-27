@@ -15,7 +15,7 @@ use std::{
 };
 use zydeco_cli::CommandCompiler;
 use zydeco_session::ExecutableProgram;
-use zydeco_stackir::{BranchJoinProgram, BuiltinRootLowerer, high::normalize::Normalizer};
+use zydeco_stackir::{BuiltinRootLowerer, FragmentProgram, SpsScheme, high::normalize::Normalizer};
 use zydeco_utils::{
     pass::{CompilerPass, PassSequence},
     pipeline,
@@ -25,11 +25,11 @@ struct CountComputations<'a> {
     result: &'a Cell<usize>,
 }
 
-impl CompilerPass<BranchJoinProgram> for CountComputations<'_> {
-    type Output = BranchJoinProgram;
+impl CompilerPass<FragmentProgram> for CountComputations<'_> {
+    type Output = FragmentProgram;
     type Error = Infallible;
 
-    fn run(&mut self, input: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
+    fn run(&mut self, input: FragmentProgram) -> Result<Self::Output, Self::Error> {
         self.result.set(input.as_program().arena().inner.compus.iter().count());
         Ok(input)
     }
@@ -47,13 +47,14 @@ impl Measurement {
         checked: &ExecutableProgram, count: NonZeroUsize, mut configure: impl FnMut() -> P,
     ) -> Result<Self, Box<dyn std::error::Error>>
     where
-        P: CompilerPass<BranchJoinProgram, Output = BranchJoinProgram, Error = Infallible>,
+        P: CompilerPass<FragmentProgram, Output = FragmentProgram, Error = Infallible>,
     {
         let mut lower = BuiltinRootLowerer {
             spans: &checked.spans,
             scoped: &checked.scoped,
             statics: &checked.statics,
             signature: checked.signature.clone(),
+            scheme: SpsScheme::BranchJoin,
         };
         (0..count.get()).try_fold(Self::default(), |mut total, _| {
             let input = lower.run(checked.root)?;

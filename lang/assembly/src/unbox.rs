@@ -302,7 +302,7 @@ impl<'a> Folder for VariableUsesFolder<'a> {
 mod tests {
     use super::*;
     use crate::representation::{Boxed, Direct, RepresentationStrategy, Shared};
-    use zydeco_stackir::arena::Construct as _;
+    use zydeco_stackir::{SpsScheme, arena::Construct as _};
     use zydeco_statics::arena::StaticsScope;
     use zydeco_utils::arena::IdAllocator;
     use zydeco_utils::fold::Recursive;
@@ -368,7 +368,7 @@ mod tests {
             };
             let binder = variable.build(&mut arena, None);
             let root = sk::LetValue { binder, bindee, tail }.build(&mut arena, None);
-            (SpsLowProgram::try_new(arena, root).unwrap(), bindee, variable)
+            (SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap(), bindee, variable)
         }
 
         fn block(arena: &mut sk::SpsLowArena, kind: sk::EntryKind) -> sk::ValueId {
@@ -476,7 +476,7 @@ mod tests {
                 sk::OpenClosure { package, environment, code, body: tail }.build(&mut arena, None);
             let binder = variable.build(&mut arena, None);
             let root = sk::LetValue { binder, bindee, tail }.build(&mut arena, None);
-            (SpsLowProgram::try_new(arena, root).unwrap(), bindee, variable)
+            (SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap(), bindee, variable)
         }
     }
 
@@ -596,7 +596,7 @@ mod tests {
         let code = sk::Hole.build(&mut arena, None);
         let body = Fixture::terminal(&mut arena);
         let root = sk::OpenClosure { package, environment, code, body }.build(&mut arena, None);
-        let program = SpsLowProgram::try_new(arena, root).unwrap();
+        let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
         let selected = Fixture::select(&program, &KeepClosures);
         assert!(selected.values.is_empty());
         assert!(selected.patterns.is_empty());
@@ -624,7 +624,7 @@ mod tests {
         let body: sk::CompuId = sk::SHole(stack).build(&mut arena, None);
         let root: sk::CompuId =
             sk::LetValue { binder: pattern, bindee: value, tail: body }.build(&mut arena, None);
-        let program = SpsLowProgram::try_new(arena, root).unwrap();
+        let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
 
         let unboxing = LocalUnboxing::collect(&program);
         assert!(unboxing.values.contains(&value));
@@ -647,7 +647,7 @@ mod tests {
         let body: sk::CompuId = sk::SHole(stack).build(&mut arena, None);
         let root: sk::CompuId =
             sk::LetValue { binder, bindee: value, tail: body }.build(&mut arena, None);
-        let program = SpsLowProgram::try_new(arena, root).unwrap();
+        let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
 
         let unboxing = LocalUnboxing::collect(&program);
         assert!(!unboxing.values.contains(&value));
@@ -674,7 +674,7 @@ mod tests {
             let binder = sk::VCons::new(patterns, layout).build(&mut arena, None);
             root = sk::LetValue { binder, bindee, tail: root }.build(&mut arena, None);
         }
-        let program = SpsLowProgram::try_new(arena, root).unwrap();
+        let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
         let explicit = Alternating::default();
         let recursive = Alternating::default();
         assert_eq!(
@@ -706,7 +706,7 @@ mod tests {
         let binder = sk::Hole.build(&mut arena, None);
         let tail = Fixture::terminal(&mut arena);
         let root = sk::LetValue { binder, bindee, tail }.build(&mut arena, None);
-        let program = SpsLowProgram::try_new(arena, root).unwrap();
+        let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
         let shape = VariableShape::Closure;
         let explicit =
             VarUse::classify_with_driver::<Explicit>(&program.arena().inner, root, label, shape);
@@ -736,7 +736,7 @@ mod tests {
                 let binder = def.build(&mut arena, None);
                 let bindee = Fixture::product(&mut arena);
                 root = sk::LetValue { binder, bindee, tail: root }.build(&mut arena, None);
-                let program = SpsLowProgram::try_new(arena, root).unwrap();
+                let program = SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin).unwrap();
                 let plan = LocalUnboxing::collect(&program);
                 assert_eq!(plan.unboxed_vars.get(&def), Some(&2));
                 assert!(plan.values.contains(&bindee));

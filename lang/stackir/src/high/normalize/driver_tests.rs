@@ -20,7 +20,7 @@ impl Drivers {
 
     // Bounded semantic fixtures can copy immutable inputs. Each run receives a
     // fresh allocator, preserving source IDs without duplicating allocation rights.
-    fn input(source: &SpsArena, root: CompuId) -> BranchJoinProgram {
+    fn input(source: &SpsArena, root: CompuId) -> FragmentProgram {
         let arena = SpsArena {
             admin: AdminArena {
                 defs: source.admin.defs.clone(),
@@ -40,7 +40,7 @@ impl Drivers {
                 compus: source.inner.compus.clone(),
             },
         };
-        BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap()
+        FragmentProgram::try_new(SpsProgram::new(arena, root), SpsScheme::BranchJoin).unwrap()
     }
 
     pub(super) fn normalize(source: &SpsArena, root: CompuId) -> SpsProgram {

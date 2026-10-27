@@ -1,7 +1,7 @@
 use super::*;
 use crate::representation::RepresentationStrategy;
 use std::fmt::Write as _;
-use zydeco_stackir::arena::Construct as _;
+use zydeco_stackir::{SpsScheme, arena::Construct as _};
 use zydeco_statics::arena::StaticsScope;
 use zydeco_utils::fold::{Explicit, Recursive};
 
@@ -68,7 +68,7 @@ impl Fixture {
         let bindee = sk::StackVar.build(&mut fixture.arena, None);
         let root =
             sk::LetStack { binder: sk::StackVar, bindee, tail }.build(&mut fixture.arena, None);
-        SpsLowProgram::try_new(fixture.arena, root).unwrap()
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
     }
 
     fn block(&mut self, name: &str, body: sk::CompuId) -> sk::ValueId {
@@ -103,7 +103,7 @@ impl Fixture {
         let bindee = sk::StackVar.build(&mut fixture.arena, None);
         let root =
             sk::LetStack { binder: sk::StackVar, bindee, tail }.build(&mut fixture.arena, None);
-        SpsLowProgram::try_new(fixture.arena, root).unwrap()
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
     }
 
     fn continuation() -> SpsLowProgram {
@@ -142,7 +142,7 @@ impl Fixture {
         let binder = source.build(&mut fixture.arena, None);
         let bindee = fixture.integer(42);
         let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
-        SpsLowProgram::try_new(fixture.arena, root).unwrap()
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
     }
 
     fn product(width: usize, aliases: bool) -> SpsLowProgram {
@@ -169,7 +169,7 @@ impl Fixture {
         let tail = sk::SProductMatch { scrut, binder, body }.build(&mut fixture.arena, None);
         let binder = variable.build(&mut fixture.arena, None);
         let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
-        SpsLowProgram::try_new(fixture.arena, root).unwrap()
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
     }
 
     fn closure_jump() -> SpsLowProgram {
@@ -202,7 +202,7 @@ impl Fixture {
         .build(&mut fixture.arena, None);
         let binder = package.build(&mut fixture.arena, None);
         let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
-        SpsLowProgram::try_new(fixture.arena, root).unwrap()
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
     }
 
     fn observations() -> (Self, sk::CompuId) {
@@ -553,7 +553,7 @@ fn constructor_patterns_outside_match_arms_are_rejected() {
     let binder = sk::Ctor(tag, binder).build(&mut fixture.arena, None);
     let tail = fixture.terminal();
     let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
-    let program = SpsLowProgram::try_new(fixture.arena, root).unwrap();
+    let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
     Fixture::lower::<Explicit>(&program, false, RepresentationStrategy::Local);
 }
 
@@ -635,7 +635,7 @@ fn empty_unboxed_sequences_continue_into_the_computation_body() {
     let binder = sk::VCons::new(Vec::<sk::VPatId>::new(), layout).build(&mut fixture.arena, None);
     let tail = fixture.terminal();
     let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
-    let program = SpsLowProgram::try_new(fixture.arena, root).unwrap();
+    let program = SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap();
     for policy in [
         RepresentationStrategy::Direct,
         RepresentationStrategy::Local,

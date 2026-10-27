@@ -120,7 +120,7 @@ impl Node<'_> {
                 }
                 | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => {
                     ordinary((*bindee).into());
-                    child((*tail).into(), Edge::BranchJoin(id));
+                    child((*tail).into(), Edge::StackLetTail(id));
                 }
                 | Computation::LetArg(Let { binder: Cons(binder, _), bindee, tail }) => {
                     ordinary((*bindee).into());
@@ -136,12 +136,12 @@ impl Node<'_> {
     }
 }
 
-/// The immediate structural edge, including the parent owning a branch join.
+/// The immediate structural edge, including the stack let-binding that owns a tail.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Edge {
     Root,
     Child,
-    BranchJoin(CompuId),
+    StackLetTail(CompuId),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

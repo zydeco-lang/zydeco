@@ -46,7 +46,7 @@ flowchart TD
     Statics --> Queries[Static queries and editor analysis]
     Statics --> Entry[Executable selection and completeness]
     Entry --> Dynamics[Builtin linking and interpreter]
-    Entry --> Sps[BranchJoinProgram: SPS]
+    Entry --> Sps[FragmentProgram: SPS]
     Sps --> Normalize[Selected SPS passes: normalization by default]
     Normalize --> Low[SpsLowProgram: closure conversion]
     Low --> Wasm[Structured WebAssembly]
@@ -64,7 +64,7 @@ The main boundaries are concrete program types:
 | `CheckedProgram` | `CompilerSession::checked_program` | Full typed-tree inspection |
 | `ExecutableProgram` | `CompilerSession::executable_program` | Builtin root linking or lowering |
 | `DynamicsProgram` | [BuiltinRootLinker](../../lang/dynamics/src/link.rs) | Reference interpreter |
-| `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | Selected SPS transformations, then closure conversion |
+| `FragmentProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | Selected SPS transformations, then closure conversion |
 | `SpsLowProgram` | [SpsLowPipeline::run](../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
 | `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | ZASM rendering and representation analysis |
 | `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
@@ -177,7 +177,7 @@ Panics remain compiler bugs and are not converted into ordinary pass errors.
 
 [`SpsLowPipeline`](../../lang/stackir/src/pipeline.rs) declares SPS checks,
 optional transformations, and closure conversion as a sequence.
-Its `with_optimizations` method accepts any pass preserving `BranchJoinProgram`,
+Its `with_optimizations` method accepts any pass preserving `FragmentProgram`,
 including `Identity`, a custom Rust pass, or a nested sequence.
 The selected stage runs between the required SPS checks and before closure conversion.
 The default runs the existing normalizer once, keeping its combined reductions and demand analysis;
@@ -1505,7 +1505,9 @@ Source regressions and runtime parity tests use the interpreter as one observabl
 ## C8. SPS Lowering, Normalization, and Demand
 
 [SPS lowering](../../lang/stackir/src/high/lower.rs) is indexed by the stack consuming a residual computation.
-It builds complete user and Builtin structures into `BranchJoinProgram`.
+It builds complete user and Builtin structures into a `FragmentProgram`,
+which records the [compilation scheme](../../lang/stackir/src/scheme.rs) whose fragment the program lies in;
+the implemented scheme is branch-join.
 SPS retains lexical values, closures, continuations, arguments, and explicit ambient stacks.
 Stack lets guard value-coproduct matches and scalar comparisons so every branch shares one supplied stack.
 The [SPS verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
@@ -1608,7 +1610,7 @@ from rejected payloads or unmatched tags.
 Flat plan storage also avoids recursive cloning and destruction of long decision chains.
 
 Residual static-value failures accumulate in occurrence order; any failure prevents publication of a program.
-Successful reconstruction validates lexical ownership and branch joins before returning `BranchJoinProgram`.
+Successful reconstruction validates lexical ownership and branch joins before returning a `FragmentProgram`.
 [Depth regressions](../../lang/stackir/src/high/lower/tests.rs) construct and drop residual fixtures
 on a 512 KiB worker stack, covering mixed computation and thunk nesting, value lets,
 structural aliases, literal fallthrough, and Builtin products.
@@ -1624,13 +1626,14 @@ Lexical ownership, branch-join placement, and free variables all depend on the s
 The [shared traversal](../../lang/stackir/src/high/traverse.rs) owns its exhaustive child enumeration.
 It exposes borrowed pattern, value, stack, and computation nodes; definitions remain leaves.
 An entry event identifies the immediate incoming edge and whether the occurrence is first, shared, or cyclic.
-A stack-let tail carries its owning join ID so placement checks do not need their own recursive descent.
+A stack-let tail carries the ID of its owning stack let so placement checks do not need their own recursive descent.
 
 Every incoming edge is observed, including repeated ownership.
 Children and exit events are scheduled once per node; repeated edges do not expand the same subtree again,
 and active back edges terminate traversal of that edge.
-`BranchJoinValidator` reports repeated owners and misplaced joins without stopping independent checks.
-`BranchJoinProgram` is constructed only when its complete `BranchJoinErrors` collection is empty.
+`FragmentValidator` reports repeated owners and misplaced stack lets without stopping independent checks;
+it applies the placement rule of the program's scheme.
+`FragmentProgram` is constructed only when its complete `FragmentErrors` collection is empty.
 This preserves lexical-tree ownership even though the structural driver can safely inspect a malformed graph.
 
 `Variables` computes bound and free variable summaries at exit, reading completed child facts.

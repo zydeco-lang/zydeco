@@ -11,7 +11,7 @@ struct SourceStack {
     spans: Arc<zydeco_surface::textual::syntax::SpanArena>,
     scoped: Arc<zydeco_surface::scoped::arena::ScopedArena>,
     statics: Arc<zydeco_statics::arena::StaticsArena>,
-    stackir: zydeco_stackir::BranchJoinProgram,
+    stackir: zydeco_stackir::FragmentProgram,
 }
 
 struct SourceSpsLow {
@@ -150,12 +150,16 @@ impl CheckedProgram {
             }));
         };
         let Self { spans, scoped, statics, root: _ } = self;
-        let stackir =
-            zydeco_stackir::RootLowerer { spans: &spans, scoped: &scoped, statics: &statics }
-                .run(root)
-                .map_err(|errors| {
-                    TestPipelineError::Stack(zydeco_stackir::BuiltinRootLowerError::Sps(errors))
-                })?;
+        let stackir = zydeco_stackir::RootLowerer {
+            spans: &spans,
+            scoped: &scoped,
+            statics: &statics,
+            scheme: zydeco_stackir::SpsScheme::BranchJoin,
+        }
+        .run(root)
+        .map_err(|errors| {
+            TestPipelineError::Stack(zydeco_stackir::BuiltinRootLowerError::Sps(errors))
+        })?;
         Ok(SourceStack { spans, scoped, statics, stackir })
     }
 
@@ -180,6 +184,7 @@ impl CheckedProgram {
             scoped: &scoped,
             statics: &statics,
             signature: *signature,
+            scheme: zydeco_stackir::SpsScheme::BranchJoin,
         }
         .run(root)
         .map_err(TestPipelineError::Stack)?;

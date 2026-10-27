@@ -21,7 +21,9 @@ impl Fixture {
         let stack = StackVar.build(&mut self.source, None);
         let root = Let { binder: Cons(binder, StackVar), bindee: stack, tail }
             .build(&mut self.source, None);
-        let program = BranchJoinProgram::try_new(SpsProgram::new(self.source, root)).unwrap();
+        let program =
+            FragmentProgram::try_new(SpsProgram::new(self.source, root), SpsScheme::BranchJoin)
+                .unwrap();
         Normalization::new(program)
     }
 }

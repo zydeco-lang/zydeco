@@ -1,7 +1,10 @@
 use super::*;
-use crate::high::{
-    check::{BranchJoinError, BranchJoinValidator},
-    variables::{FreeVars, Variables},
+use crate::{
+    SpsScheme,
+    high::{
+        check::{FragmentError, FragmentValidator},
+        variables::{FreeVars, Variables},
+    },
 };
 
 #[derive(Default)]
@@ -27,11 +30,14 @@ fn composed_variables_and_ownership_observe_shared_edges_once_without_reexpandin
     let stack = StackVar.build(&mut arena, None);
     let root = SReturn { stack, value: pair }.build(&mut arena, None);
     let mut together = Together {
-        first: Together { first: BranchJoinValidator::default(), second: Variables::default() },
+        first: Together {
+            first: FragmentValidator::new(SpsScheme::BranchJoin, &arena.inner),
+            second: Variables::default(),
+        },
         second: Counts::default(),
     };
     Traversal { arena: &arena.inner }.run(root.into(), &mut together);
-    assert_eq!(together.first.first.errors(), &[BranchJoinError::SharedValue { value }]);
+    assert_eq!(together.first.first.errors(), &[FragmentError::SharedValue { value }]);
     let actual = together.first.second.free_variables(root.into()).unwrap();
     assert_eq!(actual.iter().copied().collect::<Vec<_>>(), [definition]);
     assert_eq!(
@@ -39,15 +45,17 @@ fn composed_variables_and_ownership_observe_shared_edges_once_without_reexpandin
         root.free_vars(&arena).iter().collect::<Vec<_>>()
     );
     assert_eq!((together.second.entries, together.second.exits), (5, 4));
-    let mut separate = BranchJoinValidator::default();
+    let mut separate = FragmentValidator::new(SpsScheme::BranchJoin, &arena.inner);
     Traversal { arena: &arena.inner }.run(root.into(), &mut separate);
     assert_eq!(together.first.first.errors(), separate.errors());
 
     let other = Value::Var(definition).build(&mut arena, None);
     arena.inner.values[&pair] =
         Value::VCons(VCons::new(vec![value, other], ProductLayout { arity: 2 }));
-    let mut valid =
-        Together { first: BranchJoinValidator::default(), second: Variables::default() };
+    let mut valid = Together {
+        first: FragmentValidator::new(SpsScheme::BranchJoin, &arena.inner),
+        second: Variables::default(),
+    };
     Traversal { arena: &arena.inner }.run(root.into(), &mut valid);
     assert!(valid.first.errors().is_empty());
     assert_eq!(
@@ -68,8 +76,10 @@ fn bottom_up_variables_respect_lexical_bindings_and_continuation_scopes() {
     let body = SReturn { stack, value }.build(&mut arena, None);
     let continuation = Kont { binder, body }.build(&mut arena, None);
     let root = SReturn { stack: continuation, value: bindee }.build(&mut arena, None);
-    let mut analyses =
-        Together { first: Variables::default(), second: BranchJoinValidator::default() };
+    let mut analyses = Together {
+        first: Variables::default(),
+        second: FragmentValidator::new(SpsScheme::BranchJoin, &arena.inner),
+    };
     Traversal { arena: &arena.inner }.run(root.into(), &mut analyses);
     assert!(analyses.second.errors().is_empty());
     assert!(analyses.first.free_variables(continuation.into()).unwrap().is_empty());
@@ -96,14 +106,16 @@ fn cyclic_ownership_does_not_prevent_independent_repeated_edges_from_being_repor
         .build(&mut arena, None);
     let stack = StackVar.build(&mut arena, None);
     let root = SReturn { stack, value: pair }.build(&mut arena, None);
-    let mut analyses =
-        Together { first: BranchJoinValidator::default(), second: Variables::default() };
+    let mut analyses = Together {
+        first: FragmentValidator::new(SpsScheme::BranchJoin, &arena.inner),
+        second: Variables::default(),
+    };
     Traversal { arena: &arena.inner }.run(root.into(), &mut analyses);
     assert_eq!(
         analyses.first.errors(),
         &[
-            BranchJoinError::SharedValue { value: cyclic },
-            BranchJoinError::SharedValue { value: shared },
+            FragmentError::SharedValue { value: cyclic },
+            FragmentError::SharedValue { value: shared },
         ]
     );
     assert!(analyses.second.free_variables(root.into()).is_none());

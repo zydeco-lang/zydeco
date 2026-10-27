@@ -25,7 +25,9 @@ Both representations have one computation root rather than a top-level declarati
 - `syntax` holds the shared node forms, parameterized by phase-specific IDs,
   and `arena` holds shared builder and definition-name lookup traits.
   Each phase adds its own control-flow forms to the common syntax.
-- `high::syntax` and `high::arena` define lexical SPS; `high::lower` constructs a validated `BranchJoinProgram` directly
+- `scheme` defines where stack-passing compilation names the current stack and the placement rule
+  of each scheme's fragment, which `high::check` and `low::check` both apply.
+- `high::syntax` and `high::arena` define lexical SPS; `high::lower` constructs a validated `FragmentProgram` directly
   from checked syntax.
 - `high::variables` provides free-variable analysis, and `high::check` validates closed roots, lexical ownership,
   and branch-join placement.

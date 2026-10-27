@@ -1,5 +1,6 @@
-use super::{check::BranchJoinProgram, syntax::*};
+use super::{check::FragmentProgram, syntax::*};
 use crate::protocol::SourceProtocols;
+use crate::scheme::SpsScheme;
 use ariadne::{Label, Report, ReportKind};
 use derive_more::{AsMut, AsRef};
 use std::ops::Range;
@@ -157,6 +158,8 @@ pub struct Lowerer<'a> {
     /// Internal residual invariant failures collected during lowering.
     lower_errors: Vec<SpsLoweringError>,
     protocols: SourceProtocols<'a>,
+    /// Where this lowering names the current stack.
+    scheme: SpsScheme,
 }
 
 /// Lowering pass for one checked computation root.
@@ -164,6 +167,7 @@ pub struct RootLowerer<'a> {
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
+    pub scheme: SpsScheme,
 }
 
 /// Lowering pass for a package-dependent root applied to the host Builtin package.
@@ -172,11 +176,14 @@ pub struct BuiltinRootLowerer<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     pub signature: ss::PackPi,
+    pub scheme: SpsScheme,
 }
 
 impl<'a> Lowerer<'a> {
     /// Create a structural lowerer with fresh stack arenas.
-    pub fn new(spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
+    pub fn new(
+        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena, scheme: SpsScheme,
+    ) -> Self {
         let arena = SpsArena::default();
         let lower_errors = Vec::new();
         Self {
@@ -186,6 +193,7 @@ impl<'a> Lowerer<'a> {
             statics,
             lower_errors,
             protocols: SourceProtocols::new(statics),
+            scheme,
         }
     }
 
@@ -279,11 +287,11 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn finish(mut self, root: CompuId) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
+    fn finish(mut self, root: CompuId) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
         if self.lower_errors.is_empty() {
             self.arena.inner.protocols = std::sync::Arc::new(self.protocols.graph);
-            Ok(BranchJoinProgram::try_new(SpsProgram::new(self.arena, root))
-                .expect("stack-indexed lowering must construct branch-join SPS"))
+            Ok(FragmentProgram::try_new(SpsProgram::new(self.arena, root), self.scheme)
+                .expect("stack-indexed lowering must construct its scheme's fragment"))
         } else {
             Err(self.lower_errors)
         }
@@ -306,10 +314,10 @@ impl<'a> Lowerer<'a> {
 }
 
 impl CompilerPass<ss::CompuId> for RootLowerer<'_> {
-    type Output = BranchJoinProgram;
+    type Output = FragmentProgram;
     type Error = Vec<SpsLoweringError>;
 
-    fn run(&mut self, root: ss::CompuId) -> Result<BranchJoinProgram, Self::Error> {
+    fn run(&mut self, root: ss::CompuId) -> Result<FragmentProgram, Self::Error> {
         self.run_with_builtin(root, None)
     }
 }
@@ -318,15 +326,15 @@ impl RootLowerer<'_> {
     /// Lower either a process or a checked export, supplying its validated host package.
     pub fn run_with_builtin(
         &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
-    ) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
+    ) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
         self.run_with_driver::<Explicit>(root, builtin)
     }
 
     /// Select continuation storage for both package materialization and residual reconstruction.
     pub fn run_with_driver<D: Driver>(
         &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
-    ) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
-        let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
+    ) -> Result<FragmentProgram, Vec<SpsLoweringError>> {
+        let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics, self.scheme);
         let root = self.statics.execution_compu(root);
         let mut stack = StackVar.build(&mut lowerer, None);
         if let Some(plan) = builtin {
@@ -339,12 +347,13 @@ impl RootLowerer<'_> {
 }
 
 impl CompilerPass<ss::CompuId> for BuiltinRootLowerer<'_> {
-    type Output = BranchJoinProgram;
+    type Output = FragmentProgram;
     type Error = BuiltinRootLowerError;
 
-    fn run(&mut self, root: ss::CompuId) -> Result<BranchJoinProgram, Self::Error> {
+    fn run(&mut self, root: ss::CompuId) -> Result<FragmentProgram, Self::Error> {
         let plan = BuiltinPackagePlan::for_executable(self.statics, &self.signature)?;
-        RootLowerer { spans: self.spans, scoped: self.scoped, statics: self.statics }
+        let Self { spans, scoped, statics, scheme, .. } = *self;
+        RootLowerer { spans, scoped, statics, scheme }
             .run_with_builtin(root, Some(plan))
             .map_err(BuiltinRootLowerError::Sps)
     }

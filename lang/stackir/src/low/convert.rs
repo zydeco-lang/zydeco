@@ -3,9 +3,10 @@
 use super::{check::SpsLowProgram, syntax as low};
 use crate::arena::{Construct as _, DefinitionNames as _};
 use crate::high::{
-    check::BranchJoinProgram, syntax as high, traverse::Traversal, variables::Variables,
+    check::FragmentProgram, syntax as high, traverse::Traversal, variables::Variables,
 };
 use crate::protocol::{StackProtocol, ValueProtocol};
+use crate::scheme::SpsScheme;
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
 use zydeco_statics::{arena::StaticsArena, syntax as ss};
@@ -27,11 +28,11 @@ pub struct SpsLowConverter<'a> {
     pub statics: &'a StaticsArena,
 }
 
-impl CompilerPass<BranchJoinProgram> for SpsLowConverter<'_> {
+impl CompilerPass<FragmentProgram> for SpsLowConverter<'_> {
     type Output = SpsLowProgram;
     type Error = Infallible;
 
-    fn run(&mut self, program: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
+    fn run(&mut self, program: FragmentProgram) -> Result<Self::Output, Self::Error> {
         self.run_with_driver::<Explicit>(program)
     }
 }
@@ -39,7 +40,7 @@ impl CompilerPass<BranchJoinProgram> for SpsLowConverter<'_> {
 impl SpsLowConverter<'_> {
     /// Select continuation storage for reconstruction and pattern translation.
     pub fn run_with_driver<D: Driver>(
-        &mut self, program: BranchJoinProgram,
+        &mut self, program: FragmentProgram,
     ) -> Result<SpsLowProgram, Infallible> {
         Ok(ClosureConversion::new(program, self.scoped, self.statics).convert::<D>())
     }
@@ -71,10 +72,13 @@ struct ClosureConversion<'a> {
     statics: &'a StaticsArena,
     envs: Vec<RenameEnv>,
     variables: Variables,
+    /// Conversion is homomorphic on stack lets, so the output keeps the input's fragment.
+    scheme: SpsScheme,
 }
 
 impl<'a> ClosureConversion<'a> {
-    fn new(program: BranchJoinProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
+    fn new(program: FragmentProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
+        let scheme = program.scheme();
         let high::SpsRebuild { source, target, root } = program.into_program().into_rebuild();
         let mut variables = Variables::default();
         Traversal { arena: &source.inner }.run(root.into(), &mut variables);
@@ -93,13 +97,14 @@ impl<'a> ClosureConversion<'a> {
             statics,
             envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
             variables,
+            scheme,
         }
     }
 
     fn convert<D: Driver>(mut self) -> SpsLowProgram {
         let source = self.root;
         let root = fold::ConversionFolder::<D>::new(&mut self).run(source);
-        SpsLowProgram::try_new(self.arena, root)
+        SpsLowProgram::try_new(self.arena, root, self.scheme)
             .expect("closure conversion produces closed first-order SPSLow")
     }
 
@@ -345,7 +350,7 @@ mod tests {
         let (mut arena, root) = program.into_parts();
         let wrong_result = low::Hole.build(&mut arena, None);
         arena.inner.continuations[&package].result = wrong_result;
-        assert!(matches!(SpsLowProgram::try_new(arena, root),
+        assert!(matches!(SpsLowProgram::try_new(arena, root, SpsScheme::BranchJoin),
             Err(crate::low::check::SpsLowValidationError::ContinuationContext { stack }) if stack == package));
     }
 

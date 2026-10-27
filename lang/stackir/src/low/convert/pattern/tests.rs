@@ -16,14 +16,14 @@ impl Fixture {
         pattern.into().build(&mut self.arena, Some(ss::PatId::Value(self.origins.alloc())))
     }
 
-    fn program(mut self, binder: high::VPatId) -> BranchJoinProgram {
+    fn program(mut self, binder: high::VPatId) -> FragmentProgram {
         let stack = StackVar.build(&mut self.arena, None);
         let value = Triv.build(&mut self.arena, None);
         let tail = SReturn { stack, value }.build(&mut self.arena, None);
         let bindee = StackVar.build(&mut self.arena, None);
         let root =
             Let { binder: Cons(binder, StackVar), bindee, tail }.build(&mut self.arena, None);
-        BranchJoinProgram::try_new(SpsProgram::new(self.arena, root)).unwrap()
+        FragmentProgram::try_new(SpsProgram::new(self.arena, root), SpsScheme::BranchJoin).unwrap()
     }
 }
 

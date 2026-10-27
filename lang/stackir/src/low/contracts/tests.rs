@@ -1,5 +1,8 @@
 use super::*;
-use crate::low::{SpsLowProgram, SpsLowValidationError};
+use crate::{
+    SpsScheme,
+    low::{SpsLowProgram, SpsLowValidationError},
+};
 
 #[derive(Default)]
 struct Fixture {
@@ -69,7 +72,7 @@ impl Fixture {
     }
 
     fn check(self, root: CompuId) -> Result<SpsLowProgram, SpsLowValidationError> {
-        SpsLowProgram::try_new(self.arena, root)
+        SpsLowProgram::try_new(self.arena, root, SpsScheme::BranchJoin)
     }
 
     fn rejects(self, root: CompuId, error: EntryContractError) {

@@ -133,7 +133,7 @@ impl Node<'_> {
                 | Computation::LetStack(LetStack { bindee, tail, .. }) => {
                     return match position {
                         | 0 => Some(((*bindee).into(), Edge::Child)),
-                        | 1 => Some(((*tail).into(), Edge::BranchJoin(id))),
+                        | 1 => Some(((*tail).into(), Edge::StackLetTail(id))),
                         | _ => None,
                     };
                 }
@@ -165,7 +165,7 @@ impl Node<'_> {
 pub enum Edge {
     Root,
     Child,
-    BranchJoin(CompuId),
+    StackLetTail(CompuId),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

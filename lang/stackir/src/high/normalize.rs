@@ -5,11 +5,12 @@
 //! bodies move only from literal forces or singly used variable bindings.
 
 use super::{
-    check::BranchJoinProgram,
+    check::FragmentProgram,
     demand::{Demand, Demands},
     syntax::*,
     variables::Vars as _,
 };
+use crate::scheme::SpsScheme;
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible, rc::Rc};
 use zydeco_statics::syntax as ss;
@@ -30,11 +31,11 @@ use fold::NormalizationFolder;
 /// Normalize SPS using fresh construction state for each input program.
 pub struct Normalizer;
 
-impl CompilerPass<BranchJoinProgram> for Normalizer {
-    type Output = BranchJoinProgram;
+impl CompilerPass<FragmentProgram> for Normalizer {
+    type Output = FragmentProgram;
     type Error = Infallible;
 
-    fn run(&mut self, program: BranchJoinProgram) -> Result<Self::Output, Self::Error> {
+    fn run(&mut self, program: FragmentProgram) -> Result<Self::Output, Self::Error> {
         self.run_with_driver::<Explicit>(program)
     }
 }
@@ -42,8 +43,8 @@ impl CompilerPass<BranchJoinProgram> for Normalizer {
 impl Normalizer {
     /// Select continuation storage for reconstruction, pattern copying, and pattern decisions.
     pub fn run_with_driver<D: Driver>(
-        &mut self, program: BranchJoinProgram,
-    ) -> Result<BranchJoinProgram, Infallible> {
+        &mut self, program: FragmentProgram,
+    ) -> Result<FragmentProgram, Infallible> {
         Ok(Normalization::new(program).run::<D>())
     }
 }
@@ -113,10 +114,13 @@ struct Normalization {
     delayed_stacks: Vec<ScopedStack>,
     /// Conservative syntactic occurrence counts, including currently dead uses.
     occurrences: HashMap<DefId, usize>,
+    /// The scheme whose fragment both the input and the output belong to.
+    scheme: SpsScheme,
 }
 
 impl Normalization {
-    fn new(program: BranchJoinProgram) -> Self {
+    fn new(program: FragmentProgram) -> Self {
+        let scheme = program.scheme();
         let SpsRebuild { source, target: arena, root } = program.into_program().into_rebuild();
         let occurrences =
             source.inner.values.iter().fold(HashMap::new(), |mut counts, (_, value)| {
@@ -126,14 +130,14 @@ impl Normalization {
                 counts
             });
         let envs = vec![Environment { parent: None, bindings: HashMap::new() }];
-        Self { source, arena, root, envs, delayed_stacks: Vec::new(), occurrences }
+        Self { source, arena, root, envs, delayed_stacks: Vec::new(), occurrences, scheme }
     }
 
-    fn run<D: Driver>(mut self) -> BranchJoinProgram {
+    fn run<D: Driver>(mut self) -> FragmentProgram {
         let source_root = self.root;
         let root = NormalizationFolder::<D>::new(&mut self).run(source_root);
-        BranchJoinProgram::try_new(SpsProgram::new(self.arena, root))
-            .expect("normalization preserves lexical ownership and branch joins")
+        FragmentProgram::try_new(SpsProgram::new(self.arena, root), self.scheme)
+            .expect("normalization preserves lexical ownership and its scheme's fragment")
     }
 
     fn lookup(&self, mut env: EnvId, def: DefId) -> Rc<KnownValue> {

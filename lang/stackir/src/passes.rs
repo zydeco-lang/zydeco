@@ -1,7 +1,7 @@
 //! Built-in SPS plans.
 
 use crate::{
-    BranchJoinError, BranchJoinProgram,
+    FragmentError, FragmentProgram, SpsScheme,
     high::{fmt::Pretty, normalize::Normalizer, syntax::DefId},
 };
 use std::{
@@ -121,6 +121,13 @@ impl fmt::Display for SpsPlan {
     }
 }
 
+/// The configuration that defines an SPS product: the lowering scheme and the optional passes.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SpsSelection {
+    pub scheme: SpsScheme,
+    pub plan: SpsPlan,
+}
+
 impl SpsPlan {
     pub fn passes(&self) -> &[SpsPass] {
         match self {
@@ -144,7 +151,7 @@ impl SpsPlan {
     }
 
     /// Instantiate independent occurrences, preserving the selected order.
-    pub fn instantiate(&self) -> PassSequence<'static, BranchJoinProgram, Infallible> {
+    pub fn instantiate(&self) -> PassSequence<'static, FragmentProgram, Infallible> {
         self.passes().iter().fold(PassSequence::new(), |passes, pass| match pass {
             | SpsPass::Normalize => passes.with_pass(Normalizer),
         })
@@ -153,9 +160,9 @@ impl SpsPlan {
     /// Share a borrowed observer among this plan's distinct pass occurrences.
     pub fn instantiate_observed<'a, O>(
         &self, observer: &'a mut O,
-    ) -> PassSequence<'a, BranchJoinProgram, PassFailure<Infallible, O::Error>>
+    ) -> PassSequence<'a, FragmentProgram, PassFailure<Infallible, O::Error>>
     where
-        O: PassObserver<BranchJoinProgram, BranchJoinProgram, Infallible>,
+        O: PassObserver<FragmentProgram, FragmentProgram, Infallible>,
     {
         let observer = Rc::new(RefCell::new(observer));
         self.passes().iter().enumerate().fold(PassSequence::new(), |passes, (index, pass)| {
@@ -192,7 +199,7 @@ pub enum SpsObservationError {
 #[derive(Debug, thiserror::Error)]
 pub enum SpsInvariant {
     #[error("SPS invariant failed: {0}")]
-    BranchJoin(BranchJoinError),
+    Fragment(FragmentError),
     #[error("SPS invariant failed: root has free definitions {0:?}")]
     FreeDefinitions(Vec<DefId>),
 }
@@ -208,23 +215,26 @@ pub struct SpsObserver<'a, W> {
 }
 
 impl<W: Write> SpsObserver<'_, W> {
-    fn inspect(&mut self, program: &BranchJoinProgram) -> Result<(), SpsObservationError> {
+    fn inspect(&mut self, program: &FragmentProgram) -> Result<(), SpsObservationError> {
         if self.inspection.verify {
             use crate::high::{
-                check::BranchJoinValidator,
+                check::FragmentValidator,
                 traverse::{Together, Traversal},
                 variables::Variables,
             };
+            let scheme = program.scheme();
             let program = program.as_program();
-            let mut analyses =
-                Together { first: BranchJoinValidator::default(), second: Variables::default() };
+            let mut analyses = Together {
+                first: FragmentValidator::new(scheme, &program.arena().inner),
+                second: Variables::default(),
+            };
             Traversal { arena: &program.arena().inner }.run(program.root().into(), &mut analyses);
             let errors = analyses
                 .first
                 .errors()
                 .iter()
                 .cloned()
-                .map(SpsInvariant::BranchJoin)
+                .map(SpsInvariant::Fragment)
                 .chain(
                     analyses
                         .second
@@ -253,13 +263,11 @@ impl<W: Write> SpsObserver<'_, W> {
     }
 }
 
-impl<W: Write> PassObserver<BranchJoinProgram, BranchJoinProgram, Infallible>
-    for SpsObserver<'_, W>
-{
+impl<W: Write> PassObserver<FragmentProgram, FragmentProgram, Infallible> for SpsObserver<'_, W> {
     type Error = SpsObservationError;
 
     fn before(
-        &mut self, invocation: &PassInvocation, input: &BranchJoinProgram,
+        &mut self, invocation: &PassInvocation, input: &FragmentProgram,
     ) -> Result<(), Self::Error> {
         if self.inspection.trace || self.inspection.dump {
             writeln!(self.output, "before SPS {invocation}")?;
@@ -268,7 +276,7 @@ impl<W: Write> PassObserver<BranchJoinProgram, BranchJoinProgram, Infallible>
     }
 
     fn after(
-        &mut self, invocation: &PassInvocation, output: &BranchJoinProgram, elapsed: Duration,
+        &mut self, invocation: &PassInvocation, output: &FragmentProgram, elapsed: Duration,
     ) -> Result<(), Self::Error> {
         if self.inspection.trace || self.inspection.dump {
             writeln!(

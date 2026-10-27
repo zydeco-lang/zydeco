@@ -5,7 +5,7 @@ use zydeco_utils::fold::Recursive;
 pub(in crate::low::convert) struct Drivers;
 
 impl Drivers {
-    fn input(source: &high::SpsArena, root: high::CompuId) -> BranchJoinProgram {
+    fn input(source: &high::SpsArena, root: high::CompuId) -> FragmentProgram {
         let arena = high::SpsArena {
             admin: high::AdminArena {
                 defs: source.admin.defs.clone(),
@@ -25,7 +25,7 @@ impl Drivers {
                 compus: source.inner.compus.clone(),
             },
         };
-        BranchJoinProgram::try_new(high::SpsProgram::new(arena, root)).unwrap()
+        FragmentProgram::try_new(high::SpsProgram::new(arena, root), SpsScheme::BranchJoin).unwrap()
     }
 
     pub(in crate::low::convert) fn convert(
@@ -301,7 +301,9 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
             let stack = StackVar.build(&mut arena, None);
             root = SReturn { stack, value }.build(&mut arena, None);
         }
-        let program = BranchJoinProgram::try_new(high::SpsProgram::new(arena, root)).unwrap();
+        let program =
+            FragmentProgram::try_new(high::SpsProgram::new(arena, root), SpsScheme::BranchJoin)
+                .unwrap();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut conversion = ClosureConversion::new(program, &scoped, &statics);
@@ -317,7 +319,9 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
             stack = Cons(value, stack).build(&mut arena, None);
         }
         let root = SHole(stack).build(&mut arena, None);
-        let program = BranchJoinProgram::try_new(high::SpsProgram::new(arena, root)).unwrap();
+        let program =
+            FragmentProgram::try_new(high::SpsProgram::new(arena, root), SpsScheme::BranchJoin)
+                .unwrap();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut conversion = ClosureConversion::new(program, &scoped, &statics);
