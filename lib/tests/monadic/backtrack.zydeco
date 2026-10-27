@@ -4,6 +4,7 @@ param (/numeric; /stdio; /process; builtin) : @(import(
 )) in
 let (/make = make_data) = @(import("../../std/data/package.zy")) in
 let (/Bool; /List; /list; /bool; data_package) = make_data builtin in
+let (/Monad; /Algebra) = @(import("../../std/effect/monad.zy")) in
 let nondet =
   let (/make = make_nondet) = @(import("../../std/effect/nondet.zy")) in
   make_nondet builtin data_package
@@ -15,16 +16,20 @@ do xs <- ! list/cons Int 1 xs_tail;
 do ys_tail <- ! list/cons Int 4 empty;
 do ys <- ! list/cons Int 3 ys_tail;
 let search : Thk (N (Int * Int)) = {
-  ! n/monad .bind Int (Int * Int) { ! nondet/choose (N, n) Int xs } {
-    fn x =>
-      ! n/monad .bind Int (Int * Int) { ! nondet/choose (N, n) Int ys } {
-        fn y =>
-          ! n/monad .bind Unit (Int * Int) {
-            do sum <- ! numeric/int/add x y;
-            do matches <- ! numeric/int/eq (Ret Bool) sum 5 { ret bool/true } { ret bool/false };
-            ! nondet/guard (N, n) matches
-          } { fn _ => ! n/monad .return (Int * Int) (x, y) }
-      }
+  (
+    @[monadic]
+    fn (choose_x : Thk (Ret Int)) (choose_y : Thk (Ret Int))
+      (guard_sum : Thk (Int -> Int -> Ret Unit))
+    =>
+      do x <- ! choose_x;
+      do y <- ! choose_y;
+      do _ <- ! guard_sum x y;
+      ret (x, y)
+  ) N n/monad { ! nondet/choose (N, n) Int xs } { ! nondet/choose (N, n) Int ys } {
+    fn x y =>
+      do sum <- ! numeric/int/add x y;
+      do matches <- ! numeric/int/eq (Ret Bool) sum 5 { ret bool/true } { ret bool/false };
+      ! nondet/guard (N, n) matches
   }
 } in
 do results <- ! nondet/observe_all (Int * Int) search;
