@@ -1,6 +1,6 @@
 //! Formatters for scoped and statics entities in the type checker.
 //!
-//! Gap discipline follows the [layout laws](../../../docs/references/compiler.md#layout-laws):
+//! Gap discipline follows the formatter layout laws:
 //! a gap the canonical families declare as a boundary renders as `RcDoc::line()`
 //! inside a group, so the width can break it, while `RcDoc::space()` is reserved
 //! for gaps the layout laws pin as canonical spacing, which never break.

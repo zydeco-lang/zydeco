@@ -17,8 +17,9 @@ pub mod fold;
 
 pub mod diagnostic;
 
-#[doc = include_str!("textual/README.md")]
 pub mod textual {
+    #![doc = include_str!("textual/README.md")]
+
     /// Author-selected layout attached to canonical textual IDs.
     pub mod intention;
     pub use intention::*;
@@ -72,8 +73,9 @@ pub mod textual {
     mod tests;
 }
 
-#[doc = include_str!("bitter/README.md")]
 pub mod bitter {
+    #![doc = include_str!("bitter/README.md")]
+
     /// Core bitter AST and identifiers.
     pub mod syntax;
     /// Bitter arena storage and textual back-mapping.
@@ -95,8 +97,9 @@ pub mod bitter {
     mod span;
 }
 
-#[doc = include_str!("scoped/README.md")]
 pub mod scoped {
+    #![doc = include_str!("scoped/README.md")]
+
     /// Scoped AST aliases and primitive definition tracking.
     pub mod syntax;
     /// Scoped arena storage and dependency metadata.

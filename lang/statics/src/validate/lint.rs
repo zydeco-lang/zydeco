@@ -6,8 +6,7 @@
 //! It runs only after a check has succeeded, treats every allocated node
 //! (orphans from inference retries included) the same way, and reports
 //! violations as internal compiler errors rather than user diagnostics.
-//! The full design, including the annotation re-derivation this pass
-//! deliberately defers, is recorded in `docs/proposals/tyck-lint.md`.
+//! Annotation re-derivation is deliberately left to the `rederive` pass.
 
 use crate::arena::StaticsArena;
 use crate::surface_syntax as su;

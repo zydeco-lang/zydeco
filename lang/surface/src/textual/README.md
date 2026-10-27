@@ -40,15 +40,15 @@ but it does not perform desugaring or name resolution.
 
 ## Lexing and parsing
 
-- [lexer.rs](lexer.rs) supplies Logos tokens, typed lexical errors, and generated `TokenMetadata`.
-- [parser.rs](parser.rs) exposes `StrictParser`, `RecoveringParser`, and their source-bound outcomes.
-  Its private generated parser consumes [grammar.lalrpop](parser/grammar.lalrpop) through the arena allocator.
-- [escape.rs](escape.rs) expands string and character escape sequences after literal parsing.
+- [`lexer`] supplies Logos tokens, typed lexical errors, and generated `TokenMetadata`.
+- [`parser`] exposes `StrictParser`, `RecoveringParser`, and their source-bound outcomes.
+  Its private generated parser consumes `parser/grammar.lalrpop` through the arena allocator.
+- [`escape`] expands string and character escape sequences after literal parsing.
 
-[C4's recovery contract](../../../../docs/references/compiler.md#recovering-parsing) owns the shared grammar,
-strict acceptance, typed expectations, cursor replacement ranges, and exact recovery identities.
-[Recovery tests](parser/tests/recovery.rs) compare retained structure with strict repairs and exercise token mutations,
-Unicode prefixes, lexical failures, and abandoned recovery events.
+Both parsers share one grammar.
+Recovery preserves strict acceptance, typed expectations, cursor replacement ranges, and exact recovery identities.
+Recovery tests in `parser/tests/recovery.rs` compare retained structure with strict repairs
+and exercise token mutations, Unicode prefixes, lexical failures, and abandoned recovery events.
 
 ## Spans and lookup helpers
 
@@ -59,16 +59,11 @@ of highlighting the whole annotation.
 
 ## Errors and formatting
 
-- [err.rs](err.rs) formats every retained parser issue with its source context.
-- [ugly.rs](ugly.rs) implements debug spelling; the `fmt` module
-  in [lib.rs](../lib.rs) re-exports rendering entry points.
-- [pretty.rs](pretty.rs) constructs documents from textual syntax, trivia, and intentions.
-  [Grammar contexts](pretty/context.rs), [punning](pretty/punning.rs),
-  and [options](pretty/config.rs) supply its reusable policies; [corpus checks](pretty/corpus.rs) compare preservation
-  and idempotence.
+- [`err`] formats every retained parser issue with its source context.
+- `ugly` implements debug spelling; the [`fmt`] module re-exports rendering entry points.
+- `pretty` constructs documents from textual syntax, trivia, and intentions.
+  Its private `context`, `punning`, and `config` modules supply grammar contexts, punning, and options;
+  corpus checks in `corpus` compare preservation and idempotence.
 
-[C15](../../../../docs/references/compiler.md#formatting-and-typed-rendering) owns formatter laws,
-source intentions, boundary algebra, canonical layout families, and directives.
-The [language reference](../../../../docs/references/language.md#meta-annotations-compile-time-metadata) provides
-meta annotation syntax, while [source analysis](../../../../docs/references/compiler.md#shared-source-analysis)
-owns documentation/literal attachment decoding and diagnostics.
+Formatting follows shared laws over source intentions, boundary algebra, canonical layout families, and directives.
+Source analysis decodes documentation and literal attachments and reports their diagnostics.

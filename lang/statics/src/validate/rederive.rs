@@ -8,10 +8,9 @@
 //! abstract-type witness reachable from the annotation roots.
 //!
 //! Zydeco has no top level: a file is one term whose `begin` blocks
-//! dependency-order their mobile bindings into ordinary telescopes
-//! ([binding rules](../../../../docs/references/language.md#3-bindings-and-scope)).
-//! The elaborated term therefore obeys strict
-//! lexical scope, with two named exceptions this pass treats as ambient:
+//! dependency-order their mobile bindings into ordinary telescopes.
+//! The elaborated term therefore obeys strict lexical scope,
+//! with two named exceptions this pass treats as ambient:
 //! recursive type components, whose identities are allocated together, and
 //! package openings, whose witnesses bind through the elaborated program.
 //! Computation recursion is the explicit `fix` form and stays structural.
@@ -22,8 +21,7 @@
 //! universal, or inside a package member elaborated per import, carries one
 //! annotation that legitimately differs between recording sites, and the
 //! finished arena cannot distinguish those from corruption. Constructor
-//! shapes are instantiation-stable, which is why they alone judge. The
-//! deferred judgments are recorded in `docs/proposals/tyck-lint.md`.
+//! shapes are instantiation-stable, which is why they alone judge.
 //!
 //! The traversal starts from the annotation roots — the root `TermAnnId`,
 //! recorded definition bodies, data and codata arms, and sealed types — so

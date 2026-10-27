@@ -1,6 +1,4 @@
 //! Typed compiler transformations and ordered composition.
-//!
-//! See `docs/references/compiler.md#compiler-pass-composition`.
 
 use std::convert::Infallible;
 

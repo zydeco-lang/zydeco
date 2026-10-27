@@ -1,8 +1,7 @@
 # Scoped (Name Resolution)
 
 `scoped` resolves names in desugared surface syntax and supplies the term graph consumed by static checking.
-The [compiler reference](../../../../docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution)
-owns resolution, block scheduling, source boundaries, and their phase contracts.
+It covers resolution, block scheduling, and source boundaries.
 
 ```text
 textual -> bitter -> scoped -> statics
@@ -12,20 +11,17 @@ textual -> bitter -> scoped -> statics
 
 | Module | Responsibility |
 | --- | --- |
-| [`syntax`](syntax.rs) | Scoped syntax aliases, contextual bindings, and block plans. |
-| [`arena`](arena.rs) | Resolved storage, source origins, and dependency graphs. |
-| [`resolver`](resolver.rs) | Semantic scheduling, structural rebuilding, recovery, and publication. |
-| [`scope`](scope.rs) | Shared name lookup and lexical scope enumeration. |
-| [`alloc`](alloc.rs) | Scoped syntax construction and provenance. |
-| [`observers`](observers.rs) | Reference indexing and exact cursor capture. |
-| [`dependencies`](dependencies.rs) | Required block graphs with begin, finish, and abort boundaries. |
-| [`binders`](binders.rs), [`blocks`](blocks.rs) | Mobile binding discovery and dependency-directed elaboration. |
-| [`completion`](completion.rs) | Recovered resolution results for completion. |
-| [`traverse`](traverse.rs) | Shared structural traversal and visitor composition. |
-| [`context`](context.rs) | Free-variable analysis and the term summaries retained for checking. |
-| [`err`](err.rs), [`fmt`](fmt.rs), [`span`](span.rs) | Diagnostics, debug formatting, and source locations. |
+| [`syntax`] | Scoped syntax aliases, contextual bindings, and block plans. |
+| [`arena`] | Resolved storage, source origins, and dependency graphs. |
+| [`resolver`] | Semantic scheduling, structural rebuilding, recovery, and publication. |
+| [`scope`] | Shared name lookup and lexical scope enumeration. |
+| `alloc` | Scoped syntax construction and provenance. |
+| [`observers`] | Reference indexing and exact cursor capture. |
+| `dependencies` | Required block graphs with begin, finish, and abort boundaries. |
+| [`binders`], `blocks` | Mobile binding discovery and dependency-directed elaboration. |
+| `completion` | Recovered resolution results for completion. |
+| [`traverse`] | Shared structural traversal and visitor composition. |
+| [`context`] | Free-variable analysis and the term summaries retained for checking. |
+| [`err`], [`fmt`], `span` | Diagnostics, debug formatting, and source locations. |
 
 `ContextCollector` can share a traversal with other analysis visitors.
-The [structural traversal contract](../../../../docs/references/compiler.md#scoped-structural-traversal)
-specifies ordering, sharing, stopping, and the lifetime of its summaries.
-Remaining folder migrations are collected in the [traversal proposal](../../../../docs/proposals/traversals.md).

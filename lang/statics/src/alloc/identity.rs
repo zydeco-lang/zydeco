@@ -27,7 +27,6 @@ enum DerivationSite {
 ///
 /// Keep this registry alive across query eviction and replay, and share it
 /// between database clones. Its entries contain identities, not arena payloads.
-/// See the [compiler identity account](../../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance).
 #[derive(Debug, Default)]
 pub struct DerivedIdRegistry {
     spaces: KeySpaceRegistry<DerivationSite>,

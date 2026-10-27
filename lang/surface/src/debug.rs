@@ -3,7 +3,8 @@
 //! Bitter and scoped terms are the same node types stored in different arenas; the arenas
 //! differ only in what a `Var` node carries (source names before resolution, resolved ids
 //! after) and in the rendering of a few phase-residual nodes. This module maintains the
-//! [`Pretty`] impls once, generic over a [`DebugArena`] adapter that each phase supplies.
+//! [`Pretty`](zydeco_syntax::Pretty) impls once, generic over a
+//! [`DebugArena`](crate::debug::DebugArena) adapter that each phase supplies.
 
 use crate::bitter::syntax::*;
 use pretty::RcDoc;

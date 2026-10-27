@@ -3,7 +3,7 @@
 //! Every test first proves the fixture lints clean, then corrupts exactly one
 //! fact in a clone of the finished arena and asserts the lint reports the
 //! matching error variant. A lint that cannot be shown to catch a seeded
-//! defect has no credibility, per `docs/proposals/tyck-lint.md`.
+//! defect has no credibility.
 //!
 //! `DanglingReference` has no dedicated mutation: removing a node needs a
 //! `remove` on `ArenaSparse`, which the container does not expose, and

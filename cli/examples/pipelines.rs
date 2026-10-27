@@ -1,6 +1,8 @@
 //! Compare static and dynamic composition on the same checked source.
 //!
-//! Timing scope: `docs/references/compiler.md#pipeline-examples-and-validation`.
+//! The CSV reports average pipeline construction and normalization times separately,
+//! excluding source checking and high-SPS construction, and these timings do not
+//! measure generated-program performance.
 
 use clap::Parser;
 use std::{

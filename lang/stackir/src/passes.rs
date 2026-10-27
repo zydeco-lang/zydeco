@@ -1,6 +1,4 @@
 //! Built-in high-SPS plans.
-//!
-//! See `docs/references/compiler.md#built-in-plans-and-phase-boundaries`.
 
 use crate::{
     BranchJoinError, BranchJoinProgram,

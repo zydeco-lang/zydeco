@@ -770,8 +770,7 @@ impl StaticsArena {
     }
 
     /// Clone only the keyed indexes of a finished check, leaving the much
-    /// larger occurrence payload in its shared materialization. See
-    /// `docs/proposals/arena-gc.md` for the L/S classification.
+    /// larger occurrence payload in its shared materialization.
     pub fn clone_keyed_indexes(&self) -> Self {
         Self { indexes: Arc::clone(&self.indexes), ..Self::default() }
     }

@@ -74,7 +74,6 @@ impl KeySpaceId {
 ///
 /// Share the registry with `Arc`, and retain it for as long as its sites may be
 /// replayed. Dropping it releases the site map without recycling any issued ID.
-/// See the [compiler identity account](../../../docs/references/compiler.md#c2-compiler-data-identities-arenas-and-source-provenance).
 ///
 /// ```
 /// use zydeco_utils::arena::KeySpaceRegistry;
@@ -288,7 +287,7 @@ pub trait ArenaAccessMut<Id, T>: ArenaAccess<Id, T> + IndexMut<Id, Output = T> {
 /// An arena after its producing phase has finished.
 ///
 /// `FrozenArena` is a transparent, allocation-free ownership boundary. It
-/// deliberately implements [`Deref`] but not `DerefMut`, so downstream phases
+/// deliberately implements [`Deref`](std::ops::Deref) but not `DerefMut`, so downstream phases
 /// can read the arena at the same cost as the underlying value without being
 /// able to update a completed phase product accidentally. A consuming
 /// transformation may recover ownership with [`FrozenArena::into_inner`] and

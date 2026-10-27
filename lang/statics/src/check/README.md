@@ -8,12 +8,8 @@ The module boundaries separate those responsibilities so a rule can be maintaine
 
 ## Checking contracts
 
-The [compiler reference](../../../../docs/references/compiler.md#c5-typed-representation-judgments-and-inference)
-owns judgment dispatch, inference regions, solver rollback, checked-term reuse, and shared finalization.
-Its [elaboration chapter](../../../../docs/references/compiler.md#c6-typed-elaboration-residualization-and-validation)
-owns generated syntax, coverage, static residualization, and typed-arena validation.
-The [language reference](../../../../docs/references/language.md#4-classification-and-inference) specifies source
-inference and classifier extraction; the [formal calculus](../../type-system.typ) provides their mathematical companion.
+Checking covers judgment dispatch, inference regions, solver rollback, checked-term reuse, and shared finalization.
+Elaboration adds generated syntax, coverage, static residualization, and typed-arena validation.
 
 The table below locates those responsibilities within `check`.
 Keep syntax-family rules behind the term and pattern dispatchers so allocation guards,
@@ -60,5 +56,3 @@ across value reduction, pattern handling, computation traversal, and residual co
 
 `validate` consumes typed syntax for coverage and the optional type lint.
 `fmt` and the crate-private `source_span` provide formatting and source-aware diagnostic locations.
-The overall ownership and publication boundaries are described
-in [DESIGN.md](../../../../DESIGN.md#query-based-analysis).
