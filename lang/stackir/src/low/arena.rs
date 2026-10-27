@@ -2,7 +2,7 @@
 
 use super::syntax::*;
 use crate::{
-    high::arena::{AdminArena as HighAdminArena, StackirScope},
+    high::arena::{AdminArena as HighAdminArena, SpsScope},
     static_syntax as ss,
 };
 use derive_more::{AsMut, AsRef};
@@ -33,8 +33,8 @@ impl ArenaSchema<CompuId> for SpsLowScope {
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SpsLowAdminArena {
     node_allocator: IdAllocator<SpsLowScope>,
-    def_allocator: IdAllocator<StackirScope>,
-    /// Names introduced by high and low Stack IR lowering. Source and typed-
+    def_allocator: IdAllocator<SpsScope>,
+    /// Names introduced by SPS and SPSLow lowering. Source and typed-
     /// elaboration names stay in their immutable phase arenas.
     pub defs: ArenaSparse<ScopedScope, DefId>,
     pub pats: ArenaForth<ss::PatId, VPatId>,

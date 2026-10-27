@@ -46,7 +46,7 @@ or the phase's acceptance boundary.
 
 The implemented [resumable execution contract](../references/compiler.md#resumable-folder-execution) provides
 statically selected native and explicit-stack drivers for residual lowering, Builtin packed value materialization,
-high SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
+SPS reconstruction and pattern decisions, closure conversion, SPSLow structural analysis, local unboxing,
 and [CPS assembly lowering](../references/compiler.md#cps-assembly-lowering).
 Their equivalence and depth checks support using the interface for those boundaries.
 The following sections record boundaries skipped after evaluation because their ownership
@@ -199,7 +199,7 @@ the [compiler memory proposal](arena-gc.md) owns the broader retention questions
 
 ### Other execution adapters
 
-The scoped and high SPS analysis visitors already enumerate children directly into one traversal vector.
+The scoped and SPS analysis visitors already enumerate children directly into one traversal vector.
 Adapting their callback-based child enumeration to one-child-at-a-time calls would need retained child sequences
 or a shared child cursor; re-enumerating all children for each position would make wide nodes quadratic.
 A migration needs a concrete maintenance benefit and must preserve entry/exit balancing, cycle handling,
@@ -229,8 +229,8 @@ a replacement needs a context-sensitive traversal or a justified memo key under 
 The raw classifier folder and residual runtime iterator provide distinct starting points. Further SPS
 rebuilding must preserve the established [consumer-demand schedule](../references/compiler.md#consumer-demands).
 
-Residual lowering and high SPS normalization now use explicit reconstruction frames,
-as recorded in [C8](../references/compiler.md#c8-high-sps-lowering-normalization-and-demand).
+Residual lowering and SPS normalization now use explicit reconstruction frames,
+as recorded in [C8](../references/compiler.md#c8-sps-lowering-normalization-and-demand).
 Further depth work should distinguish those completed migrations from recursive semantic helpers:
 normalization's owned known-value construction, structured demand and protocol operations,
 and low verification still have recursive paths.

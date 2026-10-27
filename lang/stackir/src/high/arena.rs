@@ -8,19 +8,19 @@ use zydeco_surface::scoped::arena::ScopedScope;
 
 /// Allocation scope for high Stack IR nodes and synthetic scoped definitions.
 #[derive(Debug)]
-pub enum StackirScope {}
+pub enum SpsScope {}
 
-impl Allocates<VPatId> for StackirScope {}
-impl Allocates<ValueId> for StackirScope {}
-impl Allocates<StackId> for StackirScope {}
-impl Allocates<CompuId> for StackirScope {}
-impl Allocates<DefId> for StackirScope {}
+impl Allocates<VPatId> for SpsScope {}
+impl Allocates<ValueId> for SpsScope {}
+impl Allocates<StackId> for SpsScope {}
+impl Allocates<CompuId> for SpsScope {}
+impl Allocates<DefId> for SpsScope {}
 
 /// Generated definition names and typed-source provenance for high Stack IR.
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct AdminArena {
     /// ID allocator shared by all stack-IR node categories.
-    pub(crate) allocator: IdAllocator<StackirScope>,
+    pub(crate) allocator: IdAllocator<SpsScope>,
 
     /// Names introduced by Stack IR lowering. Source and typed-elaboration
     /// names stay in their immutable phase arenas.
@@ -47,7 +47,7 @@ impl AdminArena {
     pub(crate) fn fresh<Id>(&mut self) -> Id
     where
         Id: ArenaId,
-        StackirScope: Allocates<Id>,
+        SpsScope: Allocates<Id>,
     {
         self.allocator.alloc()
     }
@@ -69,16 +69,16 @@ impl Default for AdminArena {
     }
 }
 
-impl ArenaSchema<VPatId> for StackirScope {
+impl ArenaSchema<VPatId> for SpsScope {
     type Item = ValuePattern;
 }
-impl ArenaSchema<ValueId> for StackirScope {
+impl ArenaSchema<ValueId> for SpsScope {
     type Item = Value;
 }
-impl ArenaSchema<StackId> for StackirScope {
+impl ArenaSchema<StackId> for SpsScope {
     type Item = Stack;
 }
-impl ArenaSchema<CompuId> for StackirScope {
+impl ArenaSchema<CompuId> for SpsScope {
     type Item = Computation<LetJoin>;
 }
 
@@ -86,7 +86,7 @@ impl ArenaSchema<CompuId> for StackirScope {
 /// The definitions and patterns are equivalent to the ones in
 /// [`zydeco_statics::arena::StaticsArena`].
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
-pub struct StackirArena {
+pub struct SpsArena {
     /// administrative arena
     #[as_ref]
     #[as_mut]
@@ -95,11 +95,11 @@ pub struct StackirArena {
     /// inner arena that stores the nodes and associated properties
     #[as_ref]
     #[as_mut]
-    pub inner: StackirInnerArena,
+    pub inner: SpsInnerArena,
 }
 
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
-pub struct StackirInnerArena {
+pub struct SpsInnerArena {
     pub protocols: std::sync::Arc<crate::protocol::ProtocolGraph>,
     /// Closed compiler-defined builtin bodies may be exposed at every known call.
     /// This is compiler provenance, not an annotation on arbitrary source closures.
@@ -109,35 +109,35 @@ pub struct StackirInnerArena {
     /// Intrinsic protocols of recursive entries and codata eliminations.
     pub compu_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
     /// value pattern arena
-    pub vpats: ArenaSparse<StackirScope, VPatId>,
+    pub vpats: ArenaSparse<SpsScope, VPatId>,
     /// value arena
-    pub values: ArenaSparse<StackirScope, ValueId>,
+    pub values: ArenaSparse<SpsScope, ValueId>,
     /// stack arena
-    pub stacks: ArenaSparse<StackirScope, StackId>,
+    pub stacks: ArenaSparse<SpsScope, StackId>,
     /// computation arena
-    pub compus: ArenaSparse<StackirScope, CompuId>,
+    pub compus: ArenaSparse<SpsScope, CompuId>,
 }
 
 /// A complete Stack IR program with one computation at its top level.
 #[derive(Debug)]
-pub struct StackirProgram {
-    arena: FrozenArena<StackirArena>,
+pub struct SpsProgram {
+    arena: FrozenArena<SpsArena>,
     root: CompuId,
 }
 
 /// Read-only source storage and empty target storage for a structural rebuild.
-pub(crate) struct StackirRebuild {
-    pub source: StackirArena,
-    pub target: StackirArena,
+pub(crate) struct SpsRebuild {
+    pub source: SpsArena,
+    pub target: SpsArena,
     pub root: CompuId,
 }
 
-impl StackirProgram {
-    pub fn new(arena: StackirArena, root: CompuId) -> Self {
+impl SpsProgram {
+    pub fn new(arena: SpsArena, root: CompuId) -> Self {
         Self { arena: FrozenArena::new(arena), root }
     }
 
-    pub fn arena(&self) -> &StackirArena {
+    pub fn arena(&self) -> &SpsArena {
         &self.arena
     }
 
@@ -145,21 +145,18 @@ impl StackirProgram {
         self.root
     }
 
-    pub(crate) fn into_rebuild(self) -> StackirRebuild {
+    pub(crate) fn into_rebuild(self) -> SpsRebuild {
         let Self { arena, root } = self;
-        let StackirArena { mut admin, inner } = arena.into_inner();
+        let SpsArena { mut admin, inner } = arena.into_inner();
         let source_admin = AdminArena {
             pats: std::mem::take(&mut admin.pats),
             terms: std::mem::take(&mut admin.terms),
             ..AdminArena::default()
         };
         let protocols = inner.protocols.clone();
-        StackirRebuild {
-            source: StackirArena { admin: source_admin, inner },
-            target: StackirArena {
-                admin,
-                inner: StackirInnerArena { protocols, ..Default::default() },
-            },
+        SpsRebuild {
+            source: SpsArena { admin: source_admin, inner },
+            target: SpsArena { admin, inner: SpsInnerArena { protocols, ..Default::default() } },
             root,
         }
     }
@@ -167,7 +164,7 @@ impl StackirProgram {
 
 impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U
 where
-    Arena: AsMut<StackirArena>,
+    Arena: AsMut<SpsArena>,
     U: Into<ValuePattern>,
 {
     type Site = ss::PatId;
@@ -184,7 +181,7 @@ where
 
 impl<U, Arena> Construct<Value, ValueId, Arena> for U
 where
-    Arena: AsMut<StackirArena>,
+    Arena: AsMut<SpsArena>,
     U: Into<Value>,
 {
     type Site = ss::TermId;
@@ -201,7 +198,7 @@ where
 
 impl<U, Arena> Construct<Stack, StackId, Arena> for U
 where
-    Arena: AsMut<StackirArena>,
+    Arena: AsMut<SpsArena>,
     U: Into<Stack>,
 {
     type Site = ss::TermId;
@@ -218,7 +215,7 @@ where
 
 impl<U, Arena> Construct<Computation<LetJoin>, CompuId, Arena> for U
 where
-    Arena: AsMut<StackirArena>,
+    Arena: AsMut<SpsArena>,
     U: Into<Computation<LetJoin>>,
 {
     type Site = ss::TermId;

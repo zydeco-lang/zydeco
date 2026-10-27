@@ -85,8 +85,8 @@ and its regressions should run in child processes so an abort cannot take down t
 The monadic-literal lowering failure is resolved:
 the existing `monadic_block_lifts_builtin_literals_with_trivial_value_structures` regression passes,
 following `406fa554`'s empty-comatch protocol-hint repair.
-High SPS ownership and free-variable analysis now share a traversal,
-closure conversion reuses its variable facts, and the selected-pass regressions pass.
+SPS ownership and free-variable analysis now share a traversal, closure conversion reuses its variable facts,
+and the selected-pass regressions pass.
 The shared CLI/test execution runner also replaces the earlier duplicated execution path.
 Further generic traversal machinery needs a demonstrated consumer.
 

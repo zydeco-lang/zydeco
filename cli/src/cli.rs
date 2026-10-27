@@ -135,7 +135,7 @@ pub enum Commands {
         #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "NAME")]
         packages: Vec<PackagePath>,
     },
-    /// List optional compiler passes or explain a selected high-SPS plan
+    /// List optional compiler passes or explain a selected SPS plan
     Passes {
         /// Explain `default`, `none`, or a comma-separated list such as normalize,normalize
         #[arg(long, value_name = "PLAN")]
@@ -232,16 +232,16 @@ pub struct SourceSelection {
 /// External text is parsed into phase-owned plan types before source loading.
 #[derive(Args, Debug, Default)]
 pub struct PipelineOptions {
-    /// High-SPS passes: default, none, or a comma-separated list; order and duplicates are preserved
+    /// SPS passes: default, none, or a comma-separated list; order and duplicates are preserved
     #[arg(long, value_name = "PLAN")]
     pub sps_passes: Option<String>,
-    /// Trace each selected high-SPS pass and its execution time on stderr
+    /// Trace each selected SPS pass and its execution time on stderr
     #[arg(long)]
     pub trace_passes: bool,
-    /// Verify high-SPS invariants before and after each selected pass
+    /// Verify SPS invariants before and after each selected pass
     #[arg(long)]
     pub verify_passes: bool,
-    /// Print high-SPS IR before and after each selected pass on stderr
+    /// Print SPS IR before and after each selected pass on stderr
     #[arg(long)]
     pub dump_passes: bool,
 }

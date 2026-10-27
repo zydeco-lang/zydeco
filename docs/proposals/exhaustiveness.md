@@ -6,7 +6,7 @@ This motivates the typed pattern matrix described in the [compiler reference](..
 typing determines constructor spaces, product arities, and erased witness components
 before the matrix enumerates missing shapes.
 The [language reference](../references/language.md#7-patterns-and-coverage) owns source acceptance and catch-all rules;
-[high SPS lowering](../references/compiler.md#pattern-decisions-and-validation) owns compiled pattern decisions.
+[SPS lowering](../references/compiler.md#pattern-decisions-and-validation) owns compiled pattern decisions.
 
 The remaining extensions change what a row can observe or how rows interact.
 They should preserve correlated coverage and source-order fallthrough across interpreter and compiled execution.

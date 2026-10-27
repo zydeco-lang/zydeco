@@ -1,7 +1,7 @@
 //! Compare static and dynamic composition on the same checked source.
 //!
 //! The CSV reports average pipeline construction and normalization times separately,
-//! excluding source checking and high-SPS construction, and these timings do not
+//! excluding source checking and SPS construction, and these timings do not
 //! measure generated-program performance.
 
 use clap::Parser;

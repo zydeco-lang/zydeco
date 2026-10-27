@@ -150,7 +150,7 @@ impl<T> ValuePlan<T> {
 pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
-    pub arena: StackirArena,
+    pub arena: SpsArena,
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
@@ -177,7 +177,7 @@ pub struct BuiltinRootLowerer<'a> {
 impl<'a> Lowerer<'a> {
     /// Create a structural lowerer with fresh stack arenas.
     pub fn new(spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
-        let arena = StackirArena::default();
+        let arena = SpsArena::default();
         let lower_errors = Vec::new();
         Self {
             arena,
@@ -282,7 +282,7 @@ impl<'a> Lowerer<'a> {
     fn finish(mut self, root: CompuId) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
         if self.lower_errors.is_empty() {
             self.arena.inner.protocols = std::sync::Arc::new(self.protocols.graph);
-            Ok(BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
+            Ok(BranchJoinProgram::try_new(SpsProgram::new(self.arena, root))
                 .expect("stack-indexed lowering must construct branch-join SPS"))
         } else {
             Err(self.lower_errors)

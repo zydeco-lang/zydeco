@@ -542,8 +542,8 @@ The
 [compiler reference's phase map](docs/references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
 connects source loading and checking to interpretation, SPS lowering, and native or WebAssembly emission.
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
-High SPS retains lexical branch joins; normalization simplifies known producers
-and consumers before closure conversion constructs first-order SPSLow.
+SPS retains lexical branch joins; normalization simplifies known producers and consumers
+before closure conversion constructs first-order SPSLow.
 SPSLow checks explicit environment/result entry roles and closure/continuation record provenance
 under the [word entry contract](docs/references/compiler.md#word-entry-contracts).
 It also preserves and checks [partial source protocols](docs/references/compiler.md#partial-source-protocols)
@@ -556,7 +556,7 @@ ZASM makes the control-flow graph explicit for assembly-derived targets.
 | Parsing, desugaring, and resolution | [C4](docs/references/compiler.md#c4-parsing-desugaring-and-name-resolution) | `lang/surface/src/{textual,bitter,scoped}` |
 | Typing, finalization, elaboration, and validation | [C5–C6](docs/references/compiler.md#c5-typed-representation-judgments-and-inference) | `lang/statics/src` |
 | Linking and interpretation | [C7](docs/references/compiler.md#c7-linking-and-the-reference-interpreter) | `lang/dynamics/src` |
-| High SPS, demand, and closure conversion | [C8–C9](docs/references/compiler.md#c8-high-sps-lowering-normalization-and-demand) | `lang/stackir/src/{high,low}` |
+| SPS, demand, and closure conversion | [C8–C9](docs/references/compiler.md#c8-sps-lowering-normalization-and-demand) | `lang/stackir/src/{high,low}` |
 | ZASM and representation analysis | [C10](docs/references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) | `lang/assembly/src` |
 | Native preparation, emission, and runtime | [C11–C12](docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission) | `lang/{assembly,amd64,machine}`, `runtime` |
 | WebAssembly emission and embedding | [C13](docs/references/compiler.md#c13-webassembly-backend-and-embedding) | `lang/{wasm-sps,wasm-common}` |
@@ -706,9 +706,9 @@ Storage and access have separate contracts:
   `Desugarer`, assembly `Lowerer`, and stack analysis.
   Their output arenas do not retain the cursor.
   The checker uses the derived allocation strategy described above.
-  Stack IR is the deliberate exception: high SPS retains its definition issuer until the consuming SPSLow conversion,
+  Stack IR is the deliberate exception: SPS retains its definition issuer until the consuming SPSLow conversion,
   which moves that issuer into the low administrative arena for globally unique synthetic definitions.
-  SPSLow nodes use a separate low-syntax issuer and never reuse high node IDs.
+  SPSLow nodes use a separate issuer and never reuse SPS node IDs.
 - Provenance tables encode their actual cardinality.
   In particular, repeated type checking and transparent syntax make surface-to-typed provenance many-to-many,
   while one typed node can lower to many stack-IR nodes.

@@ -13,7 +13,7 @@ use zydeco_session::{
 use zydeco_stackir::{
     BranchJoinProgram, BuiltinRootLowerError, RootLowerer, SpsLowPipeline, SpsLowProgram,
     SpsLoweringError,
-    passes::{HighSpsFailure, HighSpsInspection, HighSpsObserver, HighSpsPlan},
+    passes::{SpsFailure, SpsInspection, SpsObserver, SpsPlan},
 };
 use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax::SpanArena};
@@ -26,8 +26,8 @@ pub struct CommandCompiler {
     project: Arc<zydeco_session::source::Project>,
     lint_types: bool,
     representation: RepresentationStrategy,
-    sps_passes: HighSpsPlan,
-    pass_inspection: HighSpsInspection,
+    sps_passes: SpsPlan,
+    pass_inspection: SpsInspection,
 }
 
 /// The interaction of a checked source run: its standard output, standard error, and exit status.
@@ -66,14 +66,14 @@ impl CommandCompiler {
             .map_err(|error| CompileError::Analysis(AnalysisError::Source { error }))
     }
 
-    /// Select optional high-SPS transformations for subsequent compilations.
-    pub fn with_sps_passes(mut self, plan: HighSpsPlan) -> Self {
+    /// Select optional SPS transformations for subsequent compilations.
+    pub fn with_sps_passes(mut self, plan: SpsPlan) -> Self {
         self.sps_passes = plan;
         self
     }
 
-    /// Inspect high-SPS transformations on stderr using each compilation's arenas.
-    pub fn with_pass_inspection(mut self, inspection: HighSpsInspection) -> Self {
+    /// Inspect SPS transformations on stderr using each compilation's arenas.
+    pub fn with_pass_inspection(mut self, inspection: SpsInspection) -> Self {
         self.pass_inspection = inspection;
         self
     }
@@ -321,7 +321,7 @@ pub struct BackendProgram {
     /// Populated only when an assembly-derived target is requested.
     assembly: OnceLock<AssemblyProgram>,
     representation: RepresentationStrategy,
-    sps_passes: HighSpsPlan,
+    sps_passes: SpsPlan,
 }
 
 /// One source-level SPS lowering failure with the provenance its reports need.
@@ -361,17 +361,17 @@ pub struct Amd64Artifact {
 
 enum BackendLowerError {
     Root(BuiltinRootLowerError),
-    Pass(HighSpsFailure),
+    Pass(SpsFailure),
 }
 
 impl BackendProgram {
     pub fn lower(executable: ExecutableProgram) -> Result<Self, CompileError> {
-        Self::lower_with_passes(executable, &HighSpsPlan::Default, HighSpsInspection::default())
+        Self::lower_with_passes(executable, &SpsPlan::Default, SpsInspection::default())
     }
 
     /// Lower and freeze an executable under the selected pass plan.
     pub fn lower_with_passes(
-        executable: ExecutableProgram, plan: &HighSpsPlan, inspection: HighSpsInspection,
+        executable: ExecutableProgram, plan: &SpsPlan, inspection: SpsInspection,
     ) -> Result<Self, CompileError> {
         let ExecutableProgram { spans, scoped, statics, root, signature } = executable;
         let builtin = zydeco_statics::BuiltinPackagePlan::for_executable(&statics, &signature)
@@ -382,12 +382,12 @@ impl BackendProgram {
     fn lower_boundary(
         spans: Arc<SpanArena>, scoped: Arc<ScopedArena>, statics: Arc<StaticsArena>,
         root: zydeco_statics::CompuId, builtin: Option<zydeco_statics::BuiltinPackagePlan>,
-        plan: &HighSpsPlan, inspection: HighSpsInspection,
+        plan: &SpsPlan, inspection: SpsInspection,
     ) -> Result<Self, CompileError> {
         let lower_sps = |program: BranchJoinProgram| {
             let mut pipeline = SpsLowPipeline { scoped: &scoped, statics: &statics };
             if inspection.enabled() {
-                let mut observer = HighSpsObserver {
+                let mut observer = SpsObserver {
                     scoped: &scoped,
                     statics: &statics,
                     inspection,
@@ -399,7 +399,7 @@ impl BackendProgram {
                     .map_err(BackendLowerError::Pass)
             } else {
                 Ok(match plan {
-                    | HighSpsPlan::Default => pipeline.run_infallible(program),
+                    | SpsPlan::Default => pipeline.run_infallible(program),
                     | _ => pipeline.with_optimizations(plan.instantiate()).run_infallible(program),
                 })
             }
@@ -424,7 +424,7 @@ impl BackendProgram {
                     statics,
                 }));
             }
-            | Err(BackendLowerError::Pass(error)) => return Err(CompileError::HighSpsPass(error)),
+            | Err(BackendLowerError::Pass(error)) => return Err(CompileError::SpsPass(error)),
         };
         Ok(Self {
             spans,
@@ -438,7 +438,7 @@ impl BackendProgram {
     }
 
     /// The immutable optimization selection used to produce this backend input.
-    pub fn sps_passes(&self) -> &HighSpsPlan {
+    pub fn sps_passes(&self) -> &SpsPlan {
         &self.sps_passes
     }
 
@@ -572,8 +572,8 @@ impl BackendProgram {
 pub enum CompileError {
     #[error(transparent)]
     Library(zydeco_statics::LibraryCheckError),
-    #[error("high-SPS pipeline: {0}")]
-    HighSpsPass(#[source] HighSpsFailure),
+    #[error("SPS pipeline: {0}")]
+    SpsPass(#[source] SpsFailure),
     #[error(transparent)]
     Analysis(AnalysisError),
     #[error("type checking failed")]

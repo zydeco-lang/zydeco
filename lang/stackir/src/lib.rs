@@ -2,7 +2,7 @@
 
 use zydeco_statics::syntax as static_syntax;
 
-/// Syntax shared by high and low Stack IR.
+/// Syntax shared by SPS and SPSLow.
 pub mod syntax;
 /// Partial source value and stack protocols, independent of physical frame extent.
 pub mod protocol;
@@ -15,7 +15,7 @@ pub use builtin::*;
 mod pipeline;
 pub use pipeline::SpsLowPipeline;
 
-/// Built-in high-SPS pass selection and typed inspection hooks.
+/// Built-in SPS pass selection and typed inspection hooks.
 pub mod passes;
 
 /// First-order stack-passing IR with blocks, jumps, and explicit packages.

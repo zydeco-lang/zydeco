@@ -80,10 +80,10 @@ impl HostCallMode {
 }
 
 impl ExternalFunction {
-    /// Wrap an external call in a high Stack IR closure.
+    /// Wrap an external call in an SPS closure.
     pub fn make_function<Arena>(self, arena: &mut Arena) -> ValueId
     where
-        Arena: AsMut<StackirArena>,
+        Arena: AsMut<SpsArena>,
     {
         if let ExternalFunction::Host(role) = self
             && let Some(operation) = ComparisonOp::from_builtin(role)
@@ -107,7 +107,7 @@ impl ExternalFunction {
 impl CompareBranch {
     /// Keep primitive selection in the builtin body, including at escaping uses
     /// and when optional normalization is disabled.
-    fn make_function<Arena: AsMut<StackirArena>>(
+    fn make_function<Arena: AsMut<SpsArena>>(
         arena: &mut Arena, operation: ComparisonOp,
     ) -> ValueId {
         use crate::protocol::ValueProtocol;
@@ -156,7 +156,7 @@ impl CompareBranch {
 }
 
 impl MemoryStep {
-    fn make_function<Arena: AsMut<StackirArena>>(
+    fn make_function<Arena: AsMut<SpsArena>>(
         arena: &mut Arena, access: memory::MemoryAccess,
     ) -> ValueId {
         use crate::protocol::ValueProtocol;
@@ -212,7 +212,7 @@ impl MemoryStep {
 
 impl AddrOffset {
     /// Materialize the builtin's pure body even when optional normalization is disabled.
-    fn make_function<Arena: AsMut<StackirArena>>(arena: &mut Arena) -> ValueId {
+    fn make_function<Arena: AsMut<SpsArena>>(arena: &mut Arena) -> ValueId {
         use crate::protocol::ValueProtocol;
 
         let [base, displacement] = ["__address_base__", "__byte_displacement__"].map(|name| {

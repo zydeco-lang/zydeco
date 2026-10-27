@@ -10,14 +10,14 @@ pub use zydeco_syntax::Pretty;
 /// Formatter for stack IR using scoped and statics naming.
 pub struct Formatter<'arena> {
     admin: &'arena AdminArena,
-    inner: &'arena StackirInnerArena,
+    inner: &'arena SpsInnerArena,
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
     pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(
-        admin: &'arena AdminArena, inner: &'arena StackirInnerArena, scoped: &'arena ScopedArena,
+        admin: &'arena AdminArena, inner: &'arena SpsInnerArena, scoped: &'arena ScopedArena,
         statics: &'arena StaticsArena,
     ) -> Self {
         Formatter { admin, inner, scoped, statics, indent: 2 }
@@ -415,7 +415,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for StackirProgram {
+impl<'a> Pretty<'a, Formatter<'a>> for SpsProgram {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("[root]")
             .append(RcDoc::concat([RcDoc::line(), self.root().pretty(f)]).nest(f.indent))

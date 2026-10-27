@@ -175,7 +175,7 @@ impl<A: Visitor, B: Visitor> Visitor for Together<A, B> {
 }
 
 pub struct Traversal<'a> {
-    pub arena: &'a StackirInnerArena,
+    pub arena: &'a SpsInnerArena,
 }
 
 enum VisitState {

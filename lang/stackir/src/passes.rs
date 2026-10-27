@@ -1,4 +1,4 @@
-//! Built-in high-SPS plans.
+//! Built-in SPS plans.
 
 use crate::{
     BranchJoinError, BranchJoinProgram,
@@ -19,13 +19,13 @@ use zydeco_utils::pass::{
     CompilerPass, PassFailure, PassInvocation, PassLocation, PassObserver, PassSequence,
 };
 
-/// A selectable high-SPS transformation.
+/// A selectable SPS transformation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HighSpsPass {
+pub enum SpsPass {
     Normalize,
 }
 
-impl HighSpsPass {
+impl SpsPass {
     pub const ALL: &'static [Self] = &[Self::Normalize];
 
     pub fn name(self) -> &'static str {
@@ -45,28 +45,28 @@ impl HighSpsPass {
     }
 }
 
-impl fmt::Display for HighSpsPass {
+impl fmt::Display for SpsPass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
 }
 
-/// An owned selection of built-in high-SPS passes.
+/// An owned selection of built-in SPS passes.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub enum HighSpsPlan {
+pub enum SpsPlan {
     #[default]
     Default,
     None,
-    Custom(Vec<HighSpsPass>),
+    Custom(Vec<SpsPass>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-pub enum HighSpsPlanError {
-    #[error("empty high-SPS pass selection; use `none` to disable optional passes")]
+pub enum SpsPlanError {
+    #[error("empty SPS pass selection; use `none` to disable optional passes")]
     Empty,
-    #[error("empty high-SPS pass at position {position}")]
+    #[error("empty SPS pass at position {position}")]
     EmptyPass { position: usize },
-    #[error("unknown high-SPS pass `{name}` at position {position}; available pass: normalize")]
+    #[error("unknown SPS pass `{name}` at position {position}; available pass: normalize")]
     UnknownPass { position: usize, name: String },
     #[error(
         "`{name}` selects a complete plan and cannot occur at position {position} in a pass list"
@@ -74,12 +74,12 @@ pub enum HighSpsPlanError {
     NestedPreset { position: usize, name: String },
 }
 
-impl FromStr for HighSpsPlan {
-    type Err = HighSpsPlanError;
+impl FromStr for SpsPlan {
+    type Err = SpsPlanError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         match text.trim() {
-            | "" => Err(HighSpsPlanError::Empty),
+            | "" => Err(SpsPlanError::Empty),
             | "default" => Ok(Self::Default),
             | "none" => Ok(Self::None),
             | text => text
@@ -88,14 +88,12 @@ impl FromStr for HighSpsPlan {
                 .map(|(index, token)| {
                     let position = index + 1;
                     match token.trim() {
-                        | "normalize" => Ok(HighSpsPass::Normalize),
-                        | "" => Err(HighSpsPlanError::EmptyPass { position }),
+                        | "normalize" => Ok(SpsPass::Normalize),
+                        | "" => Err(SpsPlanError::EmptyPass { position }),
                         | name @ ("default" | "none") => {
-                            Err(HighSpsPlanError::NestedPreset { position, name: name.into() })
+                            Err(SpsPlanError::NestedPreset { position, name: name.into() })
                         }
-                        | name => {
-                            Err(HighSpsPlanError::UnknownPass { position, name: name.into() })
-                        }
+                        | name => Err(SpsPlanError::UnknownPass { position, name: name.into() }),
                     }
                 })
                 .collect::<Result<Vec<_>, _>>()
@@ -104,7 +102,7 @@ impl FromStr for HighSpsPlan {
     }
 }
 
-impl fmt::Display for HighSpsPlan {
+impl fmt::Display for SpsPlan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             | Self::Default => f.write_str("default"),
@@ -123,10 +121,10 @@ impl fmt::Display for HighSpsPlan {
     }
 }
 
-impl HighSpsPlan {
-    pub fn passes(&self) -> &[HighSpsPass] {
+impl SpsPlan {
+    pub fn passes(&self) -> &[SpsPass] {
         match self {
-            | Self::Default => &[HighSpsPass::Normalize],
+            | Self::Default => &[SpsPass::Normalize],
             | Self::None => &[],
             | Self::Custom(passes) => passes,
         }
@@ -141,14 +139,14 @@ impl HighSpsPlan {
             .map(|(index, pass)| format!("  {}\n", pass.location(index)))
             .collect::<String>();
         format!(
-            "high-SPS selection: {self}\n  check closed root (required)\n{stages}  check closed root (required)\n  closure conversion (required)\n"
+            "SPS selection: {self}\n  check closed root (required)\n{stages}  check closed root (required)\n  closure conversion (required)\n"
         )
     }
 
     /// Instantiate independent occurrences, preserving the selected order.
     pub fn instantiate(&self) -> PassSequence<'static, BranchJoinProgram, Infallible> {
         self.passes().iter().fold(PassSequence::new(), |passes, pass| match pass {
-            | HighSpsPass::Normalize => passes.with_pass(Normalizer),
+            | SpsPass::Normalize => passes.with_pass(Normalizer),
         })
     }
 
@@ -162,55 +160,55 @@ impl HighSpsPlan {
         let observer = Rc::new(RefCell::new(observer));
         self.passes().iter().enumerate().fold(PassSequence::new(), |passes, (index, pass)| {
             match pass {
-                | HighSpsPass::Normalize => passes
+                | SpsPass::Normalize => passes
                     .with_pass(Normalizer.with_observer(pass.location(index), observer.clone())),
             }
         })
     }
 }
 
-/// High-SPS trace, verification, and dump options.
+/// SPS trace, verification, and dump options.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct HighSpsInspection {
+pub struct SpsInspection {
     pub trace: bool,
     pub verify: bool,
     pub dump: bool,
 }
 
-impl HighSpsInspection {
+impl SpsInspection {
     pub fn enabled(self) -> bool {
         self.trace || self.verify || self.dump
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum HighSpsObservationError {
+pub enum SpsObservationError {
     #[error(transparent)]
-    Invalid(#[from] zydeco_surface::diagnostic::Diagnostics<HighSpsInvariant>),
-    #[error("could not write high-SPS inspection output: {0}")]
+    Invalid(#[from] zydeco_surface::diagnostic::Diagnostics<SpsInvariant>),
+    #[error("could not write SPS inspection output: {0}")]
     Output(#[from] io::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum HighSpsInvariant {
-    #[error("high-SPS invariant failed: {0}")]
+pub enum SpsInvariant {
+    #[error("SPS invariant failed: {0}")]
     BranchJoin(BranchJoinError),
-    #[error("high-SPS invariant failed: root has free definitions {0:?}")]
+    #[error("SPS invariant failed: root has free definitions {0:?}")]
     FreeDefinitions(Vec<DefId>),
 }
 
-pub type HighSpsFailure = PassFailure<Infallible, HighSpsObservationError>;
+pub type SpsFailure = PassFailure<Infallible, SpsObservationError>;
 
 /// Render and verify borrowed IR using the current compilation's naming arenas.
-pub struct HighSpsObserver<'a, W> {
+pub struct SpsObserver<'a, W> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
-    pub inspection: HighSpsInspection,
+    pub inspection: SpsInspection,
     pub output: W,
 }
 
-impl<W: Write> HighSpsObserver<'_, W> {
-    fn inspect(&mut self, program: &BranchJoinProgram) -> Result<(), HighSpsObservationError> {
+impl<W: Write> SpsObserver<'_, W> {
+    fn inspect(&mut self, program: &BranchJoinProgram) -> Result<(), SpsObservationError> {
         if self.inspection.verify {
             use crate::high::{
                 check::BranchJoinValidator,
@@ -226,15 +224,13 @@ impl<W: Write> HighSpsObserver<'_, W> {
                 .errors()
                 .iter()
                 .cloned()
-                .map(HighSpsInvariant::BranchJoin)
+                .map(SpsInvariant::BranchJoin)
                 .chain(
                     analyses
                         .second
                         .free_variables(program.root().into())
                         .filter(|free| !free.is_empty())
-                        .map(|free| {
-                            HighSpsInvariant::FreeDefinitions(free.iter().copied().collect())
-                        }),
+                        .map(|free| SpsInvariant::FreeDefinitions(free.iter().copied().collect())),
                 )
                 .collect();
             if let Some(errors) = zydeco_surface::diagnostic::Diagnostics::with_errors(errors) {
@@ -258,15 +254,15 @@ impl<W: Write> HighSpsObserver<'_, W> {
 }
 
 impl<W: Write> PassObserver<BranchJoinProgram, BranchJoinProgram, Infallible>
-    for HighSpsObserver<'_, W>
+    for SpsObserver<'_, W>
 {
-    type Error = HighSpsObservationError;
+    type Error = SpsObservationError;
 
     fn before(
         &mut self, invocation: &PassInvocation, input: &BranchJoinProgram,
     ) -> Result<(), Self::Error> {
         if self.inspection.trace || self.inspection.dump {
-            writeln!(self.output, "before high-SPS {invocation}")?;
+            writeln!(self.output, "before SPS {invocation}")?;
         }
         self.inspect(input)
     }
@@ -277,7 +273,7 @@ impl<W: Write> PassObserver<BranchJoinProgram, BranchJoinProgram, Infallible>
         if self.inspection.trace || self.inspection.dump {
             writeln!(
                 self.output,
-                "after high-SPS {invocation}: {:.3} ms",
+                "after SPS {invocation}: {:.3} ms",
                 elapsed.as_secs_f64() * 1000.0
             )?;
         }

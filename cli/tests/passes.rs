@@ -2,7 +2,7 @@ use std::{
     path::PathBuf,
     process::{Command, Output},
 };
-use zydeco_cli::{CommandCompiler, HighSpsPlan};
+use zydeco_cli::{CommandCompiler, SpsPlan};
 
 struct Fixture {
     directory: tempfile::TempDir,
@@ -109,7 +109,7 @@ fn discovery_and_expansion_need_no_source_file() {
             .unwrap();
         Fixture::assert_success(&output);
         let text = String::from_utf8(output.stdout).unwrap();
-        assert_eq!(text, plan.parse::<HighSpsPlan>().unwrap().explain());
+        assert_eq!(text, plan.parse::<SpsPlan>().unwrap().explain());
     }
 }
 
@@ -118,12 +118,12 @@ fn rejected_selections_stop_before_source_loading_or_artifact_creation() {
     let fixture = Fixture::arithmetic();
     std::fs::remove_file(fixture.source()).unwrap();
     for (plan, diagnostic) in [
-        ("", "empty high-SPS pass selection"),
+        ("", "empty SPS pass selection"),
         ("normalize,missing", "position 2"),
-        ("normalize,", "empty high-SPS pass at position 2"),
-        ("normalize(limit=2)", "unknown high-SPS pass"),
+        ("normalize,", "empty SPS pass at position 2"),
+        ("normalize(limit=2)", "unknown SPS pass"),
         ("normalize,none", "selects a complete plan"),
-        ("stack-analysis", "unknown high-SPS pass"),
+        ("stack-analysis", "unknown SPS pass"),
     ] {
         let output = fixture.build(plan, "exe", &[]);
         assert!(!output.status.success());
@@ -157,14 +157,14 @@ fn inspection_preserves_output_and_identifies_every_selected_occurrence() {
     Fixture::assert_success(&inspected);
     assert_eq!(inspected.stdout, baseline.stdout);
     let trace = String::from_utf8_lossy(&inspected.stderr);
-    assert!(trace.contains("before high-SPS normalize[1] (invocation 1)"));
-    assert!(trace.contains("after high-SPS normalize[1] (invocation 1)"));
+    assert!(trace.contains("before SPS normalize[1] (invocation 1)"));
+    assert!(trace.contains("after SPS normalize[1] (invocation 1)"));
     assert!(trace.lines().count() > 2, "IR dumps accompany trace boundaries");
     let repeated =
         fixture.build("normalize,normalize", "zir", &["--trace-passes", "--verify-passes"]);
     Fixture::assert_success(&repeated);
     let trace = String::from_utf8_lossy(&repeated.stderr);
-    assert_eq!(trace.matches("before high-SPS").count(), 2);
+    assert_eq!(trace.matches("before SPS").count(), 2);
     assert!(trace.contains("normalize[2] (invocation 1)"));
     let empty = fixture.build("none", "zir", &["--trace-passes", "--verify-passes"]);
     Fixture::assert_success(&empty);
@@ -177,19 +177,19 @@ fn changing_command_selection_produces_independent_frozen_backend_products() {
     let mut compiler = CommandCompiler::default();
     let original = compiler.lower(&fixture.source()).unwrap();
     let original_size = original.assembly().arena().programs.len();
-    compiler = compiler.with_sps_passes(HighSpsPlan::None);
+    compiler = compiler.with_sps_passes(SpsPlan::None);
     let unoptimized = compiler.lower(&fixture.source()).unwrap();
-    assert_eq!(unoptimized.sps_passes(), &HighSpsPlan::None);
+    assert_eq!(unoptimized.sps_passes(), &SpsPlan::None);
     assert!(unoptimized.assembly().arena().programs.len() > original_size);
-    compiler = compiler.with_sps_passes(HighSpsPlan::Default);
+    compiler = compiler.with_sps_passes(SpsPlan::Default);
     let again = compiler.lower(&fixture.source()).unwrap();
-    assert_eq!(again.sps_passes(), &HighSpsPlan::Default);
+    assert_eq!(again.sps_passes(), &SpsPlan::Default);
     assert_eq!(again.assembly().arena().programs.len(), original_size);
     assert_eq!(original.assembly().arena().programs.len(), original_size);
 }
 
 #[test]
-fn every_build_target_accepts_the_high_sps_selection() {
+fn every_build_target_accepts_the_sps_selection() {
     let fixture = Fixture::arithmetic();
     for target in ["zir", "zasm", "asm", "wasm-sps"] {
         Fixture::assert_success(&fixture.build("none", target, &[]));

@@ -1,4 +1,4 @@
-//! Closure conversion from lexical high SPS to first-order SPSLow.
+//! Closure conversion from lexical SPS to first-order SPSLow.
 
 use super::{check::SpsLowProgram, syntax as low};
 use crate::arena::{Construct as _, DefinitionNames as _};
@@ -21,7 +21,7 @@ use zydeco_utils::{
 mod pattern;
 mod fold;
 
-/// Convert lexical high SPS into first-order SPSLow with fresh construction state.
+/// Convert lexical SPS into first-order SPSLow with fresh construction state.
 pub struct SpsLowConverter<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
@@ -59,10 +59,10 @@ struct PatternTranslation {
     bindings: Vec<(high::DefId, high::DefId)>,
 }
 
-/// Consume high SPS and construct a fresh first-order SPSLow program.
+/// Consume SPS and construct a fresh first-order SPSLow program.
 #[derive(AsRef, AsMut)]
 struct ClosureConversion<'a> {
-    source: high::StackirArena,
+    source: high::SpsArena,
     #[as_ref(low::SpsLowArena)]
     #[as_mut(low::SpsLowArena)]
     arena: low::SpsLowArena,
@@ -75,7 +75,7 @@ struct ClosureConversion<'a> {
 
 impl<'a> ClosureConversion<'a> {
     fn new(program: BranchJoinProgram, scoped: &'a ScopedArena, statics: &'a StaticsArena) -> Self {
-        let high::StackirRebuild { source, target, root } = program.into_program().into_rebuild();
+        let high::SpsRebuild { source, target, root } = program.into_program().into_rebuild();
         let mut variables = Variables::default();
         Traversal { arena: &source.inner }.run(root.into(), &mut variables);
         let arena = low::SpsLowArena {
@@ -229,13 +229,13 @@ mod tests {
     use zydeco_utils::arena::ArenaAccess;
 
     struct Fixture {
-        arena: high::StackirArena,
+        arena: high::SpsArena,
         scoped: ScopedArena,
     }
 
     impl Fixture {
         fn new() -> Self {
-            Self { arena: high::StackirArena::default(), scoped: ScopedArena::default() }
+            Self { arena: high::SpsArena::default(), scoped: ScopedArena::default() }
         }
 
         fn def(&mut self, name: &str) -> high::DefId {
@@ -246,7 +246,7 @@ mod tests {
 
         fn build<U, S, T>(&mut self, node: U) -> T
         where
-            U: Construct<S, T, high::StackirArena>,
+            U: Construct<S, T, high::SpsArena>,
         {
             node.build(&mut self.arena, None)
         }

@@ -5,11 +5,11 @@ use zydeco_utils::fold::Recursive;
 pub(super) struct Drivers;
 
 impl Drivers {
-    fn integer(arena: &mut StackirArena, value: i64) -> ValueId {
+    fn integer(arena: &mut SpsArena, value: i64) -> ValueId {
         Literal::Integer(IntegerLiteral::Int(value)).build(arena, None)
     }
 
-    fn trap(arena: &mut StackirArena) -> ValueId {
+    fn trap(arena: &mut SpsArena) -> ValueId {
         let operands = [Self::integer(arena, 1), Self::integer(arena, 0)];
         Primitive {
             operation: PrimitiveOp::Integer(IntegerType::Int, IntegerArithmetic::Div),
@@ -20,15 +20,15 @@ impl Drivers {
 
     // Bounded semantic fixtures can copy immutable inputs. Each run receives a
     // fresh allocator, preserving source IDs without duplicating allocation rights.
-    fn input(source: &StackirArena, root: CompuId) -> BranchJoinProgram {
-        let arena = StackirArena {
+    fn input(source: &SpsArena, root: CompuId) -> BranchJoinProgram {
+        let arena = SpsArena {
             admin: AdminArena {
                 defs: source.admin.defs.clone(),
                 pats: source.admin.pats.clone(),
                 terms: source.admin.terms.clone(),
                 ..Default::default()
             },
-            inner: StackirInnerArena {
+            inner: SpsInnerArena {
                 protocols: source.inner.protocols.clone(),
                 builtin_functions: source.inner.builtin_functions.clone(),
                 value_protocols: source.inner.value_protocols.clone(),
@@ -40,10 +40,10 @@ impl Drivers {
                 compus: source.inner.compus.clone(),
             },
         };
-        BranchJoinProgram::try_new(StackirProgram::new(arena, root)).unwrap()
+        BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap()
     }
 
-    pub(super) fn normalize(source: &StackirArena, root: CompuId) -> StackirProgram {
+    pub(super) fn normalize(source: &SpsArena, root: CompuId) -> SpsProgram {
         let explicit = Normalizer
             .run_with_driver::<Explicit>(Self::input(source, root))
             .unwrap()
@@ -67,7 +67,7 @@ fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers(
         StackTrap,
     }
     for case in [Case::True, Case::False, Case::Unknown, Case::OperandTrap, Case::StackTrap] {
-        let mut arena = StackirArena::default();
+        let mut arena = SpsArena::default();
         let first = match case {
             | Case::Unknown => Hole.build(&mut arena, None),
             | Case::OperandTrap => Drivers::trap(&mut arena),
@@ -138,7 +138,7 @@ impl Snapshot {
         items
     }
 
-    fn of(program: &StackirProgram) -> Self {
+    fn of(program: &SpsProgram) -> Self {
         let arena = program.arena();
         let scoped = zydeco_surface::scoped::arena::ScopedArena::default();
         let statics = zydeco_statics::arena::StaticsArena::default();
@@ -194,7 +194,7 @@ impl Snapshot {
 
 #[test]
 fn drivers_preserve_reconstruction_sites_and_protocols() {
-    let mut arena = StackirArena::default();
+    let mut arena = SpsArena::default();
     let mut origins = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
     let pattern_site = ss::PatId::Value(origins.alloc());
     let value_site = ss::TermId::Value(origins.alloc());
@@ -242,7 +242,7 @@ fn drivers_preserve_empty_and_wide_child_sequences() {
     }
     for count in [0, 1, 64] {
         for children in [Children::Values, Children::ComatchArms, Children::CoproductArms] {
-            let mut arena = StackirArena::default();
+            let mut arena = SpsArena::default();
             let (root, expected) = match children {
                 | Children::Values => {
                     let items = (0..count).map(|_| Triv.build(&mut arena, None)).collect();

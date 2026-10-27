@@ -10,7 +10,7 @@ pub mod native;
 pub mod library;
 pub mod unit;
 pub use zydeco_assembly::representation::RepresentationStrategy;
-pub use zydeco_stackir::passes::{HighSpsInspection, HighSpsPass, HighSpsPlan, HighSpsPlanError};
+pub use zydeco_stackir::passes::{SpsInspection, SpsPass, SpsPlan, SpsPlanError};
 
 pub use crate::{
     cli::{

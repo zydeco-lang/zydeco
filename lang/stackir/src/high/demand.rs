@@ -1,4 +1,4 @@
-//! Consumer demands used while rebuilding lexical high SPS.
+//! Consumer demands used while rebuilding lexical SPS.
 
 use super::syntax::*;
 use std::collections::{BTreeMap, HashMap};
@@ -78,7 +78,7 @@ impl Demands {
         self.0.remove(def);
     }
 
-    pub fn pattern(&self, arena: &StackirArena, binder: VPatId) -> Demand {
+    pub fn pattern(&self, arena: &SpsArena, binder: VPatId) -> Demand {
         match &arena.inner.vpats[&binder] {
             | ValuePattern::Var(def) => self.0.get(def).cloned().unwrap_or_default(),
             | ValuePattern::Hole(_) | ValuePattern::Triv(_) => Demand::Absent,

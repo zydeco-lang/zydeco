@@ -4,7 +4,7 @@ use zydeco_utils::fold::Recursive;
 struct Fixture;
 
 impl Fixture {
-    fn decide(arena: &StackirInnerArena, binder: VPatId, known: &KnownValue) -> Option<bool> {
+    fn decide(arena: &SpsInnerArena, binder: VPatId, known: &KnownValue) -> Option<bool> {
         let input = (binder, KnownView::Value(known));
         let explicit = Explicit::run(&mut DecisionFolder { source: arena }, input);
         let recursive = Recursive::run(&mut DecisionFolder { source: arena }, input);
@@ -23,7 +23,7 @@ impl Fixture {
 
 #[test]
 fn decisions_preserve_the_first_uncertain_or_rejected_alias_member() {
-    let mut arena = StackirArena::default();
+    let mut arena = SpsArena::default();
     let hole = Hole.build(&mut arena, None);
     let nested = Ctor(Fixture::tag(), hole).build(&mut arena, None);
     let uncertain = Ctor(Fixture::tag(), nested).build(&mut arena, None);
@@ -44,7 +44,7 @@ fn decisions_preserve_the_first_uncertain_or_rejected_alias_member() {
 
 #[test]
 fn suffix_decisions_borrow_physical_fields_and_preserve_shape_uncertainty() {
-    let mut arena = StackirArena::default();
+    let mut arena = SpsArena::default();
     let hole = Hole.build(&mut arena, None);
     let first = Ctor(Fixture::tag(), hole).build(&mut arena, None);
     let second = Ctor(Fixture::other(), hole).build(&mut arena, None);
@@ -69,7 +69,7 @@ fn suffix_decisions_borrow_physical_fields_and_preserve_shape_uncertainty() {
 
 #[test]
 fn false_and_uncertain_prefixes_do_not_inspect_later_children() {
-    let mut arena = StackirArena::default();
+    let mut arena = SpsArena::default();
     let missing: VPatId = arena.admin.fresh();
     let hole = Hole.build(&mut arena, None);
     let rejected = Ctor(Fixture::other(), hole).build(&mut arena, None);
@@ -81,7 +81,7 @@ fn false_and_uncertain_prefixes_do_not_inspect_later_children() {
 
 #[test]
 fn wide_alias_decisions_preserve_every_matching_component() {
-    let mut arena = StackirArena::default();
+    let mut arena = SpsArena::default();
     let patterns = (0..256)
         .map(|_| {
             let hole = Hole.build(&mut arena, None);
@@ -98,7 +98,7 @@ fn deep_alias_decisions_run_and_drop_on_a_small_stack() {
     std::thread::Builder::new()
         .stack_size(512 * 1024)
         .spawn(|| {
-            let mut arena = StackirArena::default();
+            let mut arena = SpsArena::default();
             let mut binder = Hole.build(&mut arena, None);
             for _ in 0..16_384 {
                 binder = Alias(ConsN::from_vec(vec![binder]).unwrap()).build(&mut arena, None);
@@ -122,7 +122,7 @@ fn deep_product_decisions_borrow_facts_without_owning_their_teardown() {
     std::thread::Builder::new()
         .stack_size(512 * 1024)
         .spawn(|| {
-            let mut arena = StackirArena::default();
+            let mut arena = SpsArena::default();
             let mut binder = Hole.build(&mut arena, None);
             // Retain each level so the fixture can release parents before children.
             // Production KnownValue destruction remains a separate representation concern.

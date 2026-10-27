@@ -17,7 +17,7 @@ Dated experimental reports and their evidence live in [evaluations](../evaluatio
 | [Shared view evaluation](shared-view-evaluation.md) | Should grouped arms evaluate their view once? |
 | [Broader view heads](broader-view-heads.md) | Which value terms should be admitted as view heads? |
 | [Residual code sharing](residual-code-sharing.md) | When should repeated static applications share residual code? |
-| [Demand-directed construction](demand-directed-construction.md) | Can unused high-SPS nodes be avoided during construction? |
+| [Demand-directed construction](demand-directed-construction.md) | Can unused SPS nodes be avoided during construction? |
 | [REPL history and replay](repl-history-replay.md) | How should numbered source history persist and replay effects? |
 | [REPL history pruning](repl-history-pruning.md) | When can stored interactive sources be discarded? |
 | [REPL command extensions](repl-command-extensions.md) | Which interactions need argument-bearing or stateful commands? |

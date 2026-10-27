@@ -25,11 +25,11 @@ Both representations have one computation root rather than a top-level declarati
 - `syntax` holds the shared node forms, parameterized by phase-specific IDs,
   and `arena` holds shared builder and definition-name lookup traits.
   Each phase adds its own control-flow forms to the common syntax.
-- `high::syntax` and `high::arena` define lexical high SPS;
-  `high::lower` constructs a validated `BranchJoinProgram` directly from checked syntax.
+- `high::syntax` and `high::arena` define lexical SPS; `high::lower` constructs a validated `BranchJoinProgram` directly
+  from checked syntax.
 - `high::variables` provides free-variable analysis, and `high::check` validates closed roots, lexical ownership,
   and branch-join placement.
-- `high::normalize` rebuilds high SPS using local reductions and the consumer demands defined by `high::demand`.
+- `high::normalize` rebuilds SPS using local reductions and the consumer demands defined by `high::demand`.
 - `low::syntax` and `low::arena` define first-order SPS with typed package forms.
 - `low::entry` defines the explicit environment/result word roles consumed by block entries and supplied by jumps.
 - `protocol` extracts partial source value/stack protocols.
@@ -42,6 +42,6 @@ Both representations have one computation root rather than a top-level declarati
 - `low::convert` performs fresh structural closure conversion; `low::check` validates lexical ownership,
   retained branch joins, and native continuation metadata.
   `low::contracts` checks code provenance and package agreement against the word entry roles.
-- `SpsLowPipeline` composes lowering, high-SPS passes, and closure conversion into first-order SPSLow.
+- `SpsLowPipeline` composes lowering, SPS passes, and closure conversion into first-order SPSLow.
 
-High SPS and SPSLow implement the stack-passing-style paper's SPS and `SPS_l`.
+SPS and SPSLow implement the stack-passing-style paper's SPS and `SPS_l`.

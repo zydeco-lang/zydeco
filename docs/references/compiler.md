@@ -20,7 +20,7 @@ when locating failures.
 5. [Checking and Inference](#c5-typed-representation-judgments-and-inference)
 6. [Elaboration and Validation](#c6-typed-elaboration-residualization-and-validation)
 7. [Reference Interpreter](#c7-linking-and-the-reference-interpreter)
-8. [High SPS and Normalization](#c8-high-sps-lowering-normalization-and-demand)
+8. [SPS and Normalization](#c8-sps-lowering-normalization-and-demand)
 9. [Closure Conversion](#c9-closure-conversion-and-first-order-spslow)
 10. [ZASM and Local Representations](#c10-zasm-stack-analysis-and-local-representation-choices)
 11. [Native Preparation and Emission](#c11-native-preparation-activation-frames-and-amd64-emission)
@@ -46,10 +46,10 @@ flowchart TD
     Statics --> Queries[Static queries and editor analysis]
     Statics --> Entry[Executable selection and completeness]
     Entry --> Dynamics[Builtin linking and interpreter]
-    Entry --> High[BranchJoinProgram: high SPS]
-    High --> Normalize[Selected high-SPS passes: normalization by default]
+    Entry --> Sps[BranchJoinProgram: SPS]
+    Sps --> Normalize[Selected SPS passes: normalization by default]
     Normalize --> Low[SpsLowProgram: closure conversion]
-    Low --> SPS[Structured WebAssembly]
+    Low --> Wasm[Structured WebAssembly]
     Low --> Portable[Portable ZASM, stack analysis, and rendering]
     Low --> Native[Native ZASM and checked frame preparation]
     Native --> AMD64[AMD64 emission and runtime linking]
@@ -64,7 +64,7 @@ The main boundaries are concrete program types:
 | `CheckedProgram` | `CompilerSession::checked_program` | Full typed-tree inspection |
 | `ExecutableProgram` | `CompilerSession::executable_program` | Builtin root linking or lowering |
 | `DynamicsProgram` | [BuiltinRootLinker](../../lang/dynamics/src/link.rs) | Reference interpreter |
-| `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | Selected high-SPS transformations, then closure conversion |
+| `BranchJoinProgram` | [BuiltinRootLowerer](../../lang/stackir/src/high/lower.rs) | Selected SPS transformations, then closure conversion |
 | `SpsLowProgram` | [SpsLowPipeline::run](../../lang/stackir/src/pipeline.rs) | Structured Wasm or assembly lowering |
 | `AssemblyProgram` | [LoweringPipeline::run](../../lang/assembly/src/pipeline.rs) | ZASM rendering and representation analysis |
 | `NativeProgram` | Native pipeline from `LoweringPipeline::with_native_frames` | AMD64 emitter |
@@ -84,7 +84,7 @@ do code <- ! api/run 0;
 Source loading checks the Builtin signature independently.
 Checking resolves `api/run` to a structural field route and relates `process` to the executable's type witnesses.
 Static elaboration erases static evidence while retaining the explicit thunk and computation calls.
-High lowering constructs the product and its consuming stack.
+SPS lowering constructs the product and its consuming stack.
 Normalization exposes the known field and thunk, binds `n` to `0`, forwards the return
 into `code`, and removes unused fields.
 Any remaining closure crosses C9 as a closure record with explicit captures.
@@ -131,7 +131,7 @@ of the selected stages and their validated program types.
 Stages in a sequence share an error type. `map_err` translates domain errors at a composition boundary;
 `with_error` gives an infallible pass the enclosing pipeline's error type.
 `run_infallible` removes the unreachable error case when executing an entirely infallible sequence.
-For a high-SPS program `high` and its naming arenas, a Rust caller can select repeated normalization:
+For an SPS program `sps` and its naming arenas, a Rust caller can select repeated normalization:
 
 ```rust
 use zydeco_stackir::{SpsLowPipeline, high::normalize::Normalizer};
@@ -140,7 +140,7 @@ use zydeco_utils::{pass::CompilerPass, pipeline};
 let optimizations = pipeline![Normalizer, Normalizer];
 let mut lowering = SpsLowPipeline { scoped: &scoped, statics: &statics }
     .with_optimizations(optimizations);
-let sps_low = lowering.run_infallible(high);
+let sps_low = lowering.run_infallible(sps);
 ```
 
 #### Runtime Sequences and Execution Adapters
@@ -175,18 +175,18 @@ Panics remain compiler bugs and are not converted into ordinary pass errors.
 
 #### Built-In Plans and Phase Boundaries
 
-[`SpsLowPipeline`](../../lang/stackir/src/pipeline.rs) declares high-SPS checks,
+[`SpsLowPipeline`](../../lang/stackir/src/pipeline.rs) declares SPS checks,
 optional transformations, and closure conversion as a sequence.
 Its `with_optimizations` method accepts any pass preserving `BranchJoinProgram`,
 including `Identity`, a custom Rust pass, or a nested sequence.
-The selected stage runs between the required high-SPS checks and before closure conversion.
+The selected stage runs between the required SPS checks and before closure conversion.
 The default runs the existing normalizer once, keeping its combined reductions and demand analysis;
 an empty selection still runs the checks and closure conversion.
-[High SPS](#c8-high-sps-lowering-normalization-and-demand) defines the representation and normalization rules.
+[SPS](#c8-sps-lowering-normalization-and-demand) defines the representation and normalization rules.
 
-[`HighSpsPlan`](../../lang/stackir/src/passes.rs) describes built-in selection.
+[`SpsPlan`](../../lang/stackir/src/passes.rs) describes built-in selection.
 `Default` selects one normalizer, `None` selects no optional transformations,
-and `Custom` retains an ordered vector of typed `HighSpsPass` entries.
+and `Custom` retains an ordered vector of typed `SpsPass` entries.
 The textual forms are `default`, `none`, and comma-separated pass names; the initial catalog contains `normalize`.
 An empty textual selection, unknown names or options, empty list entries,
 and presets embedded inside lists are rejected before source loading or artifact creation.
@@ -197,15 +197,15 @@ Rust callers can provide arbitrary `CompilerPass` implementations without joinin
 The command compiler owns the plan and instantiates its passes after checked arenas are available.
 An observed plan shares a borrowed observer among distinct occurrences;
 each compilation creates fresh invocation counts and temporary pass state.
-The high-SPS observer verifies lexical ownership, branch joins, and root closure using borrowed phase data.
+The SPS observer verifies lexical ownership, branch joins, and root closure using borrowed phase data.
 The unobserved default retains static composition.
 `BackendProgram` records the selection that produced its frozen SPSLow input,
 and its assembly cache belongs to that product.
-Selecting another high-SPS plan requires a new lowering result, so cached assembly cannot cross selections.
+Selecting another SPS plan requires a new lowering result, so cached assembly cannot cross selections.
 [Assembly representation policy](#policy-selection) remains independently selectable and invalidates
 that product's assembly cache.
 
-High SPS is the configurable optimization boundary.
+SPS is the configurable optimization boundary.
 [`LoweringPipeline`](../../lang/assembly/src/pipeline.rs) composes required assembly construction,
 stack analysis, and publication from a borrowed SPSLow program.
 Its `with_native_frames` option returns a pass that ends in checked `NativeProgram::prepare`,
@@ -231,15 +231,15 @@ zydeco passes --sps-passes normalize,normalize
 
 Every `build` target accepts `--sps-passes`.
 The source interpreter (`run`), `check`, and the REPL do not execute this backend phase and do not accept the option.
-For example, disable optional high-SPS transformations or select repeated normalization:
+For example, disable optional SPS transformations or select repeated normalization:
 
 ```sh
 zydeco build lib/tests/core/representation-policies.zy --target zir --sps-passes none
 zydeco build lib/tests/core/representation-policies.zy --target wasm-sps --sps-passes normalize,normalize
 ```
 
-Use `--trace-passes` to report occurrences and timings, `--verify-passes` to check high-SPS invariants
-before and after each selected pass, and `--dump-passes` to render the corresponding intermediate programs.
+Use `--trace-passes` to report occurrences and timings, `--verify-passes` to check SPS invariants before
+and after each selected pass, and `--dump-passes` to render the corresponding intermediate programs.
 Trace and dump output goes to stderr, leaving the selected target's stdout intact.
 With `none`, there are no optional occurrences to inspect; the required phase checks still run.
 
@@ -259,7 +259,7 @@ cargo run --release -p zydeco-cli --example pipelines -- --iterations 30 \
 ```
 
 The CSV reports average pipeline construction and normalization times separately,
-excluding source checking and high-SPS construction.
+excluding source checking and SPS construction.
 It also records the resulting computation-node count.
 Use repeated runs when comparing timings; these measurements do not establish generated-program performance.
 
@@ -294,8 +294,8 @@ A source binder, a particular checking occurrence, and an emitted runtime value 
 | `FrozenArena<A>` | Consumers receive storage without the builder's indexed-mutation capability. |
 
 Sequential issuers normally live on a parser, resolver, or lowerer rather than its published arena.
-High SPS retains its definition issuer until consuming closure conversion moves it into the low administrative arena;
-low syntax has a separate issuer and never reuses high syntax IDs.
+SPS retains its definition issuer until consuming closure conversion moves it into the low administrative arena;
+SPSLow syntax has a separate issuer and never reuses SPS syntax IDs.
 Statics producer queries derive occurrence IDs, while the checker materializes their returned fragments.
 Rechecking the same source entity in a distinct occurrence must not overwrite an earlier elaboration.
 
@@ -368,10 +368,10 @@ The implemented interfaces serve different questions and therefore expose differ
 | Raw inferred classifiers | [Classifier folders](#classifier-folders) | Owned child reconstruction; preserve unchanged IDs; clients select substitution environments and reductions |
 | Raw checked terms and static evidence | [`CheckedNode` children](#nominal-algebra-construction) | Include classifier, pattern, and static-argument edges; clients select declaration expansion and use `TypeFolder` for classifiers |
 | Executable typed terms | [Residual runtime traversal](#residual-runtime-traversal) | Borrowed runtime nodes from the residual root; visit each identity once and exclude static evidence |
-| Typed terms to lexical high SPS | [Residual lowering folder](#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh output syntax for every input occurrence |
-| Lexical high SPS analysis | [High SPS traversal and analyzers](#high-sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
-| Lexical high SPS normalization | [Normalization reconstruction](#normalization-reconstruction) | Explicit frames retain forward producer scopes and resume rebuilding with backward consumer demands |
-| Lexical high SPS to first-order SPSLow | [Closure conversion folders](#closure-conversion-folders) | Occurrence-local renaming and ordered captures; fresh syntax with preserved allocation and publication order |
+| Typed terms to lexical SPS | [Residual lowering folder](#residual-lowering-folder) | Explicit reconstruction frames; inherited continuation stacks; fresh output syntax for every input occurrence |
+| Lexical SPS analysis | [SPS traversal and analyzers](#sps-analysis-traversal) | Observe every incoming edge for ownership, but expand children and compute exit summaries once |
+| Lexical SPS normalization | [Normalization reconstruction](#normalization-reconstruction) | Explicit frames retain forward producer scopes and resume rebuilding with backward consumer demands |
+| Lexical SPS to first-order SPSLow | [Closure conversion folders](#closure-conversion-folders) | Occurrence-local renaming and ordered captures; fresh syntax with preserved allocation and publication order |
 | First-order SPSLow analysis | [SPSLow traversal and analyzers](#spslow-traversal-and-analyzers) | Observe ownership edges and compute variable summaries in one scan; metadata adds no executable occurrences |
 
 Before reusing a traversal, establish its input view, child environments, occurrence policy, and output identity policy.
@@ -423,7 +423,7 @@ they cannot borrow the mutable folder itself.
 `Explicit::run(&mut folder, root)` stores unfinished parents in a vector and executes through a loop.
 `Recursive::run(&mut folder, root)` retains the same frames in Rust recursive calls.
 Both implement `Driver`, so a caller can select `D: Driver` statically without changing the folder.
-Production residual lowering, Builtin packed value materialization, high SPS normalization,
+Production residual lowering, Builtin packed value materialization, SPS normalization,
 closure conversion, and CPS assembly lowering use `Explicit`; `Recursive` supports bounded comparisons
 and consumes native stack proportional to pending calls.
 The driver introduces no boxed callbacks or individual heap allocation for each continuation.
@@ -449,7 +449,7 @@ Its tests compare both drivers' materialized syntax and arena counts, retain the
 and construct and destroy 16,384 nested products on a 512 KiB stack through `Explicit`.
 These checks establish behavior and depth robustness, without claiming a compilation-time speedup.
 
-The [high SPS pattern folder](../../lang/stackir/src/high/normalize/pattern.rs) copies one owned pattern layer
+The [SPS pattern folder](../../lang/stackir/src/high/normalize/pattern.rs) copies one owned pattern layer
 and replaces each child slot as its result returns.
 Constructor payloads, alias components, and product fields retain their structural order.
 The completed layer moves into the target arena with its original definition IDs,
@@ -1502,17 +1502,17 @@ The [dynamics guide](../../lang/dynamics/src/README.md) maps runtime modules.
 [L6](language.md#6-computations-and-control) owns source dynamics.
 Source regressions and runtime parity tests use the interpreter as one observable execution surface.
 
-## C8. High SPS Lowering, Normalization, and Demand
+## C8. SPS Lowering, Normalization, and Demand
 
-[High lowering](../../lang/stackir/src/high/lower.rs) is indexed by the stack consuming a residual computation.
+[SPS lowering](../../lang/stackir/src/high/lower.rs) is indexed by the stack consuming a residual computation.
 It builds complete user and Builtin structures into `BranchJoinProgram`.
-High SPS retains lexical values, closures, continuations, arguments, and explicit ambient stacks.
+SPS retains lexical values, closures, continuations, arguments, and explicit ambient stacks.
 Stack lets guard value-coproduct matches and scalar comparisons so every branch shares one supplied stack.
-The [high verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
+The [SPS verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
 and this branch-join shape.
 
-The [pass composition contract](#built-in-plans-and-phase-boundaries) owns the configurable stage between high-SPS
-checks and closure conversion, including its default normalization and built-in plans.
+The [pass composition contract](#built-in-plans-and-phase-boundaries) owns the configurable stage between SPS checks
+and closure conversion, including its default normalization and built-in plans.
 The [selection and inspection guide](#selecting-and-inspecting-passes) gives the corresponding CLI commands.
 These optimizations are optional consequences of known runtime structure;
 they do not relax L10's source elimination boundary.
@@ -1524,11 +1524,11 @@ SPS separates values, stacks, and programs.
 Continuations, argument pushes, and tag pushes build stacks; each program consumes one ambient stack `•` exactly once
 on every path, and no value captures it, because closures receive their stack at each call.
 The branch-join shape above is the paper's fragment `SPS_br`, whose stack lets occur exactly
-around value-coproduct matches, and high lowering follows the paper's branch-join compilation.
+around value-coproduct matches, and SPS lowering follows the paper's branch-join compilation.
 Indexed by the consuming stack, it pushes an argument for each application and a tag for each destructor,
 installs a continuation for each `do`, and names the stack with a let at each value case split.
 
-| SPS form | High SPS node | Printed |
+| SPS form | Syntax node | Printed |
 | --- | --- | --- |
 | Variable `x`, literal `n` | `Value::Var`, `Value::Literal` | `x`, `n` |
 | Closure `λ_c •. M` | `Value::Closure` | `{ • -> M }` |
@@ -1588,7 +1588,7 @@ Product cursors and branch iterators request one child at a time.
 This retains structural order without constructing a separate list of pending child calls.
 Tail calls cover erased wrappers and intermediate transitions that need no additional unfinished parent.
 
-Computation visits inherit the high SPS stack that consumes their result.
+Computation visits inherit the SPS stack that consumes their result.
 Reconstruction preserves the semantic child schedule: application arguments precede their function body;
 a `do` continuation is lowered before its bindee; value-binding plans wrap their completed continuation
 in evaluation order.
@@ -1618,9 +1618,9 @@ Separate assertions cover fresh ownership and protocols; independent rejected va
 This guarantee concerns residual reconstruction; classifier protocol extraction, normalization analyses,
 and subsequent conversion have their own traversal contracts.
 
-### High SPS Analysis Traversal
+### SPS Analysis Traversal
 
-Lexical ownership, branch-join placement, and free variables all depend on the same high SPS structure.
+Lexical ownership, branch-join placement, and free variables all depend on the same SPS structure.
 The [shared traversal](../../lang/stackir/src/high/traverse.rs) owns its exhaustive child enumeration.
 It exposes borrowed pattern, value, stack, and computation nodes; definitions remain leaves.
 An entry event identifies the immediate incoming edge and whether the occurrence is first, shared, or cyclic.
@@ -1642,7 +1642,7 @@ Those transient facts are released with conversion; keeping summaries trades tem
 for avoiding repeated walks through nested closure bodies.
 
 `Together` delivers the same events to independent analyzers.
-High SPS verification composes ownership and variable analysis in one traversal
+SPS verification composes ownership and variable analysis in one traversal
 and retains both invariant failures when the graph is acyclic.
 The normalizer still owns forward producer propagation and backward consumer demands.
 [Traversal regressions](../../lang/stackir/src/high/traverse/tests.rs) compare separate and composed results,
@@ -1807,7 +1807,7 @@ and direct Wasm instruction selection.
 Numeric `eq`, `lt`, and `gt` choose between two computations of the same arbitrary computation type.
 Their primitive representation therefore exposes control flow directly, without constructing a source `Bool`.
 The shared [comparison domain](../../lang/syntax/src/primitive.rs) pairs a predicate with an integer or float type;
-high and low SPS use `CompareBranch { operation, operands, when_true, when_false }`.
+SPS and SPSLow use `CompareBranch { operation, operands, when_true, when_false }`.
 An immediately enclosing stack let supplies one shared ambient stack to both successors.
 The ownership checks require distinct lexical occurrences for operands and successors,
 and low protocol checking verifies known operand types and both successors against that same stack.
@@ -1854,7 +1854,7 @@ General source closures retain their existing sharing restrictions.
 An escaping or unknown function keeps the ordinary thunk calling convention.
 
 `AddrOffset` takes an `Addr` and a signed `Int` byte displacement and produces an `Addr`.
-The low-SPS protocol checker distinguishes address evidence from numeric evidence and rejects known operand mismatches.
+The SPSLow protocol checker distinguishes address evidence from numeric evidence and rejects known operand mismatches.
 Partial protocol compatibility does not establish allocation validity or access permission.
 The calculation wraps at the execution profile's address width, without dereferencing,
 checking a range, or asserting an in-bounds pointer.
@@ -1881,9 +1881,9 @@ A load binds one result before its successor; a store has only a successor.
 The shared [access domain](../../lang/syntax/src/memory.rs) identifies the scalar role and load/store direction.
 It determines the exact carrier width, numeric little-endian or native address interpretation, and access alignment one.
 Stronger alignment, volatile accesses, and atomics require additional contracts.
-The low-SPS checker validates known address, result, and stored-value protocols.
+The SPSLow checker validates known address, result, and stored-value protocols.
 
-High normalization exposes the fixed builtin body through known aliases and field projections.
+SPS normalization exposes the fixed builtin body through known aliases and field projections.
 It preserves every access, including a load whose result is unused, and sequences the successor after it.
 Each expanded load gets a fresh result binding. Reusing a builtin wrapper must preserve earlier observations
 that remain live across later stores and loads of the same address.
@@ -1941,8 +1941,7 @@ and demand operations remain [separate work](../proposals/traversals.md#normaliz
 Integer literal match plans use the `BuiltinValueRole::Integer(t, Eq)` intrinsic body
 and its scalar comparison with success and failure continuations.
 There is no structural literal-pattern node in SPS.
-Structural aliases survive high and low SPS; assembly saves and reloads their bindee,
-while direct SPS Wasm uses a local.
+Structural aliases survive SPS and SPSLow; assembly saves and reloads their bindee, while direct SPS Wasm uses a local.
 Resolved field routes already consist of ordinary structural patterns and erased witness evidence.
 
 Normalizer and pipeline tests pair reductions with shared closures, traps, unknown branches, and suspended recursion.
@@ -1952,7 +1951,7 @@ A new reduction needs both a reducible example and a case where sharing, stack m
 
 ## C9. Closure Conversion and First-Order SPSLow
 
-[SpsLowConverter](../../lang/stackir/src/low/convert.rs) consumes lexical high SPS and creates fresh low syntax.
+[SpsLowConverter](../../lang/stackir/src/low/convert.rs) consumes lexical SPS and creates fresh low syntax.
 Free-variable analysis determines ordered captures; renamed capture bindings close each generated block.
 A closure becomes a record with an explicit environment and code pointer.
 Its entry unpacks the captured environment before consuming ordinary arguments.
@@ -1961,9 +1960,9 @@ Force and return open the corresponding closure or continuation record and jump 
 
 [Low syntax](../../lang/stackir/src/low/syntax.rs) separates `Block`, `Jump`,
 `ClosurePackage`, `ContinuationPackage`, `OpenClosure`, and `OpenContinuation`.
-Products, primitives, patterns, and external-call forms share their structural vocabulary with high SPS.
+Products, primitives, patterns, and external-call forms share their structural vocabulary with SPS.
 Source captures remain value identities; code labels and lexical syntax nodes belong to the new low arena.
-Administrative definition allocation continues from the consumed high program as described in C2.
+Administrative definition allocation continues from the consumed SPS program as described in C2.
 
 `SpsLowProgram` has one root and first-order closed blocks.
 Its [verifier](../../lang/stackir/src/low/check.rs) checks reference closure,
@@ -1991,7 +1990,7 @@ and a continuation becomes a stack package of type `Ko_A = ∃•Y. Label(A ⊘ 
 | Opening a continuation package | `Computation::OpenContinuation` | `open-continuation S as q :: • in M` |
 
 Continuation blocks list `result: p` before their environment, and returns jump with `result: V`.
-The remaining forms are those of high SPS without closures, continuations, calls, returns, and fixed points.
+The remaining forms are those of SPS without closures, continuations, calls, returns, and fixed points.
 Conversion follows the paper's translation: a call opens the closure package and jumps
 to its code with the environment above the caller's stack; a return opens the continuation package and jumps
 to its code with the result above the restored residual stack, which begins with the saved environment;
@@ -2144,7 +2143,7 @@ In particular, an argument prefix followed by `cont(A)` does not bound the stack
 [ValueProtocol and StackProtocol](../../lang/stackir/src/protocol.rs) are owned IR data extracted
 from checked classifiers.
 Values retain unit, primitive, product, and thunk structure when known.
-Codata interfaces retain observation alternatives in an owned `ProtocolGraph` shared by the high and low arenas.
+Codata interfaces retain observation alternatives in an owned `ProtocolGraph` shared by the SPS and SPSLow arenas.
 Disclosed seals and applied type functions can lead back to existing graph instances.
 Unresolved first-order value and computation witnesses retain program-local parameter names and their kinds.
 Universal binders retain their scope in the descriptor, while captured parameters can occur freely in local entries.
@@ -2190,12 +2189,12 @@ These guards impose no unfolding-depth limit, but can lose evidence for finite n
 General nonregular recursion remains outside this instantiation procedure.
 
 Observation indices are the zero-based ranks of complete destructor names in lexicographic order within the interface.
-High lowering obtains both pushed tags and case tags from the descriptor's canonical ordering.
+SPS lowering obtains both pushed tags and case tags from the descriptor's canonical ordering.
 Consequently, structurally equal codata interfaces agree on runtime indices even
 when their source declarations list observations in different orders.
 Both the name and index participate in low protocol checking.
 
-High lowering records value and pattern protocols, recursive entry protocols, and the interface of each codata case.
+SPS lowering records value and pattern protocols, recursive entry protocols, and the interface of each codata case.
 Normalization copies facts for retained whole values and patterns into the fresh arena;
 discarded values and pruned product fields do not retain stale whole-value facts.
 Surviving cases keep their interface, and rebuilding shares the immutable graph while preserving its references.
@@ -2418,7 +2417,7 @@ Product fields retain their ordinary tagged-word representation.
 
 | Policy | Selected opportunities |
 | --- | --- |
-| `Boxed` | Keep residual product, closure, and scalar operation boxes after the selected high-SPS transformations. |
+| `Boxed` | Keep residual product, closure, and scalar operation boxes after the selected SPS transformations. |
 | `Direct` | Immediate product elimination and opening of a syntactic closure record. |
 | `Local` (default) | `Direct`, plus a variable-bound product used only through compatible projections. |
 | `Shared` (experimental) | `Local`, plus a variable-bound closure used only through closure openings. |
@@ -2599,7 +2598,7 @@ The source roles and legality rules belong to [L14](language.md#compiled-librari
 [Library checking](../../lang/statics/src/check/library.rs) reuses the source judgment query, Builtin domain validator,
 ordinary field resolver, directional foreign classifier, static elaborator, and readiness checker.
 The checked product retains one residual root and scalar signature per export in a shared typed arena.
-`RootLowerer::run_with_builtin` supplies the optional validated provider through the same high-SPS entry path used
+`RootLowerer::run_with_builtin` supplies the optional validated provider through the same SPS entry path used
 for executables; subsequent SPS, representation, and native-frame passes are shared.
 
 Each `CExportEntry` adds a SysV adapter around its prepared native root.
@@ -2789,7 +2788,7 @@ source calls, captures, and mixed raw/reference layouts.
 ### Raw Memory Kernels
 
 A [memory kernel](../../lang/syntax/src/scalar/kernel.rs) encloses raw scalar arithmetic between one load and one store.
-The shared [low-SPS planner](../../lang/stackir/src/low/scalar/memory.rs) recognizes `Int64`, `UInt64`,
+The shared [SPSLow planner](../../lang/stackir/src/low/scalar/memory.rs) recognizes `Int64`, `UInt64`,
 and `Float64` loads followed by a primitive tree or adjacent single-use scalar bindings
 and a store of the same scalar type, with at most 32 arithmetic operations and 32 intervening bindings.
 Every eliminated scalar binding must be consumed inside the kernel.
@@ -2906,7 +2905,7 @@ An embedding supplies the `zydeco` import namespace; the module is not a standal
 the allocator body, and the module scaffolding.
 
 Emission starts from SPSLow, after shared closure conversion and before ZASM lowering.
-Starting at high SPS would duplicate closure conversion, and recovering structure
+Starting at SPS would duplicate closure conversion, and recovering structure
 from ZASM would require reconstructing lexical regions and stack effects from machine program points.
 SPSLow still retains lexical blocks, so the emitter uses structured Wasm and locals
 within a block and remains independent of lazy ZASM construction and native preparation.
@@ -3138,7 +3137,7 @@ Recovery boundaries are owned by their producing phases:
 [source loading](#c3-source-loading-sessions-queries-and-memory-retention),
 [shared source analysis](#shared-source-analysis), [desugaring](#desugaring-folders),
 [resolution](#name-resolution), [checking and finalization](#checker-recovery),
-[execution readiness](#residual-runtime-traversal), and [high SPS verification](#high-sps-analysis-traversal).
+[execution readiness](#residual-runtime-traversal), and [SPS verification](#sps-analysis-traversal).
 These contracts state which work continues and which dependent product remains unavailable.
 Further diagnostic producers and presentation customization remain
 in the [traversal proposal](../proposals/traversals.md#diagnostic-collection-and-recovery).
@@ -3547,7 +3546,7 @@ an IR snapshot alone does not prove effect order.
 | Grammar or formatting | Surface parser agreement, recovery contracts, semantic/comment preservation, idempotence |
 | Typing, scope, or a source rejection | [Source fixtures](../../lang/tests/cases) or the relevant Rust integration target, with exact diagnostic codes |
 | Typed-arena invariant | A seeded mutation and a clean counterpart in [type-lint tests](../../lang/tests/tests/tyck_lint.rs) |
-| SPS reduction or representation | High/low invariant checks, blocked-rewrite cases, and runtime observations |
+| SPS reduction or representation | SPS and SPSLow invariant checks, blocked-rewrite cases, and runtime observations |
 | Native layout or allocation | Preparation/model unit tests and targeted native-model or GC integration tests |
 | Host or FFI operation | Signature rejection tests, adapter tests, declared I/O, and target-specific execution |
 | Tooling | Current and failed revisions, exact cursor/site identity, and stale-result rejection |
@@ -3608,7 +3607,7 @@ to its invariant.
 ### Following a Change
 
 For a source feature, follow textual syntax and metadata through bitter/scoped forms, typing,
-static elaboration, interpreter linking, high lowering, and every consuming backend.
+static elaboration, interpreter linking, SPS lowering, and every consuming backend.
 For an optimization, identify its required input invariant and every representation or root map it changes.
 For a primitive, update the role catalog, checked signature, materializers, interpreter,
 native runtime/emitter, Wasm emitter/host, and conformance cases.
@@ -3640,7 +3639,7 @@ and documentation drift belongs in [the todo records](../todos/README.md).
 | `@[typeof]` | Reused classifier identity | Operand has no runtime query node |
 | A thunk | Checked computation capture | Interpreter closure or SPS closure conversion |
 | `ret` and `do` | Computation and its consuming continuation | SPS return/binding, then target control representation |
-| A literal pattern | Typed integer and opaque coverage observation | Equality branch during high lowering |
+| A literal pattern | Typed integer and opaque coverage observation | Equality branch during SPS lowering |
 | A monadic block | Retained checked payload and translated algebra structure | Ordinary residualization and backend pipeline |
 | A foreign thunk | Validated `ForeignSignature` | libffi or native returning-call bridge |
 
@@ -3649,7 +3648,7 @@ and documentation drift belongs in [the todo records](../todos/README.md).
 | Hygienic source and binder identities | C2–C4 | Checking and editor provenance |
 | Closed inference and stable normalized types | C5 | C6, linking, and all lowering |
 | Representable executable residual | C6 and executable selection | C7–C14 |
-| Lexical single occurrence and branch joins | High/low validators, C8–C9 | Normalization, capture analysis, local unboxing |
+| Lexical single occurrence and branch joins | SPS and SPSLow validators, C8–C9 | Normalization, capture analysis, local unboxing |
 | Native activation and initialization contracts | C11 preparation | Emitter, frame model, collector |
 | Tagged words and shared record layouts | C12 model and C13 ABI | Host adapters, generated code, runtime |
 | Complete mutable roots at collection | C11 maps and C12 publication | Native moving collector |

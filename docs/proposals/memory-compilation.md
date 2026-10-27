@@ -468,7 +468,7 @@ Treat each successful target as a scoped guarantee before expanding its domain.
 | Source interfaces (implemented) | [L13](../references/language.md#independent-storage-and-codecs), std factories and callers | Shared witnesses; storage-only array composition; explicit logical conversion; fixed/runtime carrier rejection |
 | Static target facts | Layout factory inputs and compiler target/profile identity | Pointer width/alignment and geometry bounds known before static layout reduction; runtime inputs rejected on the fixed path |
 | Memory operations (address/scalar access and bounded kernels implemented) | [C8](../references/compiler.md#ordered-scalar-memory-accesses), [C12](../references/compiler.md#raw-memory-kernels); copy/fill and stronger access evidence remain | Source-domain validation and exact access width/endian/alignment; wrapping addresses; ordered effects; no zero-offset host call |
-| Known workers and contification | High SPS use analysis and normalization before closure conversion | Shared/recursive calls, stack compatibility, unknown/escaping/repeated callbacks |
+| Known workers and contification | SPS use analysis and normalization before closure conversion | Shared/recursive calls, stack compatibility, unknown/escaping/repeated callbacks |
 | Raw component transport | Representation analysis, low entry contracts, native preparation, root maps, emitters | Matching entries and adapters; wide scalar extremes; mixed references surviving collection |
 | Cost regression and diagnostics | Paired code-generation fixtures and execution counters | Allocations, copies, retained frames, code size, compilation cost, and scoped strict-contract failures |
 

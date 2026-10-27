@@ -1,4 +1,4 @@
-//! Syntax shared by high and low Stack IR, parameterized by each phase's node IDs.
+//! Syntax shared by SPS and SPSLow, parameterized by each phase's node IDs.
 //!
 //! The phase modules own their identifiers and control-flow variants. Patterns,
 //! products, primitive calls, bindings, and data eliminations use these common forms.

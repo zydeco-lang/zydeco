@@ -5,15 +5,15 @@ use zydeco_utils::fold::Recursive;
 pub(in crate::low::convert) struct Drivers;
 
 impl Drivers {
-    fn input(source: &high::StackirArena, root: high::CompuId) -> BranchJoinProgram {
-        let arena = high::StackirArena {
+    fn input(source: &high::SpsArena, root: high::CompuId) -> BranchJoinProgram {
+        let arena = high::SpsArena {
             admin: high::AdminArena {
                 defs: source.admin.defs.clone(),
                 pats: source.admin.pats.clone(),
                 terms: source.admin.terms.clone(),
                 ..Default::default()
             },
-            inner: high::StackirInnerArena {
+            inner: high::SpsInnerArena {
                 builtin_functions: source.inner.builtin_functions.clone(),
                 protocols: source.inner.protocols.clone(),
                 value_protocols: source.inner.value_protocols.clone(),
@@ -25,12 +25,11 @@ impl Drivers {
                 compus: source.inner.compus.clone(),
             },
         };
-        BranchJoinProgram::try_new(high::StackirProgram::new(arena, root)).unwrap()
+        BranchJoinProgram::try_new(high::SpsProgram::new(arena, root)).unwrap()
     }
 
     pub(in crate::low::convert) fn convert(
-        source: &high::StackirArena, root: high::CompuId, scoped: &ScopedArena,
-        statics: &StaticsArena,
+        source: &high::SpsArena, root: high::CompuId, scoped: &ScopedArena, statics: &StaticsArena,
     ) -> SpsLowProgram {
         let mut converter = SpsLowConverter { scoped, statics };
         let explicit = converter.run_with_driver::<Explicit>(Self::input(source, root)).unwrap();
@@ -42,7 +41,7 @@ impl Drivers {
         explicit
     }
 
-    fn returning(arena: &mut high::StackirArena) -> high::CompuId {
+    fn returning(arena: &mut high::SpsArena) -> high::CompuId {
         let value = Triv.build(arena, None);
         let stack = Bullet.build(arena, None);
         SReturn { stack, value }.build(arena, None)
@@ -60,7 +59,7 @@ enum Definition {
 }
 
 impl Definition {
-    fn of(id: high::DefId, source: &high::StackirArena) -> Self {
+    fn of(id: high::DefId, source: &high::SpsArena) -> Self {
         if source.admin.defs.get(&id).is_some() {
             Self::Source(id)
         } else {
@@ -99,7 +98,7 @@ impl Snapshot {
     }
 
     fn of(
-        program: &SpsLowProgram, source: &high::StackirArena, scoped: &ScopedArena,
+        program: &SpsLowProgram, source: &high::SpsArena, scoped: &ScopedArena,
         statics: &StaticsArena,
     ) -> Self {
         let arena = program.arena();
@@ -190,7 +189,7 @@ impl Snapshot {
 #[test]
 fn drivers_preserve_empty_and_wide_children() {
     for count in [0, 1, 32] {
-        let mut arena = high::StackirArena::default();
+        let mut arena = high::SpsArena::default();
         let arms = (0..count)
             .map(|idx| {
                 let values = (0..count).map(|_| Triv.build(&mut arena, None)).collect();
@@ -224,7 +223,7 @@ fn drivers_preserve_empty_and_wide_children() {
 
 #[test]
 fn drivers_preserve_comparison_operands_successors_and_shared_stack() {
-    let mut arena = high::StackirArena::default();
+    let mut arena = high::SpsArena::default();
     let operands =
         [4, 9].map(|value| Literal::Integer(IntegerLiteral::Int(value)).build(&mut arena, None));
     let [when_true, when_false] = [(); 2].map(|()| Drivers::returning(&mut arena));
@@ -251,7 +250,7 @@ fn drivers_preserve_comparison_operands_successors_and_shared_stack() {
 
 #[test]
 fn drivers_preserve_origins_and_partial_protocols() {
-    let mut arena = high::StackirArena::default();
+    let mut arena = high::SpsArena::default();
     let mut origins = IdAllocator::<zydeco_statics::arena::StaticsScope>::new();
     let value_site = ss::TermId::Value(origins.alloc());
     let body_site = ss::TermId::Compu(origins.alloc());
@@ -292,7 +291,7 @@ fn drivers_preserve_origins_and_partial_protocols() {
 fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
     // Isolate reconstruction: low validation has independent recursive analyses.
     Drivers::small_stack(|| {
-        let mut arena = high::StackirArena::default();
+        let mut arena = high::SpsArena::default();
         let mut root = Drivers::returning(&mut arena);
         for _ in 0..4096 {
             let binder: high::VPatId = Hole.build(&mut arena, None);
@@ -302,7 +301,7 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
             let stack = Bullet.build(&mut arena, None);
             root = SReturn { stack, value }.build(&mut arena, None);
         }
-        let program = BranchJoinProgram::try_new(high::StackirProgram::new(arena, root)).unwrap();
+        let program = BranchJoinProgram::try_new(high::SpsProgram::new(arena, root)).unwrap();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut conversion = ClosureConversion::new(program, &scoped, &statics);
@@ -311,14 +310,14 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
         assert_eq!(conversion.arena.inner.values.len(), 4096 * 5 + 2);
     });
     Drivers::small_stack(|| {
-        let mut arena = high::StackirArena::default();
+        let mut arena = high::SpsArena::default();
         let mut stack = Bullet.build(&mut arena, None);
         for _ in 0..16384 {
             let value: high::ValueId = Triv.build(&mut arena, None);
             stack = Cons(value, stack).build(&mut arena, None);
         }
         let root = SHole(stack).build(&mut arena, None);
-        let program = BranchJoinProgram::try_new(high::StackirProgram::new(arena, root)).unwrap();
+        let program = BranchJoinProgram::try_new(high::SpsProgram::new(arena, root)).unwrap();
         let scoped = ScopedArena::default();
         let statics = StaticsArena::default();
         let mut conversion = ClosureConversion::new(program, &scoped, &statics);

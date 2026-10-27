@@ -40,7 +40,7 @@ which [`lang/stackir`](../../../lang/stackir/src/README.md) implements:
   Each program consumes one ambient stack `•` exactly once on every path, and no value captures it.
   Continuations, argument pushes, and tag pushes build stacks, closures receive one at each call,
   and value and stack let-bindings are the join points.
-  High SPS, `BranchJoinProgram` in [C8](../../references/compiler.md#c8-high-sps-lowering-normalization-and-demand),
+  High SPS, `BranchJoinProgram` in [C8](../../references/compiler.md#c8-sps-lowering-normalization-and-demand),
   realizes SPS in the paper's branch-join fragment `SPS_br`, whose stack lets occur exactly
   around value-coproduct matches; the implementation treats scalar comparisons as a second branching form.
 - **`SPS_l`**, which the code calls SPSLow, is the first-order target of closure conversion: blocks with self labels,

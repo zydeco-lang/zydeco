@@ -97,7 +97,7 @@ Explicit CPS can therefore introduce callback allocations even when it avoids an
 The existing [local reductions](../references/compiler.md#local-reductions) remove some immediate cases.
 
 Contification turns eligible functions into local continuations, represented as control-flow blocks.
-The proposed extension would analyze uses in high SPS before closure conversion, requiring known,
+The proposed extension would analyze uses in SPS before closure conversion, requiring known,
 fully applied, nonescaping uses with compatible ambient-stack and entry contracts.
 Preserve the proven local-continuation status through normalization and lower invocations to jumps;
 escaping or unknown uses keep an adequate first-class environment and lifetime.

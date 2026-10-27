@@ -12,7 +12,7 @@ use zydeco_surface::diagnostic::Diagnostics;
 /// A lexical Stack IR tree whose stack joins occur exactly at coproduct and scalar-comparison branches.
 #[derive(Debug)]
 pub struct BranchJoinProgram {
-    program: StackirProgram,
+    program: SpsProgram,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
@@ -37,35 +37,35 @@ impl BranchJoinProgram {
         BranchJoinValidator::validate(&self.program)
     }
 
-    pub fn try_new(program: StackirProgram) -> Result<Self, BranchJoinErrors> {
+    pub fn try_new(program: SpsProgram) -> Result<Self, BranchJoinErrors> {
         BranchJoinValidator::validate(&program)?;
         Ok(Self { program })
     }
 
-    pub fn as_program(&self) -> &StackirProgram {
+    pub fn as_program(&self) -> &SpsProgram {
         &self.program
     }
 
-    pub fn into_program(self) -> StackirProgram {
+    pub fn into_program(self) -> SpsProgram {
         self.program
     }
 }
 
-impl AsRef<StackirProgram> for BranchJoinProgram {
-    fn as_ref(&self) -> &StackirProgram {
+impl AsRef<SpsProgram> for BranchJoinProgram {
+    fn as_ref(&self) -> &SpsProgram {
         self.as_program()
     }
 }
 
-impl TryFrom<StackirProgram> for BranchJoinProgram {
+impl TryFrom<SpsProgram> for BranchJoinProgram {
     type Error = BranchJoinErrors;
 
-    fn try_from(program: StackirProgram) -> Result<Self, Self::Error> {
+    fn try_from(program: SpsProgram) -> Result<Self, Self::Error> {
         Self::try_new(program)
     }
 }
 
-impl From<BranchJoinProgram> for StackirProgram {
+impl From<BranchJoinProgram> for SpsProgram {
     fn from(program: BranchJoinProgram) -> Self {
         program.into_program()
     }
@@ -80,7 +80,7 @@ pub struct BranchJoinValidator {
 }
 
 impl BranchJoinValidator {
-    fn validate(program: &StackirProgram) -> Result<(), BranchJoinErrors> {
+    fn validate(program: &SpsProgram) -> Result<(), BranchJoinErrors> {
         let mut validator = Self::default();
         Traversal { arena: &program.arena().inner }.run(program.root().into(), &mut validator);
         validator.into_result()
@@ -125,12 +125,12 @@ impl Visitor for BranchJoinValidator {
 /// Check that the given stack IR arena is well-formed enough for debugging.
 ///
 /// This function panics if the root computation has free variables.
-pub fn check(program: &StackirProgram, scoped: &ScopedArena, statics: &StaticsArena) {
+pub fn check(program: &SpsProgram, scoped: &ScopedArena, statics: &StaticsArena) {
     check_closed_root(program, scoped, statics);
 }
 
 /// Ensure that the program root is closed (has no free variables).
-fn check_closed_root(program: &StackirProgram, scoped: &ScopedArena, statics: &StaticsArena) {
+fn check_closed_root(program: &SpsProgram, scoped: &ScopedArena, statics: &StaticsArena) {
     let fv = program.root().free_vars(program.arena());
     let fv_str = fv
         .iter()
@@ -150,14 +150,14 @@ mod tests {
     use super::*;
 
     struct Fixture {
-        arena: StackirArena,
+        arena: SpsArena,
         scrut: ValueId,
         branch: CompuId,
     }
 
     impl Fixture {
         fn new() -> Self {
-            let mut arena = StackirArena::default();
+            let mut arena = SpsArena::default();
             let scrut = Triv.build(&mut arena, None);
             let stack = Bullet.build(&mut arena, None);
             let value = Triv.build(&mut arena, None);
@@ -195,7 +195,7 @@ mod tests {
         let bindee = Bullet.build(&mut fixture.arena, None);
         let root = Let { binder: Bullet, bindee, tail: body }.build(&mut fixture.arena, None);
 
-        let program = StackirProgram::new(fixture.arena, root);
+        let program = SpsProgram::new(fixture.arena, root);
         assert!(BranchJoinProgram::try_new(program).is_ok());
     }
 
@@ -203,7 +203,7 @@ mod tests {
     fn branch_join_rejects_an_unguarded_coproduct_match() {
         let mut fixture = Fixture::new();
         let root = fixture.coprod_match();
-        let program = StackirProgram::new(fixture.arena, root);
+        let program = SpsProgram::new(fixture.arena, root);
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
@@ -232,7 +232,7 @@ mod tests {
         };
         compare.when_false = compare.when_true;
         assert_eq!(
-            BranchJoinProgram::try_new(StackirProgram::new(arena, root)).unwrap_err(),
+            BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap_err(),
             BranchJoinError::SharedComputation { compu: fixture.branch }.into()
         );
     }
@@ -243,7 +243,7 @@ mod tests {
         let bindee = Bullet.build(&mut fixture.arena, None);
         let root =
             Let { binder: Bullet, bindee, tail: fixture.branch }.build(&mut fixture.arena, None);
-        let program = StackirProgram::new(fixture.arena, root);
+        let program = SpsProgram::new(fixture.arena, root);
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),
@@ -259,7 +259,7 @@ mod tests {
             .build(&mut fixture.arena, None);
         let stack = Bullet.build(&mut fixture.arena, None);
         let root = SReturn { stack, value: pair }.build(&mut fixture.arena, None);
-        let program = StackirProgram::new(fixture.arena, root);
+        let program = SpsProgram::new(fixture.arena, root);
 
         assert_eq!(
             BranchJoinProgram::try_new(program).unwrap_err(),

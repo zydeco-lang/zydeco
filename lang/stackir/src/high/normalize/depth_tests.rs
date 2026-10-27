@@ -8,14 +8,14 @@ impl Depth {
         std::thread::Builder::new().stack_size(512 * 1024).spawn(test).unwrap().join().unwrap();
     }
 
-    fn returning(arena: &mut StackirArena) -> CompuId {
+    fn returning(arena: &mut SpsArena) -> CompuId {
         let value = Triv.build(arena, None);
         let stack = Bullet.build(arena, None);
         SReturn { stack, value }.build(arena, None)
     }
 
-    fn normalize(arena: StackirArena, root: CompuId) -> StackirProgram {
-        let program = BranchJoinProgram::try_new(StackirProgram::new(arena, root)).unwrap();
+    fn normalize(arena: SpsArena, root: CompuId) -> SpsProgram {
+        let program = BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap();
         Normalizer.run(program).unwrap().into_program()
     }
 }
@@ -24,7 +24,7 @@ impl Depth {
 fn deep_bindings_prune_total_values_and_retain_traps_on_a_small_stack() {
     Depth::small_stack(|| {
         for trapping in [false, true] {
-            let mut arena = StackirArena::default();
+            let mut arena = SpsArena::default();
             let mut root = Depth::returning(&mut arena);
             for _ in 0..16384 {
                 let binder = Hole.build(&mut arena, None);
@@ -45,7 +45,7 @@ fn deep_bindings_prune_total_values_and_retain_traps_on_a_small_stack() {
 #[test]
 fn deep_suspended_bodies_rebuild_on_a_small_stack() {
     Depth::small_stack(|| {
-        let mut arena = StackirArena::default();
+        let mut arena = SpsArena::default();
         let mut root = Depth::returning(&mut arena);
         for _ in 0..8192 {
             let value = Closure { stack: Bullet, body: root }.build(&mut arena, None);
@@ -61,7 +61,7 @@ fn deep_suspended_bodies_rebuild_on_a_small_stack() {
 #[test]
 fn deep_ambient_substitutions_reduce_and_drop_on_a_small_stack() {
     Depth::small_stack(|| {
-        let mut arena = StackirArena::default();
+        let mut arena = SpsArena::default();
         let mut root = Depth::returning(&mut arena);
         for _ in 0..16384 {
             let thunk = Closure { stack: Bullet, body: root }.build(&mut arena, None);
@@ -78,7 +78,7 @@ fn deep_ambient_substitutions_reduce_and_drop_on_a_small_stack() {
 #[test]
 fn deep_argument_stacks_rebuild_on_a_small_stack() {
     Depth::small_stack(|| {
-        let mut arena = StackirArena::default();
+        let mut arena = SpsArena::default();
         let mut stack = Bullet.build(&mut arena, None);
         for _ in 0..16384 {
             let value: ValueId = Triv.build(&mut arena, None);
@@ -95,7 +95,7 @@ fn deep_argument_stacks_rebuild_on_a_small_stack() {
 #[test]
 fn deep_alias_parameters_preserve_bindings_on_a_small_stack() {
     Depth::small_stack(|| {
-        let mut arena = StackirArena::default();
+        let mut arena = SpsArena::default();
         let def: DefId = arena.admin.fresh();
         let mut binder: VPatId = def.build(&mut arena, None);
         for _ in 0..8192 {
@@ -117,7 +117,7 @@ fn deep_alias_parameters_preserve_bindings_on_a_small_stack() {
 #[test]
 fn deep_unknown_branches_join_sibling_demands_on_a_small_stack() {
     Depth::small_stack(|| {
-        let mut arena = StackirArena::default();
+        let mut arena = SpsArena::default();
         let scrutinee: DefId = arena.admin.fresh();
         let mut root = Depth::returning(&mut arena);
         for _ in 0..2048 {

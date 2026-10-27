@@ -158,7 +158,7 @@ impl CheckedProgram {
         Ok(SourceStack { spans, scoped, statics, stackir })
     }
 
-    fn stackir_with_builtin(self) -> Result<SourceStack, TestPipelineError> {
+    fn sps_with_builtin(self) -> Result<SourceStack, TestPipelineError> {
         use zydeco_statics::syntax::{Fillable, TermAnnId, Type};
 
         let TermAnnId::Compu(root, ty) = self.root else {
@@ -272,7 +272,7 @@ impl TestPipeline {
     ) -> Result<NativePackage, TestPipelineError> {
         let path = path.as_ref();
         let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap().to_owned();
-        let lowered = checked.stackir_with_builtin()?.convert();
+        let lowered = checked.sps_with_builtin()?.convert();
         let native = zydeco_assembly::LoweringPipeline::new(
             &lowered.spans,
             &lowered.scoped,
@@ -299,7 +299,7 @@ impl TestPipeline {
     }
 
     fn zasm(path: impl AsRef<Path>) -> Result<SourceAssembly, TestPipelineError> {
-        Ok(Self::check(path)?.stackir_with_builtin()?.convert().assemble())
+        Ok(Self::check(path)?.sps_with_builtin()?.convert().assemble())
     }
 
     fn amd64(path: impl AsRef<Path>) -> Result<NativePackage, TestPipelineError> {
@@ -1789,7 +1789,7 @@ fn stack_ir_constructs_and_applies_the_same_typed_builtin_package() {
         .check()
         .unwrap();
 
-    let SourceStack { stackir, scoped, statics, .. } = checked.stackir_with_builtin().unwrap();
+    let SourceStack { stackir, scoped, statics, .. } = checked.sps_with_builtin().unwrap();
 
     let stackir = stackir.as_program();
     assert!(stackir.arena().inner.compus.get(&stackir.root()).is_some());

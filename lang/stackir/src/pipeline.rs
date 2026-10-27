@@ -4,14 +4,14 @@ use zydeco_statics::arena::StaticsArena;
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_utils::{pass::CompilerPass, pipeline};
 
-/// Convert branch-join high SPS into first-order SPSLow.
+/// Convert branch-join SPS into first-order SPSLow.
 pub struct SpsLowPipeline<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
 }
 
 impl SpsLowPipeline<'_> {
-    /// Select the optional high-SPS transformations.
+    /// Select the optional SPS transformations.
     pub fn with_optimizations<P>(
         self, optimizations: P,
     ) -> impl CompilerPass<BranchJoinProgram, Output = SpsLowProgram, Error = P::Error>
@@ -49,7 +49,7 @@ mod tests {
 
     #[derive(Default)]
     struct PrimitiveFixture {
-        arena: StackirArena,
+        arena: SpsArena,
     }
 
     impl PrimitiveFixture {
@@ -58,12 +58,12 @@ mod tests {
             let value = fixture.build(Triv);
             let stack = fixture.build(Bullet);
             let root = fixture.build(SReturn { value, stack });
-            BranchJoinProgram::try_new(StackirProgram::new(fixture.arena, root)).unwrap()
+            BranchJoinProgram::try_new(SpsProgram::new(fixture.arena, root)).unwrap()
         }
 
         fn build<U, S, T>(&mut self, node: U) -> T
         where
-            U: Construct<S, T, StackirArena>,
+            U: Construct<S, T, SpsArena>,
         {
             node.build(&mut self.arena, None)
         }
@@ -107,8 +107,7 @@ mod tests {
         }
 
         fn compile(self, root: CompuId) -> SpsLowProgram {
-            let program =
-                BranchJoinProgram::try_new(StackirProgram::new(self.arena, root)).unwrap();
+            let program = BranchJoinProgram::try_new(SpsProgram::new(self.arena, root)).unwrap();
             SpsLowPipeline { scoped: &ScopedArena::default(), statics: &StaticsArena::default() }
                 .run_infallible(program)
         }

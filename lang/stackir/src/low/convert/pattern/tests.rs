@@ -3,13 +3,13 @@ use crate::high::syntax::*;
 use zydeco_utils::fold::Recursive;
 
 struct Fixture {
-    arena: high::StackirArena,
+    arena: high::SpsArena,
     origins: IdAllocator<zydeco_statics::arena::StaticsScope>,
 }
 
 impl Fixture {
     fn new() -> Self {
-        Self { arena: high::StackirArena::default(), origins: IdAllocator::new() }
+        Self { arena: high::SpsArena::default(), origins: IdAllocator::new() }
     }
 
     fn pattern(&mut self, pattern: impl Into<high::ValuePattern>) -> high::VPatId {
@@ -22,7 +22,7 @@ impl Fixture {
         let tail = SReturn { stack, value }.build(&mut self.arena, None);
         let bindee = Bullet.build(&mut self.arena, None);
         let root = Let { binder: Cons(binder, Bullet), bindee, tail }.build(&mut self.arena, None);
-        BranchJoinProgram::try_new(StackirProgram::new(self.arena, root)).unwrap()
+        BranchJoinProgram::try_new(SpsProgram::new(self.arena, root)).unwrap()
     }
 }
 

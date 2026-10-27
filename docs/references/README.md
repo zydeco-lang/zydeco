@@ -41,7 +41,7 @@ Chapter contents provide the detailed topic indexes.
 | Foreign interfaces and compiled libraries | [L14](language.md#14-foreign-interfaces) | [C14: C calls](compiler.md#foreign-calls), [C11: artifacts](compiler.md#compilation-unit-preparation-and-artifacts) |
 | Execution profiles and costs | [L15](language.md#15-execution-profiles) | [C11: activation lifetime](compiler.md#activation-lifetime), [C12: native runtime](compiler.md#c12-shared-native-model-allocation-and-collection), [C13: Wasm](compiler.md#c13-webassembly-backend-and-embedding) |
 | Identity and provenance | Construct-specific scope rules above | [C2: compiler identities](compiler.md#c2-compiler-data-identities-arenas-and-source-provenance), [C3: retained facts](compiler.md#analysis-facts-and-materialization) |
-| Optional residual optimization | [L10: phase boundary](language.md#10-static-elimination) | [C8: normalization and demand](compiler.md#c8-high-sps-lowering-normalization-and-demand) |
+| Optional residual optimization | [L10: phase boundary](language.md#10-static-elimination) | [C8: normalization and demand](compiler.md#c8-sps-lowering-normalization-and-demand) |
 | Formatting and documentation | [Meta annotation syntax](language.md#meta-annotations-compile-time-metadata), [source documentation](language.md#source-documentation) | [C4: source analysis](compiler.md#shared-source-analysis), [C15: tooling](compiler.md#c15-diagnostics-formatting-documentation-and-interactive-tooling) |
 
 Package paths, source instantiation, import identity,

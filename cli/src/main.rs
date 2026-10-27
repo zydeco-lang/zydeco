@@ -4,9 +4,9 @@ use thiserror::Error;
 use zydeco_cli::library::{LibraryArtifactKind, LibraryBuilder, LibraryError, LinkedLibraries};
 use zydeco_cli::{
     BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
-    Executable, ExecutionError, ExecutionRunner, ExecutionTarget, HighSpsInspection, HighSpsPass,
-    HighSpsPlan, HighSpsPlanError, NativeError, RepresentationStrategy, SourceFormatError,
-    SourceFormatOutcome, SourceFormatter, SourceSelection, TargetArchitecture, TargetOs,
+    Executable, ExecutionError, ExecutionRunner, ExecutionTarget, NativeError,
+    RepresentationStrategy, SourceFormatError, SourceFormatOutcome, SourceFormatter,
+    SourceSelection, SpsInspection, SpsPass, SpsPlan, SpsPlanError, TargetArchitecture, TargetOs,
     TestTarget,
 };
 use zydeco_session::source::{
@@ -56,10 +56,10 @@ impl Application {
             }
             | Commands::Passes { sps_passes } => {
                 if let Some(text) = sps_passes {
-                    print!("{}", text.parse::<HighSpsPlan>()?.explain());
+                    print!("{}", text.parse::<SpsPlan>()?.explain());
                 } else {
-                    println!("Optional high-SPS passes:");
-                    for pass in HighSpsPass::ALL {
+                    println!("Optional SPS passes:");
+                    for pass in SpsPass::ALL {
                         println!("  {pass}: {}", pass.description());
                     }
                     println!("Selections: default, none, or a comma-separated pass list.");
@@ -112,14 +112,14 @@ impl Application {
                 let plan = pipeline
                     .sps_passes
                     .as_deref()
-                    .map(str::parse::<HighSpsPlan>)
+                    .map(str::parse::<SpsPlan>)
                     .transpose()?
                     .unwrap_or_default();
                 self.compiler = self
                     .compiler
                     .with_representation(representation.map(Into::into).unwrap_or_default())
                     .with_sps_passes(plan)
-                    .with_pass_inspection(HighSpsInspection {
+                    .with_pass_inspection(SpsInspection {
                         trace: pipeline.trace_passes,
                         verify: pipeline.verify_passes,
                         dump: pipeline.dump_passes,
@@ -567,7 +567,7 @@ enum ApplicationError {
     #[error(transparent)]
     Package(#[from] zydeco_session::source::SourceLoadError),
     #[error(transparent)]
-    PipelinePlan(#[from] HighSpsPlanError),
+    PipelinePlan(#[from] SpsPlanError),
     #[error(
         "--representation applies to zasm, asm, exe, wasm-sps, object, staticlib, and sharedlib; this target does not select physical representations"
     )]

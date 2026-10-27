@@ -2,7 +2,7 @@ use std::{
     path::PathBuf,
     process::{Command, Output},
 };
-use zydeco_cli::{CommandCompiler, HighSpsPlan, TargetOs};
+use zydeco_cli::{CommandCompiler, SpsPlan, TargetOs};
 
 struct Fixture {
     directory: tempfile::TempDir,
@@ -167,9 +167,7 @@ fn comparisons_emit_instructions_without_host_imports() {
         let zero = if ty.starts_with("Float") { "0.0" } else { "0" };
         let fixture =
             Fixture::new(&Fixture::probe(ty, &[(zero, zero, 1)], "! process/exit 0".into()));
-        for plan in
-            [HighSpsPlan::Default, HighSpsPlan::None, "normalize,normalize".parse().unwrap()]
-        {
+        for plan in [SpsPlan::Default, SpsPlan::None, "normalize,normalize".parse().unwrap()] {
             let backend =
                 CommandCompiler::default().with_sps_passes(plan).lower(&fixture.source).unwrap();
             let low = backend.render_sps_low();

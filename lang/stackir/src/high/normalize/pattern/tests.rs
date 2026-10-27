@@ -4,7 +4,7 @@ use zydeco_statics::arena::StaticsScope;
 use zydeco_utils::fold::{Driver, Explicit, Recursive};
 
 struct Fixture {
-    source: StackirArena,
+    source: SpsArena,
     origins: IdAllocator<StaticsScope>,
 }
 
@@ -21,14 +21,14 @@ impl Fixture {
         let stack = Bullet.build(&mut self.source, None);
         let root =
             Let { binder: Cons(binder, Bullet), bindee: stack, tail }.build(&mut self.source, None);
-        let program = BranchJoinProgram::try_new(StackirProgram::new(self.source, root)).unwrap();
+        let program = BranchJoinProgram::try_new(SpsProgram::new(self.source, root)).unwrap();
         Normalization::new(program)
     }
 }
 
 #[test]
 fn drivers_preserve_pattern_children_definitions_layouts_and_evidence() {
-    let mut fixture = Fixture { source: StackirArena::default(), origins: IdAllocator::new() };
+    let mut fixture = Fixture { source: SpsArena::default(), origins: IdAllocator::new() };
     let definition: DefId = fixture.source.admin.fresh();
     fixture.source.admin.insert_def(definition, VarName("argument".into()));
     let variable = fixture.pattern(definition);
@@ -84,7 +84,7 @@ fn drivers_preserve_pattern_children_definitions_layouts_and_evidence() {
 #[test]
 fn drivers_reject_invalid_product_layouts_before_allocating_the_parent() {
     fn reject<D: Driver>(arity: usize, expected: &str) {
-        let mut fixture = Fixture { source: StackirArena::default(), origins: IdAllocator::new() };
+        let mut fixture = Fixture { source: SpsArena::default(), origins: IdAllocator::new() };
         let hole = fixture.pattern(Hole);
         let unit = fixture.pattern(Triv);
         let root = fixture.pattern(VCons::new(vec![hole, unit], ProductLayout { arity: 2 }));

@@ -21,7 +21,7 @@ impl<'a> KnownView<'a> {
 }
 
 pub(super) struct DecisionFolder<'a> {
-    pub source: &'a StackirInnerArena,
+    pub source: &'a SpsInnerArena,
 }
 
 impl<'a> Folder for DecisionFolder<'a> {

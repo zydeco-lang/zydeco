@@ -28,7 +28,7 @@ impl Variables {
         if self.cyclic { None } else { self.patterns.get(&pattern) }
     }
 
-    fn analyze(arena: &StackirArena, root: EntityId) -> Self {
+    fn analyze(arena: &SpsArena, root: EntityId) -> Self {
         let mut analysis = Self::default();
         Traversal { arena: &arena.inner }.run(root, &mut analysis);
         assert!(!analysis.cyclic, "free variable analysis requires acyclic SPS syntax");
@@ -179,22 +179,22 @@ Summary!(CompuId, computations, CoContext<DefId>);
 
 /// Collect bound variables from patterns.
 pub trait Vars {
-    fn vars(self, arena: &impl AsRef<StackirArena>) -> Context<DefId>;
+    fn vars(self, arena: &impl AsRef<SpsArena>) -> Context<DefId>;
 }
 impl Vars for VPatId {
-    fn vars(self, arena: &impl AsRef<StackirArena>) -> Context<DefId> {
+    fn vars(self, arena: &impl AsRef<SpsArena>) -> Context<DefId> {
         self.summary(&Variables::analyze(arena.as_ref(), self.into()))
     }
 }
 
 /// Collect free variables from stack IR nodes.
 pub trait FreeVars {
-    fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId>;
+    fn free_vars(self, arena: &impl AsRef<SpsArena>) -> CoContext<DefId>;
 }
 macro_rules! FreeVars {
     ($id:ty) => {
         impl FreeVars for $id {
-            fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId> {
+            fn free_vars(self, arena: &impl AsRef<SpsArena>) -> CoContext<DefId> {
                 self.summary(&Variables::analyze(arena.as_ref(), self.into()))
             }
         }

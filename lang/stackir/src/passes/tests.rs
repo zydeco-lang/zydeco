@@ -7,7 +7,7 @@ struct Fixture;
 
 impl Fixture {
     fn program(open: bool) -> BranchJoinProgram {
-        let mut arena = StackirArena::default();
+        let mut arena = SpsArena::default();
         let value = if open {
             let def = arena.admin.fresh();
             arena.admin.insert_def(def, VarName("free".into()));
@@ -17,7 +17,7 @@ impl Fixture {
         };
         let stack = Bullet.build(&mut arena, None);
         let root = SReturn { value, stack }.build(&mut arena, None);
-        BranchJoinProgram::try_new(StackirProgram::new(arena, root)).unwrap()
+        BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap()
     }
 }
 
@@ -29,43 +29,37 @@ fn selections_preserve_order_duplicates_and_canonical_spelling() {
         ("normalize", "normalize", 1),
         (" normalize , normalize ", "normalize,normalize", 2),
     ] {
-        let plan = text.parse::<HighSpsPlan>().unwrap();
+        let plan = text.parse::<SpsPlan>().unwrap();
         assert_eq!(plan.to_string(), canonical);
         assert_eq!(plan.passes().len(), count);
-        assert_eq!(plan.to_string().parse::<HighSpsPlan>().unwrap(), plan);
+        assert_eq!(plan.to_string().parse::<SpsPlan>().unwrap(), plan);
     }
-    let plan = HighSpsPlan::Custom(vec![HighSpsPass::Normalize, HighSpsPass::Normalize]);
+    let plan = SpsPlan::Custom(vec![SpsPass::Normalize, SpsPass::Normalize]);
     assert!(plan.explain().contains("normalize[1]\n  normalize[2]"));
-    assert!(HighSpsPlan::None.explain().contains("closure conversion (required)"));
-    assert!(!HighSpsPlan::None.explain().contains("normalize"));
+    assert!(SpsPlan::None.explain().contains("closure conversion (required)"));
+    assert!(!SpsPlan::None.explain().contains("normalize"));
 }
 
 #[test]
 fn malformed_passes_options_and_nested_presets_are_rejected() {
     for (text, expected) in [
-        ("", HighSpsPlanError::Empty),
-        ("normalize,", HighSpsPlanError::EmptyPass { position: 2 }),
-        (",normalize", HighSpsPlanError::EmptyPass { position: 1 }),
-        ("normalize,,normalize", HighSpsPlanError::EmptyPass { position: 2 }),
-        (
-            "normalize,missing",
-            HighSpsPlanError::UnknownPass { position: 2, name: "missing".into() },
-        ),
+        ("", SpsPlanError::Empty),
+        ("normalize,", SpsPlanError::EmptyPass { position: 2 }),
+        (",normalize", SpsPlanError::EmptyPass { position: 1 }),
+        ("normalize,,normalize", SpsPlanError::EmptyPass { position: 2 }),
+        ("normalize,missing", SpsPlanError::UnknownPass { position: 2, name: "missing".into() }),
         (
             "normalize(limit=2)",
-            HighSpsPlanError::UnknownPass { position: 1, name: "normalize(limit=2)".into() },
+            SpsPlanError::UnknownPass { position: 1, name: "normalize(limit=2)".into() },
         ),
         (
             "stack-analysis",
-            HighSpsPlanError::UnknownPass { position: 1, name: "stack-analysis".into() },
+            SpsPlanError::UnknownPass { position: 1, name: "stack-analysis".into() },
         ),
-        ("normalize,none", HighSpsPlanError::NestedPreset { position: 2, name: "none".into() }),
-        (
-            "default,normalize",
-            HighSpsPlanError::NestedPreset { position: 1, name: "default".into() },
-        ),
+        ("normalize,none", SpsPlanError::NestedPreset { position: 2, name: "none".into() }),
+        ("default,normalize", SpsPlanError::NestedPreset { position: 1, name: "default".into() }),
     ] {
-        assert_eq!(text.parse::<HighSpsPlan>().unwrap_err(), expected, "{text}");
+        assert_eq!(text.parse::<SpsPlan>().unwrap_err(), expected, "{text}");
     }
 }
 
@@ -73,13 +67,13 @@ fn malformed_passes_options_and_nested_presets_are_rejected() {
 fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
     let scoped = ScopedArena::default();
     let statics = StaticsArena::default();
-    let plan = "normalize,normalize".parse::<HighSpsPlan>().unwrap();
+    let plan = "normalize,normalize".parse::<SpsPlan>().unwrap();
     for _ in 0..2 {
         let mut output = Vec::new();
-        let mut observer = HighSpsObserver {
+        let mut observer = SpsObserver {
             scoped: &scoped,
             statics: &statics,
-            inspection: HighSpsInspection { trace: true, verify: true, dump: true },
+            inspection: SpsInspection { trace: true, verify: true, dump: true },
             output: &mut output,
         };
         let observed =
@@ -94,13 +88,13 @@ fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
         };
         assert_eq!(format(&observed), format(&direct));
         let trace = String::from_utf8(output).unwrap();
-        assert_eq!(trace.matches("before high-SPS").count(), 2);
-        assert_eq!(trace.matches("after high-SPS").count(), 2);
+        assert_eq!(trace.matches("before SPS").count(), 2);
+        assert_eq!(trace.matches("after SPS").count(), 2);
         assert!(trace.contains("normalize[1] (invocation 1)"));
         assert!(trace.contains("normalize[2] (invocation 1)"));
         assert!(!trace.contains("invocation 2"));
     }
-    let output = HighSpsPlan::None.instantiate().run_infallible(Fixture::program(false));
+    let output = SpsPlan::None.instantiate().run_infallible(Fixture::program(false));
     output.validate().unwrap();
 }
 
@@ -108,10 +102,10 @@ fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
 fn verification_identifies_the_stage_that_introduced_an_open_root() {
     let scoped = ScopedArena::default();
     let statics = StaticsArena::default();
-    let mut observer = HighSpsObserver {
+    let mut observer = SpsObserver {
         scoped: &scoped,
         statics: &statics,
-        inspection: HighSpsInspection { verify: true, ..Default::default() },
+        inspection: SpsInspection { verify: true, ..Default::default() },
         output: Vec::new(),
     };
     let executed = Cell::new(false);
@@ -125,14 +119,14 @@ fn verification_identifies_the_stage_that_introduced_an_open_root() {
     assert!(!executed.get());
     assert!(matches!(
         error.cause,
-        PassFailureCause::Before(HighSpsObservationError::Invalid(errors)) if errors.iter().any(|error| matches!(error, HighSpsInvariant::FreeDefinitions(_)))
+        PassFailureCause::Before(SpsObservationError::Invalid(errors)) if errors.iter().any(|error| matches!(error, SpsInvariant::FreeDefinitions(_)))
     ));
     let error = pass.run(Fixture::program(false)).unwrap_err();
     assert!(executed.get());
     assert_eq!(error.invocation.location, location);
     assert!(matches!(
         error.cause,
-        PassFailureCause::After(HighSpsObservationError::Invalid(errors)) if errors.iter().any(|error| matches!(error, HighSpsInvariant::FreeDefinitions(_)))
+        PassFailureCause::After(SpsObservationError::Invalid(errors)) if errors.iter().any(|error| matches!(error, SpsInvariant::FreeDefinitions(_)))
     ));
     let result = Identity.with_observer(location, &mut observer).run(Fixture::program(false));
     assert!(result.is_ok());
@@ -151,16 +145,16 @@ fn inspection_output_failures_stop_before_transformation() {
     }
     let scoped = ScopedArena::default();
     let statics = StaticsArena::default();
-    let mut observer = HighSpsObserver {
+    let mut observer = SpsObserver {
         scoped: &scoped,
         statics: &statics,
-        inspection: HighSpsInspection { trace: true, ..Default::default() },
+        inspection: SpsInspection { trace: true, ..Default::default() },
         output: BrokenWriter,
     };
-    let error = HighSpsPlan::Default
+    let error = SpsPlan::Default
         .instantiate_observed(&mut observer)
         .run(Fixture::program(false))
         .unwrap_err();
     assert_eq!(error.invocation.location.path, [0]);
-    assert!(matches!(error.cause, PassFailureCause::Before(HighSpsObservationError::Output(_))));
+    assert!(matches!(error.cause, PassFailureCause::Before(SpsObservationError::Output(_))));
 }

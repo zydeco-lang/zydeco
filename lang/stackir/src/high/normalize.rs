@@ -1,4 +1,4 @@
-//! Sharing-preserving local reductions and demand-driven rebuilding of high SPS.
+//! Sharing-preserving local reductions and demand-driven rebuilding of SPS.
 //!
 //! Producer facts flow into consumers; surviving consumers return field demands.
 //! Stack substitution stops at binders, including branch joins. General closure
@@ -27,7 +27,7 @@ mod driver_tests;
 
 use fold::NormalizationFolder;
 
-/// Normalize high SPS using fresh construction state for each input program.
+/// Normalize SPS using fresh construction state for each input program.
 pub struct Normalizer;
 
 impl CompilerPass<BranchJoinProgram> for Normalizer {
@@ -104,10 +104,10 @@ struct Residual<T> {
 /// Shared bodies stay bound, so moving a body preserves its definition IDs.
 #[derive(AsRef, AsMut)]
 struct Normalization {
-    source: StackirArena,
+    source: SpsArena,
     #[as_ref]
     #[as_mut]
-    arena: StackirArena,
+    arena: SpsArena,
     root: CompuId,
     envs: Vec<Environment>,
     delayed_stacks: Vec<ScopedStack>,
@@ -117,7 +117,7 @@ struct Normalization {
 
 impl Normalization {
     fn new(program: BranchJoinProgram) -> Self {
-        let StackirRebuild { source, target: arena, root } = program.into_program().into_rebuild();
+        let SpsRebuild { source, target: arena, root } = program.into_program().into_rebuild();
         let occurrences =
             source.inner.values.iter().fold(HashMap::new(), |mut counts, (_, value)| {
                 if let Value::Var(def) = value {
@@ -132,7 +132,7 @@ impl Normalization {
     fn run<D: Driver>(mut self) -> BranchJoinProgram {
         let source_root = self.root;
         let root = NormalizationFolder::<D>::new(&mut self).run(source_root);
-        BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
+        BranchJoinProgram::try_new(SpsProgram::new(self.arena, root))
             .expect("normalization preserves lexical ownership and branch joins")
     }
 
@@ -466,7 +466,7 @@ mod tests {
 
     #[derive(Default)]
     struct Fixture {
-        arena: StackirArena,
+        arena: SpsArena,
     }
 
     impl Fixture {
@@ -478,7 +478,7 @@ mod tests {
 
         fn build<U, S, T>(&mut self, node: U) -> T
         where
-            U: Construct<S, T, StackirArena>,
+            U: Construct<S, T, SpsArena>,
         {
             node.build(&mut self.arena, None)
         }
@@ -546,7 +546,7 @@ mod tests {
             CtorIdx { idx: index, name: CtorName(format!("C{index}")) }
         }
 
-        fn normalize(self, root: CompuId) -> StackirProgram {
+        fn normalize(self, root: CompuId) -> SpsProgram {
             let normalized = driver_tests::Drivers::normalize(&self.arena, root);
             assert!(normalized.root().free_vars(normalized.arena()).is_empty());
             normalized
