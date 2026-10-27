@@ -46,6 +46,19 @@ Keep documentation examples consistent with the repository's CLI flags and scrip
   Retain bug reproducers as regression tests.
 - When adding example projects under `lib/`, consider wiring them into `lang/tests`.
 
+## Naming
+
+Name each item after what it means to the code that uses it:
+
+- Name a value by what it identifies or does, not by its representation or opacity.
+  A checked handle for one entity is `<Entity>Id`, matching `LayoutId` and `DefId`.
+- Give a word one meaning within a module.
+  Variants that carry the same payload in different enums share a name.
+- Use `Kind` for a type's own discriminant and `Role` for a classification that a particular consumer imposes.
+- Name a transitional state after what completes it, such as a label `Reserved` before its definition exists.
+- Keep the vocabulary of external protocols and standard idioms verbatim, such as LSP semantic tokens
+  or a Rust capability token.
+
 ## Rust Conventions
 
 Register every Rust dependency in the root `Cargo.toml` under `[workspace.dependencies]`;
