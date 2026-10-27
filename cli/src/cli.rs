@@ -79,6 +79,17 @@ pub enum RepresentationChoice {
     Shared,
 }
 
+/// Command-line spelling of where SPS lowering names the current stack, translated at entry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum SpsSchemeChoice {
+    /// Copy the consumer stack into every arm of a branch
+    #[value(name = "dup")]
+    Duplicating,
+    /// Name the consumer stack once at each branch (default)
+    #[value(name = "br")]
+    BranchJoin,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum TargetArchitecture {
     #[value(alias = "x86", alias = "amd64")]
@@ -135,11 +146,14 @@ pub enum Commands {
         #[arg(short = 'p', long = "pkg", visible_alias = "package", value_name = "NAME")]
         packages: Vec<PackagePath>,
     },
-    /// List optional compiler passes or explain a selected SPS plan
+    /// List optional compiler passes and SPS schemes, or explain a selected SPS plan
     Passes {
         /// Explain `default`, `none`, or a comma-separated list such as normalize,normalize
         #[arg(long, value_name = "PLAN")]
         sps_passes: Option<String>,
+        /// Explain the selection under this stack-passing scheme
+        #[arg(long, value_enum, value_name = "SCHEME")]
+        sps_scheme: Option<SpsSchemeChoice>,
     },
     /// Format Zydeco source files in place
     Fmt {
@@ -235,6 +249,9 @@ pub struct PipelineOptions {
     /// SPS passes: default, none, or a comma-separated list; order and duplicates are preserved
     #[arg(long, value_name = "PLAN")]
     pub sps_passes: Option<String>,
+    /// Where SPS lowering names the current stack
+    #[arg(long, value_enum, value_name = "SCHEME")]
+    pub sps_scheme: Option<SpsSchemeChoice>,
     /// Trace each selected SPS pass and its execution time on stderr
     #[arg(long)]
     pub trace_passes: bool,

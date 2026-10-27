@@ -27,7 +27,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'List the project''s packages and relationships without checking or executing code')
-            [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected SPS plan')
+            [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes and SPS schemes, or explain a selected SPS plan')
             [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a source package and its code dependencies, including its declared executable role')
@@ -48,9 +48,10 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
         }
         'zydeco;passes' {
             [CompletionResult]::new('--sps-passes', '--sps-passes', [CompletionResultType]::ParameterName, 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize')
+            [CompletionResult]::new('--sps-scheme', '--sps-scheme', [CompletionResultType]::ParameterName, 'Explain the selection under this stack-passing scheme')
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'zydeco;fmt' {
@@ -114,6 +115,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Target backend')
             [CompletionResult]::new('--representation', '--representation', [CompletionResultType]::ParameterName, 'Local representation policy for native, ZASM, and Wasm targets')
             [CompletionResult]::new('--sps-passes', '--sps-passes', [CompletionResultType]::ParameterName, 'SPS passes: default, none, or a comma-separated list; order and duplicates are preserved')
+            [CompletionResult]::new('--sps-scheme', '--sps-scheme', [CompletionResultType]::ParameterName, 'Where SPS lowering names the current stack')
             [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('--build-dir', '--build-dir', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Runtime directory')
@@ -125,13 +127,13 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('-x', '-x', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--execute', '--execute', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--lint-types', '--lint-types', [CompletionResultType]::ParameterName, 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'zydeco;help' {
             [CompletionResult]::new('show', 'show', [CompletionResultType]::ParameterValue, 'List the project''s packages and relationships without checking or executing code')
-            [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes or explain a selected SPS plan')
+            [CompletionResult]::new('passes', 'passes', [CompletionResultType]::ParameterValue, 'List optional compiler passes and SPS schemes, or explain a selected SPS plan')
             [CompletionResult]::new('fmt', 'fmt', [CompletionResultType]::ParameterValue, 'Format Zydeco source files in place')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Run a zydeco program')
             [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check a source package and its code dependencies, including its declared executable role')

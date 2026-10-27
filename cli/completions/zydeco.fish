@@ -28,7 +28,7 @@ complete -c zydeco -n "__fish_zydeco_needs_command" -l lint-types -d 'Re-validat
 complete -c zydeco -n "__fish_zydeco_needs_command" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_needs_command" -s V -l version -d 'Print version'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "show" -d 'List the project\'s packages and relationships without checking or executing code'
-complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "passes" -d 'List optional compiler passes or explain a selected SPS plan'
+complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "passes" -d 'List optional compiler passes and SPS schemes, or explain a selected SPS plan'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "fmt" -d 'Format Zydeco source files in place'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "run" -d 'Run a zydeco program'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "check" -d 'Check a source package and its code dependencies, including its declared executable role'
@@ -40,8 +40,10 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand show" -s p -l pkg -l packa
 complete -c zydeco -n "__fish_zydeco_using_subcommand show" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand show" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l sps-passes -d 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize' -r
+complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l sps-scheme -d 'Explain the selection under this stack-passing scheme' -r -f -a "dup\t'Copy the consumer stack into every arm of a branch'
+br\t'Name the consumer stack once at each branch (default)'"
 complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
-complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -s h -l help -d 'Print help'
+complete -c zydeco -n "__fish_zydeco_using_subcommand passes" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l check -d 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand fmt" -s h -l help -d 'Print help'
@@ -86,6 +88,8 @@ direct\t''
 local\t''
 shared\t''"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l sps-passes -d 'SPS passes: default, none, or a comma-separated list; order and duplicates are preserved' -r
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l sps-scheme -d 'Where SPS lowering names the current stack' -r -f -a "dup\t'Copy the consumer stack into every arm of a branch'
+br\t'Name the consumer stack once at each branch (default)'"
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-library -d 'Resolve a compiled library through its checked artifact manifest (repeatable)' -r -F
@@ -94,9 +98,9 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l verify-passes -d
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dump-passes -d 'Print SPS IR before and after each selected pass on stderr'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l lint-types -d 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "show" -d 'List the project\'s packages and relationships without checking or executing code'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "passes" -d 'List optional compiler passes or explain a selected SPS plan'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "passes" -d 'List optional compiler passes and SPS schemes, or explain a selected SPS plan'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "fmt" -d 'Format Zydeco source files in place'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "run" -d 'Run a zydeco program'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from show passes fmt run check test repl build help" -f -a "check" -d 'Check a source package and its code dependencies, including its declared executable role'

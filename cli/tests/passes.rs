@@ -2,7 +2,7 @@ use std::{
     path::PathBuf,
     process::{Command, Output},
 };
-use zydeco_cli::{CommandCompiler, SpsPlan};
+use zydeco_cli::{CommandCompiler, SpsPlan, SpsScheme, SpsSelection};
 
 struct Fixture {
     directory: tempfile::TempDir,
@@ -102,6 +102,9 @@ fn discovery_and_expansion_need_no_source_file() {
     Fixture::assert_success(&output);
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.contains("normalize:"));
+    for scheme in SpsScheme::ALL {
+        assert!(text.contains(&format!("{scheme}: {}", scheme.description())), "{text}");
+    }
     for plan in ["default", "none", "normalize,normalize"] {
         let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
             .args(["passes", "--sps-passes", plan])
@@ -109,7 +112,17 @@ fn discovery_and_expansion_need_no_source_file() {
             .unwrap();
         Fixture::assert_success(&output);
         let text = String::from_utf8(output.stdout).unwrap();
-        assert_eq!(text, plan.parse::<SpsPlan>().unwrap().explain());
+        let plan = plan.parse::<SpsPlan>().unwrap();
+        assert_eq!(text, SpsSelection { plan, ..SpsSelection::default() }.explain());
+    }
+    for &scheme in SpsScheme::ALL {
+        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+            .args(["passes", "--sps-scheme", scheme.name()])
+            .output()
+            .unwrap();
+        Fixture::assert_success(&output);
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert_eq!(text, SpsSelection { scheme, plan: SpsPlan::Default }.explain());
     }
 }
 
@@ -133,17 +146,26 @@ fn rejected_selections_stop_before_source_loading_or_artifact_creation() {
         assert!(!text.contains("No such file"));
         assert!(!fixture.build_dir().exists());
     }
+    let output = fixture.build("default", "exe", &["--sps-scheme", "cps"]);
+    assert!(!output.status.success());
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(text.contains("invalid value 'cps' for '--sps-scheme <SCHEME>'"), "{text}");
+    assert!(!fixture.build_dir().exists());
     for command in ["run", "check"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
-            .arg(command)
-            .arg(fixture.source())
-            .args(["--sps-passes", "none"])
-            .output()
-            .unwrap();
-        assert!(!output.status.success());
-        assert!(
-            String::from_utf8_lossy(&output.stderr).contains("unexpected argument '--sps-passes'")
-        );
+        for (option, value) in [("--sps-passes", "none"), ("--sps-scheme", "dup")] {
+            let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
+                .arg(command)
+                .arg(fixture.source())
+                .args([option, value])
+                .output()
+                .unwrap();
+            assert!(!output.status.success());
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains(&format!("unexpected argument '{option}'")),
+                "{command} {option}"
+            );
+        }
     }
 }
 
@@ -186,6 +208,13 @@ fn changing_command_selection_produces_independent_frozen_backend_products() {
     assert_eq!(again.sps_passes(), &SpsPlan::Default);
     assert_eq!(again.assembly().arena().programs.len(), original_size);
     assert_eq!(original.assembly().arena().programs.len(), original_size);
+    for &scheme in SpsScheme::ALL {
+        compiler = compiler.with_sps_scheme(scheme);
+        let lowered = compiler.lower(&fixture.source()).unwrap();
+        assert_eq!(lowered.sps_scheme(), scheme);
+        assert_eq!(lowered.sps_low.scheme(), scheme);
+    }
+    assert_eq!(original.sps_scheme(), SpsScheme::BranchJoin);
 }
 
 #[test]
@@ -193,6 +222,10 @@ fn every_build_target_accepts_the_sps_selection() {
     let fixture = Fixture::arithmetic();
     for target in ["zir", "zasm", "asm", "wasm-sps"] {
         Fixture::assert_success(&fixture.build("none", target, &[]));
+        for scheme in SpsScheme::ALL {
+            let scheme = scheme.to_string();
+            Fixture::assert_success(&fixture.build("none", target, &["--sps-scheme", &scheme]));
+        }
     }
 }
 
@@ -218,12 +251,14 @@ fn selected_sequences_preserve_sharing_effects_and_results_across_backends() {
         .unwrap();
     Fixture::assert_success(&reference);
     assert_eq!(reference.stdout, b"before\n42\n42\n");
-    for plan in ["default", "none", "normalize,normalize"] {
-        // The zasm target only renders lowering; these backends execute host effects.
-        for target in ["wasm-sps", "exe"] {
-            let output = fixture.execute(plan, target);
-            Fixture::assert_success(&output);
-            assert_eq!(output.stdout, reference.stdout, "{plan}/{target}");
+    for scheme in SpsScheme::ALL.iter().map(ToString::to_string) {
+        for plan in ["default", "none", "normalize,normalize"] {
+            // The zasm target only renders lowering; these backends execute host effects.
+            for target in ["wasm-sps", "exe"] {
+                let output = fixture.execute_options(plan, target, &["--sps-scheme", &scheme]);
+                Fixture::assert_success(&output);
+                assert_eq!(output.stdout, reference.stdout, "{scheme}/{plan}/{target}");
+            }
         }
     }
 }
@@ -241,15 +276,18 @@ do wrapped <- ret (+Wrap(37) : Wrapped);
 ! process/exit (unwrap wrapped)
 "#,
     );
-    for plan in ["none", "default", "normalize,normalize"] {
-        for target in ["wasm-sps", "exe"] {
-            let output = fixture.execute_options(plan, target, &["--verify-passes"]);
-            assert_eq!(
-                output.status.code(),
-                Some(37),
-                "{plan}/{target}: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+    for scheme in SpsScheme::ALL.iter().map(ToString::to_string) {
+        for plan in ["none", "default", "normalize,normalize"] {
+            for target in ["wasm-sps", "exe"] {
+                let extra = ["--verify-passes", "--sps-scheme", &scheme];
+                let output = fixture.execute_options(plan, target, &extra);
+                assert_eq!(
+                    output.status.code(),
+                    Some(37),
+                    "{scheme}/{plan}/{target}: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
     }
 }
@@ -258,11 +296,14 @@ do wrapped <- ret (+Wrap(37) : Wrapped);
 #[test]
 fn nested_constructor_patterns_work_with_and_without_normalization() {
     let fixture = Fixture::with_source("lib/tests/core/nested-constructor-patterns.zy");
-    for plan in ["none", "default", "normalize,normalize"] {
-        for target in ["wasm-sps", "exe"] {
-            let output = fixture.execute_options(plan, target, &["--verify-passes"]);
-            Fixture::assert_success(&output);
-            assert!(output.stdout.is_empty(), "{plan}/{target}");
+    for scheme in SpsScheme::ALL.iter().map(ToString::to_string) {
+        for plan in ["none", "default", "normalize,normalize"] {
+            for target in ["wasm-sps", "exe"] {
+                let extra = ["--verify-passes", "--sps-scheme", &scheme];
+                let output = fixture.execute_options(plan, target, &extra);
+                Fixture::assert_success(&output);
+                assert!(output.stdout.is_empty(), "{scheme}/{plan}/{target}");
+            }
         }
     }
 }
@@ -280,14 +321,17 @@ let fix divide (x : Int) (y : Int) : Ret Int = ! numeric/int/div x y in
 
 "#,
     );
-    for plan in ["default", "none", "normalize,normalize"] {
-        for target in ["wasm-sps", "exe"] {
-            let output = fixture.execute(plan, target);
-            assert!(!output.status.success(), "{plan}/{target}");
-            assert_eq!(output.stdout, b"before\n", "{plan}/{target}");
-            let error = String::from_utf8_lossy(&output.stderr);
-            assert!(error.contains("integer division by zero"), "{plan}/{target}: {error}");
-            assert!(!error.contains("panicked"), "{plan}/{target}: {error}");
+    for scheme in SpsScheme::ALL.iter().map(ToString::to_string) {
+        for plan in ["default", "none", "normalize,normalize"] {
+            for target in ["wasm-sps", "exe"] {
+                let output = fixture.execute_options(plan, target, &["--sps-scheme", &scheme]);
+                let case = format!("{scheme}/{plan}/{target}");
+                assert!(!output.status.success(), "{case}");
+                assert_eq!(output.stdout, b"before\n", "{case}");
+                let error = String::from_utf8_lossy(&output.stderr);
+                assert!(error.contains("integer division by zero"), "{case}: {error}");
+                assert!(!error.contains("panicked"), "{case}: {error}");
+            }
         }
     }
 }

@@ -42,9 +42,11 @@ _arguments "${_arguments_options[@]}" : \
 (passes)
 _arguments "${_arguments_options[@]}" : \
 '--sps-passes=[Explain \`default\`, \`none\`, or a comma-separated list such as normalize,normalize]:PLAN:_default' \
+'--sps-scheme=[Explain the selection under this stack-passing scheme]:SCHEME:((dup\:"Copy the consumer stack into every arm of a branch"
+br\:"Name the consumer stack once at each branch (default)"))' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 && ret=0
 ;;
 (fmt)
@@ -119,6 +121,8 @@ _arguments "${_arguments_options[@]}" : \
 '--target=[Target backend]:TARGET:(zir zasm asm object staticlib sharedlib wasm-sps exe)' \
 '--representation=[Local representation policy for native, ZASM, and Wasm targets]:REPRESENTATION:(boxed direct local shared)' \
 '--sps-passes=[SPS passes\: default, none, or a comma-separated list; order and duplicates are preserved]:PLAN:_default' \
+'--sps-scheme=[Where SPS lowering names the current stack]:SCHEME:((dup\:"Copy the consumer stack into every arm of a branch"
+br\:"Name the consumer stack once at each branch (default)"))' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \
 '-r+[Runtime directory]:RUNTIME_DIR:_files' \
@@ -130,8 +134,8 @@ _arguments "${_arguments_options[@]}" : \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \
 '--lint-types[Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 '::file -- Package name, or source path (use ./ for an extensionless file):_default' \
 && ret=0
 ;;
@@ -196,7 +200,7 @@ esac
 _zydeco_commands() {
     local commands; commands=(
 'show:List the project'\''s packages and relationships without checking or executing code' \
-'passes:List optional compiler passes or explain a selected SPS plan' \
+'passes:List optional compiler passes and SPS schemes, or explain a selected SPS plan' \
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a source package and its code dependencies, including its declared executable role' \
@@ -226,7 +230,7 @@ _zydeco__subcmd__fmt_commands() {
 _zydeco__subcmd__help_commands() {
     local commands; commands=(
 'show:List the project'\''s packages and relationships without checking or executing code' \
-'passes:List optional compiler passes or explain a selected SPS plan' \
+'passes:List optional compiler passes and SPS schemes, or explain a selected SPS plan' \
 'fmt:Format Zydeco source files in place' \
 'run:Run a zydeco program' \
 'check:Check a source package and its code dependencies, including its declared executable role' \

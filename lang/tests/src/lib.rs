@@ -11,7 +11,7 @@ pub mod utils {
     pub use zydeco_cli::ExecutionTarget;
     use zydeco_cli::{
         CommandCompiler, CompileError, DiagnosticRenderer, ExecutionError, ExecutionRunner,
-        RepresentationStrategy, TestInteraction,
+        RepresentationStrategy, SpsPlan, SpsScheme, SpsSelection, TestInteraction,
     };
     use zydeco_session::{AnalysisError, DesugarError};
     use zydeco_statics::{TyckDiagnosticCode, syntax::TermAnnId};
@@ -37,6 +37,7 @@ pub mod utils {
         arguments: Vec<String>,
         standard_input: Option<String>,
         representation: RepresentationStrategy,
+        sps: SpsSelection,
     }
 
     /// A source fixture whose root is checked without imposing the executable contract.
@@ -81,6 +82,7 @@ pub mod utils {
                 arguments: Vec::new(),
                 standard_input: None,
                 representation: RepresentationStrategy::default(),
+                sps: SpsSelection::default(),
             }
         }
 
@@ -108,6 +110,18 @@ pub mod utils {
         /// Select the representation policy for compiled execution.
         pub fn with_representation(mut self, strategy: RepresentationStrategy) -> Self {
             self.representation = strategy;
+            self
+        }
+
+        /// Select where SPS lowering names the current stack for compiled execution.
+        pub fn with_sps_scheme(mut self, scheme: SpsScheme) -> Self {
+            self.sps.scheme = scheme;
+            self
+        }
+
+        /// Select the optional SPS passes for compiled execution.
+        pub fn with_sps_passes(mut self, plan: SpsPlan) -> Self {
+            self.sps.plan = plan;
             self
         }
 
@@ -142,7 +156,11 @@ pub mod utils {
         }
 
         fn run(&self, backend: ExecutionTarget) -> Result<TestInteraction, CaseError> {
-            let compiler = Self::compiler().with_representation(self.representation);
+            let SpsSelection { scheme, plan } = self.sps.clone();
+            let compiler = Self::compiler()
+                .with_representation(self.representation)
+                .with_sps_scheme(scheme)
+                .with_sps_passes(plan);
             let executable = compiler.executable(&self.path)?;
             let runner = ExecutionRunner::new(
                 &compiler,

@@ -2,8 +2,10 @@
 
 /// Arenas and builders for high Stack IR nodes.
 pub mod arena;
-/// Validation of lexical ownership and branch-join placement.
+/// Validation of lexical ownership and placement in the compiling scheme's fragment.
 pub mod check;
+/// Deep copies of SPS subtrees for the duplicating scheme.
+mod copy;
 /// Consumer demands used by normalization.
 pub mod demand;
 /// Pretty/ugly formatters for high Stack IR.

@@ -128,6 +128,23 @@ pub struct SpsSelection {
     pub plan: SpsPlan,
 }
 
+impl SpsSelection {
+    /// Explain the lowering scheme and the expanded passes with their required phase boundaries.
+    pub fn explain(&self) -> String {
+        let Self { scheme, plan } = self;
+        let stages = plan
+            .passes()
+            .iter()
+            .enumerate()
+            .map(|(index, pass)| format!("  {}\n", pass.location(index)))
+            .collect::<String>();
+        format!(
+            "SPS scheme: {scheme} ({})\nSPS selection: {plan}\n  check closed root (required)\n{stages}  check closed root (required)\n  closure conversion (required)\n",
+            scheme.description()
+        )
+    }
+}
+
 impl SpsPlan {
     pub fn passes(&self) -> &[SpsPass] {
         match self {
@@ -135,19 +152,6 @@ impl SpsPlan {
             | Self::None => &[],
             | Self::Custom(passes) => passes,
         }
-    }
-
-    /// Explain the expanded selection together with its required phase boundaries.
-    pub fn explain(&self) -> String {
-        let stages = self
-            .passes()
-            .iter()
-            .enumerate()
-            .map(|(index, pass)| format!("  {}\n", pass.location(index)))
-            .collect::<String>();
-        format!(
-            "SPS selection: {self}\n  check closed root (required)\n{stages}  check closed root (required)\n  closure conversion (required)\n"
-        )
     }
 
     /// Instantiate independent occurrences, preserving the selected order.

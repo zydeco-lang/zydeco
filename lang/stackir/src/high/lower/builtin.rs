@@ -20,9 +20,9 @@ impl Folder for BuiltinPackageFolder<'_, '_> {
     fn enter(&mut self, input: BuiltinPackageValue) -> Step<Self> {
         match input {
             | BuiltinPackageValue::Unit => Step::Return(Triv.build(self.lowerer, None)),
-            | BuiltinPackageValue::Operation(role) => {
-                Step::Return(ExternalFunction::Host(role).make_function(self.lowerer))
-            }
+            | BuiltinPackageValue::Operation(role) => Step::Return(
+                ExternalFunction::Host(role).make_function(self.lowerer.scheme, self.lowerer),
+            ),
             | BuiltinPackageValue::Product(product) => {
                 let fields = Vec::with_capacity(product.len());
                 self.product(ProductFrame { remaining: product.into_iter(), fields })

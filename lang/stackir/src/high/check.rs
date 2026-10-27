@@ -263,6 +263,25 @@ mod tests {
     }
 
     #[test]
+    fn duplicating_accepts_a_bare_branch_and_rejects_any_stack_let() {
+        let mut fixture = Fixture::new();
+        let root = fixture.coprod_match();
+        let program = SpsProgram::new(fixture.arena, root);
+        assert!(FragmentProgram::try_new(program, SpsScheme::Duplicating).is_ok());
+
+        let mut fixture = Fixture::new();
+        let body = fixture.coprod_match();
+        let bindee = StackVar.build(&mut fixture.arena, None);
+        let root = Let { binder: StackVar, bindee, tail: body }.build(&mut fixture.arena, None);
+        let program = SpsProgram::new(fixture.arena, root);
+        assert_eq!(
+            FragmentProgram::try_new(program, SpsScheme::Duplicating).unwrap_err(),
+            FragmentError::Placement { compu: root, error: PlacementError::UnexpectedStackLet }
+                .into()
+        );
+    }
+
+    #[test]
     fn branch_join_rejects_implicit_arena_sharing() {
         let mut fixture = Fixture::new();
         let value = Triv.build(&mut fixture.arena, None);

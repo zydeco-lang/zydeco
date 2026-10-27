@@ -35,9 +35,21 @@ fn selections_preserve_order_duplicates_and_canonical_spelling() {
         assert_eq!(plan.to_string().parse::<SpsPlan>().unwrap(), plan);
     }
     let plan = SpsPlan::Custom(vec![SpsPass::Normalize, SpsPass::Normalize]);
-    assert!(plan.explain().contains("normalize[1]\n  normalize[2]"));
-    assert!(SpsPlan::None.explain().contains("closure conversion (required)"));
-    assert!(!SpsPlan::None.explain().contains("normalize"));
+    let explain = |plan| SpsSelection { plan, ..SpsSelection::default() }.explain();
+    assert!(explain(plan).contains("normalize[1]\n  normalize[2]"));
+    assert!(explain(SpsPlan::None).contains("closure conversion (required)"));
+    assert!(!explain(SpsPlan::None).contains("normalize"));
+}
+
+#[test]
+fn explanations_name_the_lowering_scheme() {
+    for scheme in SpsScheme::ALL.iter().copied() {
+        let text = SpsSelection { scheme, plan: SpsPlan::Default }.explain();
+        assert!(
+            text.starts_with(&format!("SPS scheme: {scheme} ({})\n", scheme.description())),
+            "{text}"
+        );
+    }
 }
 
 #[test]

@@ -20,7 +20,7 @@ impl Drivers {
 
     // Bounded semantic fixtures can copy immutable inputs. Each run receives a
     // fresh allocator, preserving source IDs without duplicating allocation rights.
-    fn input(source: &SpsArena, root: CompuId) -> FragmentProgram {
+    fn input(source: &SpsArena, root: CompuId, scheme: SpsScheme) -> FragmentProgram {
         let arena = SpsArena {
             admin: AdminArena {
                 defs: source.admin.defs.clone(),
@@ -40,16 +40,16 @@ impl Drivers {
                 compus: source.inner.compus.clone(),
             },
         };
-        FragmentProgram::try_new(SpsProgram::new(arena, root), SpsScheme::BranchJoin).unwrap()
+        FragmentProgram::try_new(SpsProgram::new(arena, root), scheme).unwrap()
     }
 
-    pub(super) fn normalize(source: &SpsArena, root: CompuId) -> SpsProgram {
+    pub(super) fn normalize(source: &SpsArena, root: CompuId, scheme: SpsScheme) -> SpsProgram {
         let explicit = Normalizer
-            .run_with_driver::<Explicit>(Self::input(source, root))
+            .run_with_driver::<Explicit>(Self::input(source, root, scheme))
             .unwrap()
             .into_program();
         let recursive = Normalizer
-            .run_with_driver::<Recursive>(Self::input(source, root))
+            .run_with_driver::<Recursive>(Self::input(source, root, scheme))
             .unwrap()
             .into_program();
         assert_eq!(Snapshot::of(&explicit), Snapshot::of(&recursive));
@@ -93,7 +93,7 @@ fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers(
             bindee = Cons(value, bindee).build(&mut arena, None);
         }
         let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
-        let output = Drivers::normalize(&arena, root);
+        let output = Drivers::normalize(&arena, root, SpsScheme::BranchJoin);
         let inner = &output.arena().inner;
         match case {
             | Case::True | Case::False => {
@@ -219,7 +219,7 @@ fn drivers_preserve_reconstruction_sites_and_protocols() {
     );
     arena.inner.compu_protocols.insert_new(root, protocol.clone());
 
-    let normalized = Drivers::normalize(&arena, root);
+    let normalized = Drivers::normalize(&arena, root, SpsScheme::BranchJoin);
     let snapshot = Snapshot::of(&normalized);
     assert_eq!(snapshot.pattern_protocols.len(), 1);
     assert_eq!(snapshot.value_protocols.len(), 1);
@@ -285,7 +285,7 @@ fn drivers_preserve_empty_and_wide_child_sequences() {
                     (root, [count * 2, count + 1, count + 1, count + 2])
                 }
             };
-            let normalized = Drivers::normalize(&arena, root);
+            let normalized = Drivers::normalize(&arena, root, SpsScheme::BranchJoin);
             assert_eq!(Snapshot::of(&normalized).counts, expected);
         }
     }

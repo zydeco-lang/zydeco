@@ -87,20 +87,22 @@ pub(super) enum Work {
     ComparisonChildren {
         source: CompuId,
         position: usize,
-        bindee: ScopedStack,
+        arms: Scope,
+        join: Option<ScopedStack>,
         site: Option<ss::TermId>,
     },
     BranchArms {
         source: CompuId,
         position: usize,
         known: Rc<KnownValue>,
-        bindee: ScopedStack,
+        arms: Scope,
+        join: Option<ScopedStack>,
         site: Option<ss::TermId>,
     },
     BranchArm {
         binder: VPatId,
         tail: CompuId,
-        env: EnvId,
+        scope: Scope,
         known: Rc<KnownValue>,
     },
     FinishBranchArm(VPatId),
@@ -108,13 +110,14 @@ pub(super) enum Work {
         scrut: ValueId,
         count: usize,
         tail: CompuId,
-        bindee: ScopedStack,
+        env: EnvId,
+        join: Option<ScopedStack>,
         site: Option<ss::TermId>,
     },
     BranchTail {
         count: usize,
         tail: CompuId,
-        bindee: ScopedStack,
+        join: Option<ScopedStack>,
         demands: Demands,
         site: Option<ss::TermId>,
     },
@@ -434,10 +437,10 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 })
             }
             | Computation::Join(LetJoin::Stack(Let { bindee, tail, .. })) => {
-                self.branch(bindee, tail, scope, site)
+                self.branch(tail, scope, Some(bindee), site)
             }
             | Computation::Compare(_) | Computation::CoprodMatch(_) => {
-                unreachable!("branches are handled with their stack join")
+                self.branch(id, scope, None, site)
             }
             | Computation::LetArg(Let { binder: Cons(binder, StackVar), bindee, tail }) => {
                 let stack =
@@ -487,40 +490,46 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         }
     }
 
+    /// Normalize a value case split or scalar comparison. A branch under a stack let shares the
+    /// stack the let names; the arms of a bare branch each consume the current delayed stack,
+    /// rebuilding it on their own.
     fn branch(
-        &mut self, bindee: StackId, tail: CompuId, scope: Scope, site: Option<ss::TermId>,
+        &mut self, branch: CompuId, scope: Scope, guard: Option<StackId>, site: Option<ss::TermId>,
     ) -> Step<Self> {
+        // Selecting a successor moves a guard's stack into it, so the guard must be movable.
+        let selectable = guard.is_none_or(|bindee| self.norm.movable_stack(bindee));
         if let Computation::Compare(CompareBranch { operation, operands, when_true, when_false }) =
-            self.norm.source.inner.compus[&tail]
+            self.norm.source.inner.compus[&branch]
         {
             let known = operands.map(|value| self.norm.known(value, scope.values));
-            if self.norm.movable_stack(bindee)
+            if selectable
                 && operands.iter().all(|value| self.norm.discardable(*value))
                 && let [KnownValue::Literal(first), KnownValue::Literal(second)] =
                     known.each_ref().map(|value| value.as_ref())
                 && let Ok(condition) = operation.evaluate(&[first.clone(), second.clone()])
             {
-                let stack =
-                    Some(self.norm.delay_stack(ScopedStack { node: bindee, scope: scope.clone() }));
+                let scope = self.selected(guard, scope);
                 return Step::TailCall(Work::Computation(
                     if condition { when_true } else { when_false },
-                    Scope { stack, ..scope },
+                    scope,
                 ));
             }
+            let (arms, join) = Self::unknown(guard, scope);
             return Step::TailCall(Work::ComparisonChildren {
-                source: tail,
+                source: branch,
                 position: 0,
-                bindee: ScopedStack { node: bindee, scope },
+                arms,
+                join,
                 site,
             });
         }
         let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
-            self.norm.source.inner.compus[&tail].clone()
+            self.norm.source.inner.compus[&branch].clone()
         else {
-            unreachable!("branch-join input guards a branch")
+            unreachable!("a stack let guards a branch")
         };
         let known = self.norm.shared(scrut, scope.values);
-        if self.norm.movable_stack(bindee) {
+        if selectable {
             for arm in &arms {
                 match self.norm.matches::<D>(arm.binder, &known) {
                     | Some(true) => {
@@ -535,15 +544,12 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                         {
                             break;
                         }
-                        let stack = Some(
-                            self.norm
-                                .delay_stack(ScopedStack { node: bindee, scope: scope.clone() }),
-                        );
+                        let scope = self.selected(guard, scope);
                         return Step::TailCall(Work::Binding {
                             binder: arm.binder,
                             bindee: value,
                             tail: arm.tail,
-                            scope: Scope { stack, ..scope },
+                            scope,
                             site,
                         });
                     }
@@ -552,13 +558,50 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 }
             }
         }
-        Step::TailCall(Work::BranchArms {
-            source: tail,
-            position: 0,
-            known,
-            bindee: ScopedStack { node: bindee, scope },
-            site,
-        })
+        let (arms, join) = Self::unknown(guard, scope);
+        Step::TailCall(Work::BranchArms { source: branch, position: 0, known, arms, join, site })
+    }
+
+    /// The scope a selected successor or arm continues in: a guard's stack is delayed into it,
+    /// and a bare branch keeps the current delayed stack.
+    fn selected(&mut self, guard: Option<StackId>, scope: Scope) -> Scope {
+        match guard {
+            | Some(bindee) => {
+                let bindee = ScopedStack { node: bindee, scope: scope.clone() };
+                Scope { stack: Some(self.norm.delay_stack(bindee)), ..scope }
+            }
+            | None => scope,
+        }
+    }
+
+    /// Finish a rebuilt branch. A guarded branch rebuilds its guard's stack and names it again;
+    /// a bare branch is complete.
+    fn join_branch(
+        &mut self, branch: CompuId, demands: Demands, join: Option<ScopedStack>,
+        site: Option<ss::TermId>,
+    ) -> Step<Self> {
+        match join {
+            | Some(bindee) => Step::Call {
+                input: Work::Stack(bindee),
+                frame: Work::BranchStack { tail: branch, demands, site },
+            },
+            | None => {
+                self.computations.push(Residual { node: branch, demands });
+                Step::Return(())
+            }
+        }
+    }
+
+    /// The scope unknown arms run in, and the stack a rebuilt guard names. The arms of a guarded
+    /// branch consume the guard's `•`; the arms of a bare branch inherit the delayed stack.
+    fn unknown(guard: Option<StackId>, scope: Scope) -> (Scope, Option<ScopedStack>) {
+        match guard {
+            | Some(bindee) => (
+                Scope { values: scope.values, stack: None },
+                Some(ScopedStack { node: bindee, scope }),
+            ),
+            | None => (scope, None),
+        }
     }
 
     fn external_call(
@@ -728,7 +771,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     };
                 }
             }
-            | Work::ComparisonChildren { source, position, bindee, site } => {
+            | Work::ComparisonChildren { source, position, arms, join, site } => {
                 let Computation::Compare(CompareBranch {
                     operation,
                     operands,
@@ -738,11 +781,10 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 else {
                     unreachable!("comparison branch")
                 };
-                let env = bindee.scope.values;
                 let input = match position {
-                    | 0 => Some(Work::Computation(when_true, Scope { values: env, stack: None })),
-                    | 1 => Some(Work::Computation(when_false, Scope { values: env, stack: None })),
-                    | 2 | 3 => Some(Work::Value(operands[position - 2], env, Demand::Used)),
+                    | 0 => Some(Work::Computation(when_true, arms.clone())),
+                    | 1 => Some(Work::Computation(when_false, arms.clone())),
+                    | 2 | 3 => Some(Work::Value(operands[position - 2], arms.values, Demand::Used)),
                     | _ => None,
                 };
                 if let Some(input) = input {
@@ -751,7 +793,8 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         frame: Work::ComparisonChildren {
                             source,
                             position: position + 1,
-                            bindee,
+                            arms,
+                            join,
                             site,
                         },
                     };
@@ -774,12 +817,9 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     .join(second.demands)
                     .join(when_true.demands)
                     .join(when_false.demands);
-                return Step::Call {
-                    input: Work::Stack(bindee),
-                    frame: Work::BranchStack { tail, demands, site },
-                };
+                return self.join_branch(tail, demands, join, site);
             }
-            | Work::BranchArms { source, position, known, bindee, site } => {
+            | Work::BranchArms { source, position, known, arms: scope, join, site } => {
                 let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
                     &self.norm.source.inner.compus[&source]
                 else {
@@ -790,14 +830,15 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         input: Work::BranchArm {
                             binder: arm.binder,
                             tail: arm.tail,
-                            env: bindee.scope.values,
+                            scope: scope.clone(),
                             known: known.clone(),
                         },
                         frame: Work::BranchArms {
                             source,
                             position: position + 1,
                             known,
-                            bindee,
+                            arms: scope,
+                            join,
                             site,
                         },
                     };
@@ -806,7 +847,8 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     scrut: *scrut,
                     count: arms.len(),
                     tail: source,
-                    bindee,
+                    env: scope.values,
+                    join,
                     site,
                 });
             }
@@ -1012,10 +1054,10 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 self.computations
                     .push(Residual { node, demands: tail.demands.join(bindee.demands) });
             }
-            | Work::BranchArm { binder, tail, env, known } => {
-                let values = self.norm.bind(env, binder, known);
+            | Work::BranchArm { binder, tail, scope, known } => {
+                let values = self.norm.bind(scope.values, binder, known);
                 return Step::Call {
-                    input: Work::Computation(tail, Scope { values, stack: None }),
+                    input: Work::Computation(tail, Scope { values, ..scope }),
                     frame: Work::FinishBranchArm(binder),
                 };
             }
@@ -1028,7 +1070,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 let binder = self.norm.pattern::<D>(binder);
                 self.arms.push((Matcher { binder, tail: tail.node }, tail.demands, demand));
             }
-            | Work::BranchScrutinee { scrut, count, tail, bindee, site } => {
+            | Work::BranchScrutinee { scrut, count, tail, env, join, site } => {
                 let first = self.arms.len() - count;
                 let (demands, demand) = self.arms[first..].iter_mut().fold(
                     (Demands::default(), Demand::Absent),
@@ -1037,13 +1079,12 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     },
                 );
                 let demand = if demand.is_absent() { Demand::Used } else { demand };
-                let env = bindee.scope.values;
                 return Step::Call {
                     input: Work::Value(scrut, env, demand),
-                    frame: Work::BranchTail { count, tail, bindee, demands, site },
+                    frame: Work::BranchTail { count, tail, join, demands, site },
                 };
             }
-            | Work::BranchTail { count, tail, bindee, demands, site } => {
+            | Work::BranchTail { count, tail, join, demands, site } => {
                 let scrut = self.value();
                 let arms = self
                     .arms
@@ -1053,10 +1094,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     .collect();
                 let branch_site = self.norm.source.admin.terms.back(&TermId::Compu(tail)).copied();
                 let tail = SCoprodMatch { scrut: scrut.node, arms }.build(self.norm, branch_site);
-                return Step::Call {
-                    input: Work::Stack(bindee),
-                    frame: Work::BranchStack { tail, demands: demands.join(scrut.demands), site },
-                };
+                return self.join_branch(tail, demands.join(scrut.demands), join, site);
             }
             | Work::BranchStack { tail, demands, site } => {
                 let stack = self.stack();

@@ -91,7 +91,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__build)
-            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --link-library --execute --lint-types --help"
+            opts="-p -t -b -r -x -h --package --pkg --target-os --target-arch --target --representation --sps-passes --sps-scheme --trace-passes --verify-passes --dump-passes --build-dir --runtime-dir --link-library --execute --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -131,6 +131,10 @@ _zydeco() {
                     ;;
                 --sps-passes)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --sps-scheme)
+                    COMPREPLY=($(compgen -W "dup br" -- "${cur}"))
                     return 0
                     ;;
                 --build-dir)
@@ -341,7 +345,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__subcmd__passes)
-            opts="-h --sps-passes --lint-types --help"
+            opts="-h --sps-passes --sps-scheme --lint-types --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -349,6 +353,10 @@ _zydeco() {
             case "${prev}" in
                 --sps-passes)
                     COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --sps-scheme)
+                    COMPREPLY=($(compgen -W "dup br" -- "${cur}"))
                     return 0
                     ;;
                 *)

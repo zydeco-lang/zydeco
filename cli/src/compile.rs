@@ -12,7 +12,7 @@ use zydeco_session::{
 };
 use zydeco_stackir::{
     BuiltinRootLowerError, FragmentProgram, RootLowerer, SpsLowPipeline, SpsLowProgram,
-    SpsLoweringError,
+    SpsLoweringError, SpsScheme,
     passes::{SpsFailure, SpsInspection, SpsObserver, SpsPlan, SpsSelection},
 };
 use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
@@ -69,6 +69,12 @@ impl CommandCompiler {
     /// Select optional SPS transformations for subsequent compilations.
     pub fn with_sps_passes(mut self, plan: SpsPlan) -> Self {
         self.sps.plan = plan;
+        self
+    }
+
+    /// Select where subsequent SPS lowering names the current stack.
+    pub fn with_sps_scheme(mut self, scheme: SpsScheme) -> Self {
+        self.sps.scheme = scheme;
         self
     }
 
@@ -446,6 +452,11 @@ impl BackendProgram {
     /// The immutable optimization selection used to produce this backend input.
     pub fn sps_passes(&self) -> &SpsPlan {
         &self.sps_passes
+    }
+
+    /// The scheme whose fragment this backend input lies in.
+    pub fn sps_scheme(&self) -> SpsScheme {
+        self.sps_low.scheme()
     }
 
     /// Reconfigure assembly lowering, invalidating any previously cached assembly.

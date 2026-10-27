@@ -190,18 +190,21 @@ and `Custom` retains an ordered vector of typed `SpsPass` entries.
 The textual forms are `default`, `none`, and comma-separated pass names; the initial catalog contains `normalize`.
 An empty textual selection, unknown names or options, empty list entries,
 and presets embedded inside lists are rejected before source loading or artifact creation.
-Displaying a plan gives its canonical textual selection; `explain` expands its optional stages together
+Displaying a plan gives its canonical textual selection.
+An `SpsSelection` pairs the plan with the [stack-passing scheme](#correspondence-with-sps) that lowering uses;
+its `explain` names the scheme and expands the plan's optional stages together
 with their required checking and conversion boundaries.
 Rust callers can provide arbitrary `CompilerPass` implementations without joining the built-in catalog.
 
-The command compiler owns the plan and instantiates its passes after checked arenas are available.
+The command compiler owns the selection and instantiates its passes after checked arenas are available.
 An observed plan shares a borrowed observer among distinct occurrences;
 each compilation creates fresh invocation counts and temporary pass state.
-The SPS observer verifies lexical ownership, branch joins, and root closure using borrowed phase data.
+The SPS observer verifies lexical ownership, the placement rule of the program's scheme,
+and root closure using borrowed phase data.
 The unobserved default retains static composition.
 `BackendProgram` records the selection that produced its frozen SPSLow input,
 and its assembly cache belongs to that product.
-Selecting another SPS plan requires a new lowering result, so cached assembly cannot cross selections.
+Selecting another SPS plan or scheme requires a new lowering result, so cached assembly cannot cross selections.
 [Assembly representation policy](#policy-selection) remains independently selectable and invalidates
 that product's assembly cache.
 
@@ -227,15 +230,18 @@ Discover the optional passes and explain their enclosing compiler phase without 
 zydeco passes
 zydeco passes --sps-passes default
 zydeco passes --sps-passes normalize,normalize
+zydeco passes --sps-scheme dup
 ```
 
-Every `build` target accepts `--sps-passes`.
-The source interpreter (`run`), `check`, and the REPL do not execute this backend phase and do not accept the option.
-For example, disable optional SPS transformations or select repeated normalization:
+Every `build` target accepts `--sps-passes` and `--sps-scheme`.
+The source interpreter (`run`), `check`, and the REPL do not execute this backend phase and do not accept the options.
+For example, disable optional SPS transformations, select repeated normalization,
+or compare how the schemes name the stack of a value case split:
 
 ```sh
 zydeco build lib/tests/core/representation-policies.zy --target zir --sps-passes none
 zydeco build lib/tests/core/representation-policies.zy --target wasm-sps --sps-passes normalize,normalize
+zydeco build lib/tests/core/dispatch.zy --target zir --sps-passes none --sps-scheme dup
 ```
 
 Use `--trace-passes` to report occurrences and timings, `--verify-passes` to check SPS invariants before
@@ -1506,12 +1512,13 @@ Source regressions and runtime parity tests use the interpreter as one observabl
 
 [SPS lowering](../../lang/stackir/src/high/lower.rs) is indexed by the stack consuming a residual computation.
 It builds complete user and Builtin structures into a `FragmentProgram`,
-which records the [compilation scheme](../../lang/stackir/src/scheme.rs) whose fragment the program lies in;
-the implemented scheme is branch-join.
+which records the [compilation scheme](../../lang/stackir/src/scheme.rs) whose fragment the program lies in.
 SPS retains lexical values, closures, continuations, arguments, and explicit ambient stacks.
-Stack lets guard value-coproduct matches and scalar comparisons so every branch shares one supplied stack.
+Under the default branch-join scheme, stack lets guard value-coproduct matches
+and scalar comparisons so every branch shares one supplied stack; under the duplicating scheme,
+no stack let occurs and every arm consumes its own copy of the stack.
 The [SPS verifier](../../lang/stackir/src/high/check.rs) checks closed roots, lexical ownership,
-and this branch-join shape.
+and the placement rule of the program's scheme.
 
 The [pass composition contract](#built-in-plans-and-phase-boundaries) owns the configurable stage between SPS checks
 and closure conversion, including its default normalization and built-in plans.
@@ -1525,10 +1532,16 @@ The normalizer preserves definition identities while allocating fresh syntax for
 SPS separates values, stacks, and programs.
 Continuations, argument pushes, and tag pushes build stacks; each program consumes one ambient stack `•` exactly once
 on every path, and no value captures it, because closures receive their stack at each call.
-The branch-join shape above is the paper's fragment `SPS_br`, whose stack lets occur exactly
-around value-coproduct matches, and SPS lowering follows the paper's branch-join compilation.
-Indexed by the consuming stack, it pushes an argument for each application and a tag for each destructor,
-installs a continuation for each `do`, and names the stack with a let at each value case split.
+SPS lowering follows the paper's stack-passing compilation in the scheme that `--sps-scheme` selects.
+Indexed by the consuming stack, it pushes an argument for each application and a tag for each destructor
+and installs a continuation for each `do`; the schemes differ at a value case split:
+
+| Scheme | Paper fragment | At a value case split or scalar comparison |
+| --- | --- | --- |
+| `br` (default) | `SPS_br`, whose stack lets occur exactly around value-coproduct matches | one stack let names the stack that the arms share |
+| `dup` | `SPS_dup`, which has no stack let | each arm consumes its own [copy](../../lang/stackir/src/high/copy.rs) of the stack |
+
+One [placement rule](../../lang/stackir/src/scheme.rs) per scheme checks its fragment in SPS and SPSLow.
 
 | SPS form | Syntax node | Printed |
 | --- | --- | --- |
@@ -1560,7 +1573,11 @@ The implementation departs from SPS where Zydeco's source language or its backen
 - A fixed point carries the stack it runs on and binds a fresh `•` for its body,
   so stack substitution stops at it as it does at closures.
 - Primitives, address offsets, scalar comparisons, external calls, memory steps, and holes extend the calculus.
-  A scalar comparison is a second branching form, and the branch-join verifier requires its stack let as well.
+  A scalar comparison is a second branching form that each scheme treats as it treats a value case split.
+
+The duplicating scheme trades sharing for copies.
+`n` nested splits copy a consumer `2ⁿ` times, and structured Wasm declares every local of the program in every function,
+so heavily duplicated programs can exceed a WebAssembly engine's limit on locals.
 
 Normalization orients part of the paper's equational theory as rewrites.
 The [local reductions](#local-reductions) orient its β- and η-equations: closure β is inlining,
@@ -1572,6 +1589,8 @@ the paper's join points: a value let is substituted only under the occurrence an
 and a stack let disappears only when its branch is selected.
 Rewrites apply only where sharing, effects, and stack movement permit; recursion is never unfolded,
 and normalization does not compute βη normal forms.
+Normalization preserves its input's scheme: at an unknown branch, branch-join rebuilds the guard's stack once,
+while the duplicating scheme rebuilds a delayed consumer in every arm.
 
 ### Residual Lowering Folder
 
@@ -1968,8 +1987,9 @@ Source captures remain value identities; code labels and lexical syntax nodes be
 Administrative definition allocation continues from the consumed SPS program as described in C2.
 
 `SpsLowProgram` has one root and first-order closed blocks.
-Its [verifier](../../lang/stackir/src/low/check.rs) checks reference closure,
-lexical node ownership, retained branch joins, and the word entry contracts below.
+Its [verifier](../../lang/stackir/src/low/check.rs) checks reference closure, lexical node ownership,
+the stack placement of its scheme, and the word entry contracts below.
+Conversion is homomorphic on stack lets, so SPSLow records and keeps the scheme of its SPS input.
 A single-occurrence syntax tree means runtime sharing is explicit in variables;
 it is not a proof that a continuation is dynamically used once.
 Native preparation must establish the stronger lifetime facts in C11.

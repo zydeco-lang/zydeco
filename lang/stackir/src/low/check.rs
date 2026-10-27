@@ -399,6 +399,30 @@ mod tests {
     }
 
     #[test]
+    fn duplicating_programs_keep_bare_branches_and_no_stack_lets() {
+        let mut arena = SpsLowArena::default();
+        let scrut = Triv.build(&mut arena, None);
+        let branch = SCoprodMatch { scrut, arms: vec![] }.build(&mut arena, None);
+        let scheme = SpsScheme::Duplicating;
+        for result in [
+            SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch, scheme).err(),
+            SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch, scheme).err(),
+        ] {
+            assert_eq!(result, None);
+        }
+        let stack = StackVar.build(&mut arena, None);
+        let root =
+            LetStack { binder: StackVar, bindee: stack, tail: branch }.build(&mut arena, None);
+        assert_eq!(
+            SpsLowProgram::try_new(arena, root, scheme).unwrap_err(),
+            SpsLowValidationError::Placement {
+                compu: root,
+                error: PlacementError::UnexpectedStackLet,
+            }
+        );
+    }
+
+    #[test]
     fn comparisons_require_a_join_and_distinct_successor_occurrences() {
         let mut arena = SpsLowArena::default();
         let operands = [1, 2]

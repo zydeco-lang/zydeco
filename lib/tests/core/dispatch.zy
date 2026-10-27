@@ -1,0 +1,31 @@
+param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+begin
+  let int = numeric/int that
+
+  def Choice =
+    data
+    | +Left : Int
+    | +Right : Int
+    end
+  that
+
+  -- A value case split under an argument frame and a bind frame. Branch-join
+  -- compilation names that consumer once above the split; duplicating compilation
+  -- copies it into both arms.
+  def ! dispatch : Choice -> Int -> Ret Int = fn (choice : Choice) (offset : Int) =>
+    do z <- (
+      match choice
+      | +Left(x) => ! int/add x
+      | +Right(x) => ! int/sub x
+      end
+    ) offset;
+    ! int/mul z 2
+  that
+
+  -- (5 + 2) * 2 = 14 and (5 - 2) * 2 = 6
+  do left <- ! dispatch (+Left(5) : Choice) 2;
+  do right <- ! dispatch (+Right(5) : Choice) 2;
+  do total <- ! int/add left right;
+  do status <- ! int/sub total 20;
+  ! process/exit status
+end

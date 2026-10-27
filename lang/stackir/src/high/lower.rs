@@ -97,8 +97,7 @@ impl ValueBinding {
             assert_eq!(ctor.idx, 0, "an irrefutable constructor binder must have tag zero");
             let tail = SCoprodMatch { scrut: bindee, arms: vec![Matcher { binder, tail }] }
                 .build(lo, site);
-            let bindee = StackVar.build(lo, site);
-            Let { binder: StackVar, bindee, tail }.build(lo, site)
+            lo.join(None, tail, site)
         } else {
             Let { binder, bindee, tail }.build(lo, site)
         }
@@ -284,6 +283,32 @@ impl<'a> Lowerer<'a> {
         match arms {
             | [Matcher { binder, tail: _ }] => self.is_coprod_pattern(*binder),
             | _ => true,
+        }
+    }
+
+    /// The stack one arm of a branch consumes. A branch that names its stack gives every arm a
+    /// fresh `•`; otherwise each arm but the last consumes its own copy of the branch's stack,
+    /// and the last arm consumes the stack itself.
+    fn arm_stack(&mut self, stack: StackId, last: bool, site: Option<ss::TermId>) -> StackId {
+        if self.scheme.shares_branch_stack() {
+            StackVar.build(self, site)
+        } else if last {
+            stack
+        } else {
+            self.arena.copy_stack(stack)
+        }
+    }
+
+    /// Guard a branch with the stack its arms share, when the scheme names it.
+    /// `None` names the ambient stack itself.
+    fn join(
+        &mut self, stack: Option<StackId>, branch: CompuId, site: Option<ss::TermId>,
+    ) -> CompuId {
+        if self.scheme.shares_branch_stack() {
+            let bindee = stack.unwrap_or_else(|| StackVar.build(self, site));
+            Let { binder: StackVar, bindee, tail: branch }.build(self, site)
+        } else {
+            branch
         }
     }
 

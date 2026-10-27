@@ -24,7 +24,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -V 'Print version'
             cand --version 'Print version'
             cand show 'List the project''s packages and relationships without checking or executing code'
-            cand passes 'List optional compiler passes or explain a selected SPS plan'
+            cand passes 'List optional compiler passes and SPS schemes, or explain a selected SPS plan'
             cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a source package and its code dependencies, including its declared executable role'
@@ -43,9 +43,10 @@ set edit:completion:arg-completer[zydeco] = {|@words|
         }
         &'zydeco;passes'= {
             cand --sps-passes 'Explain `default`, `none`, or a comma-separated list such as normalize,normalize'
+            cand --sps-scheme 'Explain the selection under this stack-passing scheme'
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
-            cand -h 'Print help'
-            cand --help 'Print help'
+            cand -h 'Print help (see more with ''--help'')'
+            cand --help 'Print help (see more with ''--help'')'
         }
         &'zydeco;fmt'= {
             cand --check 'Report files that would change without writing them, and exit unsuccessfully when at least one file would change'
@@ -103,6 +104,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand --target 'Target backend'
             cand --representation 'Local representation policy for native, ZASM, and Wasm targets'
             cand --sps-passes 'SPS passes: default, none, or a comma-separated list; order and duplicates are preserved'
+            cand --sps-scheme 'Where SPS lowering names the current stack'
             cand -b 'Build Directory'
             cand --build-dir 'Build Directory'
             cand -r 'Runtime directory'
@@ -114,12 +116,12 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
             cand --lint-types 'Re-validate the finished typed arena after every successful check, reporting internal compiler errors (debugging aid)'
-            cand -h 'Print help'
-            cand --help 'Print help'
+            cand -h 'Print help (see more with ''--help'')'
+            cand --help 'Print help (see more with ''--help'')'
         }
         &'zydeco;help'= {
             cand show 'List the project''s packages and relationships without checking or executing code'
-            cand passes 'List optional compiler passes or explain a selected SPS plan'
+            cand passes 'List optional compiler passes and SPS schemes, or explain a selected SPS plan'
             cand fmt 'Format Zydeco source files in place'
             cand run 'Run a zydeco program'
             cand check 'Check a source package and its code dependencies, including its declared executable role'

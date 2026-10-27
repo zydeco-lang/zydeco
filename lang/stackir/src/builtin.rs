@@ -1,3 +1,4 @@
+use crate::SpsScheme;
 use crate::high::syntax::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,15 +81,15 @@ impl HostCallMode {
 }
 
 impl ExternalFunction {
-    /// Wrap an external call in an SPS closure.
-    pub fn make_function<Arena>(self, arena: &mut Arena) -> ValueId
+    /// Wrap an external call in an SPS closure compiled under `scheme`.
+    pub fn make_function<Arena>(self, scheme: SpsScheme, arena: &mut Arena) -> ValueId
     where
         Arena: AsMut<SpsArena>,
     {
         if let ExternalFunction::Host(role) = self
             && let Some(operation) = ComparisonOp::from_builtin(role)
         {
-            return CompareBranch::make_function(arena, operation);
+            return CompareBranch::make_function(arena, operation, scheme);
         }
         if matches!(self, ExternalFunction::Host(BuiltinValueRole::MemoryOffset)) {
             return AddrOffset::make_function(arena);
@@ -108,7 +109,7 @@ impl CompareBranch {
     /// Keep primitive selection in the builtin body, including at escaping uses
     /// and when optional normalization is disabled.
     fn make_function<Arena: AsMut<SpsArena>>(
-        arena: &mut Arena, operation: ComparisonOp,
+        arena: &mut Arena, operation: ComparisonOp, scheme: SpsScheme,
     ) -> ValueId {
         use crate::protocol::ValueProtocol;
         let [first, second, when_true, when_false] =
@@ -132,8 +133,13 @@ impl CompareBranch {
             when_false: when_false_body,
         }
         .build(arena, None);
-        let bindee = StackVar.build(arena, None);
-        let body = Let { binder: StackVar, bindee, tail: branch }.build(arena, None);
+        // Both successors consume the ambient stack, which only the branch-join scheme names.
+        let body = if scheme.shares_branch_stack() {
+            let bindee = StackVar.build(arena, None);
+            Let { binder: StackVar, bindee, tail: branch }.build(arena, None)
+        } else {
+            branch
+        };
         let scalar = ValueProtocol::Primitive(operation.operand_type());
         let body = [
             (first, scalar.clone()),

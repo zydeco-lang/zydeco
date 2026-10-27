@@ -542,8 +542,8 @@ The
 [compiler reference's phase map](docs/references/compiler.md#c1-architecture-and-a-programs-path-through-the-compiler)
 connects source loading and checking to interpretation, SPS lowering, and native or WebAssembly emission.
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
-SPS retains lexical branch joins; normalization simplifies known producers and consumers
-before closure conversion constructs first-order SPSLow.
+SPS names the stack where its compilation scheme does, at branch joins by default;
+normalization simplifies known producers and consumers before closure conversion constructs first-order SPSLow.
 SPSLow checks explicit environment/result entry roles and closure/continuation record provenance
 under the [word entry contract](docs/references/compiler.md#word-entry-contracts).
 It also preserves and checks [partial source protocols](docs/references/compiler.md#partial-source-protocols)

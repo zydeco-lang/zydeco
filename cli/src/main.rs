@@ -6,8 +6,8 @@ use zydeco_cli::{
     BuildOptions, BuildTarget, Cli, CommandCompiler, Commands, CompileError, DiagnosticRenderer,
     Executable, ExecutionError, ExecutionRunner, ExecutionTarget, NativeError,
     RepresentationStrategy, SourceFormatError, SourceFormatOutcome, SourceFormatter,
-    SourceSelection, SpsInspection, SpsPass, SpsPlan, SpsPlanError, TargetArchitecture, TargetOs,
-    TestTarget,
+    SourceSelection, SpsInspection, SpsPass, SpsPlan, SpsPlanError, SpsScheme, SpsSelection,
+    TargetArchitecture, TargetOs, TestTarget,
 };
 use zydeco_session::source::{
     Package, PackageId, PackagePath, PackageRole, SourceLoadError, SourceReference,
@@ -54,16 +54,27 @@ impl Application {
                 self.show_packages(packages)?;
                 Ok(0)
             }
-            | Commands::Passes { sps_passes } => {
-                if let Some(text) = sps_passes {
-                    print!("{}", text.parse::<SpsPlan>()?.explain());
+            | Commands::Passes { sps_passes, sps_scheme } => {
+                if sps_passes.is_some() || sps_scheme.is_some() {
+                    let plan = sps_passes.as_deref().map(str::parse).transpose()?;
+                    let selection = SpsSelection {
+                        scheme: sps_scheme.map(Into::into).unwrap_or_default(),
+                        plan: plan.unwrap_or_default(),
+                    };
+                    print!("{}", selection.explain());
                 } else {
                     println!("Optional SPS passes:");
                     for pass in SpsPass::ALL {
                         println!("  {pass}: {}", pass.description());
                     }
                     println!("Selections: default, none, or a comma-separated pass list.");
-                    println!("Use --sps-passes PLAN to explain the selected sequence.");
+                    println!("Stack-passing schemes:");
+                    for scheme in SpsScheme::ALL {
+                        println!("  {scheme}: {}", scheme.description());
+                    }
+                    println!(
+                        "Use --sps-passes PLAN and --sps-scheme SCHEME to explain a selection."
+                    );
                 }
                 Ok(0)
             }
@@ -119,6 +130,7 @@ impl Application {
                     .compiler
                     .with_representation(representation.map(Into::into).unwrap_or_default())
                     .with_sps_passes(plan)
+                    .with_sps_scheme(pipeline.sps_scheme.map(Into::into).unwrap_or_default())
                     .with_pass_inspection(SpsInspection {
                         trace: pipeline.trace_passes,
                         verify: pipeline.verify_passes,

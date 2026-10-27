@@ -5,6 +5,7 @@ e2e_sources!({
     r#const => "tests/core/const.zy",
     direct_closure => "tests/core/direct-closure.zy",
     direct_tuple => "tests/core/direct-tuple.zy",
+    dispatch => "tests/core/dispatch.zy",
     explosion => "tests/core/explosion.zy",
     fact => "tests/core/fact.zy",
     fn_cmp_ret => "tests/core/fn-cmp-ret.zy",

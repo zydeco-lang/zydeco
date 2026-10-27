@@ -120,11 +120,11 @@ pub(super) enum Work {
     MatchArm {
         binder: ss::VPatId,
         tail: ss::CompuId,
-        site: Option<ss::TermId>,
+        stack: StackId,
     },
     MatchArmBody {
         tail: ss::CompuId,
-        site: Option<ss::TermId>,
+        stack: StackId,
     },
     CoproductMatch {
         scrut: ValueId,
@@ -173,6 +173,7 @@ pub(super) enum Work {
         tag: CtorIdx,
         payload: Option<(ss::VPatId, MatchPlanId)>,
         failure: MatchPlanId,
+        stack: StackId,
         site: Option<ss::TermId>,
     },
     ConstructorArms {
@@ -647,7 +648,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     integer_type,
                     zydeco_syntax::IntegerOperation::Eq,
                 );
-                let operator = ExternalFunction::Host(role).make_function(self.lo);
+                let operator = ExternalFunction::Host(role).make_function(self.lo.scheme, self.lo);
                 let success_stack = StackVar.build(self.lo, site);
                 Step::Call {
                     input: Work::MatchPlan { plan: success, stack: success_stack, site },
@@ -734,10 +735,13 @@ impl Folder for LoweringFolder<'_, '_> {
             }
             | Work::CoproductArms { mut remaining, scrut, count, stack, site } => {
                 return match remaining.next() {
-                    | Some(Matcher { binder, tail }) => Step::Call {
-                        input: Work::MatchArm { binder, tail, site },
-                        frame: Work::CoproductArms { remaining, scrut, count, stack, site },
-                    },
+                    | Some(Matcher { binder, tail }) => {
+                        let arm = self.lo.arm_stack(stack, remaining.len() == 0, site);
+                        Step::Call {
+                            input: Work::MatchArm { binder, tail, stack: arm },
+                            frame: Work::CoproductArms { remaining, scrut, count, stack, site },
+                        }
+                    }
                     | None => Step::TailCall(Work::CoproductMatch { scrut, count, stack, site }),
                 };
             }
@@ -761,19 +765,22 @@ impl Folder for LoweringFolder<'_, '_> {
                 site,
             } => {
                 return match remaining.next() {
-                    | Some(ConstructorBranch { tag, payload }) => Step::Call {
-                        input: Work::ConstructorArm { tag, payload, failure, site },
-                        frame: Work::ConstructorArms {
-                            remaining,
-                            scrutinee,
-                            continuation,
-                            fallback,
-                            failure,
-                            count,
-                            stack,
-                            site,
-                        },
-                    },
+                    | Some(ConstructorBranch { tag, payload }) => {
+                        let arm = self.lo.arm_stack(stack, remaining.len() == 0, site);
+                        Step::Call {
+                            input: Work::ConstructorArm { tag, payload, failure, stack: arm, site },
+                            frame: Work::ConstructorArms {
+                                remaining,
+                                scrutinee,
+                                continuation,
+                                fallback,
+                                failure,
+                                count,
+                                stack,
+                                site,
+                            },
+                        }
+                    }
                     | None => Step::TailCall(Work::PlannedConstructor {
                         scrutinee,
                         continuation,
@@ -907,21 +914,19 @@ impl Folder for LoweringFolder<'_, '_> {
                 let body = self.computation();
                 self.computations.push(SProductMatch { scrut, binder, body }.build(self.lo, site));
             }
-            | Work::MatchArm { binder, tail, site } => {
+            | Work::MatchArm { binder, tail, stack } => {
                 return Step::Call {
                     input: Work::Pattern(binder),
-                    frame: Work::MatchArmBody { tail, site },
+                    frame: Work::MatchArmBody { tail, stack },
                 };
             }
-            | Work::MatchArmBody { tail, site } => {
-                let stack = StackVar.build(self.lo, site);
+            | Work::MatchArmBody { tail, stack } => {
                 return Step::TailCall(Work::Computation(tail, stack));
             }
             | Work::CoproductMatch { scrut, count, stack, site } => {
                 let arms = self.match_arms(count);
-                let tail = SCoprodMatch { scrut, arms }.build(self.lo, site);
-                self.computations
-                    .push(Let { binder: StackVar, bindee: stack, tail }.build(self.lo, site));
+                let branch = SCoprodMatch { scrut, arms }.build(self.lo, site);
+                self.computations.push(self.lo.join(Some(stack), branch, site));
             }
             | Work::CoMatchArm { codata, name, tail, site } => {
                 self.tags.push(self.lo.protocols.tag(codata, name));
@@ -984,8 +989,7 @@ impl Folder for LoweringFolder<'_, '_> {
                     remaining,
                 });
             }
-            | Work::ConstructorArm { tag, payload, failure, site } => {
-                let stack = StackVar.build(self.lo, site);
+            | Work::ConstructorArm { tag, payload, failure, stack, site } => {
                 let (binder, plan) = if let Some((pattern, success)) = payload {
                     let scrutinee = self.lo.alloc_admin_def("__match_payload__");
                     let binder = scrutinee.build(self.lo, None);
@@ -1009,7 +1013,7 @@ impl Folder for LoweringFolder<'_, '_> {
                 let arms = self.match_arms(count);
                 let scrut = scrutinee.build(self.lo, site);
                 let body = SCoprodMatch { scrut, arms }.build(self.lo, site);
-                let tail = Let { binder: StackVar, bindee: stack, tail: body }.build(self.lo, site);
+                let tail = self.lo.join(Some(stack), body, site);
                 let binder = continuation.build(self.lo, None);
                 self.computations.push(Let { binder, bindee: fallback, tail }.build(self.lo, site));
             }

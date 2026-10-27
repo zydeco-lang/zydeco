@@ -471,6 +471,7 @@ mod tests {
     #[derive(Default)]
     struct Fixture {
         arena: SpsArena,
+        scheme: SpsScheme,
     }
 
     impl Fixture {
@@ -551,7 +552,7 @@ mod tests {
         }
 
         fn normalize(self, root: CompuId) -> SpsProgram {
-            let normalized = driver_tests::Drivers::normalize(&self.arena, root);
+            let normalized = driver_tests::Drivers::normalize(&self.arena, root, self.scheme);
             assert!(normalized.root().free_vars(normalized.arena()).is_empty());
             normalized
         }
@@ -673,7 +674,8 @@ mod tests {
         ] {
             let mut fixture = Fixture::default();
             let role = PrimitiveOp::Integer(IntegerType::Int, arithmetic).builtin();
-            let thunk = ExternalFunction::Host(role).make_function(&mut fixture.arena);
+            let thunk = ExternalFunction::Host(role)
+                .make_function(SpsScheme::BranchJoin, &mut fixture.arena);
             let first = if trapping_operand {
                 fixture.trap("operand")
             } else {
@@ -1038,6 +1040,50 @@ mod tests {
                 .iter()
                 .any(|(_, value)| matches!(value, Value::Closure(_)))
         );
+    }
+
+    #[test]
+    fn duplicating_unknown_branches_give_each_arm_its_own_delayed_continuation() {
+        let mut fixture = Fixture { scheme: SpsScheme::Duplicating, ..Fixture::default() };
+        let condition = fixture.def("condition");
+        let scrut = fixture.build(condition);
+        let arms = (0..2)
+            .map(|index| {
+                let payload = fixture.build(Hole);
+                let binder = fixture.build(Ctor(Fixture::ctor(index), payload));
+                let unit = fixture.build(Triv);
+                let tail = fixture.ret(unit);
+                Matcher { binder, tail }
+            })
+            .collect();
+        let body = fixture.build(SCoprodMatch { scrut, arms });
+        let thunk = fixture.build(Closure { stack: StackVar, body });
+        let after = fixture.external(BuiltinValueRole::WriteLine);
+        let hole = fixture.build(Hole);
+        let stack = fixture.build(Kont { binder: hole, body: after });
+        let tail = fixture.build(SForce { thunk, stack });
+        let ambient = fixture.build(StackVar);
+        let binder = fixture.build(condition);
+        let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
+        let program = fixture.normalize(root);
+        let inner = &program.arena().inner;
+        // Each arm returns into its own copy of the continuation, which then reduces away.
+        assert_eq!(
+            inner
+                .compus
+                .iter()
+                .filter(|(_, node)| matches!(node, Computation::ExternCall(_)))
+                .count(),
+            2
+        );
+        assert!(!inner.stacks.iter().any(|(_, stack)| matches!(stack, Stack::Kont(_))));
+        assert!(
+            !inner
+                .compus
+                .iter()
+                .any(|(_, node)| matches!(node, Computation::Join(LetJoin::Stack(_))))
+        );
+        assert!(!inner.values.iter().any(|(_, value)| matches!(value, Value::Closure(_))));
     }
 
     #[test]

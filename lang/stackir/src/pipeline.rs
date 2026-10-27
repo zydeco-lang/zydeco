@@ -77,7 +77,7 @@ mod tests {
 
         fn primitive(&mut self, role: BuiltinValueRole) -> ValueId {
             assert_eq!(HostCallMode::for_role(role), HostCallMode::Returning);
-            ExternalFunction::Host(role).make_function(&mut self.arena)
+            ExternalFunction::Host(role).make_function(SpsScheme::BranchJoin, &mut self.arena)
         }
 
         fn literal(role: BuiltinValueRole, value: u8) -> Literal {
