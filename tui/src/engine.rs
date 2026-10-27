@@ -2,8 +2,8 @@ use crate::{diagnostics::DiagnosticText, submission::ExpressionMode};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use thiserror::Error;
 use zydeco_dynamics::{
-    BuiltinComputationRootLinker, BuiltinPackageError, ProgKont, RootLinker, Runtime,
-    ValueRootLinker, fmt::Formatter as DynamicFormatter,
+    BuiltinComputationRootLinker, LinkError, ProgKont, RootLinker, Runtime, ValueRootLinker,
+    fmt::Formatter as DynamicFormatter,
 };
 use zydeco_session::{
     AnalysisOutcome, CheckedProgram, CompilerSession, ProgramAnalysis, SourceLoadError,
@@ -180,11 +180,15 @@ impl ReplEngine {
         zydeco_statics::validate::ExecutionReadiness::check(&program.statics, program.root)?;
         match program.root {
             | TermAnnId::Value(root, _) => {
-                Ok(ValueRootLinker { scoped: program.scoped, statics: program.statics, root }.run())
+                ValueRootLinker { scoped: program.scoped, statics: program.statics, root }
+                    .run()
+                    .map_err(ReplLinkError::from)
             }
             | TermAnnId::Compu(root, ty) => match Self::computation_plan(&program.statics, ty) {
                 | ComputationPlan::Return(_) | ComputationPlan::Executable => {
-                    Ok(RootLinker { scoped: program.scoped, statics: program.statics, root }.run())
+                    RootLinker { scoped: program.scoped, statics: program.statics, root }
+                        .run()
+                        .map_err(ReplLinkError::from)
                 }
                 | ComputationPlan::Builtin(signature) => BuiltinComputationRootLinker {
                     scoped: program.scoped,
@@ -389,7 +393,7 @@ enum ReplLinkError {
     #[error(transparent)]
     Hole(#[from] zydeco_statics::validate::ExecutableHoles),
     #[error(transparent)]
-    Builtin(#[from] BuiltinPackageError),
+    Link(#[from] LinkError),
     #[error("checked computation root has no runtime entry contract")]
     UnsupportedRoot,
     #[error("checked source root is not dynamically evaluable")]

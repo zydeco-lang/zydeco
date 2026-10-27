@@ -34,14 +34,6 @@ pub enum ValuePattern {
     Alias(Alias<RcVPat>),
     Triv(Triv),
     VCons(Vec<RcVPat>),
-    View(ViewPattern),
-}
-
-/// A total value transformation performed before matching `pattern`.
-#[derive(Clone, Debug)]
-pub struct ViewPattern {
-    pub function: RcValue,
-    pub pattern: RcVPat,
 }
 
 /// Runtime values: variables, thunks, constructors, and literals.
@@ -50,8 +42,6 @@ pub enum Value {
     Hole(Hole),
     Var(DefId),
     Let(Let<RcVPat, RcValue, RcValue>),
-    ValAbs(Abs<RcVPat, RcValue>),
-    ValApp(App<RcValue, RcValue>),
     Thunk(Thunk<RcCompu>),
     Ctor(Ctor<CtorName, RcValue>),
     Triv(Triv),
@@ -132,18 +122,9 @@ pub struct EnvThunk {
     pub env: Env<SemValue>,
 }
 
-/// A total value function paired with its lexical environment.
-#[derive(Clone, Debug)]
-pub struct EnvValueClosure {
-    pub binder: RcVPat,
-    pub body: RcValue,
-    pub env: Env<SemValue>,
-}
-
 /// Semantic values used by the evaluator.
 #[derive(From, Clone, Debug)]
 pub enum SemValue {
-    Closure(EnvValueClosure),
     Thunk(EnvThunk),
     Ctor(Ctor<CtorName, Rc<SemValue>>),
     Triv(Triv),

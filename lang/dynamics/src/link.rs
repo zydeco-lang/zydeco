@@ -3,26 +3,26 @@ use std::{collections::HashSet, rc::Rc, sync::Arc};
 use thiserror::Error;
 use zydeco_statics::{
     BuiltinPackagePlan, BuiltinPackagePlanError, BuiltinPackageValue, arena::StaticsArena,
-    surface_syntax::ScopedArena,
+    elaborate::static_values::StaticElaboration, surface_syntax::ScopedArena,
 };
 use zydeco_syntax::*;
 use zydeco_utils::prelude::ArenaAccess;
 
-/// Trait for translating statics syntax nodes into dynamic syntax nodes.
-pub trait Link {
+/// Erase nodes reached from a selected residual root into dynamic syntax.
+trait Link {
     type Arena<'a>;
     type Out;
     fn link(&self, arena: Self::Arena<'_>) -> Self::Out;
 }
 
-/// Entry point for linking one checked computation root.
+/// Link the recorded residual of one checked source computation root.
 pub struct RootLinker {
     pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
     pub root: ss::CompuId,
 }
 
-/// Link one checked value as a computation that returns it.
+/// Link the recorded residual of one checked source value as a computation that returns it.
 pub struct ValueRootLinker {
     pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
@@ -45,8 +45,11 @@ pub struct BuiltinComputationRootLinker {
     pub signature: ss::PackPi,
 }
 
+/// A missing executable residual or an invalid host Builtin contract.
 #[derive(Clone, Debug, Error)]
-pub enum BuiltinPackageError {
+pub enum LinkError {
+    #[error("cannot link source root {root:?} without a matching residual runtime root")]
+    MissingResidual { root: ss::TermId },
     #[error(transparent)]
     Plan(#[from] BuiltinPackagePlanError),
     #[error("host package contracts form a recursive result at type {ty:?}")]
@@ -57,7 +60,7 @@ pub enum BuiltinPackageError {
 struct BuiltinPackageLinker;
 
 impl BuiltinPackageLinker {
-    fn link(value: BuiltinPackageValue) -> Result<ds::RcValue, BuiltinPackageError> {
+    fn link(value: BuiltinPackageValue) -> Result<ds::RcValue, LinkError> {
         match value {
             | BuiltinPackageValue::Unit => Ok(Rc::new(ds::Value::Triv(Triv))),
             | BuiltinPackageValue::Operation(role) => Ok(BuiltinRuntime::package_value(role)),
@@ -81,31 +84,47 @@ impl BuiltinPackageLinker {
 }
 
 impl RootLinker {
-    /// Erase static structure and retain one computation as the dynamic root.
-    pub fn run(self) -> DynamicsProgram {
+    fn residual(statics: &StaticsArena, root: ss::CompuId) -> Result<ss::CompuId, LinkError> {
+        match &statics.static_elaboration {
+            | Some(StaticElaboration {
+                source: ss::TermAnnId::Compu(source, _),
+                residual: Some(ss::TermAnnId::Compu(residual, _)),
+            }) if *source == root => Ok(*residual),
+            | _ => Err(LinkError::MissingResidual { root: root.into() }),
+        }
+    }
+
+    /// Erase the source root's residual computation into the dynamic root.
+    pub fn run(self) -> Result<DynamicsProgram, LinkError> {
         let Self { scoped, statics, root } = self;
-        let root = statics.execution_compu(root);
+        let root = Self::residual(&statics, root)?;
         let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let root = root.link(&statics);
-        DynamicsProgram::new(defs, root)
+        Ok(DynamicsProgram::new(defs, root))
     }
 }
 
 impl ValueRootLinker {
-    pub fn run(self) -> DynamicsProgram {
+    pub fn run(self) -> Result<DynamicsProgram, LinkError> {
         let Self { scoped, statics, root } = self;
-        let root = statics.execution_value(root);
+        let root = match &statics.static_elaboration {
+            | Some(StaticElaboration {
+                source: ss::TermAnnId::Value(source, _),
+                residual: Some(ss::TermAnnId::Value(residual, _)),
+            }) if *source == root => *residual,
+            | _ => return Err(LinkError::MissingResidual { root: root.into() }),
+        };
         let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let value = root.link(&statics);
         let root = Rc::new(ds::Computation::Ret(Return(value)));
-        DynamicsProgram::new(defs, root)
+        Ok(DynamicsProgram::new(defs, root))
     }
 }
 
 impl BuiltinRootLinker {
-    pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
+    pub fn run(self) -> Result<DynamicsProgram, LinkError> {
         let Self { scoped, statics, root, signature } = self;
-        let root = statics.execution_compu(root);
+        let root = RootLinker::residual(&statics, root)?;
         let plan = BuiltinPackagePlan::for_executable(&statics, &signature)?;
         let package = BuiltinPackageLinker::link(plan.value)?;
         let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
@@ -116,9 +135,9 @@ impl BuiltinRootLinker {
 }
 
 impl BuiltinComputationRootLinker {
-    pub fn run(self) -> Result<DynamicsProgram, BuiltinPackageError> {
+    pub fn run(self) -> Result<DynamicsProgram, LinkError> {
         let Self { scoped, statics, root, signature } = self;
-        let root = statics.execution_compu(root);
+        let root = RootLinker::residual(&statics, root)?;
         let defs = statics.dynamic_definitions(&scoped).rebind::<ds::DynamicsScope>();
         let (root, _) = std::iter::successors(Some(signature), |signature| {
             BuiltinPackageLinker::computation_signature(&statics, signature.codomain)
@@ -127,14 +146,11 @@ impl BuiltinComputationRootLinker {
             (root.link(&statics), HashSet::new()),
             |(function, mut seen), signature| {
                 if !seen.insert(signature.codomain) {
-                    return Err(BuiltinPackageError::RecursiveContract { ty: signature.codomain });
+                    return Err(LinkError::RecursiveContract { ty: signature.codomain });
                 }
                 let plan = BuiltinPackagePlan::for_computation(&statics, &signature)?;
                 let package = BuiltinPackageLinker::link(plan.value)?;
-                Ok::<_, BuiltinPackageError>((
-                    Rc::new(ds::Computation::VApp(App(function, package))),
-                    seen,
-                ))
+                Ok::<_, LinkError>((Rc::new(ds::Computation::VApp(App(function, package))), seen))
             },
         )?;
         Ok(DynamicsProgram::new(defs, root))
@@ -171,10 +187,7 @@ impl Link for ss::VPatId {
                 let body = body.link(statics);
                 body.as_ref().to_owned()
             }
-            | VPat::View(view) => ds::ValuePattern::View(ds::ViewPattern {
-                function: view.function.link(statics),
-                pattern: view.pattern.link(statics),
-            }),
+            | VPat::View(_) => unreachable!("static elaboration eliminates views before linking"),
         };
         Rc::new(vpat)
     }
@@ -194,8 +207,8 @@ impl Link for ss::ValueId {
         let value = match value {
             | Value::Hole(Hole) => Hole.into(),
             | Value::Var(def) => (*def).into(),
-            | Value::Match(_) | Value::IntOp(_) => {
-                unreachable!("value matches and integer operations must be statically eliminated")
+            | Value::ValAbs(_) | Value::ValApp(_) | Value::Match(_) | Value::IntOp(_) => {
+                unreachable!("static value operations must be eliminated before linking")
             }
             | Value::Named(Named(_, inner)) => inner.link(statics).as_ref().to_owned(),
             | Value::Let(Let { binder, bindee, tail }) => {
@@ -203,24 +216,6 @@ impl Link for ss::ValueId {
                 let bindee = bindee.link(statics);
                 let tail = tail.link(statics);
                 Let { binder, bindee, tail }.into()
-            }
-            | Value::ValAbs(Abs(ss::ValBinder::Type(_), body)) => {
-                let body = body.link(statics);
-                body.as_ref().to_owned()
-            }
-            | Value::ValAbs(Abs(ss::ValBinder::Value(binder), body)) => {
-                let binder = binder.link(statics);
-                let body = body.link(statics);
-                ds::Value::ValAbs(Abs(binder, body))
-            }
-            | Value::ValApp(App(function, ss::ValArgument::Type(_))) => {
-                let function = function.link(statics);
-                function.as_ref().to_owned()
-            }
-            | Value::ValApp(App(function, ss::ValArgument::Value(argument))) => {
-                let function = function.link(statics);
-                let argument = argument.link(statics);
-                ds::Value::ValApp(App(function, argument))
             }
             | Value::Thunk(Thunk(body)) => {
                 let body = body.link(statics);
@@ -348,16 +343,39 @@ mod tests {
         let mut allocator = IdAllocator::<StaticsScope>::new();
         let value = allocator.alloc();
         let root = allocator.alloc();
+        let unit = allocator.alloc();
+        let ret = allocator.alloc();
+        let result = allocator.alloc();
+        let vtype = allocator.alloc();
+        let ctype = allocator.alloc();
+        let ret_kind = allocator.alloc();
         let mut statics = StaticsArena::default();
         statics.values.insert_new(value, ss::Triv.into());
         statics.compus.insert_new(root, ss::Return(value).into());
+        statics.kinds_pre.insert_new(vtype, ss::Fillable::Done(ss::VType.into()));
+        statics.kinds_pre.insert_new(ctype, ss::Fillable::Done(ss::CType.into()));
+        statics.kinds_pre.insert_new(ret_kind, ss::Fillable::Done(Arrow(vtype, ctype).into()));
+        statics.types_pre.insert_new(unit, ss::Fillable::Done(ss::Type::Unit(ss::UnitTy)), vtype);
+        statics.types_pre.insert_new(ret, ss::Fillable::Done(ss::Type::Ret(ss::RetTy)), ret_kind);
+        statics.types_pre.insert_new(
+            result,
+            ss::Fillable::Done(ss::Type::App(App(ret, unit))),
+            ctype,
+        );
+        statics.annotations_value.insert_new(value, unit);
+        statics.annotations_compu.insert_new(root, result);
+        statics.static_elaboration = Some(StaticElaboration {
+            source: ss::TermAnnId::Compu(root, result),
+            residual: Some(ss::TermAnnId::Compu(root, result)),
+        });
 
         let arena = RootLinker {
             scoped: Arc::new(ScopedArena::default()),
             statics: Arc::new(statics),
             root,
         }
-        .run();
+        .run()
+        .unwrap();
         let mut input = std::io::empty();
         let mut output = Vec::new();
         let result = ds::Runtime::new(&mut input, &mut output, &mut Vec::new(), &[], arena).run();

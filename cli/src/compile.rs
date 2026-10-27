@@ -5,7 +5,7 @@ use std::{
 };
 use thiserror::Error;
 use zydeco_assembly::{LoweringPipeline, syntax::AssemblyProgram};
-use zydeco_dynamics::{BuiltinPackageError, BuiltinRootLinker, ProgKont, Runtime};
+use zydeco_dynamics::{BuiltinRootLinker, LinkError, ProgKont, Runtime};
 use zydeco_session::{
     AnalysisError, AnalysisOutcome, CompilerSession, ExecutableError, ExecutableProgram,
     ProgramAnalysis,
@@ -219,7 +219,7 @@ impl CommandCompiler {
             signature: executable.signature,
         }
         .run()
-        .map_err(CompileError::BuiltinLink)?;
+        .map_err(CompileError::Link)?;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         let mut stderr = std::io::stderr();
@@ -241,7 +241,7 @@ impl CommandCompiler {
             signature: executable.signature,
         }
         .run()
-        .map_err(CompileError::BuiltinLink)?;
+        .map_err(CompileError::Link)?;
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let mut stderr = std::io::sink();
@@ -281,7 +281,7 @@ impl CommandCompiler {
             signature: executable.signature,
         }
         .run()
-        .map_err(CompileError::BuiltinLink)?;
+        .map_err(CompileError::Link)?;
         let mut input = input.as_bytes();
         let mut output = Vec::new();
         let mut stderr = Vec::new();
@@ -581,7 +581,7 @@ pub enum CompileError {
     #[error(transparent)]
     Executable(ExecutableError),
     #[error(transparent)]
-    BuiltinLink(BuiltinPackageError),
+    Link(LinkError),
     #[error(transparent)]
     BuiltinLower(BuiltinPackagePlanError),
     #[error("{0}")]

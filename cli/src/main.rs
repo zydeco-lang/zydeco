@@ -232,7 +232,7 @@ impl Application {
             &executable.statics,
             &executable.signature,
         )
-        .map_err(|error| CompileError::BuiltinLink(error.into()))?;
+        .map_err(|error| CompileError::Link(error.into()))?;
         Ok(Some(executable))
     }
 

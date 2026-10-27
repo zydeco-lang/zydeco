@@ -726,8 +726,9 @@ impl StaticsArena {
         }
     }
 
-    /// Select the residual of a representable checked value. Static library
-    /// exports retain their source-level semantics for interactive inspection.
+    /// Select the residual of a representable checked value, falling back to
+    /// the source for inspection when no matching residual is recorded.
+    /// Linking requires a recorded residual rather than this fallback.
     pub fn execution_value(&self, source: ValueId) -> ValueId {
         match &self.static_elaboration {
             | Some(crate::elaborate::static_values::StaticElaboration {

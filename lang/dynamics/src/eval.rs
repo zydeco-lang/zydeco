@@ -93,7 +93,6 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                         | Err(()) => return Step::Done(Err(())),
                     }
                 }
-                | SemValue::Closure(_)
                 | SemValue::Thunk(_)
                 | SemValue::Triv(_)
                 | SemValue::VCons(_)
@@ -108,7 +107,6 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 }
                 // A value of another shape can never equal a literal, so the
                 // arm simply fails rather than reporting an impossible state.
-                | SemValue::Closure(_)
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::Triv(_)
@@ -125,7 +123,6 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
             }
             | VPat::Triv(Triv) => match sem {
                 | SemValue::Triv(Triv) => {}
-                | SemValue::Closure(_)
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::VCons(_)
@@ -146,20 +143,12 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                         }
                     }
                 }
-                | SemValue::Closure(_)
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::Triv(_)
                 | SemValue::Literal(_)
                 | SemValue::Host(_) => unreachable!(),
             },
-            | VPat::View(ViewPattern { function, pattern }) => {
-                let argument = Rc::new(Value::SemValue(sem));
-                let transformed = Value::ValApp(App(function.clone(), argument)).eval(runtime);
-                if Assign(pattern.clone(), transformed).eval(runtime).is_err() {
-                    return Step::Done(Err(()));
-                }
-            }
         }
         Step::Done(Ok(()))
     }
@@ -181,23 +170,6 @@ impl<'rt> Eval<'rt> for Value {
                 let bindee = bindee.as_ref().clone().eval(runtime);
                 Assign(binder, bindee).eval(runtime).expect("pattern match failed in value let");
                 let value = tail.as_ref().clone().eval(runtime);
-                runtime.env = outer;
-                Step::Done(value)
-            }
-            | Value::ValAbs(Abs(binder, body)) => {
-                Step::Done(EnvValueClosure { binder, body, env: runtime.env.clone() }.into())
-            }
-            | Value::ValApp(App(function, argument)) => {
-                let function = function.as_ref().clone().eval(runtime);
-                let argument = argument.as_ref().clone().eval(runtime);
-                let SemValue::Closure(EnvValueClosure { binder, body, env }) = function else {
-                    panic!("value application on non-closure")
-                };
-                let outer = std::mem::replace(&mut runtime.env, env);
-                Assign(binder, argument)
-                    .eval(runtime)
-                    .expect("pattern match failed in value function");
-                let value = body.as_ref().clone().eval(runtime);
                 runtime.env = outer;
                 Step::Done(value)
             }

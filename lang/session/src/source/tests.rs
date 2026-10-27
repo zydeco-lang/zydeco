@@ -40,7 +40,7 @@ enum TestPipelineError {
     #[error(transparent)]
     Executable(ExecutableError),
     #[error(transparent)]
-    Dynamic(zydeco_dynamics::BuiltinPackageError),
+    Link(zydeco_dynamics::LinkError),
     #[error(transparent)]
     Stack(zydeco_stackir::BuiltinRootLowerError),
     #[error(transparent)]
@@ -112,7 +112,8 @@ impl CheckedProgram {
                 statics: self.statics,
                 root,
             }
-            .run(),
+            .run()
+            .map_err(TestPipelineError::Link)?,
         })
     }
 
@@ -138,7 +139,7 @@ impl CheckedProgram {
             signature: *signature,
         }
         .run()
-        .map_err(TestPipelineError::Dynamic)?;
+        .map_err(TestPipelineError::Link)?;
         Ok(SourceDynamics { program: arena })
     }
 
@@ -425,11 +426,17 @@ fn checked_trivial_computation() -> CheckedProgram {
     let mut statics = StaticsArena::default();
     statics.values.insert_new(value, ss::Triv.into());
     statics.compus.insert_new(root, ss::Return(value).into());
+    let root = ss::TermAnnId::Compu(root, ty);
+    statics.static_elaboration =
+        Some(zydeco_statics::elaborate::static_values::StaticElaboration {
+            source: root,
+            residual: Some(root),
+        });
     CheckedProgram {
         spans: Default::default(),
         scoped: Default::default(),
         statics: Arc::new(statics),
-        root: ss::TermAnnId::Compu(root, ty),
+        root,
     }
 }
 
