@@ -3,9 +3,7 @@
 use super::{PrettyFormatter, PrettyOptions};
 use crate::{
     bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter},
-    textual::{
-        LexicalTokenKind, LexicalTokens, StrictParser, syntax::*, tests::corpus::ZydecoCorpus,
-    },
+    textual::{LexicalRole, LexicalTokens, StrictParser, syntax::*, tests::corpus::ZydecoCorpus},
 };
 use std::fs;
 use zydeco_syntax::Ugly;
@@ -46,16 +44,14 @@ impl ParsedSource {
 struct Comments;
 
 impl Comments {
-    fn retained(source: &str) -> Vec<(LexicalTokenKind, String)> {
+    fn retained(source: &str) -> Vec<(LexicalRole, String)> {
         LexicalTokens::new(source)
-            .filter(|token| {
-                matches!(token.kind, LexicalTokenKind::Comment | LexicalTokenKind::TextBlock)
-            })
+            .filter(|token| matches!(token.role, LexicalRole::Comment | LexicalRole::TextBlock))
             .map(|token| {
                 let comment = &source[token.range];
                 let comment = comment.strip_suffix('\n').unwrap_or(comment);
                 let comment = comment.strip_suffix('\r').unwrap_or(comment);
-                (token.kind, comment.to_string())
+                (token.role, comment.to_string())
             })
             .collect()
     }

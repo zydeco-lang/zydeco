@@ -18,7 +18,7 @@ mod sealed {
 ///
 /// Enter establishes a layout after outgoing arguments have been staged. Suspend
 /// preserves the selected initialized values; generated code must not overwrite
-/// those slots while that suspension is pending. Resume consumes the newest token
+/// those slots while that suspension is pending. Resume consumes the newest suspension ID
 /// and reestablishes its layout and captured values, including collector updates.
 /// Only declared captures and newly bound inputs are available after resumption.
 ///
@@ -26,13 +26,15 @@ mod sealed {
 /// base; Enter and Resume return the base generated code must subsequently use.
 /// Roots returns mutable live value locations, valid until any next attempted
 /// transition, including a failed reservation. Failure preserves logical values,
-/// tokens, and the active base; a snapshot buffer may have reserved more capacity.
+/// suspension IDs, and the active base; a snapshot buffer may have reserved more capacity.
 /// Managed values cannot contain pointers into environment storage. Implementations
 /// are sealed because emitted code relies on these obligations, not just signatures.
 pub trait Environment: sealed::Sealed {
     fn enter(&mut self, layout: Layout) -> Result<*mut Word, FrameError>;
-    fn suspend(&mut self, layout: LayoutId, slots: &'static [Word]) -> Result<Token, FrameError>;
-    fn resume(&mut self, layout: LayoutId, token: Token) -> Result<*mut Word, FrameError>;
+    fn suspend(
+        &mut self, layout: LayoutId, slots: &'static [Word],
+    ) -> Result<SuspensionId, FrameError>;
+    fn resume(&mut self, layout: LayoutId, id: SuspensionId) -> Result<*mut Word, FrameError>;
     fn roots(&mut self, layout: LayoutId, slots: &[Word]) -> Result<Vec<*mut Word>, FrameError>;
 }
 
@@ -45,10 +47,11 @@ pub struct Layout {
     pub words: usize,
 }
 
+/// Identifies one pending suspension; Resume accepts only the newest one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Token(Word);
+pub struct SuspensionId(Word);
 
-impl Token {
+impl SuspensionId {
     pub fn word(self) -> Word {
         self.0
     }
@@ -65,7 +68,7 @@ pub enum FrameError {
     WrongLayout { expected: LayoutId, actual: LayoutId },
     InvalidSlot { slot: usize, words: usize },
     InvalidResumption,
-    TokenOverflow,
+    SuspensionIdOverflow,
     InvalidAction,
 }
 
@@ -85,7 +88,7 @@ impl core::fmt::Display for FrameError {
                 write!(f, "frame slot {slot} is outside its {words}-word layout")
             }
             | Self::InvalidResumption => f.write_str("stale or out-of-order frame resumption"),
-            | Self::TokenOverflow => f.write_str("frame resumption token space exhausted"),
+            | Self::SuspensionIdOverflow => f.write_str("frame suspension ID space exhausted"),
             | Self::InvalidAction => f.write_str("invalid native frame action"),
         }
     }
@@ -102,12 +105,12 @@ struct Activation {
 
 struct Suspension {
     frame: usize,
-    token: Token,
+    id: SuspensionId,
     slots: &'static [Word],
 }
 
 /// A nested environment with independently chosen word storage.
-/// Saved references are checked tokens, never pointers into the metadata vectors.
+/// Saved references are checked suspension IDs, never pointers into the metadata vectors.
 /// Enter may relocate words; callers must use its returned base and discard all
 /// earlier slot addresses. Suspend and Roots never relocate words. Managed values
 /// cannot contain pointers into these frames. Root addresses are temporary, and
@@ -116,7 +119,7 @@ pub struct Frames<S: Storage> {
     storage: S,
     activations: Vec<Activation>,
     suspensions: Vec<Suspension>,
-    next_token: u64,
+    next_suspension: u64,
     high_water: usize,
 }
 
@@ -125,7 +128,7 @@ impl<S: Storage> Frames<S> {
         storage: S::EMPTY,
         activations: Vec::new(),
         suspensions: Vec::new(),
-        next_token: 0,
+        next_suspension: 0,
         high_water: 0,
     };
 
@@ -190,21 +193,24 @@ impl<S: Storage> Environment for Frames<S> {
         Ok(self.storage.base().wrapping_add(base))
     }
 
-    fn suspend(&mut self, layout: LayoutId, slots: &'static [Word]) -> Result<Token, FrameError> {
+    fn suspend(
+        &mut self, layout: LayoutId, slots: &'static [Word],
+    ) -> Result<SuspensionId, FrameError> {
         let frame = self.active(layout)?;
         Self::check_slots(frame, slots)?;
-        let token = RuntimeWord::unsigned(self.next_token).ok_or(FrameError::TokenOverflow)?;
-        let token = Token(Word::try_from(token).map_err(|_| FrameError::TokenOverflow)?);
-        self.next_token += 1;
+        let id =
+            RuntimeWord::unsigned(self.next_suspension).ok_or(FrameError::SuspensionIdOverflow)?;
+        let id = SuspensionId(Word::try_from(id).map_err(|_| FrameError::SuspensionIdOverflow)?);
+        self.next_suspension += 1;
         let frame = self.activations.len() - 1;
         self.activations[frame].retained += 1;
-        self.suspensions.push(Suspension { frame, token, slots });
-        Ok(token)
+        self.suspensions.push(Suspension { frame, id, slots });
+        Ok(id)
     }
 
-    fn resume(&mut self, layout: LayoutId, token: Token) -> Result<*mut Word, FrameError> {
+    fn resume(&mut self, layout: LayoutId, id: SuspensionId) -> Result<*mut Word, FrameError> {
         let suspension = self.suspensions.last().ok_or(FrameError::InvalidResumption)?;
-        if suspension.token != token {
+        if suspension.id != id {
             return Err(FrameError::InvalidResumption);
         }
         let index = suspension.frame;
@@ -290,7 +296,7 @@ impl Action<Word> {
     /// The descriptor and its `words` trailing slot indices must be valid static
     /// storage emitted by the matching compiler. Enter/Resume have no trailing slots.
     pub unsafe fn apply<E: Environment>(
-        &'static self, frames: &mut E, token: Word,
+        &'static self, frames: &mut E, suspension: Word,
     ) -> Result<Word, FrameError> {
         let layout = LayoutId(self.layout);
         match self.kind as u64 {
@@ -298,10 +304,10 @@ impl Action<Word> {
                 frames.enter(Layout { id: layout, words: self.words }).map(|base| base as Word)
             }
             | kind if kind == ActionKind::Suspend as u64 => {
-                frames.suspend(layout, unsafe { self.slots() }).map(Token::word)
+                frames.suspend(layout, unsafe { self.slots() }).map(SuspensionId::word)
             }
             | kind if kind == ActionKind::Resume as u64 => {
-                frames.resume(layout, Token::from_word(token)).map(|base| base as Word)
+                frames.resume(layout, SuspensionId::from_word(suspension)).map(|base| base as Word)
             }
             | _ => Err(FrameError::InvalidAction),
         }
@@ -358,7 +364,7 @@ mod tests {
             caller.write(71);
         }
         let suspend = Descriptor::serialize(Action::suspend(CALLER.id, 1), &[0]);
-        let token = unsafe { suspend.apply(&mut frames, 0).unwrap() };
+        let id = unsafe { suspend.apply(&mut frames, 0).unwrap() };
         let callee = Descriptor::serialize(Action::enter(CALLEE), &[]);
         unsafe {
             callee.apply(&mut frames, 0).unwrap();
@@ -368,7 +374,7 @@ mod tests {
         assert_eq!(unsafe { roots.apply(&mut frames, 0) }, Err(FrameError::InvalidAction));
         assert_eq!(unsafe { enter.root_slots(&mut frames) }, Err(FrameError::InvalidAction));
         let resume = Descriptor::serialize(Action::resume(CALLER.id), &[]);
-        assert_eq!(unsafe { resume.apply(&mut frames, token).unwrap() }, caller as Word);
+        assert_eq!(unsafe { resume.apply(&mut frames, id).unwrap() }, caller as Word);
         assert_eq!(unsafe { caller.read() }, 71);
     }
 
@@ -458,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn growth_preserves_offsets_and_tokens_beyond_the_old_fixed_capacity() {
+    fn growth_preserves_offsets_and_suspension_ids_beyond_the_old_fixed_capacity() {
         let mut frames = Frames::<storage::Growable>::EMPTY;
         let first = frames.enter(CALLER).unwrap();
         unsafe { first.write(71) };
@@ -466,7 +472,7 @@ mod tests {
         let inner = frames.suspend(CALLER.id, &[0]).unwrap();
         let large = Layout { id: CALLEE.id, words: 200_000 };
         let active = frames.enter(large).unwrap();
-        // Only the new base and checked tokens may be used after entry. Never
+        // Only the new base and checked suspension IDs may be used after entry. Never
         // dereference `first`: the allocator is allowed to have moved its words.
         assert_eq!(frames.used_words(), 200_003);
         assert_eq!(unsafe { frames.roots(large.id, &[]).unwrap()[0].read() }, 71);
@@ -488,13 +494,13 @@ mod tests {
         let mut frames = Frames::<storage::Growable<8>>::EMPTY;
         let base = frames.enter(CALLER).unwrap();
         unsafe { base.write(71) };
-        let token = frames.suspend(CALLER.id, &[0]).unwrap();
+        let id = frames.suspend(CALLER.id, &[0]).unwrap();
         assert_eq!(
             frames.enter(Layout { id: CALLEE.id, words: 6 }),
             Err(FrameError::Capacity { requested: 6, available: 5 })
         );
         assert_eq!(frames.roots(CALLER.id, &[]).unwrap(), [base]);
-        assert_eq!(frames.resume(CALLER.id, token).unwrap(), base);
+        assert_eq!(frames.resume(CALLER.id, id).unwrap(), base);
         assert_eq!(unsafe { base.read() }, 71);
         let mut impossible = Frames::<storage::Fixed<{ usize::MAX }>>::EMPTY;
         assert_eq!(impossible.enter(CALLER), Err(FrameError::Allocation { words: usize::MAX }));

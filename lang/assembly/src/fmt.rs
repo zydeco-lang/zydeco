@@ -271,7 +271,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Tag {
 impl<'a> Pretty<'a, Formatter<'a>> for Symbol {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Symbol::Undefined(undefined) => undefined.pretty(f),
+            | Symbol::Reserved(reserved) => reserved.pretty(f),
             | Symbol::Prog(prog_id) => {
                 let label = f.arena.prog_label(prog_id).unwrap();
                 RcDoc::text(format!("<label:{}>", label))
@@ -281,9 +281,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Symbol {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Undefined {
+impl<'a> Pretty<'a, Formatter<'a>> for Reserved {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text("<undefined>")
+        RcDoc::text("<reserved>")
     }
 }
 

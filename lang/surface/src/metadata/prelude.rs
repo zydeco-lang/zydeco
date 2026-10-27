@@ -1,5 +1,5 @@
 use super::*;
-use crate::textual::{LexicalTokenKind, LexicalTokens};
+use crate::textual::{LexicalRole, LexicalTokens};
 use zydeco_syntax::VarName;
 
 /// The fixed vocabulary of the default prelude and explicit replacement views.
@@ -50,7 +50,7 @@ impl PreludeMeta {
     pub(super) fn is_binding(source: &str) -> bool {
         let mut tokens = LexicalTokens::new(source);
         matches!(tokens.next(), Some(token)
-            if matches!(token.kind, LexicalTokenKind::UpperIdentifier | LexicalTokenKind::LowerIdentifier)
+            if matches!(token.role, LexicalRole::UpperIdentifier | LexicalRole::LowerIdentifier)
                 && token.range == (0..source.len()))
             && tokens.next().is_none()
     }

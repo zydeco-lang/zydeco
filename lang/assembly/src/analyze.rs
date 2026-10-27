@@ -104,7 +104,7 @@ impl StackAnalyzer<'_> {
             .iter()
             .filter_map(|(_, sym)| match sym.inner {
                 | Symbol::Prog(prog) => Some(prog),
-                | Symbol::Undefined(_) | Symbol::StringLiteral(_) => None,
+                | Symbol::Reserved(_) | Symbol::StringLiteral(_) => None,
             })
             .collect();
         for prog in symbol_programs.iter().copied() {
@@ -252,7 +252,7 @@ impl<'a> StackInline<'a> for ProgId {
                         layout.control.last().and_then(|slot_id| match si.slots[slot_id] {
                             | Slot::Sym(sym) => match si.arena.symbols[&sym].inner {
                                 | Symbol::Prog(target) => Some(target),
-                                | Symbol::Undefined(_) | Symbol::StringLiteral(_) => None,
+                                | Symbol::Reserved(_) | Symbol::StringLiteral(_) => None,
                             },
                             | Slot::Imm(_) | Slot::Product(_) | Slot::Unknown => None,
                         })

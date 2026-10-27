@@ -77,7 +77,7 @@ pub enum Instruction {
     /// Clear specified variables from the current context.
     Clear(Context),
     /// Retain the active activation for a checked native continuation entry.
-    /// Pushes one non-pointer token beneath the continuation code address.
+    /// Pushes one non-pointer suspension ID beneath the continuation code address.
     RetainFrame(RetainFrame),
 }
 
@@ -156,9 +156,9 @@ pub enum Atom {
 ///
 /// In our implementation, we track the following statically known symbols:
 /// - Program, which are labelled blocks
-/// - External functions
-/// - Literals
+/// - String literals
 ///
+/// External functions are [`Extern`]s rather than symbols.
 /// Symbols are guaranteed to be evaluated and generated at compile time.
 #[derive(Clone, Debug)]
 pub struct NamedSymbol {
@@ -167,13 +167,15 @@ pub struct NamedSymbol {
 }
 #[derive(From, Clone, Debug)]
 pub enum Symbol {
-    Undefined(Undefined),
+    Reserved(Reserved),
     Prog(ProgId),
     StringLiteral(Utf8String),
 }
 
+/// A block's label, reserved before lowering its body so recursive references
+/// resolve; lowering replaces it with [`Symbol::Prog`] before emission.
 #[derive(Clone, Debug)]
-pub struct Undefined;
+pub struct Reserved;
 
 #[derive(Clone, Debug)]
 pub enum Imm {

@@ -370,7 +370,7 @@ impl<'e> Emitter<'e> {
         let action = match entry {
             | Entry::Fresh => Action::enter(layout),
             | Entry::Resume { .. } => {
-                // Remove the saved token while keeping the result on the control stack.
+                // Remove the saved suspension ID while keeping the result on the control stack.
                 self.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rsi,
@@ -760,7 +760,7 @@ impl Emitter<'_> {
                 | Symbol::StringLiteral(characters) => {
                     Some(NativeStringLiteral::new(self.assembly.sym_label(symbol), characters))
                 }
-                | Symbol::Undefined(_) | Symbol::Prog(_) => None,
+                | Symbol::Reserved(_) | Symbol::Prog(_) => None,
             })
             .flat_map(NativeStringLiteral::declaration)
             .collect::<Vec<_>>();
@@ -1209,8 +1209,8 @@ impl<'a> Emit<'a> for Atom {
                         ]);
                         em.shift_stack_parity(1);
                     }
-                    | Symbol::Undefined(sa::Undefined) => {
-                        unreachable!("undefined symbol should never be emitted")
+                    | Symbol::Reserved(sa::Reserved) => {
+                        unreachable!("reserved symbol should be defined before emission")
                     }
                     | Symbol::StringLiteral(s) => {
                         em.asm.text.push(Instr::Comment(format!("push_sym_str {:?}", s)));

@@ -22,18 +22,18 @@ Retained frames remain the reference implementation while these alternatives are
 
 [`frames::fragments::Fragments`](../../lang/machine/src/frames/fragments.rs) implements the same
 `Environment` capability with one reusable active region and a separate contiguous buffer of captured values.
-Suspend records a pending use of active slots.
-A host operation can consume that token through Resume without moving either its environment or its captures.
+Suspend records a pending use of active slots. A host operation can consume the resulting suspension ID
+through Resume without moving either its environment or its captures.
 Only Enter, which will reuse the active region, materializes the still-active suspensions as compact fragments.
 The generated transfer has already staged its outgoing arguments before this boundary.
-A saved fragment records the layout, slot map, and token; Resume copies its current values back
+A saved fragment records the layout, slot map, and suspension ID; Resume copies its current values back
 to those offsets and reestablishes the owner's layout.
 Slots outside that entry's declared captures are unavailable.
 The compiler's preservation analysis remains unchanged, so both engines accept the same generated code.
 
-Saved suspensions form a prefix of the pending-token vector, followed by a suffix referring to active slots.
+Saved suspensions form a prefix of the pending-suspension vector, followed by a suffix referring to active slots.
 Entry visits only that suffix. A tail entry with no newly pending active suspensions does not walk the saved prefix.
-Consuming an active token performs no capture copy; consuming a saved token restores its fields
+Resuming an active suspension performs no capture copy; resuming a saved suspension restores its fields
 and retracts the compact frontier.
 Older snapshots remain saved after an inner resumption.
 This permits a resumed activation to publish new active suspensions above an older saved prefix.
@@ -47,11 +47,11 @@ Dead active slots are still excluded.
 The root source remains deferred until collection actually needs it.
 
 Both buffers use the selected `Storage` policy and cache capacity independently.
-The snapshot frontier follows token nesting; consuming a token reclaims its fragment
+The snapshot frontier follows suspension nesting; resuming a suspension reclaims its fragment
 without a heap allocation or free operation per continuation.
 Enter first reserves and fills an unpublished snapshot suffix, then reserves the destination active extent,
 and finally publishes the new locations.
-If either reservation fails, logical captures, pending tokens, and the current active base remain usable.
+If either reservation fails, logical captures, pending suspensions, and the current active base remain usable.
 Snapshot reservation may already have increased capacity or moved that buffer on a later active-reservation failure;
 previously returned root addresses expire at the attempted transition, and fresh enumeration resolves the new addresses.
 No managed collection occurs during staging or publication.
@@ -68,7 +68,8 @@ retained frames remain the default.
 Both selections consume the compiler's bundled model and identical descriptors.
 This experiment keeps captures in ordinary Rust storage, not in the moving value heap.
 It therefore isolates capture copying and compact storage without introducing the collecting-entry boundary below.
-It also retains the nested token discipline: copied payloads do not make machine continuations detachable or duplicable.
+It also retains the nested suspension discipline: copied payloads do not make machine continuations detachable
+or duplicable.
 
 ### Experimental managed environments
 

@@ -549,9 +549,9 @@ extern "sysv64" fn zydeco_alloc_opaque(
 }
 
 #[unsafe(export_name = "\x01zydeco_frame_step")]
-extern "sysv64" fn zydeco_frame_step(action: &'static Action<Word>, token: Word) -> Word {
+extern "sysv64" fn zydeco_frame_step(action: &'static Action<Word>, suspension: Word) -> Word {
     // SAFETY: action and trailing indices are static descriptors from matched codegen.
-    unsafe { action.apply(&mut *RuntimeInstance::frames(), token) }
+    unsafe { action.apply(&mut *RuntimeInstance::frames(), suspension) }
         .unwrap_or_else(|error| out_of_frames(error))
 }
 

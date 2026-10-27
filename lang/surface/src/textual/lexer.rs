@@ -190,7 +190,7 @@ pub enum LexicalError {
 
 enum SourceToken<'source> {
     Syntax(Tok<'source>),
-    Trivia { kind: LexicalTokenKind, open_ended: bool },
+    Trivia { role: LexicalRole, open_ended: bool },
     Invalid(LexicalError),
 }
 
@@ -221,7 +221,7 @@ impl<'source> SourceTokens<'source> {
                         // ASCII delimiters end on UTF-8 boundaries, even in a Unicode comment.
                         self.inner.bump(offset);
                         return SourceToken::Trivia {
-                            kind: LexicalTokenKind::Comment,
+                            role: LexicalRole::Comment,
                             open_ended: false,
                         };
                     }
@@ -242,11 +242,11 @@ impl<'source> Iterator for SourceTokens<'source> {
             | Ok(Tok::CommentOpen) => self.block_comment(),
             | Ok(Tok::CommentClose) => SourceToken::Invalid(LexicalError::UnexpectedCommentClose),
             | Ok(Tok::TextLine(text)) => SourceToken::Trivia {
-                kind: LexicalTokenKind::TextBlock,
+                role: LexicalRole::TextBlock,
                 open_ended: !text.ends_with('\n'),
             },
             | Ok(Tok::CommentLine(text)) => SourceToken::Trivia {
-                kind: LexicalTokenKind::Comment,
+                role: LexicalRole::Comment,
                 open_ended: !text.ends_with('\n'),
             },
             | Ok(Tok::UnterminatedString(_)) => {
@@ -272,7 +272,7 @@ impl<'source> Iterator for SourceTokens<'source> {
 /// The lexical role of a source token, independent of a particular editor
 /// protocol or theme.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum LexicalTokenKind {
+pub enum LexicalRole {
     UpperIdentifier,
     LowerIdentifier,
     Constructor,
@@ -293,7 +293,7 @@ pub enum LexicalTokenKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LexicalToken {
     pub range: Range<usize>,
-    pub kind: LexicalTokenKind,
+    pub role: LexicalRole,
     open_ended: bool,
 }
 
@@ -301,10 +301,8 @@ impl LexicalToken {
     /// Whether an insertion cursor is inside a comment or quoted literal.
     /// An unfinished token also owns the cursor at its end, including EOF.
     pub fn is_opaque_at(&self, offset: usize) -> bool {
-        matches!(
-            self.kind,
-            LexicalTokenKind::Comment | LexicalTokenKind::TextBlock | LexicalTokenKind::String
-        ) && self.range.start < offset
+        matches!(self.role, LexicalRole::Comment | LexicalRole::TextBlock | LexicalRole::String)
+            && self.range.start < offset
             && (offset < self.range.end || (self.open_ended && offset == self.range.end))
     }
 }
@@ -325,14 +323,14 @@ impl<'source> LexicalTokens<'source> {
         Self { inner: SourceTokens::new(source) }
     }
 
-    fn classify(tok: &Tok<'_>) -> Option<LexicalTokenKind> {
-        use LexicalTokenKind as Kind;
+    fn classify(tok: &Tok<'_>) -> Option<LexicalRole> {
+        use LexicalRole as Role;
         Some(match tok {
-            | Tok::UpperIdent(_) => Kind::UpperIdentifier,
-            | Tok::LowerIdent(_) => Kind::LowerIdentifier,
-            | Tok::CtorIdent(_) => Kind::Constructor,
-            | Tok::DtorIdent(_) => Kind::Destructor,
-            | Tok::FieldIdent(_) => Kind::Field,
+            | Tok::UpperIdent(_) => Role::UpperIdentifier,
+            | Tok::LowerIdent(_) => Role::LowerIdentifier,
+            | Tok::CtorIdent(_) => Role::Constructor,
+            | Tok::DtorIdent(_) => Role::Destructor,
+            | Tok::FieldIdent(_) => Role::Field,
             | Tok::End
             | Tok::Begin
             | Tok::Data
@@ -356,12 +354,12 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Exists
             | Tok::Pack
             | Tok::Where
-            | Tok::Is => Kind::Keyword,
-            | Tok::FloatLit(_) | Tok::IntLit(_) | Tok::MalformedNumber(_) => Kind::Number,
+            | Tok::Is => Role::Keyword,
+            | Tok::FloatLit(_) | Tok::IntLit(_) | Tok::MalformedNumber(_) => Role::Number,
             | Tok::StrLit(_)
             | Tok::CharLit(_)
             | Tok::UnterminatedString(_)
-            | Tok::MalformedChar(_) => Kind::String,
+            | Tok::MalformedChar(_) => Role::String,
             | Tok::ParenOpen
             | Tok::ParenClose
             | Tok::BracketOpen
@@ -371,7 +369,7 @@ impl<'source> LexicalTokens<'source> {
             | Tok::Comma
             | Tok::Colon
             | Tok::ColonColon
-            | Tok::Semicolon => Kind::Punctuation,
+            | Tok::Semicolon => Role::Punctuation,
             | Tok::Equals
             | Tok::Force
             | Tok::Slash
@@ -385,11 +383,11 @@ impl<'source> LexicalTokens<'source> {
             | Tok::PipeForward
             | Tok::PipeBackward
             | Tok::Assign
-            | Tok::CommentClose => Kind::Operator,
-            | Tok::Hole => Kind::Hole,
-            | Tok::At => Kind::Attribute,
-            | Tok::TextLine(_) => Kind::TextBlock,
-            | Tok::CommentLine(_) => Kind::Comment,
+            | Tok::CommentClose => Role::Operator,
+            | Tok::Hole => Role::Hole,
+            | Tok::At => Role::Attribute,
+            | Tok::TextLine(_) => Role::TextBlock,
+            | Tok::CommentLine(_) => Role::Comment,
             | Tok::CommentOpen | Tok::Unknown(_) => return None,
         })
     }
@@ -401,24 +399,24 @@ impl Iterator for LexicalTokens<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (range, token) = self.inner.next()?;
-            let (kind, open_ended) = match token {
+            let (role, open_ended) = match token {
                 | SourceToken::Syntax(token) => match Self::classify(&token) {
-                    | Some(kind) => (kind, false),
+                    | Some(role) => (role, false),
                     | None => continue,
                 },
-                | SourceToken::Trivia { kind, open_ended } => (kind, open_ended),
+                | SourceToken::Trivia { role, open_ended } => (role, open_ended),
                 | SourceToken::Invalid(LexicalError::UnterminatedBlockComment) => {
-                    (LexicalTokenKind::Comment, true)
+                    (LexicalRole::Comment, true)
                 }
                 | SourceToken::Invalid(
                     LexicalError::UnterminatedString | LexicalError::UnterminatedCharacter,
-                ) => (LexicalTokenKind::String, true),
+                ) => (LexicalRole::String, true),
                 | SourceToken::Invalid(LexicalError::InvalidCharacter) => {
-                    (LexicalTokenKind::String, false)
+                    (LexicalRole::String, false)
                 }
                 | SourceToken::Invalid(_) => continue,
             };
-            return Some(LexicalToken { range, kind, open_ended });
+            return Some(LexicalToken { range, role, open_ended });
         }
     }
 }

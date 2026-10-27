@@ -1,6 +1,6 @@
 //! Lexer and derived token metadata contracts.
 
-use super::{Lexer, LexicalError, LexicalToken, LexicalTokenKind, LexicalTokens, Tok, TokenKind};
+use super::{Lexer, LexicalError, LexicalRole, LexicalToken, LexicalTokens, Tok, TokenKind};
 use logos::Logos;
 use strum::VariantArray;
 
@@ -100,7 +100,7 @@ fn tooling_tokens_retain_line_comments_at_end_of_file() {
     let fixture = LexicalFixture::new("begin --| documentation");
     let tokens = fixture.tokens();
     assert_eq!(tokens.len(), 2);
-    assert_eq!(tokens[1].kind, LexicalTokenKind::TextBlock);
+    assert_eq!(tokens[1].role, LexicalRole::TextBlock);
     assert_eq!(fixture.text(&tokens[1]), "--| documentation");
 }
 
@@ -110,7 +110,7 @@ fn tooling_tokens_combine_nested_and_unterminated_block_comments() {
         let fixture = LexicalFixture::new(source);
         let tokens = fixture.tokens();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].kind, LexicalTokenKind::Comment);
+        assert_eq!(tokens[0].role, LexicalRole::Comment);
         assert_eq!(fixture.text(&tokens[0]), source);
     });
 }
@@ -125,7 +125,7 @@ fn nested_comments_share_boundaries_and_do_not_lex_their_contents_as_code() {
         [(_, Tok::LowerIdent("first"), _), (_, Tok::LowerIdent("second"), _)]
     ));
     let comments = LexicalTokens::new(&source)
-        .filter(|token| token.kind == LexicalTokenKind::Comment)
+        .filter(|token| token.role == LexicalRole::Comment)
         .collect::<Vec<_>>();
     assert_eq!(comments.len(), 1);
     assert_eq!(&source[comments[0].range.clone()], comment);

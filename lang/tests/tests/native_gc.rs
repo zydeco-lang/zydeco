@@ -182,7 +182,7 @@ impl EnvironmentCollection {
             base.add(1).write(dead as Word);
         }
         let outer = frames.suspend(owner.id, &[0]).unwrap();
-        let token = frames.suspend(owner.id, &[0]).unwrap();
+        let inner = frames.suspend(owner.id, &[0]).unwrap();
         frames.enter(callee).unwrap();
         let mut slots = frames.roots(callee.id, &[]).unwrap();
         let roots = Roots { stack: empty, slots: &mut slots };
@@ -191,13 +191,13 @@ impl EnvironmentCollection {
         unsafe {
             heap.allocate(7, AllocationKind::Opaque, roots).unwrap();
         }
-        assert_eq!(frames.resume(owner.id, token).unwrap(), base);
+        assert_eq!(frames.resume(owner.id, inner).unwrap(), base);
         let relocated = unsafe { base.read() as *mut Word };
         assert_ne!(relocated, retained.cast());
         assert_eq!(unsafe { relocated.read() }, 71);
 
         // A collecting allocation can fail after roots moved. Active and pending
-        // copies must both be repaired, and the outer token must remain consumable.
+        // copies must both be repaired, and the outer suspension must remain resumable.
         let mut slots = frames.roots(owner.id, &[0]).unwrap();
         let roots = Roots { stack: empty, slots: &mut slots };
         let error = unsafe { heap.allocate(13, AllocationKind::Opaque, roots) }.unwrap_err();

@@ -2538,7 +2538,7 @@ impl<'a> Pretty<'a, PrettyFormatter<'a>> for TermId {
 mod tests {
     use super::*;
     use crate::bitter::{SourceUnitDesugarer, fmt::Formatter as BitterFormatter};
-    use crate::textual::{LexicalTokenKind, LexicalTokens, StrictParser};
+    use crate::textual::{LexicalRole, LexicalTokens, StrictParser};
     use zydeco_syntax::Ugly;
     use zydeco_utils::pass::CompilerPass;
 
@@ -2551,16 +2551,14 @@ mod tests {
     struct RetainedComments;
 
     impl RetainedComments {
-        fn collect(source: &str) -> Vec<(LexicalTokenKind, String)> {
+        fn collect(source: &str) -> Vec<(LexicalRole, String)> {
             LexicalTokens::new(source)
-                .filter(|token| {
-                    matches!(token.kind, LexicalTokenKind::Comment | LexicalTokenKind::TextBlock)
-                })
+                .filter(|token| matches!(token.role, LexicalRole::Comment | LexicalRole::TextBlock))
                 .map(|token| {
                     let comment = &source[token.range];
                     let comment = comment.strip_suffix('\n').unwrap_or(comment);
                     let comment = comment.strip_suffix('\r').unwrap_or(comment);
-                    (token.kind, comment.to_string())
+                    (token.role, comment.to_string())
                 })
                 .collect()
         }

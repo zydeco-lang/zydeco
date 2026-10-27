@@ -329,21 +329,21 @@ fn completion_matches_an_explicit_hole_at_the_validated_replacement() {
 
 #[test]
 fn completion_cursor_retains_word_roles_and_only_the_typed_prefix() {
-    for (source, offset, prefix, kind) in [
-        ("value", 3, "val", LexicalTokenKind::LowerIdentifier),
-        ("val", 3, "val", LexicalTokenKind::Keyword),
-        ("_", 1, "_", LexicalTokenKind::Hole),
-        (".field", 3, ".fi", LexicalTokenKind::Destructor),
+    for (source, offset, prefix, role) in [
+        ("value", 3, "val", LexicalRole::LowerIdentifier),
+        ("val", 3, "val", LexicalRole::Keyword),
+        ("_", 1, "_", LexicalRole::Hole),
+        (".field", 3, ".fi", LexicalRole::Destructor),
     ] {
         let cursor = CompletionCursor::at(source, offset).unwrap();
         assert_eq!(cursor.replacement(), 0..source.len());
         assert_eq!(cursor.prefix(), prefix);
-        assert_eq!(cursor.token_kind(), Some(kind));
+        assert_eq!(cursor.token_role(), Some(role));
     }
     let cursor = CompletionCursor::at("val ", 4).unwrap();
     assert_eq!(cursor.replacement(), 4..4);
     assert_eq!(cursor.prefix(), "");
-    assert_eq!(cursor.token_kind(), None);
+    assert_eq!(cursor.token_role(), None);
 }
 
 #[test]

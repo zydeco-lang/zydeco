@@ -161,7 +161,7 @@ impl Lowering<'_, '_> {
                     .def_name(self.lo.scoped, self.lo.statics, &label)
                     .plain()
                     .to_owned();
-                let symbol = Undefined.build(self.lo, (Some(name.clone()), Some(label)));
+                let symbol = Reserved.build(self.lo, (Some(name.clone()), Some(label)));
                 let body = self.save(Continuation::Body(body));
                 let body = entry
                     .words()

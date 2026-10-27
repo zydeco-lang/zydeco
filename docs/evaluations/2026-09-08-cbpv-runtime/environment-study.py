@@ -186,7 +186,7 @@ class EnvironmentStudy(RUNTIME.Study):
         hooks = {
             # Exit prints the word-buffer metrics first, then the independent
             # transition probe. It observes actions without knowing storage layout.
-            'extern "sysv64" fn zydeco_frame_step(action: &\'static Action<Word>, token: Word) -> Word {':
+            'extern "sysv64" fn zydeco_frame_step(action: &\'static Action<Word>, suspension: Word) -> Word {':
                 '    unsafe { &mut *ENVIRONMENT_PROBE.get() }.step(action);',
             '        slots.extend(unsafe { &*HOST_ROOTS.get() }.slots.iter().copied());':
                 '        unsafe { &mut *ENVIRONMENT_PROBE.get() }.roots(slots.len());',

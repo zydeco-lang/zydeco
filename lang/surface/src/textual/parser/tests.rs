@@ -123,7 +123,7 @@ fn token_metadata_agrees_with_the_grammar_terminal_names_and_variants() {
             }
             let variant = mapping
                 .trim()
-                .strip_prefix("ParserToken::Lexical(Tok::")
+                .strip_prefix("ParserToken::Syntax(Tok::")
                 .expect("public terminals must map to lexer tokens")
                 .split(['(', ')'])
                 .next()

@@ -1,5 +1,5 @@
 use super::super::{
-    lexer::{LexicalToken, LexicalTokenKind, LexicalTokens},
+    lexer::{LexicalRole, LexicalToken, LexicalTokens},
     syntax::{EntityId, MetaId, PatId},
 };
 use std::{cmp::Reverse, collections::BTreeMap, ops::Range, sync::Arc};
@@ -24,7 +24,7 @@ impl TextBlock {
         let block = source.get(self.range.clone())?;
         let comments = CommentBlocks::new(block);
         let lines = LexicalTokens::new(block)
-            .filter(|token| token.kind == LexicalTokenKind::TextBlock)
+            .filter(|token| token.role == LexicalRole::TextBlock)
             .map(|token| comments.line_content_range(&token, "--|"))
             .scan(0usize, |offset, source| {
                 let start = *offset;
@@ -469,9 +469,9 @@ impl<'source> CommentBlocks<'source> {
     }
 
     fn comment_token(&self, lexical: LexicalToken) -> Option<CommentToken> {
-        let kind = match lexical.kind {
-            | LexicalTokenKind::TextBlock => CommentTokenKind::TextLine,
-            | LexicalTokenKind::Comment
+        let kind = match lexical.role {
+            | LexicalRole::TextBlock => CommentTokenKind::TextLine,
+            | LexicalRole::Comment
                 if self
                     .source
                     .get(lexical.range.clone())
@@ -479,7 +479,7 @@ impl<'source> CommentBlocks<'source> {
             {
                 CommentTokenKind::Line
             }
-            | LexicalTokenKind::Comment => CommentTokenKind::Block,
+            | LexicalRole::Comment => CommentTokenKind::Block,
             | _ => return None,
         };
         Some(CommentToken { lexical, kind })

@@ -2518,23 +2518,24 @@ Ordinary escaping closures still own heap capture environments.
 
 With the control-stack top on the left, a portable call enters with `E_f :: argument :: L_k :: E_k :: S`,
 where `E_k` is the continuation's capture product.
-Native preparation replaces it with `E_f :: argument :: L_k :: token(F) :: S`;
-the token retains the caller activation `F` and the entry descriptor identifies its resumption layout.
+Native preparation replaces it with `E_f :: argument :: L_k :: suspension(F) :: S`;
+the suspension ID retains the caller activation `F` and the entry descriptor identifies its resumption layout.
 An independent allocation frontier tracks reserved environment storage as well as the active base.
 Restoring only the base would not reclaim or preserve the correct extent.
 The environment and control stacks remain separate, preserving the ordinary argument protocol.
 
 The default retained environment stores frames in growable Rust-owned storage.
 Closure entry may reserve and relocate that storage; generated code reloads its active base into `rbp`.
-Saved references are logical offsets and tokens, never raw environment-slot pointers in managed values or closures.
+Saved references are logical offsets and suspension IDs, never raw environment-slot pointers
+in managed values or closures.
 Suspend and Resume preserve the model's nesting discipline.
-Resuming consumes the most recent pending token, restores the owning frame and frontier,
+Resuming consumes the most recent pending suspension, restores the owning frame and frontier,
 and releases younger unretained storage.
 A tail transfer reuses an unretained active frame or preserves it beneath its callee when a continuation still needs it.
 
 The lifetime justification comes from the concrete lowered stack operations:
 SPSLow values cannot contain a residual machine stack, checked continuation bodies cannot refer
-to their own entry label, and native continuation opening consumes its token destructively.
+to their own entry label, and native continuation opening consumes its suspension ID destructively.
 Recursive closure invocation establishes another activation instead of reentering a suspended one.
 Source `Ret` types and lexical node occurrence counts alone do not establish this property.
 Escaping ordinary closures own heap captures with adequate lifetime.
@@ -2566,7 +2567,7 @@ stack alignment, jumps, return prologues, and host bridges.
 and invokes the target toolchain using [the CLI build workflow](../../cli/README.md#native-executables).
 [Native-model tests](../../lang/tests/tests/native_model.rs) check preparation and transitions;
 [native frame proposal](../proposals/native-frames.md) retains alternative storage and evaluation decisions.
-Model regressions reject mismatched layouts, uninitialized reads, stale or out-of-order tokens,
+Model regressions reject mismatched layouts, uninitialized reads, stale or out-of-order suspension IDs,
 and reservation overflow without corrupting callers.
 Tail-chain tests check bounded usage, while GC tests keep a moved object alive solely through a suspension
 and exclude dead slots in the same frame.
@@ -2681,7 +2682,7 @@ It has no extra closure-environment argument.
 so native helper calls use the existing dynamic alignment path where necessary.
 An imported initializer lowers to an ordinary thunk whose body tail-jumps to that symbol
 after consuming its own closure environment.
-It forwards the continuation stack unchanged, including retained-frame tokens and residual data.
+It forwards the continuation stack unchanged, including retained-frame suspension IDs and residual data.
 Calls through the returned exports use ordinary closure conversion and word entries.
 The process supplies the runtime instance and its root-stack extent for all participating units.
 Values retained across initialization or calls remain in traced source slots, stacks, or closure environments;
@@ -2850,15 +2851,16 @@ These resources are released at normal teardown; managed GC does not individuall
 
 [frames::Environment](../../lang/machine/src/frames.rs) exposes Enter, Suspend, Resume, and Roots actions.
 Enter reserves before changing state and returns the possibly relocated active base.
-Suspend validates captures and creates a tagged token; Resume validates its owner and nesting, then restores the frame.
+Suspend validates captures and creates a tagged suspension ID; Resume validates its owner
+and nesting, then restores the frame.
 Roots returns mutable addresses for the active map joined with all pending suspension maps.
 Only initialized live slots are roots; reserved capacity and dead tagged words are insufficient evidence of liveness.
 
 The retained store grows geometrically and caches capacity at its high-water mark.
 Only successful Enter may relocate retained frame words; Suspend keeps the active base stable.
 Slot access uses raw pointers without constructing Rust references over generated-code storage.
-Metadata vectors hold indices and checked tokens, so their growth cannot invalidate logical frame references.
-Failed word reservation preserves existing words, bases, and tokens;
+Metadata vectors hold indices and checked suspension IDs, so their growth cannot invalidate logical frame references.
+Failed word reservation preserves existing words, bases, and suspension IDs;
 zeroed capacity does not count as an initialized binding.
 Transitions may allocate Rust metadata but do not collect the managed heap;
 metadata allocation still has the Rust allocator's ordinary failure behavior.
@@ -2867,8 +2869,8 @@ They identify values and need not coincide with active-layout offsets in every e
 Managed collection may rewrite those values but cannot relocate their published addresses.
 A model declaration generates action headers and serialization order;
 emitted records and target carriers share checked alignment.
-A return prologue removes `token(F)` while preserving `result :: S`, resumes the owner,
-restores `rbp`, and then binds the result.
+A return prologue removes `suspension(F)` while preserving `result :: S`,
+resumes the owner, restores `rbp`, and then binds the result.
 Returning host and C calls enter that same prologue.
 
 The [native environment proposal](../proposals/native-frames.md) retains the compact-storage

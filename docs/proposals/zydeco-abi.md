@@ -64,7 +64,7 @@ The proposal has two access levels to this same model:
 
 The implemented native profile requires matching compiler/runtime model identities.
 The runtime binding interface can be versioned separately so bindings need not expose moving heap addresses,
-Rust object layouts, or native frame tokens.
+Rust object layouts, or native suspension IDs.
 An internal optimization may change local packing only while preserving or adapting at the published word boundary.
 A direct native integration is a trusted implementation of this agreement;
 interface metadata does not verify arbitrary foreign machine code.
@@ -193,13 +193,13 @@ and a return continuation, then enters the closure with its environment.
 In the current native implementation, the conceptual entry stack is:
 
 ```text
-environment_f :: argument_1 :: argument_2 :: label_k :: token(F) :: residual_stack
+environment_f :: argument_1 :: argument_2 :: label_k :: suspension(F) :: residual_stack
 ```
 
 The closure establishes its own activation and consumes arguments in source order.
 Returning stages the result, transfers to `label_k`, restores the continuation's retained activation,
 and delivers the result word.
-The portable lowering uses a captured environment in place of `token(F)`;
+The portable lowering uses a captured environment in place of `suspension(F)`;
 native preparation selects the retained-frame form.
 The [activation reference](../references/compiler.md#activation-lifetime) owns those transitions.
 
@@ -347,7 +347,7 @@ The plan is not a captured native stack.
 A `Cursor<B>` or `ReturnPort<A>` refers to one active invocation and cannot outlive it,
 be replayed, or be reconstructed from raw bits.
 Runtime scope tokens provide dynamic validation where the host language cannot enforce the borrowing discipline.
-Native frame tokens are not exported as durable handles.
+Native suspension IDs are not exported as durable handles.
 Supporting detached or multi-shot machine continuations would require a separate extension
 to the [native frame model](../references/compiler.md#activation-lifetime).
 This restriction leaves ordinary reusable `Thk B` values fully usable.
@@ -728,7 +728,7 @@ and equivalent Wasm/interpreter support require separate estimates.
    Exercise collection during initialization and inside a callee, odd/even argument stacks,
    and returns into another unit.
    Do not assume whole-program stack-parity knowledge at externally reachable code entries
-   or expose native frame tokens as reusable values.
+   or expose native suspension IDs as reusable values.
 6. **Initialization sharing must be deliberate.** Re-evaluating each export independently can duplicate captures;
    caching arbitrary imported computations can suppress effects.
    Prepare one value environment, keep computation invocation explicit, reject initialization cycles,
@@ -793,7 +793,7 @@ checking that the public word boundary is still honored.
 | Recursive codata observation sequences | Unknown observation or wrong branch argument | Preserve the full residual stack and reject malformed plans |
 | Generic identity at several `A` types | A result reinterpreted at an unrelated instantiation | Instantiations erase from transport but remain related in interface checking |
 | Shared existential opening | Carrier supplied to operations from an independent opening | Witness relationships survive generated bindings |
-| Reused `StackPlan` and thunk | Replayed active `Cursor`, return port, or native frame token | New invocations get fresh delimiters; stale active tokens never dispatch |
+| Reused `StackPlan` and thunk | Replayed active `Cursor`, return port, or native suspension ID | New invocations get fresh delimiters; stale active handles never dispatch |
 | Host callback returning `Enter` or `Deliver` | Wrong protocol, wrong result, or host unwinding | Correct source transfer and bounded host stack for tail chains |
 | Compatible independently compiled modules | Runtime/interface mismatch or incomplete descriptor | Loading fails before publishing an incompatible export |
 

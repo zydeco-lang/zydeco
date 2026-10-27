@@ -808,7 +808,7 @@ Managed collection does not move this allocation.
 
 Portable SPSLow and ZASM retain explicit capture products.
 Native preparation uses checked continuation provenance to replace a return continuation's capture product
-with a frame token.
+with a suspension ID for the retained frame.
 Resumption reads the retained slots directly and binds the returned value.
 Ordinary closures continue to own explicit capture environments, which can outlive their creating activation.
 The compiler reference owns [activation lifetime](docs/references/compiler.md#activation-lifetime),

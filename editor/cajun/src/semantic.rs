@@ -15,7 +15,7 @@ use zydeco_surface::{
         arena::ScopedArena,
         syntax::{DefId, PatId, Pattern, Pi, Sigma, Term, ValPi},
     },
-    textual::{LexicalTokenKind, LexicalTokens, syntax::SpanArena},
+    textual::{LexicalRole, LexicalTokens, syntax::SpanArena},
 };
 use zydeco_syntax::{Abs, Alias, Ann, Ctor, Label, Named, Proj, ProjectionPattern};
 use zydeco_utils::{
@@ -218,7 +218,7 @@ impl<'source> SemanticDocument<'source> {
         let tokens = LexicalTokens::new(source)
             .map(|token| {
                 let range = ByteRange::new(token.range.start, token.range.end);
-                (range, Self::lexical_style(token.kind))
+                (range, Self::lexical_style(token.role))
             })
             .collect();
         Self { source, tokens }
@@ -373,24 +373,24 @@ impl<'source> SemanticDocument<'source> {
             .for_each(|range| self.overlay(range, TokenStyle::new(SemanticKind::Property)));
     }
 
-    fn lexical_style(kind: LexicalTokenKind) -> TokenStyle {
-        use LexicalTokenKind as Lexical;
-        match kind {
-            | Lexical::UpperIdentifier => TokenStyle::new(SemanticKind::Type),
-            | Lexical::LowerIdentifier => TokenStyle::new(SemanticKind::Variable),
-            | Lexical::Constructor => TokenStyle::new(SemanticKind::EnumMember),
-            | Lexical::Destructor => TokenStyle::new(SemanticKind::Method),
-            | Lexical::Field => TokenStyle::new(SemanticKind::Property),
-            | Lexical::Keyword => TokenStyle::new(SemanticKind::Keyword),
-            | Lexical::Number => TokenStyle::new(SemanticKind::Number),
-            | Lexical::String => TokenStyle::new(SemanticKind::String),
-            | Lexical::Comment => TokenStyle::new(SemanticKind::Comment),
-            | Lexical::TextBlock => {
+    fn lexical_style(role: LexicalRole) -> TokenStyle {
+        use LexicalRole as Role;
+        match role {
+            | Role::UpperIdentifier => TokenStyle::new(SemanticKind::Type),
+            | Role::LowerIdentifier => TokenStyle::new(SemanticKind::Variable),
+            | Role::Constructor => TokenStyle::new(SemanticKind::EnumMember),
+            | Role::Destructor => TokenStyle::new(SemanticKind::Method),
+            | Role::Field => TokenStyle::new(SemanticKind::Property),
+            | Role::Keyword => TokenStyle::new(SemanticKind::Keyword),
+            | Role::Number => TokenStyle::new(SemanticKind::Number),
+            | Role::String => TokenStyle::new(SemanticKind::String),
+            | Role::Comment => TokenStyle::new(SemanticKind::Comment),
+            | Role::TextBlock => {
                 TokenStyle::new(SemanticKind::Comment).with(SemanticModifier::Documentation)
             }
-            | Lexical::Operator | Lexical::Hole => TokenStyle::new(SemanticKind::Operator),
-            | Lexical::Punctuation => TokenStyle::new(SemanticKind::Punctuation),
-            | Lexical::Attribute => TokenStyle::new(SemanticKind::Decorator),
+            | Role::Operator | Role::Hole => TokenStyle::new(SemanticKind::Operator),
+            | Role::Punctuation => TokenStyle::new(SemanticKind::Punctuation),
+            | Role::Attribute => TokenStyle::new(SemanticKind::Decorator),
         }
     }
 

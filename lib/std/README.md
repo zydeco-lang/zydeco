@@ -377,7 +377,7 @@ The design motivation is to express control through a relative monad and evaluat
 that encoding before adding an ambient continuation primitive to `Ret`.
 The historical exploration points to [the HOPE talk](http://maxsnew.com/publications.html#hope22)
 and [the delimcc API discussion](https://okmij.org/ftp/continuations/implementations.html#delimcc-paper).
-These encodings do not capture native frame tokens;
+These encodings do not capture native suspension IDs;
 [native lifetime rules](../../docs/references/compiler.md#c11-native-preparation-activation-frames-and-amd64-emission)
 remain a separate implementation contract.
 

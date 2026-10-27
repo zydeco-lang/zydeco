@@ -1,5 +1,5 @@
 use super::{
-    LexicalTokenKind, LexicalTokens,
+    LexicalRole, LexicalTokens,
     escape::{EscapeError, LiteralEscapes},
     lexer::{Lexer, LexicalError, Tok, TokenKind},
     syntax::{
@@ -87,7 +87,7 @@ impl LiteralParser {
 /// Parser-only token wrapper. The ordinary lexer can never emit `Completion`.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ParserToken<'source> {
-    Lexical(Tok<'source>),
+    Syntax(Tok<'source>),
     Invalid(LexicalError),
     Completion,
 }
@@ -95,7 +95,7 @@ pub(crate) enum ParserToken<'source> {
 impl Display for ParserToken<'_> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            | Self::Lexical(token) => token.fmt(formatter),
+            | Self::Syntax(token) => token.fmt(formatter),
             | Self::Invalid(error) => error.fmt(formatter),
             | Self::Completion => formatter.write_str("<completion>"),
         }
@@ -389,7 +389,7 @@ pub struct CompletionCursor<'source> {
     source: &'source str,
     offset: usize,
     replacement: Range<usize>,
-    token_kind: Option<LexicalTokenKind>,
+    token_role: Option<LexicalRole>,
 }
 
 impl<'source> CompletionCursor<'source> {
@@ -411,23 +411,23 @@ impl<'source> CompletionCursor<'source> {
             .iter()
             .filter(|token| {
                 matches!(
-                    token.kind,
-                    LexicalTokenKind::UpperIdentifier
-                        | LexicalTokenKind::LowerIdentifier
-                        | LexicalTokenKind::Constructor
-                        | LexicalTokenKind::Destructor
-                        | LexicalTokenKind::Field
-                        | LexicalTokenKind::Hole
-                        | LexicalTokenKind::Keyword
+                    token.role,
+                    LexicalRole::UpperIdentifier
+                        | LexicalRole::LowerIdentifier
+                        | LexicalRole::Constructor
+                        | LexicalRole::Destructor
+                        | LexicalRole::Field
+                        | LexicalRole::Hole
+                        | LexicalRole::Keyword
                 )
             })
             .find(|token| token.range.start <= offset && offset <= token.range.end)
             .map(|token| token.range.clone());
         let replacement =
             word.or_else(|| containing.map(|token| token.range.clone())).unwrap_or(offset..offset);
-        let token_kind =
-            tokens.iter().find(|token| token.range == replacement).map(|token| token.kind);
-        Ok(Self { source, offset, replacement, token_kind })
+        let token_role =
+            tokens.iter().find(|token| token.range == replacement).map(|token| token.role);
+        Ok(Self { source, offset, replacement, token_role })
     }
 
     pub fn offset(&self) -> usize {
@@ -442,8 +442,8 @@ impl<'source> CompletionCursor<'source> {
         &self.source[self.replacement.start..self.offset]
     }
 
-    pub fn token_kind(&self) -> Option<LexicalTokenKind> {
-        self.token_kind
+    pub fn token_role(&self) -> Option<LexicalRole> {
+        self.token_role
     }
 }
 
@@ -610,7 +610,7 @@ impl<'source> Iterator for ParserLexer<'source> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().map(|token| match token {
-            | Ok((start, token, end)) => (start, ParserToken::Lexical(token), end),
+            | Ok((start, token, end)) => (start, ParserToken::Syntax(token), end),
             | Err(error) => {
                 let range = error.info.range();
                 (range.start, ParserToken::Invalid(error.inner), range.end)
@@ -620,7 +620,7 @@ impl<'source> Iterator for ParserLexer<'source> {
 }
 
 enum ParseTokens<'source> {
-    Lexical(ParserLexer<'source>),
+    Ordinary(ParserLexer<'source>),
     Completion(std::vec::IntoIter<(usize, ParserToken<'source>, usize)>),
 }
 
@@ -631,7 +631,7 @@ impl<'source> ParseTokens<'source> {
 
     fn new(source: &'source str, completion: Option<&CompletionCursor<'_>>) -> Self {
         let Some(completion) = completion else {
-            return Self::Lexical(Self::ordinary(source));
+            return Self::Ordinary(Self::ordinary(source));
         };
         let replacement = completion.replacement();
         let mut tokens = ParserLexer::new(source)
@@ -654,7 +654,7 @@ impl<'source> Iterator for ParseTokens<'source> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            | Self::Lexical(tokens) => tokens.next(),
+            | Self::Ordinary(tokens) => tokens.next(),
             | Self::Completion(tokens) => tokens.next(),
         }
     }

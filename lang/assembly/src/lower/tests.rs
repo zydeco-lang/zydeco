@@ -477,7 +477,7 @@ fn drivers_preserve_recursive_symbols_closure_words_and_context_resets() {
                     .arena
                     .symbols
                     .iter()
-                    .all(|(_, symbol)| !matches!(symbol.inner, Symbol::Undefined(_)))
+                    .all(|(_, symbol)| !matches!(symbol.inner, Symbol::Reserved(_)))
             );
         }
     }

@@ -3,7 +3,7 @@ use tower_lsp::{
     jsonrpc,
     lsp_types::{Location, TextEdit, Url, WorkspaceEdit},
 };
-use zydeco_surface::textual::{LexicalTokenKind, LexicalTokens};
+use zydeco_surface::textual::{LexicalRole, LexicalTokens};
 
 /// The JSON-RPC code carrying LSP's `RequestFailed`, whose message clients
 /// display when a rename cannot proceed.
@@ -26,11 +26,11 @@ impl NameClass {
         if name.chars().next().is_some_and(char::is_uppercase) { Self::Upper } else { Self::Lower }
     }
 
-    fn describes(self, kind: LexicalTokenKind) -> bool {
+    fn describes(self, role: LexicalRole) -> bool {
         matches!(
-            (self, kind),
-            (Self::Upper, LexicalTokenKind::UpperIdentifier)
-                | (Self::Lower, LexicalTokenKind::LowerIdentifier)
+            (self, role),
+            (Self::Upper, LexicalRole::UpperIdentifier)
+                | (Self::Lower, LexicalRole::LowerIdentifier)
         )
     }
 
@@ -103,9 +103,9 @@ impl Renamer {
         let token = LexicalTokens::new(replacement)
             .next()
             .filter(|token| token.range == (0..replacement.len()));
-        match token.map(|token| token.kind) {
+        match token.map(|token| token.role) {
             | None if replacement.is_empty() => Err(RenameRejection::Empty),
-            | Some(LexicalTokenKind::Keyword) => {
+            | Some(LexicalRole::Keyword) => {
                 Err(RenameRejection::Reserved { proposed: replacement.to_owned() })
             }
             | Some(kind) if class.describes(kind) => {

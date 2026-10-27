@@ -16,7 +16,7 @@ use zydeco_statics::{
 use zydeco_surface::{
     scoped::{CompletionResolution, ResolveFolder, VisibleDefinition, arena::ScopedArena},
     textual::{
-        CompletionCursor, CompletionCursorError, LexicalTokenKind, ParsedHole, RecoveringParser,
+        CompletionCursor, CompletionCursorError, LexicalRole, ParsedHole, RecoveringParser,
         TokenKind, syntax::Parser,
     },
 };
@@ -112,14 +112,12 @@ fn complete_source(
         return Ok(None);
     };
     let cursor = CompletionCursor::at(&source, offset)?;
-    let prefix = match cursor.token_kind() {
+    let prefix = match cursor.token_role() {
         | None
         | Some(
-            LexicalTokenKind::UpperIdentifier
-            | LexicalTokenKind::LowerIdentifier
-            | LexicalTokenKind::Keyword,
+            LexicalRole::UpperIdentifier | LexicalRole::LowerIdentifier | LexicalRole::Keyword,
         ) => cursor.prefix().to_owned(),
-        | Some(LexicalTokenKind::Hole) => String::new(),
+        | Some(LexicalRole::Hole) => String::new(),
         | Some(_) => return Ok(None),
     };
     let mut parser = Parser::new();

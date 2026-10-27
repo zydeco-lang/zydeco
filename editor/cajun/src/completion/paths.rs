@@ -11,7 +11,7 @@ use zydeco_session::{
     CompilerSession,
     source::{SourceKind, SourcePathCandidateKind},
 };
-use zydeco_surface::textual::{LexicalTokenKind, LexicalTokens, escape::LiteralEscapes};
+use zydeco_surface::textual::{LexicalRole, LexicalTokens, escape::LiteralEscapes};
 use zydeco_utils::span::FileMap;
 
 pub(super) struct SourcePathCursor {
@@ -25,7 +25,7 @@ impl SourcePathCursor {
     pub(super) fn at(source: &str, offset: usize) -> Option<Self> {
         source.get(..offset)?;
         let token = LexicalTokens::new(source).find(|token| token.is_opaque_at(offset))?;
-        if token.kind != LexicalTokenKind::String || !source[token.range.clone()].starts_with('"') {
+        if token.role != LexicalRole::String || !source[token.range.clone()].starts_with('"') {
             return None;
         }
         let MetadataPosition::Active(Some(cursor)) = MetadataCursor::at(source, token.range.start)

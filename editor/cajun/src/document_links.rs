@@ -5,9 +5,7 @@ use zydeco_session::{
     SourceGraph,
     source::{PackageInstance, PackageInstanceId, SourceTemplate},
 };
-use zydeco_surface::textual::{
-    ImportSite, ImportTarget, LexicalTokenKind, LexicalTokens, syntax as t,
-};
+use zydeco_surface::textual::{ImportSite, ImportTarget, LexicalRole, LexicalTokens, syntax as t};
 use zydeco_utils::span::{FileMap, LineCol};
 
 /// Filesystem import links derived from one compiler source graph.
@@ -62,7 +60,7 @@ impl<'graph> ImportDocumentLinks<'graph> {
     fn source_links(&self, instance: &PackageInstance) -> Vec<DocumentLink> {
         let file = &instance.template;
         let strings = LexicalTokens::new(&file.source)
-            .filter(|token| token.kind == LexicalTokenKind::String)
+            .filter(|token| token.role == LexicalRole::String)
             .collect::<Vec<_>>();
 
         let imports = instance.imports.iter().filter_map(|(term, imported)| {

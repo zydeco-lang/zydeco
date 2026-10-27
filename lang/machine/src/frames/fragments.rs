@@ -2,7 +2,7 @@
 //! Captured values live in a separate Rust allocation, outside the managed heap.
 //! Snapshots are materialized only when entry will reuse the active region.
 
-use super::{Environment, FrameError, Layout, LayoutId, Token, sealed, storage::Storage};
+use super::{Environment, FrameError, Layout, LayoutId, SuspensionId, sealed, storage::Storage};
 use crate::{native::Word, word::RuntimeWord};
 use alloc::vec::Vec;
 
@@ -14,7 +14,7 @@ enum Residence {
 
 struct Fragment {
     layout: Layout,
-    token: Token,
+    id: SuspensionId,
     slots: &'static [Word],
     residence: Residence,
 }
@@ -22,7 +22,7 @@ struct Fragment {
 /// Copy a suspension's captures only when a fresh entry reuses the active region.
 ///
 /// The two stores grow independently and cache their historical capacities. The
-/// snapshot frontier follows token nesting, so return reclaims words without an
+/// snapshot frontier follows suspension nesting, so return reclaims words without an
 /// allocation per continuation. Multiple suspensions of one activation have
 /// independent snapshots once saved, including copies of overlapping captures.
 /// Before entry they share active slots, so host returns need no capture copying.
@@ -36,7 +36,7 @@ pub struct Fragments<S: Storage> {
     // Saved fragments form a prefix; the remaining suffix refers to active slots.
     saved_count: usize,
     saved_words: usize,
-    next_token: u64,
+    next_suspension: u64,
     high_water: usize,
 }
 
@@ -48,7 +48,7 @@ impl<S: Storage> Fragments<S> {
         fragments: Vec::new(),
         saved_count: 0,
         saved_words: 0,
-        next_token: 0,
+        next_suspension: 0,
         high_water: 0,
     };
 
@@ -127,7 +127,7 @@ impl<S: Storage> Environment for Fragments<S> {
             }
         }
         self.scratch.reserve(0, layout.words)?;
-        // Both reservations succeeded. Until here, saved tokens and the active
+        // Both reservations succeeded. Until here, saved suspension IDs and the active
         // base survive failure; root addresses expire on any attempted transition.
         let mut base = self.saved_words;
         for fragment in &mut self.fragments[self.saved_count..] {
@@ -145,20 +145,23 @@ impl<S: Storage> Environment for Fragments<S> {
     }
 
     #[inline]
-    fn suspend(&mut self, layout: LayoutId, slots: &'static [Word]) -> Result<Token, FrameError> {
+    fn suspend(
+        &mut self, layout: LayoutId, slots: &'static [Word],
+    ) -> Result<SuspensionId, FrameError> {
         let layout = self.active(layout)?;
         Self::check_slots(layout, slots)?;
-        let token = RuntimeWord::unsigned(self.next_token).ok_or(FrameError::TokenOverflow)?;
-        let token = Token(Word::try_from(token).map_err(|_| FrameError::TokenOverflow)?);
-        self.fragments.push(Fragment { layout, token, slots, residence: Residence::Active });
-        self.next_token += 1;
-        Ok(token)
+        let id =
+            RuntimeWord::unsigned(self.next_suspension).ok_or(FrameError::SuspensionIdOverflow)?;
+        let id = SuspensionId(Word::try_from(id).map_err(|_| FrameError::SuspensionIdOverflow)?);
+        self.fragments.push(Fragment { layout, id, slots, residence: Residence::Active });
+        self.next_suspension += 1;
+        Ok(id)
     }
 
     #[inline]
-    fn resume(&mut self, layout: LayoutId, token: Token) -> Result<*mut Word, FrameError> {
+    fn resume(&mut self, layout: LayoutId, id: SuspensionId) -> Result<*mut Word, FrameError> {
         let fragment = self.fragments.last().ok_or(FrameError::InvalidResumption)?;
-        if fragment.token != token {
+        if fragment.id != id {
             return Err(FrameError::InvalidResumption);
         }
         Self::check_layout(fragment.layout, layout)?;
@@ -283,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn rejected_operations_preserve_tokens_bases_and_values() {
+    fn rejected_operations_preserve_suspension_ids_bases_and_values() {
         let mut frames = Fragments::<Fixed<8>>::EMPTY;
         assert_eq!(frames.suspend(CALLER.id, &[]), Err(FrameError::MissingActivation));
         let caller = frames.enter(CALLER).unwrap();
@@ -296,23 +299,23 @@ mod tests {
             frames.roots(CALLER.id, &[8]),
             Err(FrameError::InvalidSlot { slot: 8, words: 8 })
         );
-        let token = frames.suspend(CALLER.id, &[0]).unwrap();
+        let id = frames.suspend(CALLER.id, &[0]).unwrap();
         assert_eq!(
             frames.enter(Layout { words: 9, ..CALLEE }),
             Err(FrameError::Capacity { requested: 9, available: 8 })
         );
         assert_eq!(
-            frames.resume(CALLEE.id, token),
+            frames.resume(CALLEE.id, id),
             Err(FrameError::WrongLayout { expected: CALLEE.id, actual: CALLER.id })
         );
         assert_eq!(unsafe { caller.read() }, 71);
         assert_eq!(frames.fragments.len(), 1);
         assert_eq!(frames.saved_words, 0);
-        frames.next_token = u64::MAX;
-        assert_eq!(frames.suspend(CALLER.id, &[0]), Err(FrameError::TokenOverflow));
-        assert_eq!(frames.resume(CALLER.id, token).unwrap(), caller);
+        frames.next_suspension = u64::MAX;
+        assert_eq!(frames.suspend(CALLER.id, &[0]), Err(FrameError::SuspensionIdOverflow));
+        assert_eq!(frames.resume(CALLER.id, id).unwrap(), caller);
         assert_eq!(unsafe { caller.read() }, 71);
-        assert_eq!(frames.resume(CALLER.id, token), Err(FrameError::InvalidResumption));
+        assert_eq!(frames.resume(CALLER.id, id), Err(FrameError::InvalidResumption));
     }
 
     #[test]
