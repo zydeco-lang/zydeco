@@ -5,7 +5,7 @@ pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     program: &'arena DynamicsProgram,
 }
-impl<'a, T> Pretty<'a, Formatter<'a>> for Vec<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for [T]
 where
     T: Pretty<'a, Formatter<'a>>,
 {

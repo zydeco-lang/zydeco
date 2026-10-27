@@ -145,9 +145,9 @@ pub struct EnvValueClosure {
 pub enum SemValue {
     Closure(EnvValueClosure),
     Thunk(EnvThunk),
-    Ctor(Ctor<CtorName, Box<SemValue>>),
+    Ctor(Ctor<CtorName, Rc<SemValue>>),
     Triv(Triv),
-    VCons(Vec<SemValue>),
+    VCons(Rc<[SemValue]>),
     Literal(Literal),
     Host(HostValue),
 }

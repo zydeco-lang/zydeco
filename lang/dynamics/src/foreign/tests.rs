@@ -264,7 +264,7 @@ fn rejects_invalid_runtime_arguments_before_loading_or_calling() {
     for (parameters, arguments) in [
         (vec![U], vec![]),
         (vec![], vec![ForeignFixture::integer(1)]),
-        (vec![U], vec![ds::SemValue::VCons(vec![])]),
+        (vec![U], vec![ds::SemValue::VCons([].into())]),
         (vec![B], vec![ForeignFixture::integer(1)]),
         (vec![U], vec![ds::SemValue::Literal(Literal::Integer(IntegerLiteral::UInt32(1)))]),
     ] {

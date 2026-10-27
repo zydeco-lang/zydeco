@@ -1,5 +1,8 @@
 use crate::syntax::*;
-use std::io::{BufRead, Write};
+use std::{
+    io::{BufRead, Write},
+    rc::Rc,
+};
 use zydeco_statics::environment::Env;
 
 /// Trait for stepping a term until a result is produced.
@@ -67,10 +70,6 @@ impl<'rt> Runtime<'rt> {
     }
 }
 
-fn mk_box<T>(t: T) -> Box<T> {
-    Box::new(t)
-}
-
 /// Helper to bind a runtime value to a value pattern.
 struct Assign<S, T>(S, T);
 
@@ -89,7 +88,7 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                     if ctor != &ctor_ {
                         return Step::Done(Err(()));
                     }
-                    match Assign(vpat.to_owned(), *body).eval(runtime) {
+                    match Assign(vpat.to_owned(), body.as_ref().clone()).eval(runtime) {
                         | Ok(()) => {}
                         | Err(()) => return Step::Done(Err(())),
                     }
@@ -136,12 +135,12 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 }
             },
             | VPat::VCons(patterns) => match sem {
-                | SemValue::VCons(mut values) => {
+                | SemValue::VCons(values) => {
                     if patterns.len() != values.len() {
                         return Step::Done(Err(()));
                     }
-                    for (pattern, value) in patterns.iter().zip(values.drain(..)) {
-                        match Assign(pattern.to_owned(), value).eval(runtime) {
+                    for (pattern, value) in patterns.iter().zip(values.iter()) {
+                        match Assign(pattern.to_owned(), value.clone()).eval(runtime) {
                             | Ok(()) => {}
                             | Err(()) => return Step::Done(Err(())),
                         }
@@ -155,7 +154,7 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                 | SemValue::Host(_) => unreachable!(),
             },
             | VPat::View(ViewPattern { function, pattern }) => {
-                let argument = std::rc::Rc::new(Value::SemValue(sem));
+                let argument = Rc::new(Value::SemValue(sem));
                 let transformed = Value::ValApp(App(function.clone(), argument)).eval(runtime);
                 if Assign(pattern.clone(), transformed).eval(runtime).is_err() {
                     return Step::Done(Err(()));
@@ -206,7 +205,7 @@ impl<'rt> Eval<'rt> for Value {
                 Step::Done(EnvThunk { body, env: runtime.env.clone() }.into())
             }
             | Value::Ctor(Ctor(ctor, arg)) => {
-                let arg = mk_box(arg.as_ref().clone().eval(runtime));
+                let arg = Rc::new(arg.as_ref().clone().eval(runtime));
                 Step::Done(Ctor(ctor, arg).into())
             }
             | Value::Triv(Triv) => Step::Done(Triv.into()),
@@ -221,9 +220,9 @@ impl<'rt> Eval<'rt> for Value {
                     panic!("type-checked product projection must project a product")
                 };
                 let projected = components
-                    .into_iter()
-                    .nth(position)
-                    .expect("type-checked product projection must have a matching component");
+                    .get(position)
+                    .expect("type-checked product projection must have a matching component")
+                    .clone();
                 Step::Done(projected)
             }
             | Value::Lit(lit) => Step::Done(lit.into()),
@@ -283,7 +282,7 @@ impl<'rt> Eval<'rt> for Computation {
             }
             | Computation::Fix(Fix(vpat, body)) => {
                 let thunk = SemValue::Thunk(EnvThunk {
-                    body: std::rc::Rc::new(Fix(vpat.clone(), body.clone()).into()),
+                    body: Rc::new(Fix(vpat.clone(), body.clone()).into()),
                     env: runtime.env.clone(),
                 });
                 let () = Assign(vpat, thunk).eval(runtime).expect("pattern match failed in fix");
