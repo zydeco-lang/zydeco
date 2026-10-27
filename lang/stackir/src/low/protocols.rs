@@ -506,7 +506,7 @@ mod tests {
                 Literal::Integer(value).build(&mut arena, None)
             });
             let successors = [2, 3].map(|index| {
-                let stack = Bullet.build(&mut arena, None);
+                let stack = StackVar.build(&mut arena, None);
                 let tail = SHole(stack).build(&mut arena, None);
                 let binder = Hole.build(&mut arena, None);
                 let protocol = if rejected == Some(index) {
@@ -515,9 +515,9 @@ mod tests {
                     ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))
                 };
                 arena.inner.pattern_protocols.insert_new(binder, protocol);
-                let bindee = Bullet.build(&mut arena, None);
+                let bindee = StackVar.build(&mut arena, None);
                 (
-                    LetArg { binder: Cons(binder, Bullet), bindee, tail }.build(&mut arena, None),
+                    LetArg { binder: Cons(binder, StackVar), bindee, tail }.build(&mut arena, None),
                     binder,
                 )
             });
@@ -559,7 +559,7 @@ mod tests {
             let store_address = base.build(&mut arena, None);
             let value = loaded.build(&mut arena, None);
             let result = loaded.build(&mut arena, None);
-            let stack = Bullet.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             let next = SHole(stack).build(&mut arena, None);
             let next = MemoryStep::Store {
                 scalar: MemoryScalar::Integer(store_type),

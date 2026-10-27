@@ -43,7 +43,7 @@ impl Drivers {
 
     fn returning(arena: &mut high::SpsArena) -> high::CompuId {
         let value = Triv.build(arena, None);
-        let stack = Bullet.build(arena, None);
+        let stack = StackVar.build(arena, None);
         SReturn { stack, value }.build(arena, None)
     }
 
@@ -195,7 +195,7 @@ fn drivers_preserve_empty_and_wide_children() {
                 let values = (0..count).map(|_| Triv.build(&mut arena, None)).collect();
                 let value = VCons::new(values, ProductLayout { arity: count.max(1) })
                     .build(&mut arena, None);
-                let stack = Bullet.build(&mut arena, None);
+                let stack = StackVar.build(&mut arena, None);
                 let tail = SReturn { stack, value }.build(&mut arena, None);
                 let payload: high::VPatId = Hole.build(&mut arena, None);
                 let binder = Ctor(CtorIdx { idx, name: CtorName(format!("+Arm{idx}")) }, payload)
@@ -205,17 +205,17 @@ fn drivers_preserve_empty_and_wide_children() {
             .collect();
         let scrut = Hole.build(&mut arena, None);
         let tail = SCoprodMatch { scrut, arms }.build(&mut arena, None);
-        let bindee = Bullet.build(&mut arena, None);
-        let branch = Let { binder: Bullet, bindee, tail }.build(&mut arena, None);
+        let bindee = StackVar.build(&mut arena, None);
+        let branch = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
         let mut coarms = vec![CoMatcher {
-            dtor: Cons(DtorIdx { idx: 0, name: DtorName("branch".into()) }, Bullet),
+            dtor: Cons(DtorIdx { idx: 0, name: DtorName("branch".into()) }, StackVar),
             tail: branch,
         }];
         coarms.extend((1..count).map(|idx| CoMatcher {
-            dtor: Cons(DtorIdx { idx, name: DtorName(format!("method{idx}")) }, Bullet),
+            dtor: Cons(DtorIdx { idx, name: DtorName(format!("method{idx}")) }, StackVar),
             tail: Drivers::returning(&mut arena),
         }));
-        let scrut = Bullet.build(&mut arena, None);
+        let scrut = StackVar.build(&mut arena, None);
         let root = SCoMatch { scrut, arms: coarms }.build(&mut arena, None);
         Drivers::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
     }
@@ -237,7 +237,7 @@ fn drivers_preserve_comparison_operands_successors_and_shared_stack() {
     let binder = Hole.build(&mut arena, None);
     let body = Drivers::returning(&mut arena);
     let bindee = Kont { binder, body }.build(&mut arena, None);
-    let root = Let { binder: Bullet, bindee, tail }.build(&mut arena, None);
+    let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
     let output = Drivers::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
     let low::Computation::LetStack(low::LetStack { tail, .. }) =
         output.arena().inner.compus[&output.root()]
@@ -257,15 +257,15 @@ fn drivers_preserve_origins_and_partial_protocols() {
     let closure_site = ss::TermId::Value(origins.alloc());
     let unit = Triv.build(&mut arena, Some(value_site));
     arena.inner.value_protocols.insert_new(unit, ValueProtocol::Unit);
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let body = SReturn { stack, value: unit }.build(&mut arena, Some(body_site));
-    let closure = Closure { stack: Bullet, body }.build(&mut arena, Some(closure_site));
+    let closure = Closure { stack: StackVar, body }.build(&mut arena, Some(closure_site));
     let protocol = StackProtocol::Continuation(Box::new(ValueProtocol::Unit));
     arena
         .inner
         .value_protocols
         .insert_new(closure, ValueProtocol::Thunk(Box::new(protocol.clone())));
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let root = SReturn { stack, value: closure }.build(&mut arena, None);
     let output = Drivers::convert(&arena, root, &ScopedArena::default(), &StaticsArena::default());
     assert_eq!(output.arena().inner.entry_protocols.len(), 1);
@@ -297,8 +297,8 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
             let binder: high::VPatId = Hole.build(&mut arena, None);
             let bindee = Triv.build(&mut arena, None);
             let body = Let { binder, bindee, tail: root }.build(&mut arena, None);
-            let value = Closure { stack: Bullet, body }.build(&mut arena, None);
-            let stack = Bullet.build(&mut arena, None);
+            let value = Closure { stack: StackVar, body }.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             root = SReturn { stack, value }.build(&mut arena, None);
         }
         let program = BranchJoinProgram::try_new(high::SpsProgram::new(arena, root)).unwrap();
@@ -311,7 +311,7 @@ fn deep_conversion_reconstructs_and_drops_without_native_recursion() {
     });
     Drivers::small_stack(|| {
         let mut arena = high::SpsArena::default();
-        let mut stack = Bullet.build(&mut arena, None);
+        let mut stack = StackVar.build(&mut arena, None);
         for _ in 0..16384 {
             let value: high::ValueId = Triv.build(&mut arena, None);
             stack = Cons(value, stack).build(&mut arena, None);

@@ -272,7 +272,7 @@ impl Lowering<'_, '_> {
             };
         }
         match stack {
-            | sk::Stack::Var(sk::Bullet) => Step::TailCall(Work::Apply(next, context)),
+            | sk::Stack::Var(sk::StackVar) => Step::TailCall(Work::Apply(next, context)),
             | sk::Stack::Arg(Cons(value, rest)) => {
                 let next = self.then(Action::Value(value), next);
                 Step::TailCall(Work::Stack(rest, context, next))
@@ -358,11 +358,11 @@ impl Lowering<'_, '_> {
                 let next = self.save(Continuation::CoprodMatch(arms));
                 Step::TailCall(Work::Value(scrut, context, next))
             }
-            | Compu::LetStack(sk::LetStack { binder: sk::Bullet, bindee, tail }) => {
+            | Compu::LetStack(sk::LetStack { binder: sk::StackVar, bindee, tail }) => {
                 let next = self.save(Continuation::Body(tail));
                 Step::TailCall(Work::Stack(bindee, context, next))
             }
-            | Compu::LetArg(sk::LetArg { binder: Cons(pattern, sk::Bullet), bindee, tail }) => {
+            | Compu::LetArg(sk::LetArg { binder: Cons(pattern, sk::StackVar), bindee, tail }) => {
                 let next = self.save(Continuation::Body(tail));
                 let next = self.then(Action::Pattern(pattern), next);
                 Step::TailCall(Work::Stack(bindee, context, next))

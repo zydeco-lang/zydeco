@@ -28,11 +28,11 @@ pub type AddrOffset = common::AddrOffset<ValueId>;
 pub type MemoryStep = common::MemoryStep<ValueId, VPatId, CompuId>;
 pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
 pub type SCoprodMatch = common::SCoprodMatch<ValueId, VPatId, CompuId>;
-pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, Bullet>, CompuId>;
+pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, StackVar>, CompuId>;
 pub type ExternCall = common::ExternCall<StackId>;
 pub type LetValue = Let<VPatId, ValueId, CompuId>;
-pub type LetStack = Let<Bullet, StackId, CompuId>;
-pub type LetArg = Let<Cons<VPatId, Bullet>, StackId, CompuId>;
+pub type LetStack = Let<StackVar, StackId, CompuId>;
+pub type LetArg = Let<Cons<VPatId, StackVar>, StackId, CompuId>;
 
 /* ---------------------------------- Values -------------------------------- */
 
@@ -91,7 +91,7 @@ pub struct CaptureBinding {
 
 #[derive(From, Clone, Debug)]
 pub enum Stack {
-    Var(Bullet),
+    Var(StackVar),
     Arg(Cons<ValueId, StackId>),
     Tag(Cons<DtorIdx, StackId>),
     ContinuationPackage(ContinuationPackage),

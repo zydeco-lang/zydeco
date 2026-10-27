@@ -7,10 +7,10 @@ struct Storage;
 impl Storage {
     fn sequential_lets(depth: usize) -> usize {
         let mut arena = sk::SpsLowArena::default();
-        let stack = sk::Bullet.build(&mut arena, None);
+        let stack = sk::StackVar.build(&mut arena, None);
         let mut root = sk::SHole(stack).build(&mut arena, None);
         for _ in 0..depth {
-            root = sk::LetStack { binder: sk::Bullet, bindee: stack, tail: root }
+            root = sk::LetStack { binder: sk::StackVar, bindee: stack, tail: root }
                 .build(&mut arena, None);
         }
         let mut lo = Lowerer {

@@ -150,7 +150,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackId {
 impl<'a> Pretty<'a, Formatter<'a>> for Stack {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Stack::Var(Bullet) => RcDoc::text("•"),
+            | Stack::Var(StackVar) => RcDoc::text("•"),
             | Stack::Arg(Cons(value, stack)) => RcDoc::concat([
                 RcDoc::text("arg("),
                 value.pretty(f),
@@ -251,7 +251,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::text(" in"),
                 RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
             ]),
-            | Computation::LetStack(LetStack { binder: Bullet, bindee, tail: body }) => {
+            | Computation::LetStack(LetStack { binder: StackVar, bindee, tail: body }) => {
                 RcDoc::concat([
                     RcDoc::text("let • = "),
                     bindee.pretty(f),
@@ -259,16 +259,18 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
                 ])
             }
-            | Computation::LetArg(LetArg { binder: Cons(binder, Bullet), bindee, tail: body }) => {
-                RcDoc::concat([
-                    RcDoc::text("let arg("),
-                    binder.pretty(f),
-                    RcDoc::text(") :: • = "),
-                    bindee.pretty(f),
-                    RcDoc::text(" in"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-                ])
-            }
+            | Computation::LetArg(LetArg {
+                binder: Cons(binder, StackVar),
+                bindee,
+                tail: body,
+            }) => RcDoc::concat([
+                RcDoc::text("let arg("),
+                binder.pretty(f),
+                RcDoc::text(") :: • = "),
+                bindee.pretty(f),
+                RcDoc::text(" in"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+            ]),
             | Computation::CoCase(SCoMatch { scrut, arms }) => {
                 let statics_fmt = zydeco_statics::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([

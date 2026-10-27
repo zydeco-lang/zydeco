@@ -223,12 +223,12 @@ impl Normalization {
             }
             | Value::Closure(Closure { body, .. }) => match &self.source.inner.compus[body] {
                 | Computation::ExternCall(ExternCall { function, stack })
-                    if matches!(self.source.inner.stacks[stack], Stack::Var(Bullet)) =>
+                    if matches!(self.source.inner.stacks[stack], Stack::Var(StackVar)) =>
                 {
                     Rc::new(KnownValue::External(function.clone()))
                 }
                 | Computation::Force(SForce { thunk, stack })
-                    if matches!(self.source.inner.stacks[stack], Stack::Var(Bullet))
+                    if matches!(self.source.inner.stacks[stack], Stack::Var(StackVar))
                         && matches!(self.source.inner.values[thunk], Value::Var(_)) =>
                 {
                     self.known(*thunk, env)
@@ -401,7 +401,7 @@ impl Normalization {
     }
 
     fn resolve_stack(&self, mut stack: ScopedStack) -> ScopedStack {
-        while matches!(self.source.inner.stacks[&stack.node], Stack::Var(Bullet)) {
+        while matches!(self.source.inner.stacks[&stack.node], Stack::Var(StackVar)) {
             match stack.scope.stack {
                 | Some(ambient) => stack = self.delayed_stacks[ambient.0].clone(),
                 | None => break,
@@ -484,7 +484,7 @@ mod tests {
         }
 
         fn primitive(&mut self) -> ValueId {
-            let stack = self.build(Bullet);
+            let stack = self.build(StackVar);
             let body = self.build(ExternCall {
                 function: ExternalFunction::Host(BuiltinValueRole::Integer(
                     IntegerType::Int,
@@ -492,27 +492,27 @@ mod tests {
                 )),
                 stack,
             });
-            self.build(Closure { stack: Bullet, body })
+            self.build(Closure { stack: StackVar, body })
         }
 
         fn force(&mut self, thunk: ValueId) -> CompuId {
-            let stack = self.build(Bullet);
+            let stack = self.build(StackVar);
             self.build(SForce { thunk, stack })
         }
 
         fn ret(&mut self, value: ValueId) -> CompuId {
-            let stack = self.build(Bullet);
+            let stack = self.build(StackVar);
             self.build(SReturn { stack, value })
         }
 
         fn returning_thunk(&mut self) -> ValueId {
             let value = self.build(Triv);
             let body = self.ret(value);
-            self.build(Closure { stack: Bullet, body })
+            self.build(Closure { stack: StackVar, body })
         }
 
         fn external(&mut self, role: BuiltinValueRole) -> CompuId {
-            let stack = self.build(Bullet);
+            let stack = self.build(StackVar);
             self.build(ExternCall { function: ExternalFunction::Host(role), stack })
         }
 
@@ -532,8 +532,8 @@ mod tests {
         fn effect_before_popping_argument(&mut self) -> CompuId {
             let tail = self.external(BuiltinValueRole::WriteLine);
             let binder = self.build(Hole);
-            let ambient = self.build(Bullet);
-            let body = self.build(Let { binder: Cons(binder, Bullet), bindee: ambient, tail });
+            let ambient = self.build(StackVar);
+            let body = self.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
             let binder = self.build(Hole);
             let stack = self.build(Kont { binder, body });
             self.build(ExternCall {
@@ -566,8 +566,8 @@ mod tests {
             let offset = fixture.build(AddrOffset { base: address, displacement: delta });
             let tail = fixture.ret(offset);
             let binder = fixture.build(base);
-            let bindee = fixture.build(Bullet);
-            let root = fixture.build(Let { binder: Cons(binder, Bullet), bindee, tail });
+            let bindee = fixture.build(StackVar);
+            let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee, tail });
             let program = fixture.normalize(root);
             let retained = program
                 .arena()
@@ -619,10 +619,10 @@ mod tests {
         let tail_value = fixture.build(tail_def);
         let projected =
             fixture.build(SProductMatch { scrut: tail_value, binder: projection, body: returned });
-        let ambient = fixture.build(Bullet);
+        let ambient = fixture.build(StackVar);
         let stack = fixture.build(Cons(package, ambient));
         let root = fixture.build(Let {
-            binder: Cons(package_pat, Bullet),
+            binder: Cons(package_pat, StackVar),
             bindee: stack,
             tail: projected,
         });
@@ -729,12 +729,12 @@ mod tests {
             let function = fixture.def("function");
             let thunk = fixture.build(function);
             let body = fixture.force(thunk);
-            let stack = fixture.build(Bullet);
+            let stack = fixture.build(StackVar);
             let root = if recursive {
                 fixture.build(SFix { param: function, stack, body })
             } else {
                 let binder = fixture.build(function);
-                fixture.build(Let { binder: Cons(binder, Bullet), bindee: stack, tail: body })
+                fixture.build(Let { binder: Cons(binder, StackVar), bindee: stack, tail: body })
             };
 
             let program = fixture.normalize(root);
@@ -765,13 +765,13 @@ mod tests {
     fn closure_beta_preserves_changes_to_the_incoming_stack() {
         let mut fixture = Fixture::default();
         let value: ValueId = fixture.build(Triv);
-        let ambient = fixture.build(Bullet);
+        let ambient = fixture.build(StackVar);
         let stack = fixture.build(Cons(value, ambient));
         let body = fixture.build(ExternCall {
             function: ExternalFunction::Host(BuiltinValueRole::WriteStr),
             stack,
         });
-        let thunk = fixture.build(Closure { stack: Bullet, body });
+        let thunk = fixture.build(Closure { stack: StackVar, body });
         let root = fixture.force(thunk);
 
         let program = fixture.normalize(root);
@@ -995,16 +995,16 @@ mod tests {
             })
             .collect();
         let branch = fixture.build(SCoprodMatch { scrut, arms });
-        let ambient = fixture.build(Bullet);
-        let body = fixture.build(Let { binder: Bullet, bindee: ambient, tail: branch });
-        let thunk = fixture.build(Closure { stack: Bullet, body });
+        let ambient = fixture.build(StackVar);
+        let body = fixture.build(Let { binder: StackVar, bindee: ambient, tail: branch });
+        let thunk = fixture.build(Closure { stack: StackVar, body });
         let after = fixture.external(BuiltinValueRole::WriteLine);
         let hole = fixture.build(Hole);
         let stack = fixture.build(Kont { binder: hole, body: after });
         let tail = fixture.build(SForce { thunk, stack });
-        let ambient = fixture.build(Bullet);
+        let ambient = fixture.build(StackVar);
         let binder = fixture.build(condition);
-        let root = fixture.build(Let { binder: Cons(binder, Bullet), bindee: ambient, tail });
+        let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
         let program = fixture.normalize(root);
         assert_eq!(
             program
@@ -1054,8 +1054,8 @@ mod tests {
             })
             .collect();
         let tail = fixture.build(SCoprodMatch { scrut, arms });
-        let bindee = fixture.build(Bullet);
-        let root = fixture.build(Let { binder: Bullet, bindee, tail });
+        let bindee = fixture.build(StackVar);
+        let root = fixture.build(Let { binder: StackVar, bindee, tail });
         let program = fixture.normalize(root);
         assert!(
             program
@@ -1102,8 +1102,8 @@ mod tests {
             })
             .collect();
         let tail = fixture.build(SCoprodMatch { scrut, arms });
-        let bindee = fixture.build(Bullet);
-        let tail = fixture.build(Let { binder: Bullet, bindee, tail });
+        let bindee = fixture.build(StackVar);
+        let tail = fixture.build(Let { binder: StackVar, bindee, tail });
         let binder: VPatId = fixture.build(alias);
         let bindee: ValueId = fixture.build(stored);
         let tail = fixture.build(Let { binder, bindee, tail });
@@ -1148,10 +1148,10 @@ mod tests {
             let returned = fixture.build(argument);
             let tail = fixture.ret(returned);
             let binder = fixture.build(argument);
-            let ambient = fixture.build(Bullet);
-            let body = fixture.build(Let { binder: Cons(binder, Bullet), bindee: ambient, tail });
-            let arms = vec![CoMatcher { dtor: Cons(tag.clone(), Bullet), tail: body }];
-            let ambient = fixture.build(Bullet);
+            let ambient = fixture.build(StackVar);
+            let body = fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
+            let arms = vec![CoMatcher { dtor: Cons(tag.clone(), StackVar), tail: body }];
+            let ambient = fixture.build(StackVar);
             let scrut = if known {
                 let value: ValueId = fixture.build(Triv);
                 let rest: StackId = fixture.build(Cons(value, ambient));
@@ -1179,7 +1179,7 @@ mod tests {
             let function = fixture.def("function");
             let value = fixture.build(function);
             let body = fixture.force(value);
-            let thunk = fixture.build(Closure { stack: Bullet, body });
+            let thunk = fixture.build(Closure { stack: StackVar, body });
             let tail = if returned {
                 fixture.ret(thunk)
             } else {
@@ -1191,8 +1191,8 @@ mod tests {
                 fixture.build(SForce { thunk, stack })
             };
             let binder = fixture.build(function);
-            let ambient = fixture.build(Bullet);
-            let root = fixture.build(Let { binder: Cons(binder, Bullet), bindee: ambient, tail });
+            let ambient = fixture.build(StackVar);
+            let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail });
             let program = fixture.normalize(root);
             assert!(
                 !program
@@ -1236,24 +1236,24 @@ mod tests {
         {
             let mut fixture = Fixture::default();
             let value = fixture.trap("argument");
-            let ambient = fixture.build(Bullet);
+            let ambient = fixture.build(StackVar);
             let rest: StackId = fixture.build(Cons(value, ambient));
             let body = fixture.effect_before_popping_argument();
             let root = match consumer {
                 | Consumer::Closure => {
-                    let thunk = fixture.build(Closure { stack: Bullet, body });
+                    let thunk = fixture.build(Closure { stack: StackVar, body });
                     fixture.build(SForce { thunk, stack: rest })
                 }
                 | Consumer::Argument => {
                     let value: ValueId = fixture.build(Triv);
                     let bindee = fixture.build(Cons(value, rest));
                     let binder = fixture.build(Hole);
-                    fixture.build(Let { binder: Cons(binder, Bullet), bindee, tail: body })
+                    fixture.build(Let { binder: Cons(binder, StackVar), bindee, tail: body })
                 }
                 | Consumer::Destructor => {
                     let tag = DtorIdx { idx: 0, name: DtorName("run".into()) };
                     let scrut = fixture.build(Cons(tag.clone(), rest));
-                    let arms = vec![CoMatcher { dtor: Cons(tag, Bullet), tail: body }];
+                    let arms = vec![CoMatcher { dtor: Cons(tag, StackVar), tail: body }];
                     fixture.build(SCoMatch { scrut, arms })
                 }
                 | Consumer::Branch => {
@@ -1263,7 +1263,7 @@ mod tests {
                     let binder = fixture.build(Ctor(Fixture::ctor(0), hole));
                     let tail = fixture
                         .build(SCoprodMatch { scrut, arms: vec![Matcher { binder, tail: body }] });
-                    fixture.build(Let { binder: Bullet, bindee: rest, tail })
+                    fixture.build(Let { binder: StackVar, bindee: rest, tail })
                 }
             };
             let program = fixture.normalize(root);

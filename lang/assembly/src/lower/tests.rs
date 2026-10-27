@@ -26,7 +26,7 @@ impl Fixture {
     }
 
     fn terminal(&mut self) -> sk::CompuId {
-        let stack = sk::Bullet.build(&mut self.arena, None);
+        let stack = sk::StackVar.build(&mut self.arena, None);
         sk::SHole(stack).build(&mut self.arena, None)
     }
 
@@ -54,7 +54,7 @@ impl Fixture {
         let [when_true, when_false] =
             [sk::IntegerArithmetic::Div, sk::IntegerArithmetic::Mod].map(|operation| {
                 let value = fixture.trap(operation);
-                let ambient = sk::Bullet.build(&mut fixture.arena, None);
+                let ambient = sk::StackVar.build(&mut fixture.arena, None);
                 let stack = sk::Cons(value, ambient).build(&mut fixture.arena, None);
                 sk::SHole(stack).build(&mut fixture.arena, None)
             });
@@ -65,9 +65,9 @@ impl Fixture {
             when_false,
         }
         .build(&mut fixture.arena, None);
-        let bindee = sk::Bullet.build(&mut fixture.arena, None);
+        let bindee = sk::StackVar.build(&mut fixture.arena, None);
         let root =
-            sk::LetStack { binder: sk::Bullet, bindee, tail }.build(&mut fixture.arena, None);
+            sk::LetStack { binder: sk::StackVar, bindee, tail }.build(&mut fixture.arena, None);
         SpsLowProgram::try_new(fixture.arena, root).unwrap()
     }
 
@@ -100,9 +100,9 @@ impl Fixture {
         let scrut = sk::Ctor(sk::CtorIdx { idx: 0, name: "+First".into() }, payload)
             .build(&mut fixture.arena, None);
         let tail = sk::SCoprodMatch { scrut, arms }.build(&mut fixture.arena, None);
-        let bindee = sk::Bullet.build(&mut fixture.arena, None);
+        let bindee = sk::StackVar.build(&mut fixture.arena, None);
         let root =
-            sk::LetStack { binder: sk::Bullet, bindee, tail }.build(&mut fixture.arena, None);
+            sk::LetStack { binder: sk::StackVar, bindee, tail }.build(&mut fixture.arena, None);
         SpsLowProgram::try_new(fixture.arena, root).unwrap()
     }
 
@@ -116,7 +116,7 @@ impl Fixture {
         let environment = sk::VCons::new(vec![capture], sk::ProductLayout { arity: 1 })
             .build(&mut fixture.arena, None);
         let value: sk::ValueId = binding.build(&mut fixture.arena, None);
-        let stack = sk::Bullet.build(&mut fixture.arena, None);
+        let stack = sk::StackVar.build(&mut fixture.arena, None);
         let stack = sk::Cons(value, stack).build(&mut fixture.arena, None);
         let body = sk::SHole(stack).build(&mut fixture.arena, None);
         let entry = sk::EntryParameters::Continuation { result, environment };
@@ -125,7 +125,7 @@ impl Fixture {
         let environment: sk::ValueId =
             sk::VCons::new(vec![capture], sk::ProductLayout { arity: 1 })
                 .build(&mut fixture.arena, None);
-        let ambient = sk::Bullet.build(&mut fixture.arena, None);
+        let ambient = sk::StackVar.build(&mut fixture.arena, None);
         let residual = sk::Cons(environment, ambient).build(&mut fixture.arena, None);
         let package = sk::ContinuationPackage { code, residual }.build(&mut fixture.arena, None);
         fixture.arena.inner.continuations.insert_new(
@@ -177,7 +177,7 @@ impl Fixture {
         let label = fixture.definition("worker");
         let target = label.build(&mut fixture.arena, None);
         let environment = sk::Triv.build(&mut fixture.arena, None);
-        let stack = sk::Bullet.build(&mut fixture.arena, None);
+        let stack = sk::StackVar.build(&mut fixture.arena, None);
         let body = sk::Jump { target, argument: sk::EntryArgument::Closure { environment }, stack }
             .build(&mut fixture.arena, None);
         let entry =
@@ -191,7 +191,7 @@ impl Fixture {
         let target = code.build(&mut fixture.arena, None);
         let argument =
             sk::EntryArgument::Closure { environment: environment.build(&mut fixture.arena, None) };
-        let stack = sk::Bullet.build(&mut fixture.arena, None);
+        let stack = sk::StackVar.build(&mut fixture.arena, None);
         let body = sk::Jump { target, argument, stack }.build(&mut fixture.arena, None);
         let tail = sk::OpenClosure {
             package: package.build(&mut fixture.arena, None),
@@ -224,7 +224,7 @@ impl Fixture {
             .into_iter()
             .zip(functions)
             .map(|(idx, function)| {
-                let stack = sk::Bullet.build(&mut fixture.arena, None);
+                let stack = sk::StackVar.build(&mut fixture.arena, None);
                 let mut tail = sk::ExternCall { function, stack }.build(&mut fixture.arena, None);
                 for literal in [
                     sk::Literal::Float(sk::FloatLiteral::from_bits(0x8000_0000_0000_0000)),
@@ -244,16 +244,16 @@ impl Fixture {
                     operands,
                 }
                 .build(&mut fixture.arena, None);
-                let ambient = sk::Bullet.build(&mut fixture.arena, None);
+                let ambient = sk::StackVar.build(&mut fixture.arena, None);
                 let bindee = sk::Cons(value, ambient).build(&mut fixture.arena, None);
                 let pattern = sk::Hole.build(&mut fixture.arena, None);
-                let tail = sk::LetArg { binder: Cons(pattern, sk::Bullet), bindee, tail }
+                let tail = sk::LetArg { binder: Cons(pattern, sk::StackVar), bindee, tail }
                     .build(&mut fixture.arena, None);
-                let dtor = Cons(sk::DtorIdx { idx, name: ".observe".into() }, sk::Bullet);
+                let dtor = Cons(sk::DtorIdx { idx, name: ".observe".into() }, sk::StackVar);
                 sk::CoMatcher { dtor, tail }
             })
             .collect();
-        let scrut = sk::Bullet.build(&mut fixture.arena, None);
+        let scrut = sk::StackVar.build(&mut fixture.arena, None);
         let root = sk::SCoMatch { scrut, arms }.build(&mut fixture.arena, None);
         (fixture, root)
     }
@@ -610,7 +610,7 @@ fn a_value_hole_abandons_the_remaining_sequence_without_compiling_it() {
     let hole = sk::Hole.build(&mut fixture.arena, None);
     let value = sk::VCons::new(vec![untouched, hole], sk::ProductLayout { arity: 2 })
         .build(&mut fixture.arena, None);
-    let ambient = sk::Bullet.build(&mut fixture.arena, None);
+    let ambient = sk::StackVar.build(&mut fixture.arena, None);
     let stack = sk::Cons(value, ambient).build(&mut fixture.arena, None);
     let root = sk::SHole(stack).build(&mut fixture.arena, None);
     let explicit = fixture.lower_raw::<Explicit>(root, false, Default::default());

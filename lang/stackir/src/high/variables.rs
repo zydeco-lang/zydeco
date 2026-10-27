@@ -55,7 +55,7 @@ impl Variables {
     fn value(&self, value: Value) -> CoContext<DefId> {
         match value {
             | Value::Var(def_id) => CoContext::singleton(def_id),
-            | Value::Closure(Closure { stack: Bullet, body }) => body.summary(self),
+            | Value::Closure(Closure { stack: StackVar, body }) => body.summary(self),
             | Value::Ctor(Ctor(_ctor, body)) => body.summary(self),
             | Value::VCons(VCons { items, layout: _ }) => items
                 .into_iter()
@@ -74,7 +74,7 @@ impl Variables {
     fn stack(&self, stack: Stack) -> CoContext<DefId> {
         match stack {
             | Stack::Kont(Kont { binder, body }) => body.summary(self) - binder.summary(self),
-            | Stack::Var(Bullet) => CoContext::new(),
+            | Stack::Var(StackVar) => CoContext::new(),
             | Stack::Arg(Cons(a, b)) => a.summary(self) + b.summary(self),
             | Stack::Tag(Cons(_dtor, body)) => body.summary(self),
         }
@@ -107,10 +107,10 @@ impl Variables {
             | Compu::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
                 tail.summary(self) - binder.summary(self) + bindee.summary(self)
             }
-            | Compu::Join(LetJoin::Stack(Let { binder: Bullet, bindee, tail })) => {
+            | Compu::Join(LetJoin::Stack(Let { binder: StackVar, bindee, tail })) => {
                 bindee.summary(self) + tail.summary(self)
             }
-            | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {
+            | Compu::LetArg(Let { binder: Cons(param, StackVar), bindee, tail }) => {
                 tail.summary(self) - param.summary(self) + bindee.summary(self)
             }
             | Compu::CoCase(SCoMatch { scrut, arms }) => {

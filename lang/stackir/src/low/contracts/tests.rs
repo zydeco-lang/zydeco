@@ -19,7 +19,7 @@ impl Fixture {
     }
 
     fn terminal(&mut self) -> CompuId {
-        let stack = self.build(Bullet);
+        let stack = self.build(StackVar);
         self.build(SHole(stack))
     }
 
@@ -58,13 +58,13 @@ impl Fixture {
     fn continuation(&mut self) -> StackId {
         let code = self.block(EntryKind::Continuation, 0);
         let environment: ValueId = self.build(Triv);
-        let stack = self.build(Bullet);
+        let stack = self.build(StackVar);
         let residual = self.build(Cons(environment, stack));
         self.build(ContinuationPackage { code, residual })
     }
 
     fn jump(&mut self, target: ValueId, argument: EntryArgument) -> CompuId {
-        let stack = self.build(Bullet);
+        let stack = self.build(StackVar);
         self.build(Jump { target, argument, stack })
     }
 
@@ -83,7 +83,7 @@ fn direct_entries_require_the_matching_transfer_kind() {
         let mut f = Fixture::default();
         let target = f.block(kind, 0);
         let environment = f.build(Triv);
-        let stack = f.build(Bullet);
+        let stack = f.build(StackVar);
         let (argument, stack) = match kind {
             | EntryKind::Closure => (EntryArgument::Closure { environment }, stack),
             | EntryKind::Continuation => {
@@ -160,7 +160,7 @@ fn closure_packages_check_entry_kind_and_known_environment_arity() {
 fn continuation_packages_require_their_environment_word() {
     let mut f = Fixture::default();
     let code = f.block(EntryKind::Continuation, 0);
-    let residual = f.build(Bullet);
+    let residual = f.build(StackVar);
     let stack = f.build(ContinuationPackage { code, residual });
     let root = f.build(SHole(stack));
     f.rejects(
@@ -180,7 +180,7 @@ fn continuation_packages_check_entry_kind_and_known_environment_arity() {
         let mut f = Fixture::default();
         let code = f.block(kind, 1);
         let environment = f.environment(arity);
-        let ambient = f.build(Bullet);
+        let ambient = f.build(StackVar);
         let residual = f.build(Cons(environment, ambient));
         let package = f.build(ContinuationPackage { code, residual });
         let root = f.build(SHole(package));
@@ -215,7 +215,7 @@ fn direct_jumps_check_the_known_environment_layout() {
             let mut f = Fixture::default();
             let target = f.block(kind, 1);
             let environment = f.environment(arity);
-            let stack = f.build(Bullet);
+            let stack = f.build(StackVar);
             let (argument, stack) = match kind {
                 | EntryKind::Closure => (EntryArgument::Closure { environment }, stack),
                 | EntryKind::Continuation => {
@@ -320,7 +320,7 @@ fn continuation_transfers_preserve_the_restored_stack() {
         for change in [Change::Keep, Change::Push, Change::Pop, Change::PushPop] {
             let mut f = Fixture::default();
             let original = f.def();
-            let residual = f.build(Bullet);
+            let residual = f.build(StackVar);
             let residual = if matches!(change, Change::Push) {
                 let extra: ValueId = f.build(Triv);
                 f.build(Cons(extra, residual))
@@ -342,14 +342,14 @@ fn continuation_transfers_preserve_the_restored_stack() {
             };
             let body = if matches!(change, Change::Pop | Change::PushPop) {
                 let pattern = f.build(Hole);
-                let bindee = f.build(Bullet);
+                let bindee = f.build(StackVar);
                 let bindee = if matches!(change, Change::PushPop) {
                     let extra: ValueId = f.build(Triv);
                     f.build(Cons(extra, bindee))
                 } else {
                     bindee
                 };
-                f.build(LetArg { binder: Cons(pattern, Bullet), bindee, tail: body })
+                f.build(LetArg { binder: Cons(pattern, StackVar), bindee, tail: body })
             } else {
                 body
             };

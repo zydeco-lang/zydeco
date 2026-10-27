@@ -28,7 +28,7 @@ pub type AddrOffset = common::AddrOffset<ValueId>;
 pub type MemoryStep = common::MemoryStep<ValueId, VPatId, CompuId>;
 pub type SProductMatch = common::SProductMatch<ValueId, VPatId, CompuId>;
 pub type SCoprodMatch = common::SCoprodMatch<ValueId, VPatId, CompuId>;
-pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, Bullet>, CompuId>;
+pub type SCoMatch = common::SCoMatch<StackId, Cons<DtorIdx, StackVar>, CompuId>;
 pub type ExternCall = common::ExternCall<StackId>;
 
 /* ---------------------------------- Values -------------------------------- */
@@ -36,7 +36,7 @@ pub type ExternCall = common::ExternCall<StackId>;
 /// A closure whose minimal capture list is computed during closure conversion.
 #[derive(Clone, Debug)]
 pub struct Closure {
-    pub stack: Bullet,
+    pub stack: StackVar,
     pub body: CompuId,
 }
 
@@ -65,7 +65,7 @@ pub struct Kont {
 #[derive(From, Clone, Debug)]
 pub enum Stack {
     Kont(Kont),
-    Var(Bullet),
+    Var(StackVar),
     Arg(Cons<ValueId, StackId>),
     Tag(Cons<DtorIdx, StackId>),
 }
@@ -94,7 +94,7 @@ pub struct SFix {
 #[derive(From, Clone, Debug)]
 pub enum LetJoin {
     Value(Let<VPatId, ValueId, CompuId>),
-    Stack(Let<Bullet, StackId, CompuId>),
+    Stack(Let<StackVar, StackId, CompuId>),
 }
 
 #[derive(From, Clone, Debug)]
@@ -108,7 +108,7 @@ pub enum Computation<Join> {
     Compare(CompareBranch),
     #[from(ignore)]
     Join(Join),
-    LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
+    LetArg(Let<Cons<VPatId, StackVar>, StackId, CompuId>),
     CoCase(SCoMatch),
     ExternCall(ExternCall),
     Memory(MemoryStep),

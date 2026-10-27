@@ -155,7 +155,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         match self.conversion.source.inner.stacks[&source].clone() {
             | high::Stack::Var(_) => {
                 let site = self.conversion.stack_site(source);
-                self.stacks.push(low::Bullet.build(self.conversion, site));
+                self.stacks.push(low::StackVar.build(self.conversion, site));
             }
             | high::Stack::Arg(high::Cons(value, rest)) => {
                 return Step::Call {
@@ -434,7 +434,7 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     .insert_new(code, low::EntryProtocol::Continuation(protocol));
                 let environment =
                     self.conversion.captured_value_outside(&captures.sources, captures.env, site);
-                let ambient = low::Bullet.build(self.conversion, site);
+                let ambient = low::StackVar.build(self.conversion, site);
                 let residual = low::Cons(environment, ambient).build(self.conversion, site);
                 let package =
                     low::ContinuationPackage { code, residual }.build(self.conversion, site);
@@ -524,7 +524,7 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                         low::LetValue { binder, bindee: self.value(), tail: body }.into()
                     }
                     | high::Computation::LetArg(_) => low::LetArg {
-                        binder: low::Cons(binder, low::Bullet),
+                        binder: low::Cons(binder, low::StackVar),
                         bindee: self.stack(),
                         tail: body,
                     }
@@ -650,14 +650,14 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                             self.conversion.alloc_def(VarName("__continuation_code__".into()));
                         let code = code_def.build(self.conversion, None);
                         let target = code_def.build(self.conversion, site);
-                        let stack = low::Bullet.build(self.conversion, site);
+                        let stack = low::StackVar.build(self.conversion, site);
                         let argument = low::EntryArgument::Continuation { result: value };
                         let body =
                             low::Jump { target, argument, stack }.build(self.conversion, site);
                         low::OpenContinuation { package, code, body }.into()
                     }
                     | high::Computation::Join(high::LetJoin::Stack(_)) => low::LetStack {
-                        binder: low::Bullet,
+                        binder: low::StackVar,
                         bindee: self.stack(),
                         tail: self.computation(),
                     }

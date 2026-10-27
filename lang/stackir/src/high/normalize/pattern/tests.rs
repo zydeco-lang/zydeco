@@ -16,11 +16,11 @@ impl Fixture {
 
     fn normalization(mut self, binder: VPatId) -> Normalization {
         let value = Triv.build(&mut self.source, None);
-        let stack = Bullet.build(&mut self.source, None);
+        let stack = StackVar.build(&mut self.source, None);
         let tail = SReturn { stack, value }.build(&mut self.source, None);
-        let stack = Bullet.build(&mut self.source, None);
-        let root =
-            Let { binder: Cons(binder, Bullet), bindee: stack, tail }.build(&mut self.source, None);
+        let stack = StackVar.build(&mut self.source, None);
+        let root = Let { binder: Cons(binder, StackVar), bindee: stack, tail }
+            .build(&mut self.source, None);
         let program = BranchJoinProgram::try_new(SpsProgram::new(self.source, root)).unwrap();
         Normalization::new(program)
     }

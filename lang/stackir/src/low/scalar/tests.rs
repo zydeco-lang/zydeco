@@ -34,7 +34,7 @@ impl Fixture {
             operands: [sum_use, two],
         }
         .build(&mut fixture.arena, None);
-        let mut stack = Bullet.build(&mut fixture.arena, None);
+        let mut stack = StackVar.build(&mut fixture.arena, None);
         if shared {
             let value: ValueId = sum.build(&mut fixture.arena, None);
             stack = Cons(value, stack).build(&mut fixture.arena, None);
@@ -113,7 +113,7 @@ fn long_chains_split_at_the_region_bound() {
         );
     }
     let result: ValueId = definitions[39].build(&mut fixture.arena, None);
-    let ambient = Bullet.build(&mut fixture.arena, None);
+    let ambient = StackVar.build(&mut fixture.arena, None);
     let stack = Cons(result, ambient).build(&mut fixture.arena, None);
     let mut root = SHole(stack).build(&mut fixture.arena, None);
     for (&definition, &bindee) in definitions.iter().zip(&values).rev() {

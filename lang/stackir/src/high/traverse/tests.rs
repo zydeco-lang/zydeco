@@ -24,7 +24,7 @@ fn composed_variables_and_ownership_observe_shared_edges_once_without_reexpandin
     let definition: DefId = arena.admin.fresh();
     let value = Value::Var(definition).build(&mut arena, None);
     let pair = VCons::new(vec![value, value], ProductLayout { arity: 2 }).build(&mut arena, None);
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let root = SReturn { stack, value: pair }.build(&mut arena, None);
     let mut together = Together {
         first: Together { first: BranchJoinValidator::default(), second: Variables::default() },
@@ -64,7 +64,7 @@ fn bottom_up_variables_respect_lexical_bindings_and_continuation_scopes() {
     let binder = ValuePattern::Var(bound).build(&mut arena, None);
     let bindee = Value::Var(outer).build(&mut arena, None);
     let value = Value::Var(bound).build(&mut arena, None);
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let body = SReturn { stack, value }.build(&mut arena, None);
     let continuation = Kont { binder, body }.build(&mut arena, None);
     let root = SReturn { stack: continuation, value: bindee }.build(&mut arena, None);
@@ -94,7 +94,7 @@ fn cyclic_ownership_does_not_prevent_independent_repeated_edges_from_being_repor
     let shared = Triv.build(&mut arena, None);
     let pair = VCons::new(vec![cyclic, shared, shared], ProductLayout { arity: 3 })
         .build(&mut arena, None);
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let root = SReturn { stack, value: pair }.build(&mut arena, None);
     let mut analyses =
         Together { first: BranchJoinValidator::default(), second: Variables::default() };

@@ -27,7 +27,7 @@ impl Deep {
 
     fn arguments_and_tags() {
         let mut fixture = Fixture::default();
-        let mut stack = sk::Bullet.build(&mut fixture.arena, None);
+        let mut stack = sk::StackVar.build(&mut fixture.arena, None);
         for index in 0..Self::DEPTH {
             let value = fixture.integer(index as i64);
             stack = sk::Cons(value, stack).build(&mut fixture.arena, None);
@@ -66,7 +66,7 @@ impl Deep {
             value = sk::Ctor(sk::CtorIdx { idx: 0, name: "+Nested".into() }, value)
                 .build(&mut fixture.arena, None);
         }
-        let ambient = sk::Bullet.build(&mut fixture.arena, None);
+        let ambient = sk::StackVar.build(&mut fixture.arena, None);
         let stack = sk::Cons(value, ambient).build(&mut fixture.arena, None);
         let root = sk::SHole(stack).build(&mut fixture.arena, None);
         let build = fixture.lower_raw::<Explicit>(root, false, LocalUnboxing::default());
@@ -93,8 +93,8 @@ impl Deep {
         let mut fixture = Fixture::default();
         let mut root = fixture.terminal();
         for index in 0..Self::DEPTH {
-            let scrut = sk::Bullet.build(&mut fixture.arena, None);
-            let dtor = sk::Cons(sk::DtorIdx { idx: index, name: ".next".into() }, sk::Bullet);
+            let scrut = sk::StackVar.build(&mut fixture.arena, None);
+            let dtor = sk::Cons(sk::DtorIdx { idx: index, name: ".next".into() }, sk::StackVar);
             let arms = vec![sk::CoMatcher { dtor, tail: root }];
             root = sk::SCoMatch { scrut, arms }.build(&mut fixture.arena, None);
         }
@@ -115,7 +115,7 @@ impl Deep {
             let entry = sk::EntryParameters::Continuation { result, environment };
             let code = sk::Block { label, entry, body: root }.build(&mut fixture.arena, None);
             let value: sk::ValueId = sk::Triv.build(&mut fixture.arena, None);
-            let stack = sk::Bullet.build(&mut fixture.arena, None);
+            let stack = sk::StackVar.build(&mut fixture.arena, None);
             let residual = sk::Cons(value, stack).build(&mut fixture.arena, None);
             let package =
                 sk::ContinuationPackage { code, residual }.build(&mut fixture.arena, None);

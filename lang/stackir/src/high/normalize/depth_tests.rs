@@ -10,7 +10,7 @@ impl Depth {
 
     fn returning(arena: &mut SpsArena) -> CompuId {
         let value = Triv.build(arena, None);
-        let stack = Bullet.build(arena, None);
+        let stack = StackVar.build(arena, None);
         SReturn { stack, value }.build(arena, None)
     }
 
@@ -48,8 +48,8 @@ fn deep_suspended_bodies_rebuild_on_a_small_stack() {
         let mut arena = SpsArena::default();
         let mut root = Depth::returning(&mut arena);
         for _ in 0..8192 {
-            let value = Closure { stack: Bullet, body: root }.build(&mut arena, None);
-            let stack = Bullet.build(&mut arena, None);
+            let value = Closure { stack: StackVar, body: root }.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             root = SReturn { stack, value }.build(&mut arena, None);
         }
         let normalized = Depth::normalize(arena, root);
@@ -64,8 +64,8 @@ fn deep_ambient_substitutions_reduce_and_drop_on_a_small_stack() {
         let mut arena = SpsArena::default();
         let mut root = Depth::returning(&mut arena);
         for _ in 0..16384 {
-            let thunk = Closure { stack: Bullet, body: root }.build(&mut arena, None);
-            let stack = Bullet.build(&mut arena, None);
+            let thunk = Closure { stack: StackVar, body: root }.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             root = SForce { thunk, stack }.build(&mut arena, None);
         }
         let normalized = Depth::normalize(arena, root);
@@ -79,7 +79,7 @@ fn deep_ambient_substitutions_reduce_and_drop_on_a_small_stack() {
 fn deep_argument_stacks_rebuild_on_a_small_stack() {
     Depth::small_stack(|| {
         let mut arena = SpsArena::default();
-        let mut stack = Bullet.build(&mut arena, None);
+        let mut stack = StackVar.build(&mut arena, None);
         for _ in 0..16384 {
             let value: ValueId = Triv.build(&mut arena, None);
             stack = Cons(value, stack).build(&mut arena, None);
@@ -103,11 +103,11 @@ fn deep_alias_parameters_preserve_bindings_on_a_small_stack() {
             binder = Alias(ConsN::from_vec(vec![binder, hole]).unwrap()).build(&mut arena, None);
         }
         let value = def.build(&mut arena, None);
-        let stack = Bullet.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
         let tail = SReturn { stack, value }.build(&mut arena, None);
-        let stack = Bullet.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
         let root =
-            Let { binder: Cons(binder, Bullet), bindee: stack, tail }.build(&mut arena, None);
+            Let { binder: Cons(binder, StackVar), bindee: stack, tail }.build(&mut arena, None);
         let normalized = Depth::normalize(arena, root);
         assert_eq!(normalized.arena().inner.vpats.len(), 16385);
         assert!(normalized.root().free_vars(normalized.arena()).is_empty());
@@ -134,13 +134,13 @@ fn deep_unknown_branches_join_sibling_demands_on_a_small_stack() {
                 .collect();
             let scrut = scrutinee.build(&mut arena, None);
             let tail = SCoprodMatch { scrut, arms }.build(&mut arena, None);
-            let stack = Bullet.build(&mut arena, None);
-            root = Let { binder: Bullet, bindee: stack, tail }.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
+            root = Let { binder: StackVar, bindee: stack, tail }.build(&mut arena, None);
         }
         let binder: VPatId = scrutinee.build(&mut arena, None);
-        let stack = Bullet.build(&mut arena, None);
-        let root =
-            Let { binder: Cons(binder, Bullet), bindee: stack, tail: root }.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
+        let root = Let { binder: Cons(binder, StackVar), bindee: stack, tail: root }
+            .build(&mut arena, None);
         let normalized = Depth::normalize(arena, root);
         assert_eq!(normalized.arena().inner.compus.len(), 2048 * 3 + 2);
         assert!(normalized.root().free_vars(normalized.arena()).is_empty());

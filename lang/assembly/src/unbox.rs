@@ -348,7 +348,7 @@ mod tests {
         }
 
         fn terminal(arena: &mut sk::SpsLowArena) -> sk::CompuId {
-            let stack = sk::Bullet.build(arena, None);
+            let stack = sk::StackVar.build(arena, None);
             sk::SHole(stack).build(arena, None)
         }
 
@@ -358,7 +358,7 @@ mod tests {
             let bindee = Self::product(&mut arena);
             let scrut = variable.build(&mut arena, None);
             let tail = if escape {
-                let ambient = sk::Bullet.build(&mut arena, None);
+                let ambient = sk::StackVar.build(&mut arena, None);
                 let stack = sk::Cons(scrut, ambient).build(&mut arena, None);
                 sk::SHole(stack).build(&mut arena, None)
             } else {
@@ -401,7 +401,7 @@ mod tests {
                         .build(&mut arena, None)
                 }
                 | ClosureUse::EntryEnvironment | ClosureUse::EntryResult => {
-                    let stack = sk::Bullet.build(&mut arena, None);
+                    let stack = sk::StackVar.build(&mut arena, None);
                     let (kind, argument, stack) = match usage {
                         | ClosureUse::EntryEnvironment => (
                             sk::EntryKind::Closure,
@@ -422,7 +422,7 @@ mod tests {
                     sk::Jump { target, argument, stack }.build(&mut arena, None)
                 }
                 | ClosureUse::Argument | ClosureUse::Continuation => {
-                    let stack = sk::Bullet.build(&mut arena, None);
+                    let stack = sk::StackVar.build(&mut arena, None);
                     let residual = sk::Cons(value, stack).build(&mut arena, None);
                     let stack = if matches!(usage, ClosureUse::Continuation) {
                         let code = Self::block(&mut arena, sk::EntryKind::Continuation);
@@ -620,7 +620,7 @@ mod tests {
         let pattern: sk::VPatId =
             sk::VCons::new(vec![pattern_a, pattern_b], layout).build(&mut arena, None);
 
-        let stack: sk::StackId = sk::Bullet.build(&mut arena, None);
+        let stack: sk::StackId = sk::StackVar.build(&mut arena, None);
         let body: sk::CompuId = sk::SHole(stack).build(&mut arena, None);
         let root: sk::CompuId =
             sk::LetValue { binder: pattern, bindee: value, tail: body }.build(&mut arena, None);
@@ -643,7 +643,7 @@ mod tests {
         let value: sk::ValueId = sk::VCons::new(items, layout).build(&mut arena, None);
 
         let binder: sk::VPatId = sk::Hole.build(&mut arena, None);
-        let stack: sk::StackId = sk::Bullet.build(&mut arena, None);
+        let stack: sk::StackId = sk::StackVar.build(&mut arena, None);
         let body: sk::CompuId = sk::SHole(stack).build(&mut arena, None);
         let root: sk::CompuId =
             sk::LetValue { binder, bindee: value, tail: body }.build(&mut arena, None);
@@ -698,7 +698,7 @@ mod tests {
         let label = Fixture::definition(&mut arena);
         let target = label.build(&mut arena, None);
         let environment = sk::Triv.build(&mut arena, None);
-        let stack = sk::Bullet.build(&mut arena, None);
+        let stack = sk::StackVar.build(&mut arena, None);
         let body = sk::Jump { target, argument: sk::EntryArgument::Closure { environment }, stack }
             .build(&mut arena, None);
         let entry = sk::EntryParameters::Closure { environment: sk::Hole.build(&mut arena, None) };
@@ -762,7 +762,7 @@ mod tests {
                     )
                     .build(&mut arena, None);
                 }
-                let ambient = sk::Bullet.build(&mut arena, None);
+                let ambient = sk::StackVar.build(&mut arena, None);
                 let stack = sk::Cons(value, ambient).build(&mut arena, None);
                 let root = sk::SHole(stack).build(&mut arena, None);
                 // Isolate this semantic view from the separate entry and protocol validators.

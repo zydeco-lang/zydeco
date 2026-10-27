@@ -96,8 +96,8 @@ impl ValueBinding {
             assert_eq!(ctor.idx, 0, "an irrefutable constructor binder must have tag zero");
             let tail = SCoprodMatch { scrut: bindee, arms: vec![Matcher { binder, tail }] }
                 .build(lo, site);
-            let bindee = Bullet.build(lo, site);
-            Let { binder: Bullet, bindee, tail }.build(lo, site)
+            let bindee = StackVar.build(lo, site);
+            Let { binder: StackVar, bindee, tail }.build(lo, site)
         } else {
             Let { binder, bindee, tail }.build(lo, site)
         }
@@ -328,7 +328,7 @@ impl RootLowerer<'_> {
     ) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
         let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
         let root = self.statics.execution_compu(root);
-        let mut stack = Bullet.build(&mut lowerer, None);
+        let mut stack = StackVar.build(&mut lowerer, None);
         if let Some(plan) = builtin {
             let package = D::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, plan.value);
             stack = Cons(package, stack).build(&mut lowerer, None);

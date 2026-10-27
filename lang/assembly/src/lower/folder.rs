@@ -68,7 +68,7 @@ pub(super) enum Continuation {
     Sequence { sequence: Sequence, next: ContId },
     CoprodMatch(Vec<Matcher<sk::VPatId, sk::CompuId>>),
     Compare { operation: ComparisonOp, when_true: sk::CompuId, when_false: sk::CompuId },
-    CoCase(Vec<CoMatcher<Cons<sk::DtorIdx, sk::Bullet>, sk::CompuId>>),
+    CoCase(Vec<CoMatcher<Cons<sk::DtorIdx, sk::StackVar>, sk::CompuId>>),
 }
 
 struct PendingInstruction {
@@ -81,7 +81,7 @@ struct PendingInstruction {
 
 enum BranchArms {
     Coproduct(IntoIter<Matcher<sk::VPatId, sk::CompuId>>),
-    Codata(IntoIter<CoMatcher<Cons<sk::DtorIdx, sk::Bullet>, sk::CompuId>>),
+    Codata(IntoIter<CoMatcher<Cons<sk::DtorIdx, sk::StackVar>, sk::CompuId>>),
 }
 
 pub(super) struct Branches {
@@ -241,7 +241,7 @@ impl<'lo, 'ir> Lowering<'lo, 'ir> {
                 (tag, Work::Pattern(binder, branches.context.clone(), next))
             }),
             | BranchArms::Codata(arms) => {
-                arms.next().map(|CoMatcher { dtor: Cons(dtor, sk::Bullet), tail }| {
+                arms.next().map(|CoMatcher { dtor: Cons(dtor, sk::StackVar), tail }| {
                     let tag = Tag { idx: dtor.idx, name: Some(dtor.name.plain().to_owned()) };
                     (tag, Work::Compu(tail, branches.context.clone()))
                 })

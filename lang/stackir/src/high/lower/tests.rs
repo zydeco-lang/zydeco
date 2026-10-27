@@ -333,7 +333,7 @@ fn deeply_nested_builtin_products_lower_on_a_small_stack() {
         let statics = StaticsArena::default();
         let mut lowerer = Lowerer::new(&spans, &scoped, &statics);
         let value = Explicit::run(&mut BuiltinPackageFolder { lowerer: &mut lowerer }, value);
-        let stack = Bullet.build(&mut lowerer, None);
+        let stack = StackVar.build(&mut lowerer, None);
         let root = SReturn { stack, value }.build(&mut lowerer, None);
         let program = lowerer.finish(root).unwrap();
         assert_eq!(program.as_program().arena().inner.values.len(), 16385);

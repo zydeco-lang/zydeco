@@ -182,7 +182,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Stack {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Bullet {
+impl<'a> Pretty<'a, Formatter<'a>> for StackVar {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("•")
     }
@@ -324,7 +324,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
             ]),
             | Computation::LetArg(Let { binder, bindee, tail }) => {
-                let Cons(param, Bullet) = binder;
+                let Cons(param, StackVar) = binder;
                 RcDoc::concat([
                     RcDoc::text("let"),
                     RcDoc::space(),
@@ -334,7 +334,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                     RcDoc::space(),
                     RcDoc::text("::"),
                     RcDoc::space(),
-                    Bullet.pretty(f),
+                    StackVar.pretty(f),
                     RcDoc::space(),
                     RcDoc::text("="),
                     RcDoc::concat([
@@ -353,7 +353,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                     RcDoc::space(),
                     scrut.pretty(f),
                     RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
-                        let Cons(dtor, Bullet) = dtor;
+                        let Cons(dtor, StackVar) = dtor;
                         RcDoc::concat([
                             RcDoc::line(),
                             RcDoc::text("|"),

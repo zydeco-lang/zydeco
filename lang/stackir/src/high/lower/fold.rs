@@ -349,13 +349,13 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
     fn visit_value(&mut self, source: ss::ValueId) -> Step<Self> {
         let site = Some(ss::TermId::Value(source));
         if let Some(import) = self.lo.statics.foreign_imports.get(&source).cloned() {
-            let stack = Bullet.build(self.lo, site);
+            let stack = StackVar.build(self.lo, site);
             let function = match import {
                 | CheckedImport::C(import) => ExternalFunction::Foreign(import),
                 | CheckedImport::Zydeco(import) => ExternalFunction::Unit(import),
             };
             let body = ExternCall { function, stack }.build(self.lo, site);
-            let value = Closure { stack: Bullet, body }.build(self.lo, site);
+            let value = Closure { stack: StackVar, body }.build(self.lo, site);
             let protocol = self.lo.protocols.value(self.lo.statics.annotations_value[&source]);
             self.lo.arena.inner.value_protocols.insert_new(value, protocol);
             self.values.push(ValuePlan::pure(value));
@@ -372,7 +372,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 Step::Call { input: Work::Value(*bindee), frame: Work::ValueLetTail(source) }
             }
             | ss::Value::Thunk(Thunk(body)) => {
-                let stack = Bullet.build(self.lo, site);
+                let stack = StackVar.build(self.lo, site);
                 Step::Call {
                     input: Work::Computation(*body, stack),
                     frame: Work::FinishValue(source),
@@ -415,7 +415,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             }
             | ss::Value::Thunk(_) => {
                 let body = self.computation();
-                ValuePlan::pure(Closure { stack: Bullet, body }.build(self.lo, site))
+                ValuePlan::pure(Closure { stack: StackVar, body }.build(self.lo, site))
             }
             | ss::Value::Ctor(Ctor(name, _)) => {
                 let data = self.lo.statics.data_hints[&source];
@@ -454,7 +454,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         match self.lo.statics.compus[&source].clone() {
             | ss::Computation::Hole(_) => self.computations.push(SHole(stack).build(self.lo, site)),
             | ss::Computation::VAbs(Abs(param, body)) => {
-                let body_stack = Bullet.build(self.lo, site);
+                let body_stack = StackVar.build(self.lo, site);
                 return Step::Call {
                     input: Work::BinderBody {
                         binder: param,
@@ -484,7 +484,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                         panic!("Fix param must be a variable, found:\n{}", param.ugly(&fmt));
                     }
                 };
-                let body_stack = Bullet.build(self.lo, site);
+                let body_stack = StackVar.build(self.lo, site);
                 return Step::Call {
                     input: Work::Computation(body, body_stack),
                     frame: Work::Fix { source, param, stack },
@@ -622,7 +622,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                 // Bind remaining rows once; unmatched tags and rejected payloads
                 // resume that closure with their own ambient branch stack.
                 let continuation = self.lo.alloc_admin_def("__match_fallback__");
-                let failure_stack = Bullet.build(self.lo, site);
+                let failure_stack = StackVar.build(self.lo, site);
                 Step::Call {
                     input: Work::MatchPlan { plan: failure, stack: failure_stack, site },
                     frame: Work::ConstructorFallback {
@@ -648,7 +648,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     zydeco_syntax::IntegerOperation::Eq,
                 );
                 let operator = ExternalFunction::Host(role).make_function(self.lo);
-                let success_stack = Bullet.build(self.lo, site);
+                let success_stack = StackVar.build(self.lo, site);
                 Step::Call {
                     input: Work::MatchPlan { plan: success, stack: success_stack, site },
                     frame: Work::LiteralSuccess {
@@ -793,7 +793,7 @@ impl Folder for LoweringFolder<'_, '_> {
                 self.computations.push(binding.bind(self.lo, tail));
             }
             | Work::Abstraction { stack, site } => {
-                let binder = Cons(self.pattern(), Bullet);
+                let binder = Cons(self.pattern(), StackVar);
                 let tail = self.computation();
                 self.computations.push(Let { binder, bindee: stack, tail }.build(self.lo, site));
             }
@@ -914,18 +914,18 @@ impl Folder for LoweringFolder<'_, '_> {
                 };
             }
             | Work::MatchArmBody { tail, site } => {
-                let stack = Bullet.build(self.lo, site);
+                let stack = StackVar.build(self.lo, site);
                 return Step::TailCall(Work::Computation(tail, stack));
             }
             | Work::CoproductMatch { scrut, count, stack, site } => {
                 let arms = self.match_arms(count);
                 let tail = SCoprodMatch { scrut, arms }.build(self.lo, site);
                 self.computations
-                    .push(Let { binder: Bullet, bindee: stack, tail }.build(self.lo, site));
+                    .push(Let { binder: StackVar, bindee: stack, tail }.build(self.lo, site));
             }
             | Work::CoMatchArm { codata, name, tail, site } => {
                 self.tags.push(self.lo.protocols.tag(codata, name));
-                let stack = Bullet.build(self.lo, site);
+                let stack = StackVar.build(self.lo, site);
                 return Step::TailCall(Work::Computation(tail, stack));
             }
             | Work::CoMatch { source, count, stack } => {
@@ -934,7 +934,7 @@ impl Folder for LoweringFolder<'_, '_> {
                 let arms = tags
                     .into_iter()
                     .zip(tails)
-                    .map(|(tag, tail)| CoMatcher { dtor: Cons(tag, Bullet), tail })
+                    .map(|(tag, tail)| CoMatcher { dtor: Cons(tag, StackVar), tail })
                     .collect();
                 let case = SCoMatch { scrut: stack, arms }.build(self.lo, Some(source.into()));
                 let protocol = self.lo.protocols.codata(self.lo.statics.codata_hints[&source]);
@@ -955,7 +955,7 @@ impl Folder for LoweringFolder<'_, '_> {
                 site,
             } => {
                 let body = self.computation();
-                let fallback = Closure { stack: Bullet, body }.build(self.lo, site);
+                let fallback = Closure { stack: StackVar, body }.build(self.lo, site);
                 let failure = self.plan(MatchPlan::Continue(continuation));
                 let ss::ValuePattern::Ctor(Ctor(name, argument)) =
                     self.lo.statics.vpats[&pattern].clone()
@@ -985,7 +985,7 @@ impl Folder for LoweringFolder<'_, '_> {
                 });
             }
             | Work::ConstructorArm { tag, payload, failure, site } => {
-                let stack = Bullet.build(self.lo, site);
+                let stack = StackVar.build(self.lo, site);
                 let (binder, plan) = if let Some((pattern, success)) = payload {
                     let scrutinee = self.lo.alloc_admin_def("__match_payload__");
                     let binder = scrutinee.build(self.lo, None);
@@ -1009,14 +1009,14 @@ impl Folder for LoweringFolder<'_, '_> {
                 let arms = self.match_arms(count);
                 let scrut = scrutinee.build(self.lo, site);
                 let body = SCoprodMatch { scrut, arms }.build(self.lo, site);
-                let tail = Let { binder: Bullet, bindee: stack, tail: body }.build(self.lo, site);
+                let tail = Let { binder: StackVar, bindee: stack, tail: body }.build(self.lo, site);
                 let binder = continuation.build(self.lo, None);
                 self.computations.push(Let { binder, bindee: fallback, tail }.build(self.lo, site));
             }
             | Work::LiteralSuccess { scrutinee, integer, operator, failure, stack, site } => {
                 let body = self.computation();
-                let then = Closure { stack: Bullet, body }.build(self.lo, site);
-                let failure_stack = Bullet.build(self.lo, site);
+                let then = Closure { stack: StackVar, body }.build(self.lo, site);
+                let failure_stack = StackVar.build(self.lo, site);
                 return Step::Call {
                     input: Work::MatchPlan { plan: failure, stack: failure_stack, site },
                     frame: Work::LiteralFailure { scrutinee, integer, operator, then, stack, site },
@@ -1024,7 +1024,7 @@ impl Folder for LoweringFolder<'_, '_> {
             }
             | Work::LiteralFailure { scrutinee, integer, operator, then, stack, site } => {
                 let body = self.computation();
-                let otherwise = Closure { stack: Bullet, body }.build(self.lo, site);
+                let otherwise = Closure { stack: StackVar, body }.build(self.lo, site);
                 let scrut: ValueId = scrutinee.build(self.lo, site);
                 let literal: ValueId =
                     zydeco_syntax::Literal::Integer(integer).build(self.lo, site);

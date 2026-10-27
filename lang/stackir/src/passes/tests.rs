@@ -15,7 +15,7 @@ impl Fixture {
         } else {
             Triv.build(&mut arena, None)
         };
-        let stack = Bullet.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
         let root = SReturn { value, stack }.build(&mut arena, None);
         BranchJoinProgram::try_new(SpsProgram::new(arena, root)).unwrap()
     }

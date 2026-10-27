@@ -239,7 +239,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
             | Value::Closure(Closure { body, .. }) => {
                 if let Computation::Force(SForce { thunk, stack }) =
                     self.norm.source.inner.compus[&body]
-                    && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(Bullet))
+                    && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(StackVar))
                     && matches!(self.norm.source.inner.values[&thunk], Value::Var(_))
                 {
                     return Step::TailCall(Work::Value(thunk, env, demand));
@@ -306,10 +306,10 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     fn visit_stack(&mut self, stack: ScopedStack) -> Step<Self> {
         let ScopedStack { node: id, scope } = self.norm.resolve_stack(stack);
         match self.norm.source.inner.stacks[&id].clone() {
-            | Stack::Var(bullet) => {
+            | Stack::Var(stack_var) => {
                 let site = self.norm.source.admin.terms.back(&TermId::Stack(id)).copied();
                 self.stacks.push(Residual {
-                    node: bullet.build(self.norm, site),
+                    node: stack_var.build(self.norm, site),
                     demands: Demands::default(),
                 });
             }
@@ -330,7 +330,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     && let Computation::Ret(SReturn { value, stack }) =
                         self.norm.source.inner.compus[&body]
                     && matches!(self.norm.source.inner.values[&value], Value::Var(returned) if returned == def)
-                    && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(Bullet))
+                    && matches!(self.norm.source.inner.stacks[&stack], Stack::Var(StackVar))
                 {
                     return Step::TailCall(Work::Stack(ScopedStack { node: stack, scope }));
                 }
@@ -439,7 +439,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
             | Computation::Compare(_) | Computation::CoprodMatch(_) => {
                 unreachable!("branches are handled with their stack join")
             }
-            | Computation::LetArg(Let { binder: Cons(binder, Bullet), bindee, tail }) => {
+            | Computation::LetArg(Let { binder: Cons(binder, StackVar), bindee, tail }) => {
                 let stack =
                     self.norm.resolve_stack(ScopedStack { node: bindee, scope: scope.clone() });
                 if let Stack::Arg(Cons(value, rest)) = self.norm.source.inner.stacks[&stack.node]
@@ -912,10 +912,10 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         stack.demands.join(value.demands),
                     );
                 }
-                | Computation::LetArg(Let { binder: Cons(binder, Bullet), .. }) => {
+                | Computation::LetArg(Let { binder: Cons(binder, StackVar), .. }) => {
                     let tail = self.computation();
                     let bindee = self.stack();
-                    let binder = Cons(self.norm.pattern::<D>(binder), Bullet);
+                    let binder = Cons(self.norm.pattern::<D>(binder), StackVar);
                     self.finish_computation(
                         id,
                         Let { binder, bindee: bindee.node, tail: tail.node },
@@ -1060,7 +1060,8 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             }
             | Work::BranchStack { tail, demands, site } => {
                 let stack = self.stack();
-                let node = Let { binder: Bullet, bindee: stack.node, tail }.build(self.norm, site);
+                let node =
+                    Let { binder: StackVar, bindee: stack.node, tail }.build(self.norm, site);
                 self.computations.push(Residual { node, demands: demands.join(stack.demands) });
             }
             | Work::PrimitiveValue { operation, operands, site } => {
@@ -1119,14 +1120,14 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 });
                 let operands = defs.map(|def| def.build(self.norm, site));
                 let value = Primitive { operation, operands }.build(self.norm, site);
-                let ambient = Bullet.build(self.norm, site);
+                let ambient = StackVar.build(self.norm, site);
                 let tail = SReturn { stack: ambient, value }.build(self.norm, site);
                 let second = defs[1].build(self.norm, None);
-                let ambient = Bullet.build(self.norm, site);
-                let tail = Let { binder: Cons(second, Bullet), bindee: ambient, tail }
+                let ambient = StackVar.build(self.norm, site);
+                let tail = Let { binder: Cons(second, StackVar), bindee: ambient, tail }
                     .build(self.norm, site);
                 let first = defs[0].build(self.norm, None);
-                let node = Let { binder: Cons(first, Bullet), bindee: stack.node, tail }
+                let node = Let { binder: Cons(first, StackVar), bindee: stack.node, tail }
                     .build(self.norm, site);
                 self.computations.push(Residual { node, demands: stack.demands });
             }

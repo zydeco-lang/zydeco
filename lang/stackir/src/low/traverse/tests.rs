@@ -109,7 +109,7 @@ fn summaries_respect_block_entries_and_opening_scopes() {
     let fields = [environment, result, label, opened].map(|def| def.build(&mut arena, None));
     let argument = VCons::new(fields.into(), ProductLayout { arity: 4 }).build(&mut arena, None);
     let target = code.build(&mut arena, None);
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let tail = Jump { target, argument: EntryArgument::Continuation { result: argument }, stack }
         .build(&mut arena, None);
     let package = outer.build(&mut arena, None);
@@ -126,7 +126,7 @@ fn summaries_respect_block_entries_and_opening_scopes() {
         body,
     }
     .build(&mut arena, None);
-    let ambient = Bullet.build(&mut arena, None);
+    let ambient = StackVar.build(&mut arena, None);
     let stack = Cons(block, ambient).build(&mut arena, None);
     let tail = SHole(stack).build(&mut arena, None);
     let binder = outer.build(&mut arena, None);
@@ -162,12 +162,12 @@ fn entry_word_order_excludes_continuation_metadata_edges() {
     let label = arena.admin.fresh_def();
     let result = Hole.build(&mut arena, None);
     let environment = Triv.build(&mut arena, None);
-    let body_stack = Bullet.build(&mut arena, None);
+    let body_stack = StackVar.build(&mut arena, None);
     let body = SHole(body_stack).build(&mut arena, None);
     let code = Block { label, entry: EntryParameters::Continuation { result, environment }, body }
         .build(&mut arena, None);
     let value: ValueId = Triv.build(&mut arena, None);
-    let ambient = Bullet.build(&mut arena, None);
+    let ambient = StackVar.build(&mut arena, None);
     let residual = Cons(value, ambient).build(&mut arena, None);
     let package = ContinuationPackage { code, residual }.build(&mut arena, None);
     arena
@@ -228,7 +228,7 @@ fn deep_mixed_syntax_and_summaries_drop_on_a_small_stack() {
         .stack_size(512 * 1024)
         .spawn(|| {
             let mut arena = SpsLowArena::default();
-            let stack = Bullet.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             let mut root = SHole(stack).build(&mut arena, None);
             for _ in 0..16_384 {
                 let bindee = Triv.build(&mut arena, None);

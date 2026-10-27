@@ -96,9 +96,9 @@ pub enum MemoryStep<V, Pat, C> {
 
 /* ---------------------------------- Stack --------------------------------- */
 
-/// The one and only stack variable.
+/// The one and only stack variable, printed as `•`.
 #[derive(From, Clone, Debug)]
-pub struct Bullet;
+pub struct StackVar;
 
 /* ------------------------------- Computation ------------------------------ */
 

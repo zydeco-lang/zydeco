@@ -17,11 +17,12 @@ impl Fixture {
     }
 
     fn program(mut self, binder: high::VPatId) -> BranchJoinProgram {
-        let stack = Bullet.build(&mut self.arena, None);
+        let stack = StackVar.build(&mut self.arena, None);
         let value = Triv.build(&mut self.arena, None);
         let tail = SReturn { stack, value }.build(&mut self.arena, None);
-        let bindee = Bullet.build(&mut self.arena, None);
-        let root = Let { binder: Cons(binder, Bullet), bindee, tail }.build(&mut self.arena, None);
+        let bindee = StackVar.build(&mut self.arena, None);
+        let root =
+            Let { binder: Cons(binder, StackVar), bindee, tail }.build(&mut self.arena, None);
         BranchJoinProgram::try_new(SpsProgram::new(self.arena, root)).unwrap()
     }
 }

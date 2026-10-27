@@ -77,7 +77,7 @@ fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers(
         let second = Drivers::integer(&mut arena, 2);
         let [when_true, when_false] = [11, 22].map(|result| {
             let value = Drivers::integer(&mut arena, result);
-            let stack = Bullet.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             SReturn { stack, value }.build(&mut arena, None)
         });
         let tail = CompareBranch {
@@ -87,12 +87,12 @@ fn drivers_fold_comparisons_and_preserve_unknown_operands_and_movement_barriers(
             when_false,
         }
         .build(&mut arena, None);
-        let mut bindee = Bullet.build(&mut arena, None);
+        let mut bindee = StackVar.build(&mut arena, None);
         if matches!(case, Case::StackTrap) {
             let value = Drivers::trap(&mut arena);
             bindee = Cons(value, bindee).build(&mut arena, None);
         }
-        let root = Let { binder: Bullet, bindee, tail }.build(&mut arena, None);
+        let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
         let output = Drivers::normalize(&arena, root);
         let inner = &output.arena().inner;
         match case {
@@ -205,13 +205,13 @@ fn drivers_preserve_reconstruction_sites_and_protocols() {
     arena.inner.pattern_protocols.insert_new(binder, ValueProtocol::Unit);
     let value = parameter.build(&mut arena, Some(value_site));
     arena.inner.value_protocols.insert_new(value, ValueProtocol::Unit);
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let tail = SReturn { stack, value }.build(&mut arena, None);
-    let stack = Bullet.build(&mut arena, None);
-    let body = Let { binder: Cons(binder, Bullet), bindee: stack, tail }.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
+    let body = Let { binder: Cons(binder, StackVar), bindee: stack, tail }.build(&mut arena, None);
     let param: DefId = arena.admin.fresh();
     arena.admin.insert_def(param, VarName("recursive".into()));
-    let stack = Bullet.build(&mut arena, None);
+    let stack = StackVar.build(&mut arena, None);
     let root = SFix { param, stack, body }.build(&mut arena, Some(computation_site));
     let protocol = StackProtocol::Argument(
         Box::new(ValueProtocol::Unit),
@@ -248,7 +248,7 @@ fn drivers_preserve_empty_and_wide_child_sequences() {
                     let items = (0..count).map(|_| Triv.build(&mut arena, None)).collect();
                     let value = VCons::new(items, ProductLayout { arity: count.max(1) })
                         .build(&mut arena, None);
-                    let stack = Bullet.build(&mut arena, None);
+                    let stack = StackVar.build(&mut arena, None);
                     let root = SReturn { stack, value }.build(&mut arena, None);
                     (root, [0, count + 1, 1, 1])
                 }
@@ -256,13 +256,13 @@ fn drivers_preserve_empty_and_wide_child_sequences() {
                     let arms = (0..count)
                         .map(|idx| {
                             let value = Triv.build(&mut arena, None);
-                            let stack = Bullet.build(&mut arena, None);
+                            let stack = StackVar.build(&mut arena, None);
                             let tail = SReturn { stack, value }.build(&mut arena, None);
                             let tag = DtorIdx { idx, name: DtorName(format!("arm{idx}")) };
-                            CoMatcher { dtor: Cons(tag, Bullet), tail }
+                            CoMatcher { dtor: Cons(tag, StackVar), tail }
                         })
                         .collect();
-                    let scrut = Bullet.build(&mut arena, None);
+                    let scrut = StackVar.build(&mut arena, None);
                     let root = SCoMatch { scrut, arms }.build(&mut arena, None);
                     (root, [0, count, count + 1, count + 1])
                 }
@@ -270,7 +270,7 @@ fn drivers_preserve_empty_and_wide_child_sequences() {
                     let arms = (0..count)
                         .map(|idx| {
                             let value = Triv.build(&mut arena, None);
-                            let stack = Bullet.build(&mut arena, None);
+                            let stack = StackVar.build(&mut arena, None);
                             let tail = SReturn { stack, value }.build(&mut arena, None);
                             let payload: VPatId = Hole.build(&mut arena, None);
                             let tag = CtorIdx { idx, name: CtorName(format!("+Arm{idx}")) };
@@ -280,8 +280,8 @@ fn drivers_preserve_empty_and_wide_child_sequences() {
                         .collect();
                     let scrut = Hole.build(&mut arena, None);
                     let tail = SCoprodMatch { scrut, arms }.build(&mut arena, None);
-                    let bindee = Bullet.build(&mut arena, None);
-                    let root = Let { binder: Bullet, bindee, tail }.build(&mut arena, None);
+                    let bindee = StackVar.build(&mut arena, None);
+                    let root = Let { binder: StackVar, bindee, tail }.build(&mut arena, None);
                     (root, [count * 2, count + 1, count + 1, count + 2])
                 }
             };

@@ -262,11 +262,11 @@ mod tests {
         let mut fixture = Fixture::new();
         let captured = fixture.def("captured");
         let captured_use: high::ValueId = fixture.build(captured);
-        let closure_stack = fixture.build(high::Bullet);
+        let closure_stack = fixture.build(high::StackVar);
         let closure_body =
             fixture.build(high::SReturn { stack: closure_stack, value: captured_use });
-        let closure = fixture.build(high::Closure { stack: high::Bullet, body: closure_body });
-        let call_stack = fixture.build(high::Bullet);
+        let closure = fixture.build(high::Closure { stack: high::StackVar, body: closure_body });
+        let call_stack = fixture.build(high::StackVar);
         let call = fixture.build(high::SForce { thunk: closure, stack: call_stack });
         let binder: high::VPatId = fixture.build(captured);
         let bindee = fixture.build(high::Triv);
@@ -312,7 +312,7 @@ mod tests {
         let returned = fixture.def("returned");
         let binder: high::VPatId = fixture.build(returned);
         let returned_value: high::ValueId = fixture.build(returned);
-        let body_stack = fixture.build(high::Bullet);
+        let body_stack = fixture.build(high::StackVar);
         let body = fixture.build(high::SReturn { stack: body_stack, value: returned_value });
         let continuation = fixture.build(high::Kont { binder, body });
         let value = fixture.build(high::Triv);
@@ -354,9 +354,9 @@ mod tests {
         let mut fixture = Fixture::new();
         let recursive = fixture.def("recursive");
         let recursive_value: high::ValueId = fixture.build(recursive);
-        let body_stack = fixture.build(high::Bullet);
+        let body_stack = fixture.build(high::StackVar);
         let body = fixture.build(high::SForce { thunk: recursive_value, stack: body_stack });
-        let root_stack = fixture.build(high::Bullet);
+        let root_stack = fixture.build(high::StackVar);
         let root = fixture.build(high::SFix { param: recursive, stack: root_stack, body });
 
         let program = fixture.convert(root);

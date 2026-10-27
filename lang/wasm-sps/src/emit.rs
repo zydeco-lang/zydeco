@@ -651,7 +651,7 @@ impl<'a> CaseEncoder<'a> {
                     id = body;
                 }
                 | Computation::LetStack(sps::LetStack {
-                    binder: sps::Bullet,
+                    binder: sps::StackVar,
                     bindee,
                     tail: body,
                 }) => {
@@ -660,7 +660,7 @@ impl<'a> CaseEncoder<'a> {
                     id = body;
                 }
                 | Computation::LetArg(sps::LetArg {
-                    binder: sps::Cons(binder, sps::Bullet),
+                    binder: sps::Cons(binder, sps::StackVar),
                     bindee,
                     tail: body,
                 }) => {
@@ -677,7 +677,7 @@ impl<'a> CaseEncoder<'a> {
                         .instruction(&WasmInstruction::LocalSet(self.plan.locals.scratch_word));
                     self.load_local_word(self.plan.locals.scratch_stack, 1);
                     self.function.instruction(&WasmInstruction::LocalSet(0));
-                    for sps::CoMatcher { dtor: sps::Cons(dtor, sps::Bullet), tail } in arms {
+                    for sps::CoMatcher { dtor: sps::Cons(dtor, sps::StackVar), tail } in arms {
                         self.function
                             .instruction(&WasmInstruction::LocalGet(self.plan.locals.scratch_word));
                         self.function
@@ -906,7 +906,7 @@ impl<'a> CaseEncoder<'a> {
     fn emit_stack(&mut self, id: StackId) -> Result<(), EmitError> {
         let target = self.plan.locals.stack(id)?;
         match self.arena.inner.stacks[&id].clone() {
-            | sps::Stack::Var(sps::Bullet) => {
+            | sps::Stack::Var(sps::StackVar) => {
                 self.function.instruction(&WasmInstruction::LocalGet(0));
             }
             | sps::Stack::Arg(sps::Cons(value, stack)) => {
@@ -1138,7 +1138,7 @@ mod tests {
         }
 
         fn hole(&mut self) -> CompuId {
-            let stack = sps::Bullet.build(&mut self.arena, None);
+            let stack = sps::StackVar.build(&mut self.arena, None);
             sps::SHole(stack).build(&mut self.arena, None)
         }
 

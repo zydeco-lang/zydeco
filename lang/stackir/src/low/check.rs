@@ -104,7 +104,7 @@ impl ContinuationEntry {
             return false;
         }
         let Stack::Arg(Cons(value, ambient)) = arena.stacks[residual] else { return false };
-        if !matches!(arena.stacks[&ambient], Stack::Var(Bullet)) {
+        if !matches!(arena.stacks[&ambient], Stack::Var(StackVar)) {
             return false;
         }
         let (values, patterns) = match (&arena.values[&value], &arena.vpats[&environment]) {
@@ -247,7 +247,7 @@ mod tests {
         let mut arena = SpsLowArena::default();
         let shared = Triv.build(&mut arena, None);
         let package = ClosurePackage { environment: shared, code: shared }.build(&mut arena, None);
-        let stack = Bullet.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
         let root = Jump { argument: Fixture::argument(&mut arena), target: package, stack }
             .build(&mut arena, None);
 
@@ -263,7 +263,7 @@ mod tests {
         let label = arena.admin.fresh_def();
         let captured = arena.admin.fresh_def();
         let captured_value: ValueId = captured.build(&mut arena, None);
-        let body_stack = Bullet.build(&mut arena, None);
+        let body_stack = StackVar.build(&mut arena, None);
         let body = Jump {
             argument: Fixture::argument(&mut arena),
             target: captured_value,
@@ -272,7 +272,7 @@ mod tests {
         .build(&mut arena, None);
         let block =
             Block { entry: Fixture::entry(&mut arena), label, body }.build(&mut arena, None);
-        let root_stack = Bullet.build(&mut arena, None);
+        let root_stack = StackVar.build(&mut arena, None);
         let root =
             Jump { argument: Fixture::argument(&mut arena), target: block, stack: root_stack }
                 .build(&mut arena, None);
@@ -288,7 +288,7 @@ mod tests {
         let mut arena = SpsLowArena::default();
         let free = arena.admin.fresh_def();
         let target: ValueId = free.build(&mut arena, None);
-        let stack = Bullet.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
         let root =
             Jump { argument: Fixture::argument(&mut arena), target, stack }.build(&mut arena, None);
 
@@ -304,7 +304,7 @@ mod tests {
         let label = arena.admin.fresh_def();
 
         let first_target: ValueId = label.build(&mut arena, None);
-        let first_stack = Bullet.build(&mut arena, None);
+        let first_stack = StackVar.build(&mut arena, None);
         let first_body = Jump {
             argument: Fixture::argument(&mut arena),
             target: first_target,
@@ -315,7 +315,7 @@ mod tests {
             .build(&mut arena, None);
 
         let second_target: ValueId = label.build(&mut arena, None);
-        let second_stack = Bullet.build(&mut arena, None);
+        let second_stack = StackVar.build(&mut arena, None);
         let second_body = Jump {
             argument: Fixture::argument(&mut arena),
             target: second_target,
@@ -326,7 +326,7 @@ mod tests {
             .build(&mut arena, None);
 
         let package = ClosurePackage { environment: first, code: second }.build(&mut arena, None);
-        let root_stack = Bullet.build(&mut arena, None);
+        let root_stack = StackVar.build(&mut arena, None);
         let root =
             Jump { argument: Fixture::argument(&mut arena), target: package, stack: root_stack }
                 .build(&mut arena, None);
@@ -348,11 +348,12 @@ mod tests {
         ] {
             assert_eq!(error, Some(SpsLowValidationError::UnguardedBranch { compu: branch }));
         }
-        let stack = Bullet.build(&mut arena, None);
-        let root = LetStack { binder: Bullet, bindee: stack, tail: branch }.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
+        let root =
+            LetStack { binder: StackVar, bindee: stack, tail: branch }.build(&mut arena, None);
         let program = Fixture::program(arena, root).unwrap();
         let (mut arena, root) = program.into_parts();
-        let stack = Bullet.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
         arena.inner.compus[&branch] = SHole(stack).into();
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
@@ -366,7 +367,7 @@ mod tests {
         let operands = [1, 2]
             .map(|value| Literal::Integer(IntegerLiteral::Int(value)).build(&mut arena, None));
         let [when_true, when_false] = [(); 2].map(|()| {
-            let stack = Bullet.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             SHole(stack).build(&mut arena, None)
         });
         let branch = CompareBranch {
@@ -382,8 +383,8 @@ mod tests {
         ] {
             assert_eq!(error, Some(SpsLowValidationError::UnguardedBranch { compu: branch }));
         }
-        let bindee = Bullet.build(&mut arena, None);
-        let root = LetStack { binder: Bullet, bindee, tail: branch }.build(&mut arena, None);
+        let bindee = StackVar.build(&mut arena, None);
+        let root = LetStack { binder: StackVar, bindee, tail: branch }.build(&mut arena, None);
         let program = Fixture::program(arena, root).unwrap();
         let (mut arena, root) = program.into_parts();
         let Computation::Compare(compare) = &mut arena.inner.compus[&branch] else {
@@ -399,7 +400,7 @@ mod tests {
     #[test]
     fn cyclic_blocks_are_rejected_before_capture_summaries_are_consumed() {
         let mut arena = SpsLowArena::default();
-        let stack = Bullet.build(&mut arena, None);
+        let stack = StackVar.build(&mut arena, None);
         let body = SHole(stack).build(&mut arena, None);
         let binder = Hole.build(&mut arena, None);
         let bindee = Triv.build(&mut arena, None);
@@ -407,7 +408,7 @@ mod tests {
         let label = arena.admin.fresh_def();
         let block =
             Block { label, entry: Fixture::entry(&mut arena), body }.build(&mut arena, None);
-        let ambient = Bullet.build(&mut arena, None);
+        let ambient = StackVar.build(&mut arena, None);
         let stack = Cons(block, ambient).build(&mut arena, None);
         let root = SHole(stack).build(&mut arena, None);
         assert_eq!(
@@ -422,7 +423,7 @@ mod tests {
             .stack_size(512 * 1024)
             .spawn(|| {
                 let mut arena = SpsLowArena::default();
-                let stack = Bullet.build(&mut arena, None);
+                let stack = StackVar.build(&mut arena, None);
                 let mut body = SHole(stack).build(&mut arena, None);
                 for _ in 0..16_384 {
                     let binder = Hole.build(&mut arena, None);
@@ -432,7 +433,7 @@ mod tests {
                 let label = arena.admin.fresh_def();
                 let block = Block { label, entry: Fixture::entry(&mut arena), body }
                     .build(&mut arena, None);
-                let ambient = Bullet.build(&mut arena, None);
+                let ambient = StackVar.build(&mut arena, None);
                 let stack = Cons(block, ambient).build(&mut arena, None);
                 let root = SHole(stack).build(&mut arena, None);
                 let variables =

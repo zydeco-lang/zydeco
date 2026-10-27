@@ -56,7 +56,7 @@ mod tests {
         fn closed_program() -> BranchJoinProgram {
             let mut fixture = Self::default();
             let value = fixture.build(Triv);
-            let stack = fixture.build(Bullet);
+            let stack = fixture.build(StackVar);
             let root = fixture.build(SReturn { value, stack });
             BranchJoinProgram::try_new(SpsProgram::new(fixture.arena, root)).unwrap()
         }
@@ -115,8 +115,8 @@ mod tests {
         fn parameters(&mut self, params: &[DefId], mut tail: CompuId) -> CompuId {
             for def in params.iter().rev() {
                 let binder = self.build(*def);
-                let bindee = self.build(Bullet);
-                tail = self.build(Let { binder: Cons(binder, Bullet), bindee, tail });
+                let bindee = self.build(StackVar);
+                tail = self.build(Let { binder: Cons(binder, StackVar), bindee, tail });
             }
             tail
         }
@@ -205,7 +205,7 @@ mod tests {
             let params = [fixture.def("first"), fixture.def("second")];
             let arguments = params.map(|def| fixture.build(def));
             let thunk = fixture.primitive(role);
-            let ambient = fixture.build(Bullet);
+            let ambient = fixture.build(StackVar);
             let call = fixture.call(thunk, arguments, ambient);
             let root = fixture.parameters(&params, call);
             let program = fixture.compile(root);
@@ -233,7 +233,7 @@ mod tests {
             let mut root = program.root();
             for argument in actual {
                 let low::Computation::LetArg(low::LetArg {
-                    binder: Cons(pattern, Bullet),
+                    binder: Cons(pattern, StackVar),
                     tail,
                     ..
                 }) = program.arena().inner.compus[&root]
@@ -255,7 +255,7 @@ mod tests {
         {
             let mut fixture = PrimitiveFixture::default();
             let thunk = fixture.primitive(role);
-            let ambient = fixture.build(Bullet);
+            let ambient = fixture.build(StackVar);
             let root = fixture.literal_call(role, thunk, ambient);
             let program = fixture.compile(root);
             PrimitiveFixture::assert_no_call_wrappers(&program);
@@ -287,7 +287,7 @@ mod tests {
         let operation_value = fixture.build(operation);
         let result_value = fixture.build(result);
         let one = fixture.build(PrimitiveFixture::literal(role, 1));
-        let ambient = fixture.build(Bullet);
+        let ambient = fixture.build(StackVar);
         let second = fixture.call(operation_value, [result_value, one], ambient);
         let binder = fixture.build(result);
         let continuation = fixture.build(Kont { binder, body: second });
@@ -337,7 +337,7 @@ mod tests {
         let result = fixture.def("result");
         let values = vec![fixture.build(operation), fixture.build(result)];
         let value = fixture.build(VCons::new(values, ProductLayout { arity: 2 }));
-        let ambient = fixture.build(Bullet);
+        let ambient = fixture.build(StackVar);
         let returned = fixture.build(SReturn { stack: ambient, value });
         let binder = fixture.build(result);
         let continuation = fixture.build(Kont { binder, body: returned });
@@ -388,7 +388,7 @@ mod tests {
         let result = fixture.def("result");
         let items = vec![fixture.build(result), fixture.build(result)];
         let value = fixture.build(VCons::new(items, ProductLayout { arity: 2 }));
-        let stack = fixture.build(Bullet);
+        let stack = fixture.build(StackVar);
         let body = fixture.build(SReturn { value, stack });
         let binder = fixture.build(result);
         let rest = fixture.build(Kont { binder, body });
@@ -436,11 +436,11 @@ mod tests {
         let mut fixture = PrimitiveFixture::default();
         let operation = fixture.def("operation");
         let thunk = fixture.build(operation);
-        let ambient = fixture.build(Bullet);
+        let ambient = fixture.build(StackVar);
         let tail = fixture.literal_call(role, thunk, ambient);
         let binder = fixture.build(operation);
-        let bindee = fixture.build(Bullet);
-        let root = fixture.build(Let { binder: Cons(binder, Bullet), bindee, tail });
+        let bindee = fixture.build(StackVar);
+        let root = fixture.build(Let { binder: Cons(binder, StackVar), bindee, tail });
         let program = fixture.compile(root);
         let arena = &program.arena().inner;
 

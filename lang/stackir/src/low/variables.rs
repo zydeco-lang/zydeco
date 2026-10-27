@@ -81,7 +81,7 @@ impl Variables {
     }
     fn stack(&self, node: Stack) -> CoContext<DefId> {
         match node {
-            | Stack::Var(Bullet) => CoContext::new(),
+            | Stack::Var(StackVar) => CoContext::new(),
             | Stack::Arg(Cons(value, stack)) => value.summary(self) + stack.summary(self),
             | Stack::Tag(Cons(_, stack)) => stack.summary(self),
             | Stack::ContinuationPackage(ContinuationPackage { code, residual }) => {
@@ -114,12 +114,14 @@ impl Variables {
             | Computation::LetValue(LetValue { binder, bindee, tail: body }) => {
                 bindee.summary(self) + (body.summary(self) - binder.summary(self))
             }
-            | Computation::LetStack(LetStack { binder: Bullet, bindee, tail: body }) => {
+            | Computation::LetStack(LetStack { binder: StackVar, bindee, tail: body }) => {
                 bindee.summary(self) + body.summary(self)
             }
-            | Computation::LetArg(LetArg { binder: Cons(binder, Bullet), bindee, tail: body }) => {
-                bindee.summary(self) + (body.summary(self) - binder.summary(self))
-            }
+            | Computation::LetArg(LetArg {
+                binder: Cons(binder, StackVar),
+                bindee,
+                tail: body,
+            }) => bindee.summary(self) + (body.summary(self) - binder.summary(self)),
             | Computation::CoCase(SCoMatch { scrut, arms }) => {
                 scrut.summary(self)
                     + arms

@@ -159,7 +159,7 @@ mod tests {
         fn new() -> Self {
             let mut arena = SpsArena::default();
             let scrut = Triv.build(&mut arena, None);
-            let stack = Bullet.build(&mut arena, None);
+            let stack = StackVar.build(&mut arena, None);
             let value = Triv.build(&mut arena, None);
             let branch = SReturn { stack, value }.build(&mut arena, None);
             Self { arena, scrut, branch }
@@ -175,7 +175,7 @@ mod tests {
             let operands = [1, 2].map(|value| {
                 Literal::Integer(IntegerLiteral::Int(value)).build(&mut self.arena, None)
             });
-            let stack = Bullet.build(&mut self.arena, None);
+            let stack = StackVar.build(&mut self.arena, None);
             let value = Triv.build(&mut self.arena, None);
             let when_false = SReturn { stack, value }.build(&mut self.arena, None);
             CompareBranch {
@@ -192,8 +192,8 @@ mod tests {
     fn branch_join_accepts_a_guarded_coproduct_match() {
         let mut fixture = Fixture::new();
         let body = fixture.coprod_match();
-        let bindee = Bullet.build(&mut fixture.arena, None);
-        let root = Let { binder: Bullet, bindee, tail: body }.build(&mut fixture.arena, None);
+        let bindee = StackVar.build(&mut fixture.arena, None);
+        let root = Let { binder: StackVar, bindee, tail: body }.build(&mut fixture.arena, None);
 
         let program = SpsProgram::new(fixture.arena, root);
         assert!(BranchJoinProgram::try_new(program).is_ok());
@@ -222,8 +222,8 @@ mod tests {
             BranchJoinError::UnguardedBranch { compu: branch }.into()
         );
         let mut arena = fixture.arena;
-        let bindee = Bullet.build(&mut arena, None);
-        let root = Let { binder: Bullet, bindee, tail: branch }.build(&mut arena, None);
+        let bindee = StackVar.build(&mut arena, None);
+        let root = Let { binder: StackVar, bindee, tail: branch }.build(&mut arena, None);
         let mut validator = BranchJoinValidator::default();
         Traversal { arena: &arena.inner }.run(root.into(), &mut validator);
         validator.into_result().unwrap();
@@ -240,9 +240,9 @@ mod tests {
     #[test]
     fn branch_join_rejects_a_non_branch_stack_let() {
         let mut fixture = Fixture::new();
-        let bindee = Bullet.build(&mut fixture.arena, None);
+        let bindee = StackVar.build(&mut fixture.arena, None);
         let root =
-            Let { binder: Bullet, bindee, tail: fixture.branch }.build(&mut fixture.arena, None);
+            Let { binder: StackVar, bindee, tail: fixture.branch }.build(&mut fixture.arena, None);
         let program = SpsProgram::new(fixture.arena, root);
 
         assert_eq!(
@@ -257,7 +257,7 @@ mod tests {
         let value = Triv.build(&mut fixture.arena, None);
         let pair = VCons::new(vec![value, value], ProductLayout { arity: 2 })
             .build(&mut fixture.arena, None);
-        let stack = Bullet.build(&mut fixture.arena, None);
+        let stack = StackVar.build(&mut fixture.arena, None);
         let root = SReturn { stack, value: pair }.build(&mut fixture.arena, None);
         let program = SpsProgram::new(fixture.arena, root);
 

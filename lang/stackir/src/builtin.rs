@@ -98,9 +98,9 @@ impl ExternalFunction {
         {
             return MemoryStep::make_function(arena, access);
         }
-        let stack = Bullet.build(arena, None);
+        let stack = StackVar.build(arena, None);
         let body = ExternCall { function: self, stack }.build(arena, None);
-        Closure { stack: Bullet, body }.build(arena, None)
+        Closure { stack: StackVar, body }.build(arena, None)
     }
 }
 
@@ -121,7 +121,7 @@ impl CompareBranch {
                 });
         let [when_true_body, when_false_body] = [when_true, when_false].map(|def| {
             let thunk = def.build(arena, None);
-            let stack = Bullet.build(arena, None);
+            let stack = StackVar.build(arena, None);
             SForce { thunk, stack }.build(arena, None)
         });
         let operands = [first, second].map(|def| def.build(arena, None));
@@ -132,8 +132,8 @@ impl CompareBranch {
             when_false: when_false_body,
         }
         .build(arena, None);
-        let bindee = Bullet.build(arena, None);
-        let body = Let { binder: Bullet, bindee, tail: branch }.build(arena, None);
+        let bindee = StackVar.build(arena, None);
+        let body = Let { binder: StackVar, bindee, tail: branch }.build(arena, None);
         let scalar = ValueProtocol::Primitive(operation.operand_type());
         let body = [
             (first, scalar.clone()),
@@ -146,10 +146,10 @@ impl CompareBranch {
         .fold(body, |tail, (def, protocol)| {
             let binder = def.build(arena, None);
             arena.as_mut().inner.pattern_protocols.insert_new(binder, protocol);
-            let bindee = Bullet.build(arena, None);
-            Let { binder: Cons(binder, Bullet), bindee, tail }.build(arena, None)
+            let bindee = StackVar.build(arena, None);
+            Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
         });
-        let function = Closure { stack: Bullet, body }.build(arena, None);
+        let function = Closure { stack: StackVar, body }.build(arena, None);
         arena.as_mut().inner.builtin_functions.insert_new(function, operation.builtin());
         function
     }
@@ -170,7 +170,7 @@ impl MemoryStep {
                 def
             });
         let thunk = success.build(arena, None);
-        let stack = Bullet.build(arena, None);
+        let stack = StackVar.build(arena, None);
         let stack = if access.kind == AccessKind::Load {
             let value: ValueId = value.build(arena, None);
             Cons(value, stack).build(arena, None)
@@ -201,10 +201,10 @@ impl MemoryStep {
         let body = operands.into_iter().flatten().rev().fold(body, |tail, (def, protocol)| {
             let binder = def.build(arena, None);
             arena.as_mut().inner.pattern_protocols.insert_new(binder, protocol);
-            let bindee = Bullet.build(arena, None);
-            Let { binder: Cons(binder, Bullet), bindee, tail }.build(arena, None)
+            let bindee = StackVar.build(arena, None);
+            Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
         });
-        let function = Closure { stack: Bullet, body }.build(arena, None);
+        let function = Closure { stack: StackVar, body }.build(arena, None);
         arena.as_mut().inner.builtin_functions.insert_new(function, access.builtin());
         function
     }
@@ -226,7 +226,7 @@ impl AddrOffset {
             displacement: displacement.build(arena, None),
         }
         .build(arena, None);
-        let stack = Bullet.build(arena, None);
+        let stack = StackVar.build(arena, None);
         let body = SReturn { stack, value }.build(arena, None);
         let body = [
             (displacement, ValueProtocol::Primitive(PrimitiveType::Integer(IntegerType::Int))),
@@ -236,10 +236,10 @@ impl AddrOffset {
         .fold(body, |tail, (def, protocol)| {
             let binder = def.build(arena, None);
             arena.as_mut().inner.pattern_protocols.insert_new(binder, protocol);
-            let bindee = Bullet.build(arena, None);
-            Let { binder: Cons(binder, Bullet), bindee, tail }.build(arena, None)
+            let bindee = StackVar.build(arena, None);
+            Let { binder: Cons(binder, StackVar), bindee, tail }.build(arena, None)
         });
-        let function = Closure { stack: Bullet, body }.build(arena, None);
+        let function = Closure { stack: StackVar, body }.build(arena, None);
         arena.as_mut().inner.builtin_functions.insert_new(function, BuiltinValueRole::MemoryOffset);
         function
     }
