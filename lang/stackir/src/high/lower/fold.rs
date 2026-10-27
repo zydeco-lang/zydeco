@@ -410,7 +410,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             | ss::Value::ValApp(_)
             | ss::Value::Match(_)
             | ss::Value::IntOp(_) => {
-                self.lo.lower_errors.push(SpsLowerError::ResidualStaticValue { value: source });
+                self.lo.lower_errors.push(SpsLoweringError::ResidualStaticValue { value: source });
                 ValuePlan::pure(Hole.build(self.lo, site))
             }
             | ss::Value::Thunk(_) => {

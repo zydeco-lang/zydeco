@@ -1,5 +1,5 @@
 use super::*;
-use crate::low::{SpsLowError, SpsLowProgram};
+use crate::low::{SpsLowProgram, SpsLowValidationError};
 
 #[derive(Default)]
 struct Fixture {
@@ -68,12 +68,12 @@ impl Fixture {
         self.build(Jump { target, argument, stack })
     }
 
-    fn check(self, root: CompuId) -> Result<SpsLowProgram, SpsLowError> {
+    fn check(self, root: CompuId) -> Result<SpsLowProgram, SpsLowValidationError> {
         SpsLowProgram::try_new(self.arena, root)
     }
 
     fn rejects(self, root: CompuId, error: EntryContractError) {
-        assert_eq!(self.check(root).unwrap_err(), SpsLowError::EntryContract(error));
+        assert_eq!(self.check(root).unwrap_err(), SpsLowValidationError::EntryContract(error));
     }
 }
 

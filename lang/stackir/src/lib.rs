@@ -20,7 +20,7 @@ pub mod passes;
 
 /// First-order stack-passing IR with blocks, jumps, and explicit packages.
 pub mod low;
-pub use low::{SpsLowConverter, SpsLowError, SpsLowProgram};
+pub use low::{SpsLowConverter, SpsLowProgram, SpsLowValidationError};
 
 /// Lexical stack-passing IR with closures and continuations.
 pub mod high;
@@ -28,5 +28,5 @@ pub mod high;
 pub use high::{
     arena::*,
     check::{BranchJoinError, BranchJoinErrors, BranchJoinProgram},
-    lower::{BuiltinRootLowerError, BuiltinRootLowerer, Lowerer, RootLowerer, SpsLowerError},
+    lower::{BuiltinRootLowerError, BuiltinRootLowerer, Lowerer, RootLowerer, SpsLoweringError},
 };

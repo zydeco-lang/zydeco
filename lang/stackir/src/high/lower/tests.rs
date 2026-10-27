@@ -311,11 +311,11 @@ fn independent_invalid_values_are_collected_without_publishing_a_program() {
         .run_with_driver::<Recursive>(root, None)
         .unwrap_err();
     assert_eq!(
-        errors.iter().map(SpsLowerError::value).collect::<Vec<_>>(),
-        recursive.iter().map(SpsLowerError::value).collect::<Vec<_>>()
+        errors.iter().map(SpsLoweringError::value).collect::<Vec<_>>(),
+        recursive.iter().map(SpsLoweringError::value).collect::<Vec<_>>()
     );
     assert!(
-        matches!(errors.as_slice(), [SpsLowerError::ResidualStaticValue { value: a }, SpsLowerError::ResidualStaticValue { value: b }] if *a == first && *b == second)
+        matches!(errors.as_slice(), [SpsLoweringError::ResidualStaticValue { value: a }, SpsLoweringError::ResidualStaticValue { value: b }] if *a == first && *b == second)
     );
     fixture.statics.values[&first] = ss::Value::Triv(Triv);
     fixture.statics.values[&second] = ss::Value::Triv(Triv);
@@ -453,7 +453,7 @@ fn residual_value_functions_report_an_internal_invariant_failure() {
     let before = passes.run(valid_root).expect("a complete root reaches SPSLow");
     let errors = passes.run(root).expect_err("unelaborated static syntax cannot lower");
     assert!(
-        matches!(errors.as_slice(), [SpsLowerError::ResidualStaticValue { value }] if *value == abstraction)
+        matches!(errors.as_slice(), [SpsLoweringError::ResidualStaticValue { value }] if *value == abstraction)
     );
     // Internal fixtures need a useful report even without source spans.
     let _ = errors[0].to_report(&spans, &scoped, &statics);

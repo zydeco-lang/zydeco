@@ -14,7 +14,7 @@ pub struct SpsLowProgram {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-pub enum SpsLowError {
+pub enum SpsLowValidationError {
     #[error("branch {compu:?} is not immediately guarded by a stack let-binding")]
     UnguardedBranch { compu: CompuId },
     #[error("stack let-binding {compu:?} has body {body:?}, which is not a branch")]
@@ -42,7 +42,7 @@ pub enum SpsLowError {
 }
 
 impl SpsLowProgram {
-    pub fn try_new(arena: SpsLowArena, root: CompuId) -> Result<Self, SpsLowError> {
+    pub fn try_new(arena: SpsLowArena, root: CompuId) -> Result<Self, SpsLowValidationError> {
         let facts = SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root)?;
         let mut variables = facts
             .free_variables(root.into())
@@ -52,7 +52,7 @@ impl SpsLowProgram {
             .collect::<Vec<_>>();
         variables.sort_unstable();
         if !variables.is_empty() {
-            return Err(SpsLowError::OpenRoot { variables });
+            return Err(SpsLowValidationError::OpenRoot { variables });
         }
         drop(facts);
         super::contracts::EntryValidator::validate(&arena.inner, root)?;
@@ -81,7 +81,7 @@ impl AsRef<SpsLowArena> for SpsLowProgram {
 
 #[derive(Default)]
 struct SpsLowValidator {
-    error: Option<SpsLowError>,
+    error: Option<SpsLowValidationError>,
     stacks: HashSet<StackId>,
     labels: HashSet<DefId>,
     blocks: Vec<ValueId>,
@@ -142,7 +142,7 @@ impl ContinuationEntry {
 impl SpsLowValidator {
     fn validate_with_driver<D: Driver>(
         arena: &SpsLowInnerArena, root: CompuId,
-    ) -> Result<Variables, SpsLowError> {
+    ) -> Result<Variables, SpsLowValidationError> {
         let mut analyses = Together { first: Self::default(), second: Variables::default() };
         Traversal { arena }.run_with_driver::<D>(root.into(), &mut analyses);
         let Together { first: validator, second: variables } = analyses;
@@ -158,14 +158,14 @@ impl SpsLowValidator {
                 .copied()
                 .collect::<Vec<_>>();
             if !captures.is_empty() {
-                return Err(SpsLowError::ImplicitBlockCapture { label, captures });
+                return Err(SpsLowValidationError::ImplicitBlockCapture { label, captures });
             }
         }
         for (stack, entry) in &arena.continuations {
             if !validator.stacks.contains(stack)
                 || !entry.matches_package(arena, *stack, &variables)
             {
-                return Err(SpsLowError::ContinuationContext { stack: *stack });
+                return Err(SpsLowValidationError::ContinuationContext { stack: *stack });
             }
         }
         Ok(variables)
@@ -173,20 +173,20 @@ impl SpsLowValidator {
 
     fn check(
         &mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence,
-    ) -> Result<(), SpsLowError> {
+    ) -> Result<(), SpsLowValidationError> {
         if occurrence != Occurrence::First {
             return Err(match node {
-                | Node::Pattern(pattern, _) => SpsLowError::SharedPattern { pattern },
-                | Node::Value(value, _) => SpsLowError::SharedValue { value },
-                | Node::Stack(stack, _) => SpsLowError::SharedStack { stack },
-                | Node::Computation(compu, _) => SpsLowError::SharedComputation { compu },
+                | Node::Pattern(pattern, _) => SpsLowValidationError::SharedPattern { pattern },
+                | Node::Value(value, _) => SpsLowValidationError::SharedValue { value },
+                | Node::Stack(stack, _) => SpsLowValidationError::SharedStack { stack },
+                | Node::Computation(compu, _) => SpsLowValidationError::SharedComputation { compu },
             });
         }
         match node {
             | Node::Pattern(_, _) => {}
             | Node::Value(id, Value::Block(Block { label, .. })) => {
                 if !self.labels.insert(*label) {
-                    return Err(SpsLowError::DuplicateBlockLabel { label: *label });
+                    return Err(SpsLowValidationError::DuplicateBlockLabel { label: *label });
                 }
                 self.blocks.push(id);
             }
@@ -197,10 +197,10 @@ impl SpsLowValidator {
             | Node::Computation(id, computation) => {
                 if let Edge::BranchJoin(compu) = edge {
                     if !computation.is_branch() {
-                        return Err(SpsLowError::NonBranchStackLet { compu, body: id });
+                        return Err(SpsLowValidationError::NonBranchStackLet { compu, body: id });
                     }
                 } else if computation.is_branch() {
-                    return Err(SpsLowError::UnguardedBranch { compu: id });
+                    return Err(SpsLowValidationError::UnguardedBranch { compu: id });
                 }
             }
         }
@@ -224,7 +224,9 @@ mod tests {
     struct Fixture;
 
     impl Fixture {
-        fn program(arena: SpsLowArena, root: CompuId) -> Result<SpsLowProgram, SpsLowError> {
+        fn program(
+            arena: SpsLowArena, root: CompuId,
+        ) -> Result<SpsLowProgram, SpsLowValidationError> {
             let explicit = SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, root);
             let recursive = SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, root);
             assert_eq!(explicit.err(), recursive.err());
@@ -251,7 +253,7 @@ mod tests {
 
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowError::SharedValue { value: shared }
+            SpsLowValidationError::SharedValue { value: shared }
         );
     }
 
@@ -277,7 +279,7 @@ mod tests {
 
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowError::ImplicitBlockCapture { label, captures: vec![captured] }
+            SpsLowValidationError::ImplicitBlockCapture { label, captures: vec![captured] }
         );
     }
 
@@ -292,7 +294,7 @@ mod tests {
 
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowError::OpenRoot { variables: vec![free] }
+            SpsLowValidationError::OpenRoot { variables: vec![free] }
         );
     }
 
@@ -331,7 +333,7 @@ mod tests {
 
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowError::DuplicateBlockLabel { label }
+            SpsLowValidationError::DuplicateBlockLabel { label }
         );
     }
 
@@ -344,7 +346,7 @@ mod tests {
             SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch).err(),
             SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch).err(),
         ] {
-            assert_eq!(error, Some(SpsLowError::UnguardedBranch { compu: branch }));
+            assert_eq!(error, Some(SpsLowValidationError::UnguardedBranch { compu: branch }));
         }
         let stack = Bullet.build(&mut arena, None);
         let root = LetStack { binder: Bullet, bindee: stack, tail: branch }.build(&mut arena, None);
@@ -354,7 +356,7 @@ mod tests {
         arena.inner.compus[&branch] = SHole(stack).into();
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowError::NonBranchStackLet { compu: root, body: branch }
+            SpsLowValidationError::NonBranchStackLet { compu: root, body: branch }
         );
     }
 
@@ -378,7 +380,7 @@ mod tests {
             SpsLowValidator::validate_with_driver::<Explicit>(&arena.inner, branch).err(),
             SpsLowValidator::validate_with_driver::<Recursive>(&arena.inner, branch).err(),
         ] {
-            assert_eq!(error, Some(SpsLowError::UnguardedBranch { compu: branch }));
+            assert_eq!(error, Some(SpsLowValidationError::UnguardedBranch { compu: branch }));
         }
         let bindee = Bullet.build(&mut arena, None);
         let root = LetStack { binder: Bullet, bindee, tail: branch }.build(&mut arena, None);
@@ -390,7 +392,7 @@ mod tests {
         compare.when_false = when_true;
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowError::SharedComputation { compu: when_true }
+            SpsLowValidationError::SharedComputation { compu: when_true }
         );
     }
 
@@ -410,7 +412,7 @@ mod tests {
         let root = SHole(stack).build(&mut arena, None);
         assert_eq!(
             Fixture::program(arena, root).unwrap_err(),
-            SpsLowError::SharedComputation { compu: body }
+            SpsLowValidationError::SharedComputation { compu: body }
         );
     }
 

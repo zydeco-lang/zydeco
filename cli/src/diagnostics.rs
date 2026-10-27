@@ -37,7 +37,7 @@ impl DiagnosticRenderer {
                     let _ = error.to_report(spans).eprint(&mut cache);
                 }
             }
-            | CompileError::SpsLower(failure) => {
+            | CompileError::SpsLowering(failure) => {
                 let mut cache = SourceCaches::span_arena(&failure.spans);
                 for error in &failure.errors {
                     let _ = error

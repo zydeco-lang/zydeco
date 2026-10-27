@@ -346,7 +346,7 @@ mod tests {
         let wrong_result = low::Hole.build(&mut arena, None);
         arena.inner.continuations[&package].result = wrong_result;
         assert!(matches!(SpsLowProgram::try_new(arena, root),
-            Err(crate::low::check::SpsLowError::ContinuationContext { stack }) if stack == package));
+            Err(crate::low::check::SpsLowValidationError::ContinuationContext { stack }) if stack == package));
     }
 
     #[test]

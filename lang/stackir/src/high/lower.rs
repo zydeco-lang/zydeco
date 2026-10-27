@@ -19,12 +19,12 @@ use zydeco_utils::{
 /// An internal invariant failure in a purportedly residual typed program.
 /// Source-level static-elimination failures are reported by the shared checker.
 #[derive(Clone, Debug, Error)]
-pub enum SpsLowerError {
+pub enum SpsLoweringError {
     #[error("internal compiler error: a static value operation survived static elimination")]
     ResidualStaticValue { value: ss::ValueId },
 }
 
-impl SpsLowerError {
+impl SpsLoweringError {
     /// The typed node blamed for the failure.
     fn value(&self) -> ss::ValueId {
         match self {
@@ -71,7 +71,7 @@ pub enum BuiltinRootLowerError {
     #[error(transparent)]
     Package(#[from] BuiltinPackagePlanError),
     #[error("static elimination left an invalid residual program")]
-    Sps(Vec<SpsLowerError>),
+    Sps(Vec<SpsLoweringError>),
 }
 
 mod builtin;
@@ -155,7 +155,7 @@ pub struct Lowerer<'a> {
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
     /// Internal residual invariant failures collected during lowering.
-    lower_errors: Vec<SpsLowerError>,
+    lower_errors: Vec<SpsLoweringError>,
     protocols: SourceProtocols<'a>,
 }
 
@@ -279,7 +279,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn finish(mut self, root: CompuId) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
+    fn finish(mut self, root: CompuId) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
         if self.lower_errors.is_empty() {
             self.arena.inner.protocols = std::sync::Arc::new(self.protocols.graph);
             Ok(BranchJoinProgram::try_new(StackirProgram::new(self.arena, root))
@@ -307,7 +307,7 @@ impl<'a> Lowerer<'a> {
 
 impl CompilerPass<ss::CompuId> for RootLowerer<'_> {
     type Output = BranchJoinProgram;
-    type Error = Vec<SpsLowerError>;
+    type Error = Vec<SpsLoweringError>;
 
     fn run(&mut self, root: ss::CompuId) -> Result<BranchJoinProgram, Self::Error> {
         self.run_with_builtin(root, None)
@@ -318,14 +318,14 @@ impl RootLowerer<'_> {
     /// Lower either a process or a checked export, supplying its validated host package.
     pub fn run_with_builtin(
         &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
-    ) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
+    ) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
         self.run_with_driver::<Explicit>(root, builtin)
     }
 
     /// Select continuation storage for both package materialization and residual reconstruction.
     pub fn run_with_driver<D: Driver>(
         &mut self, root: ss::CompuId, builtin: Option<BuiltinPackagePlan>,
-    ) -> Result<BranchJoinProgram, Vec<SpsLowerError>> {
+    ) -> Result<BranchJoinProgram, Vec<SpsLoweringError>> {
         let mut lowerer = Lowerer::new(self.spans, self.scoped, self.statics);
         let root = self.statics.execution_compu(root);
         let mut stack = Bullet.build(&mut lowerer, None);

@@ -12,7 +12,7 @@ use zydeco_session::{
 };
 use zydeco_stackir::{
     BranchJoinProgram, BuiltinRootLowerError, RootLowerer, SpsLowPipeline, SpsLowProgram,
-    SpsLowerError,
+    SpsLoweringError,
     passes::{HighSpsFailure, HighSpsInspection, HighSpsObserver, HighSpsPlan},
 };
 use zydeco_statics::{BuiltinPackagePlanError, arena::StaticsArena, validate::LintChecker};
@@ -326,14 +326,14 @@ pub struct BackendProgram {
 
 /// One source-level SPS lowering failure with the provenance its reports need.
 #[derive(Error)]
-pub struct SpsLowerFailure {
-    pub errors: Vec<SpsLowerError>,
+pub struct SpsLoweringFailure {
+    pub errors: Vec<SpsLoweringError>,
     pub spans: Arc<SpanArena>,
     pub scoped: Arc<ScopedArena>,
     pub statics: Arc<StaticsArena>,
 }
 
-impl std::fmt::Display for SpsLowerFailure {
+impl std::fmt::Display for SpsLoweringFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Some(first) = self.errors.first() else { return Ok(()) };
         write!(f, "{first}")?;
@@ -344,9 +344,9 @@ impl std::fmt::Display for SpsLowerFailure {
     }
 }
 
-impl std::fmt::Debug for SpsLowerFailure {
+impl std::fmt::Debug for SpsLoweringFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SpsLowerFailure").field("errors", &self.errors).finish()
+        f.debug_struct("SpsLoweringFailure").field("errors", &self.errors).finish()
     }
 }
 
@@ -417,7 +417,7 @@ impl BackendProgram {
                 return Err(CompileError::BuiltinLower(error));
             }
             | Err(BackendLowerError::Root(BuiltinRootLowerError::Sps(errors))) => {
-                return Err(CompileError::SpsLower(SpsLowerFailure {
+                return Err(CompileError::SpsLowering(SpsLoweringFailure {
                     errors,
                     spans,
                     scoped,
@@ -585,7 +585,7 @@ pub enum CompileError {
     #[error(transparent)]
     BuiltinLower(BuiltinPackagePlanError),
     #[error("{0}")]
-    SpsLower(SpsLowerFailure),
+    SpsLowering(SpsLoweringFailure),
     #[error(transparent)]
     Runtime(zydeco_dynamics::syntax::RuntimeError),
     #[error(transparent)]

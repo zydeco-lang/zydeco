@@ -13,5 +13,5 @@ pub mod traverse;
 pub mod variables;
 
 pub use arena::*;
-pub use check::{SpsLowError, SpsLowProgram};
+pub use check::{SpsLowProgram, SpsLowValidationError};
 pub use convert::SpsLowConverter;
