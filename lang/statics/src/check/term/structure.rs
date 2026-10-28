@@ -7,105 +7,110 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'db>, term: su::Named<FieldName, su::TermId>,
         switch: Switch<AnnId>,
     ) -> ResultKont<TermAnnId> {
-        Ok({
-            let su::Named(name, inner) = term;
-            match switch {
-                | Switch::Syn => match self.mk(inner).tyck_k(tycker, Action::syn())? {
-                    | inner_out @ (TermAnnId::Type(..)
-                    | TermAnnId::Hole(_)
-                    | TermAnnId::Kind(_)
-                    | TermAnnId::Compu(_, _)) => {
-                        let inner_interned =
-                            crate::query::InternedTermAnn::new(tycker.db, inner_out);
-                        match tycker.judge(
-                            self.inner,
-                            inner_interned,
-                            crate::query::named_syn_judgment,
-                        ) {
-                            | crate::query::NamedSynOutcome::Type {
-                                kind_id,
-                                kind,
-                                named_id,
-                                named,
-                            } => {
-                                tycker
-                                    .statics
-                                    .kinds_pre
-                                    .insert_new(kind_id, ss::Fillable::Done(kind));
-                                tycker.statics.types_pre.insert_new(
-                                    named_id,
-                                    ss::Fillable::Done(named),
-                                    kind_id,
-                                );
-                                tycker.store_env(named_id, &self.info);
-                                TermAnnId::Type(named_id, kind_id)
-                            }
-                            | crate::query::NamedSynOutcome::Error(error) => tycker.err_k(error)?,
-                        }
-                    }
-                    | TermAnnId::Value(inner, inner_ty) => {
-                        let inner_kind = tycker.statics.type_kind(inner_ty);
-                        let vtype = ss::VType.build(tycker, &self.info);
-                        Lub::lub_k(vtype, inner_kind, tycker)?;
-                        let named_ty = Alloc::alloc(
-                            tycker,
-                            ss::Label(name.clone(), inner_ty),
-                            vtype,
-                            &self.info,
-                        );
-                        let named =
-                            Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
-                        TermAnnId::Value(named, named_ty)
-                    }
-                },
-                | Switch::Ana(AnnId::Kind(kd)) => {
-                    let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
-                        tycker.kind_filled_k(&kd)?.to_owned()
-                    else {
-                        tycker.err_k(TyckError::KindMismatch)?
-                    };
-                    if name != expected_name {
-                        tycker.err_k(TyckError::NamedLabelMismatch {
-                            expected: expected_name,
-                            found: name.clone(),
-                        })?
-                    }
-                    let checked = self.mk(inner).tyck_k(tycker, Action::ana(inner_kind.into()))?;
-                    let (inner, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
-                    let named = Alloc::alloc(tycker, ss::Named(name, inner), kd, &self.info);
-                    TermAnnId::Type(named, kd)
-                }
-                | Switch::Ana(AnnId::Type(expected)) => {
-                    let unrolled = expected.unroll_k(tycker)?;
-                    let expected_view = if unrolled == expected {
-                        expected
-                    } else {
-                        unrolled.subst_env_k(tycker, &self.info)?
-                    };
-                    let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
-                        tycker.type_filled_k(&expected_view)?.to_owned()
-                    else {
-                        tycker.err_k(TyckError::TypeExpected {
-                            expected: "a named value type".to_string(),
-                            found: expected,
-                        })?
-                    };
-                    if name != expected_name {
-                        tycker.err_k(TyckError::NamedLabelMismatch {
-                            expected: expected_name,
-                            found: name.clone(),
-                        })?
-                    }
-                    let checked = self
-                        .mk(inner)
-                        .tyck_k(tycker, Action::ana_prepared(inner_ty.into(), &self.info))?;
-                    let (inner, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
-                    let named = Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
-                    TermAnnId::Value(named, expected)
-                }
-                | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch)?,
+        let su::Named(name, inner) = term;
+        match switch {
+            | Switch::Syn => self.check_named_syn_k(tycker, name, inner),
+            | Switch::Ana(AnnId::Kind(kd)) => self.check_named_ana_kind_k(tycker, name, inner, kd),
+            | Switch::Ana(AnnId::Type(expected)) => {
+                self.check_named_ana_type_k(tycker, name, inner, expected)
             }
-        })
+            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
+        }
+    }
+
+    /// Synthesize a named term from its payload: a value payload forms a named value
+    /// of label type, and any other payload goes through the named judgment.
+    fn check_named_syn_k<'db>(
+        &self, tycker: &mut Tycker<'db>, name: FieldName, inner: su::TermId,
+    ) -> ResultKont<TermAnnId> {
+        match self.mk(inner).tyck_k(tycker, Action::syn())? {
+            | inner_out @ (TermAnnId::Type(..)
+            | TermAnnId::Hole(_)
+            | TermAnnId::Kind(_)
+            | TermAnnId::Compu(_, _)) => self.check_named_syn_judged_k(tycker, inner_out),
+            | TermAnnId::Value(inner, inner_ty) => {
+                self.check_named_syn_value_k(tycker, name, inner, inner_ty)
+            }
+        }
+    }
+
+    fn check_named_syn_judged_k<'db>(
+        &self, tycker: &mut Tycker<'db>, inner_out: TermAnnId,
+    ) -> ResultKont<TermAnnId> {
+        let inner_interned = crate::query::InternedTermAnn::new(tycker.db, inner_out);
+        match tycker.judge(self.inner, inner_interned, crate::query::named_syn_judgment) {
+            | crate::query::NamedSynOutcome::Type { kind_id, kind, named_id, named } => {
+                tycker.statics.kinds_pre.insert_new(kind_id, ss::Fillable::Done(kind));
+                tycker.statics.types_pre.insert_new(named_id, ss::Fillable::Done(named), kind_id);
+                tycker.store_env(named_id, &self.info);
+                Ok(TermAnnId::Type(named_id, kind_id))
+            }
+            | crate::query::NamedSynOutcome::Error(error) => tycker.err_k(error),
+        }
+    }
+
+    fn check_named_syn_value_k<'db>(
+        &self, tycker: &mut Tycker<'db>, name: FieldName, inner: ss::ValueId, inner_ty: ss::TypeId,
+    ) -> ResultKont<TermAnnId> {
+        let inner_kind = tycker.statics.type_kind(inner_ty);
+        let vtype = ss::VType.build(tycker, &self.info);
+        Lub::lub_k(vtype, inner_kind, tycker)?;
+        let named_ty = Alloc::alloc(tycker, ss::Label(name.clone(), inner_ty), vtype, &self.info);
+        let named = Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
+        Ok(TermAnnId::Value(named, named_ty))
+    }
+
+    /// Check a named type against a label kind.
+    fn check_named_ana_kind_k<'db>(
+        &self, tycker: &mut Tycker<'db>, name: FieldName, inner: su::TermId, kd: ss::KindId,
+    ) -> ResultKont<TermAnnId> {
+        let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
+            tycker.kind_filled_k(&kd)?.to_owned()
+        else {
+            tycker.err_k(TyckError::KindMismatch)?
+        };
+        Self::check_named_label_k(tycker, expected_name, &name)?;
+        let checked = self.mk(inner).tyck_k(tycker, Action::ana(inner_kind.into()))?;
+        let (inner, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
+        let named = Alloc::alloc(tycker, ss::Named(name, inner), kd, &self.info);
+        Ok(TermAnnId::Type(named, kd))
+    }
+
+    /// Check a named value against a label type, unrolling the expected type first.
+    fn check_named_ana_type_k<'db>(
+        &self, tycker: &mut Tycker<'db>, name: FieldName, inner: su::TermId, expected: ss::TypeId,
+    ) -> ResultKont<TermAnnId> {
+        let unrolled = expected.unroll_k(tycker)?;
+        let expected_view = if unrolled == expected {
+            expected
+        } else {
+            unrolled.subst_env_k(tycker, &self.info)?
+        };
+        let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
+            tycker.type_filled_k(&expected_view)?.to_owned()
+        else {
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "a named value type".to_string(),
+                found: expected,
+            })?
+        };
+        Self::check_named_label_k(tycker, expected_name, &name)?;
+        let checked =
+            self.mk(inner).tyck_k(tycker, Action::ana_prepared(inner_ty.into(), &self.info))?;
+        let (inner, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
+        let named = Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
+        Ok(TermAnnId::Value(named, expected))
+    }
+
+    /// Reject a named term whose label differs from the one its classifier expects.
+    #[track_caller]
+    fn check_named_label_k(
+        tycker: &mut Tycker<'_>, expected: FieldName, found: &FieldName,
+    ) -> ResultKont<()> {
+        if *found != expected {
+            return tycker.err_k(TyckError::NamedLabelMismatch { expected, found: found.clone() });
+        }
+        Ok(())
     }
 
     pub(super) fn check_label_k<'db>(
