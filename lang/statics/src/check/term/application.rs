@@ -110,21 +110,14 @@ impl TermChecker<'_> {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                     };
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input = crate::query::InternedAppInput::new(
                         tycker.db,
                         crate::query::AppShape::Value { function, argument },
                         result,
                         result,
                     );
-                    let Some(crate::query::AppSynOutcome::Value { id, value, ann, reported }) =
-                        crate::query::app_judgment(
-                            tycker.db,
-                            tycker.data,
-                            term,
-                            input,
-                            tycker.site_occurrence(),
-                        )
+                    let outcome = tycker.judge(self.inner, input, crate::query::app_judgment);
+                    let crate::query::AppSynOutcome::Value { id, value, ann, reported } = outcome
                     else {
                         unreachable!("value applications are query-produced")
                     };
@@ -163,7 +156,6 @@ impl TermChecker<'_> {
                                     },
                                 }
                             };
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedAppInput::new(
                                 tycker.db,
                                 crate::query::AppShape::CompuValue {
@@ -173,18 +165,10 @@ impl TermChecker<'_> {
                                 ty_out,
                                 ty_out,
                             );
-                            let Some(crate::query::AppSynOutcome::Compu {
-                                id,
-                                compu,
-                                ann,
-                                reported,
-                            }) = crate::query::app_judgment(
-                                tycker.db,
-                                tycker.data,
-                                term,
-                                input,
-                                tycker.site_occurrence(),
-                            )
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::app_judgment);
+                            let crate::query::AppSynOutcome::Compu { id, compu, ann, reported } =
+                                outcome
                             else {
                                 unreachable!("computation applications are query-produced")
                             };
@@ -221,7 +205,6 @@ impl TermChecker<'_> {
                                     },
                                 }
                             };
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedAppInput::new(
                                 tycker.db,
                                 crate::query::AppShape::CompuType {
@@ -231,18 +214,10 @@ impl TermChecker<'_> {
                                 ty_out,
                                 body_ty_subst,
                             );
-                            let Some(crate::query::AppSynOutcome::Compu {
-                                id,
-                                compu,
-                                ann,
-                                reported,
-                            }) = crate::query::app_judgment(
-                                tycker.db,
-                                tycker.data,
-                                term,
-                                input,
-                                tycker.site_occurrence(),
-                            )
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::app_judgment);
+                            let crate::query::AppSynOutcome::Compu { id, compu, ann, reported } =
+                                outcome
                             else {
                                 unreachable!(
                                     "polymorphic computation applications are query-produced"
@@ -319,17 +294,8 @@ impl TermChecker<'_> {
                 std::panic::Location::caller(),
             )?;
             binder_elaboration.close_scope_k(tycker, fix_ty)?;
-            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
             let input = crate::query::InternedFixInput::new(tycker.db, binder, body_out, fix_ty);
-            let Some(outcome) = crate::query::fix_judgment(
-                tycker.db,
-                tycker.data,
-                term,
-                input,
-                tycker.site_occurrence(),
-            ) else {
-                unreachable!("fixpoint judgments are query-produced")
-            };
+            let outcome = tycker.judge(self.inner, input, crate::query::fix_judgment);
             tycker.statics.compus.insert_new(outcome.id, outcome.compu);
             tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
             tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());

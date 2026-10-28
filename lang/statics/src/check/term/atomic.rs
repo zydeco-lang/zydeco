@@ -28,20 +28,12 @@ impl TermChecker<'_> {
                 }
                 | Switch::Ana(AnnId::Kind(kd)) => {
                     // a type hole, with a specific kind in mind
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input = crate::query::InternedHoleAna::new(
                         tycker.db,
                         crate::query::HoleAnaShape::Type { kd },
                     );
-                    let Some(crate::query::HoleAnaOutcome::Type { fill, ty, kd }) =
-                        crate::query::hole_ana_judgment(
-                            tycker.db,
-                            tycker.data,
-                            term,
-                            input,
-                            tycker.site_occurrence(),
-                        )
-                    else {
+                    let outcome = tycker.judge(self.inner, input, crate::query::hole_ana_judgment);
+                    let crate::query::HoleAnaOutcome::Type { fill, ty, kd } = outcome else {
                         unreachable!("the kind arm of hole judgments is query-produced")
                     };
                     tycker.statics.fills.insert_new(fill, ss::InferenceSite::Term(self.inner));
@@ -64,19 +56,14 @@ impl TermChecker<'_> {
                     let kd = tycker.statics.type_kind(ty);
                     match tycker.kind_filled_k(&kd)?.to_owned() {
                         | ss::Kind::VType(ss::VType) => {
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedHoleAna::new(
                                 tycker.db,
                                 crate::query::HoleAnaShape::Value { ty },
                             );
-                            let Some(crate::query::HoleAnaOutcome::Value { fill, id, value, ann }) =
-                                crate::query::hole_ana_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::hole_ana_judgment);
+                            let crate::query::HoleAnaOutcome::Value { fill, id, value, ann } =
+                                outcome
                             else {
                                 unreachable!("the value arm of hole judgments is query-produced")
                             };
@@ -92,19 +79,14 @@ impl TermChecker<'_> {
                             TermAnnId::Value(id, ann)
                         }
                         | ss::Kind::CType(ss::CType) => {
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedHoleAna::new(
                                 tycker.db,
                                 crate::query::HoleAnaShape::Compu { ty },
                             );
-                            let Some(crate::query::HoleAnaOutcome::Compu { fill, id, compu, ann }) =
-                                crate::query::hole_ana_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::hole_ana_judgment);
+                            let crate::query::HoleAnaOutcome::Compu { fill, id, compu, ann } =
+                                outcome
                             else {
                                 unreachable!(
                                     "the computation arm of hole judgments is query-produced"

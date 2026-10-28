@@ -28,19 +28,15 @@ impl TermChecker<'_> {
                     Ok((name, ty))
                 })
                 .collect_k::<Vec<_>>()?;
-            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
             let arms_interned = crate::query::InternedDataArms::new(tycker.db, arms);
             let kd_interned = crate::query::InternedKind::new(tycker.db, vtype);
-            let Some(outcome) = crate::query::data_syn_judgment(
-                tycker.db,
-                tycker.data,
-                term,
-                arms_interned,
-                kd_interned,
-                tycker.site_occurrence(),
-            ) else {
-                unreachable!("data declaration judgments are query-produced")
-            };
+            let outcome = tycker.judge(
+                self.inner,
+                (arms_interned, kd_interned),
+                |db, data, term, (arms, kd), occurrence| {
+                    crate::query::data_syn_judgment(db, data, term, arms, kd, occurrence)
+                },
+            );
             tycker.statics.datas.insert_new(outcome.data_id, outcome.data);
             tycker.statics.types_pre.insert_new(
                 outcome.ty_id,
@@ -77,19 +73,15 @@ impl TermChecker<'_> {
                     Ok((name, ty))
                 })
                 .collect_k::<Vec<_>>()?;
-            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
             let arms_interned = crate::query::InternedCoDataArms::new(tycker.db, arms);
             let kd_interned = crate::query::InternedKind::new(tycker.db, ctype);
-            let Some(outcome) = crate::query::codata_syn_judgment(
-                tycker.db,
-                tycker.data,
-                term,
-                arms_interned,
-                kd_interned,
-                tycker.site_occurrence(),
-            ) else {
-                unreachable!("codata declaration judgments are query-produced")
-            };
+            let outcome = tycker.judge(
+                self.inner,
+                (arms_interned, kd_interned),
+                |db, data, term, (arms, kd), occurrence| {
+                    crate::query::codata_syn_judgment(db, data, term, arms, kd, occurrence)
+                },
+            );
             tycker.statics.codatas.insert_new(outcome.codata_id, outcome.codata);
             tycker.statics.types_pre.insert_new(
                 outcome.ty_id,
@@ -135,7 +127,6 @@ impl TermChecker<'_> {
             };
             let arg_out_ann = self.mk(arg).tyck_k(tycker, Action::ana(arg_ty.into()))?;
             let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
-            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
             let input = crate::query::InternedCtorInput::new(
                 tycker.db,
                 ctor.to_owned(),
@@ -143,15 +134,7 @@ impl TermChecker<'_> {
                 ana_ty,
                 data_id,
             );
-            let Some(outcome) = crate::query::ctor_syn_judgment(
-                tycker.db,
-                tycker.data,
-                term,
-                input,
-                tycker.site_occurrence(),
-            ) else {
-                unreachable!("constructor judgments are query-produced")
-            };
+            let outcome = tycker.judge(self.inner, input, crate::query::ctor_syn_judgment);
             tycker.statics.values.insert_new(outcome.id, outcome.value);
             tycker.statics.annotations_value.insert_new(outcome.id, outcome.ann);
             tycker.statics.env_value.insert_new(outcome.id, self.info.clone());
@@ -252,17 +235,8 @@ impl TermChecker<'_> {
                         (binder, tail)
                     })
                     .collect();
-                let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                 let input = crate::query::InternedMatchInput::new(tycker.db, scrut, arms, ty);
-                let Some(outcome) = crate::query::match_syn_judgment(
-                    tycker.db,
-                    tycker.data,
-                    term,
-                    input,
-                    tycker.site_occurrence(),
-                ) else {
-                    unreachable!("match judgments are query-produced")
-                };
+                let outcome = tycker.judge(self.inner, input, crate::query::match_syn_judgment);
                 tycker.statics.compus.insert_new(outcome.id, outcome.compu);
                 tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
                 tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
@@ -335,7 +309,6 @@ impl TermChecker<'_> {
                     Ok(ss::CoMatcher { dtor, tail })
                 })
                 .collect_k::<Vec<_>>()?;
-            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
             let input = crate::query::InternedCoMatchInput::new(
                 tycker.db,
                 comatchers_new
@@ -344,15 +317,7 @@ impl TermChecker<'_> {
                     .collect::<Vec<_>>(),
                 ana_ty,
             );
-            let Some(outcome) = crate::query::comatch_syn_judgment(
-                tycker.db,
-                tycker.data,
-                term,
-                input,
-                tycker.site_occurrence(),
-            ) else {
-                unreachable!("comatch judgments are query-produced")
-            };
+            let outcome = tycker.judge(self.inner, input, crate::query::comatch_syn_judgment);
             tycker.statics.compus.insert_new(outcome.id, outcome.compu);
             tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
             tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
@@ -393,18 +358,9 @@ impl TermChecker<'_> {
             };
             match switch {
                 | Switch::Syn => {
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input =
                         crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);
-                    let Some(outcome) = crate::query::dtor_syn_judgment(
-                        tycker.db,
-                        tycker.data,
-                        term,
-                        input,
-                        tycker.site_occurrence(),
-                    ) else {
-                        unreachable!("destructor judgments are query-produced")
-                    };
+                    let outcome = tycker.judge(self.inner, input, crate::query::dtor_syn_judgment);
                     tycker.statics.compus.insert_new(outcome.id, outcome.compu);
                     tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
                     tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());
@@ -415,18 +371,9 @@ impl TermChecker<'_> {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
                     let whole_ty = Lub::lub_k(ana_ty, whole_ty, tycker)?;
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input =
                         crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);
-                    let Some(outcome) = crate::query::dtor_syn_judgment(
-                        tycker.db,
-                        tycker.data,
-                        term,
-                        input,
-                        tycker.site_occurrence(),
-                    ) else {
-                        unreachable!("destructor judgments are query-produced")
-                    };
+                    let outcome = tycker.judge(self.inner, input, crate::query::dtor_syn_judgment);
                     tycker.statics.compus.insert_new(outcome.id, outcome.compu);
                     tycker.statics.annotations_compu.insert_new(outcome.id, outcome.ann);
                     tycker.statics.env_compu.insert_new(outcome.id, self.info.clone());

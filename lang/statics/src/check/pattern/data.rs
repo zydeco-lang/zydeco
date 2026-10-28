@@ -50,7 +50,6 @@ impl PatternChecker<'_> {
                     PatternAction::ana(arm_ty.to_owned().into()).with_skolems(skolems.clone()),
                 )?;
                 let (args, _) = args_out_ann.as_value();
-                let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
                 let input = crate::query::InternedPatCtorInput::new(
                     tycker.db,
                     ctor.to_owned(),
@@ -58,15 +57,7 @@ impl PatternChecker<'_> {
                     ann_ty,
                     data_id.to_owned(),
                 );
-                let Some(outcome) = crate::query::pat_ctor_ana_judgment(
-                    tycker.db,
-                    tycker.data,
-                    pat_i,
-                    input,
-                    tycker.site_occurrence(),
-                ) else {
-                    unreachable!("constructor pattern judgments are query-produced")
-                };
+                let outcome = tycker.judge(self.inner, input, crate::query::pat_ctor_ana_judgment);
                 tycker.statics.vpats.insert_new(outcome.id, outcome.pat);
                 tycker.statics.annotations_vpat.insert_new(outcome.id, outcome.ann);
                 tycker.statics.env_vpat.insert_new(outcome.id, self.info.clone());
@@ -178,18 +169,10 @@ impl PatternChecker<'_> {
                             Ok((info, output, opened))
                         },
                     )?;
-                    let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
                     let input =
                         crate::query::InternedPatAliasInput::new(tycker.db, output, expected);
-                    let Some(outcome) = crate::query::pat_alias_ana_judgment(
-                        tycker.db,
-                        tycker.data,
-                        pat_i,
-                        input,
-                        tycker.site_occurrence(),
-                    ) else {
-                        unreachable!("alias pattern judgments are query-produced")
-                    };
+                    let outcome =
+                        tycker.judge(self.inner, input, crate::query::pat_alias_ana_judgment);
                     tycker.statics.vpats.insert_new(outcome.id, outcome.pat);
                     tycker.statics.annotations_vpat.insert_new(outcome.id, outcome.ann);
                     tycker.statics.env_vpat.insert_new(outcome.id, self.info.clone());

@@ -42,22 +42,18 @@ impl TermChecker<'_> {
                                 self.mk_add(subst_vec, body).tyck_k(tycker, Action::syn())?;
                             match body {
                                 | TermAnnId::Kind(kd_2) => {
-                                    let term =
-                                        crate::query::InternedTerm::new(tycker.db, self.inner);
                                     let input = crate::query::InternedPiSyn::new(
                                         tycker.db,
                                         crate::query::PiSynArm::KindArrow { kd_1, kd_2 },
                                         tpat,
                                         abst,
                                     );
-                                    let Some(crate::query::PiSynOutcome::Kind { id, kind }) =
-                                        crate::query::pi_syn_judgment(
-                                            tycker.db,
-                                            tycker.data,
-                                            term,
-                                            input,
-                                            tycker.site_occurrence(),
-                                        )
+                                    let outcome = tycker.judge(
+                                        self.inner,
+                                        input,
+                                        crate::query::pi_syn_judgment,
+                                    );
+                                    let crate::query::PiSynOutcome::Kind { id, kind } = outcome
                                     else {
                                         unreachable!(
                                             "the kind arrow of pi judgments is query-produced"
@@ -84,19 +80,15 @@ impl TermChecker<'_> {
                                             crate::query::PiSynArm::KindMismatch
                                         }
                                     };
-                                    let term =
-                                        crate::query::InternedTerm::new(tycker.db, self.inner);
                                     let input = crate::query::InternedPiSyn::new(
                                         tycker.db, arm, tpat, abst,
                                     );
-                                    match crate::query::pi_syn_judgment(
-                                        tycker.db,
-                                        tycker.data,
-                                        term,
+                                    match tycker.judge(
+                                        self.inner,
                                         input,
-                                        tycker.site_occurrence(),
+                                        crate::query::pi_syn_judgment,
                                     ) {
-                                        | Some(crate::query::PiSynOutcome::Type { id, ty, kd }) => {
+                                        | crate::query::PiSynOutcome::Type { id, ty, kd } => {
                                             tycker.statics.types_pre.insert_new(
                                                 id,
                                                 ss::Fillable::Done(ty),
@@ -105,32 +97,27 @@ impl TermChecker<'_> {
                                             tycker.store_env(id, &self.info);
                                             TermAnnId::Type(id, kd)
                                         }
-                                        | Some(crate::query::PiSynOutcome::Error(error)) => {
+                                        | crate::query::PiSynOutcome::Error(error) => {
                                             tycker.err_k(error, std::panic::Location::caller())?
                                         }
-                                        | _ => unreachable!(
+                                        | crate::query::PiSynOutcome::Kind { .. } => unreachable!(
                                             "the type arm of pi judgments is query-produced"
                                         ),
                                     }
                                 }
                                 | TermAnnId::Hole(_) => {
-                                    let term =
-                                        crate::query::InternedTerm::new(tycker.db, self.inner);
                                     let input = crate::query::InternedPiSyn::new(
                                         tycker.db,
                                         crate::query::PiSynArm::MissingAnnotation,
                                         tpat,
                                         abst,
                                     );
-                                    let Some(crate::query::PiSynOutcome::Error(error)) =
-                                        crate::query::pi_syn_judgment(
-                                            tycker.db,
-                                            tycker.data,
-                                            term,
-                                            input,
-                                            tycker.site_occurrence(),
-                                        )
-                                    else {
+                                    let outcome = tycker.judge(
+                                        self.inner,
+                                        input,
+                                        crate::query::pi_syn_judgment,
+                                    );
+                                    let crate::query::PiSynOutcome::Error(error) = outcome else {
                                         unreachable!(
                                             "the hole arm of pi judgments is query-produced"
                                         )
@@ -138,23 +125,18 @@ impl TermChecker<'_> {
                                     tycker.err_k(error, std::panic::Location::caller())?
                                 }
                                 | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                                    let term =
-                                        crate::query::InternedTerm::new(tycker.db, self.inner);
                                     let input = crate::query::InternedPiSyn::new(
                                         tycker.db,
                                         crate::query::PiSynArm::SortMismatch,
                                         tpat,
                                         abst,
                                     );
-                                    let Some(crate::query::PiSynOutcome::Error(error)) =
-                                        crate::query::pi_syn_judgment(
-                                            tycker.db,
-                                            tycker.data,
-                                            term,
-                                            input,
-                                            tycker.site_occurrence(),
-                                        )
-                                    else {
+                                    let outcome = tycker.judge(
+                                        self.inner,
+                                        input,
+                                        crate::query::pi_syn_judgment,
+                                    );
+                                    let crate::query::PiSynOutcome::Error(error) = outcome else {
                                         unreachable!(
                                             "the sort arm of pi judgments is query-produced"
                                         )

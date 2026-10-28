@@ -15,21 +15,13 @@ impl TermChecker<'_> {
                     | TermAnnId::Hole(_)
                     | TermAnnId::Kind(_)
                     | TermAnnId::Compu(_, _)) => {
-                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                         let inner_interned =
                             crate::query::InternedTermAnn::new(tycker.db, inner_out);
-                        let Some(outcome) = crate::query::named_syn_judgment(
-                            tycker.db,
-                            tycker.data,
-                            term,
+                        match tycker.judge(
+                            self.inner,
                             inner_interned,
-                            tycker.site_occurrence(),
-                        ) else {
-                            unreachable!(
-                                "the type and rejection arms of named judgments are query-produced"
-                            )
-                        };
-                        match outcome {
+                            crate::query::named_syn_judgment,
+                        ) {
                             | crate::query::NamedSynOutcome::Type {
                                 kind_id,
                                 kind,
@@ -149,21 +141,13 @@ impl TermChecker<'_> {
                     | TermAnnId::Hole(_)
                     | TermAnnId::Value(_, _)
                     | TermAnnId::Compu(_, _)) => {
-                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                         let inner_interned =
                             crate::query::InternedTermAnn::new(tycker.db, inner_out);
-                        let Some(outcome) = crate::query::label_syn_judgment(
-                            tycker.db,
-                            tycker.data,
-                            term,
+                        match tycker.judge(
+                            self.inner,
                             inner_interned,
-                            tycker.site_occurrence(),
-                        ) else {
-                            unreachable!(
-                                "the kind and rejection arms of label judgments are query-produced"
-                            )
-                        };
-                        match outcome {
+                            crate::query::label_syn_judgment,
+                        ) {
                             | crate::query::LabelSynOutcome::Kind { id, kind } => {
                                 tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
                                 TermAnnId::Kind(id)
@@ -272,23 +256,21 @@ impl TermChecker<'_> {
                             .zip(&annotations)
                             .map(|(value, ty)| TermAnnId::Value(*value, *ty))
                             .collect::<Vec<_>>();
-                        let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                         let items_interned =
                             crate::query::InternedConsItems::new(tycker.db, item_outcomes);
                         let tail_interned = crate::query::InternedTermAnn::new(
                             tycker.db,
                             TermAnnId::Value(tail, tail_ty),
                         );
-                        let Some(outcome) = crate::query::cons_syn_judgment(
-                            tycker.db,
-                            tycker.data,
-                            term,
-                            items_interned,
-                            tail_interned,
-                            tycker.site_occurrence(),
-                        ) else {
-                            unreachable!("consumed judgments are query-produced")
-                        };
+                        let outcome = tycker.judge(
+                            self.inner,
+                            (items_interned, tail_interned),
+                            |db, data, term, (items, tail), occurrence| {
+                                crate::query::cons_syn_judgment(
+                                    db, data, term, items, tail, occurrence,
+                                )
+                            },
+                        );
                         for (id, prod) in outcome.prods {
                             tycker.statics.types_pre.insert_new(
                                 id,
@@ -537,7 +519,6 @@ impl TermChecker<'_> {
                         }
                     };
                     let field = ss::ResolvedField { name, target };
-                    let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                     let input = crate::query::InternedProjInput::new(
                         tycker.db,
                         head,
@@ -550,15 +531,7 @@ impl TermChecker<'_> {
                             .collect::<Vec<_>>(),
                         projected_ty,
                     );
-                    let Some(outcome) = crate::query::proj_syn_judgment(
-                        tycker.db,
-                        tycker.data,
-                        term,
-                        input,
-                        tycker.site_occurrence(),
-                    ) else {
-                        unreachable!("projection judgments are query-produced")
-                    };
+                    let outcome = tycker.judge(self.inner, input, crate::query::proj_syn_judgment);
                     tycker.statics.values.insert_new(outcome.id, outcome.value);
                     tycker.statics.annotations_value.insert_new(outcome.id, outcome.ann);
                     tycker.statics.env_value.insert_new(outcome.id, self.info.clone());

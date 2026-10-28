@@ -46,23 +46,21 @@ impl PatternChecker<'_> {
                         .zip(&annotations)
                         .map(|(vpat, ty)| PatAnnId::Value(*vpat, *ty))
                         .collect::<Vec<_>>();
-                    let pat_interned = crate::query::InternedPat::new(tycker.db, self.inner);
                     let items_interned =
                         crate::query::InternedPatItems::new(tycker.db, item_outcomes);
                     let tail_interned = crate::query::InternedPatAnn::new(
                         tycker.db,
                         PatAnnId::Value(tail, tail_annotation),
                     );
-                    let Some(outcome) = crate::query::pat_cons_syn_judgment(
-                        tycker.db,
-                        tycker.data,
-                        pat_interned,
-                        items_interned,
-                        tail_interned,
-                        tycker.site_occurrence(),
-                    ) else {
-                        unreachable!("consumed pattern judgments are query-produced")
-                    };
+                    let outcome = tycker.judge(
+                        self.inner,
+                        (items_interned, tail_interned),
+                        |db, data, pat, (items, tail), occurrence| {
+                            crate::query::pat_cons_syn_judgment(
+                                db, data, pat, items, tail, occurrence,
+                            )
+                        },
+                    );
                     for (id, prod) in outcome.prods {
                         tycker.statics.types_pre.insert_new(
                             id,
@@ -139,26 +137,21 @@ impl PatternChecker<'_> {
                                 .zip(&annotations)
                                 .map(|(vpat, ty)| PatAnnId::Value(*vpat, *ty))
                                 .collect::<Vec<_>>();
-                            let pat_interned =
-                                crate::query::InternedPat::new(tycker.db, self.inner);
                             let items_interned =
                                 crate::query::InternedPatItems::new(tycker.db, item_outcomes);
                             let tail_interned = crate::query::InternedPatAnn::new(
                                 tycker.db,
                                 PatAnnId::Value(tail, ann),
                             );
-                            let Some(outcome) = crate::query::pat_cons_syn_judgment(
-                                tycker.db,
-                                tycker.data,
-                                pat_interned,
-                                items_interned,
-                                tail_interned,
-                                tycker.site_occurrence(),
-                            ) else {
-                                unreachable!(
-                                    "the product arm of consumed pattern judgments is query-produced"
-                                )
-                            };
+                            let outcome = tycker.judge(
+                                self.inner,
+                                (items_interned, tail_interned),
+                                |db, data, pat, (items, tail), occurrence| {
+                                    crate::query::pat_cons_syn_judgment(
+                                        db, data, pat, items, tail, occurrence,
+                                    )
+                                },
+                            );
                             for (id, prod) in outcome.prods {
                                 tycker.statics.types_pre.insert_new(
                                     id,

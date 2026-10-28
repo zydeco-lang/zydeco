@@ -14,20 +14,13 @@ impl TermChecker<'_> {
                     let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
                     match binder_out_ann.annotation {
                         | PatAnnId::Kind(_) => {
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedSigmaSyn::new(
                                 tycker.db,
                                 crate::query::SigmaSynArm::Expressivity,
                             );
-                            let Some(crate::query::SigmaSynOutcome::Error(error)) =
-                                crate::query::sigma_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
-                            else {
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::sigma_syn_judgment);
+                            let crate::query::SigmaSynOutcome::Error(error) = outcome else {
                                 unreachable!("the kind arm of sigma judgments is query-produced")
                             };
                             tycker.err_k(error, std::panic::Location::caller())?
@@ -53,20 +46,13 @@ impl TermChecker<'_> {
                             // body_kd should be of vtype
                             let vtype = ss::VType.build(tycker, &self.info);
                             Lub::lub_k(vtype, body_kd, tycker)?;
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedSigmaSyn::new(
                                 tycker.db,
                                 crate::query::SigmaSynArm::Exists { tpat, abst, body_ty },
                             );
-                            let Some(crate::query::SigmaSynOutcome::Type { id, ty, kd }) =
-                                crate::query::sigma_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
-                            else {
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::sigma_syn_judgment);
+                            let crate::query::SigmaSynOutcome::Type { id, ty, kd } = outcome else {
                                 unreachable!("the exists arm of sigma judgments is query-produced")
                             };
                             tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kd);
@@ -88,20 +74,13 @@ impl TermChecker<'_> {
                             binder_out_ann.close_scope_k(tycker, ty_2)?;
                             // kd_2 should be of vtype
                             Lub::lub_k(vtype, kd_2, tycker)?;
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedSigmaSyn::new(
                                 tycker.db,
                                 crate::query::SigmaSynArm::Prod { ty_1, ty_2 },
                             );
-                            let Some(crate::query::SigmaSynOutcome::Type { id, ty, kd }) =
-                                crate::query::sigma_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
-                            else {
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::sigma_syn_judgment);
+                            let crate::query::SigmaSynOutcome::Type { id, ty, kd } = outcome else {
                                 unreachable!("the product arm of sigma judgments is query-produced")
                             };
                             tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(ty), kd);
@@ -153,19 +132,16 @@ impl TermChecker<'_> {
                             )?;
                             let vtype = ss::VType.build(tycker, &self.info);
                             Lub::lub_k(vtype, body_kind, tycker)?;
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedManifestSyn::new(
                                 tycker.db,
                                 crate::query::ManifestSynArm::Kind { pattern, definition, body },
                             );
-                            let Some(crate::query::ManifestSynOutcome::Type { id, ty, kd }) =
-                                crate::query::manifest_exists_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
+                            let outcome = tycker.judge(
+                                self.inner,
+                                input,
+                                crate::query::manifest_exists_syn_judgment,
+                            );
+                            let crate::query::ManifestSynOutcome::Type { id, ty, kd } = outcome
                             else {
                                 unreachable!(
                                     "the kind arm of manifest-exists judgments is query-produced"
@@ -200,7 +176,6 @@ impl TermChecker<'_> {
                             let vtype = ss::VType.build(tycker, &self.info);
                             Lub::lub_k(vtype, body_kind, tycker)?;
 
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedManifestSyn::new(
                                 tycker.db,
                                 crate::query::ManifestSynArm::Type {
@@ -210,14 +185,12 @@ impl TermChecker<'_> {
                                     body,
                                 },
                             );
-                            let Some(crate::query::ManifestSynOutcome::Type { id, ty, kd }) =
-                                crate::query::manifest_exists_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
+                            let outcome = tycker.judge(
+                                self.inner,
+                                input,
+                                crate::query::manifest_exists_syn_judgment,
+                            );
+                            let crate::query::ManifestSynOutcome::Type { id, ty, kd } = outcome
                             else {
                                 unreachable!(
                                     "the type arm of manifest-exists judgments is query-produced"
@@ -228,20 +201,16 @@ impl TermChecker<'_> {
                             TermAnnId::Type(id, kd)
                         }
                         | TermAnnId::Hole(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedManifestSyn::new(
                                 tycker.db,
                                 crate::query::ManifestSynArm::SortMismatch,
                             );
-                            let Some(crate::query::ManifestSynOutcome::Error(error)) =
-                                crate::query::manifest_exists_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
-                            else {
+                            let outcome = tycker.judge(
+                                self.inner,
+                                input,
+                                crate::query::manifest_exists_syn_judgment,
+                            );
+                            let crate::query::ManifestSynOutcome::Error(error) = outcome else {
                                 unreachable!(
                                     "the sort arm of manifest-exists judgments is query-produced"
                                 )
@@ -318,8 +287,6 @@ impl TermChecker<'_> {
                                         | None => raw_body_ty,
                                     };
                                     let vtype = ss::VType.build(tycker, &self.info);
-                                    let term =
-                                        crate::query::InternedTerm::new(tycker.db, self.inner);
                                     let arm = match mode {
                                         | su::PackMode::Disclosed => {
                                             crate::query::PackSynArm::Package {
@@ -342,18 +309,17 @@ impl TermChecker<'_> {
                                         }
                                     };
                                     let input = crate::query::InternedPackSyn::new(tycker.db, arm);
-                                    let Some(crate::query::PackSynOutcome::Package {
+                                    let outcome = tycker.judge(
+                                        self.inner,
+                                        input,
+                                        crate::query::pack_syn_judgment,
+                                    );
+                                    let crate::query::PackSynOutcome::Package {
                                         exists_id,
                                         exists,
                                         cons_id,
                                         cons,
-                                    }) = crate::query::pack_syn_judgment(
-                                        tycker.db,
-                                        tycker.data,
-                                        term,
-                                        input,
-                                        tycker.site_occurrence(),
-                                    )
+                                    } = outcome
                                     else {
                                         unreachable!(
                                             "the package arm of pack judgments is query-produced"
@@ -374,21 +340,16 @@ impl TermChecker<'_> {
                                 | TermAnnId::Kind(_)
                                 | TermAnnId::Type(_, _)
                                 | TermAnnId::Compu(_, _) => {
-                                    let term =
-                                        crate::query::InternedTerm::new(tycker.db, self.inner);
                                     let input = crate::query::InternedPackSyn::new(
                                         tycker.db,
                                         crate::query::PackSynArm::PayloadNotValue,
                                     );
-                                    let Some(crate::query::PackSynOutcome::Error(error)) =
-                                        crate::query::pack_syn_judgment(
-                                            tycker.db,
-                                            tycker.data,
-                                            term,
-                                            input,
-                                            tycker.site_occurrence(),
-                                        )
-                                    else {
+                                    let outcome = tycker.judge(
+                                        self.inner,
+                                        input,
+                                        crate::query::pack_syn_judgment,
+                                    );
+                                    let crate::query::PackSynOutcome::Error(error) = outcome else {
                                         unreachable!(
                                             "the payload arm of pack judgments is query-produced"
                                         )

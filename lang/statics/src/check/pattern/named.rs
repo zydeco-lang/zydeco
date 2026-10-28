@@ -16,21 +16,13 @@ impl PatternChecker<'_> {
                         .tyck_k(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
                     match checked.annotation {
                         | inner_out @ (PatAnnId::Kind(_) | PatAnnId::Type(_, _)) => {
-                            let pat = crate::query::InternedPat::new(tycker.db, self.inner);
                             let inner_interned =
                                 crate::query::InternedPatAnn::new(tycker.db, inner_out);
-                            let Some(outcome) = crate::query::pat_named_syn_judgment(
-                                tycker.db,
-                                tycker.data,
-                                pat,
+                            match tycker.judge(
+                                self.inner,
                                 inner_interned,
-                                tycker.site_occurrence(),
-                            ) else {
-                                unreachable!(
-                                    "the type and rejection arms of named pattern judgments are query-produced"
-                                )
-                            };
-                            match outcome {
+                                crate::query::pat_named_syn_judgment,
+                            ) {
                                 | crate::query::PatNamedSynOutcome::Type {
                                     kind_id,
                                     kind,
@@ -91,20 +83,13 @@ impl PatternChecker<'_> {
                         TyckError::SortMismatch,
                         std::panic::Location::caller(),
                     )?;
-                    let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
                     let input = crate::query::InternedPatNamedAna::new(
                         tycker.db,
                         crate::query::PatNamedAnaArm::Kind { name, inner, expected },
                     );
-                    let Some(crate::query::PatNamedAnaOutcome::Type { id, pat, kd }) =
-                        crate::query::pat_named_ana_judgment(
-                            tycker.db,
-                            tycker.data,
-                            pat_i,
-                            input,
-                            tycker.site_occurrence(),
-                        )
-                    else {
+                    let outcome =
+                        tycker.judge(self.inner, input, crate::query::pat_named_ana_judgment);
+                    let crate::query::PatNamedAnaOutcome::Type { id, pat, kd } = outcome else {
                         unreachable!("the kind arm of named pattern judgments is query-produced")
                     };
                     tycker.statics.tpats.insert_new(id, pat);
@@ -144,20 +129,13 @@ impl PatternChecker<'_> {
                         TyckError::SortMismatch,
                         std::panic::Location::caller(),
                     )?;
-                    let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
                     let input = crate::query::InternedPatNamedAna::new(
                         tycker.db,
                         crate::query::PatNamedAnaArm::Type { name, inner, expected },
                     );
-                    let Some(crate::query::PatNamedAnaOutcome::Value { id, pat, ty }) =
-                        crate::query::pat_named_ana_judgment(
-                            tycker.db,
-                            tycker.data,
-                            pat_i,
-                            input,
-                            tycker.site_occurrence(),
-                        )
-                    else {
+                    let outcome =
+                        tycker.judge(self.inner, input, crate::query::pat_named_ana_judgment);
+                    let crate::query::PatNamedAnaOutcome::Value { id, pat, ty } = outcome else {
                         unreachable!("the type arm of named pattern judgments is query-produced")
                     };
                     tycker.statics.vpats.insert_new(id, pat);
@@ -166,20 +144,13 @@ impl PatternChecker<'_> {
                     checked.with_annotation(PatAnnId::Value(id, ty))
                 }
                 | Switch::Ana(AnnId::Set) => {
-                    let pat_i = crate::query::InternedPat::new(tycker.db, self.inner);
                     let input = crate::query::InternedPatNamedAna::new(
                         tycker.db,
                         crate::query::PatNamedAnaArm::SortMismatch,
                     );
-                    let Some(crate::query::PatNamedAnaOutcome::Error(error)) =
-                        crate::query::pat_named_ana_judgment(
-                            tycker.db,
-                            tycker.data,
-                            pat_i,
-                            input,
-                            tycker.site_occurrence(),
-                        )
-                    else {
+                    let outcome =
+                        tycker.judge(self.inner, input, crate::query::pat_named_ana_judgment);
+                    let crate::query::PatNamedAnaOutcome::Error(error) = outcome else {
                         unreachable!("the set arm of named pattern judgments is query-produced")
                     };
                     tycker.err_k(error, std::panic::Location::caller())?

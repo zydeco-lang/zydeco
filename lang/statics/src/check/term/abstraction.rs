@@ -243,20 +243,13 @@ impl TermChecker<'_> {
                     let pat_out_ann = self.mk(pat).tyck_k(tycker, PatternAction::syn())?;
                     match pat_out_ann.annotation {
                         | PatAnnId::Kind(_) => {
-                            let term = crate::query::InternedTerm::new(tycker.db, self.inner);
                             let input = crate::query::InternedAbsSyn::new(
                                 tycker.db,
                                 crate::query::AbsSynArm::Expressivity,
                             );
-                            let Some(crate::query::AbsSynOutcome::Error(error)) =
-                                crate::query::abs_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
-                            else {
+                            let outcome =
+                                tycker.judge(self.inner, input, crate::query::abs_syn_judgment);
+                            let crate::query::AbsSynOutcome::Error(error) = outcome else {
                                 unreachable!(
                                     "the kind arm of abstraction judgments is query-produced"
                                 )
@@ -279,8 +272,6 @@ impl TermChecker<'_> {
                             match body_out_ann {
                             | TermAnnId::Type(ty, body_kd) => {
                                 // a type function
-                                let term =
-                                    crate::query::InternedTerm::new(tycker.db, self.inner);
                                 let input = crate::query::InternedAbsSyn::new(
                                     tycker.db,
                                     crate::query::AbsSynArm::TypeFunction {
@@ -291,18 +282,17 @@ impl TermChecker<'_> {
                                         body: ty,
                                     },
                                 );
-                                let Some(crate::query::AbsSynOutcome::TypeFunction {
+                                let outcome = tycker.judge(
+                                    self.inner,
+                                    input,
+                                    crate::query::abs_syn_judgment,
+                                );
+                                let crate::query::AbsSynOutcome::TypeFunction {
                                     arrow_id,
                                     arrow,
                                     abs_id,
                                     abs,
-                                }) = crate::query::abs_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
+                                } = outcome
                                 else {
                                     unreachable!(
                                         "the type function arm of abstraction judgments is query-produced"
@@ -322,8 +312,6 @@ impl TermChecker<'_> {
                             }
                             | TermAnnId::Compu(compu, body_ty) => {
                                 // a type-polymorphic function
-                                let term =
-                                    crate::query::InternedTerm::new(tycker.db, self.inner);
                                 let input = crate::query::InternedAbsSyn::new(
                                     tycker.db,
                                     crate::query::AbsSynArm::PolymorphicCompu {
@@ -333,19 +321,18 @@ impl TermChecker<'_> {
                                         body_ty,
                                     },
                                 );
-                                let Some(crate::query::AbsSynOutcome::TAbsCompu {
+                                let outcome = tycker.judge(
+                                    self.inner,
+                                    input,
+                                    crate::query::abs_syn_judgment,
+                                );
+                                let crate::query::AbsSynOutcome::TAbsCompu {
                                     ann_id,
                                     ann,
                                     kd,
                                     abs_id,
                                     abs,
-                                }) = crate::query::abs_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
+                                } = outcome
                                 else {
                                     unreachable!(
                                         "the polymorphic computation arm of abstraction judgments is query-produced"
@@ -372,21 +359,16 @@ impl TermChecker<'_> {
                                 std::panic::Location::caller(),
                             )?,
                             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
-                                let term =
-                                    crate::query::InternedTerm::new(tycker.db, self.inner);
                                 let input = crate::query::InternedAbsSyn::new(
                                     tycker.db,
                                     crate::query::AbsSynArm::SortMismatch,
                                 );
-                                let Some(crate::query::AbsSynOutcome::Error(error)) =
-                                    crate::query::abs_syn_judgment(
-                                        tycker.db,
-                                        tycker.data,
-                                        term,
-                                        input,
-                                        tycker.site_occurrence(),
-                                    )
-                                else {
+                                let outcome = tycker.judge(
+                                    self.inner,
+                                    input,
+                                    crate::query::abs_syn_judgment,
+                                );
+                                let crate::query::AbsSynOutcome::Error(error) = outcome else {
                                     unreachable!(
                                         "the sort arm of abstraction judgments is query-produced"
                                     )
@@ -439,23 +421,20 @@ impl TermChecker<'_> {
                                         }
                                     }
                                 };
-                                let term =
-                                    crate::query::InternedTerm::new(tycker.db, self.inner);
                                 let input =
                                     crate::query::InternedAbsSyn::new(tycker.db, arm);
-                                let Some(crate::query::AbsSynOutcome::VAbsCompu {
+                                let outcome = tycker.judge(
+                                    self.inner,
+                                    input,
+                                    crate::query::abs_syn_judgment,
+                                );
+                                let crate::query::AbsSynOutcome::VAbsCompu {
                                     ann_id,
                                     ann,
                                     kd,
                                     abs_id,
                                     abs,
-                                }) = crate::query::abs_syn_judgment(
-                                    tycker.db,
-                                    tycker.data,
-                                    term,
-                                    input,
-                                    tycker.site_occurrence(),
-                                )
+                                } = outcome
                                 else {
                                     unreachable!(
                                         "the computation arrow arm of abstraction judgments is query-produced"
@@ -485,21 +464,16 @@ impl TermChecker<'_> {
                             | TermAnnId::Hole(_)
                             | TermAnnId::Kind(_)
                             | TermAnnId::Type(_, _) => {
-                                let term =
-                                    crate::query::InternedTerm::new(tycker.db, self.inner);
                                 let input = crate::query::InternedAbsSyn::new(
                                     tycker.db,
                                     crate::query::AbsSynArm::SortMismatch,
                                 );
-                                let Some(crate::query::AbsSynOutcome::Error(error)) =
-                                    crate::query::abs_syn_judgment(
-                                        tycker.db,
-                                        tycker.data,
-                                        term,
-                                        input,
-                                        tycker.site_occurrence(),
-                                    )
-                                else {
+                                let outcome = tycker.judge(
+                                    self.inner,
+                                    input,
+                                    crate::query::abs_syn_judgment,
+                                );
+                                let crate::query::AbsSynOutcome::Error(error) = outcome else {
                                     unreachable!(
                                         "the sort arm of abstraction judgments is query-produced"
                                     )

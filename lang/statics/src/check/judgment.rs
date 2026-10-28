@@ -56,3 +56,46 @@ impl<Ann> Action<Ann> {
         Self { switch, prepared_environment: prepared_environment.cloned() }
     }
 }
+
+/// Scoped entities whose judgments are keyed on their interned identity.
+pub(super) trait JudgmentSubject: Copy {
+    type Key<'db>;
+    fn intern<'db>(self, db: &'db dyn crate::query::TyckDb) -> Self::Key<'db>;
+}
+
+impl JudgmentSubject for su::TermId {
+    type Key<'db> = crate::query::InternedTerm<'db>;
+    fn intern<'db>(self, db: &'db dyn crate::query::TyckDb) -> Self::Key<'db> {
+        crate::query::InternedTerm::new(db, self)
+    }
+}
+
+impl JudgmentSubject for su::PatId {
+    type Key<'db> = crate::query::InternedPat<'db>;
+    fn intern<'db>(self, db: &'db dyn crate::query::TyckDb) -> Self::Key<'db> {
+        crate::query::InternedPat::new(db, self)
+    }
+}
+
+impl<'a> Tycker<'a> {
+    /// Run a judgment query for the entity under check at its current
+    /// allocation occurrence, and return the typed fragment it produces.
+    ///
+    /// A judgment answers `None` only for an entity of another syntactic shape,
+    /// and the checker dispatched on the shape before asking.
+    pub(super) fn judge<Subject: JudgmentSubject, Input, Outcome>(
+        &self, subject: Subject, input: Input,
+        query: impl FnOnce(
+            &'a dyn crate::query::TyckDb,
+            crate::query::ScopedData<'a>,
+            Subject::Key<'a>,
+            Input,
+            u32,
+        ) -> Option<Outcome>,
+    ) -> Outcome {
+        let key = subject.intern(self.db);
+        query(self.db, self.data, key, input, self.site_occurrence()).unwrap_or_else(|| {
+            unreachable!("judgments are query-produced for the entity under check")
+        })
+    }
+}
