@@ -10,6 +10,9 @@ use std::{
 use zydeco_statics::environment::Env;
 use zydeco_utils::prelude::{ArenaSchema, ArenaSparse, FrozenArena};
 
+#[cfg(test)]
+mod tests;
+
 /* ------------------------------- Identifier ------------------------------- */
 
 /// Definition identifier reused from the statics arena.

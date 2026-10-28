@@ -1,0 +1,38 @@
+-- Reproducer for https://github.com/zydeco-lang/zydeco/issues/71.
+-- Building and walking this list used to deep-copy the remaining spine at every step.
+param (/int; /string; /args; /stdio; /process) : @(import("../../std/builtin.zy")) in
+begin
+  def List : VType =
+    data
+    | +Nil : Unit
+    | +Cons : Int * List
+    end
+  that
+
+  let fix build (i : Int) (acc : List) : Ret List =
+    ! int/eq (Ret List) i 0 { ret acc } {
+      do i <- ! int/sub i 1;
+      ! build i +Cons(i, acc)
+    }
+  that
+
+  let fix walk (xs : List) (n : Int) : Ret Int =
+    match xs
+    | +Nil(_) => ret n
+    | +Cons(_, rest) =>
+      do n <- ! int/add n 1;
+      ! walk rest n
+    end
+  that
+
+  ! args/at OS 0 { ! process/exit 1 } {
+    fn text =>
+      ! string/parse_int OS text { ! process/exit 1 } {
+        fn n =>
+          do xs <- ! build n +Nil();
+          do len <- ! walk xs 0;
+          do shown <- ! int/to_string len;
+          ! stdio/write_line shown { ! process/exit 0 }
+      }
+  }
+end

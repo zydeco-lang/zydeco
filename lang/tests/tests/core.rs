@@ -126,6 +126,19 @@ mod normalization {
 // `iota` exports a lazy value rather than exiting, so it is checked, not run.
 check_source!(iota, "tests/core/iota.zy");
 
+#[test]
+fn interpreter_list_sharing() {
+    use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
+
+    // Retain issue #71's source reproducer, including the empty and singleton boundaries.
+    // The dynamics syntax unit tests guard the cost invariant without a time limit.
+    for length in [0, 1, 1500] {
+        SourceProgram::setup("tests/core/interpreter-list-sharing.zy")
+            .with_args([length.to_string()])
+            .test_io(ExecutionTarget::Interpreter, &format!("{length}\n"), 0);
+    }
+}
+
 // `loop.zy` and `looping.zy` never terminate when run, so the session crate
 // only checks them and emits native assembly.
 //
