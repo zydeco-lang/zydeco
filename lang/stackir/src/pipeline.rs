@@ -36,8 +36,12 @@ impl CompilerPass<FragmentProgram> for SpsLowPipeline<'_> {
     type Error = Infallible;
 
     fn run(&mut self, stackir: FragmentProgram) -> Result<Self::Output, Self::Error> {
+        // The default plan, composed statically: normalize, then localize what stays shared.
         Self { scoped: self.scoped, statics: self.statics }
-            .with_optimizations(crate::high::normalize::Normalizer)
+            .with_optimizations(pipeline![
+                crate::high::normalize::Normalizer,
+                crate::high::localize::Localizer,
+            ])
             .run(stackir)
     }
 }

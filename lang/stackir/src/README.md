@@ -16,6 +16,8 @@ under duplicating, no stack let occurs and every arm consumes its own copy of th
 a stack let names every pushed frame and every consumer receives the ambient stack.
 Normalization combines local β/η-reductions with field-sensitive demand analysis,
 resolving known calls and pruning unused bindings and package fields before allocation.
+Localization then turns closures that are only called into second-class procedures,
+which closure conversion lowers to labels that calls reach by direct jumps.
 Known arithmetic calls become typed primitive values with direct result bindings,
 and numeric comparisons have intrinsic branching bodies.
 Closure conversion then consumes that lexical tree and produces a distinct `SpsLowProgram` with blocks,
@@ -35,6 +37,7 @@ Both representations have one computation root rather than a top-level declarati
 - `high::variables` provides free-variable analysis, and `high::check` validates closed roots, lexical ownership,
   and placement in the scheme's fragment.
 - `high::normalize` rebuilds SPS using local reductions and the consumer demands defined by `high::demand`.
+- `high::localize` turns a let-bound closure whose every use is a call outside closures into a procedure.
 - `low::syntax` and `low::arena` define first-order SPS with typed package forms.
 - `low::entry` defines the explicit environment/result word roles consumed by block entries and supplied by jumps.
 - `protocol` extracts partial source value/stack protocols.
@@ -44,8 +47,9 @@ Both representations have one computation root rather than a top-level declarati
   High rebuilding preserves retained evidence; closure conversion records it at low entries.
   `low::protocols` checks known call components against those partial source protocols,
   keeping continuation stack extent opaque.
-- `low::convert` performs fresh structural closure conversion; `low::check` validates lexical ownership,
-  the scheme's stack placement, and native continuation metadata.
+- `low::convert` performs fresh structural closure conversion, placing each procedure's label
+  as local to its block or closed; `low::check` validates lexical ownership,
+  the scheme's stack placement, label scope, and native continuation metadata.
   `low::contracts` checks code provenance and package agreement against the word entry roles.
 - `SpsLowPipeline` composes lowering, SPS passes, and closure conversion into first-order SPSLow.
 

@@ -227,7 +227,12 @@ fn erased_polymorphic_calls_check_repeated_value_parameters_together() {
         .compus
         .iter()
         .find_map(|(id, compu)| {
-            let Computation::Jump(Jump { stack, .. }) = compu else { return None };
+            // The default plan localizes the relay, so its calls are label jumps.
+            let (Computation::Jump(Jump { stack, .. })
+            | Computation::JumpLabel(JumpLabel { stack, .. })) = compu
+            else {
+                return None;
+            };
             let Stack::Arg(Cons(_, rest)) = &arena.inner.stacks[stack] else { return None };
             let Stack::Arg(Cons(first, rest)) = &arena.inner.stacks[rest] else { return None };
             let Stack::Arg(Cons(second, _)) = &arena.inner.stacks[rest] else { return None };

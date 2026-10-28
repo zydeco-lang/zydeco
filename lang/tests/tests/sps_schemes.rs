@@ -9,11 +9,11 @@ struct Fixture;
 
 impl Fixture {
     fn agree(name: &str) {
-        // Localizing before normalizing hands procedures to the normalizer.
+        // The default plan localizes after normalizing; the reverse order hands procedures to the
+        // normalizer.
         let plans = [
             SpsPlan::Default,
             SpsPlan::None,
-            SpsPlan::Custom(vec![SpsPass::Normalize, SpsPass::Localize]),
             SpsPlan::Custom(vec![SpsPass::Localize, SpsPass::Normalize]),
         ];
         for &scheme in SpsScheme::ALL {

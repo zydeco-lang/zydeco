@@ -24,10 +24,11 @@ impl Fixture {
 #[test]
 fn selections_preserve_order_duplicates_and_canonical_spelling() {
     for (text, canonical, count) in [
-        ("default", "default", 1),
+        ("default", "default", 2),
         (" none ", "none", 0),
         ("normalize", "normalize", 1),
         (" normalize , normalize ", "normalize,normalize", 2),
+        ("localize,normalize", "localize,normalize", 2),
     ] {
         let plan = text.parse::<SpsPlan>().unwrap();
         assert_eq!(plan.to_string(), canonical);
@@ -37,6 +38,7 @@ fn selections_preserve_order_duplicates_and_canonical_spelling() {
     let plan = SpsPlan::Custom(vec![SpsPass::Normalize, SpsPass::Normalize]);
     let explain = |plan| SpsSelection { plan, ..SpsSelection::default() }.explain();
     assert!(explain(plan).contains("normalize[1]\n  normalize[2]"));
+    assert!(explain(SpsPlan::Default).contains("normalize[1]\n  localize[2]"));
     assert!(explain(SpsPlan::None).contains("closure conversion (required)"));
     assert!(!explain(SpsPlan::None).contains("normalize"));
 }

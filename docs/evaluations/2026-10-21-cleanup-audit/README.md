@@ -546,4 +546,7 @@ and [C9](../../references/compiler.md#correspondence-with-sps_l), and the stack 
 which resolves the documentation finding.
 The compiler then implemented the paper's duplicating and full schemes beside branch-join,
 selected with `--sps-scheme`, so the scheme exclusion in the [yardstick](#yardstick) describes `7e5ee4c1` only.
+It then implemented the paper's second-class procedures in their non-recursive form:
+the default SPS plan localizes closures that are only called, and closure conversion lowers procedures to labels,
+so the procedure exclusion in the yardstick likewise describes `7e5ee4c1` only.
 

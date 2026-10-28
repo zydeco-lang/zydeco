@@ -180,14 +180,16 @@ optional transformations, and closure conversion as a sequence.
 Its `with_optimizations` method accepts any pass preserving `FragmentProgram`,
 including `Identity`, a custom Rust pass, or a nested sequence.
 The selected stage runs between the required SPS checks and before closure conversion.
-The default runs the existing normalizer once, keeping its combined reductions and demand analysis;
+The default runs the normalizer once, keeping its combined reductions and demand analysis,
+and then [localizes](#second-class-procedures) the closures that stay shared;
 an empty selection still runs the checks and closure conversion.
 [SPS](#c8-sps-lowering-normalization-and-demand) defines the representation and normalization rules.
 
 [`SpsPlan`](../../lang/stackir/src/passes.rs) describes built-in selection.
-`Default` selects one normalizer, `None` selects no optional transformations,
+`Default` selects `normalize,localize`, `None` selects no optional transformations,
 and `Custom` retains an ordered vector of typed `SpsPass` entries.
-The textual forms are `default`, `none`, and comma-separated pass names; the initial catalog contains `normalize`.
+The textual forms are `default`, `none`, and comma-separated pass names;
+the catalog contains `normalize` and `localize`.
 An empty textual selection, unknown names or options, empty list entries,
 and presets embedded inside lists are rejected before source loading or artifact creation.
 Displaying a plan gives its canonical textual selection.
@@ -230,6 +232,7 @@ Discover the optional passes and explain their enclosing compiler phase without 
 zydeco passes
 zydeco passes --sps-passes default
 zydeco passes --sps-passes normalize,normalize
+zydeco passes --sps-passes localize,normalize
 zydeco passes --sps-scheme dup
 ```
 
@@ -1567,6 +1570,8 @@ One [placement rule](../../lang/stackir/src/scheme.rs) per scheme checks its fra
 | Product match `match_Π V {(x_i)_i => M}` | `Computation::ProductMatch` | `match-product V as p in M` |
 | Coproduct match `match_Σ V {σ_c(x_c) => M_c}` | `Computation::CoprodMatch` | `case V \| c(p) -> M end` |
 | Fixed point `fix (g : Closure B). M` | `Computation::Fix` | `fix g ! S -> M` |
+| Procedure `letproc p • = N in M` | `Computation::LetProc` | `letproc p • = N in M` |
+| Procedure call `p ! S` | `Computation::CallProc` | `p ! S` |
 
 The implementation departs from SPS where Zydeco's source language or its backends need more:
 
@@ -1765,6 +1770,39 @@ Integer division, remainder, and holes retain possible traps unless literal fold
 Executed external calls and `Fix` remain even if their result is unused.
 A dead suspended thunk can disappear without inspecting its recursive body.
 These conditions preserve the order and multiplicity of effects while local reductions expose further consumers.
+
+### Second-Class Procedures
+
+Sharing keeps a closure that several calls use bound, so each call still opens a closure package
+and copies the environment it captured.
+The stack-passing-style paper's second-class procedures share such code without a package.
+`letproc p • = N in M` binds `N` as code over the stack that each call supplies,
+bound to its own `•`, and `p ! S` calls it with a stack built over the ambient one.
+A procedure is not a value: it can only be called, every call lies in the tail of its binding,
+and a closure or fixed-point body hides the procedures bound outside it, because that body runs at a later call.
+The implementation has the paper's minimal, non-recursive form: `p` is not in scope in `N`, so a `fix` stays a closure.
+
+The [fragment validator](../../lang/stackir/src/high/check.rs) checks this scope alongside ownership and placement.
+It rejects a call outside its procedure's tail, including a call from the procedure's own body,
+a call under a closure or fixed-point body, and a procedure used as a value.
+A call consumes its stack, so under the full scheme it receives `•`.
+
+The source language has no procedures.
+The [`localize` pass](../../lang/stackir/src/high/localize.rs) introduces them by reading the paper's localize equation,
+`let x = λ_c •. N in M = letproc x • = N in M`, from left to right.
+A value let of a closure literal is eligible when its binder is called in the tail
+and every occurrence there is the head of a call outside any closure and fixed-point body.
+A bottom-up analyzer decides inner lets first: once a closure is localized, its body no longer hides the calls in it,
+so a binding whose only obstacle was that closure becomes eligible too.
+The rewrite replaces the eligible lets and their calls in place, and the result is revalidated in the program's scheme.
+The default plan localizes after normalizing, so a closure called once is inlined rather than localized;
+`localize,normalize` hands procedures to the normalizer instead.
+
+Normalization keeps procedures as it keeps shared closures.
+A procedure called exactly once moves its body to that call, the paper's procedure β at a single site.
+A procedure whose rebuilt tail no longer calls it is dropped, and the others stay bound with their bodies rebuilt
+over a fresh `•`; under the full scheme a call names the frames it receives, as other consumers do.
+Closure conversion lowers procedures to [labels](#correspondence-with-sps_l).
 
 ### Consumer Demands
 
@@ -1996,7 +2034,7 @@ Administrative definition allocation continues from the consumed SPS program as 
 
 `SpsLowProgram` has one root and first-order closed blocks.
 Its [verifier](../../lang/stackir/src/low/check.rs) checks reference closure, lexical node ownership,
-the stack placement of its scheme, and the word entry contracts below.
+the stack placement of its scheme, label scope, and the word entry contracts below.
 Conversion is homomorphic on stack lets, so SPSLow records and keeps the scheme of its SPS input;
 under the full scheme, a continuation package, whose residual is the saved environment over `•`, binds as one frame.
 A single-occurrence syntax tree means runtime sharing is explicit in variables;
@@ -2020,13 +2058,32 @@ and a continuation becomes a stack package of type `Ko_A = ∃•Y. Label(A ⊘ 
 | Opening a closure package | `Computation::OpenClosure` | `open-closure V as (p, q) in M` |
 | Continuation package of type `Ko_A` | `Stack::ContinuationPackage` | `pack-continuation(V, S)` |
 | Opening a continuation package | `Computation::OpenContinuation` | `open-continuation S as q :: • in M` |
+| Label of a procedure | `Computation::LetLabel` | `label p • -> N in M` or `closed label p • -> N in M` |
+| Jump to a label | `Computation::JumpLabel` | `jump p ! S` |
 
 Continuation blocks list `result: p` before their environment, and returns jump with `result: V`.
+Label jumps carry no word: they supply only a stack.
 The remaining forms are those of SPS without closures, continuations, calls, returns, and fixed points.
 Conversion follows the paper's translation: a call opens the closure package and jumps
 to its code with the environment above the caller's stack; a return opens the continuation package and jumps
 to its code with the result above the restored residual stack, which begins with the saved environment;
 and the structural forms translate homomorphically.
+
+[Procedures](#second-class-procedures) lower to the labels that the paper adds to `SPS_l` for them.
+A label runs its body over the frame of the block that binds it, and a call becomes a direct jump
+that supplies only a stack, with no package.
+The [placement analysis](../../lang/stackir/src/low/convert/procedures.rs) keeps this local form
+when every call lies in the binding block.
+The paper's continuation packages save every variable in scope,
+so a procedure stays reachable from a continuation's body.
+Here a continuation becomes a block of its own that captures only what its body reads,
+so a procedure also called from inside a continuation, or from inside a closed label's body, becomes a closed label.
+Its body pops the procedure's free variables, ordered by definition identity,
+and each jump pushes them over its stack; under the full scheme a stack let names each pushed variable.
+A continuation that calls a closed label captures those variables rather than a closure package.
+The verifier keeps each jump in its label's scope: a local label is reached only from its own block,
+no label is reached from a closure block, and a closed label's body reads no variable.
+A procedure that no call reaches is dropped.
 
 The implementation departs from `SPS_l` in these respects:
 
@@ -2038,6 +2095,8 @@ The implementation departs from `SPS_l` in these respects:
   and each jump supplies the corresponding word.
 - An environment captures the free variables of the converted body, ordered by definition identity,
   rather than every variable in scope.
+  For the same reason, a procedure called from inside a continuation receives its free variables
+  at each jump instead of finding them in a restored frame.
 - A fixed point becomes a closure block whose body first rebuilds its own package from its label and environment,
   the paper's self-referential block.
 - Types are erased; entry kinds, [entry contracts](#word-entry-contracts),
@@ -2234,10 +2293,12 @@ Primitive results can recover their scalar protocol from the typed operation its
 Closure conversion transfers these facts to the low arena and records an `EntryProtocol` for each block.
 Closures retain their incoming source stack protocol, and continuation entries retain the accepted value protocol.
 Recursive self labels inherit the same entry descriptor as their block.
+Localization keeps a procedure's stack protocol from the closure it replaces, and conversion records it
+for the procedure's label, under an unknown argument for each variable that a closed label's jumps push.
 These descriptions come from checked classifiers, not a count of leading `LetArg` nodes.
 
 The [protocol verifier](../../lang/stackir/src/low/protocols.rs) checks known components before SPSLow is published.
-It compares a closure's protocol with the supplied argument stack,
+It compares a closure's protocol, and a label's, with the supplied argument stack,
 and a continuation's accepted value with the result delivered to it.
 Entry kinds agree with administrative roles; known incoming parameter protocols agree
 with their retained source pattern classifiers.
@@ -2343,6 +2404,11 @@ Applying a consumer takes its slot once and moves its payload into the next oper
 Links are affine, meaning they can be used at most once: a value hole emits `Abort`
 and can abandon an entire consumer chain, including an unfinished field sequence.
 Unused records drop with the run without recursively following their links.
+
+Labels are lowered before the tail that jumps to them, so every jump finds its target program.
+A local label becomes one labeled program in the binding activation, compiled in the binding context;
+its jumps push their stack and end in a static `Jump`, so several programs of one activation reach it.
+A closed label becomes a fresh frame entry like a block, and its jumps clear the context before their static `Jump`.
 `ContId` is neither `Copy` nor `Clone`, so applying a consumer also consumes its handle.
 Consumption removes a vacant suffix from the vector, allowing subsequent consumers to reuse that storage.
 Interior vacancies stay in place until consumers above them finish; outstanding IDs never shift.
@@ -2594,6 +2660,9 @@ The [environment capability](#environment-actions-and-roots) defines address sta
 
 The emitter serializes model-defined actions and implements SysV register placement,
 stack alignment, jumps, return prologues, and host bridges.
+Stack alignment propagates the parity of `rsp` along static edges from the root.
+Every other frame entry starts with both parities, because blocks and closed labels can be entered
+from several activations; a program reached with both parities aligns its host calls dynamically.
 [Native packaging](../../cli/src/native.rs) bundles the runtime and shared model
 and invokes the target toolchain using [the CLI build workflow](../../cli/README.md#native-executables).
 [Native-model tests](../../lang/tests/tests/native_model.rs) check preparation and transitions;
@@ -2951,6 +3020,10 @@ Emission sorts arena-derived IDs before assigning functions, imports, locals,
 and static-data offsets; unsupported forms report typed emission errors.
 The emitter currently uses a whole-program local plan and uniform product boxing,
 without ZASM's local-unboxing analysis.
+A local label wraps its tail in a `block` and follows it with the label body,
+so a jump sets the ambient-stack local and branches out of the `block` within the same function and locals.
+A closed label becomes a function of its own, and a jump to it sets the ambient stack and a static program counter
+before returning to the trampoline.
 
 ### Module and Host ABI
 

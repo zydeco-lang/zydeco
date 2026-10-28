@@ -543,7 +543,8 @@ The
 connects source loading and checking to interpretation, SPS lowering, and native or WebAssembly emission.
 SPS is stack-passing style: calls and continuations become explicit in the intermediate representation.
 SPS names the stack where its compilation scheme does, at branch joins by default;
-normalization simplifies known producers and consumers before closure conversion constructs first-order SPSLow.
+normalization simplifies known producers and consumers, and localization turns closures that are only called
+into second-class procedures, before closure conversion constructs first-order SPSLow with labels for them.
 SPSLow checks explicit environment/result entry roles and closure/continuation record provenance
 under the [word entry contract](docs/references/compiler.md#word-entry-contracts).
 It also preserves and checks [partial source protocols](docs/references/compiler.md#partial-source-protocols)

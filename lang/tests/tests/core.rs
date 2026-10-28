@@ -83,15 +83,43 @@ mod normalization {
         }
     }
 
+    /// Jumps to procedure labels, `jump p ! S`, which carry no administrative word.
+    fn label_jumps(sps: &str) -> usize {
+        sps.split("jump ")
+            .skip(1)
+            .filter(|rest| rest.split_once(" ! ").is_some_and(|(target, _)| !target.contains('(')))
+            .count()
+    }
+
     #[test]
     fn local_reductions_preserve_shared_bodies_and_remove_dead_branch_dependencies() {
         let sps = Fixture::sps("local-normalization.zy");
-        assert_eq!(sps.matches("pack-closure(").count(), 1, "{sps}");
-        assert_eq!(sps.matches("open-closure ").count(), 2, "{sps}");
+        // `shared` is called twice, so its body stays shared: one closed label, since the second
+        // call waits inside a continuation, and no closure package.
+        assert_eq!(sps.matches("closed label ").count(), 1, "{sps}");
+        assert_eq!(label_jumps(&sps), 2, "{sps}");
+        assert!(!sps.contains("pack-closure("), "{sps}");
+        assert!(!sps.contains("open-closure "), "{sps}");
         assert_eq!(sps.matches("<primitive:int_add>").count(), 1, "{sps}");
         assert!(!sps.contains("<extern:int_add/2>"), "{sps}");
         assert_eq!(sps.matches("pack-continuation(").count(), 2, "{sps}");
         assert!(!sps.contains("<extern:int_mul/2>"), "{sps}");
+    }
+
+    #[test]
+    fn procedures_replace_shared_closures_and_share_their_frame_when_they_can() {
+        let sps = Fixture::sps("dispatch.zy");
+        assert_eq!(sps.matches("closed label ").count(), 1, "{sps}");
+        assert_eq!(label_jumps(&sps), 2, "{sps}");
+        assert!(!sps.contains("pack-closure("), "{sps}");
+
+        // `finish` is called from both arms of its own block, so its label is local and reads
+        // `offset` from that frame, while `scale` pushes `factor` at each of its two calls.
+        let sps = Fixture::sps("procedures.zy");
+        assert_eq!(sps.matches("closed label ").count(), 2, "{sps}");
+        assert_eq!(sps.lines().filter(|line| line.trim_start().starts_with("label ")).count(), 1);
+        assert_eq!(label_jumps(&sps), 6, "{sps}");
+        assert!(!sps.contains("pack-closure("), "{sps}");
     }
 }
 

@@ -154,7 +154,7 @@ impl SpsSelection {
 impl SpsPlan {
     pub fn passes(&self) -> &[SpsPass] {
         match self {
-            | Self::Default => &[SpsPass::Normalize],
+            | Self::Default => &[SpsPass::Normalize, SpsPass::Localize],
             | Self::None => &[],
             | Self::Custom(passes) => passes,
         }
