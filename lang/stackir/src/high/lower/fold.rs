@@ -23,17 +23,75 @@ pub(super) enum MatchKind {
     Product,
 }
 
+/// The kind of an unfinished pattern and the source fields it keeps; its children arrive as
+/// completed patterns.
+pub(super) enum PatternParent {
+    Hole,
+    Var(DefId),
+    Triv,
+    /// A named or static-cons pattern, which lowers to its only child.
+    Forward,
+    Ctor(CtorIdx),
+    Alias {
+        count: usize,
+    },
+    VCons {
+        count: usize,
+        layout: ProductLayout,
+    },
+}
+
+/// The kind of an unfinished value and the source fields it keeps; its children arrive as
+/// completed value plans.
+pub(super) enum ValueParent {
+    Hole,
+    Var(DefId),
+    Triv,
+    Lit(ss::Literal),
+    /// A named or static-cons value, which lowers to its only child.
+    Forward,
+    /// A value let, whose bindee, tail, and binder arrive in that order.
+    Let,
+    /// A static value operation that static elimination should have removed.
+    Residual,
+    Thunk,
+    Ctor(CtorIdx),
+    VCons {
+        count: usize,
+        layout: ProductLayout,
+    },
+    Proj(ss::ProjTarget),
+}
+
 /// Each finish frame consumes the completed children of exactly one occurrence.
 /// Intermediate frames retain the original interleaving of allocation and descent.
+/// Frames carry the source fields their resumption needs, so completing a child never
+/// re-establishes the source node's variant. Frames that walk a source vector carry its id
+/// and the next position instead of the vector.
 pub(super) enum Work {
     Pattern(ss::VPatId),
+    /// Lower the children of an alias or product pattern in order.
     PatternChildren(ss::VPatId, usize),
-    FinishPattern(ss::VPatId),
+    FinishPattern {
+        source: ss::VPatId,
+        parent: PatternParent,
+    },
     Value(ss::ValueId),
+    /// Lower the items of a product value in order.
     ValueChildren(ss::ValueId, usize),
-    ValueLetTail(ss::ValueId),
-    ValueLetPattern(ss::ValueId),
-    FinishValue(ss::ValueId),
+    ValueLetTail {
+        source: ss::ValueId,
+        binder: ss::VPatId,
+        tail: ss::ValueId,
+    },
+    ValueLetPattern {
+        source: ss::ValueId,
+        binder: ss::VPatId,
+    },
+    FinishValue {
+        source: ss::ValueId,
+        parent: ValueParent,
+    },
     Computation(ss::CompuId, StackId),
     BinderBody {
         binder: ss::VPatId,
@@ -167,9 +225,12 @@ pub(super) enum Work {
         binder: VPatId,
         site: Option<ss::TermId>,
     },
+    /// Lower a constructor pattern's arms once its fallback rows are complete.
     ConstructorFallback {
         scrutinee: DefId,
-        pattern: ss::VPatId,
+        data: ss::DataId,
+        name: CtorName,
+        argument: ss::VPatId,
         success: MatchPlanId,
         continuation: DefId,
         stack: StackId,
@@ -287,63 +348,63 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         }
     }
 
-    fn visit_pattern(&mut self, source: ss::VPatId, position: usize) -> Step<Self> {
-        let child = match &self.lo.statics.vpats[&source] {
+    /// The index of constructor `name` in the declaration order of `data`.
+    fn ctor_idx(&self, data: ss::DataId, name: CtorName) -> CtorIdx {
+        let idx = self.lo.statics.datas[&data]
+            .iter()
+            .position(|(tag, _)| tag == &name)
+            .expect("Constructor tag not found");
+        CtorIdx { idx, name }
+    }
+
+    fn visit_pattern(&mut self, source: ss::VPatId) -> Step<Self> {
+        let parent = match &self.lo.statics.vpats[&source] {
+            | ss::ValuePattern::Hole(_) => PatternParent::Hole,
+            | ss::ValuePattern::Var(def) => PatternParent::Var(*def),
+            | ss::ValuePattern::Triv(_) => PatternParent::Triv,
             | ss::ValuePattern::Named(Named(_, child))
-            | ss::ValuePattern::Ctor(Ctor(_, child))
-            | ss::ValuePattern::SCons(ss::ConsN(_, child)) => (position == 0).then_some(*child),
-            | ss::ValuePattern::Alias(Alias(ConsN(head, tail))) => {
-                if position == head.len() {
-                    Some(*tail)
-                } else {
-                    head.get(position).copied()
-                }
+            | ss::ValuePattern::SCons(ss::ConsN(_, child)) => {
+                return Step::Call {
+                    input: Work::Pattern(*child),
+                    frame: Work::FinishPattern { source, parent: PatternParent::Forward },
+                };
             }
-            | ss::ValuePattern::VCons(children) => children.get(position).copied(),
-            | ss::ValuePattern::Hole(_) | ss::ValuePattern::Var(_) | ss::ValuePattern::Triv(_) => {
-                None
+            | ss::ValuePattern::Ctor(Ctor(name, child)) => {
+                let tag = self.ctor_idx(self.lo.statics.data_pat_hints[&source], name.clone());
+                return Step::Call {
+                    input: Work::Pattern(*child),
+                    frame: Work::FinishPattern { source, parent: PatternParent::Ctor(tag) },
+                };
+            }
+            | ss::ValuePattern::Alias(_) | ss::ValuePattern::VCons(_) => {
+                return Step::TailCall(Work::PatternChildren(source, 0));
             }
             | ss::ValuePattern::View(_) => unreachable!("static elaboration eliminates views"),
             | ss::ValuePattern::Lit(_) => unreachable!("literal patterns require a match plan"),
         };
-        match child {
-            | Some(child) => Step::Call {
-                input: Work::Pattern(child),
-                frame: Work::PatternChildren(source, position + 1),
-            },
-            | None => Step::TailCall(Work::FinishPattern(source)),
-        }
+        Step::TailCall(Work::FinishPattern { source, parent })
     }
 
-    fn finish_pattern(&mut self, source: ss::VPatId) {
-        let pattern: ValuePattern = match self.lo.statics.vpats[&source].clone() {
-            | ss::ValuePattern::Hole(hole) => hole.into(),
-            | ss::ValuePattern::Var(def) => def.into(),
-            | ss::ValuePattern::Triv(triv) => triv.into(),
-            | ss::ValuePattern::Named(Named(_, _)) | ss::ValuePattern::SCons(_) => {
+    fn finish_pattern(&mut self, source: ss::VPatId, parent: PatternParent) {
+        let pattern: ValuePattern = match parent {
+            | PatternParent::Hole => Hole.into(),
+            | PatternParent::Var(def) => def.into(),
+            | PatternParent::Triv => Triv.into(),
+            | PatternParent::Forward => {
                 let child = self.pattern();
                 self.lo.arena.inner.vpats[&child].clone()
             }
-            | ss::ValuePattern::Ctor(Ctor(name, _)) => {
+            | PatternParent::Ctor(tag) => {
                 let child = self.pattern();
-                let data = self.lo.statics.data_pat_hints[&source];
-                let idx = self.lo.statics.datas[&data]
-                    .iter()
-                    .position(|(tag, _)| tag == &name)
-                    .expect("Constructor tag not found");
-                Ctor(CtorIdx { idx, name }, child).into()
+                Ctor(tag, child).into()
             }
-            | ss::ValuePattern::Alias(Alias(children)) => {
-                let children = self.patterns.split_off(self.patterns.len() - children.len());
+            | PatternParent::Alias { count } => {
+                let children = self.patterns.split_off(self.patterns.len() - count);
                 Alias(ConsN::from_vec(children).unwrap()).into()
             }
-            | ss::ValuePattern::VCons(children) => {
-                let children = self.patterns.split_off(self.patterns.len() - children.len());
-                let layout = self.lo.product_layout(self.lo.statics.annotations_vpat[&source]);
+            | PatternParent::VCons { count, layout } => {
+                let children = self.patterns.split_off(self.patterns.len() - count);
                 VCons::new(children, layout).into()
-            }
-            | ss::ValuePattern::View(_) | ss::ValuePattern::Lit(_) => {
-                unreachable!("structural pattern")
             }
         };
         let pattern = pattern.build(self.lo, Some(ss::PatId::Value(source)));
@@ -368,42 +429,54 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             self.values.push(ValuePlan::pure(value));
             return Step::Return(());
         }
-        match &self.lo.statics.values[&source] {
-            | ss::Value::Named(Named(_, child))
-            | ss::Value::Ctor(Ctor(_, child))
-            | ss::Value::SCons(ss::ConsN(_, child))
-            | ss::Value::Proj(Proj(child, _)) => {
-                Step::Call { input: Work::Value(*child), frame: Work::FinishValue(source) }
+        let (child, parent) = match &self.lo.statics.values[&source] {
+            | ss::Value::Named(Named(_, child)) | ss::Value::SCons(ss::ConsN(_, child)) => {
+                (Some(*child), ValueParent::Forward)
             }
-            | ss::Value::Let(Let { bindee, .. }) => {
-                Step::Call { input: Work::Value(*bindee), frame: Work::ValueLetTail(source) }
+            | ss::Value::Ctor(Ctor(name, child)) => {
+                let tag = self.ctor_idx(self.lo.statics.data_hints[&source], name.clone());
+                (Some(*child), ValueParent::Ctor(tag))
+            }
+            | ss::Value::Proj(Proj(child, field)) => {
+                (Some(*child), ValueParent::Proj(field.target.clone()))
+            }
+            | ss::Value::Let(Let { binder, bindee, tail }) => {
+                return Step::Call {
+                    input: Work::Value(*bindee),
+                    frame: Work::ValueLetTail { source, binder: *binder, tail: *tail },
+                };
             }
             | ss::Value::Thunk(Thunk(body)) => {
                 let stack = StackVar.build(self.lo, site);
-                Step::Call {
+                return Step::Call {
                     input: Work::Computation(*body, stack),
-                    frame: Work::FinishValue(source),
-                }
+                    frame: Work::FinishValue { source, parent: ValueParent::Thunk },
+                };
             }
-            | ss::Value::VCons(_) => Step::TailCall(Work::ValueChildren(source, 0)),
-            | ss::Value::Hole(_)
-            | ss::Value::Var(_)
-            | ss::Value::Triv(_)
-            | ss::Value::Lit(_)
+            | ss::Value::VCons(_) => return Step::TailCall(Work::ValueChildren(source, 0)),
+            | ss::Value::Hole(_) => (None, ValueParent::Hole),
+            | ss::Value::Var(def) => (None, ValueParent::Var(*def)),
+            | ss::Value::Triv(_) => (None, ValueParent::Triv),
+            | ss::Value::Lit(literal) => (None, ValueParent::Lit(literal.clone())),
             | ss::Value::ValAbs(_)
             | ss::Value::ValApp(_)
             | ss::Value::Match(_)
-            | ss::Value::IntOp(_) => Step::TailCall(Work::FinishValue(source)),
+            | ss::Value::IntOp(_) => (None, ValueParent::Residual),
+        };
+        let frame = Work::FinishValue { source, parent };
+        match child {
+            | Some(child) => Step::Call { input: Work::Value(child), frame },
+            | None => Step::TailCall(frame),
         }
     }
 
-    fn finish_value(&mut self, source: ss::ValueId) {
+    fn finish_value(&mut self, source: ss::ValueId, parent: ValueParent) {
         let site = Some(ss::TermId::Value(source));
-        let plan = match self.lo.statics.values[&source].clone() {
-            | ss::Value::Hole(_) => ValuePlan::pure(Hole.build(self.lo, site)),
-            | ss::Value::Var(def) => ValuePlan::pure(def.build(self.lo, site)),
-            | ss::Value::Named(_) | ss::Value::SCons(_) => self.value(),
-            | ss::Value::Let(_) => {
+        let plan = match parent {
+            | ValueParent::Hole => ValuePlan::pure(Hole.build(self.lo, site)),
+            | ValueParent::Var(def) => ValuePlan::pure(def.build(self.lo, site)),
+            | ValueParent::Forward => self.value(),
+            | ValueParent::Let => {
                 let tail = self.value();
                 let bindee = self.value();
                 let binder = self.pattern();
@@ -413,41 +486,32 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     value: tail.value,
                 }
             }
-            | ss::Value::ValAbs(_)
-            | ss::Value::ValApp(_)
-            | ss::Value::Match(_)
-            | ss::Value::IntOp(_) => {
+            | ValueParent::Residual => {
                 self.lo.lower_errors.push(SpsLoweringError::ResidualStaticValue { value: source });
                 ValuePlan::pure(Hole.build(self.lo, site))
             }
-            | ss::Value::Thunk(_) => {
+            | ValueParent::Thunk => {
                 let body = self.computation();
                 ValuePlan::pure(Closure { stack: StackVar, body }.build(self.lo, site))
             }
-            | ss::Value::Ctor(Ctor(name, _)) => {
-                let data = self.lo.statics.data_hints[&source];
-                let idx = self.lo.statics.datas[&data]
-                    .iter()
-                    .position(|(tag, _)| tag == &name)
-                    .expect("Constructor tag not found");
-                self.value().map(|body| Ctor(CtorIdx { idx, name }, body).build(self.lo, site))
+            | ValueParent::Ctor(tag) => {
+                self.value().map(|body| Ctor(tag, body).build(self.lo, site))
             }
-            | ss::Value::Triv(triv) => ValuePlan::pure(triv.build(self.lo, site)),
-            | ss::Value::VCons(children) => {
-                let layout = self.lo.product_layout(self.lo.statics.annotations_value[&source]);
-                let children = self.values.split_off(self.values.len() - children.len());
+            | ValueParent::Triv => ValuePlan::pure(Triv.build(self.lo, site)),
+            | ValueParent::VCons { count, layout } => {
+                let children = self.values.split_off(self.values.len() - count);
                 ValuePlan::sequence(children)
                     .map(|children| VCons::new(children, layout).build(self.lo, site))
             }
-            | ss::Value::Proj(Proj(_, field)) => {
-                field.target.products.into_iter().fold(self.value(), |head, projection| {
+            | ValueParent::Proj(target) => {
+                target.products.into_iter().fold(self.value(), |head, projection| {
                     let layout = self.lo.product_layout(projection.product);
                     let (binding, projected) =
                         self.lo.projection_binding(head.value, projection.position, layout, site);
                     head.with_binding(binding, projected)
                 })
             }
-            | ss::Value::Lit(literal) => ValuePlan::pure(literal.build(self.lo, site)),
+            | ValueParent::Lit(literal) => ValuePlan::pure(literal.build(self.lo, site)),
         };
         if let Some(&ty) = self.lo.statics.annotations_value.get(&source) {
             let _ =
@@ -631,16 +695,19 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
                     frame: Work::PlannedProduct { scrutinee, binder, site },
                 }
             }
-            | ss::ValuePattern::Ctor(_) => {
+            | ss::ValuePattern::Ctor(Ctor(name, argument)) => {
                 // Bind remaining rows once; unmatched tags and rejected payloads
                 // resume that closure with their own ambient branch stack.
+                let data = self.lo.statics.data_pat_hints[&pattern];
                 let continuation = self.lo.alloc_admin_def("__match_fallback__");
                 let failure_stack = StackVar.build(self.lo, site);
                 Step::Call {
                     input: Work::MatchPlan { plan: failure, stack: failure_stack, site },
                     frame: Work::ConstructorFallback {
                         scrutinee,
-                        pattern,
+                        data,
+                        name,
+                        argument,
                         success,
                         continuation,
                         stack,
@@ -695,13 +762,41 @@ impl Folder for LoweringFolder<'_, '_> {
 
     fn enter(&mut self, work: Work) -> Step<Self> {
         match work {
-            | Work::Pattern(source) => return self.visit_pattern(source, 0),
+            | Work::Pattern(source) => return self.visit_pattern(source),
             | Work::PatternChildren(source, position) => {
-                return self.visit_pattern(source, position);
+                // The next child to lower, or the finished parent once every child is complete.
+                let next = match &self.lo.statics.vpats[&source] {
+                    | ss::ValuePattern::Alias(Alias(children)) => {
+                        let ConsN(head, tail) = children;
+                        let child = if position == head.len() {
+                            Some(*tail)
+                        } else {
+                            head.get(position).copied()
+                        };
+                        child.ok_or(PatternParent::Alias { count: children.len() })
+                    }
+                    | ss::ValuePattern::VCons(children) => {
+                        children.get(position).copied().ok_or_else(|| {
+                            let ty = self.lo.statics.annotations_vpat[&source];
+                            let layout = self.lo.product_layout(ty);
+                            PatternParent::VCons { count: children.len(), layout }
+                        })
+                    }
+                    | _ => unreachable!(
+                        "a pattern-children frame is pushed only for an alias or product pattern"
+                    ),
+                };
+                return match next {
+                    | Ok(child) => Step::Call {
+                        input: Work::Pattern(child),
+                        frame: Work::PatternChildren(source, position + 1),
+                    },
+                    | Err(parent) => Step::TailCall(Work::FinishPattern { source, parent }),
+                };
             }
-            | Work::FinishPattern(source) => self.finish_pattern(source),
+            | Work::FinishPattern { source, parent } => self.finish_pattern(source, parent),
             | Work::Value(source) => return self.visit_value(source),
-            | Work::FinishValue(source) => self.finish_value(source),
+            | Work::FinishValue { source, parent } => self.finish_value(source, parent),
             | Work::Computation(source, stack) => return self.visit_computation(source, stack),
             | Work::MatchPlan { plan, stack, site } => {
                 return self.visit_match_plan(plan, stack, site);
@@ -711,32 +806,28 @@ impl Folder for LoweringFolder<'_, '_> {
             }
             | Work::ValueChildren(source, position) => {
                 let ss::Value::VCons(children) = &self.lo.statics.values[&source] else {
-                    unreachable!("product value children")
+                    unreachable!("a value-children frame is pushed only for a product value")
                 };
-                return match children.get(position) {
-                    | Some(child) => Step::Call {
-                        input: Work::Value(*child),
+                if let Some(&child) = children.get(position) {
+                    return Step::Call {
+                        input: Work::Value(child),
                         frame: Work::ValueChildren(source, position + 1),
-                    },
-                    | None => Step::TailCall(Work::FinishValue(source)),
-                };
+                    };
+                }
+                let layout = self.lo.product_layout(self.lo.statics.annotations_value[&source]);
+                let parent = ValueParent::VCons { count: children.len(), layout };
+                return Step::TailCall(Work::FinishValue { source, parent });
             }
-            | Work::ValueLetTail(source) => {
-                let ss::Value::Let(Let { tail, .. }) = self.lo.statics.values[&source] else {
-                    unreachable!("value let")
-                };
+            | Work::ValueLetTail { source, binder, tail } => {
                 return Step::Call {
                     input: Work::Value(tail),
-                    frame: Work::ValueLetPattern(source),
+                    frame: Work::ValueLetPattern { source, binder },
                 };
             }
-            | Work::ValueLetPattern(source) => {
-                let ss::Value::Let(Let { binder, .. }) = self.lo.statics.values[&source] else {
-                    unreachable!("value let")
-                };
+            | Work::ValueLetPattern { source, binder } => {
                 return Step::Call {
                     input: Work::Pattern(binder),
-                    frame: Work::FinishValue(source),
+                    frame: Work::FinishValue { source, parent: ValueParent::Let },
                 };
             }
             | Work::ProductMatchTail { scrut, tail, stack, site } => {
@@ -982,7 +1073,9 @@ impl Folder for LoweringFolder<'_, '_> {
             }
             | Work::ConstructorFallback {
                 scrutinee,
-                pattern,
+                data,
+                name,
+                argument,
                 success,
                 continuation,
                 stack,
@@ -991,12 +1084,6 @@ impl Folder for LoweringFolder<'_, '_> {
                 let body = self.computation();
                 let fallback = Closure { stack: StackVar, body }.build(self.lo, site);
                 let failure = self.plan(MatchPlan::Continue(continuation));
-                let ss::ValuePattern::Ctor(Ctor(name, argument)) =
-                    self.lo.statics.vpats[&pattern].clone()
-                else {
-                    unreachable!("constructor fallback")
-                };
-                let data = self.lo.statics.data_pat_hints[&pattern];
                 let constructors = &self.lo.statics.datas[&data];
                 let remaining = constructors
                     .iter()
