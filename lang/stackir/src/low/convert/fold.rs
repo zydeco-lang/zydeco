@@ -61,6 +61,27 @@ pub(super) enum Work {
         recursive: high::DefId,
         label: high::DefId,
     },
+    /// Convert a procedure's tail once its label body is complete.
+    ProcedureTail {
+        source: high::CompuId,
+        label: high::DefId,
+        kind: low::LabelKind,
+        /// A closed label's parameters, popped in order: each source variable and its binder.
+        parameters: Vec<(high::DefId, high::DefId)>,
+        tail: high::CompuId,
+        env: RenameEnvId,
+    },
+    FinishProcedure {
+        source: high::CompuId,
+        label: high::DefId,
+        kind: low::LabelKind,
+        /// The number of variables a closed label's jumps push.
+        pushed: usize,
+    },
+    FinishCall {
+        source: high::CompuId,
+        env: RenameEnvId,
+    },
 }
 
 pub(super) struct ConversionFolder<'a, 'source, D> {
@@ -107,7 +128,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     fn captures(
         &mut self, body: high::CompuId, excluded: Context<high::DefId>, env: RenameEnvId,
     ) -> Captures {
-        let sources = self.conversion.sorted_free_vars(body, excluded);
+        let sources = self.conversion.sorted_free_vars(body, excluded, env);
         let bindings = self.conversion.capture_bindings(&sources);
         Captures { env, sources, bindings }
     }
@@ -226,6 +247,42 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
             | high::Computation::CoCase(high::SCoMatch { scrut: stack, .. }) => {
                 Step::Call { input: Work::Stack(stack, env), frame: Work::AfterStack(source, env) }
             }
+            | high::Computation::LetProc(high::LetProc { procedure, body, tail, .. }) => {
+                let Some(kind) = self.conversion.procedures[&source] else {
+                    // No call reaches the procedure, so its body is dead.
+                    return Step::TailCall(Work::Computation(tail, env));
+                };
+                let label = self.conversion.alloc_like(procedure);
+                let (variables, parameters) = match kind {
+                    | low::LabelKind::Local => (Vec::new(), Vec::new()),
+                    | low::LabelKind::Closed => {
+                        let variables = self.conversion.sorted_free_vars(body, Context::new(), env);
+                        let parameters = variables
+                            .iter()
+                            .map(|variable| (*variable, self.conversion.alloc_like(*variable)))
+                            .collect::<Vec<_>>();
+                        (variables, parameters)
+                    }
+                };
+                self.conversion.labels.insert(label, variables);
+                let body_env = self.conversion.extend_env(env, parameters.iter().copied());
+                let tail_env = self.conversion.extend_env(env, [(procedure, label)]);
+                Step::Call {
+                    input: Work::Computation(body, body_env),
+                    frame: Work::ProcedureTail {
+                        source,
+                        label,
+                        kind,
+                        parameters,
+                        tail,
+                        env: tail_env,
+                    },
+                }
+            }
+            | high::Computation::CallProc(high::CallProc { stack, .. }) => Step::Call {
+                input: Work::Stack(stack, env),
+                frame: Work::FinishCall { source, env },
+            },
         }
     }
 
@@ -610,6 +667,71 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                 self.computations.push(
                     low::Jump { target: block, argument, stack }.build(self.conversion, site),
                 );
+            }
+            | Work::ProcedureTail { source, label, kind, parameters, tail, env } => {
+                let body = self.computation();
+                let site = self.conversion.compu_site(source);
+                let pushed = parameters.len();
+                // A closed label pops the variables each jump pushes, the first on top.
+                let body = parameters.into_iter().rev().fold(body, |body, (_, parameter)| {
+                    let binder: low::VPatId = parameter.build(self.conversion, None);
+                    let ambient = low::StackVar.build(self.conversion, site);
+                    low::LetArg {
+                        binder: low::Cons(binder, low::StackVar),
+                        bindee: ambient,
+                        tail: body,
+                    }
+                    .build(self.conversion, site)
+                });
+                self.computations.push(body);
+                return Step::Call {
+                    input: Work::Computation(tail, env),
+                    frame: Work::FinishProcedure { source, label, kind, pushed },
+                };
+            }
+            | Work::FinishProcedure { source, label, kind, pushed } => {
+                let tail = self.computation();
+                let body = self.computation();
+                let site = self.conversion.compu_site(source);
+                let node = low::LetLabel { label, kind, body, tail }.build(self.conversion, site);
+                // Jumps supply the procedure's stack under the variables a closed label pops.
+                if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
+                    let protocol = (0..pushed).fold(protocol.clone(), |rest, _| {
+                        StackProtocol::Argument(Box::new(ValueProtocol::Unknown), Box::new(rest))
+                    });
+                    self.conversion.arena.inner.label_protocols.insert_new(label, protocol);
+                }
+                self.computations.push(node);
+            }
+            | Work::FinishCall { source, env } => {
+                let high::Computation::CallProc(high::CallProc { procedure, .. }) =
+                    self.conversion.source.inner.compus[&source]
+                else {
+                    unreachable!("procedure call")
+                };
+                let stack = self.stack();
+                let site = self.conversion.compu_site(source);
+                let label = self.conversion.renamed_def(env, procedure);
+                let variables = self.conversion.labels[&label].clone();
+                let jump = if self.conversion.scheme.names_frames() {
+                    // The full scheme names each pushed variable with a stack let, deepest first,
+                    // so that the jump receives the ambient stack.
+                    let jump = low::JumpLabel { label, stack }.build(self.conversion, site);
+                    variables.iter().fold(jump, |tail, variable| {
+                        let value = self.conversion.translated_var(*variable, env, site);
+                        let ambient = low::StackVar.build(self.conversion, site);
+                        let bindee = low::Cons(value, ambient).build(self.conversion, site);
+                        low::LetStack { binder: low::StackVar, bindee, tail }
+                            .build(self.conversion, site)
+                    })
+                } else {
+                    let stack = variables.iter().rev().fold(stack, |rest, variable| {
+                        let value = self.conversion.translated_var(*variable, env, site);
+                        low::Cons(value, rest).build(self.conversion, site)
+                    });
+                    low::JumpLabel { label, stack }.build(self.conversion, site)
+                };
+                self.computations.push(jump);
             }
             | Work::FinishComputation(source) => {
                 let site = self.conversion.compu_site(source);

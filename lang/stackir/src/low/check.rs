@@ -1,10 +1,11 @@
 //! Structural validation for first-order SPS.
 
+use super::entry::EntryKind;
 use super::syntax::*;
-use super::traverse::{Edge, Node, Occurrence, Together, Traversal, Visitor};
+use super::traverse::{Edge, EntityId, Node, Occurrence, Together, Traversal, Visitor};
 use super::variables::Variables;
 use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackUse};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use zydeco_utils::fold::{Driver, Explicit};
 
 /// A lexical first-order SPS tree that keeps the stack placement of its scheme's fragment.
@@ -31,6 +32,18 @@ pub enum SpsLowValidationError {
     DuplicateBlockLabel { label: DefId },
     #[error("SPSLow block {label:?} still captures values implicitly: {captures:?}")]
     ImplicitBlockCapture { label: DefId, captures: Vec<DefId> },
+    #[error("SPSLow label {label:?} is bound more than once")]
+    DuplicateLabel { label: DefId },
+    #[error("computation {compu:?} jumps to label {label:?} outside the tail that binds it")]
+    UnboundLabel { compu: CompuId, label: DefId },
+    #[error(
+        "computation {compu:?} jumps from inside a block to local label {label:?}, whose body reads the frame of the block that binds it"
+    )]
+    LocalLabelAcrossBlock { compu: CompuId, label: DefId },
+    #[error("computation {compu:?} jumps to label {label:?} from inside a closure block")]
+    LabelUnderClosure { compu: CompuId, label: DefId },
+    #[error("closed SPSLow label {label:?} still reads variables: {captures:?}")]
+    ImplicitLabelCapture { label: DefId, captures: Vec<DefId> },
     #[error("SPSLow root still has free value variables: {variables:?}")]
     OpenRoot { variables: Vec<DefId> },
     #[error("continuation {stack:?} has an invalid capture or entry context")]
@@ -93,6 +106,21 @@ struct SpsLowValidator<'a> {
     stacks: HashSet<StackId>,
     labels: HashSet<DefId>,
     blocks: Vec<ValueId>,
+    /// Closed labels and their bodies, which must read no variable.
+    closed_labels: Vec<(DefId, CompuId)>,
+    /// The scopes around the current node, innermost last, each with the node that opened it.
+    scopes: Vec<(EntityId, LabelScope)>,
+    /// Scopes that open when the traversal reaches the keyed node.
+    openings: HashMap<EntityId, LabelScope>,
+}
+
+/// A region that a label jump resolves through.
+#[derive(Clone, Copy, Debug)]
+enum LabelScope {
+    /// The tail of a label binding.
+    Bound(DefId, LabelKind),
+    /// The body of a block, which a jump to a label bound outside it leaves the label's frame to reach.
+    Block(EntryKind),
 }
 
 impl ContinuationEntry {
@@ -158,6 +186,9 @@ impl<'a> SpsLowValidator<'a> {
             stacks: HashSet::new(),
             labels: HashSet::new(),
             blocks: Vec::new(),
+            closed_labels: Vec::new(),
+            scopes: Vec::new(),
+            openings: HashMap::new(),
         };
         let mut analyses = Together { first: validator, second: Variables::default() };
         Traversal { arena }.run_with_driver::<D>(root.into(), &mut analyses);
@@ -175,6 +206,17 @@ impl<'a> SpsLowValidator<'a> {
                 .collect::<Vec<_>>();
             if !captures.is_empty() {
                 return Err(SpsLowValidationError::ImplicitBlockCapture { label, captures });
+            }
+        }
+        for (label, body) in validator.closed_labels {
+            let captures = variables
+                .free_variables(body.into())
+                .expect("validated label body")
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
+            if !captures.is_empty() {
+                return Err(SpsLowValidationError::ImplicitLabelCapture { label, captures });
             }
         }
         for (stack, entry) in &arena.continuations {
@@ -198,25 +240,67 @@ impl<'a> SpsLowValidator<'a> {
                 | Node::Computation(compu, _) => SpsLowValidationError::SharedComputation { compu },
             });
         }
+        if let Some(scope) = self.openings.remove(&node.id()) {
+            self.scopes.push((node.id(), scope));
+        }
         match node {
             | Node::Pattern(_, _) => {}
-            | Node::Value(id, Value::Block(Block { label, .. })) => {
+            | Node::Value(id, Value::Block(Block { label, entry, .. })) => {
                 if !self.labels.insert(*label) {
                     return Err(SpsLowValidationError::DuplicateBlockLabel { label: *label });
                 }
                 self.blocks.push(id);
+                self.scopes.push((node.id(), LabelScope::Block(entry.kind())));
             }
             | Node::Value(_, _) => {}
             | Node::Stack(id, _) => {
                 self.stacks.insert(id);
             }
             | Node::Computation(id, computation) => {
+                match computation {
+                    | Computation::LetLabel(LetLabel { label, kind, body, tail }) => {
+                        if !self.labels.insert(*label) {
+                            return Err(SpsLowValidationError::DuplicateLabel { label: *label });
+                        }
+                        if *kind == LabelKind::Closed {
+                            self.closed_labels.push((*label, *body));
+                        }
+                        self.openings.insert((*tail).into(), LabelScope::Bound(*label, *kind));
+                    }
+                    | Computation::JumpLabel(JumpLabel { label, .. }) => {
+                        self.resolve(id, *label)?;
+                    }
+                    | _ => {}
+                }
                 if let Some(error) = self.scheme.check(self.usage(computation, edge)) {
                     return Err(SpsLowValidationError::Placement { compu: id, error });
                 }
             }
         }
         Ok(())
+    }
+
+    /// A jump reaches a label bound around it. A local label's body reads its binding block's
+    /// frame, so its jumps stay in that block; no jump leaves a closure block.
+    fn resolve(&self, compu: CompuId, label: DefId) -> Result<(), SpsLowValidationError> {
+        let mut crossed = false;
+        for (_, scope) in self.scopes.iter().rev() {
+            match *scope {
+                | LabelScope::Block(EntryKind::Closure) => {
+                    return Err(SpsLowValidationError::LabelUnderClosure { compu, label });
+                }
+                | LabelScope::Block(EntryKind::Continuation) => crossed = true,
+                | LabelScope::Bound(bound, kind) if bound == label => {
+                    return if crossed && kind == LabelKind::Local {
+                        Err(SpsLowValidationError::LocalLabelAcrossBlock { compu, label })
+                    } else {
+                        Ok(())
+                    };
+                }
+                | LabelScope::Bound(..) => {}
+            }
+        }
+        Err(SpsLowValidationError::UnboundLabel { compu, label })
     }
 
     fn usage(&self, computation: &Computation, edge: Edge) -> StackUse {
@@ -231,6 +315,7 @@ impl<'a> SpsLowValidator<'a> {
             | Computation::Hole(SHole(stack))
             | Computation::ExternCall(ExternCall { stack, .. })
             | Computation::Jump(Jump { stack, .. })
+            | Computation::JumpLabel(JumpLabel { stack, .. })
             | Computation::OpenContinuation(OpenContinuation { package: stack, .. })
             | Computation::LetArg(LetArg { bindee: stack, .. })
             | Computation::CoCase(SCoMatch { scrut: stack, .. }) => {
@@ -259,6 +344,12 @@ impl Visitor for SpsLowValidator<'_> {
     fn enter(&mut self, node: Node<'_>, edge: Edge, occurrence: Occurrence) {
         if self.error.is_none() {
             self.error = self.check(node, edge, occurrence).err();
+        }
+    }
+
+    fn exit(&mut self, node: Node<'_>) {
+        while self.scopes.last().is_some_and(|(opener, _)| *opener == node.id()) {
+            self.scopes.pop();
         }
     }
 }
@@ -574,5 +665,134 @@ mod tests {
             .unwrap()
             .join()
             .unwrap();
+    }
+
+    /// SPSLow programs that bind and jump to one label.
+    struct Labels {
+        arena: SpsLowArena,
+        label: DefId,
+    }
+
+    impl Labels {
+        fn new() -> Self {
+            let mut arena = SpsLowArena::default();
+            let label = arena.admin.fresh_def();
+            Self { arena, label }
+        }
+
+        fn abort(&mut self) -> CompuId {
+            let stack = StackVar.build(&mut self.arena, None);
+            SHole(stack).build(&mut self.arena, None)
+        }
+
+        fn jump(&mut self) -> CompuId {
+            let stack = StackVar.build(&mut self.arena, None);
+            JumpLabel { label: self.label, stack }.build(&mut self.arena, None)
+        }
+
+        fn bind(&mut self, kind: LabelKind, body: CompuId, tail: CompuId) -> CompuId {
+            LetLabel { label: self.label, kind, body, tail }.build(&mut self.arena, None)
+        }
+
+        /// `let _ = block[k](entry) • -> body in tail`, a block nested in the label's scope.
+        fn nest(&mut self, entry: EntryKind, body: CompuId, tail: CompuId) -> CompuId {
+            let label = self.arena.admin.fresh_def();
+            let entry = match entry {
+                | EntryKind::Closure => {
+                    EntryParameters::Closure { environment: Hole.build(&mut self.arena, None) }
+                }
+                | EntryKind::Continuation => EntryParameters::Continuation {
+                    result: Hole.build(&mut self.arena, None),
+                    environment: Hole.build(&mut self.arena, None),
+                },
+            };
+            let bindee = Block { label, entry, body }.build(&mut self.arena, None);
+            let binder = Hole.build(&mut self.arena, None);
+            LetValue { binder, bindee, tail }.build(&mut self.arena, None)
+        }
+
+        /// A label bound around a block whose body jumps to it, followed by a jump from the
+        /// binding block itself.
+        fn jump_from_block(mut self, kind: LabelKind, entry: EntryKind) -> (Self, CompuId) {
+            let body = self.abort();
+            let nested = self.jump();
+            let tail = self.jump();
+            let tail = self.nest(entry, nested, tail);
+            let root = self.bind(kind, body, tail);
+            (self, root)
+        }
+
+        fn check(self, root: CompuId) -> Result<(), SpsLowValidationError> {
+            Fixture::program(self.arena, root).map(drop)
+        }
+    }
+
+    #[test]
+    fn labels_accept_jumps_from_their_block_and_closed_labels_from_continuations() {
+        let mut labels = Labels::new();
+        let body = labels.abort();
+        let tail = labels.jump();
+        let root = labels.bind(LabelKind::Local, body, tail);
+        assert_eq!(labels.check(root), Ok(()));
+
+        let (labels, root) =
+            Labels::new().jump_from_block(LabelKind::Closed, EntryKind::Continuation);
+        assert_eq!(labels.check(root), Ok(()));
+    }
+
+    #[test]
+    fn labels_reject_jumps_that_leave_their_scope_or_frame() {
+        let mut labels = Labels::new();
+        let root = labels.jump();
+        let label = labels.label;
+        assert_eq!(
+            labels.check(root),
+            Err(SpsLowValidationError::UnboundLabel { compu: root, label })
+        );
+
+        let (labels, root) =
+            Labels::new().jump_from_block(LabelKind::Local, EntryKind::Continuation);
+        let label = labels.label;
+        assert!(matches!(
+            labels.check(root),
+            Err(SpsLowValidationError::LocalLabelAcrossBlock { label: rejected, .. }) if rejected == label
+        ));
+
+        let (labels, root) = Labels::new().jump_from_block(LabelKind::Closed, EntryKind::Closure);
+        let label = labels.label;
+        assert!(matches!(
+            labels.check(root),
+            Err(SpsLowValidationError::LabelUnderClosure { label: rejected, .. }) if rejected == label
+        ));
+    }
+
+    #[test]
+    fn closed_labels_read_no_variable_and_labels_bind_once() {
+        // let x = () in closed label p • -> _ ! arg(x) :: • in jump p ! •
+        let mut labels = Labels::new();
+        let x = labels.arena.admin.fresh_def();
+        let read: ValueId = x.build(&mut labels.arena, None);
+        let ambient = StackVar.build(&mut labels.arena, None);
+        let stack = Cons(read, ambient).build(&mut labels.arena, None);
+        let body = SHole(stack).build(&mut labels.arena, None);
+        let tail = labels.jump();
+        let bound = labels.bind(LabelKind::Closed, body, tail);
+        let binder = x.build(&mut labels.arena, None);
+        let bindee = Triv.build(&mut labels.arena, None);
+        let root = LetValue { binder, bindee, tail: bound }.build(&mut labels.arena, None);
+        let label = labels.label;
+        assert_eq!(
+            labels.check(root),
+            Err(SpsLowValidationError::ImplicitLabelCapture { label, captures: vec![x] })
+        );
+
+        let mut labels = Labels::new();
+        let inner_body = labels.abort();
+        let tail = labels.jump();
+        let inner = labels.bind(LabelKind::Local, inner_body, tail);
+        let outer_body = labels.abort();
+        let root = labels.bind(LabelKind::Local, outer_body, inner);
+        let label = labels.label;
+        assert_eq!(labels.check(root), Err(SpsLowValidationError::DuplicateLabel { label }));
     }
 }

@@ -106,6 +106,7 @@ pub(super) enum Frame {
     Publish { id: ProgId, instruction: Instruction, context: Context, root: ProgId },
     Block { symbol: SymId, name: String, context: Context, next: ContId },
     ResumeEntry { label: sk::DefId, bindings: Vec<(VarId, VarId)>, context: Context, next: ContId },
+    Label { label: sk::DefId, kind: sk::LabelKind, tail: sk::CompuId, context: Context },
     Branch { branches: Branches, tag: Tag },
     CompareTrue { operation: ComparisonOp, when_false: sk::CompuId, context: Context },
     CompareFalse { operation: ComparisonOp, when_true: ProgId, context: Context },
@@ -342,6 +343,21 @@ impl Folder for Lowering<'_, '_> {
                     ContextUpdate::Keep,
                     next,
                 )
+            }
+            | Frame::Label { label, kind, tail, context } => {
+                let name = self
+                    .lo
+                    .sps_low
+                    .admin
+                    .def_name(self.lo.scoped, self.lo.statics, &label)
+                    .plain()
+                    .to_owned();
+                let _symbol = child.build(self.lo, (Some(name), Some(label)));
+                if kind == sk::LabelKind::Closed && self.lo.native_frames {
+                    self.lo.arena.frame_entries.insert(child, crate::frames::Entry::Fresh);
+                }
+                self.lo.labels.insert(label, (child, kind));
+                Step::TailCall(Work::Compu(tail, context))
             }
             | Frame::CompareTrue { operation, when_false, context } => {
                 let _symbol = child.build(self.lo, (Some("compare_true".to_owned()), None));

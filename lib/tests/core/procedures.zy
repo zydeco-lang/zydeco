@@ -1,0 +1,38 @@
+param (/process; /numeric; builtin) : @(import("../../std/builtin.zy")) in
+begin
+  let int = numeric/int that
+
+  def Choice =
+    data
+    | +Left : Int
+    | +Right : Int
+    end
+  that
+
+  -- Both arms call `finish`, which reads `offset` from the frame that binds it. Localization
+  -- turns `finish` into a procedure, and closure conversion gives it a local label over that frame.
+  def ! dispatch : Choice -> Int -> Ret Int = fn (choice : Choice) (offset : Int) =>
+    let finish : Thk (Int -> Ret Int) = { fn x => ! int/add x offset } in
+    match choice
+    | +Left(x) => ! finish x
+    | +Right(x) => do doubled <- ! int/mul x 2; ! finish doubled
+    end
+  that
+
+  -- The second call of `scale` waits for the first, so it runs inside a continuation, and `scale`
+  -- reads `factor`. Its label is closed, and each call pushes `factor`.
+  let factor = 3 that
+  let scale : Thk (Int -> Ret Int) = { fn x => ! int/mul x factor } that
+  do first <- ! scale 2;
+  do second <- ! scale first;
+
+  -- 5 + 1 = 6 and 5 * 2 + 1 = 11
+  do left <- ! dispatch (+Left(5) : Choice) 1;
+  do right <- ! dispatch (+Right(5) : Choice) 1;
+  -- 18 + 6 + 11 + 3 = 38
+  do total <- ! int/add second left;
+  do total <- ! int/add total right;
+  do total <- ! int/add total factor;
+  do status <- ! int/sub total 38;
+  ! process/exit status
+end

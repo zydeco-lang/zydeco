@@ -71,6 +71,44 @@ impl Fixture {
         SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
     }
 
+    /// `let x = 7 in label p • -> body in let • = • in compare 1 < 2 | true -> jump p ! • | false ->
+    /// jump p ! • end`, where a local label's body reads `x` and a closed label's body reads nothing.
+    fn labels(kind: sk::LabelKind) -> SpsLowProgram {
+        let mut fixture = Self::default();
+        let x = fixture.definition("x");
+        let label = fixture.definition("p");
+        let body = match kind {
+            | sk::LabelKind::Local => {
+                let read: sk::ValueId = x.build(&mut fixture.arena, None);
+                let ambient = sk::StackVar.build(&mut fixture.arena, None);
+                let stack = sk::Cons(read, ambient).build(&mut fixture.arena, None);
+                sk::SHole(stack).build(&mut fixture.arena, None)
+            }
+            | sk::LabelKind::Closed => fixture.terminal(),
+        };
+        let [when_true, when_false] = [0, 1].map(|_| {
+            let stack = sk::StackVar.build(&mut fixture.arena, None);
+            sk::JumpLabel { label, stack }.build(&mut fixture.arena, None)
+        });
+        let operands = [fixture.integer(1), fixture.integer(2)];
+        let branch = sk::CompareBranch {
+            operation: sk::ComparisonOp::Integer(sk::IntegerType::Int, sk::ComparisonPredicate::Lt),
+            operands,
+            when_true,
+            when_false,
+        }
+        .build(&mut fixture.arena, None);
+        let bindee = sk::StackVar.build(&mut fixture.arena, None);
+        let guarded = sk::LetStack { binder: sk::StackVar, bindee, tail: branch }
+            .build(&mut fixture.arena, None);
+        let tail =
+            sk::LetLabel { label, kind, body, tail: guarded }.build(&mut fixture.arena, None);
+        let binder = x.build(&mut fixture.arena, None);
+        let bindee = fixture.integer(7);
+        let root = sk::LetValue { binder, bindee, tail }.build(&mut fixture.arena, None);
+        SpsLowProgram::try_new(fixture.arena, root, SpsScheme::BranchJoin).unwrap()
+    }
+
     fn block(&mut self, name: &str, body: sk::CompuId) -> sk::ValueId {
         let label = self.definition(name);
         let environment = sk::Hole.build(&mut self.arena, None);
@@ -273,6 +311,7 @@ impl Fixture {
             unboxing,
             scalars: zydeco_stackir::low::scalar::ScalarPlans::unoptimized(&self.arena.inner),
             unboxed_var_slots: HashMap::new(),
+            labels: HashMap::new(),
             native_frames,
         }
         .run_with_driver::<D>()
@@ -684,5 +723,41 @@ fn pipeline_driver_selection_preserves_checked_native_frame_plans() {
                 Fixture::frame_snapshot(recursive.frames())
             );
         }
+    }
+}
+
+#[test]
+fn labels_lower_to_static_jumps_that_keep_or_leave_the_frame() {
+    for kind in [sk::LabelKind::Local, sk::LabelKind::Closed] {
+        let program = Fixture::labels(kind);
+        let explicit = Fixture::native::<Explicit>(&program, RepresentationStrategy::Local);
+        let recursive = Fixture::native::<Recursive>(&program, RepresentationStrategy::Local);
+        assert_eq!(
+            Fixture::frame_snapshot(explicit.frames()),
+            Fixture::frame_snapshot(recursive.frames())
+        );
+        let arena = explicit.assembly().arena();
+        let targets = arena
+            .programs
+            .iter()
+            .filter_map(|(_, program)| match program {
+                | Program::Terminator(Terminator::Jump(Jump(target))) => Some(*target),
+                | _ => None,
+            })
+            .collect::<Vec<_>>();
+        // Both arms jump to the one program of the label.
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0], targets[1]);
+        let fresh_contexts = arena
+            .programs
+            .iter()
+            .filter(|(_, program)| {
+                matches!(program, Program::Instruction(Instruction::AllocContext(_), _))
+            })
+            .count();
+        // A local label keeps the binding frame; a closed label is a frame entry of its own.
+        let closed = kind == sk::LabelKind::Closed;
+        assert_eq!(fresh_contexts, if closed { 2 } else { 0 });
+        assert_eq!(explicit.frames().entries.contains_key(&targets[0]), closed);
     }
 }

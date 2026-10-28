@@ -105,6 +105,12 @@ impl Node<'_> {
                         .get(position)
                         .copied()
                 }
+                | Computation::LetLabel(LetLabel { body, tail, .. }) => {
+                    [(*body).into(), (*tail).into()].get(position).copied()
+                }
+                | Computation::JumpLabel(JumpLabel { stack, .. }) => {
+                    [(*stack).into()].get(position).copied()
+                }
                 | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
                     [(*scrut).into(), (*binder).into(), (*body).into()].get(position).copied()
                 }

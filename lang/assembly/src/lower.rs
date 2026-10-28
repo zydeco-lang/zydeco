@@ -37,6 +37,8 @@ pub struct Lowerer<'a> {
     unboxing: crate::unbox::LocalUnboxing,
     scalars: zydeco_stackir::low::scalar::ScalarPlans,
     unboxed_var_slots: HashMap<sk::DefId, Vec<VarId>>,
+    /// The program of each lowered label, recorded before the tail that jumps to it.
+    labels: HashMap<sk::DefId, (ProgId, sk::LabelKind)>,
     native_frames: bool,
 }
 
@@ -65,6 +67,7 @@ impl<'a> Lowerer<'a> {
             unboxing,
             scalars: zydeco_stackir::low::scalar::ScalarPlans::new(sps_low, policy.scalar_boxing()),
             unboxed_var_slots: HashMap::new(),
+            labels: HashMap::new(),
             native_frames: false,
         }
     }
@@ -333,6 +336,30 @@ impl Lowering<'_, '_> {
             }
             | Compu::Hole(sk::SHole(stack)) => {
                 let next = self.save(Continuation::End(Abort.into()));
+                Step::TailCall(Work::Stack(stack, context, next))
+            }
+            | Compu::LetLabel(sk::LetLabel { label, kind, body, tail }) => {
+                // A local label runs in the binding frame; a closed label starts a fresh one.
+                let entry = match kind {
+                    | sk::LabelKind::Local => context.clone(),
+                    | sk::LabelKind::Closed => Context::new(),
+                };
+                Step::Call {
+                    input: Work::Compu(body, entry),
+                    frame: Frame::Label { label, kind, tail, context },
+                }
+            }
+            | Compu::JumpLabel(sk::JumpLabel { label, stack }) => {
+                let (program, kind) = self.lo.labels[&label];
+                let next = self.save(Continuation::End(Jump(program).into()));
+                let next = match kind {
+                    | sk::LabelKind::Local => next,
+                    // A closed label leaves the current frame, as a block jump does.
+                    | sk::LabelKind::Closed => self.then(
+                        Action::Emit(Alloc(ContextMarker).into(), ContextUpdate::Clear),
+                        next,
+                    ),
+                };
                 Step::TailCall(Work::Stack(stack, context, next))
             }
             | Compu::Jump(sk::Jump { target, argument, stack }) => {

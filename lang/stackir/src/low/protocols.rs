@@ -86,7 +86,8 @@ impl<'a> ProtocolValidator<'a> {
                 | EntryProtocol::Continuation(value) => arena.protocols.validate_value(value)?,
             }
         }
-        for (_, stack) in arena.case_protocols.iter() {
+        let cases = arena.case_protocols.iter().map(|(_, stack)| stack);
+        for stack in cases.chain(arena.label_protocols.iter().map(|(_, stack)| stack)) {
             arena.protocols.validate_stack(stack)?;
         }
         Self { arena }.compu(root, Context::default())
@@ -395,6 +396,19 @@ impl<'a> ProtocolValidator<'a> {
                         | EntryProtocol::Continuation(expected) => {
                             self.check_value(argument.word().1, &expected, &value.protocol)?
                         }
+                    }
+                    return Ok(());
+                }
+                // A label body runs on the stack each jump supplies, over the variables in scope.
+                | Computation::LetLabel(LetLabel { label, body, tail, .. }) => {
+                    let stack = self.arena.label_protocols.get(label).cloned().unwrap_or_default();
+                    self.compu(*body, Context { stack, ..context.clone() })?;
+                    id = *tail;
+                }
+                | Computation::JumpLabel(JumpLabel { label, stack }) => {
+                    let found = self.stack(*stack, &context)?;
+                    if let Some(expected) = self.arena.label_protocols.get(label) {
+                        self.check_stack(id, expected, &found)?;
                     }
                     return Ok(());
                 }

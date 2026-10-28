@@ -99,6 +99,8 @@ pub struct SpsLowInnerArena {
     pub pattern_protocols: ArenaAssoc<VPatId, crate::protocol::ValueProtocol>,
     pub entry_protocols: ArenaAssoc<ValueId, super::entry::EntryProtocol>,
     pub case_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
+    /// The stack that each label's body expects, which every jump to the label supplies.
+    pub label_protocols: ArenaAssoc<DefId, crate::protocol::StackProtocol>,
     /// Capture ownership before conversion erased it into products and code.
     /// These references describe existing nodes; they do not add executable occurrences.
     pub continuations: ArenaAssoc<StackId, ContinuationEntry>,

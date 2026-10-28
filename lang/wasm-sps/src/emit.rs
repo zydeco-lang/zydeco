@@ -254,13 +254,32 @@ impl ModulePlan {
             .collect::<Vec<_>>();
         blocks.sort_by_key(|block| block.label);
 
+        // A closed label reads no variable, so it runs as a case of its own like a block.
+        let mut closed_labels = arena
+            .inner
+            .compus
+            .iter()
+            .filter_map(|(_, compu)| match compu {
+                | Computation::LetLabel(sps::LetLabel {
+                    label,
+                    kind: sps::LabelKind::Closed,
+                    body,
+                    ..
+                }) => Some((*label, *body)),
+                | _ => None,
+            })
+            .collect::<Vec<_>>();
+        closed_labels.sort_by_key(|(label, _)| *label);
+
         let root = Case { index: 0, label: None, entry: None, body: program.root() };
         let block_cases = blocks
             .into_iter()
+            .map(|Block { label, entry, body }| (label, Some(entry), body))
+            .chain(closed_labels.into_iter().map(|(label, body)| (label, None, body)))
             .enumerate()
-            .map(|(offset, Block { label, entry, body })| {
+            .map(|(offset, (label, entry, body))| {
                 let index = Limits::u32(offset + 1, "SPS block count")?;
-                Ok(Case { index, label: Some(label), entry: Some(entry), body })
+                Ok(Case { index, label: Some(label), entry, body })
             })
             .collect::<Result<Vec<_>, EmitError>>()?;
         let cases = std::iter::once(root).chain(block_cases).collect::<Vec<_>>();
@@ -531,12 +550,24 @@ struct CaseEncoder<'a> {
     arena: &'a sps::SpsLowArena,
     plan: &'a ModulePlan,
     function: Function,
+    /// The number of structured control blocks around the current instruction.
+    depth: u32,
+    /// The depth inside the `block` of each local label in scope; jumps branch out of it.
+    local_labels: HashMap<DefId, u32>,
 }
 
 impl<'a> CaseEncoder<'a> {
     fn new(program: &'a SpsLowProgram, plan: &'a ModulePlan) -> Self {
         let function = Function::new([(plan.locals.local_count, ValType::I64)]);
-        Self { arena: program.arena(), plan, function }
+        Self { arena: program.arena(), plan, function, depth: 0, local_labels: HashMap::new() }
+    }
+
+    /// Emit a computation nested in one more structured control block.
+    fn emit_nested(&mut self, id: CompuId) -> Result<(), EmitError> {
+        self.depth += 1;
+        let result = self.emit_compu(id);
+        self.depth -= 1;
+        result
     }
 
     fn encode(mut self, case: Case) -> Result<Function, EmitError> {
@@ -602,6 +633,35 @@ impl<'a> CaseEncoder<'a> {
                     self.function.instruction(&WasmInstruction::Unreachable);
                     break;
                 }
+                | Computation::LetLabel(sps::LetLabel { label, kind, body, tail }) => match kind {
+                    // A local label's tail runs inside a `block`; a jump branches out of it into
+                    // the label body that follows, keeping this function's locals as its frame.
+                    | sps::LabelKind::Local => {
+                        self.function.instruction(&WasmInstruction::Block(BlockType::Empty));
+                        self.local_labels.insert(label, self.depth + 1);
+                        self.emit_nested(tail)?;
+                        self.function.instruction(&WasmInstruction::End);
+                        id = body;
+                    }
+                    | sps::LabelKind::Closed => id = tail,
+                },
+                | Computation::JumpLabel(sps::JumpLabel { label, stack }) => {
+                    self.emit_stack(stack)?;
+                    if let Some(depth) = self.local_labels.get(&label) {
+                        self.function.instruction(&WasmInstruction::LocalSet(0));
+                        self.function.instruction(&WasmInstruction::Br(self.depth - depth));
+                    } else {
+                        self.function
+                            .instruction(&WasmInstruction::GlobalSet(AMBIENT_STACK_GLOBAL));
+                        self.function.instruction(&WasmInstruction::I32Const(
+                            self.plan.label(label)? as i32,
+                        ));
+                        self.function
+                            .instruction(&WasmInstruction::GlobalSet(PROGRAM_COUNTER_GLOBAL));
+                        self.function.instruction(&WasmInstruction::Return);
+                    }
+                    break;
+                }
                 | Computation::Jump(sps::Jump { target, argument, stack }) => {
                     self.emit_value(argument.word().1)?;
                     self.emit_stack(stack)?;
@@ -633,9 +693,9 @@ impl<'a> CaseEncoder<'a> {
                         self.plan.locals.value(operands[1])?,
                     );
                     self.function.instruction(&WasmInstruction::If(BlockType::Empty));
-                    self.emit_compu(when_true)?;
+                    self.emit_nested(when_true)?;
                     self.function.instruction(&WasmInstruction::Else);
-                    self.emit_compu(when_false)?;
+                    self.emit_nested(when_false)?;
                     self.function.instruction(&WasmInstruction::End);
                     break;
                 }
@@ -686,7 +746,7 @@ impl<'a> CaseEncoder<'a> {
                             ));
                         self.function.instruction(&WasmInstruction::I64Eq);
                         self.function.instruction(&WasmInstruction::If(BlockType::Empty));
-                        self.emit_compu(tail)?;
+                        self.emit_nested(tail)?;
                         self.function.instruction(&WasmInstruction::End);
                     }
                     self.function.instruction(&WasmInstruction::Unreachable);
@@ -763,7 +823,7 @@ impl<'a> CaseEncoder<'a> {
                 self.function.instruction(&WasmInstruction::If(BlockType::Empty));
                 self.load_local_word(scrut_local, 1);
                 self.emit_pattern(body)?;
-                self.emit_compu(tail)?;
+                self.emit_nested(tail)?;
                 self.function.instruction(&WasmInstruction::End);
             }
             RuntimeFailure::PatternMatch.emit(&mut self.function);
@@ -1186,6 +1246,46 @@ mod tests {
         // alloc, pair, one root case, and entry. The sixteen LetValue nodes are
         // structured instructions inside the root case rather than functions.
         assert_eq!(bodies, 4);
+    }
+
+    #[test]
+    fn local_labels_stay_in_their_function_and_closed_labels_become_cases() {
+        // label p • -> _ ! • in compare 1 < 2 | true -> jump p ! • | false -> jump p ! • end,
+        // bound as a local label and then as a closed one.
+        for (kind, cases) in [(sps::LabelKind::Local, 1), (sps::LabelKind::Closed, 2)] {
+            let mut fixture = Fixture::new();
+            let label: DefId =
+                sps::IdAllocator::<zydeco_stackir::high::arena::SpsScope>::new().alloc();
+            let body = fixture.hole();
+            let jumps = [0, 1].map(|_| {
+                let stack = sps::StackVar.build(&mut fixture.arena, None);
+                sps::JumpLabel { label, stack }.build(&mut fixture.arena, None)
+            });
+            let operands = [1, 2].map(|value| {
+                Literal::Integer(sps::IntegerLiteral::Int(value)).build(&mut fixture.arena, None)
+            });
+            let tail = sps::CompareBranch {
+                operation: sps::ComparisonOp::Integer(
+                    sps::IntegerType::Int,
+                    sps::ComparisonPredicate::Lt,
+                ),
+                operands,
+                when_true: jumps[0],
+                when_false: jumps[1],
+            }
+            .build(&mut fixture.arena, None);
+            let root = sps::LetLabel { label, kind, body, tail }.build(&mut fixture.arena, None);
+            let program =
+                SpsLowProgram::try_new(fixture.arena, root, SpsScheme::Duplicating).unwrap();
+            let module = Emitter::new(&program).run().unwrap();
+            Validator::new().validate_all(module.as_bytes()).unwrap();
+            let bodies = Parser::new(0)
+                .parse_all(module.as_bytes())
+                .filter(|payload| matches!(payload, Ok(Payload::CodeSectionEntry(_))))
+                .count();
+            // alloc, pair, entry, and one case per root or closed label.
+            assert_eq!(bodies, 3 + cases);
+        }
     }
 
     #[test]

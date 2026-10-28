@@ -145,9 +145,9 @@ impl<'e> Emitter<'e> {
     ///
     /// The root program is entered by a SysV call, so its parity is
     /// [`StackParity::Misaligned`]. Each program edge applies the stack effect of
-    /// the instruction or terminator that connects it to its successors. Programs
-    /// that are only reachable through dynamic continuations have no single
-    /// statically known entry parity and stay [`StackParity::Unknown`].
+    /// the instruction or terminator that connects it to its successors. Frame entries
+    /// start with both parities, so programs that they reach, alone or together with
+    /// the root, stay [`StackParity::Unknown`].
     fn compute_entry_parities(
         assembly: &AssemblyArena, root: ProgId, frames: &FramePlan, initial: StackParity,
     ) -> HashMap<ProgId, StackParity> {
@@ -179,6 +179,12 @@ impl<'e> Emitter<'e> {
             },
         );
         queue.push_back(root);
+        // Code entered through another frame, such as a block or a closed label that several
+        // activations jump to, has no single static parity.
+        for prog_id in frames.entries.keys().filter(|prog_id| **prog_id != root) {
+            parities.insert(*prog_id, ODD | EVEN);
+            queue.push_back(*prog_id);
+        }
 
         while let Some(prog_id) = queue.pop_front() {
             let Some(&mask) = parities.get(&prog_id) else { continue };

@@ -292,6 +292,16 @@ impl<'a> EntryValidator<'a> {
                     }
                     return Ok(());
                 }
+                // A label body runs on the stack each jump supplies, over the variables in scope.
+                | Computation::LetLabel(LetLabel { body, tail, .. }) => {
+                    let entry = Context { stack: StackEvidence::default(), ..context.clone() };
+                    self.compu(*body, entry)?;
+                    id = *tail;
+                }
+                | Computation::JumpLabel(JumpLabel { stack, .. }) => {
+                    self.stack(*stack, &context)?;
+                    return Ok(());
+                }
                 | Computation::ProductMatch(SProductMatch { scrut, binder, body })
                 | Computation::LetValue(LetValue { bindee: scrut, binder, tail: body }) => {
                     let value = self.value(*scrut, &context)?;

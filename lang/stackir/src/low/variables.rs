@@ -95,6 +95,11 @@ impl Variables {
             | Computation::Jump(Jump { target, argument, stack }) => {
                 target.summary(self) + argument.word().1.summary(self) + stack.summary(self)
             }
+            // Labels are static code, not variables.
+            | Computation::LetLabel(LetLabel { body, tail, .. }) => {
+                body.summary(self) + tail.summary(self)
+            }
+            | Computation::JumpLabel(JumpLabel { stack, .. }) => stack.summary(self),
             | Computation::ProductMatch(SProductMatch { scrut, binder, body }) => {
                 scrut.summary(self) + (body.summary(self) - binder.summary(self))
             }

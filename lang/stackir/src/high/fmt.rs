@@ -323,6 +323,29 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 .group(),
                 RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
             ]),
+            | Computation::LetProc(LetProc { procedure, stack, body, tail }) => RcDoc::concat([
+                RcDoc::text("letproc"),
+                RcDoc::space(),
+                procedure.pretty(f),
+                RcDoc::space(),
+                stack.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("="),
+                RcDoc::concat([
+                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent),
+                    RcDoc::line(),
+                    RcDoc::text("in"),
+                ])
+                .group(),
+                RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
+            ]),
+            | Computation::CallProc(CallProc { procedure, stack }) => RcDoc::concat([
+                procedure.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("!"),
+                RcDoc::space(),
+                stack.pretty(f),
+            ]),
             | Computation::LetArg(Let { binder, bindee, tail }) => {
                 let Cons(param, StackVar) = binder;
                 RcDoc::concat([

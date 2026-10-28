@@ -106,7 +106,7 @@ pub struct SpsInnerArena {
     pub(crate) builtin_functions: ArenaAssoc<ValueId, BuiltinValueRole>,
     pub value_protocols: ArenaAssoc<ValueId, crate::protocol::ValueProtocol>,
     pub pattern_protocols: ArenaAssoc<VPatId, crate::protocol::ValueProtocol>,
-    /// Intrinsic protocols of recursive entries and codata eliminations.
+    /// Intrinsic protocols of recursive entries, procedure bodies, and codata eliminations.
     pub compu_protocols: ArenaAssoc<CompuId, crate::protocol::StackProtocol>,
     /// value pattern arena
     pub vpats: ArenaSparse<SpsScope, VPatId>,
@@ -143,6 +143,11 @@ impl SpsProgram {
 
     pub fn root(&self) -> CompuId {
         self.root
+    }
+
+    /// Reopen the arena for a pass that rewrites nodes in place.
+    pub(crate) fn into_parts(self) -> (SpsArena, CompuId) {
+        (self.arena.into_inner(), self.root)
     }
 
     pub(crate) fn into_rebuild(self) -> SpsRebuild {

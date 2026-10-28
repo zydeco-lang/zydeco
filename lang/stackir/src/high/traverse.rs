@@ -29,7 +29,7 @@ impl Node<'_> {
         }
     }
 
-    fn children(self, mut child: impl FnMut(EntityId, Edge)) {
+    pub(crate) fn children(self, mut child: impl FnMut(EntityId, Edge)) {
         let mut ordinary = |id| child(id, Edge::Child);
         match self {
             | Self::Pattern(_, pattern) => match pattern {
@@ -122,6 +122,11 @@ impl Node<'_> {
                     ordinary((*bindee).into());
                     child((*tail).into(), Edge::StackLetTail(id));
                 }
+                | Computation::LetProc(LetProc { body, tail, .. }) => {
+                    ordinary((*body).into());
+                    ordinary((*tail).into());
+                }
+                | Computation::CallProc(CallProc { stack, .. }) => ordinary((*stack).into()),
                 | Computation::LetArg(Let { binder: Cons(binder, _), bindee, tail }) => {
                     ordinary((*bindee).into());
                     ordinary((*binder).into());

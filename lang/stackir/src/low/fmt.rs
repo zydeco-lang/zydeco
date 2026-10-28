@@ -259,6 +259,24 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
                 ])
             }
+            | Computation::LetLabel(LetLabel { label, kind, body, tail }) => RcDoc::concat([
+                RcDoc::text(match kind {
+                    | LabelKind::Local => "label ",
+                    | LabelKind::Closed => "closed label ",
+                }),
+                label.pretty(f),
+                RcDoc::text(" • ->"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                RcDoc::line(),
+                RcDoc::text("in"),
+                RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent).group(),
+            ]),
+            | Computation::JumpLabel(JumpLabel { label, stack }) => RcDoc::concat([
+                RcDoc::text("jump "),
+                label.pretty(f),
+                RcDoc::text(" ! "),
+                stack.pretty(f),
+            ]),
             | Computation::LetArg(LetArg {
                 binder: Cons(binder, StackVar),
                 bindee,

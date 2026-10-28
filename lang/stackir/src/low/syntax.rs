@@ -125,10 +125,40 @@ pub struct OpenContinuation {
     pub body: CompuId,
 }
 
+/// How a label reaches the variables its body reads.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LabelKind {
+    /// The body reads the frame of the block that binds the label, so every jump to it
+    /// lies in that block and passes only a stack.
+    Local,
+    /// The body reads no variable, so jumps from continuation blocks nested in the label's scope
+    /// reach it too; each jump pushes the variables the procedure needs over its stack.
+    Closed,
+}
+
+/// The label of a second-class procedure, in scope in `tail`. `body` runs on the stack a jump
+/// supplies, bound to its own `•`.
+#[derive(Clone, Debug)]
+pub struct LetLabel {
+    pub label: DefId,
+    pub kind: LabelKind,
+    pub body: CompuId,
+    pub tail: CompuId,
+}
+
+/// A direct jump to a label in scope, with no administrative word.
+#[derive(Clone, Debug)]
+pub struct JumpLabel {
+    pub label: DefId,
+    pub stack: StackId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Computation {
     Hole(SHole<StackId>),
     Jump(Jump),
+    LetLabel(LetLabel),
+    JumpLabel(JumpLabel),
     ProductMatch(SProductMatch),
     CoprodMatch(SCoprodMatch),
     Compare(CompareBranch),

@@ -102,10 +102,11 @@ fn discovery_and_expansion_need_no_source_file() {
     Fixture::assert_success(&output);
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.contains("normalize:"));
+    assert!(text.contains("localize:"));
     for scheme in SpsScheme::ALL {
         assert!(text.contains(&format!("{scheme}: {}", scheme.description())), "{text}");
     }
-    for plan in ["default", "none", "normalize,normalize"] {
+    for plan in ["default", "none", "normalize,normalize", "normalize,localize"] {
         let output = Command::new(env!("CARGO_BIN_EXE_zydeco"))
             .args(["passes", "--sps-passes", plan])
             .output()
@@ -191,6 +192,29 @@ fn inspection_preserves_output_and_identifies_every_selected_occurrence() {
     let empty = fixture.build("none", "zir", &["--trace-passes", "--verify-passes"]);
     Fixture::assert_success(&empty);
     assert!(empty.stderr.is_empty());
+}
+
+#[test]
+fn verified_localization_hands_procedures_to_later_passes() {
+    let fixture = Fixture::new(
+        "let shared : Thk (Int -> Ret Int) = { fn x => ! numeric/int/add x 1 } in
+        do first <- ! shared 1;
+        do second <- ! shared first;
+        do status <- ! numeric/int/sub second 3;
+        ! process/exit status",
+    );
+    let inspected = fixture.build(
+        "normalize,localize,normalize",
+        "zir",
+        &["--trace-passes", "--verify-passes"],
+    );
+    Fixture::assert_success(&inspected);
+    let trace = String::from_utf8_lossy(&inspected.stderr);
+    assert!(trace.contains("after SPS localize[2] (invocation 1)"), "{trace}");
+    // The second call waits for the first inside a continuation, so the label is closed.
+    let low = String::from_utf8_lossy(&inspected.stdout);
+    assert!(low.contains("closed label "), "{low}");
+    assert!(!low.contains("pack-closure("), "{low}");
 }
 
 #[test]

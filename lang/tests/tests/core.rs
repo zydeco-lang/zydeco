@@ -32,6 +32,7 @@ e2e_sources!({
     nested_out => "tests/core/nested-out.zy",
     partial_annotation => "tests/core/partial-annotation.zy",
     pattern_alias => "tests/core/pattern-alias.zy",
+    procedures => "tests/core/procedures.zy",
     string_literal => "tests/core/string-literal.zy",
     sum => "tests/core/sum.zy",
     tagged_values => "tests/core/tagged-values.zy",

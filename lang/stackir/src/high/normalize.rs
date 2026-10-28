@@ -62,6 +62,11 @@ enum KnownValue {
         body: CompuId,
         env: EnvId,
     },
+    /// A procedure with exactly one call, whose body moves to that call.
+    Procedure {
+        body: CompuId,
+        env: EnvId,
+    },
     Product(Vec<Rc<KnownValue>>),
     Constructor(CtorIdx, Rc<KnownValue>),
 }
@@ -123,6 +128,8 @@ struct Normalization {
     delayed_stacks: Vec<ScopedStack>,
     /// Conservative syntactic occurrence counts, including currently dead uses.
     occurrences: HashMap<DefId, usize>,
+    /// Conservative syntactic counts of the calls of each procedure.
+    calls: HashMap<DefId, usize>,
     /// The scheme whose fragment both the input and the output belong to.
     scheme: SpsScheme,
 }
@@ -138,8 +145,23 @@ impl Normalization {
                 }
                 counts
             });
+        let calls = source.inner.compus.iter().fold(HashMap::new(), |mut counts, (_, compu)| {
+            if let Computation::CallProc(CallProc { procedure, .. }) = compu {
+                *counts.entry(*procedure).or_default() += 1;
+            }
+            counts
+        });
         let envs = vec![Environment { parent: None, bindings: HashMap::new() }];
-        Self { source, arena, root, envs, delayed_stacks: Vec::new(), occurrences, scheme }
+        Self { source, arena, root, envs, delayed_stacks: Vec::new(), occurrences, calls, scheme }
+    }
+
+    /// A procedure called exactly once moves its body to the call; others stay bound.
+    fn procedure_fact(&self, procedure: DefId, body: CompuId, env: EnvId) -> Rc<KnownValue> {
+        if self.calls.get(&procedure) == Some(&1) {
+            Rc::new(KnownValue::Procedure { body, env })
+        } else {
+            Rc::default()
+        }
     }
 
     fn run<D: Driver>(mut self) -> FragmentProgram {
@@ -1442,5 +1464,111 @@ mod tests {
                 1
             );
         }
+    }
+
+    /// Reachable procedure bindings and calls of a normalized program.
+    fn procedure_forms(program: &SpsProgram) -> (usize, usize) {
+        use crate::high::traverse::{Edge, Node, Occurrence, Traversal, Visitor};
+        #[derive(Default)]
+        struct Forms(usize, usize);
+        impl Visitor for Forms {
+            fn enter(&mut self, node: Node<'_>, _: Edge, _: Occurrence) {
+                match node {
+                    | Node::Computation(_, Computation::LetProc(_)) => self.0 += 1,
+                    | Node::Computation(_, Computation::CallProc(_)) => self.1 += 1,
+                    | _ => {}
+                }
+            }
+        }
+        let mut forms = Forms::default();
+        Traversal { arena: &program.arena().inner }.run(program.root().into(), &mut forms);
+        (forms.0, forms.1)
+    }
+
+    impl Fixture {
+        /// `letproc p • = (let arg(x) :: • = • in • @ x) in` the computation that `tail` builds.
+        fn identity_procedure(
+            &mut self, tail: impl FnOnce(&mut Self, DefId) -> CompuId,
+        ) -> CompuId {
+            let procedure = self.def("p");
+            let x = self.def("x");
+            let returned = self.build(x);
+            let body = self.ret(returned);
+            let binder = self.build(x);
+            let ambient = self.build(StackVar);
+            let body =
+                self.build(Let { binder: Cons(binder, StackVar), bindee: ambient, tail: body });
+            let tail = tail(self, procedure);
+            self.build(LetProc { procedure, stack: StackVar, body, tail })
+        }
+
+        /// `p ! arg(()) :: stack`
+        fn call_procedure(&mut self, procedure: DefId, stack: StackId) -> CompuId {
+            let argument: ValueId = self.build(Triv);
+            let stack = self.build(Cons(argument, stack));
+            self.build(CallProc { procedure, stack })
+        }
+
+        /// `let • = arg(()) :: • in p ! •`, the frame named as the full scheme names it.
+        fn call_procedure_named(&mut self, procedure: DefId) -> CompuId {
+            let ambient = self.build(StackVar);
+            let call = self.build(CallProc { procedure, stack: ambient });
+            let argument: ValueId = self.build(Triv);
+            let ambient = self.build(StackVar);
+            let frame: StackId = self.build(Cons(argument, ambient));
+            self.build(Let { binder: StackVar, bindee: frame, tail: call })
+        }
+    }
+
+    #[test]
+    fn a_procedure_called_once_moves_to_its_call() {
+        let mut fixture = Fixture::default();
+        let root = fixture.identity_procedure(|fixture, procedure| {
+            let ambient = fixture.build(StackVar);
+            fixture.call_procedure(procedure, ambient)
+        });
+        let program = fixture.normalize(root);
+        assert!(matches!(program.arena().inner.compus[&program.root()], Computation::Ret(_)));
+        assert_eq!(procedure_forms(&program), (0, 0));
+    }
+
+    #[test]
+    fn a_procedure_stays_bound_while_calls_share_it_and_disappears_without_calls() {
+        // letproc p • = … in p ! arg(()) :: (kont _ -> p ! arg(()) :: •)
+        let mut fixture = Fixture::default();
+        let root = fixture.identity_procedure(|fixture, procedure| {
+            let ambient = fixture.build(StackVar);
+            let resumed = fixture.call_procedure(procedure, ambient);
+            let binder = fixture.build(Hole);
+            let kont = fixture.build(Kont { binder, body: resumed });
+            fixture.call_procedure(procedure, kont)
+        });
+        let program = fixture.normalize(root);
+        assert_eq!(procedure_forms(&program), (1, 2));
+
+        let mut fixture = Fixture::default();
+        let root = fixture.identity_procedure(|fixture, _| {
+            let value = fixture.build(Triv);
+            fixture.ret(value)
+        });
+        let program = fixture.normalize(root);
+        assert!(matches!(program.arena().inner.compus[&program.root()], Computation::Ret(_)));
+        assert_eq!(procedure_forms(&program), (0, 0));
+    }
+
+    #[test]
+    fn full_scheme_names_the_frames_a_procedure_call_receives() {
+        // letproc p • = … in
+        // let • = (kont _ -> let • = arg(()) :: • in p ! •) in let • = arg(()) :: • in p ! •
+        let mut fixture = Fixture { scheme: SpsScheme::Full, ..Fixture::default() };
+        let root = fixture.identity_procedure(|fixture, procedure| {
+            let resumed = fixture.call_procedure_named(procedure);
+            let binder = fixture.build(Hole);
+            let kont = fixture.build(Kont { binder, body: resumed });
+            let tail = fixture.call_procedure_named(procedure);
+            fixture.build(Let { binder: StackVar, bindee: kont, tail })
+        });
+        let program = fixture.normalize(root);
+        assert_eq!(procedure_forms(&program), (1, 2));
     }
 }

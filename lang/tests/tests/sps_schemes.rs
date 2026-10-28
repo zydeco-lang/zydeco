@@ -1,16 +1,23 @@
 //! Every stack-passing scheme compiles the same programs to the same observable behavior,
-//! with and without optional normalization, on each compiled backend.
+//! with and without the optional passes, on each compiled backend.
 
 use std::path::PathBuf;
-use zydeco_cli::{CommandCompiler, SpsPlan, SpsScheme};
+use zydeco_cli::{CommandCompiler, SpsPass, SpsPlan, SpsScheme};
 use zydeco_tests::utils::{ExecutionTarget, SourceProgram};
 
 struct Fixture;
 
 impl Fixture {
     fn agree(name: &str) {
+        // Localizing before normalizing hands procedures to the normalizer.
+        let plans = [
+            SpsPlan::Default,
+            SpsPlan::None,
+            SpsPlan::Custom(vec![SpsPass::Normalize, SpsPass::Localize]),
+            SpsPlan::Custom(vec![SpsPass::Localize, SpsPass::Normalize]),
+        ];
         for &scheme in SpsScheme::ALL {
-            for plan in [SpsPlan::Default, SpsPlan::None] {
+            for plan in plans.clone() {
                 for backend in [ExecutionTarget::Exe, ExecutionTarget::WasmSps] {
                     SourceProgram::setup(format!("tests/core/{name}"))
                         .with_sps_scheme(scheme)
@@ -57,7 +64,9 @@ schemes_agree! {
     kont_clone => "kont-clone.zy",
     let_stack => "let-stack.zy",
     literal_pattern => "literal-pattern.zy",
+    local_normalization => "local-normalization.zy",
     nested_constructor_patterns => "nested-constructor-patterns.zy",
+    procedures => "procedures.zy",
     representation_policies => "representation-policies.zy",
     tagged_values => "tagged-values.zy",
 }

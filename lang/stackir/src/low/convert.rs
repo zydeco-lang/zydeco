@@ -20,6 +20,7 @@ use zydeco_utils::{
 };
 
 mod pattern;
+mod procedures;
 mod fold;
 
 /// Convert lexical SPS into first-order SPSLow with fresh construction state.
@@ -72,6 +73,10 @@ struct ClosureConversion<'a> {
     statics: &'a StaticsArena,
     envs: Vec<RenameEnv>,
     variables: Variables,
+    /// The label kind of each procedure binding, or `None` for a procedure that no call reaches.
+    procedures: HashMap<high::CompuId, Option<low::LabelKind>>,
+    /// The variables that every jump to a converted label pushes, in order; none for a local label.
+    labels: HashMap<high::DefId, Vec<high::DefId>>,
     /// Conversion is homomorphic on stack lets, so the output keeps the input's fragment.
     scheme: SpsScheme,
 }
@@ -82,6 +87,7 @@ impl<'a> ClosureConversion<'a> {
         let high::SpsRebuild { source, target, root } = program.into_program().into_rebuild();
         let mut variables = Variables::default();
         Traversal { arena: &source.inner }.run(root.into(), &mut variables);
+        let procedures = procedures::Placement::analyze(&source.inner, root);
         let arena = low::SpsLowArena {
             admin: low::SpsLowAdminArena::from_high(target.admin),
             inner: low::SpsLowInnerArena {
@@ -97,6 +103,8 @@ impl<'a> ClosureConversion<'a> {
             statics,
             envs: vec![RenameEnv { parent: None, bindings: HashMap::new() }],
             variables,
+            procedures,
+            labels: HashMap::new(),
             scheme,
         }
     }
@@ -166,15 +174,23 @@ impl<'a> ClosureConversion<'a> {
         self.source.admin.pats.back(&id).copied()
     }
 
+    /// The variables a body reads under `env`. A call to a closed procedure reads the variables
+    /// that its jump pushes; a label itself is static code, never captured.
     fn sorted_free_vars(
-        &self, body: high::CompuId, excluded: Context<high::DefId>,
+        &self, body: high::CompuId, excluded: Context<high::DefId>, env: RenameEnvId,
     ) -> Vec<high::DefId> {
-        let mut vars: Vec<_> =
-            (self.variables.free_variables(body.into()).expect("validated closure body").clone()
-                - excluded)
-                .into_iter()
-                .collect();
+        let free =
+            self.variables.free_variables(body.into()).expect("validated closure body").clone()
+                - excluded;
+        let mut vars: Vec<_> = free
+            .into_iter()
+            .flat_map(|def| match self.labels.get(&self.renamed_def(env, def)) {
+                | Some(variables) => variables.clone(),
+                | None => vec![def],
+            })
+            .collect();
         vars.sort_unstable();
+        vars.dedup();
         vars
     }
 
@@ -379,5 +395,106 @@ mod tests {
                 .iter()
                 .any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
         );
+    }
+
+    impl Fixture {
+        /// `let y = () in letproc p • = • @ y in` the computation that `tail` builds.
+        fn procedure_reading(
+            &mut self, tail: impl FnOnce(&mut Self, high::DefId) -> high::CompuId,
+        ) -> high::CompuId {
+            let y = self.def("y");
+            let procedure = self.def("p");
+            let read: high::ValueId = self.build(y);
+            let stack = self.build(high::StackVar);
+            let body = self.build(high::SReturn { stack, value: read });
+            let tail = tail(self, procedure);
+            let bound = self.build(high::LetProc { procedure, stack: high::StackVar, body, tail });
+            let binder: high::VPatId = self.build(y);
+            let bindee = self.build(high::Triv);
+            self.build(high::Let { binder, bindee, tail: bound })
+        }
+
+        fn call(&mut self, procedure: high::DefId, stack: high::StackId) -> high::CompuId {
+            self.build(high::CallProc { procedure, stack })
+        }
+    }
+
+    /// Every label kind and every jump's stack in a converted program.
+    fn labels(program: &SpsLowProgram) -> (Vec<low::LabelKind>, Vec<low::StackId>) {
+        let inner = &program.arena().inner;
+        let kinds = inner
+            .compus
+            .iter()
+            .filter_map(|(_, compu)| match compu {
+                | low::Computation::LetLabel(low::LetLabel { kind, .. }) => Some(*kind),
+                | _ => None,
+            })
+            .collect();
+        let jumps = inner
+            .compus
+            .iter()
+            .filter_map(|(_, compu)| match compu {
+                | low::Computation::JumpLabel(low::JumpLabel { stack, .. }) => Some(*stack),
+                | _ => None,
+            })
+            .collect();
+        (kinds, jumps)
+    }
+
+    #[test]
+    fn a_procedure_called_from_its_block_becomes_a_local_label_over_that_frame() {
+        let mut fixture = Fixture::new();
+        let root = fixture.procedure_reading(|fixture, procedure| {
+            let stack = fixture.build(high::StackVar);
+            fixture.call(procedure, stack)
+        });
+        let program = fixture.convert(root);
+        let inner = &program.arena().inner;
+        let (kinds, jumps) = labels(&program);
+        assert_eq!(kinds, vec![low::LabelKind::Local]);
+        assert_eq!(jumps.len(), 1);
+        assert!(matches!(inner.stacks[&jumps[0]], low::Stack::Var(_)));
+        assert!(
+            !inner.values.iter().any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
+        );
+    }
+
+    #[test]
+    fn a_procedure_called_inside_a_continuation_becomes_a_closed_label() {
+        // let y = () in letproc p • = • @ y in p ! (kont _ -> p ! •)
+        let mut fixture = Fixture::new();
+        let root = fixture.procedure_reading(|fixture, procedure| {
+            let stack = fixture.build(high::StackVar);
+            let resumed = fixture.call(procedure, stack);
+            let binder = fixture.build(high::Hole);
+            let kont = fixture.build(high::Kont { binder, body: resumed });
+            fixture.call(procedure, kont)
+        });
+        let program = fixture.convert(root);
+        let inner = &program.arena().inner;
+        let (kinds, jumps) = labels(&program);
+        assert_eq!(kinds, vec![low::LabelKind::Closed]);
+        // Both jumps push the variable that the closed body pops, and the continuation captures it.
+        assert_eq!(jumps.len(), 2);
+        for stack in jumps {
+            assert!(matches!(inner.stacks[&stack], low::Stack::Arg(_)));
+        }
+        let entry = inner.continuations.iter().map(|(_, entry)| entry).next().unwrap();
+        assert_eq!(entry.captures.len(), 1);
+        assert!(
+            !inner.values.iter().any(|(_, value)| matches!(value, low::Value::ClosurePackage(_)))
+        );
+    }
+
+    #[test]
+    fn a_procedure_without_calls_is_dropped() {
+        let mut fixture = Fixture::new();
+        let root = fixture.procedure_reading(|fixture, _| {
+            let value = fixture.build(high::Triv);
+            let stack = fixture.build(high::StackVar);
+            fixture.build(high::SReturn { stack, value })
+        });
+        let program = fixture.convert(root);
+        assert_eq!(labels(&program), (Vec::new(), Vec::new()));
     }
 }

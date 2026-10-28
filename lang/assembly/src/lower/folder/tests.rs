@@ -24,6 +24,7 @@ impl Storage {
             unboxing: crate::unbox::LocalUnboxing::default(),
             scalars: Default::default(),
             unboxed_var_slots: HashMap::new(),
+            labels: HashMap::new(),
             native_frames: false,
         };
         let mut folder = Lowering::new(&mut lo);

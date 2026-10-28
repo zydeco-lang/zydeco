@@ -59,6 +59,17 @@ pub(super) enum Work {
         source: CompuId,
         param: DefId,
     },
+    /// Rebuild a procedure's body once its tail still calls it.
+    ProcedureBody {
+        source: CompuId,
+        procedure: DefId,
+        body: CompuId,
+        env: EnvId,
+    },
+    FinishProcedure {
+        source: CompuId,
+        procedure: DefId,
+    },
     ArgumentBody {
         source: CompuId,
         binder: VPatId,
@@ -471,6 +482,27 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 input: Work::Stack(ScopedStack { node: stack, scope: scope.clone() }),
                 frame: Work::FixBody { source: id, param, body, scope },
             },
+            | Computation::LetProc(LetProc { procedure, body, tail, .. }) => {
+                let env = scope.values;
+                let fact = self.norm.procedure_fact(procedure, body, env);
+                let values = self.norm.extend(env, [(procedure, fact)]);
+                Step::Call {
+                    input: Work::Computation(tail, Scope { values, ..scope }),
+                    frame: Work::ProcedureBody { source: id, procedure, body, env },
+                }
+            }
+            | Computation::CallProc(CallProc { procedure, stack }) => {
+                let known = self.norm.lookup(scope.values, procedure);
+                let stack = ScopedStack { node: stack, scope };
+                if self.norm.movable_stack(stack.node)
+                    && let KnownValue::Procedure { body, env } = known.as_ref()
+                {
+                    let stack = Some(self.norm.delay_stack(stack));
+                    Step::TailCall(Work::Computation(*body, Scope { values: *env, stack }))
+                } else {
+                    Step::Call { input: Work::Stack(stack), frame: Work::FinishComputation(id) }
+                }
+            }
             | Computation::ProductMatch(SProductMatch { scrut: bindee, binder, body: tail })
             | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
                 Step::TailCall(Work::Binding {
@@ -1024,6 +1056,13 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         thunk.demands.join(demands),
                     );
                 }
+                | Computation::CallProc(CallProc { procedure, .. }) => {
+                    let stack = self.stack();
+                    let (stack, spine, demands) = self.consumed(stack);
+                    // A surviving call keeps its procedure's binding alive.
+                    let demands = demands.join(Demands::singleton(procedure, Demand::Used));
+                    self.finish_computation(id, CallProc { procedure, stack }, spine, demands);
+                }
                 | Computation::Ret(_) => {
                     let value = self.value();
                     let stack = self.stack();
@@ -1084,6 +1123,29 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     SFix { param, stack, body: body.node },
                     spine,
                     demands.join(body.demands),
+                );
+            }
+            | Work::ProcedureBody { source, procedure, body, env } => {
+                // The tail is complete; a procedure that no rebuilt call reaches is dead.
+                let called =
+                    self.computations.last().is_some_and(|tail| tail.demands.contains(&procedure));
+                if !called {
+                    return Step::Return(());
+                }
+                return Step::Call {
+                    input: Work::Computation(body, Scope { values: env, stack: None }),
+                    frame: Work::FinishProcedure { source, procedure },
+                };
+            }
+            | Work::FinishProcedure { source, procedure } => {
+                let body = self.computation();
+                let mut tail = self.computation();
+                tail.demands.remove(&procedure);
+                self.finish_computation(
+                    source,
+                    LetProc { procedure, stack: StackVar, body: body.node, tail: tail.node },
+                    Vec::new(),
+                    tail.demands.join(body.demands),
                 );
             }
             | Work::ArgumentBody { source, binder, stack } => {

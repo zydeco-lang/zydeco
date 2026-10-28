@@ -4,9 +4,10 @@
 //! additionally exposes the compiling scheme's stack placement as a checked boundary.
 
 use super::syntax::*;
-use super::traverse::{Edge, Node, Occurrence, Traversal, Visitor};
+use super::traverse::{Edge, EntityId, Node, Occurrence, Traversal, Visitor};
 use super::variables::FreeVars;
 use crate::scheme::{FrameShape, PlacementError, SpsScheme, StackUse};
+use std::collections::HashMap;
 use zydeco_statics::{arena::StaticsArena, surface_syntax::ScopedArena};
 use zydeco_surface::diagnostic::Diagnostics;
 
@@ -29,6 +30,14 @@ pub enum FragmentError {
     SharedValue { value: ValueId },
     #[error("pattern node {pattern:?} occurs more than once in lexical Stack IR")]
     SharedPattern { pattern: VPatId },
+    #[error("computation {compu:?} calls procedure {procedure:?} outside the tail that binds it")]
+    ProcedureOutOfScope { compu: CompuId, procedure: DefId },
+    #[error(
+        "computation {compu:?} calls procedure {procedure:?} under a closure or fixed point, which hides the procedures bound outside it"
+    )]
+    ProcedureUnderClosure { compu: CompuId, procedure: DefId },
+    #[error("value {value:?} names procedure {procedure:?}, but a procedure is not a value")]
+    ProcedureAsValue { value: ValueId, procedure: DefId },
 }
 
 impl FragmentProgram {
@@ -70,16 +79,29 @@ impl From<FragmentProgram> for SpsProgram {
 
 pub type FragmentErrors = Diagnostics<FragmentError>;
 
-/// Independent observer of ownership and of stack placement in one scheme's fragment.
+/// Independent observer of ownership, stack placement in one scheme's fragment, and procedure scope.
 pub struct FragmentValidator<'a> {
     scheme: SpsScheme,
     arena: &'a SpsInnerArena,
     errors: Vec<FragmentError>,
+    /// The procedure scopes around the current node, innermost last, each with the node that opened it.
+    scopes: Vec<(EntityId, ProcedureScope)>,
+    /// Scopes that open when the traversal reaches the keyed node.
+    openings: HashMap<EntityId, ProcedureScope>,
+}
+
+/// A region where procedure calls are resolved.
+#[derive(Clone, Copy, Debug)]
+enum ProcedureScope {
+    /// The tail of a procedure binding, where the procedure can be called.
+    Bound(DefId),
+    /// A closure or fixed-point body, which runs at a later call and hides every procedure bound outside it.
+    Closed,
 }
 
 impl<'a> FragmentValidator<'a> {
     pub fn new(scheme: SpsScheme, arena: &'a SpsInnerArena) -> Self {
-        Self { scheme, arena, errors: Vec::new() }
+        Self { scheme, arena, errors: Vec::new(), scopes: Vec::new(), openings: HashMap::new() }
     }
 
     fn validate(program: &SpsProgram, scheme: SpsScheme) -> Result<(), FragmentErrors> {
@@ -112,6 +134,7 @@ impl<'a> FragmentValidator<'a> {
             | Computation::Hole(SHole(stack))
             | Computation::ExternCall(ExternCall { stack, .. })
             | Computation::Force(SForce { stack, .. })
+            | Computation::CallProc(CallProc { stack, .. })
             | Computation::Ret(SReturn { stack, .. })
             | Computation::Fix(SFix { stack, .. })
             | Computation::LetArg(Let { bindee: stack, .. })
@@ -134,6 +157,49 @@ impl<'a> FragmentValidator<'a> {
             | Stack::Arg(_) | Stack::Tag(_) => FrameShape::Compound,
         }
     }
+
+    /// Open the scopes that start at `node` and check the procedure names it uses.
+    fn resolve(&mut self, node: Node<'_>) -> Option<FragmentError> {
+        if let Some(scope) = self.openings.remove(&node.id()) {
+            self.scopes.push((node.id(), scope));
+        }
+        match node {
+            | Node::Value(_, Value::Closure(_)) => {
+                self.scopes.push((node.id(), ProcedureScope::Closed));
+                None
+            }
+            | Node::Value(value, Value::Var(def)) => self
+                .scopes
+                .iter()
+                .any(|(_, scope)| matches!(scope, ProcedureScope::Bound(bound) if bound == def))
+                .then_some(FragmentError::ProcedureAsValue { value, procedure: *def }),
+            | Node::Computation(_, Computation::LetProc(LetProc { procedure, tail, .. })) => {
+                self.openings.insert((*tail).into(), ProcedureScope::Bound(*procedure));
+                None
+            }
+            | Node::Computation(_, Computation::Fix(SFix { body, .. })) => {
+                self.openings.insert((*body).into(), ProcedureScope::Closed);
+                None
+            }
+            | Node::Computation(compu, Computation::CallProc(CallProc { procedure, .. })) => {
+                let mut closed = false;
+                for (_, scope) in self.scopes.iter().rev() {
+                    match scope {
+                        | ProcedureScope::Closed => closed = true,
+                        | ProcedureScope::Bound(bound) if bound == procedure => {
+                            return closed.then_some(FragmentError::ProcedureUnderClosure {
+                                compu,
+                                procedure: *procedure,
+                            });
+                        }
+                        | ProcedureScope::Bound(_) => {}
+                    }
+                }
+                Some(FragmentError::ProcedureOutOfScope { compu, procedure: *procedure })
+            }
+            | _ => None,
+        }
+    }
 }
 
 impl Visitor for FragmentValidator<'_> {
@@ -145,10 +211,21 @@ impl Visitor for FragmentValidator<'_> {
                 | Node::Stack(stack, _) => FragmentError::SharedStack { stack },
                 | Node::Computation(compu, _) => FragmentError::SharedComputation { compu },
             });
-        } else if let Node::Computation(compu, computation) = node
+            return;
+        }
+        if let Some(error) = self.resolve(node) {
+            self.errors.push(error);
+        }
+        if let Node::Computation(compu, computation) = node
             && let Some(error) = self.scheme.check(self.usage(computation, edge))
         {
             self.errors.push(FragmentError::Placement { compu, error });
+        }
+    }
+
+    fn exit(&mut self, node: Node<'_>) {
+        while self.scopes.last().is_some_and(|(opener, _)| *opener == node.id()) {
+            self.scopes.pop();
         }
     }
 }
@@ -353,6 +430,135 @@ mod tests {
         let root = consumer(&mut arena, stack);
         let error = PlacementError::NonAmbientConsumer;
         assert_eq!(program(arena, root), Err(FragmentError::Placement { compu: root, error }));
+    }
+
+    /// One procedure and the computations that bind and call it.
+    struct Procedures {
+        arena: SpsArena,
+        procedure: DefId,
+    }
+
+    impl Procedures {
+        fn new() -> Self {
+            let mut arena = SpsArena::default();
+            let procedure = arena.admin.fresh();
+            Self { arena, procedure }
+        }
+
+        fn call_with(&mut self, stack: StackId) -> CompuId {
+            CallProc { procedure: self.procedure, stack }.build(&mut self.arena, None)
+        }
+
+        fn call(&mut self) -> CompuId {
+            let stack = StackVar.build(&mut self.arena, None);
+            self.call_with(stack)
+        }
+
+        fn returns_unit(&mut self) -> CompuId {
+            let stack = StackVar.build(&mut self.arena, None);
+            let value = Triv.build(&mut self.arena, None);
+            SReturn { stack, value }.build(&mut self.arena, None)
+        }
+
+        fn bind(&mut self, body: CompuId, tail: CompuId) -> CompuId {
+            LetProc { procedure: self.procedure, stack: StackVar, body, tail }
+                .build(&mut self.arena, None)
+        }
+
+        fn check(self, root: CompuId, scheme: SpsScheme) -> Result<(), FragmentError> {
+            FragmentProgram::try_new(SpsProgram::new(self.arena, root), scheme)
+                .map(drop)
+                .map_err(|errors| errors.into_iter().next().unwrap())
+        }
+    }
+
+    #[test]
+    fn procedures_are_called_in_their_tail_including_under_continuations() {
+        let mut procedures = Procedures::new();
+        let resumed = procedures.call();
+        let binder: VPatId = Triv.build(&mut procedures.arena, None);
+        let kont = Kont { binder, body: resumed }.build(&mut procedures.arena, None);
+        let tail = procedures.call_with(kont);
+        let body = procedures.returns_unit();
+        let root = procedures.bind(body, tail);
+        assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Ok(()));
+    }
+
+    #[test]
+    fn procedures_reject_calls_outside_their_tail() {
+        let mut procedures = Procedures::new();
+        let recursive = procedures.call();
+        let tail = procedures.call();
+        let root = procedures.bind(recursive, tail);
+        let procedure = procedures.procedure;
+        let error = FragmentError::ProcedureOutOfScope { compu: recursive, procedure };
+        assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Err(error));
+
+        let mut procedures = Procedures::new();
+        let root = procedures.call();
+        let procedure = procedures.procedure;
+        let error = FragmentError::ProcedureOutOfScope { compu: root, procedure };
+        assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Err(error));
+    }
+
+    #[test]
+    fn procedures_reject_calls_under_closures_and_fixed_points() {
+        let mut procedures = Procedures::new();
+        let call = procedures.call();
+        let value = Closure { stack: StackVar, body: call }.build(&mut procedures.arena, None);
+        let stack = StackVar.build(&mut procedures.arena, None);
+        let tail = SReturn { stack, value }.build(&mut procedures.arena, None);
+        let body = procedures.returns_unit();
+        let root = procedures.bind(body, tail);
+        let procedure = procedures.procedure;
+        let error = FragmentError::ProcedureUnderClosure { compu: call, procedure };
+        assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Err(error));
+
+        let mut procedures = Procedures::new();
+        let call = procedures.call();
+        let param = procedures.arena.admin.fresh();
+        let stack = StackVar.build(&mut procedures.arena, None);
+        let tail = SFix { param, stack, body: call }.build(&mut procedures.arena, None);
+        let body = procedures.returns_unit();
+        let root = procedures.bind(body, tail);
+        let procedure = procedures.procedure;
+        let error = FragmentError::ProcedureUnderClosure { compu: call, procedure };
+        assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Err(error));
+    }
+
+    #[test]
+    fn procedures_are_not_values() {
+        let mut procedures = Procedures::new();
+        let value = procedures.procedure.build(&mut procedures.arena, None);
+        let stack = StackVar.build(&mut procedures.arena, None);
+        let tail = SReturn { stack, value }.build(&mut procedures.arena, None);
+        let body = procedures.returns_unit();
+        let root = procedures.bind(body, tail);
+        let procedure = procedures.procedure;
+        let error = FragmentError::ProcedureAsValue { value, procedure };
+        assert_eq!(procedures.check(root, SpsScheme::BranchJoin), Err(error));
+    }
+
+    #[test]
+    fn full_requires_a_procedure_call_to_receive_the_ambient_stack() {
+        let mut procedures = Procedures::new();
+        let tail = procedures.call();
+        let body = procedures.returns_unit();
+        let root = procedures.bind(body, tail);
+        assert_eq!(procedures.check(root, SpsScheme::Full), Ok(()));
+
+        let mut procedures = Procedures::new();
+        let argument: ValueId = Triv.build(&mut procedures.arena, None);
+        let ambient: StackId = StackVar.build(&mut procedures.arena, None);
+        let stack = Cons(argument, ambient).build(&mut procedures.arena, None);
+        let tail = procedures.call_with(stack);
+        let body = procedures.returns_unit();
+        let root = procedures.bind(body, tail);
+        let error = PlacementError::NonAmbientConsumer;
+        assert_eq!(
+            procedures.check(root, SpsScheme::Full),
+            Err(FragmentError::Placement { compu: tail, error })
+        );
     }
 
     #[test]

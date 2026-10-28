@@ -196,6 +196,14 @@ impl Layer {
                 | 1 => Some(S::Computation(tail)),
                 | _ => None,
             },
+            | Computation::LetProc(LetProc { body, tail, .. }) => match position {
+                | 0 => Some(S::Computation(body)),
+                | 1 => Some(S::Computation(tail)),
+                | _ => None,
+            },
+            | Computation::CallProc(CallProc { stack, .. }) => {
+                (position == 0).then_some(S::Stack(stack))
+            }
             | Computation::CoCase(SCoMatch { scrut, arms }) => match position {
                 | 0 => Some(S::Stack(scrut)),
                 | position => arms.get_mut(position - 1).map(|arm| S::Computation(&mut arm.tail)),

@@ -110,6 +110,12 @@ impl Variables {
             | Compu::Join(LetJoin::Stack(Let { binder: StackVar, bindee, tail })) => {
                 bindee.summary(self) + tail.summary(self)
             }
+            | Compu::LetProc(LetProc { procedure, stack: StackVar, body, tail }) => {
+                body.summary(self) + (tail.summary(self) - Context::singleton(procedure))
+            }
+            | Compu::CallProc(CallProc { procedure, stack }) => {
+                CoContext::singleton(procedure) + stack.summary(self)
+            }
             | Compu::LetArg(Let { binder: Cons(param, StackVar), bindee, tail }) => {
                 tail.summary(self) - param.summary(self) + bindee.summary(self)
             }

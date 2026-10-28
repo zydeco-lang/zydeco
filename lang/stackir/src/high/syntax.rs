@@ -97,6 +97,23 @@ pub enum LetJoin {
     Stack(Let<StackVar, StackId, CompuId>),
 }
 
+/// A second-class procedure: `body` runs on the stack that each call supplies, bound to its own `•`.
+/// The procedure is in scope in `tail` only, where it can be called and nothing else.
+#[derive(Clone, Debug)]
+pub struct LetProc {
+    pub procedure: DefId,
+    pub stack: StackVar,
+    pub body: CompuId,
+    pub tail: CompuId,
+}
+
+/// A call of a procedure in scope, with a stack built over the ambient one.
+#[derive(Clone, Debug)]
+pub struct CallProc {
+    pub procedure: DefId,
+    pub stack: StackId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Computation<Join> {
     Hole(SHole<StackId>),
@@ -108,6 +125,8 @@ pub enum Computation<Join> {
     Compare(CompareBranch),
     #[from(ignore)]
     Join(Join),
+    LetProc(LetProc),
+    CallProc(CallProc),
     LetArg(Let<Cons<VPatId, StackVar>, StackId, CompuId>),
     CoCase(SCoMatch),
     ExternCall(ExternCall),

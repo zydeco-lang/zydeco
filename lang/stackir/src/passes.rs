@@ -2,7 +2,7 @@
 
 use crate::{
     FragmentError, FragmentProgram, SpsScheme,
-    high::{fmt::Pretty, normalize::Normalizer, syntax::DefId},
+    high::{fmt::Pretty, localize::Localizer, normalize::Normalizer, syntax::DefId},
 };
 use std::{
     cell::RefCell,
@@ -23,20 +23,23 @@ use zydeco_utils::pass::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SpsPass {
     Normalize,
+    Localize,
 }
 
 impl SpsPass {
-    pub const ALL: &'static [Self] = &[Self::Normalize];
+    pub const ALL: &'static [Self] = &[Self::Normalize, Self::Localize];
 
     pub fn name(self) -> &'static str {
         match self {
             | Self::Normalize => "normalize",
+            | Self::Localize => "localize",
         }
     }
 
     pub fn description(self) -> &'static str {
         match self {
             | Self::Normalize => "sharing-preserving local reductions and demand-driven rebuilding",
+            | Self::Localize => "turn closures that are only called into second-class procedures",
         }
     }
 
@@ -66,7 +69,9 @@ pub enum SpsPlanError {
     Empty,
     #[error("empty SPS pass at position {position}")]
     EmptyPass { position: usize },
-    #[error("unknown SPS pass `{name}` at position {position}; available pass: normalize")]
+    #[error(
+        "unknown SPS pass `{name}` at position {position}; available passes: normalize, localize"
+    )]
     UnknownPass { position: usize, name: String },
     #[error(
         "`{name}` selects a complete plan and cannot occur at position {position} in a pass list"
@@ -89,6 +94,7 @@ impl FromStr for SpsPlan {
                     let position = index + 1;
                     match token.trim() {
                         | "normalize" => Ok(SpsPass::Normalize),
+                        | "localize" => Ok(SpsPass::Localize),
                         | "" => Err(SpsPlanError::EmptyPass { position }),
                         | name @ ("default" | "none") => {
                             Err(SpsPlanError::NestedPreset { position, name: name.into() })
@@ -158,6 +164,7 @@ impl SpsPlan {
     pub fn instantiate(&self) -> PassSequence<'static, FragmentProgram, Infallible> {
         self.passes().iter().fold(PassSequence::new(), |passes, pass| match pass {
             | SpsPass::Normalize => passes.with_pass(Normalizer),
+            | SpsPass::Localize => passes.with_pass(Localizer),
         })
     }
 
@@ -173,6 +180,8 @@ impl SpsPlan {
             match pass {
                 | SpsPass::Normalize => passes
                     .with_pass(Normalizer.with_observer(pass.location(index), observer.clone())),
+                | SpsPass::Localize => passes
+                    .with_pass(Localizer.with_observer(pass.location(index), observer.clone())),
             }
         })
     }
