@@ -137,7 +137,8 @@ including pointer relocation and state preservation on rejected transitions.
 The full workspace suite was not run. The managed-frame results are executable collector traces;
 flattened and segmented alternatives have no native measurements in this study.
 
-The accompanying evidence files retain samples, commands, source hashes, probes, pilots, and setup failures.
+The accompanying evidence files retain samples, commands, and source hashes; pilot runs,
+probe outputs, and setup failures were not retained.
 The principal records are:
 
 | Question | Records |

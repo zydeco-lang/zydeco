@@ -20,7 +20,6 @@ in [ideas](../ideas/README.md).
 | --- | --- | --- |
 | 2026-09-07 | [Bug-hunt evidence](2026-09-07-bug-hunt/README.md) | Method and retained historical measurements from the `e00b91f0` audit: interpreter value lookup, checker host stack, long-running host retention, and product-suffix layouts. |
 | 2026-09-08 | [CBPV runtime evaluation](2026-09-08-cbpv-runtime/README.md) | Environment storage, capture copying, root discovery, native runtime comparisons, and Wasm memory. |
-| 2026-09-14 | [Isolated assembly lowering evaluation](2026-09-14-assembly-lowering/README.md) | Boxed CPS and folder comparisons, isolated pass timing and allocation costs, consumer-slot reuse, reduced dispatch, and rejected optimization experiments. |
 | 2026-09-14 | [Memory abstraction comparison](2026-09-14-memory-abstractions/README.md) | Raw, fixed-view, and header-view code sites, interpreter checks, and reproducible limits of erasure. |
 | 2026-09-15 | [Bounded raw memory kernels](2026-09-15-memory-kernels/README.md) | Raw wide-scalar load–arithmetic–store kernels, allocation sites, ordinary fallbacks, and execution checks. |
 | 2026-09-15 | [Typed fields and header-array updates](2026-09-15-typed-memory/README.md) | Independent storage/codecs, allocation-free local kernels, checked raw/typed header comparison, and remaining whole-path allocation sites. |

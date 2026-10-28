@@ -2461,8 +2461,6 @@ while preserving the emitted terminator.
 These direct fixtures isolate folder execution from semantic validation and stack analysis.
 The guarantee covers lowering's control flow and flat continuation teardown; context cloning,
 retained assembly contexts, and the separate validators and analyzers still determine other costs.
-The [isolated lowering study](../evaluations/2026-09-14-assembly-lowering/README.md) records historical timing
-and allocation measurements for the boxed implementation and both folder drivers.
 
 ### Product Layout and Local Unboxing
 
@@ -3613,8 +3611,7 @@ the [completion proposal](../proposals/completion.md) retains further candidate 
 [Source documentation](language.md#source-documentation) consists of `@[doc]` and adjacent text attachment.
 The [shared source scan](#shared-source-analysis) retains these annotations and reports detached text;
 formatting preserves their attachment.
-Semantic documentation analysis, publication, editor presentation,
-and example verification are not implemented.
+Semantic documentation analysis, publication, editor presentation, and example verification are not implemented.
 
 ### Interactive Engine
 
