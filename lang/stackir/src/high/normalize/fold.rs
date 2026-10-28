@@ -4,15 +4,55 @@ use super::*;
 use std::marker::PhantomData;
 use zydeco_utils::fold::{Folder, Step};
 
+/// A memory step's operand besides its address: the fresh result binder of a load or the stored
+/// value of a store.
+enum MemoryOperand {
+    Load { result: VPatId },
+    Store { value: ValueId },
+}
+
+/// The source fields a memory step keeps while its continuation, address, and value rebuild.
 pub(super) struct MemoryFrame {
     source: CompuId,
     env: EnvId,
-    load_result: Option<VPatId>,
+    scalar: memory::MemoryScalar,
+    address: ValueId,
+    operand: MemoryOperand,
+}
+
+/// The kind of an unfinished value and the source fields it keeps; its children arrive as
+/// completed results.
+pub(super) enum ValueParent {
+    AddrOffset,
+    Closure,
+    Ctor(CtorIdx),
+    VCons { count: usize, layout: ProductLayout },
+}
+
+/// The kind of an unfinished stack frame; an argument frame's value arrives as a completed result.
+pub(super) enum StackParent {
+    Arg,
+    Tag(DtorIdx),
+}
+
+/// The kind of an unfinished computation and the source fields it keeps; a comatch keeps its
+/// destructor tags in arm order.
+pub(super) enum ComputationParent {
+    Hole,
+    Force,
+    Ret,
+    CallProc(DefId),
+    LetArg(VPatId),
+    CoCase(Vec<Cons<DtorIdx, StackVar>>),
 }
 
 pub(super) enum Work {
     Value(ValueId, EnvId, Demand),
-    FinishValue(ValueId, bool),
+    FinishValue {
+        source: ValueId,
+        parent: ValueParent,
+        protocol: bool,
+    },
     OffsetDisplacement {
         source: ValueId,
         displacement: ScopedValue,
@@ -26,7 +66,10 @@ pub(super) enum Work {
         protocol: bool,
     },
     Stack(ScopedStack),
-    FinishStack(StackId),
+    FinishStack {
+        source: StackId,
+        parent: StackParent,
+    },
     StackRest {
         source: StackId,
         stack: ScopedStack,
@@ -39,9 +82,13 @@ pub(super) enum Work {
     MemoryAddress(MemoryFrame),
     MemoryValue(MemoryFrame),
     FinishMemory(MemoryFrame),
-    FinishComputation(CompuId),
+    FinishComputation {
+        source: CompuId,
+        parent: ComputationParent,
+    },
     ComputationValue {
         source: CompuId,
+        parent: ComputationParent,
         value: ScopedValue,
     },
     CoCaseArms {
@@ -97,6 +144,7 @@ pub(super) enum Work {
     },
     ComparisonChildren {
         source: CompuId,
+        compare: CompareBranch,
         position: usize,
         arms: Scope,
         join: Option<ScopedStack>,
@@ -304,14 +352,18 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                 }
                 return Step::Call {
                     input: Work::Computation(body, Scope { values: env, stack: None }),
-                    frame: Work::FinishValue(id, protocol),
+                    frame: Work::FinishValue { source: id, parent: ValueParent::Closure, protocol },
                 };
             }
-            | Value::Ctor(Ctor(_, body)) => {
+            | Value::Ctor(Ctor(tag, body)) => {
                 let demand = if demand.is_absent() { Demand::Absent } else { Demand::Used };
                 return Step::Call {
                     input: Work::Value(body, env, demand),
-                    frame: Work::FinishValue(id, protocol),
+                    frame: Work::FinishValue {
+                        source: id,
+                        parent: ValueParent::Ctor(tag),
+                        protocol,
+                    },
                 };
             }
             | Value::VCons(_) => {
@@ -378,10 +430,10 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     frame: Work::StackRest { source: id, stack: ScopedStack { node: rest, scope } },
                 };
             }
-            | Stack::Tag(Cons(_, rest)) => {
+            | Stack::Tag(Cons(tag, rest)) => {
                 return Step::Call {
                     input: Work::Stack(ScopedStack { node: rest, scope }),
-                    frame: Work::FinishStack(id),
+                    frame: Work::FinishStack { source: id, parent: StackParent::Tag(tag) },
                 };
             }
             | Stack::Kont(Kont { binder, body }) => {
@@ -408,21 +460,25 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         match self.norm.source.inner.compus[&id].clone() {
             | Computation::Memory(step) => {
                 let env = scope.values;
-                let (next, values, load_result) = match step {
-                    | MemoryStep::Load { result, next, .. } => {
+                let (next, values, frame) = match step {
+                    | MemoryStep::Load { scalar, address, result, next } => {
                         let (result, values) = self.norm.load_pattern::<D>(result, env);
-                        (next, values, Some(result))
+                        let operand = MemoryOperand::Load { result };
+                        (next, values, MemoryFrame { source: id, env, scalar, address, operand })
                     }
-                    | MemoryStep::Store { next, .. } => (next, env, None),
+                    | MemoryStep::Store { scalar, address, value, next } => {
+                        let operand = MemoryOperand::Store { value };
+                        (next, env, MemoryFrame { source: id, env, scalar, address, operand })
+                    }
                 };
                 Step::Call {
                     input: Work::Computation(next, Scope { values, ..scope }),
-                    frame: Work::MemoryAddress(MemoryFrame { source: id, env, load_result }),
+                    frame: Work::MemoryAddress(frame),
                 }
             }
             | Computation::Hole(SHole(stack)) => Step::Call {
                 input: Work::Stack(ScopedStack { node: stack, scope }),
-                frame: Work::FinishComputation(id),
+                frame: Work::FinishComputation { source: id, parent: ComputationParent::Hole },
             },
             | Computation::Force(SForce { thunk, stack }) => {
                 let known = self.norm.known(thunk, scope.values);
@@ -450,6 +506,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                         input: Work::Stack(stack),
                         frame: Work::ComputationValue {
                             source: id,
+                            parent: ComputationParent::Force,
                             value: ScopedValue { node: thunk, env: scope.values },
                         },
                     }
@@ -473,6 +530,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                         input: Work::Stack(stack),
                         frame: Work::ComputationValue {
                             source: id,
+                            parent: ComputationParent::Ret,
                             value: ScopedValue { node: value, env: scope.values },
                         },
                     }
@@ -500,7 +558,13 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
                     let stack = Some(self.norm.delay_stack(stack));
                     Step::TailCall(Work::Computation(*body, Scope { values: *env, stack }))
                 } else {
-                    Step::Call { input: Work::Stack(stack), frame: Work::FinishComputation(id) }
+                    Step::Call {
+                        input: Work::Stack(stack),
+                        frame: Work::FinishComputation {
+                            source: id,
+                            parent: ComputationParent::CallProc(procedure),
+                        },
+                    }
                 }
             }
             | Computation::ProductMatch(SProductMatch { scrut: bindee, binder, body: tail })
@@ -579,25 +643,25 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     ) -> Step<Self> {
         // Selecting a successor moves a guard's stack into it, so the guard must be movable.
         let selectable = guard.is_none_or(|bindee| self.norm.movable_stack(bindee));
-        if let Computation::Compare(CompareBranch { operation, operands, when_true, when_false }) =
-            self.norm.source.inner.compus[&branch]
-        {
-            let known = operands.map(|value| self.norm.known(value, scope.values));
+        if let Computation::Compare(compare) = &self.norm.source.inner.compus[&branch] {
+            let compare = compare.clone();
+            let known = compare.operands.map(|value| self.norm.known(value, scope.values));
             if selectable
-                && operands.iter().all(|value| self.norm.discardable(*value))
+                && compare.operands.iter().all(|value| self.norm.discardable(*value))
                 && let [KnownValue::Literal(first), KnownValue::Literal(second)] =
                     known.each_ref().map(|value| value.as_ref())
-                && let Ok(condition) = operation.evaluate(&[first.clone(), second.clone()])
+                && let Ok(condition) = compare.operation.evaluate(&[first.clone(), second.clone()])
             {
                 let scope = self.selected(guard, scope);
                 return Step::TailCall(Work::Computation(
-                    if condition { when_true } else { when_false },
+                    if condition { compare.when_true } else { compare.when_false },
                     scope,
                 ));
             }
             let (arms, join) = self.unknown(guard, scope);
             return Step::TailCall(Work::ComparisonChildren {
                 source: branch,
+                compare,
                 position: 0,
                 arms,
                 join,
@@ -768,43 +832,24 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             | Work::Stack(stack) => return self.visit_stack(stack),
             | Work::Computation(id, scope) => return self.visit_computation(id, scope),
             | Work::MemoryAddress(frame) => {
-                let MemoryFrame { source, env, .. } = frame;
-                let Computation::Memory(step) = self.norm.source.inner.compus[&source].clone()
-                else {
-                    unreachable!()
-                };
-                let address = match step {
-                    | MemoryStep::Load { address, .. } | MemoryStep::Store { address, .. } => {
-                        address
-                    }
-                };
                 return Step::Call {
-                    input: Work::Value(address, env, Demand::Used),
+                    input: Work::Value(frame.address, frame.env, Demand::Used),
                     frame: Work::MemoryValue(frame),
                 };
             }
             | Work::MemoryValue(frame) => {
-                let MemoryFrame { source, env, .. } = frame;
-                if let Computation::Memory(MemoryStep::Store { value, .. }) =
-                    self.norm.source.inner.compus[&source]
-                {
+                if let MemoryOperand::Store { value } = frame.operand {
                     return Step::Call {
-                        input: Work::Value(value, env, Demand::Used),
+                        input: Work::Value(value, frame.env, Demand::Used),
                         frame: Work::FinishMemory(frame),
                     };
                 }
                 return Step::TailCall(Work::FinishMemory(frame));
             }
-            | Work::FinishMemory(frame) => {
-                let source = frame.source;
+            | Work::FinishMemory(MemoryFrame { source, scalar, operand, .. }) => {
                 let mut next = self.computation();
-                let Computation::Memory(original) = self.norm.source.inner.compus[&source].clone()
-                else {
-                    unreachable!()
-                };
-                let step = match original {
-                    | MemoryStep::Load { scalar, .. } => {
-                        let result = frame.load_result.expect("a load has a fresh result binder");
+                let step = match operand {
+                    | MemoryOperand::Load { result } => {
                         let address = self.value();
                         for def in result.vars(&self.norm.arena) {
                             next.demands.remove(&def);
@@ -812,7 +857,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         next.demands = next.demands.join(address.demands);
                         MemoryStep::Load { scalar, address: address.node, result, next: next.node }
                     }
-                    | MemoryStep::Store { scalar, .. } => {
+                    | MemoryOperand::Store { .. } => {
                         let value = self.value();
                         let address = self.value();
                         next.demands = next.demands.join(address.demands).join(value.demands);
@@ -829,7 +874,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             | Work::ValueChildren { source, position, env, demand, protocol } => {
                 let Value::VCons(VCons { items, layout }) = &self.norm.source.inner.values[&source]
                 else {
-                    unreachable!("product children")
+                    unreachable!("a product frame is pushed only for a product value")
                 };
                 if let Some(&child) = items.get(position) {
                     let child_demand = demand.item(position, items.len(), *layout);
@@ -844,22 +889,26 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         },
                     };
                 }
-                return Step::TailCall(Work::FinishValue(source, protocol));
+                let parent = ValueParent::VCons { count: items.len(), layout: *layout };
+                return Step::TailCall(Work::FinishValue { source, parent, protocol });
             }
             | Work::StackRest { source, stack } => {
-                return Step::Call { input: Work::Stack(stack), frame: Work::FinishStack(source) };
+                return Step::Call {
+                    input: Work::Stack(stack),
+                    frame: Work::FinishStack { source, parent: StackParent::Arg },
+                };
             }
-            | Work::ComputationValue { source, value } => {
+            | Work::ComputationValue { source, parent, value } => {
                 return Step::Call {
                     input: Work::Value(value.node, value.env, Demand::Used),
-                    frame: Work::FinishComputation(source),
+                    frame: Work::FinishComputation { source, parent },
                 };
             }
             | Work::CoCaseArms { source, position, env } => {
                 let Computation::CoCase(SCoMatch { arms, .. }) =
                     &self.norm.source.inner.compus[&source]
                 else {
-                    unreachable!("comatch arms")
+                    unreachable!("a comatch frame is pushed only for a comatch")
                 };
                 if let Some(arm) = arms.get(position) {
                     return Step::Call {
@@ -867,7 +916,9 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         frame: Work::CoCaseArms { source, position: position + 1, env },
                     };
                 }
-                return Step::TailCall(Work::FinishComputation(source));
+                let dtors = arms.iter().map(|arm| arm.dtor.clone()).collect();
+                let parent = ComputationParent::CoCase(dtors);
+                return Step::TailCall(Work::FinishComputation { source, parent });
             }
             | Work::BindingComponents { mut remaining, site } => {
                 if let Some((binder, bindee)) = remaining.next_back() {
@@ -877,20 +928,13 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                     };
                 }
             }
-            | Work::ComparisonChildren { source, position, arms, join, site } => {
-                let Computation::Compare(CompareBranch {
-                    operation,
-                    operands,
-                    when_true,
-                    when_false,
-                }) = self.norm.source.inner.compus[&source]
-                else {
-                    unreachable!("comparison branch")
-                };
+            | Work::ComparisonChildren { source, compare, position, arms, join, site } => {
                 let input = match position {
-                    | 0 => Some(Work::Computation(when_true, arms.clone())),
-                    | 1 => Some(Work::Computation(when_false, arms.clone())),
-                    | 2 | 3 => Some(Work::Value(operands[position - 2], arms.values, Demand::Used)),
+                    | 0 => Some(Work::Computation(compare.when_true, arms.clone())),
+                    | 1 => Some(Work::Computation(compare.when_false, arms.clone())),
+                    | 2 | 3 => {
+                        Some(Work::Value(compare.operands[position - 2], arms.values, Demand::Used))
+                    }
                     | _ => None,
                 };
                 if let Some(input) = input {
@@ -898,6 +942,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                         input,
                         frame: Work::ComparisonChildren {
                             source,
+                            compare,
                             position: position + 1,
                             arms,
                             join,
@@ -912,7 +957,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 let branch_site =
                     self.norm.source.admin.terms.back(&TermId::Compu(source)).copied();
                 let tail = CompareBranch {
-                    operation,
+                    operation: compare.operation,
                     operands: [first.node, second.node],
                     when_true: when_true.node,
                     when_false: when_false.node,
@@ -929,7 +974,7 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 let Computation::CoprodMatch(SCoprodMatch { scrut, arms }) =
                     &self.norm.source.inner.compus[&source]
                 else {
-                    unreachable!("coproduct arms")
+                    unreachable!("a coproduct-arm frame is pushed only for a coproduct match")
                 };
                 if let Some(arm) = arms.get(position) {
                     return Step::Call {
@@ -973,58 +1018,55 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
             | Work::OffsetDisplacement { source, displacement, protocol } => {
                 return Step::Call {
                     input: Work::Value(displacement.node, displacement.env, Demand::Used),
-                    frame: Work::FinishValue(source, protocol),
+                    frame: Work::FinishValue { source, parent: ValueParent::AddrOffset, protocol },
                 };
             }
-            | Work::FinishValue(id, protocol) => match self.norm.source.inner.values[&id].clone() {
-                | Value::AddrOffset(_) => {
+            | Work::FinishValue { source, parent, protocol } => match parent {
+                | ValueParent::AddrOffset => {
                     let displacement = self.value();
                     let base = self.value();
                     self.build_value(
-                        id,
+                        source,
                         AddrOffset { base: base.node, displacement: displacement.node },
                         base.demands.join(displacement.demands),
                         protocol,
                     );
                 }
-                | Value::Closure(Closure { stack, .. }) => {
+                | ValueParent::Closure => {
                     let body = self.computation();
                     self.build_value(
-                        id,
-                        Closure { stack, body: body.node },
+                        source,
+                        Closure { stack: StackVar, body: body.node },
                         body.demands,
                         protocol,
                     );
                 }
-                | Value::Ctor(Ctor(tag, _)) => {
+                | ValueParent::Ctor(tag) => {
                     let body = self.value();
-                    self.build_value(id, Ctor(tag, body.node), body.demands, protocol);
+                    self.build_value(source, Ctor(tag, body.node), body.demands, protocol);
                 }
-                | Value::VCons(VCons { items, layout }) => {
-                    let children = self.values.split_off(self.values.len() - items.len());
+                | ValueParent::VCons { count, layout } => {
+                    let children = self.values.split_off(self.values.len() - count);
                     let (items, demands): (Vec<_>, Vec<_>) =
                         children.into_iter().map(|child| (child.node, child.demands)).unzip();
                     self.build_value(
-                        id,
+                        source,
                         VCons::new(items, layout),
                         demands.into_iter().fold(Demands::default(), Demands::join),
                         protocol,
                     );
                 }
-                | _ => unreachable!("value with scheduled children"),
             },
-            | Work::FinishStack(id) => {
-                let site = self.norm.source.admin.terms.back(&TermId::Stack(id)).copied();
+            | Work::FinishStack { source, parent } => {
+                let site = self.norm.source.admin.terms.back(&TermId::Stack(source)).copied();
                 let tail = self.stack();
                 let (rest, spine, rest_demands) = self.consumed(tail);
-                let (stack, demands): (Stack, _) = match self.norm.source.inner.stacks[&id].clone()
-                {
-                    | Stack::Arg(_) => {
+                let (stack, demands): (Stack, _) = match parent {
+                    | StackParent::Arg => {
                         let value = self.value();
                         (Cons(value.node, rest).into(), value.demands.join(rest_demands))
                     }
-                    | Stack::Tag(Cons(tag, _)) => (Cons(tag, rest).into(), rest_demands),
-                    | _ => unreachable!("stack with scheduled tail"),
+                    | StackParent::Tag(tag) => (Cons(tag, rest).into(), rest_demands),
                 };
                 let node = stack.build(self.norm, site);
                 self.stacks.push(StackResidual { node, spine, demands });
@@ -1039,72 +1081,69 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 let node = Kont { binder, body: body.node }.build(self.norm, site);
                 self.stacks.push(StackResidual { node, spine: Vec::new(), demands: body.demands });
             }
-            | Work::FinishComputation(id) => match self.norm.source.inner.compus[&id].clone() {
-                | Computation::Hole(_) => {
+            | Work::FinishComputation { source, parent } => match parent {
+                | ComputationParent::Hole => {
                     let stack = self.stack();
                     let (stack, spine, demands) = self.consumed(stack);
-                    self.finish_computation(id, SHole(stack), spine, demands);
+                    self.finish_computation(source, SHole(stack), spine, demands);
                 }
-                | Computation::Force(_) => {
+                | ComputationParent::Force => {
                     let thunk = self.value();
                     let stack = self.stack();
                     let (stack, spine, demands) = self.consumed(stack);
                     self.finish_computation(
-                        id,
+                        source,
                         SForce { thunk: thunk.node, stack },
                         spine,
                         thunk.demands.join(demands),
                     );
                 }
-                | Computation::CallProc(CallProc { procedure, .. }) => {
+                | ComputationParent::CallProc(procedure) => {
                     let stack = self.stack();
                     let (stack, spine, demands) = self.consumed(stack);
                     // A surviving call keeps its procedure's binding alive.
                     let demands = demands.join(Demands::singleton(procedure, Demand::Used));
-                    self.finish_computation(id, CallProc { procedure, stack }, spine, demands);
+                    self.finish_computation(source, CallProc { procedure, stack }, spine, demands);
                 }
-                | Computation::Ret(_) => {
+                | ComputationParent::Ret => {
                     let value = self.value();
                     let stack = self.stack();
                     let (stack, spine, demands) = self.consumed(stack);
                     self.finish_computation(
-                        id,
+                        source,
                         SReturn { stack, value: value.node },
                         spine,
                         demands.join(value.demands),
                     );
                 }
-                | Computation::LetArg(Let { binder: Cons(binder, StackVar), .. }) => {
+                | ComputationParent::LetArg(binder) => {
                     let tail = self.computation();
                     let bindee = self.stack();
                     let (bindee, spine, demands) = self.consumed(bindee);
                     let binder = Cons(self.norm.pattern::<D>(binder), StackVar);
                     self.finish_computation(
-                        id,
+                        source,
                         Let { binder, bindee, tail: tail.node },
                         spine,
                         demands.join(tail.demands),
                     );
                 }
-                | Computation::CoCase(SCoMatch { arms, .. }) => {
-                    let tails = self.computations.split_off(self.computations.len() - arms.len());
-                    let (arms, demands): (Vec<_>, Vec<_>) = arms
+                | ComputationParent::CoCase(dtors) => {
+                    let tails = self.computations.split_off(self.computations.len() - dtors.len());
+                    let (arms, demands): (Vec<_>, Vec<_>) = dtors
                         .into_iter()
                         .zip(tails)
-                        .map(|(arm, tail)| {
-                            (CoMatcher { dtor: arm.dtor, tail: tail.node }, tail.demands)
-                        })
+                        .map(|(dtor, tail)| (CoMatcher { dtor, tail: tail.node }, tail.demands))
                         .unzip();
                     let scrut = self.stack();
                     let (scrut, spine, scrut_demands) = self.consumed(scrut);
                     self.finish_computation(
-                        id,
+                        source,
                         SCoMatch { scrut, arms },
                         spine,
                         demands.into_iter().fold(scrut_demands, Demands::join),
                     );
                 }
-                | _ => unreachable!("computation with ordinary reconstruction"),
             },
             | Work::FixBody { source, param, body, scope } => {
                 let values = self.norm.extend(scope.values, [(param, Rc::default())]);
@@ -1155,7 +1194,10 @@ impl<D: Driver> Folder for NormalizationFolder<'_, D> {
                 }
                 return Step::Call {
                     input: Work::Stack(stack),
-                    frame: Work::FinishComputation(source),
+                    frame: Work::FinishComputation {
+                        source,
+                        parent: ComputationParent::LetArg(binder),
+                    },
                 };
             }
             | Work::Binding { binder, bindee, tail, scope, site } => {
