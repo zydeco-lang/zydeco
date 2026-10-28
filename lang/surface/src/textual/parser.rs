@@ -12,7 +12,8 @@ use std::{fmt::Display, ops::Range};
 use thiserror::Error;
 
 lalrpop_util::lalrpop_mod!(
-    #[allow(clippy::all, unused_imports)]
+    // Generated parser tables and reductions are not hand-maintained code.
+    #[allow(clippy::all, clippy::too_many_lines, unused_imports)]
     #[doc = "LALRPOP-generated implementation of the canonical grammar."]
     generated,
     "/textual/parser/grammar.rs"

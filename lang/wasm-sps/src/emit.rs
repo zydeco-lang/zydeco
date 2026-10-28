@@ -591,6 +591,8 @@ impl<'a> CaseEncoder<'a> {
         Ok(())
     }
 
+    // One arm per computation form is the clearest shape for this emitter.
+    #[allow(clippy::too_many_lines)]
     fn emit_compu(&mut self, mut id: CompuId) -> Result<(), EmitError> {
         loop {
             if let Some(call) = self.plan.scalars.memory(id).cloned() {

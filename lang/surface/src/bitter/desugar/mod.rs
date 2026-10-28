@@ -192,6 +192,8 @@ impl DesugarFolder<'_> {
         result
     }
 
+    // Remaining worklist: split term desugaring by term form.
+    #[allow(clippy::too_many_lines)]
     fn term_node(&mut self, id: t::TermId) -> Result<b::TermId> {
         let term = self.lookup_term(id);
         use t::Term as Tm;

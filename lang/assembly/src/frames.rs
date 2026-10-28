@@ -116,6 +116,8 @@ impl FramePlan {
         variables
     }
 
+    // Remaining worklist: split frame analysis into its traversal and planning phases.
+    #[allow(clippy::too_many_lines)]
     fn analyze(arena: &AssemblyArena, root: ProgId) -> Result<Self, FramePlanError> {
         // Ordinary edges stay within an activation; a retained entry belongs to
         // the activation that constructs it, even though it runs after a return.

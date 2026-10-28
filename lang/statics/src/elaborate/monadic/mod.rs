@@ -878,6 +878,8 @@ impl MonConstruct<CompuId> for ReferencedStructure {
 }
 
 /// Structure Translation `Str(T)`
+// Remaining worklist: split structure translation by type former.
+#[allow(clippy::too_many_lines)]
 fn structure_translation(
     tycker: &mut Tycker, env: MonEnv, ty: TypeId,
 ) -> Result<(MonEnv, CompuId)> {
@@ -1266,6 +1268,8 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
 }
 
 /// Value Pattern Translation `[VPat]`
+// Remaining worklist: split package pattern translation into its phases.
+#[allow(clippy::too_many_lines)]
 fn package_pattern_translation(
     tycker: &mut Tycker, env: MonEnv, witnesses: &[StaticPatId],
     source_layout: Option<&[PackPiWitnessLayoutEntry]>, body: VPatId, translated_ty: TypeId,

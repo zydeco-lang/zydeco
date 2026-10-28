@@ -361,6 +361,8 @@ impl Application {
         Ok(run.run(arguments)?)
     }
 
+    // Remaining worklist: split source building into library and executable paths.
+    #[allow(clippy::too_many_lines)]
     fn build_sources(
         &self, sources: Vec<SourceReference>, target: BuildTarget, options: BuildOptions,
         execute: bool, representation: Option<RepresentationStrategy>, libraries: LinkedLibraries,

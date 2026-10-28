@@ -346,6 +346,8 @@ impl<'a> Tycker<'a> {
         }
     }
 
+    // One arm per error variant is the clearest shape for this message table.
+    #[allow(clippy::too_many_lines)]
     fn error_output(&'a self, error: TyckError) -> String {
         match error {
             | TyckError::MissingAnnotation => "Missing annotation".to_string(),
@@ -723,6 +725,8 @@ impl<'a> Tycker<'a> {
     }
 
     /// Get the error message text.
+    // One arm per error variant is the clearest shape for this message table.
+    #[allow(clippy::too_many_lines)]
     pub(super) fn error_message(&self, error: &TyckError) -> String {
         match error {
             | TyckError::MissingAnnotation => "Missing annotation".to_string(),

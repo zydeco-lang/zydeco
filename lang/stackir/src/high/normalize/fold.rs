@@ -455,6 +455,8 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         Step::Return(())
     }
 
+    // Remaining worklist: split computation normalization by form.
+    #[allow(clippy::too_many_lines)]
     fn visit_computation(&mut self, id: CompuId, scope: Scope) -> Step<Self> {
         let site = self.norm.source.admin.terms.back(&TermId::Compu(id)).copied();
         match self.norm.source.inner.compus[&id].clone() {

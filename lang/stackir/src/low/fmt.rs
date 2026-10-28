@@ -186,6 +186,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for Computation {
+    // One arm per computation form is the clearest shape for this printer.
+    #[allow(clippy::too_many_lines)]
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | Computation::Hole(SHole(stack)) => {

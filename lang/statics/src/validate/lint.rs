@@ -883,6 +883,8 @@ impl<'a> LintChecker<'a> {
     }
 
     /// Every node mentioned by an auxiliary table must resolve.
+    // Remaining worklist: split table reference validation by table group.
+    #[allow(clippy::too_many_lines)]
     fn table_references(&self) -> Vec<LintError> {
         let annotations_var =
             self.statics.annotations_var.iter().filter_map(|(def, ann)| match ann {

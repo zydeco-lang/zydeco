@@ -73,6 +73,8 @@ impl CoPatternSpine {
 impl<R> Term<R> {
     /// Structural copying order: binders precede their bodies, and a monadic body
     /// precedes its basis. Semantic folders override scheduling where scope requires it.
+    // One arm per term form is the clearest shape for this structural fold.
+    #[allow(clippy::too_many_lines)]
     pub fn fold_with<F: Folder<InputRef = R>>(
         self, folder: &mut F,
     ) -> Result<Term<F::OutputRef>, F::Error> {

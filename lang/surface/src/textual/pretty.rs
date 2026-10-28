@@ -1457,6 +1457,8 @@ impl<'arena> PrettyFormatter<'arena> {
         document
     }
 
+    // One arm per term form is the clearest shape for this printer.
+    #[allow(clippy::too_many_lines)]
     fn term_document(&self, term: TermId, requirement: TermRequirement) -> RcDoc<'arena> {
         if let Term::SourceBoundary(SourceBoundary(inner))
         | Term::SignatureBoundary(SignatureBoundary(inner)) = &self.arena.terms[&term]

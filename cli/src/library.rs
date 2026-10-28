@@ -252,6 +252,8 @@ pub struct LibraryBuilder<'a> {
 }
 
 impl LibraryBuilder<'_> {
+    // Remaining worklist: split library artifact building into its phases.
+    #[allow(clippy::too_many_lines)]
     pub fn build(
         &self, name: &PackageName, contract: &LibraryContract, analysis: &ProgramAnalysis,
         program: &LibraryProgram, kind: LibraryArtifactKind,

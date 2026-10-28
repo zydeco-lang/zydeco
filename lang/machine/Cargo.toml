@@ -14,3 +14,5 @@ runtime = []
 
 [lints.clippy]
 debug_assert_with_mut_call = "warn"
+# Function-length budget; the threshold lives in `clippy.toml`.
+too_many_lines = "warn"

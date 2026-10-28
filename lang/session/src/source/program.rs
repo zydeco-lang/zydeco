@@ -335,6 +335,8 @@ impl<'graph> TextualProgramBuilder<'graph> {
         })
     }
 
+    // Remaining worklist: split source term copying by term form.
+    #[allow(clippy::too_many_lines)]
     fn term(
         &mut self, source: SourceId, term: t::TermId,
     ) -> Result<t::TermId, TextualProgramError> {

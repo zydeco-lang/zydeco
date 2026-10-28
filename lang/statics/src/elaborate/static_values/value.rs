@@ -3,6 +3,8 @@
 use super::*;
 
 impl StaticElaborator<'_, '_> {
+    // Remaining worklist: split static value elaboration by value form.
+    #[allow(clippy::too_many_lines)]
     pub(super) fn value(
         &mut self, source: ValueId, env: &Environment, bindings: &mut Vec<Binding>,
     ) -> ResultKont<StaticValue> {

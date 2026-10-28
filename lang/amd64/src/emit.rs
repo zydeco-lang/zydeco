@@ -833,6 +833,8 @@ impl<'a> Emit<'a> for ProgId {
 
 impl<'a> Emit<'a> for Terminator {
     type Env = ProgId;
+    // One arm per terminator form is the clearest shape for this emitter.
+    #[allow(clippy::too_many_lines)]
     fn emit(&self, id: Self::Env, em: &mut Emitter) {
         match self {
             | Terminator::Jump(sa::Jump(target)) => {
@@ -1009,6 +1011,8 @@ impl<'a> Emit<'a> for Terminator {
 
 impl<'a> Emit<'a> for Instruction {
     type Env = ProgId;
+    // One arm per instruction form is the clearest shape for this emitter.
+    #[allow(clippy::too_many_lines)]
     fn emit(&self, id: Self::Env, em: &mut Emitter) {
         match self {
             | Instruction::PackProduct(sa::Pack(layout)) => {

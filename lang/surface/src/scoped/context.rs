@@ -137,6 +137,8 @@ impl ContextCollector {
     }
 
     /// Updates [`Self::coctxs_term_local`].
+    // Remaining worklist: split local co-context collection by term form.
+    #[allow(clippy::too_many_lines)]
     fn term(&mut self, term: TermId, item: &Term<DefId>) {
         if self.coctxs_term_local.get(&term).is_some() {
             return;

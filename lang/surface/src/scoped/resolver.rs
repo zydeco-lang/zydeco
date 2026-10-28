@@ -199,6 +199,8 @@ impl<O: ResolutionObserver> ResolveFolder<'_, O> {
         Ok(())
     }
 
+    // Remaining worklist: split term resolution by scope behavior.
+    #[allow(clippy::too_many_lines)]
     pub(super) fn term(&mut self, id: TermId, env: ResolveEnv<'_>) -> FoldResult<TermId> {
         let term = self.bitter.terms[&id].clone();
         // This classification is exhaustive: new constructors require a scope review.

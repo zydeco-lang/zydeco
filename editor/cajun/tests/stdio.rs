@@ -1,3 +1,7 @@
+// End-to-end protocol scenarios read as one script per test;
+// the function-length budget targets production code.
+#![allow(clippy::too_many_lines)]
+
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeSet, VecDeque},
