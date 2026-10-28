@@ -641,7 +641,7 @@ Keep source imports for consumers that need to apply arbitrary static functions.
 Supporting source-free distribution of those functions would require a separate static-code artifact
 and evaluator contract; serializing types alone does not supply their implementations.
 Consequently, native units enable reuse of prepared runtime libraries
-but do not automatically eliminate [repeated functor specialization](../ideas/residual-code-sharing.md)
+but do not automatically eliminate [repeated functor specialization](../ideas/README.md#residual-code-sharing)
 or permit every source package to become an object.
 
 Richer incremental compilation should give interface identity, implementation identity,

@@ -52,7 +52,7 @@ or review generalized computation instantiation as a separate extension.
 Preserve this pair when implementing either change.
 
 A generalized computation witness route remains
-in the [computation witness-route idea](../ideas/computation-witness-routes.md).
+in the [computation witness-route idea](../ideas/README.md#computation-witness-routes).
 Improving the rejection diagnostic does not require accepting that extension.
 
 ## Monadic closure validation

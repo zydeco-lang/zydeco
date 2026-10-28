@@ -26,7 +26,7 @@ The [ownership map](references/README.md#rule-ownership) connects source rules t
 | [Evaluations](evaluations/README.md) | Inspect dated experiments, measurements, and reproduction artifacts |
 | [Component guides](../lang) | Locate local implementation modules |
 | [OOPSLA artifact overview](../lib/tests/oopsla/README.md) | Follow paper-specific examples and evaluation instructions |
-| [Earlier tutorial](tutorial/intro_to_zydeco.md), [legacy notes](legacy) | Inspect historical language designs |
+| [Legacy notes](legacy) | Inspect historical language designs |
 
 ## Writing and maintaining documentation
 
@@ -37,8 +37,7 @@ Choose the corresponding reference section or design record below.
 | --- | --- |
 | Attach prose to `@[doc]` | [Source documentation](references/language.md#source-documentation) |
 | Understand annotation and text attachment | [Shared source analysis](references/compiler.md#shared-source-analysis) |
-| Reconsider documentation tooling | [Documentation design questions](proposals/documentation.md) |
-| Improve completion or generated type/source text | [Completion proposal](proposals/completion.md), [type-layout ideas](ideas/type-rendering-layout.md), [source-generation ideas](ideas/typed-source-generation.md) |
+| Improve completion or generated type/source text | [Completion proposal](proposals/completion.md), [type-layout ideas](ideas/README.md#elaborated-type-layout), [source-generation ideas](ideas/README.md#source-generation-from-elaborated-terms) |
 | Review, consolidate, format, and verify repository documentation | [Contribution workflow](../CONTRIBUTING.md#maintain-documentation) |
 | Repair an observed disagreement or duplicated account | [Reference drift](todos/reference-drift.md) |
 

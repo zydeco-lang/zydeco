@@ -57,7 +57,7 @@ The audit measured host-stack exhaustion with exit status 134 at about 1,500 nes
 about 2,000 nested functions or thunks, and about 8,000 nested type applications on an 8 MiB main thread;
 parsing succeeded because the parser uses an explicit stack.
 These approximate thresholds are platform-dependent and were not rerun for this record.
-Owning work: [next-pass stack mitigation](../../todos/README.md#next-pass-reviewed-2026-09-14).
+Owning work: [checker host-stack strategy](../../todos/README.md#work-that-needs-a-new-baseline).
 
 ### Long-running host retention
 
@@ -82,7 +82,7 @@ The historical RSS figures are not evidence about current entry teardown.
 when `elements < arity`, the final logical element points into an existing product suffix,
 and [C10](../../references/compiler.md#c10-zasm-stack-analysis-and-local-representation-choices) owns that contract.
 Code inspection during the audit found that source lowering emitted only full-arity layouts,
-so the suffix branches in the [ZASM interpreter](../../../lang/assembly/src/interp.rs)
+so the suffix branches in the ZASM interpreter
 and [AMD64 emitter](../../../lang/amd64/src/emit.rs) had no end-to-end coverage.
 Collector interior-pointer forwarding was covered separately
 by [GC regressions](../../../lang/tests/tests/native_gc.rs).
@@ -108,7 +108,7 @@ The audit's argument-fold and host-allocation findings were resolved after the f
 Their durable contracts live in [L13](../../references/language.md#13-primitive-values-and-capabilities),
 the [argument-contract regressions](../../../lib/tests/builtin/argument-contract.zy),
 and the [runtime-instance contract](../../references/compiler.md#runtime-instances);
-the [todos](../../todos/README.md#changes-to-earlier-findings) record the changed status.
+the [todos](../../todos/README.md) no longer list it.
 The other fixed findings' contracts and limits live in the owning references and regression tests,
 and this record does not restate their fix list.
 

@@ -138,7 +138,6 @@ The [editor guide](editor/README.md) describes shared behavior and runtime confi
 - [OOPSLA artifact instructions](lib/tests/oopsla/README.md): artifact-specific examples and evaluation instructions.
 - [Literate chapters](docs/spell): executable Zydeco chapters;
   see the [generation workflow](CONTRIBUTING.md#generate-documentation).
-- [Earlier tutorial](docs/tutorial/intro_to_zydeco.md): historical material using an older language design.
 
 Reusable programs live under `lib/`, and regression projects live under `lib/tests/`.
 The [repository map](DESIGN.md#repository-layout) locates the compiler, runtime, frontends, and editor integrations.

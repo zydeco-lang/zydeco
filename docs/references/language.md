@@ -623,9 +623,9 @@ A consumer can open a provider inside a scoped existential elimination and pass 
 and operations to a polymorphic callback.
 The hidden identity stays within that elimination and cannot escape through its result.
 The callback's classifier supplies neither purity nor single invocation nor a native continuation lifetime.
-Remaining questions concern [kind-witness introduction](../ideas/kind-witness-introduction.md),
-[computation witness routes](../ideas/computation-witness-routes.md),
-and [companion generation](../ideas/companion-interface-generation.md).
+Remaining questions concern [kind-witness introduction](../ideas/README.md#kind-witness-introduction),
+[computation witness routes](../ideas/README.md#computation-witness-routes),
+and [companion generation](../ideas/README.md#companion-interface-generation).
 
 ## 10. Static Elimination
 
@@ -1285,8 +1285,7 @@ The [source-package roles](#source-packages) describe these optional contracts.
 The compiler reference maps these abstractions
 to their [implementation representations](compiler.md#implementation-representations).
 Package context, source selection, and import identity follow the [package namespace rules](#package-hierarchy).
-Source text can retain [documentation annotations](#source-documentation);
-higher-level documentation operations remain [under design](../proposals/documentation.md).
+Source text can retain [documentation annotations](#source-documentation).
 
 ### Source Boundaries
 
@@ -2633,8 +2632,8 @@ and [CONTRIBUTING](../../CONTRIBUTING.md#format-and-lint) gives the workflow.
 ### Source Documentation
 
 `@[doc]` retains an optional adjacent text block on its payload term.
-It leaves the payload's typing and execution unchanged. The retained syntax supports authored explanations
-while the higher-level [documentation design](../proposals/documentation.md) remains open.
+It leaves the payload's typing and execution unchanged. The retained syntax supports authored explanations;
+no higher-level documentation tooling is implemented.
 
 #### Attaching Documentation
 

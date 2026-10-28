@@ -117,7 +117,7 @@ The package runner defaults to the interpreter and uses empty stdin and argument
 Support programs that need supplied arguments, fixtures, or input live under `lib/tests/std/support/`;
 they have no standalone package test.
 Their leading directives declare the execution setup,
-and the [std_directives runner](../../lang/tests/tests/std_directives.rs) supplies it.
+and the [std_directives runner](../../lang/tests/tests/directives.rs) supplies it.
 
 Use std from the same compiler release or revision, preserving its internal relative imports.
 There is no separate version resolver or hosted registry.

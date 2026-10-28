@@ -33,7 +33,7 @@ typst compile --root . lang/statics/type-system.typ /tmp/zydeco-type-system.pdf
 ```
 
 Document construction alone does not establish conformance to the compiler.
-Stronger recursive admissibility is an [unimplemented design question](../ideas/recursive-admissibility.md),
+Stronger recursive admissibility is an [unimplemented design question](../ideas/README.md#recursive-admissibility),
 not a missing positivity guarantee to add to the reference.
 
 ## Duplicate accounts and scratch records

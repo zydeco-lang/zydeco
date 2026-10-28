@@ -630,8 +630,7 @@ and offers directories and supported source files while excluding the importing 
 
 Source documentation currently consists of `@[doc]` annotations and adjacent `--|` text blocks.
 The [language reference](docs/references/language.md#source-documentation) defines their attachment rules.
-Lookup, semantic links, example verification, and publication are deferred
-while the [documentation design](docs/proposals/documentation.md) is reconsidered.
+Lookup, semantic links, example verification, and publication are not implemented.
 
 Each parsed entity, including nested metadata, has its own source span.
 The assembled program uses a shared `SourceMap` to associate byte offsets with their files;
@@ -966,7 +965,7 @@ and `memory`, but the embedding must supply the imports before invoking either f
 - Value-function application inlines each body at its use, so emitted code and compiler recursion depth grow
   with the unfolded program, dominated by multiply-instantiated library functors.
   The workspace raises its test-stack minimum accordingly; factoring repeated residual code remains future work recorded
-  in [deferred residual-code sharing](docs/ideas/residual-code-sharing.md).
+  in [deferred residual-code sharing](docs/ideas/README.md#residual-code-sharing).
 - Static reduction has the documented [resource bounds](docs/references/language.md#10-static-elimination)
   and does not enter computations to discover static functions or witnesses.
   Demand does not yet flow through runtime witness-dependent computation applications, so their arguments
@@ -994,5 +993,5 @@ and `memory`, but the embedding must supply the imports before invoking either f
   Field-projection payload patterns and general same-bindee aliases are restricted to irrefutable forms,
   apart from the supported selective opening of a packed value.
 - Monadic translation follows the [closed-term boundary](docs/references/language.md#closed-translation-boundary).
-  Its [coverage limits and deferred roots](docs/references/language.md#translation-coverage-and-deferred-roots)
+  Its [coverage limits and deferred roots](docs/references/language.md#translation-coverage)
   have separate design records; automatic removal of monad dispatch remains outside the implementation.

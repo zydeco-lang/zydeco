@@ -10,31 +10,6 @@ Remove resolved entries once their repair and durable rationale have reached the
   higher-order value-function inference, source-load error locations, monadic closure validation,
   partial-annotation scope during formatting, and package-introduction payload annotations.
 
-## Next pass, reviewed 2026-09-14
-
-The implementation review used `3b4dd665` and a newly built debug CLI, including the local,
-uncommitted 16 MiB CLI worker-stack change.
-These priorities distinguish reproduced failures from proposed extensions and performance investigations;
-they do not change the references.
-
-| Order | Work | Evidence and completion criterion |
-| --- | --- | --- |
-| 1 | [Repair product-shape inference](compiler-boundaries.md#n-ary-product-inference-refinement) | Inferred triples reject while pairs and explicitly typed triples pass. Infer the source arity and retain all three cases. |
-| 2 | [Repair witness diagnostics](compiler-boundaries.md#nested-witness-diagnostic) and [load locations](compiler-boundaries.md#source-load-diagnostic-locations) | Explain the unsupported witness route; render imports and cycles against their owning source. Preserve the supported counterparts and independent failures. |
-| 3 | [Finish package diagnostic collection](../proposals/traversals.md#diagnostic-collection-and-recovery) | Two malformed discovered files currently require two correction cycles. Report both while withholding the project and execution. |
-| 4 | [Complete SPSLow recovery](../proposals/traversals.md#diagnostic-collection-and-recovery) | Structural, free-variable, entry, and protocol checks still stop at the first failure. Collect independent failures only where prerequisite structure remains valid. |
-| 5 | [Repair reference drift](reference-drift.md) | Reconcile the formal calculus with supported source cases and retire obsolete accounts after preserving their evidence. |
-
-The CLI stack mitigation is already in progress.
-Its focused Wasm build regression passes with `RUST_MIN_STACK` removed from the child process;
-the worker-stack implementation was still uncommitted at review time.
-A larger stack is a bounded mitigation; deep checker recursion, library/editor entry points,
-and [residual-code growth](../ideas/residual-code-sharing.md) remain separate questions.
-The 2026-09-07 audit's approximate host-stack failure thresholds and their platform dependence are retained
-in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#checker-host-stack); they were not rerun.
-A chosen strategy must cover CLI, REPL, and editor entry points rather than relying on a launcher's stack size,
-and its regressions should run in child processes so an abort cannot take down the test harness.
-
 ## Work that needs a new baseline
 
 - Measure [compiler retention and query costs](../proposals/arena-gc.md#next-measurement-pass)
@@ -67,6 +42,11 @@ and its regressions should run in child processes so an abort cannot take down t
   in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#long-running-host-retention)
   as background for the long-running case, not as evidence about entry teardown;
   allocator retention makes immediate RSS reduction an unreliable sole assertion.
+- Choose a checker host-stack strategy that covers the CLI, REPL, and editor entry points rather than relying
+  on a launcher's stack size, and run its regressions in child processes so an abort cannot take down the test harness.
+  The 2026-09-07 audit's approximate failure thresholds and their platform dependence are retained
+  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#checker-host-stack);
+  deep checker recursion and [residual-code growth](../ideas/README.md#residual-code-sharing) remain separate questions.
 - Exercise product-suffix layouts through the backend boundary.
   [ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes physical arity
   from logical stack elements, so a final element may point into an existing product suffix
@@ -79,41 +59,6 @@ and its regressions should run in child processes so an abort cannot take down t
   collection while that suffix is live, interpreter/native agreement, and the corresponding WebAssembly lowering.
   The audit's code-inspection finding and limits are
   in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#product-suffix-layouts).
-
-## Changes to earlier findings
-
-The monadic-literal lowering failure is resolved:
-the existing `monadic_block_lifts_builtin_literals_with_trivial_value_structures` regression passes,
-following `406fa554`'s empty-comatch protocol-hint repair.
-SPS ownership and free-variable analysis now share a traversal, closure conversion reuses its variable facts,
-and the selected-pass regressions pass.
-The shared CLI/test execution runner also replaces the earlier duplicated execution path.
-Further generic traversal machinery needs a demonstrated consumer.
-
-The September 7 bug-hunt follow-up is historical: its status table describes `3d458223`, not today's backlog.
-The reported `ArgumentFold` host-root mechanism is gone, and native strings are released at normal entry teardown.
-Interpreter recursive cloning, checker host-stack depth, long-running host retention,
-and suffix-layout coverage remain tracked above and retain their historical limits
-in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md).
-
-## Verification for this review
-
-The debug CLI was rebuilt with `cargo build -p zydeco-cli --bin zydeco`.
-Fourteen CLI invocations checked the accepted and rejected counterparts recorded
-in [compiler boundaries](compiler-boundaries.md)
-and [package recovery](../proposals/traversals.md#diagnostic-collection-and-recovery).
-Thirteen focused Rust tests passed:
-
-```sh
-cargo test -p zydeco-session --lib monadic_block_lifts_builtin_literals_with_trivial_value_structures
-cargo test -p zydeco-stackir --lib high::traverse::tests
-cargo test -p zydeco-stackir --lib passes::tests
-cargo test -p zydeco-cli --test source_build the_wasm_target_writes_a_valid_core_module
-cargo test -p zydeco-cli --lib library::tests
-```
-
-This was a focused review, with no full workspace suite, native execution benchmark, or new timing/RSS comparison.
-The performance items above remain investigation priorities.
 
 Concrete unimplemented designs belong in [proposals](../proposals/README.md);
 exploratory questions and evaluation directions belong in [design ideas](../ideas/README.md).

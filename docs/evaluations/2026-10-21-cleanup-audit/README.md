@@ -318,7 +318,7 @@ These items have no working production use:
 - `error_entry_output` and its second copy of the 48 diagnostic message arms in `check/error.rs`;
   the `blame` field that only it reads forces 403 `Location::caller()` arguments (≈400);
 - the ZASM interpreter behind `build -t zasm -x`, which reaches `todo!()` at the `Terminator::Extern` case recorded
-  in [ZASM execution panics](../../todos/compiler-boundaries.md#zasm-execution-panics)
+  in the compiler todos at the time
   and at the `AllocContext` instruction that lowering emits at every jump (≈500);
 - `CommandCompiler::interpret` and `BackendProgram::lower`, and the `ProgKont::Dry` result,
   which the only live interpreter call never requests;
@@ -339,7 +339,7 @@ These items have no working production use:
 - The tracked [n-ary product inference](../../todos/compiler-boundaries.md#n-ary-product-inference-refinement)
   discrepancy comes from a two-component refinement
   in [`normalize/inference.rs`](../../../lang/statics/src/normalize/inference.rs),
-  which follows the unadopted [binary products](../../proposals/binary-products.md) design rather than n-ary products.
+  which follows the unadopted right-spine binary-products design rather than n-ary products.
 
 The product-inference finding is already tracked in the compiler todos, as is the ZASM panic above;
 the parser-diagnostic, duplicate-digest, and manifest-path items are unrecorded drift and belong there before repair.

@@ -47,8 +47,8 @@ The [compiler reference](../../../docs/references/compiler.md#source-fixtures-an
 diagnostic-code ownership, runtime oracles, and the `.zy.in` template helper for long shared Rust-test skeletons.
 
 The parser reserves `backends`, `input`, `output`, `args`, and `setup`
-for the [standard-library directive runner](../../tests/tests/std_directives.rs); inline fixtures reject them.
+for the [standard-library directive runner](../../tests/tests/directives.rs); inline fixtures reject them.
 Expected exit codes and desugaring-rejection spellings remain deferred
-in [the fixture-directive notes](../../../docs/ideas/fixture-directives.md).
+in [the fixture-directive notes](../../../docs/ideas/README.md#source-fixture-directive-extensions).
 The surface corpus retains its aggregate runner because recovery tests use in-crate contracts;
 its failure reports identify all violating files.

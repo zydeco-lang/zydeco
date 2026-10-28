@@ -7,7 +7,6 @@ and graph construction follow the [package namespace rules](../references/langua
 This plan covers frontend integration, compilation-unit validation, and operation policy.
 
 The [source-package reference](../references/language.md#source-packages) describes the existing implementation.
-The [documentation design questions](documentation.md) concern possible future consumers of these semantic units.
 
 ## Motivation and Starting Point
 
@@ -33,7 +32,6 @@ The planned Rust interfaces are:
   Keep target-specific preparation downstream so one semantic result can support several compilations.
 
 Replace affected callers together; `CompilerSession` continues to manage the implementation's inputs and caches.
-Future documentation consumers remain subject to the [documentation design questions](documentation.md).
 
 ## Shared Project Context
 

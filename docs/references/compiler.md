@@ -596,7 +596,7 @@ Their current implementation representations are:
 `CompilerSession` manages source revisions, snapshots, and cached queries for these abstractions.
 Package instance and analysis identity follow the [package namespace rules](language.md#copy-resolve-merge-analyze).
 The [package implementation plan](../proposals/package-management.md#implementation-representations) integrates
-that model; future documentation consumers remain [under design](../proposals/documentation.md).
+that model.
 
 ### Source Loading and Package Selection
 
@@ -1025,7 +1025,7 @@ No rejected strict result reaches type checking or execution as a normal program
 Parser and completion tests, observer visit counts, dependency lifecycle tests,
 and the [uniform-term fixtures](../../lang/tests/cases/uniform-term) exercise this boundary.
 The [binding rules](language.md#3-bindings-and-scope) explain placement and identity;
-[deferred recursion work](../ideas/recursive-admissibility.md) retains stronger admissibility questions.
+[deferred recursion work](../ideas/README.md#recursive-admissibility) retains stronger admissibility questions.
 
 ## C5. Typed Representation, Judgments, and Inference
 
@@ -3568,8 +3568,8 @@ Typed quantifier heads can remain unbreakable and exceed the width budget;
 adjacent quantifiers are not generally folded.
 Readable primitive names and witness hints need not form reparseable annotations.
 Interactive type links require semantic anchors from the renderer, never reparsing its text.
-Remaining questions concern [round-trip source generation](../ideas/typed-source-generation.md)
-and [telescope layouts](../ideas/type-rendering-layout.md).
+Remaining questions concern [round-trip source generation](../ideas/README.md#source-generation-from-elaborated-terms)
+and [telescope layouts](../ideas/README.md#elaborated-type-layout).
 
 ### Completion
 
@@ -3614,7 +3614,7 @@ the [completion proposal](../proposals/completion.md) retains further candidate 
 The [shared source scan](#shared-source-analysis) retains these annotations and reports detached text;
 formatting preserves their attachment.
 Semantic documentation analysis, publication, editor presentation,
-and example verification remain [under design](../proposals/documentation.md).
+and example verification are not implemented.
 
 ### Interactive Engine
 
@@ -3636,8 +3636,8 @@ Root command metadata is parsed into typed commands before ordinary submission h
 Help and quit do not consume a source number; unsupported command arguments are rejected,
 and unrecognized metadata remains ordinary language syntax.
 The [CLI guide](../../cli/README.md#interactive-repl) documents commands, editing keys, and retry interaction.
-Deferred interaction work covers [history persistence and replay](../ideas/repl-history-replay.md)
-and [history pruning](../ideas/repl-history-pruning.md).
+Deferred interaction work covers [history persistence and replay](../ideas/README.md#repl-history-and-replay)
+and [history pruning](../ideas/README.md#repl-history-pruning).
 
 ## C16. Validation, Debugging, and Extending the Implementation
 
@@ -3667,7 +3667,7 @@ Diagnostic spellings are parsed beside their stable compiler codes and round-tri
 Fixtures also enter the parser/formatter corpus,
 so standalone trials need neither manual registration nor a Rust recompilation after source edits.
 
-The [standard-library directive runner](../../lang/tests/tests/std_directives.rs) applies the same leading block
+The [standard-library directive runner](../../lang/tests/tests/directives.rs) applies the same leading block
 to whole-program fixtures.
 A file enters that runner when it declares `stage: run`; `backends`, `args`, `input`,
 `output`, and `setup` describe its execution.
