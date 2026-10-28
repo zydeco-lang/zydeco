@@ -194,214 +194,212 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'db>, term: su::Let<su::PatId, su::TermId, su::TermId>,
         switch: Switch<AnnId>, prepared_environment: Option<ss::TyEnv>,
     ) -> ResultKont<TermAnnId> {
-        Ok({
-            let su::Let { binder, bindee, tail } = term;
-            let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
-                | Some(bindee) => (bindee, true),
-                | None => (bindee, false),
-            };
-            // first, synthesize bindee
-            let bindee_out_ann = self.mk(bindee).tyck_k(tycker, Action::syn())?;
-            match bindee_out_ann {
-                | TermAnnId::Type(bindee_out, bindee_kd) => {
-                    // a type alias
-                    // then, ana binder with bindee_kd
-                    let binder_out_ann =
-                        self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_kd.into()))?;
-                    let (binder_out, _binder_kd) = binder_out_ann.as_type();
-                    if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
-                        let _ = tycker.statics.type_definitions.upsert(def, bindee_out);
-                    }
-                    let bindee_out = if is_sealed {
-                        let abst: AbstId = tycker.fresh();
-                        tycker.statics.absts.insert_new(abst, ());
-                        if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
-                            tycker.statics.abst_hints.insert_new(abst, def);
-                        }
-                        tycker.record_seal(abst, bindee_out);
-                        Alloc::alloc(tycker, abst, bindee_kd, &self.info)
-                    } else {
-                        bindee_out
-                    };
-                    // and then assign bindee_out to binder_out;
-                    // the type is effectively inlined
-                    let env = self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())?;
-                    match binder_out.try_destruct_def(tycker) {
-                        | (Some(def), _) => {
-                            // consider adding it to the globals if bindee is global
-                            if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
-                                tycker.statics.global_defs.ensure(def);
-                            }
-                        }
-                        | (None, _) => {}
-                    }
-                    // finally, we tyck the tail
-                    let tail_out_ann = env
-                        .mk(tail)
-                        .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
-                    match tail_out_ann {
-                        | TermAnnId::Type(tail_out, tail_kd) => {
-                            // the resulting type will be the tail
-                            TermAnnId::Type(tail_out, tail_kd)
-                        }
-                        | TermAnnId::Value(tail_out, tail_ty) => {
-                            // Type aliases and definitions are static, so the
-                            // resulting value is the checked tail itself.
-                            TermAnnId::Value(tail_out, tail_ty)
-                        }
-                        | TermAnnId::Compu(tail_out, tail_ty) => {
-                            // the resulting computation will only be the tail
-                            TermAnnId::Compu(tail_out, tail_ty)
-                        }
-                        | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                    }
-                }
-                | TermAnnId::Kind(bindee_out) => {
-                    // a kind alias
-                    // Kind binders have no classifier, so check the
-                    // binder against the set of kinds.
-                    let binder_out_ann =
-                        self.mk(binder).tyck_k(tycker, PatternAction::ana(AnnId::Set))?;
-                    let ss::PatId::Kind(binder_out) = binder_out_ann.annotation.as_pat() else {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                    };
-                    let env = self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())?;
-                    // finally, we tyck the tail
-                    let tail_out_ann = env
-                        .mk(tail)
-                        .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
-                    match tail_out_ann {
-                        | TermAnnId::Type(tail_out, tail_kd) => TermAnnId::Type(tail_out, tail_kd),
-                        | TermAnnId::Value(tail_out, tail_ty) => {
-                            TermAnnId::Value(tail_out, tail_ty)
-                        }
-                        | TermAnnId::Compu(tail_out, tail_ty) => {
-                            TermAnnId::Compu(tail_out, tail_ty)
-                        }
-                        | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                    }
-                }
-                | TermAnnId::Value(bindee_out, bindee_ty) => {
-                    // a value alias
-                    // then, ana binder with bindee_ty
-                    let binder_elaboration =
-                        self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_ty.into()))?;
-                    let (binder_out, _binder_ty) = binder_elaboration.as_value();
-                    match binder_out.try_destruct_def(tycker) {
-                        | (Some(def), _) => {
-                            let _ = tycker.statics.value_aliases.upsert(def, bindee_out);
-                            // consider adding it to the globals if bindee is global
-                            if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
-                                tycker.statics.global_defs.ensure(def);
-                                // consider adding it to the inlinables as well
-                                let _ = tycker.statics.inlinables.upsert(def, bindee_out);
-                            }
-                        }
-                        | (None, _) => {}
-                    }
-                    // finally, we tyck the tail
-                    let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
-                        .tyck_k(tycker, Action::forward(switch, prepared_environment.as_ref()))?;
-                    match tail_out_ann {
-                        | tail if ValuePatternShape::is_static_opening(tycker, binder_out)
-                            && (binder_elaboration.inner.opened.is_empty()
-                                || matches!(tail, TermAnnId::Kind(_) | TermAnnId::Type(_, _))) =>
-                        {
-                            // All selected components are static, and the runtime payload
-                            // is discarded. Preserve checking and witness escape validation,
-                            // but introduce no runtime let for a wholly manifest opening.
-                            // Fresh witnesses still need their opening evidence in runtime
-                            // terms until required static elaboration specializes them.
-                            match tail {
-                                | TermAnnId::Value(_, ty)
-                                | TermAnnId::Compu(_, ty)
-                                | TermAnnId::Type(ty, _) => {
-                                    binder_elaboration.close_scope_k(tycker, ty)?;
-                                }
-                                | TermAnnId::Kind(_) => {}
-                                | TermAnnId::Hole(_) => tycker.err_k(
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?,
-                            }
-                            tail
-                        }
-                        | TermAnnId::Value(tail_out, tail_ty) => {
-                            if !ValuePatternShape::is_irrefutable(tycker, binder_out) {
-                                tycker.err_k(
-                                    TyckError::Expressivity(
-                                        "value bindings must be irrefutable patterns",
-                                    ),
-                                    std::panic::Location::caller(),
-                                )?
-                            }
-                            binder_elaboration.close_scope_k(tycker, tail_ty)?;
-                            let binder = crate::query::InternedVPat::new(tycker.db, binder_out);
-                            let bindee = crate::query::InternedValue::new(tycker.db, bindee_out);
-                            let tail = crate::query::InternedTermAnn::new(
-                                tycker.db,
-                                TermAnnId::Value(tail_out, tail_ty),
-                            );
-                            let outcome = tycker.judge(
-                                self.inner,
-                                (binder, bindee, tail),
-                                |db, data, term, (binder, bindee, tail), occurrence| {
-                                    crate::query::let_judgment(
-                                        db, data, term, binder, bindee, tail, occurrence,
-                                    )
-                                },
-                            );
-                            let crate::query::LetSynOutcome::Value { id, value, ann } = outcome
-                            else {
-                                unreachable!("the value tail of let judgments is query-produced")
-                            };
-                            tycker.statics.values.insert_new(id, value);
-                            tycker.statics.annotations_value.insert_new(id, ann);
-                            tycker.statics.env_value.insert_new(id, self.info.clone());
-                            TermAnnId::Value(id, ann)
-                        }
-                        | TermAnnId::Compu(tail_out, tail_ty) => {
-                            binder_elaboration.close_scope_k(tycker, tail_ty)?;
-                            ValuePatternShape::require_binding_k(tycker, binder, binder_out)?;
-                            let binder = crate::query::InternedVPat::new(tycker.db, binder_out);
-                            let bindee = crate::query::InternedValue::new(tycker.db, bindee_out);
-                            let tail = crate::query::InternedTermAnn::new(
-                                tycker.db,
-                                TermAnnId::Compu(tail_out, tail_ty),
-                            );
-                            let outcome = tycker.judge(
-                                self.inner,
-                                (binder, bindee, tail),
-                                |db, data, term, (binder, bindee, tail), occurrence| {
-                                    crate::query::let_judgment(
-                                        db, data, term, binder, bindee, tail, occurrence,
-                                    )
-                                },
-                            );
-                            let crate::query::LetSynOutcome::Compu { id, compu, ann } = outcome
-                            else {
-                                unreachable!(
-                                    "the computation tail of let judgments is query-produced"
-                                )
-                            };
-                            tycker.statics.compus.insert_new(id, compu);
-                            tycker.statics.annotations_compu.insert_new(id, ann);
-                            tycker.statics.env_compu.insert_new(id, self.info.clone());
-                            TermAnnId::Compu(id, ann)
-                        }
-                        | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                    }
-                }
-                | TermAnnId::Hole(_) | TermAnnId::Compu(_, _) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                }
+        let su::Let { binder, bindee, tail } = term;
+        let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
+            | Some(bindee) => (bindee, true),
+            | None => (bindee, false),
+        };
+        let tail_action = Action::forward(switch, prepared_environment.as_ref());
+        // first, synthesize bindee
+        let bindee_out_ann = self.mk(bindee).tyck_k(tycker, Action::syn())?;
+        let env = match bindee_out_ann {
+            | TermAnnId::Type(bindee_out, bindee_kd) => {
+                self.bind_type_alias_k(tycker, binder, bindee_out, bindee_kd, is_sealed)?
             }
-        })
+            | TermAnnId::Kind(bindee_out) => self.bind_kind_alias_k(tycker, binder, bindee_out)?,
+            | TermAnnId::Value(bindee_out, bindee_ty) => {
+                return self.check_let_value_k(
+                    tycker,
+                    binder,
+                    bindee_out,
+                    bindee_ty,
+                    tail,
+                    tail_action,
+                );
+            }
+            | TermAnnId::Hole(_) | TermAnnId::Compu(_, _) => {
+                return tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
+            }
+        };
+        // finally, we tyck the tail; type and kind aliases are static, so the
+        // result is the checked tail itself
+        match env.mk(tail).tyck_k(tycker, tail_action)? {
+            | tail_out @ (TermAnnId::Type(_, _)
+            | TermAnnId::Value(_, _)
+            | TermAnnId::Compu(_, _)) => Ok(tail_out),
+            | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
+                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
+            }
+        }
+    }
+
+    /// Bind a type alias, sealing it behind a fresh abstract type when the
+    /// bindee is syntactically sealed; the type is effectively inlined.
+    fn bind_type_alias_k(
+        &self, tycker: &mut Tycker<'_>, binder: su::PatId, bindee_out: ss::TypeId,
+        bindee_kd: ss::KindId, is_sealed: bool,
+    ) -> ResultKont<TyEnvT<()>> {
+        // ana binder with bindee_kd
+        let binder_out_ann =
+            self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_kd.into()))?;
+        let (binder_out, _binder_kd) = binder_out_ann.as_type();
+        if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
+            let _ = tycker.statics.type_definitions.upsert(def, bindee_out);
+        }
+        let bindee_out = if is_sealed {
+            let abst: AbstId = tycker.fresh();
+            tycker.statics.absts.insert_new(abst, ());
+            if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
+                tycker.statics.abst_hints.insert_new(abst, def);
+            }
+            tycker.record_seal(abst, bindee_out);
+            Alloc::alloc(tycker, abst, bindee_kd, &self.info)
+        } else {
+            bindee_out
+        };
+        // and then assign bindee_out to binder_out
+        let env = self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())?;
+        if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
+            // consider adding it to the globals if bindee is global
+            if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
+                tycker.statics.global_defs.ensure(def);
+            }
+        }
+        Ok(env)
+    }
+
+    /// Bind a kind alias.
+    fn bind_kind_alias_k(
+        &self, tycker: &mut Tycker<'_>, binder: su::PatId, bindee_out: ss::KindId,
+    ) -> ResultKont<TyEnvT<()>> {
+        // Kind binders have no classifier, so check the
+        // binder against the set of kinds.
+        let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::ana(AnnId::Set))?;
+        let ss::PatId::Kind(binder_out) = binder_out_ann.annotation.as_pat() else {
+            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+        };
+        self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())
+    }
+
+    /// Bind a value, registering aliases of named binders, then check the tail.
+    fn check_let_value_k(
+        &self, tycker: &mut Tycker<'_>, binder: su::PatId, bindee_out: ss::ValueId,
+        bindee_ty: ss::TypeId, tail: su::TermId, tail_action: Action<AnnId>,
+    ) -> ResultKont<TermAnnId> {
+        // ana binder with bindee_ty
+        let binder_elaboration =
+            self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_ty.into()))?;
+        let (binder_out, _binder_ty) = binder_elaboration.as_value();
+        if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
+            let _ = tycker.statics.value_aliases.upsert(def, bindee_out);
+            // consider adding it to the globals if bindee is global
+            if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
+                tycker.statics.global_defs.ensure(def);
+                // consider adding it to the inlinables as well
+                let _ = tycker.statics.inlinables.upsert(def, bindee_out);
+            }
+        }
+        // finally, we tyck the tail
+        let tail_out_ann =
+            TyEnvT::new(binder_elaboration.info.clone(), tail).tyck_k(tycker, tail_action)?;
+        self.check_let_value_tail_k(
+            tycker,
+            binder,
+            &binder_elaboration,
+            binder_out,
+            bindee_out,
+            tail_out_ann,
+        )
+    }
+
+    /// Close the scope of a value binding over its checked tail and record the
+    /// let, unless the binding is a static opening with no runtime payload.
+    fn check_let_value_tail_k(
+        &self, tycker: &mut Tycker<'_>, binder: su::PatId, binder_elaboration: &CheckedPattern,
+        binder_out: ss::VPatId, bindee_out: ss::ValueId, tail_out_ann: TermAnnId,
+    ) -> ResultKont<TermAnnId> {
+        match tail_out_ann {
+            | tail if ValuePatternShape::is_static_opening(tycker, binder_out)
+                && (binder_elaboration.inner.opened.is_empty()
+                    || matches!(tail, TermAnnId::Kind(_) | TermAnnId::Type(_, _))) =>
+            {
+                // All selected components are static, and the runtime payload
+                // is discarded. Preserve checking and witness escape validation,
+                // but introduce no runtime let for a wholly manifest opening.
+                // Fresh witnesses still need their opening evidence in runtime
+                // terms until required static elaboration specializes them.
+                match tail {
+                    | TermAnnId::Value(_, ty)
+                    | TermAnnId::Compu(_, ty)
+                    | TermAnnId::Type(ty, _) => {
+                        binder_elaboration.close_scope_k(tycker, ty)?;
+                    }
+                    | TermAnnId::Kind(_) => {}
+                    | TermAnnId::Hole(_) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                }
+                Ok(tail)
+            }
+            | TermAnnId::Value(tail_out, tail_ty) => {
+                if !ValuePatternShape::is_irrefutable(tycker, binder_out) {
+                    tycker.err_k(
+                        TyckError::Expressivity("value bindings must be irrefutable patterns"),
+                        std::panic::Location::caller(),
+                    )?
+                }
+                binder_elaboration.close_scope_k(tycker, tail_ty)?;
+                let outcome = self.judge_let(
+                    tycker,
+                    binder_out,
+                    bindee_out,
+                    TermAnnId::Value(tail_out, tail_ty),
+                );
+                let crate::query::LetSynOutcome::Value { id, value, ann } = outcome else {
+                    unreachable!("the value tail of let judgments is query-produced")
+                };
+                tycker.statics.values.insert_new(id, value);
+                tycker.statics.annotations_value.insert_new(id, ann);
+                tycker.statics.env_value.insert_new(id, self.info.clone());
+                Ok(TermAnnId::Value(id, ann))
+            }
+            | TermAnnId::Compu(tail_out, tail_ty) => {
+                binder_elaboration.close_scope_k(tycker, tail_ty)?;
+                ValuePatternShape::require_binding_k(tycker, binder, binder_out)?;
+                let outcome = self.judge_let(
+                    tycker,
+                    binder_out,
+                    bindee_out,
+                    TermAnnId::Compu(tail_out, tail_ty),
+                );
+                let crate::query::LetSynOutcome::Compu { id, compu, ann } = outcome else {
+                    unreachable!("the computation tail of let judgments is query-produced")
+                };
+                tycker.statics.compus.insert_new(id, compu);
+                tycker.statics.annotations_compu.insert_new(id, ann);
+                tycker.statics.env_compu.insert_new(id, self.info.clone());
+                Ok(TermAnnId::Compu(id, ann))
+            }
+            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
+                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
+            }
+        }
+    }
+
+    /// Run the let judgment for a value binding over its checked tail.
+    fn judge_let(
+        &self, tycker: &mut Tycker<'_>, binder_out: ss::VPatId, bindee_out: ss::ValueId,
+        tail: TermAnnId,
+    ) -> crate::query::LetSynOutcome {
+        let binder = crate::query::InternedVPat::new(tycker.db, binder_out);
+        let bindee = crate::query::InternedValue::new(tycker.db, bindee_out);
+        let tail = crate::query::InternedTermAnn::new(tycker.db, tail);
+        tycker.judge(
+            self.inner,
+            (binder, bindee, tail),
+            |db, data, term, (binder, bindee, tail), occurrence| {
+                crate::query::let_judgment(db, data, term, binder, bindee, tail, occurrence)
+            },
+        )
     }
 }
