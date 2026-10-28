@@ -196,285 +196,290 @@ impl TermChecker<'_> {
     pub(super) fn check_cons_k<'db>(
         &self, tycker: &mut Tycker<'db>, term: Vec<su::TermId>, switch: Switch<AnnId>,
     ) -> ResultKont<TermAnnId> {
-        Ok({
-            let mut items = term;
-            let tail = items.pop().expect("a cons term carries at least two components");
-            match switch {
-                | Switch::Syn => {
-                    let mut components = items;
-                    components.push(tail);
-                    let outcomes = components
-                        .iter()
-                        .copied()
-                        .map(|component| self.mk(component).tyck_k(tycker, Action::syn()))
-                        .collect_k::<Vec<_>>()?;
-                    let typed = matches!(outcomes.first(), Some(TermAnnId::Type(_, _)));
-                    let mixed = outcomes.iter().any(|outcome| match outcome {
-                        | TermAnnId::Type(_, _) => !typed,
-                        | TermAnnId::Value(_, _) => typed,
-                        | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => true,
-                    });
-                    if mixed {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+        let mut items = term;
+        let tail = items.pop().expect("a cons term carries at least two components");
+        match switch {
+            | Switch::Syn => self.check_cons_syn_k(tycker, items, tail),
+            | Switch::Ana(AnnId::Type(expected)) => {
+                match expected.reveal_or_refine_prepared_product_k(tycker, &self.info)? {
+                    | ss::Type::Prod(_) => {
+                        self.check_cons_ana_product_k(tycker, items, tail, expected)
                     }
-                    if typed {
-                        // An infix product type: one n-ary product over the
-                        // synthesized component types.
-                        let vtype = ss::VType.build(tycker, &self.info);
-                        let component_tys = outcomes
-                            .into_iter()
-                            .zip(components)
-                            .map(|(outcome, source)| {
-                                tycker.guarded(|tycker| {
-                                    tycker.tasks.push_back_mut(TyckTask::Term(source, Switch::Syn));
-                                    match outcome {
-                                        | TermAnnId::Type(ty, kd) => {
-                                            Lub::lub_k(vtype, kd, tycker)?;
-                                            Ok(ty)
-                                        }
-                                        | _ => unreachable!("sorted outcomes are uniform"),
-                                    }
-                                })
-                            })
-                            .collect_k::<Vec<_>>()?;
-                        let prod = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
-                        TermAnnId::Type(prod, vtype)
-                    } else {
-                        let (mut output, mut annotations): (Vec<_>, Vec<_>) = outcomes
-                            .into_iter()
-                            .map(|outcome| match outcome {
-                                | TermAnnId::Value(item, item_ty) => (item, item_ty),
-                                | _ => unreachable!("sorted outcomes are uniform"),
-                            })
-                            .unzip();
-                        let tail =
-                            output.pop().expect("a cons term carries at least two components");
-                        let tail_ty =
-                            annotations.pop().expect("a cons term carries at least two components");
-                        let item_outcomes = output
-                            .iter()
-                            .zip(&annotations)
-                            .map(|(value, ty)| TermAnnId::Value(*value, *ty))
-                            .collect::<Vec<_>>();
-                        let items_interned =
-                            crate::query::InternedConsItems::new(tycker.db, item_outcomes);
-                        let tail_interned = crate::query::InternedTermAnn::new(
-                            tycker.db,
-                            TermAnnId::Value(tail, tail_ty),
-                        );
-                        let outcome = tycker.judge(
-                            self.inner,
-                            (items_interned, tail_interned),
-                            |db, data, term, (items, tail), occurrence| {
-                                crate::query::cons_syn_judgment(
-                                    db, data, term, items, tail, occurrence,
-                                )
-                            },
-                        );
-                        for (id, prod) in outcome.prods {
-                            tycker.statics.types_pre.insert_new(
-                                id,
-                                ss::Fillable::Done(prod),
-                                outcome.vtype,
-                            );
-                            tycker.store_env(id, &self.info);
-                        }
-                        tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
-                        tycker.statics.annotations_value.insert_new(outcome.cons_id, outcome.ann);
-                        tycker.statics.env_value.insert_new(outcome.cons_id, self.info.clone());
-                        TermAnnId::Value(outcome.cons_id, outcome.ann)
+                    | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
+                        self.check_cons_ana_package_k(tycker, items, tail, expected)
                     }
-                }
-                | Switch::Ana(AnnId::Type(expected)) => {
-                    let expected_view = expected;
-                    match expected_view.reveal_or_refine_prepared_product_k(tycker, &self.info)? {
-                        | ss::Type::Prod(_) => {
-                            let ss::Prod(component_tys) =
-                                expected_view.view_prepared_product_k(tycker, &self.info)?;
-                            if component_tys.len() != items.len() + 1 {
-                                tycker.err_k(
-                                    TyckError::TypeExpected {
-                                        expected: "a product with matching components".to_string(),
-                                        found: expected_view,
-                                    },
-                                    std::panic::Location::caller(),
-                                )?
-                            }
-                            let (components, annotations): (Vec<_>, Vec<_>) = items
-                                .into_iter()
-                                .chain([tail])
-                                .zip(component_tys)
-                                .map(|(item, item_ty)| -> ResultKont<_> {
-                                    let checked = self.mk(item).tyck_k(
-                                        tycker,
-                                        Action::ana_prepared(item_ty.into(), &self.info),
-                                    )?;
-                                    checked.try_as_value(
-                                        tycker,
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    )
-                                })
-                                .collect_k::<Vec<_>>()?
-                                .into_iter()
-                                .unzip();
-                            let vtype = ss::VType.build(tycker, &self.info);
-                            let ann =
-                                Alloc::alloc(tycker, ss::Prod(annotations), vtype, &self.info);
-                            let cons =
-                                Alloc::alloc(tycker, ss::Value::VCons(components), ann, &self.info);
-                            TermAnnId::Value(cons, ann)
-                        }
-                        | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
-                            let mut body_ty = DeferredTelescopeType::new(expected);
-                            let mut body_index = items.len();
-                            let mut witnesses: Vec<ss::StaticTermId> = Vec::new();
-
-                            for (index, item) in items.iter().copied().enumerate() {
-                                match body_ty.with_environment(&self.info).reveal_k(tycker)? {
-                                    | DeferredTelescopeView::ManifestKind {
-                                        definition,
-                                        body,
-                                        ..
-                                    } => {
-                                        let checked = self
-                                            .mk(item)
-                                            .tyck_k(tycker, Action::ana(AnnId::Set))?;
-                                        let witness = checked.try_as_kind(
-                                            tycker,
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )?;
-                                        let witness = Lub::lub_k(definition, witness, tycker)?;
-                                        body_ty = body;
-                                        witnesses.push(witness.into());
-                                    }
-                                    | DeferredTelescopeView::Exists { binder, mode, body } => {
-                                        let domain_kind = binder.domain_kind(tycker);
-                                        let checked = self
-                                            .mk(item)
-                                            .tyck_k(tycker, Action::ana(domain_kind.into()))?;
-                                        let (witness, _) = checked.try_as_type(
-                                            tycker,
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )?;
-                                        let payload =
-                                            binder.pattern.bind_argument_k(tycker, witness)?;
-                                        let payload = match mode {
-                                            | DeferredTelescopeExistsMode::Abstract => payload,
-                                            | DeferredTelescopeExistsMode::Manifest(definition) => {
-                                                let definition =
-                                                    definition.materialize_k(tycker)?;
-                                                Lub::lub_k(definition, payload, tycker)?
-                                            }
-                                        };
-                                        body_ty = body.with_abstract(binder.witness, payload);
-                                        witnesses.push(witness.into());
-                                    }
-                                    | DeferredTelescopeView::Other(body) => {
-                                        body_ty = body;
-                                        body_index = index;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if witnesses.is_empty() {
-                                tycker.err_k(
-                                    TyckError::TypeExpected {
-                                        expected: "an existential package".to_string(),
-                                        found: expected,
-                                    },
-                                    std::panic::Location::caller(),
-                                )?
-                            }
-
-                            let body_ty = body_ty.materialize_k(tycker)?;
-
-                            let body_items = &items[body_index..];
-                            let body = if body_items.is_empty() {
-                                let checked = self.mk(tail).tyck_k(
-                                    tycker,
-                                    Action::ana_prepared(body_ty.into(), &self.info),
-                                )?;
-                                checked
-                                    .try_as_value(
-                                        tycker,
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    )?
-                                    .0
-                            } else {
-                                let body_view = body_ty;
-                                let ss::Prod(body_component_tys) =
-                                    body_view.view_prepared_product_k(tycker, &self.info)?;
-
-                                if body_component_tys.len() < body_items.len() {
-                                    tycker.err_k(
-                                        TyckError::TypeExpected {
-                                            expected: "a product with matching components"
-                                                .to_string(),
-                                            found: body_view,
-                                        },
-                                        std::panic::Location::caller(),
-                                    )?
-                                }
-                                let remaining = tycker.rest_product_k(
-                                    &body_component_tys[body_items.len()..],
-                                    &self.info,
-                                )?;
-                                let (components, annotations): (Vec<_>, Vec<_>) = body_items
-                                    .iter()
-                                    .copied()
-                                    .zip(body_component_tys.iter().copied())
-                                    .chain([(tail, remaining)])
-                                    .map(|(item, item_ty)| -> ResultKont<_> {
-                                        let checked = self.mk(item).tyck_k(
-                                            tycker,
-                                            Action::ana_prepared(item_ty.into(), &self.info),
-                                        )?;
-                                        checked.try_as_value(
-                                            tycker,
-                                            TyckError::SortMismatch,
-                                            std::panic::Location::caller(),
-                                        )
-                                    })
-                                    .collect_k::<Vec<_>>()?
-                                    .into_iter()
-                                    .unzip();
-                                let vtype = ss::VType.build(tycker, &self.info);
-                                let ann =
-                                    Alloc::alloc(tycker, ss::Prod(annotations), vtype, &self.info);
-                                Alloc::alloc(tycker, ss::Value::VCons(components), ann, &self.info)
-                            };
-                            let cons = Alloc::alloc(
-                                tycker,
-                                ss::ConsN(witnesses, body),
-                                expected,
-                                &self.info,
-                            );
-                            TermAnnId::Value(cons, expected)
-                        }
-                        | _ => tycker.err_k(
-                            TyckError::TypeExpected {
-                                expected: "one of `_ * _` or `exists _ . _`".to_string(),
-                                found: expected,
-                            },
-                            std::panic::Location::caller(),
-                        )?,
-                    }
-                }
-                | Switch::Ana(AnnId::Kind(kd)) => {
-                    let vtype = ss::VType.build(tycker, &self.info);
-                    Lub::lub_k(vtype, kd, tycker)?;
-                    self.tyck_k(tycker, Action::syn())?
-                }
-                | Switch::Ana(AnnId::Set) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    | _ => tycker.err_k(
+                        TyckError::TypeExpected {
+                            expected: "one of `_ * _` or `exists _ . _`".to_string(),
+                            found: expected,
+                        },
+                        std::panic::Location::caller(),
+                    ),
                 }
             }
-        })
+            | Switch::Ana(AnnId::Kind(kd)) => {
+                let vtype = ss::VType.build(tycker, &self.info);
+                Lub::lub_k(vtype, kd, tycker)?;
+                self.tyck_k(tycker, Action::syn())
+            }
+            | Switch::Ana(AnnId::Set) => {
+                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
+            }
+        }
+    }
+
+    /// Synthesize a cons term from its components, which must all be types
+    /// (an infix product type) or all be values (a product value).
+    fn check_cons_syn_k(
+        &self, tycker: &mut Tycker<'_>, items: Vec<su::TermId>, tail: su::TermId,
+    ) -> ResultKont<TermAnnId> {
+        let mut components = items;
+        components.push(tail);
+        let outcomes = components
+            .iter()
+            .copied()
+            .map(|component| self.mk(component).tyck_k(tycker, Action::syn()))
+            .collect_k::<Vec<_>>()?;
+        let typed = matches!(outcomes.first(), Some(TermAnnId::Type(_, _)));
+        let mixed = outcomes.iter().any(|outcome| match outcome {
+            | TermAnnId::Type(_, _) => !typed,
+            | TermAnnId::Value(_, _) => typed,
+            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => true,
+        });
+        if mixed {
+            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+        }
+        if typed {
+            self.check_cons_syn_type_k(tycker, outcomes, components)
+        } else {
+            Ok(self.check_cons_syn_value(tycker, outcomes))
+        }
+    }
+
+    /// An infix product type: one n-ary product over the synthesized
+    /// component types.
+    fn check_cons_syn_type_k(
+        &self, tycker: &mut Tycker<'_>, outcomes: Vec<TermAnnId>, components: Vec<su::TermId>,
+    ) -> ResultKont<TermAnnId> {
+        let vtype = ss::VType.build(tycker, &self.info);
+        let component_tys = outcomes
+            .into_iter()
+            .zip(components)
+            .map(|(outcome, source)| {
+                tycker.guarded(|tycker| {
+                    tycker.tasks.push_back_mut(TyckTask::Term(source, Switch::Syn));
+                    match outcome {
+                        | TermAnnId::Type(ty, kd) => {
+                            Lub::lub_k(vtype, kd, tycker)?;
+                            Ok(ty)
+                        }
+                        | _ => unreachable!("sorted outcomes are uniform"),
+                    }
+                })
+            })
+            .collect_k::<Vec<_>>()?;
+        let prod = Alloc::alloc(tycker, ss::Prod(component_tys), vtype, &self.info);
+        Ok(TermAnnId::Type(prod, vtype))
+    }
+
+    /// A product value over synthesized component values, recorded through
+    /// the cons judgment.
+    fn check_cons_syn_value(&self, tycker: &mut Tycker<'_>, outcomes: Vec<TermAnnId>) -> TermAnnId {
+        let (mut output, mut annotations): (Vec<_>, Vec<_>) = outcomes
+            .into_iter()
+            .map(|outcome| match outcome {
+                | TermAnnId::Value(item, item_ty) => (item, item_ty),
+                | _ => unreachable!("sorted outcomes are uniform"),
+            })
+            .unzip();
+        let tail = output.pop().expect("a cons term carries at least two components");
+        let tail_ty = annotations.pop().expect("a cons term carries at least two components");
+        let item_outcomes = output
+            .iter()
+            .zip(&annotations)
+            .map(|(value, ty)| TermAnnId::Value(*value, *ty))
+            .collect::<Vec<_>>();
+        let items_interned = crate::query::InternedConsItems::new(tycker.db, item_outcomes);
+        let tail_interned =
+            crate::query::InternedTermAnn::new(tycker.db, TermAnnId::Value(tail, tail_ty));
+        let outcome = tycker.judge(
+            self.inner,
+            (items_interned, tail_interned),
+            |db, data, term, (items, tail), occurrence| {
+                crate::query::cons_syn_judgment(db, data, term, items, tail, occurrence)
+            },
+        );
+        for (id, prod) in outcome.prods {
+            tycker.statics.types_pre.insert_new(id, ss::Fillable::Done(prod), outcome.vtype);
+            tycker.store_env(id, &self.info);
+        }
+        tycker.statics.values.insert_new(outcome.cons_id, outcome.cons);
+        tycker.statics.annotations_value.insert_new(outcome.cons_id, outcome.ann);
+        tycker.statics.env_value.insert_new(outcome.cons_id, self.info.clone());
+        TermAnnId::Value(outcome.cons_id, outcome.ann)
+    }
+
+    /// Check a cons term against a product type with matching components.
+    fn check_cons_ana_product_k(
+        &self, tycker: &mut Tycker<'_>, items: Vec<su::TermId>, tail: su::TermId,
+        expected: ss::TypeId,
+    ) -> ResultKont<TermAnnId> {
+        let ss::Prod(component_tys) = expected.view_prepared_product_k(tycker, &self.info)?;
+        if component_tys.len() != items.len() + 1 {
+            tycker.err_k(
+                TyckError::TypeExpected {
+                    expected: "a product with matching components".to_string(),
+                    found: expected,
+                },
+                std::panic::Location::caller(),
+            )?
+        }
+        let components = items.into_iter().chain([tail]).zip(component_tys);
+        let (cons, ann) = self.check_value_product_k(tycker, components)?;
+        Ok(TermAnnId::Value(cons, ann))
+    }
+
+    /// Check each component against its prepared type, then allocate the
+    /// product value and its product type.
+    fn check_value_product_k(
+        &self, tycker: &mut Tycker<'_>,
+        components: impl IntoIterator<Item = (su::TermId, ss::TypeId)>,
+    ) -> ResultKont<(ss::ValueId, ss::TypeId)> {
+        let (components, annotations): (Vec<_>, Vec<_>) = components
+            .into_iter()
+            .map(|(item, item_ty)| -> ResultKont<_> {
+                let checked = self
+                    .mk(item)
+                    .tyck_k(tycker, Action::ana_prepared(item_ty.into(), &self.info))?;
+                checked.try_as_value(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )
+            })
+            .collect_k::<Vec<_>>()?
+            .into_iter()
+            .unzip();
+        let vtype = ss::VType.build(tycker, &self.info);
+        let ann = Alloc::alloc(tycker, ss::Prod(annotations), vtype, &self.info);
+        let cons = Alloc::alloc(tycker, ss::Value::VCons(components), ann, &self.info);
+        Ok((cons, ann))
+    }
+
+    /// Check a package against an existential or manifest-kind telescope:
+    /// check its static components in order, then the remaining components
+    /// against the package body.
+    fn check_cons_ana_package_k(
+        &self, tycker: &mut Tycker<'_>, items: Vec<su::TermId>, tail: su::TermId,
+        expected: ss::TypeId,
+    ) -> ResultKont<TermAnnId> {
+        let mut body_ty = DeferredTelescopeType::new(expected);
+        let mut body_index = items.len();
+        let mut witnesses: Vec<ss::StaticTermId> = Vec::new();
+
+        for (index, item) in items.iter().copied().enumerate() {
+            let (witness, next_ty) = match body_ty.with_environment(&self.info).reveal_k(tycker)? {
+                | DeferredTelescopeView::ManifestKind { definition, body, .. } => {
+                    (self.check_manifest_kind_witness_k(tycker, item, definition)?, body)
+                }
+                | DeferredTelescopeView::Exists { binder, mode, body } => {
+                    self.check_exists_witness_k(tycker, item, binder, mode, body)?
+                }
+                | DeferredTelescopeView::Other(body) => {
+                    body_ty = body;
+                    body_index = index;
+                    break;
+                }
+            };
+            body_ty = next_ty;
+            witnesses.push(witness);
+        }
+
+        if witnesses.is_empty() {
+            tycker.err_k(
+                TyckError::TypeExpected {
+                    expected: "an existential package".to_string(),
+                    found: expected,
+                },
+                std::panic::Location::caller(),
+            )?
+        }
+
+        let body_ty = body_ty.materialize_k(tycker)?;
+        let body = self.check_package_body_k(tycker, &items[body_index..], tail, body_ty)?;
+        let cons = Alloc::alloc(tycker, ss::ConsN(witnesses, body), expected, &self.info);
+        Ok(TermAnnId::Value(cons, expected))
+    }
+
+    /// Check a manifest kind component against its definition.
+    fn check_manifest_kind_witness_k(
+        &self, tycker: &mut Tycker<'_>, item: su::TermId, definition: ss::KindId,
+    ) -> ResultKont<ss::StaticTermId> {
+        let checked = self.mk(item).tyck_k(tycker, Action::ana(AnnId::Set))?;
+        let witness =
+            checked.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let witness = Lub::lub_k(definition, witness, tycker)?;
+        Ok(witness.into())
+    }
+
+    /// Check an existential witness, returning it with the telescope that
+    /// remains after its payload is substituted.
+    fn check_exists_witness_k(
+        &self, tycker: &mut Tycker<'_>, item: su::TermId, binder: ss::TypeBinder,
+        mode: DeferredTelescopeExistsMode, body: DeferredTelescopeType,
+    ) -> ResultKont<(ss::StaticTermId, DeferredTelescopeType)> {
+        let domain_kind = binder.domain_kind(tycker);
+        let checked = self.mk(item).tyck_k(tycker, Action::ana(domain_kind.into()))?;
+        let (witness, _) =
+            checked.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let payload = binder.pattern.bind_argument_k(tycker, witness)?;
+        let payload = match mode {
+            | DeferredTelescopeExistsMode::Abstract => payload,
+            | DeferredTelescopeExistsMode::Manifest(definition) => {
+                let definition = definition.materialize_k(tycker)?;
+                Lub::lub_k(definition, payload, tycker)?
+            }
+        };
+        Ok((witness.into(), body.with_abstract(binder.witness, payload)))
+    }
+
+    /// Check the value components of a package against its body type.
+    ///
+    /// A lone tail component takes the whole body; several components split
+    /// the body as a product.
+    fn check_package_body_k(
+        &self, tycker: &mut Tycker<'_>, body_items: &[su::TermId], tail: su::TermId,
+        body_ty: ss::TypeId,
+    ) -> ResultKont<ss::ValueId> {
+        if body_items.is_empty() {
+            let checked =
+                self.mk(tail).tyck_k(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
+            let (body, _) = checked.try_as_value(
+                tycker,
+                TyckError::SortMismatch,
+                std::panic::Location::caller(),
+            )?;
+            return Ok(body);
+        }
+        let ss::Prod(body_component_tys) = body_ty.view_prepared_product_k(tycker, &self.info)?;
+        if body_component_tys.len() < body_items.len() {
+            tycker.err_k(
+                TyckError::TypeExpected {
+                    expected: "a product with matching components".to_string(),
+                    found: body_ty,
+                },
+                std::panic::Location::caller(),
+            )?
+        }
+        let remaining =
+            tycker.rest_product_k(&body_component_tys[body_items.len()..], &self.info)?;
+        let components = body_items
+            .iter()
+            .copied()
+            .zip(body_component_tys.iter().copied())
+            .chain([(tail, remaining)]);
+        let (body, _) = self.check_value_product_k(tycker, components)?;
+        Ok(body)
     }
 
     pub(super) fn check_proj_k<'db>(
