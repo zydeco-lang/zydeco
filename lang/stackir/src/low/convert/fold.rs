@@ -318,6 +318,18 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         self.computations.push(compu.into().build(self.conversion, site));
     }
 
+    /// Translate a binder, then convert the body it scopes over under `frame`.
+    fn binding_body(
+        &mut self, binder: high::VPatId, body: high::CompuId, env: RenameEnvId,
+        frame: impl FnOnce(low::VPatId) -> Work,
+    ) -> Step<Self> {
+        let PatternTranslation { pattern: binder, bindings } = self.pattern(binder);
+        let env = self.conversion.extend_env(env, bindings);
+        Step::Call { input: Work::Computation(body, env), frame: frame(binder) }
+    }
+
+    // Values
+
     fn visit_value(&mut self, source: high::ValueId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.values[&source].clone() {
             | high::Value::Hole(_) => self.finish_value(source, low::Hole),
@@ -360,6 +372,89 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         Step::Return(())
     }
 
+    fn resume_product_items(
+        &mut self, source: high::ValueId, env: RenameEnvId, position: usize,
+        layout: high::ProductLayout,
+    ) -> Step<Self> {
+        match self.product_item(source, position) {
+            | Some(item) => Step::Call {
+                input: Work::Value(item, env),
+                frame: Work::ProductItems { source, env, position: position + 1, layout },
+            },
+            | None => Step::TailCall(Work::FinishProduct { source, count: position, layout }),
+        }
+    }
+
+    fn resume_finish_product(
+        &mut self, source: high::ValueId, count: usize, layout: high::ProductLayout,
+    ) -> Step<Self> {
+        let items = self.values.split_off(self.values.len() - count);
+        self.finish_value(source, low::VCons::new(items, layout));
+        Step::Return(())
+    }
+
+    fn resume_primitive_operand(
+        &mut self, source: high::ValueId, env: RenameEnvId, operation: high::PrimitiveOp,
+        operand: high::ValueId,
+    ) -> Step<Self> {
+        Step::Call {
+            input: Work::Value(operand, env),
+            frame: Work::FinishPrimitive { source, operation },
+        }
+    }
+
+    fn resume_finish_primitive(
+        &mut self, source: high::ValueId, operation: high::PrimitiveOp,
+    ) -> Step<Self> {
+        let second = self.value();
+        let first = self.value();
+        self.finish_value(source, low::Primitive { operation, operands: [first, second] });
+        Step::Return(())
+    }
+
+    fn resume_offset_displacement(
+        &mut self, source: high::ValueId, env: RenameEnvId, displacement: high::ValueId,
+    ) -> Step<Self> {
+        Step::Call { input: Work::Value(displacement, env), frame: Work::FinishAddrOffset(source) }
+    }
+
+    fn resume_finish_addr_offset(&mut self, source: high::ValueId) -> Step<Self> {
+        let displacement = self.value();
+        let base = self.value();
+        self.finish_value(source, low::AddrOffset { base, displacement });
+        Step::Return(())
+    }
+
+    fn resume_finish_ctor(&mut self, source: high::ValueId, tag: high::CtorIdx) -> Step<Self> {
+        let body = self.value();
+        self.finish_value(source, low::Ctor(tag, body));
+        Step::Return(())
+    }
+
+    fn resume_closure(&mut self, source: high::ValueId, captures: Captures) -> Step<Self> {
+        let body = self.computation();
+        let site = self.conversion.value_site(source);
+        let protocol = match self.conversion.source.inner.value_protocols.get(&source) {
+            | Some(ValueProtocol::Thunk(protocol)) => *protocol.clone(),
+            | _ => StackProtocol::Unknown,
+        };
+        let environment = self.conversion.captured_pattern(&captures.bindings);
+        let label = self.conversion.alloc_label("closure");
+        let entry = low::EntryParameters::Closure { environment };
+        let code = low::Block { label, entry, body }.build(self.conversion, site);
+        self.conversion
+            .arena
+            .inner
+            .entry_protocols
+            .insert_new(code, low::EntryProtocol::Closure(protocol));
+        let environment =
+            self.conversion.captured_value_outside(&captures.sources, captures.env, site);
+        self.finish_value(source, low::ClosurePackage { environment, code });
+        Step::Return(())
+    }
+
+    // Stacks
+
     fn visit_stack(&mut self, source: high::StackId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.stacks[&source].clone() {
             | high::Stack::Var(_) => {
@@ -397,6 +492,74 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         }
         Step::Return(())
     }
+
+    fn resume_stack_rest(
+        &mut self, source: high::StackId, rest: high::StackId, env: RenameEnvId,
+    ) -> Step<Self> {
+        Step::Call { input: Work::Stack(rest, env), frame: Work::FinishArg(source) }
+    }
+
+    fn resume_finish_arg(&mut self, source: high::StackId) -> Step<Self> {
+        let rest = self.stack();
+        let value = self.value();
+        let site = self.conversion.stack_site(source);
+        self.stacks.push(low::Cons(value, rest).build(self.conversion, site));
+        Step::Return(())
+    }
+
+    fn resume_finish_tag(&mut self, source: high::StackId, tag: high::DtorIdx) -> Step<Self> {
+        let rest = self.stack();
+        let site = self.conversion.stack_site(source);
+        self.stacks.push(low::Cons(tag, rest).build(self.conversion, site));
+        Step::Return(())
+    }
+
+    fn resume_continuation(
+        &mut self, source: high::StackId, binder: low::VPatId, result: high::VPatId,
+        captures: Captures,
+    ) -> Step<Self> {
+        let body = self.computation();
+        let site = self.conversion.stack_site(source);
+        let protocol = self
+            .conversion
+            .source
+            .inner
+            .pattern_protocols
+            .get(&result)
+            .cloned()
+            .unwrap_or_default();
+        let entry = low::ContinuationEntry {
+            result: binder,
+            body,
+            captures: captures
+                .bindings
+                .iter()
+                .map(|&(source, binding)| low::CaptureBinding {
+                    source: self.conversion.renamed_def(captures.env, source),
+                    binding,
+                })
+                .collect(),
+        };
+        let environment = self.conversion.captured_pattern(&captures.bindings);
+        let label = self.conversion.alloc_label("continuation");
+        let parameters = low::EntryParameters::Continuation { result: binder, environment };
+        let code = low::Block { label, entry: parameters, body }.build(self.conversion, site);
+        self.conversion
+            .arena
+            .inner
+            .entry_protocols
+            .insert_new(code, low::EntryProtocol::Continuation(protocol));
+        let environment =
+            self.conversion.captured_value_outside(&captures.sources, captures.env, site);
+        let ambient = low::StackVar.build(self.conversion, site);
+        let residual = low::Cons(environment, ambient).build(self.conversion, site);
+        let package = low::ContinuationPackage { code, residual }.build(self.conversion, site);
+        self.conversion.arena.inner.continuations.insert_new(package, entry);
+        self.stacks.push(package);
+        Step::Return(())
+    }
+
+    // Computations
 
     fn visit_computation(&mut self, source: high::CompuId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.compus[&source].clone() {
@@ -513,14 +676,374 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         }
     }
 
-    /// Translate a binder, then convert the body it scopes over under `frame`.
-    fn binding_body(
-        &mut self, binder: high::VPatId, body: high::CompuId, env: RenameEnvId,
-        frame: impl FnOnce(low::VPatId) -> Work,
+    fn resume_compare_children(
+        &mut self, source: high::CompuId, env: RenameEnvId, position: usize,
+        branch: high::CompareBranch,
     ) -> Step<Self> {
-        let PatternTranslation { pattern: binder, bindings } = self.pattern(binder);
-        let env = self.conversion.extend_env(env, bindings);
-        Step::Call { input: Work::Computation(body, env), frame: frame(binder) }
+        let input = match position {
+            | 0 | 1 => Some(Work::Value(branch.operands[position], env)),
+            | 2 => Some(Work::Computation(branch.when_true, env)),
+            | 3 => Some(Work::Computation(branch.when_false, env)),
+            | _ => None,
+        };
+        if let Some(input) = input {
+            return Step::Call {
+                input,
+                frame: Work::CompareChildren { source, env, position: position + 1, branch },
+            };
+        }
+        let when_false = self.computation();
+        let when_true = self.computation();
+        let second = self.value();
+        let first = self.value();
+        let node = low::CompareBranch {
+            operation: branch.operation,
+            operands: [first, second],
+            when_true,
+            when_false,
+        };
+        self.finish_computation(source, node);
+        Step::Return(())
+    }
+
+    fn resume_store_address(
+        &mut self, source: high::CompuId, env: RenameEnvId, scalar: high::memory::MemoryScalar,
+        address: high::ValueId, next: high::CompuId,
+    ) -> Step<Self> {
+        Step::Call {
+            input: Work::Value(address, env),
+            frame: Work::StoreNext { source, env, scalar, next },
+        }
+    }
+
+    fn resume_store_next(
+        &mut self, source: high::CompuId, env: RenameEnvId, scalar: high::memory::MemoryScalar,
+        next: high::CompuId,
+    ) -> Step<Self> {
+        Step::Call {
+            input: Work::Computation(next, env),
+            frame: Work::FinishStore { source, scalar },
+        }
+    }
+
+    fn resume_finish_store(
+        &mut self, source: high::CompuId, scalar: high::memory::MemoryScalar,
+    ) -> Step<Self> {
+        let address = self.value();
+        let value = self.value();
+        let next = self.computation();
+        self.finish_computation(source, low::MemoryStep::Store { scalar, address, value, next });
+        Step::Return(())
+    }
+
+    fn resume_load_next(
+        &mut self, source: high::CompuId, env: RenameEnvId, scalar: high::memory::MemoryScalar,
+        result: high::VPatId, next: high::CompuId,
+    ) -> Step<Self> {
+        self.binding_body(result, next, env, |binder| Work::FinishLoad { source, scalar, binder })
+    }
+
+    fn resume_finish_load(
+        &mut self, source: high::CompuId, scalar: high::memory::MemoryScalar, binder: low::VPatId,
+    ) -> Step<Self> {
+        let next = self.computation();
+        let address = self.value();
+        self.finish_computation(
+            source,
+            low::MemoryStep::Load { scalar, address, result: binder, next },
+        );
+        Step::Return(())
+    }
+
+    fn resume_finish_hole(&mut self, source: high::CompuId) -> Step<Self> {
+        let stack = self.stack();
+        self.finish_computation(source, low::SHole(stack));
+        Step::Return(())
+    }
+
+    fn resume_finish_extern_call(
+        &mut self, source: high::CompuId, function: high::ExternalFunction,
+    ) -> Step<Self> {
+        let stack = self.stack();
+        self.finish_computation(source, low::ExternCall { function, stack });
+        Step::Return(())
+    }
+
+    fn resume_force_stack(
+        &mut self, source: high::CompuId, env: RenameEnvId, stack: high::StackId,
+    ) -> Step<Self> {
+        Step::Call { input: Work::Stack(stack, env), frame: Work::FinishForce(source) }
+    }
+
+    fn resume_finish_force(&mut self, source: high::CompuId) -> Step<Self> {
+        let site = self.conversion.compu_site(source);
+        let package = self.value();
+        let stack = self.stack();
+        let environment_def = self.conversion.alloc_def(VarName("__environment__".into()));
+        let code_def = self.conversion.alloc_def(VarName("__closure_code__".into()));
+        let environment: low::VPatId = environment_def.build(self.conversion, None);
+        let code: low::VPatId = code_def.build(self.conversion, None);
+        let environment_value = environment_def.build(self.conversion, site);
+        let target = code_def.build(self.conversion, site);
+        let argument = low::EntryArgument::Closure { environment: environment_value };
+        let body = low::Jump { target, argument, stack }.build(self.conversion, site);
+        self.finish_computation(source, low::OpenClosure { package, environment, code, body });
+        Step::Return(())
+    }
+
+    fn resume_return_value(
+        &mut self, source: high::CompuId, env: RenameEnvId, value: high::ValueId,
+    ) -> Step<Self> {
+        Step::Call { input: Work::Value(value, env), frame: Work::FinishReturn(source) }
+    }
+
+    fn resume_finish_return(&mut self, source: high::CompuId) -> Step<Self> {
+        let site = self.conversion.compu_site(source);
+        let package = self.stack();
+        let value = self.value();
+        let code_def = self.conversion.alloc_def(VarName("__continuation_code__".into()));
+        let code = code_def.build(self.conversion, None);
+        let target = code_def.build(self.conversion, site);
+        let stack = low::StackVar.build(self.conversion, site);
+        let argument = low::EntryArgument::Continuation { result: value };
+        let body = low::Jump { target, argument, stack }.build(self.conversion, site);
+        self.finish_computation(source, low::OpenContinuation { package, code, body });
+        Step::Return(())
+    }
+
+    fn resume_product_match_body(
+        &mut self, source: high::CompuId, env: RenameEnvId, binder: high::VPatId,
+        body: high::CompuId,
+    ) -> Step<Self> {
+        self.binding_body(binder, body, env, |binder| Work::FinishProductMatch { source, binder })
+    }
+
+    fn resume_finish_product_match(
+        &mut self, source: high::CompuId, binder: low::VPatId,
+    ) -> Step<Self> {
+        let body = self.computation();
+        let scrut = self.value();
+        self.finish_computation(source, low::SProductMatch { scrut, binder, body });
+        Step::Return(())
+    }
+
+    fn resume_let_value_tail(
+        &mut self, source: high::CompuId, env: RenameEnvId, binder: high::VPatId,
+        tail: high::CompuId,
+    ) -> Step<Self> {
+        self.binding_body(binder, tail, env, |binder| Work::FinishLetValue { source, binder })
+    }
+
+    fn resume_finish_let_value(
+        &mut self, source: high::CompuId, binder: low::VPatId,
+    ) -> Step<Self> {
+        let tail = self.computation();
+        let bindee = self.value();
+        self.finish_computation(source, low::LetValue { binder, bindee, tail });
+        Step::Return(())
+    }
+
+    fn resume_let_stack_tail(
+        &mut self, source: high::CompuId, env: RenameEnvId, tail: high::CompuId,
+    ) -> Step<Self> {
+        Step::Call { input: Work::Computation(tail, env), frame: Work::FinishLetStack(source) }
+    }
+
+    fn resume_finish_let_stack(&mut self, source: high::CompuId) -> Step<Self> {
+        let bindee = self.stack();
+        let tail = self.computation();
+        self.finish_computation(source, low::LetStack { binder: low::StackVar, bindee, tail });
+        Step::Return(())
+    }
+
+    fn resume_let_arg_tail(
+        &mut self, source: high::CompuId, env: RenameEnvId, binder: high::VPatId,
+        tail: high::CompuId,
+    ) -> Step<Self> {
+        self.binding_body(binder, tail, env, |binder| Work::FinishLetArg { source, binder })
+    }
+
+    fn resume_finish_let_arg(&mut self, source: high::CompuId, binder: low::VPatId) -> Step<Self> {
+        let tail = self.computation();
+        let bindee = self.stack();
+        self.finish_computation(
+            source,
+            low::LetArg { binder: low::Cons(binder, low::StackVar), bindee, tail },
+        );
+        Step::Return(())
+    }
+
+    fn resume_match_arms(
+        &mut self, source: high::CompuId, env: RenameEnvId, position: usize,
+        arms: Vec<low::Matcher<low::VPatId, low::CompuId>>,
+    ) -> Step<Self> {
+        if let Some(high::Matcher { binder, tail }) = self.coprod_arm(source, position) {
+            let PatternTranslation { pattern: binder, bindings } = self.pattern(binder);
+            let body_env = self.conversion.extend_env(env, bindings);
+            return Step::Call {
+                input: Work::Computation(tail, body_env),
+                frame: Work::MatchArm { source, env, position, arms, binder },
+            };
+        }
+        let scrut = self.value();
+        self.finish_computation(source, low::SCoprodMatch { scrut, arms });
+        Step::Return(())
+    }
+
+    fn resume_match_arm(
+        &mut self, source: high::CompuId, env: RenameEnvId, position: usize,
+        mut arms: Vec<low::Matcher<low::VPatId, low::CompuId>>, binder: low::VPatId,
+    ) -> Step<Self> {
+        arms.push(low::Matcher { binder, tail: self.computation() });
+        Step::TailCall(Work::MatchArms { source, env, position: position + 1, arms })
+    }
+
+    fn resume_co_case_arms(
+        &mut self, source: high::CompuId, env: RenameEnvId, position: usize,
+        mut dtors: Vec<high::Cons<high::DtorIdx, high::StackVar>>,
+    ) -> Step<Self> {
+        match self.cocase_arm(source, position) {
+            | Some(high::CoMatcher { dtor, tail }) => {
+                dtors.push(dtor);
+                Step::Call {
+                    input: Work::Computation(tail, env),
+                    frame: Work::CoCaseArms { source, env, position: position + 1, dtors },
+                }
+            }
+            | None => Step::TailCall(Work::FinishCoCase { source, dtors }),
+        }
+    }
+
+    fn resume_finish_co_case(
+        &mut self, source: high::CompuId, dtors: Vec<high::Cons<high::DtorIdx, high::StackVar>>,
+    ) -> Step<Self> {
+        let tails = self.computations.split_off(self.computations.len() - dtors.len());
+        let arms = dtors
+            .into_iter()
+            .zip(tails)
+            .map(|(dtor, tail)| low::CoMatcher { dtor, tail })
+            .collect();
+        let scrut = self.stack();
+        let site = self.conversion.compu_site(source);
+        let output = low::SCoMatch { scrut, arms }.build(self.conversion, site);
+        if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
+            self.conversion.arena.inner.case_protocols.insert_new(output, protocol.clone());
+        }
+        self.computations.push(output);
+        Step::Return(())
+    }
+
+    fn resume_fix_body(
+        &mut self, source: high::CompuId, env: RenameEnvId, param: high::DefId, body: high::CompuId,
+    ) -> Step<Self> {
+        let captures = self.captures(body, Context::singleton(param), env);
+        let recursive = self.conversion.alloc_like(param);
+        let label = self.conversion.alloc_label("fix");
+        let env = self
+            .conversion
+            .extend_env(env, captures.bindings.iter().copied().chain([(param, recursive)]));
+        Step::Call {
+            input: Work::Computation(body, env),
+            frame: Work::Fix { source, captures, recursive, label },
+        }
+    }
+
+    fn resume_fix(
+        &mut self, source: high::CompuId, captures: Captures, recursive: high::DefId,
+        label: high::DefId,
+    ) -> Step<Self> {
+        let body = self.computation();
+        let site = self.conversion.compu_site(source);
+        let environment = self.conversion.captured_value_inside(&captures.bindings, site);
+        let code: low::ValueId = label.build(self.conversion, site);
+        let closure = low::ClosurePackage { environment, code }.build(self.conversion, site);
+        let binder = recursive.build(self.conversion, None);
+        let body =
+            low::LetValue { binder, bindee: closure, tail: body }.build(self.conversion, site);
+        let environment = self.conversion.captured_pattern(&captures.bindings);
+        let entry = low::EntryParameters::Closure { environment };
+        let block = low::Block { label, entry, body }.build(self.conversion, site);
+        let protocol =
+            self.conversion.source.inner.compu_protocols.get(&source).cloned().unwrap_or_default();
+        self.conversion
+            .arena
+            .inner
+            .entry_protocols
+            .insert_new(block, low::EntryProtocol::Closure(protocol));
+        let environment =
+            self.conversion.captured_value_outside(&captures.sources, captures.env, site);
+        let argument = low::EntryArgument::Closure { environment };
+        let stack = self.stack();
+        self.computations
+            .push(low::Jump { target: block, argument, stack }.build(self.conversion, site));
+        Step::Return(())
+    }
+
+    fn resume_procedure_tail(
+        &mut self, source: high::CompuId, label: high::DefId, kind: low::LabelKind,
+        parameters: Vec<(high::DefId, high::DefId)>, tail: high::CompuId, env: RenameEnvId,
+    ) -> Step<Self> {
+        let body = self.computation();
+        let site = self.conversion.compu_site(source);
+        let pushed = parameters.len();
+        // A closed label pops the variables each jump pushes, the first on top.
+        let body = parameters.into_iter().rev().fold(body, |body, (_, parameter)| {
+            let binder: low::VPatId = parameter.build(self.conversion, None);
+            let ambient = low::StackVar.build(self.conversion, site);
+            low::LetArg { binder: low::Cons(binder, low::StackVar), bindee: ambient, tail: body }
+                .build(self.conversion, site)
+        });
+        self.computations.push(body);
+        Step::Call {
+            input: Work::Computation(tail, env),
+            frame: Work::FinishProcedure { source, label, kind, pushed },
+        }
+    }
+
+    fn resume_finish_procedure(
+        &mut self, source: high::CompuId, label: high::DefId, kind: low::LabelKind, pushed: usize,
+    ) -> Step<Self> {
+        let tail = self.computation();
+        let body = self.computation();
+        let site = self.conversion.compu_site(source);
+        let node = low::LetLabel { label, kind, body, tail }.build(self.conversion, site);
+        // Jumps supply the procedure's stack under the variables a closed label pops.
+        if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
+            let protocol = (0..pushed).fold(protocol.clone(), |rest, _| {
+                StackProtocol::Argument(Box::new(ValueProtocol::Unknown), Box::new(rest))
+            });
+            self.conversion.arena.inner.label_protocols.insert_new(label, protocol);
+        }
+        self.computations.push(node);
+        Step::Return(())
+    }
+
+    fn resume_finish_call(
+        &mut self, source: high::CompuId, env: RenameEnvId, procedure: high::DefId,
+    ) -> Step<Self> {
+        let stack = self.stack();
+        let site = self.conversion.compu_site(source);
+        let label = self.conversion.renamed_def(env, procedure);
+        let variables = self.conversion.labels[&label].clone();
+        let jump = if self.conversion.scheme.names_frames() {
+            // The full scheme names each pushed variable with a stack let, deepest first,
+            // so that the jump receives the ambient stack.
+            let jump = low::JumpLabel { label, stack }.build(self.conversion, site);
+            variables.iter().fold(jump, |tail, variable| {
+                let value = self.conversion.translated_var(*variable, env, site);
+                let ambient = low::StackVar.build(self.conversion, site);
+                let bindee = low::Cons(value, ambient).build(self.conversion, site);
+                low::LetStack { binder: low::StackVar, bindee, tail }.build(self.conversion, site)
+            })
+        } else {
+            let stack = variables.iter().rev().fold(stack, |rest, variable| {
+                let value = self.conversion.translated_var(*variable, env, site);
+                low::Cons(value, rest).build(self.conversion, site)
+            });
+            low::JumpLabel { label, stack }.build(self.conversion, site)
+        };
+        self.computations.push(jump);
+        Step::Return(())
     }
 }
 
@@ -535,450 +1058,107 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
 
     fn enter(&mut self, work: Work) -> Step<Self> {
         match work {
-            | Work::Value(source, env) => return self.visit_value(source, env),
-            | Work::Stack(source, env) => return self.visit_stack(source, env),
-            | Work::Computation(source, env) => return self.visit_computation(source, env),
-            | Work::CompareChildren { source, env, position, branch } => {
-                let input = match position {
-                    | 0 | 1 => Some(Work::Value(branch.operands[position], env)),
-                    | 2 => Some(Work::Computation(branch.when_true, env)),
-                    | 3 => Some(Work::Computation(branch.when_false, env)),
-                    | _ => None,
-                };
-                if let Some(input) = input {
-                    return Step::Call {
-                        input,
-                        frame: Work::CompareChildren {
-                            source,
-                            env,
-                            position: position + 1,
-                            branch,
-                        },
-                    };
-                }
-                let when_false = self.computation();
-                let when_true = self.computation();
-                let second = self.value();
-                let first = self.value();
-                let node = low::CompareBranch {
-                    operation: branch.operation,
-                    operands: [first, second],
-                    when_true,
-                    when_false,
-                };
-                self.finish_computation(source, node);
-            }
-            | Work::StoreAddress { source, env, scalar, address, next } => {
-                return Step::Call {
-                    input: Work::Value(address, env),
-                    frame: Work::StoreNext { source, env, scalar, next },
-                };
-            }
-            | Work::StoreNext { source, env, scalar, next } => {
-                return Step::Call {
-                    input: Work::Computation(next, env),
-                    frame: Work::FinishStore { source, scalar },
-                };
-            }
-            | Work::FinishStore { source, scalar } => {
-                let address = self.value();
-                let value = self.value();
-                let next = self.computation();
-                self.finish_computation(
-                    source,
-                    low::MemoryStep::Store { scalar, address, value, next },
-                );
-            }
-            | Work::LoadNext { source, env, scalar, result, next } => {
-                return self.binding_body(result, next, env, |binder| Work::FinishLoad {
-                    source,
-                    scalar,
-                    binder,
-                });
-            }
-            | Work::FinishLoad { source, scalar, binder } => {
-                let next = self.computation();
-                let address = self.value();
-                self.finish_computation(
-                    source,
-                    low::MemoryStep::Load { scalar, address, result: binder, next },
-                );
-            }
+            | Work::Value(source, env) => self.visit_value(source, env),
             | Work::ProductItems { source, env, position, layout } => {
-                return match self.product_item(source, position) {
-                    | Some(item) => Step::Call {
-                        input: Work::Value(item, env),
-                        frame: Work::ProductItems { source, env, position: position + 1, layout },
-                    },
-                    | None => {
-                        Step::TailCall(Work::FinishProduct { source, count: position, layout })
-                    }
-                };
+                self.resume_product_items(source, env, position, layout)
             }
             | Work::FinishProduct { source, count, layout } => {
-                let items = self.values.split_off(self.values.len() - count);
-                self.finish_value(source, low::VCons::new(items, layout));
+                self.resume_finish_product(source, count, layout)
             }
             | Work::PrimitiveOperand { source, env, operation, operand } => {
-                return Step::Call {
-                    input: Work::Value(operand, env),
-                    frame: Work::FinishPrimitive { source, operation },
-                };
+                self.resume_primitive_operand(source, env, operation, operand)
             }
             | Work::FinishPrimitive { source, operation } => {
-                let second = self.value();
-                let first = self.value();
-                self.finish_value(source, low::Primitive { operation, operands: [first, second] });
+                self.resume_finish_primitive(source, operation)
             }
             | Work::OffsetDisplacement { source, env, displacement } => {
-                return Step::Call {
-                    input: Work::Value(displacement, env),
-                    frame: Work::FinishAddrOffset(source),
-                };
+                self.resume_offset_displacement(source, env, displacement)
             }
-            | Work::FinishAddrOffset(source) => {
-                let displacement = self.value();
-                let base = self.value();
-                self.finish_value(source, low::AddrOffset { base, displacement });
-            }
-            | Work::FinishCtor { source, tag } => {
-                let body = self.value();
-                self.finish_value(source, low::Ctor(tag, body));
-            }
-            | Work::Closure { source, captures } => {
-                let body = self.computation();
-                let site = self.conversion.value_site(source);
-                let protocol = match self.conversion.source.inner.value_protocols.get(&source) {
-                    | Some(ValueProtocol::Thunk(protocol)) => *protocol.clone(),
-                    | _ => StackProtocol::Unknown,
-                };
-                let environment = self.conversion.captured_pattern(&captures.bindings);
-                let label = self.conversion.alloc_label("closure");
-                let entry = low::EntryParameters::Closure { environment };
-                let code = low::Block { label, entry, body }.build(self.conversion, site);
-                self.conversion
-                    .arena
-                    .inner
-                    .entry_protocols
-                    .insert_new(code, low::EntryProtocol::Closure(protocol));
-                let environment =
-                    self.conversion.captured_value_outside(&captures.sources, captures.env, site);
-                self.finish_value(source, low::ClosurePackage { environment, code });
-            }
-            | Work::StackRest { source, rest, env } => {
-                return Step::Call {
-                    input: Work::Stack(rest, env),
-                    frame: Work::FinishArg(source),
-                };
-            }
-            | Work::FinishArg(source) => {
-                let rest = self.stack();
-                let value = self.value();
-                let site = self.conversion.stack_site(source);
-                self.stacks.push(low::Cons(value, rest).build(self.conversion, site));
-            }
-            | Work::FinishTag { source, tag } => {
-                let rest = self.stack();
-                let site = self.conversion.stack_site(source);
-                self.stacks.push(low::Cons(tag, rest).build(self.conversion, site));
-            }
+            | Work::FinishAddrOffset(source) => self.resume_finish_addr_offset(source),
+            | Work::FinishCtor { source, tag } => self.resume_finish_ctor(source, tag),
+            | Work::Closure { source, captures } => self.resume_closure(source, captures),
+            | Work::Stack(source, env) => self.visit_stack(source, env),
+            | Work::StackRest { source, rest, env } => self.resume_stack_rest(source, rest, env),
+            | Work::FinishArg(source) => self.resume_finish_arg(source),
+            | Work::FinishTag { source, tag } => self.resume_finish_tag(source, tag),
             | Work::Continuation { source, binder, result, captures } => {
-                let body = self.computation();
-                let site = self.conversion.stack_site(source);
-                let protocol = self
-                    .conversion
-                    .source
-                    .inner
-                    .pattern_protocols
-                    .get(&result)
-                    .cloned()
-                    .unwrap_or_default();
-                let entry = low::ContinuationEntry {
-                    result: binder,
-                    body,
-                    captures: captures
-                        .bindings
-                        .iter()
-                        .map(|&(source, binding)| low::CaptureBinding {
-                            source: self.conversion.renamed_def(captures.env, source),
-                            binding,
-                        })
-                        .collect(),
-                };
-                let environment = self.conversion.captured_pattern(&captures.bindings);
-                let label = self.conversion.alloc_label("continuation");
-                let parameters = low::EntryParameters::Continuation { result: binder, environment };
-                let code =
-                    low::Block { label, entry: parameters, body }.build(self.conversion, site);
-                self.conversion
-                    .arena
-                    .inner
-                    .entry_protocols
-                    .insert_new(code, low::EntryProtocol::Continuation(protocol));
-                let environment =
-                    self.conversion.captured_value_outside(&captures.sources, captures.env, site);
-                let ambient = low::StackVar.build(self.conversion, site);
-                let residual = low::Cons(environment, ambient).build(self.conversion, site);
-                let package =
-                    low::ContinuationPackage { code, residual }.build(self.conversion, site);
-                self.conversion.arena.inner.continuations.insert_new(package, entry);
-                self.stacks.push(package);
+                self.resume_continuation(source, binder, result, captures)
             }
-            | Work::FinishHole(source) => {
-                let stack = self.stack();
-                self.finish_computation(source, low::SHole(stack));
+            | Work::Computation(source, env) => self.visit_computation(source, env),
+            | Work::CompareChildren { source, env, position, branch } => {
+                self.resume_compare_children(source, env, position, branch)
             }
+            | Work::StoreAddress { source, env, scalar, address, next } => {
+                self.resume_store_address(source, env, scalar, address, next)
+            }
+            | Work::StoreNext { source, env, scalar, next } => {
+                self.resume_store_next(source, env, scalar, next)
+            }
+            | Work::FinishStore { source, scalar } => self.resume_finish_store(source, scalar),
+            | Work::LoadNext { source, env, scalar, result, next } => {
+                self.resume_load_next(source, env, scalar, result, next)
+            }
+            | Work::FinishLoad { source, scalar, binder } => {
+                self.resume_finish_load(source, scalar, binder)
+            }
+            | Work::FinishHole(source) => self.resume_finish_hole(source),
             | Work::FinishExternCall { source, function } => {
-                let stack = self.stack();
-                self.finish_computation(source, low::ExternCall { function, stack });
+                self.resume_finish_extern_call(source, function)
             }
             | Work::ForceStack { source, env, stack } => {
-                return Step::Call {
-                    input: Work::Stack(stack, env),
-                    frame: Work::FinishForce(source),
-                };
+                self.resume_force_stack(source, env, stack)
             }
-            | Work::FinishForce(source) => {
-                let site = self.conversion.compu_site(source);
-                let package = self.value();
-                let stack = self.stack();
-                let environment_def = self.conversion.alloc_def(VarName("__environment__".into()));
-                let code_def = self.conversion.alloc_def(VarName("__closure_code__".into()));
-                let environment: low::VPatId = environment_def.build(self.conversion, None);
-                let code: low::VPatId = code_def.build(self.conversion, None);
-                let environment_value = environment_def.build(self.conversion, site);
-                let target = code_def.build(self.conversion, site);
-                let argument = low::EntryArgument::Closure { environment: environment_value };
-                let body = low::Jump { target, argument, stack }.build(self.conversion, site);
-                self.finish_computation(
-                    source,
-                    low::OpenClosure { package, environment, code, body },
-                );
-            }
+            | Work::FinishForce(source) => self.resume_finish_force(source),
             | Work::ReturnValue { source, env, value } => {
-                return Step::Call {
-                    input: Work::Value(value, env),
-                    frame: Work::FinishReturn(source),
-                };
+                self.resume_return_value(source, env, value)
             }
-            | Work::FinishReturn(source) => {
-                let site = self.conversion.compu_site(source);
-                let package = self.stack();
-                let value = self.value();
-                let code_def = self.conversion.alloc_def(VarName("__continuation_code__".into()));
-                let code = code_def.build(self.conversion, None);
-                let target = code_def.build(self.conversion, site);
-                let stack = low::StackVar.build(self.conversion, site);
-                let argument = low::EntryArgument::Continuation { result: value };
-                let body = low::Jump { target, argument, stack }.build(self.conversion, site);
-                self.finish_computation(source, low::OpenContinuation { package, code, body });
-            }
+            | Work::FinishReturn(source) => self.resume_finish_return(source),
             | Work::ProductMatchBody { source, env, binder, body } => {
-                return self.binding_body(binder, body, env, |binder| Work::FinishProductMatch {
-                    source,
-                    binder,
-                });
+                self.resume_product_match_body(source, env, binder, body)
             }
             | Work::FinishProductMatch { source, binder } => {
-                let body = self.computation();
-                let scrut = self.value();
-                self.finish_computation(source, low::SProductMatch { scrut, binder, body });
+                self.resume_finish_product_match(source, binder)
             }
             | Work::LetValueTail { source, env, binder, tail } => {
-                return self.binding_body(binder, tail, env, |binder| Work::FinishLetValue {
-                    source,
-                    binder,
-                });
+                self.resume_let_value_tail(source, env, binder, tail)
             }
             | Work::FinishLetValue { source, binder } => {
-                let tail = self.computation();
-                let bindee = self.value();
-                self.finish_computation(source, low::LetValue { binder, bindee, tail });
+                self.resume_finish_let_value(source, binder)
             }
             | Work::LetStackTail { source, env, tail } => {
-                return Step::Call {
-                    input: Work::Computation(tail, env),
-                    frame: Work::FinishLetStack(source),
-                };
+                self.resume_let_stack_tail(source, env, tail)
             }
-            | Work::FinishLetStack(source) => {
-                let bindee = self.stack();
-                let tail = self.computation();
-                self.finish_computation(
-                    source,
-                    low::LetStack { binder: low::StackVar, bindee, tail },
-                );
-            }
+            | Work::FinishLetStack(source) => self.resume_finish_let_stack(source),
             | Work::LetArgTail { source, env, binder, tail } => {
-                return self.binding_body(binder, tail, env, |binder| Work::FinishLetArg {
-                    source,
-                    binder,
-                });
+                self.resume_let_arg_tail(source, env, binder, tail)
             }
-            | Work::FinishLetArg { source, binder } => {
-                let tail = self.computation();
-                let bindee = self.stack();
-                self.finish_computation(
-                    source,
-                    low::LetArg { binder: low::Cons(binder, low::StackVar), bindee, tail },
-                );
-            }
+            | Work::FinishLetArg { source, binder } => self.resume_finish_let_arg(source, binder),
             | Work::MatchArms { source, env, position, arms } => {
-                if let Some(high::Matcher { binder, tail }) = self.coprod_arm(source, position) {
-                    let PatternTranslation { pattern: binder, bindings } = self.pattern(binder);
-                    let body_env = self.conversion.extend_env(env, bindings);
-                    return Step::Call {
-                        input: Work::Computation(tail, body_env),
-                        frame: Work::MatchArm { source, env, position, arms, binder },
-                    };
-                }
-                let scrut = self.value();
-                self.finish_computation(source, low::SCoprodMatch { scrut, arms });
+                self.resume_match_arms(source, env, position, arms)
             }
-            | Work::MatchArm { source, env, position, mut arms, binder } => {
-                arms.push(low::Matcher { binder, tail: self.computation() });
-                return Step::TailCall(Work::MatchArms {
-                    source,
-                    env,
-                    position: position + 1,
-                    arms,
-                });
+            | Work::MatchArm { source, env, position, arms, binder } => {
+                self.resume_match_arm(source, env, position, arms, binder)
             }
-            | Work::CoCaseArms { source, env, position, mut dtors } => {
-                return match self.cocase_arm(source, position) {
-                    | Some(high::CoMatcher { dtor, tail }) => {
-                        dtors.push(dtor);
-                        Step::Call {
-                            input: Work::Computation(tail, env),
-                            frame: Work::CoCaseArms { source, env, position: position + 1, dtors },
-                        }
-                    }
-                    | None => Step::TailCall(Work::FinishCoCase { source, dtors }),
-                };
+            | Work::CoCaseArms { source, env, position, dtors } => {
+                self.resume_co_case_arms(source, env, position, dtors)
             }
-            | Work::FinishCoCase { source, dtors } => {
-                let tails = self.computations.split_off(self.computations.len() - dtors.len());
-                let arms = dtors
-                    .into_iter()
-                    .zip(tails)
-                    .map(|(dtor, tail)| low::CoMatcher { dtor, tail })
-                    .collect();
-                let scrut = self.stack();
-                let site = self.conversion.compu_site(source);
-                let output = low::SCoMatch { scrut, arms }.build(self.conversion, site);
-                if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
-                    self.conversion.arena.inner.case_protocols.insert_new(output, protocol.clone());
-                }
-                self.computations.push(output);
-            }
+            | Work::FinishCoCase { source, dtors } => self.resume_finish_co_case(source, dtors),
             | Work::FixBody { source, env, param, body } => {
-                let captures = self.captures(body, Context::singleton(param), env);
-                let recursive = self.conversion.alloc_like(param);
-                let label = self.conversion.alloc_label("fix");
-                let env = self
-                    .conversion
-                    .extend_env(env, captures.bindings.iter().copied().chain([(param, recursive)]));
-                return Step::Call {
-                    input: Work::Computation(body, env),
-                    frame: Work::Fix { source, captures, recursive, label },
-                };
+                self.resume_fix_body(source, env, param, body)
             }
             | Work::Fix { source, captures, recursive, label } => {
-                let body = self.computation();
-                let site = self.conversion.compu_site(source);
-                let environment = self.conversion.captured_value_inside(&captures.bindings, site);
-                let code: low::ValueId = label.build(self.conversion, site);
-                let closure =
-                    low::ClosurePackage { environment, code }.build(self.conversion, site);
-                let binder = recursive.build(self.conversion, None);
-                let body = low::LetValue { binder, bindee: closure, tail: body }
-                    .build(self.conversion, site);
-                let environment = self.conversion.captured_pattern(&captures.bindings);
-                let entry = low::EntryParameters::Closure { environment };
-                let block = low::Block { label, entry, body }.build(self.conversion, site);
-                let protocol = self
-                    .conversion
-                    .source
-                    .inner
-                    .compu_protocols
-                    .get(&source)
-                    .cloned()
-                    .unwrap_or_default();
-                self.conversion
-                    .arena
-                    .inner
-                    .entry_protocols
-                    .insert_new(block, low::EntryProtocol::Closure(protocol));
-                let environment =
-                    self.conversion.captured_value_outside(&captures.sources, captures.env, site);
-                let argument = low::EntryArgument::Closure { environment };
-                let stack = self.stack();
-                self.computations.push(
-                    low::Jump { target: block, argument, stack }.build(self.conversion, site),
-                );
+                self.resume_fix(source, captures, recursive, label)
             }
             | Work::ProcedureTail { source, label, kind, parameters, tail, env } => {
-                let body = self.computation();
-                let site = self.conversion.compu_site(source);
-                let pushed = parameters.len();
-                // A closed label pops the variables each jump pushes, the first on top.
-                let body = parameters.into_iter().rev().fold(body, |body, (_, parameter)| {
-                    let binder: low::VPatId = parameter.build(self.conversion, None);
-                    let ambient = low::StackVar.build(self.conversion, site);
-                    low::LetArg {
-                        binder: low::Cons(binder, low::StackVar),
-                        bindee: ambient,
-                        tail: body,
-                    }
-                    .build(self.conversion, site)
-                });
-                self.computations.push(body);
-                return Step::Call {
-                    input: Work::Computation(tail, env),
-                    frame: Work::FinishProcedure { source, label, kind, pushed },
-                };
+                self.resume_procedure_tail(source, label, kind, parameters, tail, env)
             }
             | Work::FinishProcedure { source, label, kind, pushed } => {
-                let tail = self.computation();
-                let body = self.computation();
-                let site = self.conversion.compu_site(source);
-                let node = low::LetLabel { label, kind, body, tail }.build(self.conversion, site);
-                // Jumps supply the procedure's stack under the variables a closed label pops.
-                if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
-                    let protocol = (0..pushed).fold(protocol.clone(), |rest, _| {
-                        StackProtocol::Argument(Box::new(ValueProtocol::Unknown), Box::new(rest))
-                    });
-                    self.conversion.arena.inner.label_protocols.insert_new(label, protocol);
-                }
-                self.computations.push(node);
+                self.resume_finish_procedure(source, label, kind, pushed)
             }
             | Work::FinishCall { source, env, procedure } => {
-                let stack = self.stack();
-                let site = self.conversion.compu_site(source);
-                let label = self.conversion.renamed_def(env, procedure);
-                let variables = self.conversion.labels[&label].clone();
-                let jump = if self.conversion.scheme.names_frames() {
-                    // The full scheme names each pushed variable with a stack let, deepest first,
-                    // so that the jump receives the ambient stack.
-                    let jump = low::JumpLabel { label, stack }.build(self.conversion, site);
-                    variables.iter().fold(jump, |tail, variable| {
-                        let value = self.conversion.translated_var(*variable, env, site);
-                        let ambient = low::StackVar.build(self.conversion, site);
-                        let bindee = low::Cons(value, ambient).build(self.conversion, site);
-                        low::LetStack { binder: low::StackVar, bindee, tail }
-                            .build(self.conversion, site)
-                    })
-                } else {
-                    let stack = variables.iter().rev().fold(stack, |rest, variable| {
-                        let value = self.conversion.translated_var(*variable, env, site);
-                        low::Cons(value, rest).build(self.conversion, site)
-                    });
-                    low::JumpLabel { label, stack }.build(self.conversion, site)
-                };
-                self.computations.push(jump);
+                self.resume_finish_call(source, env, procedure)
             }
         }
-        Step::Return(())
     }
 }
 
