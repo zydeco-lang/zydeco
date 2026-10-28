@@ -496,8 +496,17 @@ fn stdio_server_completes_current_names_after_parse_errors_with_optional_type_la
                     "position": { "line": 0, "character": source.len() },
                 }),
             );
-            let [item] = response["result"].as_array().unwrap().as_slice() else {
-                panic!("the current source should have exactly one visible name: {response}")
+            let items = response["result"].as_array().unwrap();
+            assert!(items.iter().all(|item| item["label"] != "old"));
+            if source.ends_with("curr") {
+                assert_eq!(items.len(), 1, "only the matching name should be offered: {response}");
+            } else {
+                assert!(items.iter().any(|item| item["label"] == "Int"));
+            }
+            let current =
+                items.iter().filter(|item| item["label"] == "current").collect::<Vec<_>>();
+            let [item] = current.as_slice() else {
+                panic!("the current binding should be offered exactly once: {response}")
             };
             assert_eq!(item["label"], "current");
             assert_eq!(item["detail"], "Int");
@@ -965,7 +974,7 @@ fn stdio_server_follows_source_format_annotations() {
 fn stdio_server_warns_about_ineffective_text_blocks() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("main.zy");
-    let source = "--| Ineffective documentation.\n_";
+    let source = "--| Ineffective documentation.\n()";
     std::fs::write(&path, source).unwrap();
     let uri = Url::from_file_path(&path).unwrap().to_string();
     let mut server = LspProcess::start();
@@ -1006,7 +1015,7 @@ fn stdio_server_warns_about_ineffective_text_blocks() {
         })
     );
 
-    let attached = "--| Effective documentation.\n@(doc)";
+    let attached = "--| Effective documentation.\n@[doc] ()";
     server.notify(
         "textDocument/didChange",
         json!({
