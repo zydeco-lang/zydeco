@@ -10,10 +10,45 @@ pub(super) struct Captures {
     bindings: Vec<(high::DefId, high::DefId)>,
 }
 
+/// Each frame carries the source data its resumption needs, so completing a child never
+/// re-establishes the source node's variant. Frames that walk a source vector carry its id
+/// and the next position instead of the vector.
 pub(super) enum Work {
     Value(high::ValueId, RenameEnvId),
-    ValueChildren(high::ValueId, RenameEnvId, usize),
-    FinishValue(high::ValueId),
+    /// Convert the items of a product value in order.
+    ProductItems {
+        source: high::ValueId,
+        env: RenameEnvId,
+        position: usize,
+        layout: high::ProductLayout,
+    },
+    FinishProduct {
+        source: high::ValueId,
+        count: usize,
+        layout: high::ProductLayout,
+    },
+    /// Convert the second operand of a primitive once the first is complete.
+    PrimitiveOperand {
+        source: high::ValueId,
+        env: RenameEnvId,
+        operation: high::PrimitiveOp,
+        operand: high::ValueId,
+    },
+    FinishPrimitive {
+        source: high::ValueId,
+        operation: high::PrimitiveOp,
+    },
+    /// Convert the displacement of an address offset once its base is complete.
+    OffsetDisplacement {
+        source: high::ValueId,
+        env: RenameEnvId,
+        displacement: high::ValueId,
+    },
+    FinishAddrOffset(high::ValueId),
+    FinishCtor {
+        source: high::ValueId,
+        tag: high::CtorIdx,
+    },
     Closure {
         source: high::ValueId,
         captures: Captures,
@@ -24,20 +59,105 @@ pub(super) enum Work {
         rest: high::StackId,
         env: RenameEnvId,
     },
-    FinishStack(high::StackId),
+    FinishArg(high::StackId),
+    FinishTag {
+        source: high::StackId,
+        tag: high::DtorIdx,
+    },
     Continuation {
         source: high::StackId,
         binder: low::VPatId,
+        /// The source binder, whose protocol the continuation entry inherits.
+        result: high::VPatId,
         captures: Captures,
     },
     Computation(high::CompuId, RenameEnvId),
-    ComparisonChildren(high::CompuId, RenameEnvId, usize),
-    StoreAddress(high::CompuId, RenameEnvId),
-    StoreBody(high::CompuId, RenameEnvId),
-    AfterValue(high::CompuId, RenameEnvId),
-    AfterStack(high::CompuId, RenameEnvId),
-    FinishComputation(high::CompuId),
-    FinishBinding {
+    /// Convert both operands and both branches of a comparison in order.
+    CompareChildren {
+        source: high::CompuId,
+        env: RenameEnvId,
+        position: usize,
+        branch: high::CompareBranch,
+    },
+    StoreAddress {
+        source: high::CompuId,
+        env: RenameEnvId,
+        scalar: high::memory::MemoryScalar,
+        address: high::ValueId,
+        next: high::CompuId,
+    },
+    StoreNext {
+        source: high::CompuId,
+        env: RenameEnvId,
+        scalar: high::memory::MemoryScalar,
+        next: high::CompuId,
+    },
+    FinishStore {
+        source: high::CompuId,
+        scalar: high::memory::MemoryScalar,
+    },
+    LoadNext {
+        source: high::CompuId,
+        env: RenameEnvId,
+        scalar: high::memory::MemoryScalar,
+        result: high::VPatId,
+        next: high::CompuId,
+    },
+    FinishLoad {
+        source: high::CompuId,
+        scalar: high::memory::MemoryScalar,
+        binder: low::VPatId,
+    },
+    FinishHole(high::CompuId),
+    FinishExternCall {
+        source: high::CompuId,
+        function: high::ExternalFunction,
+    },
+    ForceStack {
+        source: high::CompuId,
+        env: RenameEnvId,
+        stack: high::StackId,
+    },
+    FinishForce(high::CompuId),
+    ReturnValue {
+        source: high::CompuId,
+        env: RenameEnvId,
+        value: high::ValueId,
+    },
+    FinishReturn(high::CompuId),
+    ProductMatchBody {
+        source: high::CompuId,
+        env: RenameEnvId,
+        binder: high::VPatId,
+        body: high::CompuId,
+    },
+    FinishProductMatch {
+        source: high::CompuId,
+        binder: low::VPatId,
+    },
+    LetValueTail {
+        source: high::CompuId,
+        env: RenameEnvId,
+        binder: high::VPatId,
+        tail: high::CompuId,
+    },
+    FinishLetValue {
+        source: high::CompuId,
+        binder: low::VPatId,
+    },
+    LetStackTail {
+        source: high::CompuId,
+        env: RenameEnvId,
+        tail: high::CompuId,
+    },
+    FinishLetStack(high::CompuId),
+    LetArgTail {
+        source: high::CompuId,
+        env: RenameEnvId,
+        binder: high::VPatId,
+        tail: high::CompuId,
+    },
+    FinishLetArg {
         source: high::CompuId,
         binder: low::VPatId,
     },
@@ -54,7 +174,23 @@ pub(super) enum Work {
         arms: Vec<low::Matcher<low::VPatId, low::CompuId>>,
         binder: low::VPatId,
     },
-    CoCaseArms(high::CompuId, RenameEnvId, usize),
+    CoCaseArms {
+        source: high::CompuId,
+        env: RenameEnvId,
+        position: usize,
+        /// The destructor of each arm scheduled so far, in arm order.
+        dtors: Vec<high::Cons<high::DtorIdx, high::StackVar>>,
+    },
+    FinishCoCase {
+        source: high::CompuId,
+        dtors: Vec<high::Cons<high::DtorIdx, high::StackVar>>,
+    },
+    FixBody {
+        source: high::CompuId,
+        env: RenameEnvId,
+        param: high::DefId,
+        body: high::CompuId,
+    },
     Fix {
         source: high::CompuId,
         captures: Captures,
@@ -81,6 +217,7 @@ pub(super) enum Work {
     FinishCall {
         source: high::CompuId,
         env: RenameEnvId,
+        procedure: high::DefId,
     },
 }
 
@@ -121,6 +258,40 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         self.computations.pop().expect("completed computation child")
     }
 
+    /// The item of a product value at `position`, if any.
+    fn product_item(&self, source: high::ValueId, position: usize) -> Option<high::ValueId> {
+        let high::Value::VCons(high::VCons { items, .. }) =
+            &self.conversion.source.inner.values[&source]
+        else {
+            unreachable!("a product item frame resumes a product value")
+        };
+        items.get(position).copied()
+    }
+
+    /// The arm of a coproduct match at `position`, if any.
+    fn coprod_arm(
+        &self, source: high::CompuId, position: usize,
+    ) -> Option<high::Matcher<high::VPatId, high::CompuId>> {
+        let high::Computation::CoprodMatch(high::SCoprodMatch { arms, .. }) =
+            &self.conversion.source.inner.compus[&source]
+        else {
+            unreachable!("a match arm frame resumes a coproduct match")
+        };
+        arms.get(position).cloned()
+    }
+
+    /// The arm of a stack case at `position`, if any.
+    fn cocase_arm(
+        &self, source: high::CompuId, position: usize,
+    ) -> Option<high::CoMatcher<high::Cons<high::DtorIdx, high::StackVar>, high::CompuId>> {
+        let high::Computation::CoCase(high::SCoMatch { arms, .. }) =
+            &self.conversion.source.inner.compus[&source]
+        else {
+            unreachable!("a case arm frame resumes a stack case")
+        };
+        arms.get(position).cloned()
+    }
+
     fn pattern(&mut self, source: high::VPatId) -> PatternTranslation {
         D::run(&mut pattern::PatternFolder { conversion: self.conversion }, source)
     }
@@ -142,6 +313,11 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         self.values.push(value);
     }
 
+    fn finish_computation(&mut self, source: high::CompuId, compu: impl Into<low::Computation>) {
+        let site = self.conversion.compu_site(source);
+        self.computations.push(compu.into().build(self.conversion, site));
+    }
+
     fn visit_value(&mut self, source: high::ValueId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.values[&source].clone() {
             | high::Value::Hole(_) => self.finish_value(source, low::Hole),
@@ -159,14 +335,26 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                     frame: Work::Closure { source, captures },
                 };
             }
-            | high::Value::Ctor(high::Ctor(_, body)) => {
+            | high::Value::Ctor(high::Ctor(tag, body)) => {
                 return Step::Call {
                     input: Work::Value(body, env),
-                    frame: Work::FinishValue(source),
+                    frame: Work::FinishCtor { source, tag },
                 };
             }
-            | high::Value::VCons(_) | high::Value::Primitive(_) | high::Value::AddrOffset(_) => {
-                return Step::TailCall(Work::ValueChildren(source, env, 0));
+            | high::Value::VCons(high::VCons { layout, .. }) => {
+                return Step::TailCall(Work::ProductItems { source, env, position: 0, layout });
+            }
+            | high::Value::Primitive(high::Primitive { operation, operands: [first, second] }) => {
+                return Step::Call {
+                    input: Work::Value(first, env),
+                    frame: Work::PrimitiveOperand { source, env, operation, operand: second },
+                };
+            }
+            | high::Value::AddrOffset(high::AddrOffset { base, displacement }) => {
+                return Step::Call {
+                    input: Work::Value(base, env),
+                    frame: Work::OffsetDisplacement { source, env, displacement },
+                };
             }
         }
         Step::Return(())
@@ -184,26 +372,26 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                     frame: Work::StackRest { source, rest, env },
                 };
             }
-            | high::Stack::Tag(high::Cons(_, rest)) => {
+            | high::Stack::Tag(high::Cons(tag, rest)) => {
                 return Step::Call {
                     input: Work::Stack(rest, env),
-                    frame: Work::FinishStack(source),
+                    frame: Work::FinishTag { source, tag },
                 };
             }
-            | high::Stack::Kont(high::Kont { binder, body }) => {
+            | high::Stack::Kont(high::Kont { binder: result, body }) => {
                 let excluded = self
                     .conversion
                     .variables
-                    .bound_variables(binder)
+                    .bound_variables(result)
                     .expect("validated continuation binder")
                     .clone();
                 let captures = self.captures(body, excluded, env);
-                let PatternTranslation { pattern: binder, bindings } = self.pattern(binder);
+                let PatternTranslation { pattern: binder, bindings } = self.pattern(result);
                 let env = self.conversion.extend_env(env, captures.bindings.iter().copied());
                 let env = self.conversion.extend_env(env, bindings);
                 return Step::Call {
                     input: Work::Computation(body, env),
-                    frame: Work::Continuation { source, binder, captures },
+                    frame: Work::Continuation { source, binder, result, captures },
                 };
             }
         }
@@ -212,41 +400,80 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
 
     fn visit_computation(&mut self, source: high::CompuId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.compus[&source].clone() {
-            | high::Computation::Compare(_) => {
-                Step::TailCall(Work::ComparisonChildren(source, env, 0))
+            | high::Computation::Compare(branch) => {
+                Step::TailCall(Work::CompareChildren { source, env, position: 0, branch })
             }
-            | high::Computation::Memory(high::MemoryStep::Load { address, .. }) => Step::Call {
+            | high::Computation::Memory(high::MemoryStep::Load {
+                scalar,
+                address,
+                result,
+                next,
+            }) => Step::Call {
                 input: Work::Value(address, env),
-                frame: Work::AfterValue(source, env),
+                frame: Work::LoadNext { source, env, scalar, result, next },
             },
-            | high::Computation::Memory(high::MemoryStep::Store { value, .. }) => Step::Call {
+            | high::Computation::Memory(high::MemoryStep::Store {
+                scalar,
+                address,
+                value,
+                next,
+            }) => Step::Call {
                 input: Work::Value(value, env),
-                frame: Work::StoreAddress(source, env),
+                frame: Work::StoreAddress { source, env, scalar, address, next },
             },
-            | high::Computation::Hole(high::SHole(stack))
-            | high::Computation::ExternCall(high::ExternCall { stack, .. }) => Step::Call {
+            | high::Computation::Hole(high::SHole(stack)) => {
+                Step::Call { input: Work::Stack(stack, env), frame: Work::FinishHole(source) }
+            }
+            | high::Computation::ExternCall(high::ExternCall { function, stack }) => Step::Call {
                 input: Work::Stack(stack, env),
-                frame: Work::FinishComputation(source),
+                frame: Work::FinishExternCall { source, function },
             },
-            | high::Computation::Force(high::SForce { thunk, .. }) => {
-                Step::Call { input: Work::Value(thunk, env), frame: Work::AfterValue(source, env) }
+            | high::Computation::Force(high::SForce { thunk, stack }) => Step::Call {
+                input: Work::Value(thunk, env),
+                frame: Work::ForceStack { source, env, stack },
+            },
+            | high::Computation::ProductMatch(high::SProductMatch { scrut, binder, body }) => {
+                Step::Call {
+                    input: Work::Value(scrut, env),
+                    frame: Work::ProductMatchBody { source, env, binder, body },
+                }
             }
-            | high::Computation::ProductMatch(high::SProductMatch { scrut, .. })
-            | high::Computation::CoprodMatch(high::SCoprodMatch { scrut, .. })
-            | high::Computation::Join(high::LetJoin::Value(high::Let {
-                bindee: scrut, ..
-            })) => {
-                Step::Call { input: Work::Value(scrut, env), frame: Work::AfterValue(source, env) }
+            | high::Computation::CoprodMatch(high::SCoprodMatch { scrut, .. }) => Step::Call {
+                input: Work::Value(scrut, env),
+                frame: Work::MatchArms { source, env, position: 0, arms: Vec::new() },
+            },
+            | high::Computation::Join(high::LetJoin::Value(high::Let { binder, bindee, tail })) => {
+                Step::Call {
+                    input: Work::Value(bindee, env),
+                    frame: Work::LetValueTail { source, env, binder, tail },
+                }
             }
-            | high::Computation::Ret(high::SReturn { stack, .. })
-            | high::Computation::Fix(high::SFix { stack, .. })
-            | high::Computation::Join(high::LetJoin::Stack(high::Let {
-                bindee: stack, ..
-            }))
-            | high::Computation::LetArg(high::Let { bindee: stack, .. })
-            | high::Computation::CoCase(high::SCoMatch { scrut: stack, .. }) => {
-                Step::Call { input: Work::Stack(stack, env), frame: Work::AfterStack(source, env) }
+            | high::Computation::Ret(high::SReturn { stack, value }) => Step::Call {
+                input: Work::Stack(stack, env),
+                frame: Work::ReturnValue { source, env, value },
+            },
+            | high::Computation::Fix(high::SFix { param, stack, body }) => Step::Call {
+                input: Work::Stack(stack, env),
+                frame: Work::FixBody { source, env, param, body },
+            },
+            | high::Computation::Join(high::LetJoin::Stack(high::Let { bindee, tail, .. })) => {
+                Step::Call {
+                    input: Work::Stack(bindee, env),
+                    frame: Work::LetStackTail { source, env, tail },
+                }
             }
+            | high::Computation::LetArg(high::Let {
+                binder: high::Cons(binder, _),
+                bindee,
+                tail,
+            }) => Step::Call {
+                input: Work::Stack(bindee, env),
+                frame: Work::LetArgTail { source, env, binder, tail },
+            },
+            | high::Computation::CoCase(high::SCoMatch { scrut, .. }) => Step::Call {
+                input: Work::Stack(scrut, env),
+                frame: Work::CoCaseArms { source, env, position: 0, dtors: Vec::new() },
+            },
             | high::Computation::LetProc(high::LetProc { procedure, body, tail, .. }) => {
                 let Some(kind) = self.conversion.procedures[&source] else {
                     // No call reaches the procedure, so its body is dead.
@@ -279,23 +506,21 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
                     },
                 }
             }
-            | high::Computation::CallProc(high::CallProc { stack, .. }) => Step::Call {
+            | high::Computation::CallProc(high::CallProc { procedure, stack }) => Step::Call {
                 input: Work::Stack(stack, env),
-                frame: Work::FinishCall { source, env },
+                frame: Work::FinishCall { source, env, procedure },
             },
         }
     }
 
+    /// Translate a binder, then convert the body it scopes over under `frame`.
     fn binding_body(
-        &mut self, source: high::CompuId, binder: high::VPatId, body: high::CompuId,
-        env: RenameEnvId,
+        &mut self, binder: high::VPatId, body: high::CompuId, env: RenameEnvId,
+        frame: impl FnOnce(low::VPatId) -> Work,
     ) -> Step<Self> {
         let PatternTranslation { pattern: binder, bindings } = self.pattern(binder);
         let env = self.conversion.extend_env(env, bindings);
-        Step::Call {
-            input: Work::Computation(body, env),
-            frame: Work::FinishBinding { source, binder },
-        }
+        Step::Call { input: Work::Computation(body, env), frame: frame(binder) }
     }
 }
 
@@ -313,107 +538,112 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
             | Work::Value(source, env) => return self.visit_value(source, env),
             | Work::Stack(source, env) => return self.visit_stack(source, env),
             | Work::Computation(source, env) => return self.visit_computation(source, env),
-            | Work::ComparisonChildren(source, env, position) => {
-                let high::Computation::Compare(high::CompareBranch {
-                    operation,
-                    operands,
-                    when_true,
-                    when_false,
-                }) = self.conversion.source.inner.compus[&source]
-                else {
-                    unreachable!("comparison branch")
-                };
+            | Work::CompareChildren { source, env, position, branch } => {
                 let input = match position {
-                    | 0 | 1 => Some(Work::Value(operands[position], env)),
-                    | 2 => Some(Work::Computation(when_true, env)),
-                    | 3 => Some(Work::Computation(when_false, env)),
+                    | 0 | 1 => Some(Work::Value(branch.operands[position], env)),
+                    | 2 => Some(Work::Computation(branch.when_true, env)),
+                    | 3 => Some(Work::Computation(branch.when_false, env)),
                     | _ => None,
                 };
                 if let Some(input) = input {
                     return Step::Call {
                         input,
-                        frame: Work::ComparisonChildren(source, env, position + 1),
+                        frame: Work::CompareChildren {
+                            source,
+                            env,
+                            position: position + 1,
+                            branch,
+                        },
                     };
                 }
                 let when_false = self.computation();
                 let when_true = self.computation();
                 let second = self.value();
                 let first = self.value();
-                let site = self.conversion.compu_site(source);
                 let node = low::CompareBranch {
-                    operation,
+                    operation: branch.operation,
                     operands: [first, second],
                     when_true,
                     when_false,
-                }
-                .build(self.conversion, site);
-                self.computations.push(node);
-            }
-            | Work::StoreAddress(source, env) => {
-                let high::Computation::Memory(high::MemoryStep::Store { address, .. }) =
-                    self.conversion.source.inner.compus[&source]
-                else {
-                    unreachable!()
                 };
+                self.finish_computation(source, node);
+            }
+            | Work::StoreAddress { source, env, scalar, address, next } => {
                 return Step::Call {
                     input: Work::Value(address, env),
-                    frame: Work::StoreBody(source, env),
+                    frame: Work::StoreNext { source, env, scalar, next },
                 };
             }
-            | Work::StoreBody(source, env) => {
-                let high::Computation::Memory(high::MemoryStep::Store { next, .. }) =
-                    self.conversion.source.inner.compus[&source]
-                else {
-                    unreachable!()
-                };
+            | Work::StoreNext { source, env, scalar, next } => {
                 return Step::Call {
                     input: Work::Computation(next, env),
-                    frame: Work::FinishComputation(source),
+                    frame: Work::FinishStore { source, scalar },
                 };
             }
-            | Work::ValueChildren(source, env, position) => {
-                let child = match &self.conversion.source.inner.values[&source] {
-                    | high::Value::VCons(high::VCons { items, .. }) => items.get(position),
-                    | high::Value::Primitive(high::Primitive { operands, .. }) => {
-                        operands.get(position)
-                    }
-                    | high::Value::AddrOffset(high::AddrOffset { base, displacement }) => {
-                        match position {
-                            | 0 => Some(base),
-                            | 1 => Some(displacement),
-                            | _ => None,
-                        }
-                    }
-                    | _ => unreachable!("value fields"),
-                };
-                return match child {
-                    | Some(&child) => Step::Call {
-                        input: Work::Value(child, env),
-                        frame: Work::ValueChildren(source, env, position + 1),
+            | Work::FinishStore { source, scalar } => {
+                let address = self.value();
+                let value = self.value();
+                let next = self.computation();
+                self.finish_computation(
+                    source,
+                    low::MemoryStep::Store { scalar, address, value, next },
+                );
+            }
+            | Work::LoadNext { source, env, scalar, result, next } => {
+                return self.binding_body(result, next, env, |binder| Work::FinishLoad {
+                    source,
+                    scalar,
+                    binder,
+                });
+            }
+            | Work::FinishLoad { source, scalar, binder } => {
+                let next = self.computation();
+                let address = self.value();
+                self.finish_computation(
+                    source,
+                    low::MemoryStep::Load { scalar, address, result: binder, next },
+                );
+            }
+            | Work::ProductItems { source, env, position, layout } => {
+                return match self.product_item(source, position) {
+                    | Some(item) => Step::Call {
+                        input: Work::Value(item, env),
+                        frame: Work::ProductItems { source, env, position: position + 1, layout },
                     },
-                    | None => Step::TailCall(Work::FinishValue(source)),
+                    | None => {
+                        Step::TailCall(Work::FinishProduct { source, count: position, layout })
+                    }
                 };
             }
-            | Work::FinishValue(source) => {
-                let value: low::Value = match self.conversion.source.inner.values[&source].clone() {
-                    | high::Value::Ctor(high::Ctor(tag, _)) => low::Ctor(tag, self.value()).into(),
-                    | high::Value::VCons(high::VCons { items, layout }) => {
-                        let items = self.values.split_off(self.values.len() - items.len());
-                        low::VCons::new(items, layout).into()
-                    }
-                    | high::Value::Primitive(high::Primitive { operation, .. }) => {
-                        let second = self.value();
-                        let first = self.value();
-                        low::Primitive { operation, operands: [first, second] }.into()
-                    }
-                    | high::Value::AddrOffset(_) => {
-                        let displacement = self.value();
-                        let base = self.value();
-                        low::AddrOffset { base, displacement }.into()
-                    }
-                    | _ => unreachable!("value with children"),
+            | Work::FinishProduct { source, count, layout } => {
+                let items = self.values.split_off(self.values.len() - count);
+                self.finish_value(source, low::VCons::new(items, layout));
+            }
+            | Work::PrimitiveOperand { source, env, operation, operand } => {
+                return Step::Call {
+                    input: Work::Value(operand, env),
+                    frame: Work::FinishPrimitive { source, operation },
                 };
-                self.finish_value(source, value);
+            }
+            | Work::FinishPrimitive { source, operation } => {
+                let second = self.value();
+                let first = self.value();
+                self.finish_value(source, low::Primitive { operation, operands: [first, second] });
+            }
+            | Work::OffsetDisplacement { source, env, displacement } => {
+                return Step::Call {
+                    input: Work::Value(displacement, env),
+                    frame: Work::FinishAddrOffset(source),
+                };
+            }
+            | Work::FinishAddrOffset(source) => {
+                let displacement = self.value();
+                let base = self.value();
+                self.finish_value(source, low::AddrOffset { base, displacement });
+            }
+            | Work::FinishCtor { source, tag } => {
+                let body = self.value();
+                self.finish_value(source, low::Ctor(tag, body));
             }
             | Work::Closure { source, captures } => {
                 let body = self.computation();
@@ -438,33 +668,29 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
             | Work::StackRest { source, rest, env } => {
                 return Step::Call {
                     input: Work::Stack(rest, env),
-                    frame: Work::FinishStack(source),
+                    frame: Work::FinishArg(source),
                 };
             }
-            | Work::FinishStack(source) => {
+            | Work::FinishArg(source) => {
                 let rest = self.stack();
-                let stack: low::Stack = match self.conversion.source.inner.stacks[&source].clone() {
-                    | high::Stack::Arg(_) => low::Cons(self.value(), rest).into(),
-                    | high::Stack::Tag(high::Cons(tag, _)) => low::Cons(tag, rest).into(),
-                    | _ => unreachable!("stack with a tail"),
-                };
+                let value = self.value();
                 let site = self.conversion.stack_site(source);
-                self.stacks.push(stack.build(self.conversion, site));
+                self.stacks.push(low::Cons(value, rest).build(self.conversion, site));
             }
-            | Work::Continuation { source, binder, captures } => {
+            | Work::FinishTag { source, tag } => {
+                let rest = self.stack();
+                let site = self.conversion.stack_site(source);
+                self.stacks.push(low::Cons(tag, rest).build(self.conversion, site));
+            }
+            | Work::Continuation { source, binder, result, captures } => {
                 let body = self.computation();
                 let site = self.conversion.stack_site(source);
-                let high::Stack::Kont(high::Kont { binder: original, .. }) =
-                    self.conversion.source.inner.stacks[&source]
-                else {
-                    unreachable!()
-                };
                 let protocol = self
                     .conversion
                     .source
                     .inner
                     .pattern_protocols
-                    .get(&original)
+                    .get(&result)
                     .cloned()
                     .unwrap_or_default();
                 let entry = low::ContinuationEntry {
@@ -498,107 +724,107 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                 self.conversion.arena.inner.continuations.insert_new(package, entry);
                 self.stacks.push(package);
             }
-            | Work::AfterValue(source, env) => {
-                return match self.conversion.source.inner.compus[&source].clone() {
-                    | high::Computation::Force(high::SForce { stack, .. }) => Step::Call {
-                        input: Work::Stack(stack, env),
-                        frame: Work::FinishComputation(source),
-                    },
-                    | high::Computation::ProductMatch(high::SProductMatch {
-                        binder, body, ..
-                    })
-                    | high::Computation::Join(high::LetJoin::Value(high::Let {
-                        binder,
-                        tail: body,
-                        ..
-                    }))
-                    | high::Computation::Memory(high::MemoryStep::Load {
-                        result: binder,
-                        next: body,
-                        ..
-                    }) => self.binding_body(source, binder, body, env),
-                    | high::Computation::CoprodMatch(_) => Step::TailCall(Work::MatchArms {
-                        source,
-                        env,
-                        position: 0,
-                        arms: Vec::new(),
-                    }),
-                    | _ => unreachable!("computation with a value prefix"),
+            | Work::FinishHole(source) => {
+                let stack = self.stack();
+                self.finish_computation(source, low::SHole(stack));
+            }
+            | Work::FinishExternCall { source, function } => {
+                let stack = self.stack();
+                self.finish_computation(source, low::ExternCall { function, stack });
+            }
+            | Work::ForceStack { source, env, stack } => {
+                return Step::Call {
+                    input: Work::Stack(stack, env),
+                    frame: Work::FinishForce(source),
                 };
             }
-            | Work::AfterStack(source, env) => {
-                return match self.conversion.source.inner.compus[&source].clone() {
-                    | high::Computation::Ret(high::SReturn { value, .. }) => Step::Call {
-                        input: Work::Value(value, env),
-                        frame: Work::FinishComputation(source),
-                    },
-                    | high::Computation::Join(high::LetJoin::Stack(high::Let { tail, .. })) => {
-                        Step::Call {
-                            input: Work::Computation(tail, env),
-                            frame: Work::FinishComputation(source),
-                        }
-                    }
-                    | high::Computation::LetArg(high::Let {
-                        binder: high::Cons(binder, _),
-                        tail,
-                        ..
-                    }) => self.binding_body(source, binder, tail, env),
-                    | high::Computation::CoCase(_) => {
-                        Step::TailCall(Work::CoCaseArms(source, env, 0))
-                    }
-                    | high::Computation::Fix(high::SFix { param, body, .. }) => {
-                        let captures = self.captures(body, Context::singleton(param), env);
-                        let recursive = self.conversion.alloc_like(param);
-                        let label = self.conversion.alloc_label("fix");
-                        let env = self.conversion.extend_env(
-                            env,
-                            captures.bindings.iter().copied().chain([(param, recursive)]),
-                        );
-                        Step::Call {
-                            input: Work::Computation(body, env),
-                            frame: Work::Fix { source, captures, recursive, label },
-                        }
-                    }
-                    | _ => unreachable!("computation with a stack prefix"),
-                };
-            }
-            | Work::FinishBinding { source, binder } => {
-                let body = self.computation();
-                let compu: low::Computation = match self.conversion.source.inner.compus[&source] {
-                    | high::Computation::Memory(high::MemoryStep::Load { scalar, .. }) => {
-                        low::MemoryStep::Load {
-                            scalar,
-                            address: self.value(),
-                            result: binder,
-                            next: body,
-                        }
-                        .into()
-                    }
-                    | high::Computation::ProductMatch(_) => {
-                        low::SProductMatch { scrut: self.value(), binder, body }.into()
-                    }
-                    | high::Computation::Join(high::LetJoin::Value(_)) => {
-                        low::LetValue { binder, bindee: self.value(), tail: body }.into()
-                    }
-                    | high::Computation::LetArg(_) => low::LetArg {
-                        binder: low::Cons(binder, low::StackVar),
-                        bindee: self.stack(),
-                        tail: body,
-                    }
-                    .into(),
-                    | _ => unreachable!("binding body"),
-                };
+            | Work::FinishForce(source) => {
                 let site = self.conversion.compu_site(source);
-                self.computations.push(compu.build(self.conversion, site));
+                let package = self.value();
+                let stack = self.stack();
+                let environment_def = self.conversion.alloc_def(VarName("__environment__".into()));
+                let code_def = self.conversion.alloc_def(VarName("__closure_code__".into()));
+                let environment: low::VPatId = environment_def.build(self.conversion, None);
+                let code: low::VPatId = code_def.build(self.conversion, None);
+                let environment_value = environment_def.build(self.conversion, site);
+                let target = code_def.build(self.conversion, site);
+                let argument = low::EntryArgument::Closure { environment: environment_value };
+                let body = low::Jump { target, argument, stack }.build(self.conversion, site);
+                self.finish_computation(
+                    source,
+                    low::OpenClosure { package, environment, code, body },
+                );
+            }
+            | Work::ReturnValue { source, env, value } => {
+                return Step::Call {
+                    input: Work::Value(value, env),
+                    frame: Work::FinishReturn(source),
+                };
+            }
+            | Work::FinishReturn(source) => {
+                let site = self.conversion.compu_site(source);
+                let package = self.stack();
+                let value = self.value();
+                let code_def = self.conversion.alloc_def(VarName("__continuation_code__".into()));
+                let code = code_def.build(self.conversion, None);
+                let target = code_def.build(self.conversion, site);
+                let stack = low::StackVar.build(self.conversion, site);
+                let argument = low::EntryArgument::Continuation { result: value };
+                let body = low::Jump { target, argument, stack }.build(self.conversion, site);
+                self.finish_computation(source, low::OpenContinuation { package, code, body });
+            }
+            | Work::ProductMatchBody { source, env, binder, body } => {
+                return self.binding_body(binder, body, env, |binder| Work::FinishProductMatch {
+                    source,
+                    binder,
+                });
+            }
+            | Work::FinishProductMatch { source, binder } => {
+                let body = self.computation();
+                let scrut = self.value();
+                self.finish_computation(source, low::SProductMatch { scrut, binder, body });
+            }
+            | Work::LetValueTail { source, env, binder, tail } => {
+                return self.binding_body(binder, tail, env, |binder| Work::FinishLetValue {
+                    source,
+                    binder,
+                });
+            }
+            | Work::FinishLetValue { source, binder } => {
+                let tail = self.computation();
+                let bindee = self.value();
+                self.finish_computation(source, low::LetValue { binder, bindee, tail });
+            }
+            | Work::LetStackTail { source, env, tail } => {
+                return Step::Call {
+                    input: Work::Computation(tail, env),
+                    frame: Work::FinishLetStack(source),
+                };
+            }
+            | Work::FinishLetStack(source) => {
+                let bindee = self.stack();
+                let tail = self.computation();
+                self.finish_computation(
+                    source,
+                    low::LetStack { binder: low::StackVar, bindee, tail },
+                );
+            }
+            | Work::LetArgTail { source, env, binder, tail } => {
+                return self.binding_body(binder, tail, env, |binder| Work::FinishLetArg {
+                    source,
+                    binder,
+                });
+            }
+            | Work::FinishLetArg { source, binder } => {
+                let tail = self.computation();
+                let bindee = self.stack();
+                self.finish_computation(
+                    source,
+                    low::LetArg { binder: low::Cons(binder, low::StackVar), bindee, tail },
+                );
             }
             | Work::MatchArms { source, env, position, arms } => {
-                let high::Computation::CoprodMatch(high::SCoprodMatch { arms: originals, .. }) =
-                    &self.conversion.source.inner.compus[&source]
-                else {
-                    unreachable!()
-                };
-                if let Some(arm) = originals.get(position) {
-                    let high::Matcher { binder, tail } = *arm;
+                if let Some(high::Matcher { binder, tail }) = self.coprod_arm(source, position) {
                     let PatternTranslation { pattern: binder, bindings } = self.pattern(binder);
                     let body_env = self.conversion.extend_env(env, bindings);
                     return Step::Call {
@@ -607,9 +833,7 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     };
                 }
                 let scrut = self.value();
-                let site = self.conversion.compu_site(source);
-                self.computations
-                    .push(low::SCoprodMatch { scrut, arms }.build(self.conversion, site));
+                self.finish_computation(source, low::SCoprodMatch { scrut, arms });
             }
             | Work::MatchArm { source, env, position, mut arms, binder } => {
                 arms.push(low::Matcher { binder, tail: self.computation() });
@@ -620,18 +844,43 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     arms,
                 });
             }
-            | Work::CoCaseArms(source, env, position) => {
-                let high::Computation::CoCase(high::SCoMatch { arms, .. }) =
-                    &self.conversion.source.inner.compus[&source]
-                else {
-                    unreachable!()
+            | Work::CoCaseArms { source, env, position, mut dtors } => {
+                return match self.cocase_arm(source, position) {
+                    | Some(high::CoMatcher { dtor, tail }) => {
+                        dtors.push(dtor);
+                        Step::Call {
+                            input: Work::Computation(tail, env),
+                            frame: Work::CoCaseArms { source, env, position: position + 1, dtors },
+                        }
+                    }
+                    | None => Step::TailCall(Work::FinishCoCase { source, dtors }),
                 };
-                return match arms.get(position) {
-                    | Some(arm) => Step::Call {
-                        input: Work::Computation(arm.tail, env),
-                        frame: Work::CoCaseArms(source, env, position + 1),
-                    },
-                    | None => Step::TailCall(Work::FinishComputation(source)),
+            }
+            | Work::FinishCoCase { source, dtors } => {
+                let tails = self.computations.split_off(self.computations.len() - dtors.len());
+                let arms = dtors
+                    .into_iter()
+                    .zip(tails)
+                    .map(|(dtor, tail)| low::CoMatcher { dtor, tail })
+                    .collect();
+                let scrut = self.stack();
+                let site = self.conversion.compu_site(source);
+                let output = low::SCoMatch { scrut, arms }.build(self.conversion, site);
+                if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
+                    self.conversion.arena.inner.case_protocols.insert_new(output, protocol.clone());
+                }
+                self.computations.push(output);
+            }
+            | Work::FixBody { source, env, param, body } => {
+                let captures = self.captures(body, Context::singleton(param), env);
+                let recursive = self.conversion.alloc_like(param);
+                let label = self.conversion.alloc_label("fix");
+                let env = self
+                    .conversion
+                    .extend_env(env, captures.bindings.iter().copied().chain([(param, recursive)]));
+                return Step::Call {
+                    input: Work::Computation(body, env),
+                    frame: Work::Fix { source, captures, recursive, label },
                 };
             }
             | Work::Fix { source, captures, recursive, label } => {
@@ -703,12 +952,7 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                 }
                 self.computations.push(node);
             }
-            | Work::FinishCall { source, env } => {
-                let high::Computation::CallProc(high::CallProc { procedure, .. }) =
-                    self.conversion.source.inner.compus[&source]
-                else {
-                    unreachable!("procedure call")
-                };
+            | Work::FinishCall { source, env, procedure } => {
                 let stack = self.stack();
                 let site = self.conversion.compu_site(source);
                 let label = self.conversion.renamed_def(env, procedure);
@@ -732,80 +976,6 @@ impl<D: Driver> Folder for ConversionFolder<'_, '_, D> {
                     low::JumpLabel { label, stack }.build(self.conversion, site)
                 };
                 self.computations.push(jump);
-            }
-            | Work::FinishComputation(source) => {
-                let site = self.conversion.compu_site(source);
-                let compu: low::Computation = match self.conversion.source.inner.compus[&source]
-                    .clone()
-                {
-                    | high::Computation::Memory(high::MemoryStep::Store { scalar, .. }) => {
-                        let address = self.value();
-                        let value = self.value();
-                        low::MemoryStep::Store { scalar, address, value, next: self.computation() }
-                            .into()
-                    }
-                    | high::Computation::Hole(_) => low::SHole(self.stack()).into(),
-                    | high::Computation::ExternCall(high::ExternCall { function, .. }) => {
-                        low::ExternCall { function, stack: self.stack() }.into()
-                    }
-                    | high::Computation::Force(_) => {
-                        let package = self.value();
-                        let stack = self.stack();
-                        let environment_def =
-                            self.conversion.alloc_def(VarName("__environment__".into()));
-                        let code_def =
-                            self.conversion.alloc_def(VarName("__closure_code__".into()));
-                        let environment: low::VPatId = environment_def.build(self.conversion, None);
-                        let code: low::VPatId = code_def.build(self.conversion, None);
-                        let environment_value = environment_def.build(self.conversion, site);
-                        let target = code_def.build(self.conversion, site);
-                        let argument =
-                            low::EntryArgument::Closure { environment: environment_value };
-                        let body =
-                            low::Jump { target, argument, stack }.build(self.conversion, site);
-                        low::OpenClosure { package, environment, code, body }.into()
-                    }
-                    | high::Computation::Ret(_) => {
-                        let package = self.stack();
-                        let value = self.value();
-                        let code_def =
-                            self.conversion.alloc_def(VarName("__continuation_code__".into()));
-                        let code = code_def.build(self.conversion, None);
-                        let target = code_def.build(self.conversion, site);
-                        let stack = low::StackVar.build(self.conversion, site);
-                        let argument = low::EntryArgument::Continuation { result: value };
-                        let body =
-                            low::Jump { target, argument, stack }.build(self.conversion, site);
-                        low::OpenContinuation { package, code, body }.into()
-                    }
-                    | high::Computation::Join(high::LetJoin::Stack(_)) => low::LetStack {
-                        binder: low::StackVar,
-                        bindee: self.stack(),
-                        tail: self.computation(),
-                    }
-                    .into(),
-                    | high::Computation::CoCase(high::SCoMatch { arms, .. }) => {
-                        let tails =
-                            self.computations.split_off(self.computations.len() - arms.len());
-                        let arms = arms
-                            .into_iter()
-                            .zip(tails)
-                            .map(|(arm, tail)| low::CoMatcher { dtor: arm.dtor, tail })
-                            .collect();
-                        low::SCoMatch { scrut: self.stack(), arms }.into()
-                    }
-                    | _ => unreachable!("ordinary computation reconstruction"),
-                };
-                let output = compu.build(self.conversion, site);
-                if matches!(
-                    self.conversion.source.inner.compus[&source],
-                    high::Computation::CoCase(_)
-                ) && let Some(protocol) =
-                    self.conversion.source.inner.compu_protocols.get(&source)
-                {
-                    self.conversion.arena.inner.case_protocols.insert_new(output, protocol.clone());
-                }
-                self.computations.push(output);
             }
         }
         Step::Return(())
