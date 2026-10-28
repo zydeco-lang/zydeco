@@ -25,10 +25,7 @@ impl TypeId {
             .collect::<Vec<_>>();
         witnesses.sort_unstable();
         if !witnesses.is_empty() {
-            return tycker.err(
-                TyckError::EscapingExistential { witnesses, result: *self },
-                std::panic::Location::caller(),
-            );
+            return tycker.err(TyckError::EscapingExistential { witnesses, result: *self });
         }
 
         let constraints = support
@@ -119,7 +116,7 @@ impl InferenceOccurs {
                 let occurs = match tycker.statics.solus.get(&fill).copied() {
                     | Some(AnnId::Kind(solution)) => self.in_kind(solution, tycker)?,
                     | Some(AnnId::Set | AnnId::Type(_)) => {
-                        return tycker.err(TyckError::SortMismatch, std::panic::Location::caller());
+                        return tycker.err(TyckError::SortMismatch);
                     }
                     | None => false,
                 };
@@ -163,9 +160,7 @@ impl TypeSupportCollector {
                 if self.visiting_fills.insert(fill) {
                     let result = match solution {
                         | Some(AnnId::Type(solution)) => self.visit(solution, tycker),
-                        | Some(AnnId::Set | AnnId::Kind(_)) => {
-                            tycker.err(TyckError::SortMismatch, std::panic::Location::caller())
-                        }
+                        | Some(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch),
                         | None => Ok(()),
                     };
                     self.visiting_fills.remove(&fill);

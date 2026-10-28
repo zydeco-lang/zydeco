@@ -41,18 +41,12 @@ impl BuiltinTypeResolution {
         witnesses.sort_unstable();
 
         match witnesses.as_slice() {
-            | [] => tycker.err_k(
-                TyckError::MissingBuiltinTypeRole { role: self.0 },
-                std::panic::Location::caller(),
-            ),
+            | [] => tycker.err_k(TyckError::MissingBuiltinTypeRole { role: self.0 }),
             | [witness] => {
                 let kind = tycker.statics.annotations_abst[witness];
                 Ok(Alloc::alloc(tycker, *witness, kind, env))
             }
-            | _ => tycker.err_k(
-                TyckError::AmbiguousBuiltinTypeRole { role: self.0, witnesses },
-                std::panic::Location::caller(),
-            ),
+            | _ => tycker.err_k(TyckError::AmbiguousBuiltinTypeRole { role: self.0, witnesses }),
         }
     }
 }
@@ -200,7 +194,7 @@ impl InternalTerm {
                 if let Some(error) =
                     crate::query::internal_judgment(tycker.db, tycker.data, term, env_data)
                 {
-                    tycker.err_k(error, std::panic::Location::caller())?
+                    tycker.err_k(error)?
                 } else {
                     unreachable!("intrinsic rejections are query-produced")
                 }
@@ -275,22 +269,16 @@ impl BuiltinAttachment {
             }
             | ss::BuiltinRole::Value(role) => {
                 let TermAnnId::Type(entry, _) = self.term else {
-                    return tycker.err_k(
-                        TyckError::InvalidBuiltinAttachment {
-                            role: self.role,
-                            expected: "a named value classifier",
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err_k(TyckError::InvalidBuiltinAttachment {
+                        role: self.role,
+                        expected: "a named value classifier",
+                    });
                 };
                 let ss::Type::Label(_) = tycker.type_filled_k(&entry)?.to_owned() else {
-                    return tycker.err_k(
-                        TyckError::InvalidBuiltinAttachment {
-                            role: self.role,
-                            expected: "a named value classifier",
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err_k(TyckError::InvalidBuiltinAttachment {
+                        role: self.role,
+                        expected: "a named value classifier",
+                    });
                 };
                 let result =
                     tycker.statics.builtin_roles.attach_value(entry, role).map_err(|existing| {
@@ -317,22 +305,13 @@ impl BuiltinAttachment {
         &self, tycker: &mut Tycker<'_>, expected: &'static str,
     ) -> ResultKont<(ss::AbstId, ss::KindId)> {
         let TermAnnId::Type(entry, _) = self.term else {
-            return tycker.err_k(
-                TyckError::InvalidBuiltinAttachment { role: self.role, expected },
-                std::panic::Location::caller(),
-            );
+            return tycker.err_k(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
         };
         let ss::Type::Exists(exists) = tycker.type_filled_k(&entry)?.to_owned() else {
-            return tycker.err_k(
-                TyckError::InvalidBuiltinAttachment { role: self.role, expected },
-                std::panic::Location::caller(),
-            );
+            return tycker.err_k(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
         };
         if !matches!(exists.mode, ss::ExistsMode::Abstract) {
-            return tycker.err_k(
-                TyckError::InvalidBuiltinAttachment { role: self.role, expected },
-                std::panic::Location::caller(),
-            );
+            return tycker.err_k(TyckError::InvalidBuiltinAttachment { role: self.role, expected });
         }
         Ok((exists.binder.witness, exists.binder.payload_kind(tycker)))
     }
@@ -348,8 +327,7 @@ impl ForeignAttachment {
     #[track_caller]
     pub(super) fn register_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
         let TermAnnId::Value(value, classifier) = self.term else {
-            return tycker
-                .err_k(TyckError::InvalidForeignAttachment, std::panic::Location::caller());
+            return tycker.err_k(TyckError::InvalidForeignAttachment);
         };
         tycker.pending_foreign_imports.push(PendingForeignImport {
             value,
@@ -402,10 +380,7 @@ impl Tycker<'_> {
         };
         match self.statics.builtin_roles.transfer_witness(source, target) {
             | Ok(()) => Ok(()),
-            | Err(existing) => self.err(
-                TyckError::ConflictingBuiltinRole { existing, found },
-                std::panic::Location::caller(),
-            ),
+            | Err(existing) => self.err(TyckError::ConflictingBuiltinRole { existing, found }),
         }
     }
 
@@ -423,8 +398,7 @@ impl Tycker<'_> {
     ) -> ResultKont<()> {
         match BuiltinSignatureValidator::new(&self.statics).validate(signature) {
             | Ok(()) => Ok(()),
-            | Err(error) => self
-                .err_k(TyckError::InvalidBuiltinSignature(error), std::panic::Location::caller()),
+            | Err(error) => self.err_k(TyckError::InvalidBuiltinSignature(error)),
         }
     }
 

@@ -12,9 +12,7 @@ impl TermChecker<'_> {
             let vtype = match switch {
                 | Switch::Syn => vtype,
                 | Switch::Ana(ann) => {
-                    let AnnId::Kind(ann_kd) = ann else {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                    };
+                    let AnnId::Kind(ann_kd) = ann else { tycker.err_k(TyckError::SortMismatch)? };
                     Lub::lub_k(vtype, ann_kd, tycker)?
                 }
             };
@@ -23,7 +21,7 @@ impl TermChecker<'_> {
                 .map(|su::DataArm { name, param }| {
                     let checked = self.mk(param).tyck_k(tycker, Action::ana(vtype.into()))?;
                     let TermAnnId::Type(ty, _) = checked else {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        tycker.err_k(TyckError::SortMismatch)?
                     };
                     Ok((name, ty))
                 })
@@ -57,9 +55,7 @@ impl TermChecker<'_> {
             let ctype = match switch {
                 | Switch::Syn => ctype,
                 | Switch::Ana(ann) => {
-                    let AnnId::Kind(ann_kd) = ann else {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                    };
+                    let AnnId::Kind(ann_kd) = ann else { tycker.err_k(TyckError::SortMismatch)? };
                     Lub::lub_k(ctype, ann_kd, tycker)?
                 }
             };
@@ -68,7 +64,7 @@ impl TermChecker<'_> {
                 .map(|su::CoDataArm { name, out }| {
                     let checked = self.mk(out).tyck_k(tycker, Action::ana(ctype.into()))?;
                     let TermAnnId::Type(ty, _) = checked else {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        tycker.err_k(TyckError::SortMismatch)?
                     };
                     Ok((name, ty))
                 })
@@ -100,30 +96,20 @@ impl TermChecker<'_> {
         Ok({
             let su::Ctor(ctor, arg) = term;
             let ana_ty = match switch {
-                | Switch::Syn => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
-                }
+                | Switch::Syn => tycker.err_k(TyckError::MissingAnnotation)?,
                 | Switch::Ana(ann) => ann,
             };
-            let AnnId::Type(ana_ty) = ana_ty else {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            };
+            let AnnId::Type(ana_ty) = ana_ty else { tycker.err_k(TyckError::SortMismatch)? };
             let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
             let ss::Type::Data(data_id) = tycker.type_filled_k(&ana_ty_unroll)? else {
-                tycker.err_k(
-                    TyckError::TypeExpected {
-                        expected: "data type definition".to_string(),
-                        found: ana_ty_unroll,
-                    },
-                    std::panic::Location::caller(),
-                )?
+                tycker.err_k(TyckError::TypeExpected {
+                    expected: "data type definition".to_string(),
+                    found: ana_ty_unroll,
+                })?
             };
             let arg_ty = match tycker.statics.datas[&data_id].get(&ctor) {
                 | Some(ty) => ty.to_owned(),
-                | None => tycker.err_k(
-                    TyckError::UnknownDataConstructor(ctor.clone()),
-                    std::panic::Location::caller(),
-                )?,
+                | None => tycker.err_k(TyckError::UnknownDataConstructor(ctor.clone()))?,
             };
             let arg_out_ann = self.mk(arg).tyck_k(tycker, Action::ana(arg_ty.into()))?;
             let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
@@ -151,11 +137,7 @@ impl TermChecker<'_> {
         Ok({
             let su::Match { scrut, arms } = term;
             let scrut_out_ann = self.mk(scrut).tyck_k(tycker, Action::syn())?;
-            let (scrut, scrut_ty) = scrut_out_ann.try_as_value(
-                tycker,
-                TyckError::SortMismatch,
-                std::panic::Location::caller(),
-            )?;
+            let (scrut, scrut_ty) = scrut_out_ann.try_as_value(tycker, TyckError::SortMismatch)?;
             let scrut_ty_unroll = scrut_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
             // hint the scrut to be associated with the data type
             match tycker.type_filled_k(&scrut_ty_unroll)? {
@@ -171,11 +153,7 @@ impl TermChecker<'_> {
                     let binding = self
                         .mk(binder)
                         .tyck_k(tycker, PatternAction::ana(scrut_ty_unroll.into()))?;
-                    let (binder, _) = binding.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
+                    let (binder, _) = binding.try_as_value(tycker, TyckError::SortMismatch)?;
                     let action = match switch {
                         | Switch::Syn => Action::syn(),
                         | Switch::Ana(annotation) => Action::ana(annotation),
@@ -184,9 +162,7 @@ impl TermChecker<'_> {
                     let tail = TyEnvT::new(binding.info.clone(), tail).tyck_k(tycker, action)?;
                     let ty = match tail {
                         | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => ty,
-                        | _ => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
+                        | _ => tycker.err_k(TyckError::SortMismatch)?,
                     };
                     let joined = tycker.guarded(|tycker| {
                         tycker.tasks.push_back_mut(TyckTask::Term(source_tail, switch));
@@ -202,10 +178,8 @@ impl TermChecker<'_> {
                 .collect_k::<Vec<_>>()?;
             let ty = match (result_type, switch) {
                 | (Some(ty), _) | (None, Switch::Ana(AnnId::Type(ty))) => ty,
-                | (None, Switch::Syn) => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
-                }
-                | _ => tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                | (None, Switch::Syn) => tycker.err_k(TyckError::MissingAnnotation)?,
+                | _ => tycker.err_k(TyckError::SortMismatch)?,
             };
             let kind = tycker.statics.type_kind(ty);
             if matches!(tycker.kind_filled_k(&kind)?, ss::Kind::VType(_)) {
@@ -250,12 +224,10 @@ impl TermChecker<'_> {
     ) -> ResultKont<TermAnnId> {
         Ok({
             let expected = match switch {
-                | Switch::Syn => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
-                }
+                | Switch::Syn => tycker.err_k(TyckError::MissingAnnotation)?,
                 | Switch::Ana(AnnId::Type(expected)) => expected,
                 | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    tycker.err_k(TyckError::SortMismatch)?
                 }
             };
             let computation = CopatternElaborator::new(self.inner, term, expected, &self.info)
@@ -271,25 +243,18 @@ impl TermChecker<'_> {
         Ok({
             let su::CoMatch { arms: comatchers } = term;
             let ana_ty = match switch {
-                | Switch::Syn => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
-                }
+                | Switch::Syn => tycker.err_k(TyckError::MissingAnnotation)?,
                 | Switch::Ana(ana) => match ana {
-                    | AnnId::Set | AnnId::Kind(_) => {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                    }
+                    | AnnId::Set | AnnId::Kind(_) => tycker.err_k(TyckError::SortMismatch)?,
                     | AnnId::Type(ana_ty) => ana_ty,
                 },
             };
             let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
             let ss::Type::CoData(codata_id) = tycker.type_filled_k(&ana_ty_unroll)? else {
-                tycker.err_k(
-                    TyckError::TypeExpected {
-                        expected: "codata type definition".to_string(),
-                        found: ana_ty_unroll,
-                    },
-                    std::panic::Location::caller(),
-                )?
+                tycker.err_k(TyckError::TypeExpected {
+                    expected: "codata type definition".to_string(),
+                    found: ana_ty_unroll,
+                })?
             };
             let arms = tycker.statics.codatas[&codata_id].clone();
             let comatchers_new = comatchers
@@ -297,14 +262,11 @@ impl TermChecker<'_> {
                 .map(|su::CoMatcher { dtor, tail }| {
                     let arm_ty = match arms.get(&dtor) {
                         | Some(arm_ty) => arm_ty,
-                        | None => tycker.err_k(
-                            TyckError::UnknownCoDataDestructor(dtor.clone()),
-                            std::panic::Location::caller(),
-                        )?,
+                        | None => tycker.err_k(TyckError::UnknownCoDataDestructor(dtor.clone()))?,
                     };
                     let tail_out_ann = self.mk(tail).tyck_k(tycker, Action::ana(arm_ty.into()))?;
                     let TermAnnId::Compu(tail, _ty) = tail_out_ann else {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        tycker.err_k(TyckError::SortMismatch)?
                     };
                     Ok(ss::CoMatcher { dtor, tail })
                 })
@@ -335,26 +297,20 @@ impl TermChecker<'_> {
             let su::Dtor(body, dtor) = term;
             let body_out_ann = self.mk(body).tyck_k(tycker, Action::syn())?;
             let TermAnnId::Compu(body, ty_body) = body_out_ann else {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                tycker.err_k(TyckError::SortMismatch)?
             };
             let ty_body_unroll = ty_body.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
             let ss::Type::CoData(codata_id) = tycker.type_filled_k(&ty_body_unroll)? else {
-                tycker.err_k(
-                    TyckError::TypeExpected {
-                        expected: "codata type definition".to_string(),
-                        found: ty_body_unroll,
-                    },
-                    std::panic::Location::caller(),
-                )?
+                tycker.err_k(TyckError::TypeExpected {
+                    expected: "codata type definition".to_string(),
+                    found: ty_body_unroll,
+                })?
             };
             // hint the body to be associated with the codata type
             let _ = tycker.statics.codata_hints.upsert(body, codata_id);
             let whole_ty = match tycker.statics.codatas[&codata_id].get(&dtor) {
                 | Some(ty) => ty.to_owned(),
-                | None => tycker.err_k(
-                    TyckError::UnknownCoDataDestructor(dtor.clone()),
-                    std::panic::Location::caller(),
-                )?,
+                | None => tycker.err_k(TyckError::UnknownCoDataDestructor(dtor.clone()))?,
             };
             match switch {
                 | Switch::Syn => {
@@ -367,9 +323,7 @@ impl TermChecker<'_> {
                     TermAnnId::Compu(outcome.id, outcome.ann)
                 }
                 | Switch::Ana(ana) => {
-                    let AnnId::Type(ana_ty) = ana else {
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                    };
+                    let AnnId::Type(ana_ty) = ana else { tycker.err_k(TyckError::SortMismatch)? };
                     let whole_ty = Lub::lub_k(ana_ty, whole_ty, tycker)?;
                     let input =
                         crate::query::InternedDtorInput::new(tycker.db, body, dtor, whole_ty);

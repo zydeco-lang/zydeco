@@ -308,7 +308,7 @@ impl<'a, 'db> StaticElaborator<'a, 'db> {
         if self.purpose == Purpose::Inspect {
             return Err(KontFailure);
         }
-        self.tycker.err_k(TyckError::StaticElimination(error), std::panic::Location::caller())
+        self.tycker.err_k(TyckError::StaticElimination(error))
     }
 
     fn ty(&mut self, ty: TypeId, env: &Environment) -> ResultKont<TypeId> {

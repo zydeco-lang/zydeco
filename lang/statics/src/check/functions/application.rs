@@ -87,10 +87,10 @@ impl<'a> PackPiInstantiationState<'a> {
 
     #[track_caller]
     fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> ResultKont<T> {
-        tycker.err_k(
-            TyckError::PackageWitnessArityMismatch { expected: self.expected, found: self.found },
-            std::panic::Location::caller(),
-        )
+        tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            expected: self.expected,
+            found: self.found,
+        })
     }
 }
 
@@ -129,19 +129,14 @@ impl ValuePiInstantiation {
                 let crate::elaborate::static_values::StaticShape::Package(witnesses, payload) =
                     shape
                 else {
-                    return tycker.err_k(
-                        TyckError::PackageWitnessesUnavailable { package: argument },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker
+                        .err_k(TyckError::PackageWitnessesUnavailable { package: argument });
                 };
                 if witnesses.len() != *prefix {
-                    return tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: *prefix,
-                            found: witnesses.len(),
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        expected: *prefix,
+                        found: witnesses.len(),
+                    });
                 }
                 let mut tail_domain = domain;
                 for witness in witnesses {
@@ -160,10 +155,9 @@ impl ValuePiInstantiation {
                             manifest.body
                         }
                         | _ => {
-                            return tycker.err_k(
-                                TyckError::PackageWitnessesUnavailable { package: argument },
-                                std::panic::Location::caller(),
-                            );
+                            return tycker.err_k(TyckError::PackageWitnessesUnavailable {
+                                package: argument,
+                            });
                         }
                     };
                 }
@@ -178,10 +172,7 @@ impl ValuePiInstantiation {
             }
             | ss::PackageWitnessProjection::Package { abstracts } => {
                 let Some(witnesses) = shape.witnesses() else {
-                    tycker.err_k(
-                        TyckError::PackageWitnessesUnavailable { package: argument },
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err_k(TyckError::PackageWitnessesUnavailable { package: argument })?
                 };
                 Ok(vec![ProjectedPackageArgument { domain, witnesses, abstracts: *abstracts }])
             }
@@ -190,28 +181,19 @@ impl ValuePiInstantiation {
                 let ss::Type::Prod(ss::Prod(domains)) =
                     tycker.type_filled_k(&domain_view)?.to_owned()
                 else {
-                    tycker.err_k(
-                        TyckError::TypeExpected {
-                            expected: "a product carrying package witnesses".to_string(),
-                            found: domain_view,
-                        },
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err_k(TyckError::TypeExpected {
+                        expected: "a product carrying package witnesses".to_string(),
+                        found: domain_view,
+                    })?
                 };
                 let crate::elaborate::static_values::StaticShape::Product(arguments) = shape else {
-                    tycker.err_k(
-                        TyckError::PackageWitnessesUnavailable { package: argument },
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err_k(TyckError::PackageWitnessesUnavailable { package: argument })?
                 };
                 if projections.len() != domains.len() || domains.len() != arguments.len() {
-                    tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: projections.len(),
-                            found: arguments.len(),
-                        },
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        expected: projections.len(),
+                        found: arguments.len(),
+                    })?
                 }
                 projections.iter().zip(domains).zip(arguments).try_fold(
                     Vec::new(),
@@ -246,22 +228,16 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiInstantiation> {
             |(codomain, consumed), projected| -> ResultKont<_> {
                 let remaining = canonical.get(consumed..).unwrap_or_default();
                 let Some((first, tail)) = remaining.split_first() else {
-                    return tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: canonical.len(),
-                            found: consumed + projected.abstracts,
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        expected: canonical.len(),
+                        found: consumed + projected.abstracts,
+                    });
                 };
                 if projected.abstracts > remaining.len() {
-                    return tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: canonical.len(),
-                            found: consumed + projected.abstracts,
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        expected: canonical.len(),
+                        found: consumed + projected.abstracts,
+                    });
                 }
                 let selected_tail = tail
                     .iter()
@@ -280,13 +256,10 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiInstantiation> {
             },
         )?;
         if consumed != canonical.len() {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: canonical.len(),
-                    found: consumed,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: canonical.len(),
+                found: consumed,
+            })?
         }
         Ok(codomain)
     }
@@ -304,24 +277,19 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
         let binder = self
             .mk(*binder)
             .tyck_k(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
-        let (pattern, domain) =
-            binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (pattern, domain) = binder.try_as_value(tycker, TyckError::SortMismatch)?;
         ValuePatternShape::require_binding_k(tycker, self.inner.binder, pattern)?;
         Lub::lub_k(signature.domain, domain, tycker)?;
 
         let Some(witnesses) = binder.package_telescope_k(tycker)? else {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: signature.witnesses.len(),
-                    found: 0,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: signature.witnesses.len(),
+                found: 0,
+            })?
         };
         let body = TyEnvT::new(binder.info.clone(), *body)
             .tyck_k(tycker, Action::ana(signature.codomain.into()))?;
-        let (body, codomain) =
-            body.try_as_compu(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (body, codomain) = body.try_as_compu(tycker, TyckError::SortMismatch)?;
 
         let mut iter = witnesses.iter();
         let first = *iter.next().expect("a package telescope opens at least one witness");
@@ -360,16 +328,9 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
     ) -> ResultKont<Self::Out> {
         let PackPiElimination { function, argument, signature } = &self.inner;
         let argument = self.mk(*argument).tyck_k(tycker, Action::ana(signature.domain.into()))?;
-        let (argument, _) = argument.try_as_value(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (argument, _) = argument.try_as_value(tycker, TyckError::SortMismatch)?;
         let Some(witnesses) = argument.package_witnesses(tycker) else {
-            tycker.err_k(
-                TyckError::PackageWitnessesUnavailable { package: argument },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::PackageWitnessesUnavailable { package: argument })?
         };
         let codomain = self
             .mk(PackPiInstantiation { signature: signature.clone().into(), witnesses })
@@ -378,9 +339,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
         let codomain = match switch {
             | Switch::Syn => codomain,
             | Switch::Ana(AnnId::Type(expected)) => Lub::lub_k(expected, codomain, tycker)?,
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch)?,
         };
         let input = crate::query::InternedAppInput::new(
             tycker.db,

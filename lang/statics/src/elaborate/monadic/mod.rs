@@ -454,13 +454,10 @@ impl<'a> PackPiWitnessLayoutState<'a> {
 
     #[track_caller]
     fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
-        tycker.err(
-            TyckError::PackageWitnessArityMismatch {
-                expected: self.expected,
-                found: self.expected - self.witnesses.len(),
-            },
-            std::panic::Location::caller(),
-        )
+        tycker.err(TyckError::PackageWitnessArityMismatch {
+            expected: self.expected,
+            found: self.expected - self.witnesses.len(),
+        })
     }
 }
 
@@ -560,13 +557,10 @@ impl<'a> PackPiPatternLayoutState<'a> {
 
     #[track_caller]
     fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
-        tycker.err(
-            TyckError::PackageWitnessArityMismatch {
-                expected: self.expected,
-                found: self.expected - self.witnesses.len(),
-            },
-            std::panic::Location::caller(),
-        )
+        tycker.err(TyckError::PackageWitnessArityMismatch {
+            expected: self.expected,
+            found: self.expected - self.witnesses.len(),
+        })
     }
 }
 
@@ -734,13 +728,10 @@ impl PackPiPatternTranslation {
             }
             | ValuePattern::VCons(components) => {
                 let Type::Prod(Prod(_)) = tycker.type_filled(&translated_ty)?.to_owned() else {
-                    return tycker.err(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: self.layout.len(),
-                            found: 0,
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err(TyckError::PackageWitnessArityMismatch {
+                        expected: self.layout.len(),
+                        found: 0,
+                    });
                 };
                 let mut remaining = self.layout.0.as_slice();
                 let mut env = env;
@@ -756,13 +747,10 @@ impl PackPiPatternTranslation {
                     remaining = rest;
                 }
                 if !remaining.is_empty() {
-                    return tycker.err(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: self.layout.len(),
-                            found: self.layout.len() - remaining.len(),
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err(TyckError::PackageWitnessArityMismatch {
+                        expected: self.layout.len(),
+                        found: self.layout.len() - remaining.len(),
+                    });
                 }
                 let pattern =
                     Alloc::alloc(tycker, ValuePattern::VCons(translated), translated_ty, &env.ty);
@@ -773,10 +761,10 @@ impl PackPiPatternTranslation {
             | ValuePattern::Ctor(_)
             | ValuePattern::Lit(_)
             | ValuePattern::Triv(_)
-            | ValuePattern::View(_) => tycker.err(
-                TyckError::PackageWitnessArityMismatch { expected: self.layout.len(), found: 0 },
-                std::panic::Location::caller(),
-            ),
+            | ValuePattern::View(_) => tycker.err(TyckError::PackageWitnessArityMismatch {
+                expected: self.layout.len(),
+                found: 0,
+            }),
         }
     }
 }
@@ -884,7 +872,7 @@ impl MonConstruct<CompuId> for ReferencedStructure {
         let (env, kind) = cs::TypeOf(self.ty).mbuild(tycker, env)?;
         match tycker.kind_filled(&kind)?.to_owned() {
             | Kind::VType(VType) => cs::Top.mbuild(tycker, env),
-            | _ => tycker.err(TyckError::MissingStructure(self.ty), std::panic::Location::caller()),
+            | _ => tycker.err(TyckError::MissingStructure(self.ty)),
         }
     }
 }
@@ -1136,7 +1124,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         | Type::Var(def) => {
             // substitute according to the environment
             let Some(def_) = env.subst.get(&def).cloned() else {
-                tycker.err(TyckError::NotInlinable(def), std::panic::Location::caller())?
+                tycker.err(TyckError::NotInlinable(def))?
             };
             let alloc = Alloc::alloc(tycker, def_, kd, &env.ty);
             (env, alloc)
@@ -1196,10 +1184,9 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             (env, alloc)
         }
         // primitive types are not allowed in monadic blocks
-        | Type::Opaque(_) => tycker.err(
-            TyckError::Expressivity("opaque checker-test types are unavailable in monadic blocks"),
-            std::panic::Location::caller(),
-        )?,
+        | Type::Opaque(_) => tycker.err(TyckError::Expressivity(
+            "opaque checker-test types are unavailable in monadic blocks",
+        ))?,
         | Type::Primitive(primitive) => PrimitiveTy(primitive.0).mbuild(tycker, env)?,
         | Type::Data(data) => {
             cs::Data(data, |_ctor, ty| cs::TypeLift { ty }).mbuild(tycker, env)?
@@ -1297,10 +1284,10 @@ fn package_pattern_translation(
     let (source_entry, remaining_source_layout) = match source_layout {
         | Some(source_layout) => {
             let Some((&source_entry, remaining)) = source_layout.split_first() else {
-                return tycker.err(
-                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
-                    std::panic::Location::caller(),
-                );
+                return tycker.err(TyckError::PackageWitnessArityMismatch {
+                    expected: witnesses.len(),
+                    found: 0,
+                });
             };
             (Some(source_entry), Some(remaining))
         }
@@ -1312,16 +1299,16 @@ fn package_pattern_translation(
             let Type::ManifestKind(ManifestKind { definition, body: translated_tail_ty, .. }) =
                 tycker.type_filled(&translated_ty)?.to_owned()
             else {
-                return tycker.err(
-                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
-                    std::panic::Location::caller(),
-                );
+                return tycker.err(TyckError::PackageWitnessArityMismatch {
+                    expected: witnesses.len(),
+                    found: 0,
+                });
             };
             if !matches!(source_entry, None | Some(PackPiWitnessLayoutEntry::KindManifest)) {
-                return tycker.err(
-                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
-                    std::panic::Location::caller(),
-                );
+                return tycker.err(TyckError::PackageWitnessArityMismatch {
+                    expected: witnesses.len(),
+                    found: 0,
+                });
             }
             let (env, witness) = kind_pattern_translation(tycker, env, witness, definition)?;
             let (env, body) = package_pattern_translation(
@@ -1342,10 +1329,10 @@ fn package_pattern_translation(
         }
         | StaticPatId::Type(witness) => {
             let Type::Exists(exists) = tycker.type_filled(&translated_ty)?.to_owned() else {
-                return tycker.err(
-                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
-                    std::panic::Location::caller(),
-                );
+                return tycker.err(TyckError::PackageWitnessArityMismatch {
+                    expected: witnesses.len(),
+                    found: 0,
+                });
             };
             let Exists {
                 binder: translated_binder,
@@ -1396,13 +1383,10 @@ fn package_pattern_translation(
                     ),
                     ExistsMode::Abstract,
                 ) => {
-                    return tycker.err(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: witnesses.len(),
-                            found: 0,
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err(TyckError::PackageWitnessArityMismatch {
+                        expected: witnesses.len(),
+                        found: 0,
+                    });
                 }
             };
             let translated_body_ty = if pattern_abst == domain_abst {
@@ -1612,7 +1596,7 @@ fn value_translation(
                     use zydeco_utils::arena::ArenaAccess;
                     // it should then be global and should be in the inlinables
                     let Some(value) = tycker.statics.inlinables.get(&def).cloned() else {
-                        tycker.err(TyckError::NotInlinable(def), std::panic::Location::caller())?
+                        tycker.err(TyckError::NotInlinable(def))?
                     };
                     cs::TermLift { tm: value }.mbuild(tycker, env)?
                 }

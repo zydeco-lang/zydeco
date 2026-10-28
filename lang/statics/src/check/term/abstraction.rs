@@ -13,9 +13,7 @@ impl TermChecker<'_> {
             | Switch::Ana(AnnId::Type(expected)) => {
                 self.check_val_abs_ana_k(tycker, source_binder, source_body, expected)
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
-            }
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch),
         }
     }
 
@@ -27,10 +25,9 @@ impl TermChecker<'_> {
         let binder = self.mk(source_binder).tyck_k(tycker, PatternAction::syn())?;
         let vtype = ss::VType.build(tycker, &self.info);
         let (binder_node, body, classifier) = match binder.inner.annotation {
-            | PatAnnId::Kind(_) => tycker.err_k(
-                TyckError::Expressivity("kind parameters are not supported by value functions"),
-                std::panic::Location::caller(),
-            )?,
+            | PatAnnId::Kind(_) => tycker.err_k(TyckError::Expressivity(
+                "kind parameters are not supported by value functions",
+            ))?,
             | PatAnnId::Type(pattern, _) => {
                 self.check_val_abs_syn_type_binder_k(tycker, &binder, pattern, source_body)?
             }
@@ -60,8 +57,7 @@ impl TermChecker<'_> {
         let body_env =
             TyEnvT::new(binder.info.clone(), Assign(pattern, argument)).tyck_k(tycker, ())?.info;
         let body = TyEnvT::new(body_env, source_body).tyck_k(tycker, Action::syn())?;
-        let (body, codomain) =
-            body.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (body, codomain) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         let classifier = ss::ValPi {
             binder: ss::ValPiBinder::Type(ss::TypeBinder { pattern, witness }),
             codomain,
@@ -74,28 +70,23 @@ impl TermChecker<'_> {
         domain: ss::TypeId, source_body: su::TermId, vtype: ss::KindId,
     ) -> ResultKont<(ss::ValBinder, ss::ValueId, ss::ValPi)> {
         if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-            tycker.err_k(
-                TyckError::Expressivity("value-function parameters must be irrefutable patterns"),
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::Expressivity(
+                "value-function parameters must be irrefutable patterns",
+            ))?
         }
         let domain_kind = tycker.statics.type_kind(domain);
         Lub::lub_k(vtype, domain_kind, tycker)?;
         let body = TyEnvT::new(binder.info.clone(), source_body).tyck_k(tycker, Action::syn())?;
-        let (body, codomain) =
-            body.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (body, codomain) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         let witnesses = binder.package_telescope_k(tycker)?;
         let witness_projection = PackageWitnessProjectionBuilder::build(pattern, tycker)?;
         let projected_arity = PackageWitnessProjectionBuilder::abstract_arity(&witness_projection);
         let witness_arity = witnesses.as_ref().map_or(0, ss::PackTelescope::len);
         if projected_arity != witness_arity {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: witness_arity,
-                    found: projected_arity,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: witness_arity,
+                found: projected_arity,
+            })?
         }
         if witnesses.is_none() {
             binder.close_scope_k(tycker, codomain)?;
@@ -129,13 +120,10 @@ impl TermChecker<'_> {
         Lub::lub_k(vtype, expected_kind, tycker)?;
         let view = expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
         let ss::Type::ValPi(pi) = tycker.type_filled_k(&view)?.to_owned() else {
-            tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a value-function classifier".to_string(),
-                    found: view,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "a value-function classifier".to_string(),
+                found: view,
+            })?
         };
         let ss::ValPi { binder: expected_binder, codomain } = *pi;
         let (binder, body) = match expected_binder {
@@ -165,8 +153,7 @@ impl TermChecker<'_> {
         let domain_kind = expected_binder.domain_kind(tycker);
         let binder =
             self.mk(source_binder).tyck_k(tycker, PatternAction::ana(domain_kind.into()))?;
-        let (pattern, _) =
-            binder.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (pattern, _) = binder.try_as_type(tycker, TyckError::SortMismatch)?;
         let payload_kind = expected_binder.payload_kind(tycker);
         let payload = Alloc::alloc(tycker, expected_binder.witness, payload_kind, &self.info);
         let argument = expected_binder.pattern.introduce_payload(tycker, payload);
@@ -174,8 +161,7 @@ impl TermChecker<'_> {
         let body_env = TyEnvT::new(binder.info, Assign(pattern, argument)).tyck_k(tycker, ())?.info;
         let body = TyEnvT::new(body_env, source_body)
             .tyck_k(tycker, Action::ana_prepared(codomain.into(), &self.info))?;
-        let (body, _) =
-            body.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (body, _) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         Ok((ss::ValBinder::Type(pattern), body))
     }
 
@@ -200,40 +186,31 @@ impl TermChecker<'_> {
         let binder = self
             .mk(source_binder)
             .tyck_k(tycker, PatternAction::ana(parameter.domain.into()).with_skolems(skolems))?;
-        let (pattern, domain) =
-            binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (pattern, domain) = binder.try_as_value(tycker, TyckError::SortMismatch)?;
         Lub::lub_k(parameter.domain, domain, tycker)?;
         if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-            tycker.err_k(
-                TyckError::Expressivity("value-function parameters must be irrefutable patterns"),
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::Expressivity(
+                "value-function parameters must be irrefutable patterns",
+            ))?
         }
         let actual_witnesses = binder.package_telescope_k(tycker)?;
         let actual_projection = PackageWitnessProjectionBuilder::build(pattern, tycker)?;
         match (&parameter.witnesses, &actual_witnesses) {
             | (None, None) => binder.close_scope_k(tycker, codomain)?,
             | (Some(expected), Some(actual)) if expected.len() == actual.len() => {}
-            | (expected, actual) => tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: expected.as_ref().map_or(0, |w| w.len()),
-                    found: actual.as_ref().map_or(0, |w| w.len()),
-                },
-                std::panic::Location::caller(),
-            )?,
+            | (expected, actual) => tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: expected.as_ref().map_or(0, |w| w.len()),
+                found: actual.as_ref().map_or(0, |w| w.len()),
+            })?,
         }
         if parameter.witness_projection != actual_projection {
-            tycker.err_k(
-                TyckError::Expressivity(
-                    "value-function package witness projection does not match its classifier",
-                ),
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::Expressivity(
+                "value-function package witness projection does not match its classifier",
+            ))?
         }
         let body = TyEnvT::new(binder.info, source_body)
             .tyck_k(tycker, Action::ana_prepared(codomain.into(), &self.info))?;
-        let (body, _) =
-            body.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (body, _) = body.try_as_value(tycker, TyckError::SortMismatch)?;
         Ok((ss::ValBinder::Value(pattern), body))
     }
 
@@ -244,9 +221,7 @@ impl TermChecker<'_> {
         let su::Abs(pat, body) = term;
         match switch {
             | Switch::Syn => self.check_abs_syn_k(tycker, pat, body),
-            | Switch::Ana(AnnId::Set) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
-            }
+            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
             | Switch::Ana(AnnId::Kind(kd)) => self.check_abs_ana_kind_k(tycker, pat, body, kd),
             | Switch::Ana(AnnId::Type(ty)) => self.check_abs_ana_type_k(tycker, pat, body, ty),
         }
@@ -279,7 +254,7 @@ impl TermChecker<'_> {
         let crate::query::AbsSynOutcome::Error(error) = outcome else {
             unreachable!("the rejection arms of abstraction judgments are query-produced")
         };
-        tycker.err_k(error, std::panic::Location::caller())
+        tycker.err_k(error)
     }
 
     fn check_abs_syn_type_binder_k<'db>(
@@ -341,12 +316,9 @@ impl TermChecker<'_> {
                 tycker.statics.env_compu.insert_new(abs_id, self.info.clone());
                 Ok(TermAnnId::Compu(abs_id, ann_id))
             }
-            | TermAnnId::Value(_, _) => tycker.err_k(
-                TyckError::Expressivity(
-                    "use `val` or block-form `param val` to introduce a pure value function",
-                ),
-                std::panic::Location::caller(),
-            ),
+            | TermAnnId::Value(_, _) => tycker.err_k(TyckError::Expressivity(
+                "use `val` or block-form `param val` to introduce a pure value function",
+            )),
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
                 self.reject_abs_syn_k(tycker, crate::query::AbsSynArm::SortMismatch)
             }
@@ -363,12 +335,9 @@ impl TermChecker<'_> {
         let body_out_ann =
             TyEnvT::new(pat_out_ann.info.clone(), body).tyck_k(tycker, Action::syn())?;
         match body_out_ann {
-            | TermAnnId::Value(_, _) => tycker.err_k(
-                TyckError::Expressivity(
-                    "use `val` or block-form `param val` to introduce a pure value function",
-                ),
-                std::panic::Location::caller(),
-            ),
+            | TermAnnId::Value(_, _) => tycker.err_k(TyckError::Expressivity(
+                "use `val` or block-form `param val` to introduce a pure value function",
+            )),
             | TermAnnId::Compu(compu, body_ty) => {
                 let arm = match pat_out_ann.package_telescope_k(tycker)? {
                     | None => {
@@ -425,12 +394,11 @@ impl TermChecker<'_> {
         // type function in f omega
         // expecting a kind arrow
         let ss::Kind::Arrow(kd_arr) = tycker.kind_filled_k(&kd)?.to_owned() else {
-            tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
+            tycker.err_k(TyckError::KindMismatch)?
         };
         let ss::Arrow(kd_1, kd_2) = kd_arr;
         let binder = self.mk(pat).tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
-        let (binder, binder_kd) =
-            binder.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (binder, binder_kd) = binder.try_as_type(tycker, TyckError::SortMismatch)?;
         let witness: ss::AbstId = Alloc::alloc(tycker, binder, (), &());
         let body_env = match binder.try_destruct_def(tycker).0 {
             | Some(def) => {
@@ -441,11 +409,7 @@ impl TermChecker<'_> {
             | None => self.info.clone(),
         };
         let body_out_ann = TyEnvT::new(body_env, body).tyck_k(tycker, Action::ana(kd_2.into()))?;
-        let (body_out, body_kd) = body_out_ann.try_as_type(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (body_out, body_kd) = body_out_ann.try_as_type(tycker, TyckError::SortMismatch)?;
         let ann = Alloc::alloc(tycker, ss::Arrow(binder_kd, body_kd), (), &());
         let abs = Alloc::alloc(
             tycker,
@@ -467,16 +431,11 @@ impl TermChecker<'_> {
         // could be either a term function or a type-polymorphic term function
         let kind = tycker.statics.type_kind(ty);
         let expected = match tycker.kind_filled_k(&kind)?.to_owned() {
-            | ss::Kind::VType(_) => tycker.err_k(
-                TyckError::Expressivity(
-                    "use `val` or block-form `param val` to introduce a pure value function",
-                ),
-                std::panic::Location::caller(),
-            )?,
+            | ss::Kind::VType(_) => tycker.err_k(TyckError::Expressivity(
+                "use `val` or block-form `param val` to introduce a pure value function",
+            ))?,
             | ss::Kind::CType(_) => tycker.type_filled_k(&ty)?.to_owned(),
-            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => {
-                tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
-            }
+            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err_k(TyckError::KindMismatch)?,
         };
         match expected {
             | ss::Type::Arrow(arrow) => self.check_abs_ana_arrow_k(tycker, pat, body, arrow),
@@ -484,15 +443,12 @@ impl TermChecker<'_> {
                 .mk(PackPiIntroduction { binder: pat, body, signature: *signature })
                 .tyck_k(tycker, ()),
             | ss::Type::Forall(forall) => self.check_abs_ana_forall_k(tycker, pat, body, forall),
-            | _ => tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "one of `_ -> _`, a package-dependent \
+            | _ => tycker.err_k(TyckError::TypeExpected {
+                expected: "one of `_ -> _`, a package-dependent \
                                arrow, or `forall _ . _`"
-                        .to_string(),
-                    found: ty,
-                },
-                std::panic::Location::caller(),
-            ),
+                    .to_string(),
+                found: ty,
+            }),
         }
     }
 
@@ -503,19 +459,12 @@ impl TermChecker<'_> {
         // a term-term function
         let ss::Arrow(ty_1, ty_2) = arrow;
         let binder_elaboration = self.mk(pat).tyck_k(tycker, PatternAction::ana(ty_1.into()))?;
-        let (binder, binder_ty) = binder_elaboration.try_as_value(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (binder, binder_ty) =
+            binder_elaboration.try_as_value(tycker, TyckError::SortMismatch)?;
         ValuePatternShape::require_binding_k(tycker, pat, binder)?;
         let body_out_ann = TyEnvT::new(binder_elaboration.info.clone(), body)
             .tyck_k(tycker, Action::ana_prepared(ty_2.into(), &self.info))?;
-        let (body_out, body_ty) = body_out_ann.try_as_compu(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (body_out, body_ty) = body_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?;
         binder_elaboration.close_scope_k(tycker, body_ty)?;
         let ctype = ss::CType.build(tycker, &self.info);
         let ann = Alloc::alloc(tycker, ss::Arrow(binder_ty, body_ty), ctype, &self.info);
@@ -529,8 +478,7 @@ impl TermChecker<'_> {
         let ss::Forall(source_binder, ty_body) = forall;
         let domain_kind = source_binder.domain_kind(tycker);
         let binder = self.mk(pat).tyck_k(tycker, PatternAction::ana(domain_kind.into()))?;
-        let (binder, _binder_kd) =
-            binder.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (binder, _binder_kd) = binder.try_as_type(tycker, TyckError::SortMismatch)?;
         let payload_kind = source_binder.payload_kind(tycker);
         let abst_ty = Alloc::alloc(tycker, source_binder.witness, payload_kind, &self.info);
         let full_argument = source_binder.pattern.introduce_payload(tycker, abst_ty);
@@ -540,11 +488,7 @@ impl TermChecker<'_> {
             .tyck_k(tycker, Action::ana_prepared(ty_body.into(), &self.info))?;
         // throwing _body_ty away because it has been substituted
         // Todo: reuse _body_ty by substituting abst back
-        let (body_out, body_ty) = body_out_ann.try_as_compu(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (body_out, body_ty) = body_out_ann.try_as_compu(tycker, TyckError::SortMismatch)?;
         let ctype = ss::CType.build(tycker, &self.info);
         let ann = Alloc::alloc(tycker, ss::Forall(source_binder, body_ty), ctype, &self.info);
         let abs = Alloc::alloc(tycker, ss::Abs(binder, body_out), ann, &self.info);

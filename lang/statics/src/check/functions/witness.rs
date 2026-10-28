@@ -146,13 +146,10 @@ impl<'a> PackPiWitnessSkolems<'a> {
                     }
                 }
             }
-            | _ => tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: self.expected,
-                    found: self.expected - self.witnesses.len(),
-                },
-                std::panic::Location::caller(),
-            ),
+            | _ => tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: self.expected,
+                found: self.expected - self.witnesses.len(),
+            }),
         }
     }
 }
@@ -220,10 +217,10 @@ impl<'a> PackPiPatternAssignments<'a> {
 
     #[track_caller]
     fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> ResultKont<T> {
-        tycker.err_k(
-            TyckError::PackageWitnessArityMismatch { expected: self.expected, found: self.found },
-            std::panic::Location::caller(),
-        )
+        tycker.err_k(TyckError::PackageWitnessArityMismatch {
+            expected: self.expected,
+            found: self.found,
+        })
     }
 }
 
@@ -252,13 +249,10 @@ impl PackPiPatternSkolems {
             | su::Pattern::Ctor(_)
             | su::Pattern::Lit(_)
             | su::Pattern::Alias(_)
-            | su::Pattern::Triv(_) => tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: self.signature.witnesses.len(),
-                    found: 0,
-                },
-                std::panic::Location::caller(),
-            ),
+            | su::Pattern::Triv(_) => tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: self.signature.witnesses.len(),
+                found: 0,
+            }),
         }
     }
 }
@@ -299,13 +293,10 @@ impl ValuePiPatternSkolems {
                     }
                     | su::Pattern::Project(_) => vec![pattern],
                     | _ => {
-                        return tycker.err_k(
-                            TyckError::PackageWitnessArityMismatch {
-                                expected: *prefix + 1,
-                                found: 0,
-                            },
-                            std::panic::Location::caller(),
-                        );
+                        return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                            expected: *prefix + 1,
+                            found: 0,
+                        });
                     }
                 };
                 let mut tail_domain = domain;
@@ -322,7 +313,6 @@ impl ValuePiPatternSkolems {
                                                 expected: *abstracts,
                                                 found: canonical.len(),
                                             },
-                                            std::panic::Location::caller(),
                                         );
                                     };
                                     remaining = rest;
@@ -335,13 +325,10 @@ impl ValuePiPatternSkolems {
                         }
                         | ss::Type::ManifestKind(manifest) => manifest.body,
                         | _ => {
-                            return tycker.err_k(
-                                TyckError::TypeExpected {
-                                    expected: "a package carrying witnesses".to_string(),
-                                    found: tail_domain,
-                                },
-                                std::panic::Location::caller(),
-                            );
+                            return tycker.err_k(TyckError::TypeExpected {
+                                expected: "a package carrying witnesses".to_string(),
+                                found: tail_domain,
+                            });
                         }
                     };
                 }
@@ -371,13 +358,10 @@ impl ValuePiPatternSkolems {
                     )?,
                     | patterns => {
                         let ss::PackageWitnessProjection::Product(projections) = &**body else {
-                            return tycker.err_k(
-                                TyckError::PackageWitnessArityMismatch {
-                                    expected: 1,
-                                    found: patterns.len(),
-                                },
-                                std::panic::Location::caller(),
-                            );
+                            return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                                expected: 1,
+                                found: patterns.len(),
+                            });
                         };
                         Self::collect_product_k(
                             tycker,
@@ -394,13 +378,10 @@ impl ValuePiPatternSkolems {
             }
             | ss::PackageWitnessProjection::Package { abstracts } => {
                 if *abstracts == 0 || *abstracts > canonical.len() {
-                    return tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: canonical.len(),
-                            found: *abstracts,
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        expected: canonical.len(),
+                        found: *abstracts,
+                    });
                 }
                 let selected = &canonical[..*abstracts];
                 let (&first, rest) = selected.split_first().expect("a package route is nonempty");
@@ -414,13 +395,10 @@ impl ValuePiPatternSkolems {
             }
             | ss::PackageWitnessProjection::Product(projections) => {
                 let su::Pattern::Cons(patterns) = tycker.scoped.pats[&pattern].to_owned() else {
-                    return tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: projections.len(),
-                            found: 0,
-                        },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        expected: projections.len(),
+                        found: 0,
+                    });
                 };
                 Self::collect_product_k(
                     tycker,
@@ -443,22 +421,16 @@ impl ValuePiPatternSkolems {
         let domain_view = domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
         let ss::Type::Prod(ss::Prod(domains)) = tycker.type_filled_k(&domain_view)?.to_owned()
         else {
-            return tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a product carrying package witnesses".to_string(),
-                    found: domain_view,
-                },
-                std::panic::Location::caller(),
-            );
+            return tycker.err_k(TyckError::TypeExpected {
+                expected: "a product carrying package witnesses".to_string(),
+                found: domain_view,
+            });
         };
         if projections.len() != domains.len() || domains.len() != patterns.len() {
-            return tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: projections.len(),
-                    found: patterns.len(),
-                },
-                std::panic::Location::caller(),
-            );
+            return tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: projections.len(),
+                found: patterns.len(),
+            });
         }
         projections.iter().zip(domains).zip(patterns.iter().copied()).try_fold(
             (PatternSkolems::default(), 0usize),
@@ -489,13 +461,10 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiPatternSkolems> {
             self.inner.signature.codomain,
         )?;
         if consumed != canonical.len() {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: canonical.len(),
-                    found: consumed,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: canonical.len(),
+                found: consumed,
+            })?
         }
         Ok(skolems)
     }

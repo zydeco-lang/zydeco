@@ -126,13 +126,10 @@ impl Lub for KindId {
                     Kind::Label(Label(rhs_name, rhs_inner)),
                 ) => {
                     if lhs_name != rhs_name {
-                        tycker.err(
-                            TyckError::NamedLabelMismatch {
-                                expected: lhs_name.clone(),
-                                found: rhs_name,
-                            },
-                            std::panic::Location::caller(),
-                        )?
+                        tycker.err(TyckError::NamedLabelMismatch {
+                            expected: lhs_name.clone(),
+                            found: rhs_name,
+                        })?
                     }
                     let inner = lhs_inner.lub(rhs_inner, tycker)?;
                     Alloc::alloc(tycker, Label(lhs_name, inner), (), &())
@@ -140,9 +137,7 @@ impl Lub for KindId {
                 | (Kind::VType(_), _)
                 | (Kind::CType(_), _)
                 | (Kind::Arrow(_), _)
-                | (Kind::Label(_), _) => {
-                    tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?
-                }
+                | (Kind::Label(_), _) => tycker.err(TyckError::KindMismatch)?,
             },
         };
         Ok(res)
@@ -285,10 +280,9 @@ impl Debruijn {
                 | (Type::CoData(lhs), Type::CoData(rhs)) => {
                     self.lub_codata(lhs, rhs, lhs_id, rhs_id, tycker)?
                 }
-                | (_, _) => tycker.err(
-                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                    std::panic::Location::caller(),
-                )?,
+                | (_, _) => {
+                    tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
+                }
             },
         };
         Ok(res)
@@ -303,10 +297,7 @@ impl Debruijn {
         }
         match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
             | (Some(l), Some(r)) if l == r => Ok(lhs_id),
-            | _ => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            ),
+            | _ => tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id }),
         }
     }
 
@@ -316,10 +307,7 @@ impl Debruijn {
         match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
             | (Some(l), Some(r)) if l == r => Ok(lhs_id),
             | (None, None) if lhs == rhs => Ok(lhs_id),
-            | _ => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            ),
+            | _ => tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id }),
         }
     }
 
@@ -369,10 +357,10 @@ impl Debruijn {
         let Named(lhs_name, lhs_inner) = lhs;
         let Named(rhs_name, rhs_inner) = rhs;
         if lhs_name != rhs_name {
-            tycker.err(
-                TyckError::NamedLabelMismatch { expected: lhs_name.clone(), found: rhs_name },
-                std::panic::Location::caller(),
-            )?
+            tycker.err(TyckError::NamedLabelMismatch {
+                expected: lhs_name.clone(),
+                found: rhs_name,
+            })?
         }
         let inner = self.lub(lhs_inner, rhs_inner, tycker)?;
         if inner == lhs_inner {
@@ -389,10 +377,10 @@ impl Debruijn {
         let Label(lhs_name, lhs_inner) = lhs;
         let Label(rhs_name, rhs_inner) = rhs;
         if lhs_name != rhs_name {
-            tycker.err(
-                TyckError::NamedLabelMismatch { expected: lhs_name.clone(), found: rhs_name },
-                std::panic::Location::caller(),
-            )?
+            tycker.err(TyckError::NamedLabelMismatch {
+                expected: lhs_name.clone(),
+                found: rhs_name,
+            })?
         }
         let inner = self.lub(lhs_inner, rhs_inner, tycker)?;
         if inner == lhs_inner {
@@ -409,10 +397,10 @@ impl Debruijn {
         let Proj(lhs_head, lhs_name) = lhs;
         let Proj(rhs_head, rhs_name) = rhs;
         if lhs_name != rhs_name {
-            tycker.err(
-                TyckError::NamedLabelMismatch { expected: lhs_name.clone(), found: rhs_name },
-                std::panic::Location::caller(),
-            )?
+            tycker.err(TyckError::NamedLabelMismatch {
+                expected: lhs_name.clone(),
+                found: rhs_name,
+            })?
         }
         let head = self.lub(lhs_head, rhs_head, tycker)?;
         if head == lhs_head {
@@ -442,10 +430,7 @@ impl Debruijn {
             }
             | (ValPiBinder::Value(lhs), ValPiBinder::Value(rhs)) => {
                 if lhs.witness_projection != rhs.witness_projection {
-                    tycker.err(
-                        TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
                 }
                 let domain = self.clone().lub(lhs.domain, rhs.domain, tycker)?;
                 let body_context = match (&lhs.witnesses, &rhs.witnesses) {
@@ -460,10 +445,9 @@ impl Debruijn {
                             let _ = Lub::lub(lhs_kind, rhs_kind, tycker)?;
                             Ok(context.insert(Some(lhs), Some(rhs)))
                         })?,
-                    | _ => tycker.err(
-                        TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                        std::panic::Location::caller(),
-                    )?,
+                    | _ => {
+                        tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
+                    }
                 };
                 let codomain = body_context.lub(lhs_codomain, rhs_codomain, tycker)?;
                 let unchanged = domain == lhs.domain;
@@ -478,10 +462,9 @@ impl Debruijn {
                 )
             }
             | (ValPiBinder::Type(_), ValPiBinder::Value(_))
-            | (ValPiBinder::Value(_), ValPiBinder::Type(_)) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
+            | (ValPiBinder::Value(_), ValPiBinder::Type(_)) => {
+                tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
+            }
         };
         if binder_unchanged && codomain == lhs_codomain {
             return Ok(lhs_id);
@@ -528,10 +511,7 @@ impl Debruijn {
         let PackPi { domain: lhs_domain, witnesses: lhs_witnesses, codomain: lhs_codomain } = lhs;
         let PackPi { domain: rhs_domain, witnesses: rhs_witnesses, codomain: rhs_codomain } = rhs;
         if lhs_witnesses.len() != rhs_witnesses.len() {
-            tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?
+            tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
         }
         let domain = self.clone().lub(lhs_domain, rhs_domain, tycker)?;
         let body_context = lhs_witnesses
@@ -559,10 +539,7 @@ impl Debruijn {
         let Prod(lhs) = lhs;
         let Prod(rhs) = rhs;
         if lhs.len() != rhs.len() {
-            tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?
+            tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
         }
         let components = lhs
             .iter()
@@ -591,10 +568,9 @@ impl Debruijn {
                 (ExistsMode::Manifest(definition), definition == ldefinition)
             }
             | (ExistsMode::Abstract, ExistsMode::Manifest(_))
-            | (ExistsMode::Manifest(_), ExistsMode::Abstract) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
+            | (ExistsMode::Manifest(_), ExistsMode::Abstract) => {
+                tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
+            }
         };
         let body =
             self.insert(Some(lbind.witness), Some(rbind.witness)).lub(lbody, rbody, tycker)?;
@@ -626,17 +602,11 @@ impl Debruijn {
         let lhs_arms = tycker.statics.datas[&lhs].clone();
         let rhs_arms = tycker.statics.datas[&rhs].clone();
         if lhs_arms.len() != rhs_arms.len() {
-            tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?
+            tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
         }
         for (ctor, lhs_ty) in lhs_arms {
             let Some(rhs_ty) = rhs_arms.get(&ctor) else {
-                tycker.err(
-                    TyckError::Expressivity("unexpected data constructor"),
-                    std::panic::Location::caller(),
-                )?
+                tycker.err(TyckError::Expressivity("unexpected data constructor"))?
             };
             let _ = self.clone().lub(lhs_ty, rhs_ty, tycker)?;
         }
@@ -646,7 +616,6 @@ impl Debruijn {
         // if lhs != rhs {
         //     tycker.err(
         //         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-        //         std::panic::Location::caller(),
         //     )?
         // }
 
@@ -659,17 +628,11 @@ impl Debruijn {
         let lhs_arms = tycker.statics.codatas[&lhs].clone();
         let rhs_arms = tycker.statics.codatas[&rhs].clone();
         if lhs_arms.len() != rhs_arms.len() {
-            tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?
+            tycker.err(TyckError::TypeMismatch { expected: lhs_id, found: rhs_id })?
         }
         for (dtor, lhs_ty) in lhs_arms {
             let Some(rhs_ty) = rhs_arms.get(&dtor) else {
-                tycker.err(
-                    TyckError::Expressivity("unexpected codata destructor"),
-                    std::panic::Location::caller(),
-                )?
+                tycker.err(TyckError::Expressivity("unexpected codata destructor"))?
             };
             let _ = self.clone().lub(lhs_ty, rhs_ty, tycker)?;
         }
@@ -679,7 +642,6 @@ impl Debruijn {
         // if lhs != rhs {
         //     tycker.err(
         //         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-        //         std::panic::Location::caller(),
         //     )?
         // }
 
@@ -703,16 +665,12 @@ impl Lub for AnnId {
     fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let res = match (self, other) {
             | (AnnId::Set, AnnId::Set) => AnnId::Set,
-            | (AnnId::Set, _) | (_, AnnId::Set) => {
-                tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | (AnnId::Set, _) | (_, AnnId::Set) => tycker.err(TyckError::SortMismatch)?,
             | (AnnId::Kind(lhs), AnnId::Kind(rhs)) => {
                 let kd = lhs.lub(rhs, tycker)?;
                 kd.into()
             }
-            | (AnnId::Kind(_), _) | (_, AnnId::Kind(_)) => {
-                tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | (AnnId::Kind(_), _) | (_, AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
             | (AnnId::Type(lhs), AnnId::Type(rhs)) => {
                 let ty = lhs.lub(rhs, tycker)?;
                 ty.into()

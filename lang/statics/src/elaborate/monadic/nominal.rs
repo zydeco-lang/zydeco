@@ -220,8 +220,7 @@ impl NominalTranslation {
                 .get(&seal)
                 .is_some_and(|owner| ownership.definitions.contains(owner))
             {
-                return tycker
-                    .err(TyckError::NotInlinableSeal(seal), std::panic::Location::caller());
+                return tycker.err(TyckError::NotInlinableSeal(seal));
             }
             let body = tycker.statics.seals[&seal];
             let found = Dependencies::collect(tycker, body, &env.ty)?;
@@ -237,8 +236,7 @@ impl NominalTranslation {
                     .get(witness)
                     .is_some_and(|owner| ownership.definitions.contains(owner))
             }) {
-                return tycker
-                    .err(TyckError::NotInlinableSeal(*source), std::panic::Location::caller());
+                return tycker.err(TyckError::NotInlinableSeal(*source));
             }
         }
         // Free dependencies propagate along declaration edges, never through
@@ -251,10 +249,7 @@ impl NominalTranslation {
                     .iter()
                     .map(|(other, bound)| {
                         let Some(other) = dependencies.get(other) else {
-                            return tycker.err(
-                                TyckError::NotInlinableSeal(*other),
-                                std::panic::Location::caller(),
-                            );
+                            return tycker.err(TyckError::NotInlinableSeal(*other));
                         };
                         Ok(other.free.difference(bound).copied().collect::<Vec<_>>())
                     })
@@ -350,8 +345,7 @@ impl NominalTranslation {
                 | Type::Abs(abstraction) => body = abstraction.body,
                 | Type::Data(_) | Type::CoData(_) => return Ok(()),
                 | _ => {
-                    return tycker
-                        .err(TyckError::NotInlinableSeal(seal), std::panic::Location::caller());
+                    return tycker.err(TyckError::NotInlinableSeal(seal));
                 }
             }
         }
@@ -373,7 +367,7 @@ impl NominalTranslation {
         tycker: &mut Tycker<'_>, env: MonEnv, source: AbstId,
     ) -> Result<(MonEnv, TypeId)> {
         let Some(family) = env.nominals.get(&source).cloned() else {
-            return tycker.err(TyckError::NotInlinableSeal(source), std::panic::Location::caller());
+            return tycker.err(TyckError::NotInlinableSeal(source));
         };
         let (env, constructor) =
             App(App(family.constructor, env.monad_ty), env.basis.algebra).mbuild(tycker, env)?;
@@ -389,7 +383,7 @@ impl NominalTranslation {
         tycker: &mut Tycker<'_>, env: MonEnv, source: AbstId,
     ) -> Result<(MonEnv, CompuId)> {
         let Some(family) = env.nominals.get(&source).cloned() else {
-            return tycker.err(TyckError::NotInlinableSeal(source), std::panic::Location::caller());
+            return tycker.err(TyckError::NotInlinableSeal(source));
         };
         let dictionary =
             env.nominal_dictionary.expect("structures are built after reserving their dictionary");
@@ -485,14 +479,12 @@ impl NominalTranslation {
             | Kind::CType(_) => {
                 let view = source.unroll(tycker)?;
                 let Type::CoData(source_codata) = tycker.type_filled(&view)? else {
-                    return tycker
-                        .err(TyckError::MissingStructure(source), std::panic::Location::caller());
+                    return tycker.err(TyckError::MissingStructure(source));
                 };
                 CoDataStructureTranslation { source, source_codata }.mbuild(tycker, env)?
             }
             | _ => {
-                return tycker
-                    .err(TyckError::MissingStructure(source), std::panic::Location::caller());
+                return tycker.err(TyckError::MissingStructure(source));
             }
         };
         let body = parameters.computation(tycker, &outer, body);

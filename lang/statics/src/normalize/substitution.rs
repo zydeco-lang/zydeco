@@ -59,12 +59,12 @@ impl TypeFolder for LexicalSubstitution<'_> {
         let target = match tycker.statics.types_pre[&source].clone() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
                 | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution)?,
-                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
+                | Some(_) => tycker.err(TyckError::SortMismatch)?,
                 | None => source,
             },
             | Fillable::Done(Type::Var(definition)) => match self.env.get(&definition) {
                 | Some(AnnId::Type(replacement)) => *replacement,
-                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
+                | Some(_) => tycker.err(TyckError::SortMismatch)?,
                 | None => source,
             },
             | Fillable::Done(node) => self.fold_children(tycker, source, node, kind, self.env)?,
@@ -87,7 +87,7 @@ impl TypeFolder for AbstractSubstitution<'_> {
         let target = match tycker.statics.types_pre[&source].clone() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
                 | Some(AnnId::Type(solution)) => self.fold_type(tycker, solution)?,
-                | Some(_) => tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?,
+                | Some(_) => tycker.err(TyckError::SortMismatch)?,
                 | None => source,
             },
             | Fillable::Done(Type::Abst(witness)) => {

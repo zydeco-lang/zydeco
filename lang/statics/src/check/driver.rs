@@ -62,7 +62,7 @@ impl<'a> Tycker<'a> {
             let inference = InferenceRegion::enter(tycker);
             let root = env.mk(root).tyck_k(tycker, Action::syn())?;
             if matches!(root, TermAnnId::Hole(_)) {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                tycker.err_k(TyckError::SortMismatch)?
             }
             inference.close_k(tycker)?;
             Ok(root)
@@ -299,8 +299,7 @@ impl<'a> Tycker<'a> {
         let missing = resolver.into_missing();
         if !missing.is_empty() {
             // keep running tycker even after unsuccessful solving hole
-            let _: ResultKont<()> =
-                self.err_k(TyckError::MissingSolution(missing), std::panic::Location::caller());
+            let _: ResultKont<()> = self.err_k(TyckError::MissingSolution(missing));
         }
     }
     pub(super) fn collect_hole_solutions(&mut self) {
@@ -355,17 +354,17 @@ mod impl_tycker {
 
         /// Throw a pure error.
         #[inline]
-        fn err<T>(
-            &self, error: TyckError, blame: &'static std::panic::Location<'static>,
-        ) -> Result<T> {
+        #[track_caller]
+        fn err<T>(&self, error: TyckError) -> Result<T> {
+            let blame = std::panic::Location::caller();
             let stack = self.tasks.clone();
             Err(Box::new(TyckErrorEntry { error, blame, stack }))
         }
         /// Throw a continuation error.
         #[inline]
-        fn err_k<T>(
-            &mut self, error: TyckError, blame: &'static std::panic::Location<'static>,
-        ) -> ResultKont<T> {
+        #[track_caller]
+        fn err_k<T>(&mut self, error: TyckError) -> ResultKont<T> {
+            let blame = std::panic::Location::caller();
             let stack = self.tasks.clone();
             self.push_err_entry_k(TyckErrorEntry { error, blame, stack })
         }

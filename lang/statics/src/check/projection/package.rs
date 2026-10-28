@@ -179,11 +179,8 @@ impl ExistentialProjectionPattern {
             | ExistentialProjectionSlot::Kind { definition, .. } => {
                 let checked = TyEnvT::new(opening.env.clone(), payload)
                     .tyck_k(tycker, PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()))?;
-                let payload_pattern = checked.annotation.try_as_kind(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                let payload_pattern =
+                    checked.annotation.try_as_kind(tycker, TyckError::SortMismatch)?;
                 opening.env = TyEnvT::new(checked.info, Assign(payload_pattern, *definition))
                     .tyck_k(tycker, ())?
                     .info;
@@ -200,11 +197,7 @@ impl ExistentialProjectionPattern {
                     tycker,
                     PatternAction::ana((*payload_kind).into()).with_skolems(skolems.clone()),
                 )?;
-                let (payload_pattern, _) = checked.try_as_type(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                let (payload_pattern, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
                 opening.env = TyEnvT::new(checked.info, Assign(payload_pattern, *slot_payload))
                     .tyck_k(tycker, ())?
                     .info;
@@ -243,14 +236,9 @@ impl ExistentialProjectionPattern {
                     tycker,
                     PatternAction::ana(expected.into()).with_skolems(skolems.clone()),
                 )?;
-                let (pattern, _) = checked.try_as_value(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                let (pattern, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
                 if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-                    tycker
-                        .err_k(TyckError::RefutablePatternAlias, std::panic::Location::caller())?
+                    tycker.err_k(TyckError::RefutablePatternAlias)?
                 }
                 opening.env = checked.info;
                 opening.opened.extend(checked.inner.opened);
@@ -288,10 +276,9 @@ impl ExistentialProjectionPattern {
                 value_candidates.as_slice(),
                 package_field_candidates.as_slice(),
             ) {
-                | ([], [], []) => tycker.err_k(
-                    TyckError::MissingNamedField { field, found: expected },
-                    std::panic::Location::caller(),
-                )?,
+                | ([], [], []) => {
+                    tycker.err_k(TyckError::MissingNamedField { field, found: expected })?
+                }
                 | ([slot_index], [], []) => {
                     let selected =
                         Self::select_slot_k(tycker, &mut opening, *slot_index, payload, &skolems)?;
@@ -304,16 +291,10 @@ impl ExistentialProjectionPattern {
                         PatternAction::ana(candidate.projected.into())
                             .with_skolems(skolems.clone()),
                     )?;
-                    let (payload_pattern, _) = checked.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
+                    let (payload_pattern, _) =
+                        checked.try_as_value(tycker, TyckError::SortMismatch)?;
                     if !ValuePatternShape::is_irrefutable(tycker, payload_pattern) {
-                        tycker.err_k(
-                            TyckError::RefutableFieldProjectionPattern,
-                            std::panic::Location::caller(),
-                        )?
+                        tycker.err_k(TyckError::RefutableFieldProjectionPattern)?
                     }
                     opening.env = checked.info;
                     opening.opened.extend(checked.inner.opened);
@@ -334,10 +315,7 @@ impl ExistentialProjectionPattern {
                         candidate: candidate.clone(),
                     });
                 }
-                | _ => tycker.err_k(
-                    TyckError::DuplicateNamedField { field, found: expected },
-                    std::panic::Location::caller(),
-                )?,
+                | _ => tycker.err_k(TyckError::DuplicateNamedField { field, found: expected })?,
             }
         }
 
@@ -467,16 +445,10 @@ impl ExistentialProjectionPattern {
                         tycker,
                         PatternAction::ana(payload_node.into()).with_skolems(skolems.clone()),
                     )?;
-                    let (payload_pattern, _) = checked.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
+                    let (payload_pattern, _) =
+                        checked.try_as_value(tycker, TyckError::SortMismatch)?;
                     if !ValuePatternShape::is_irrefutable(tycker, payload_pattern) {
-                        tycker.err_k(
-                            TyckError::RefutableFieldProjectionPattern,
-                            std::panic::Location::caller(),
-                        )?
+                        tycker.err_k(TyckError::RefutableFieldProjectionPattern)?
                     }
                     *env = checked.info;
                     opened.extend(checked.inner.opened);

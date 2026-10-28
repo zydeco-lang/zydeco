@@ -40,9 +40,7 @@ impl TermChecker<'_> {
                                 tycker.store_env(named_id, &self.info);
                                 TermAnnId::Type(named_id, kind_id)
                             }
-                            | crate::query::NamedSynOutcome::Error(error) => {
-                                tycker.err_k(error, std::panic::Location::caller())?
-                            }
+                            | crate::query::NamedSynOutcome::Error(error) => tycker.err_k(error)?,
                         }
                     }
                     | TermAnnId::Value(inner, inner_ty) => {
@@ -64,23 +62,16 @@ impl TermChecker<'_> {
                     let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
                         tycker.kind_filled_k(&kd)?.to_owned()
                     else {
-                        tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
+                        tycker.err_k(TyckError::KindMismatch)?
                     };
                     if name != expected_name {
-                        tycker.err_k(
-                            TyckError::NamedLabelMismatch {
-                                expected: expected_name,
-                                found: name.clone(),
-                            },
-                            std::panic::Location::caller(),
-                        )?
+                        tycker.err_k(TyckError::NamedLabelMismatch {
+                            expected: expected_name,
+                            found: name.clone(),
+                        })?
                     }
                     let checked = self.mk(inner).tyck_k(tycker, Action::ana(inner_kind.into()))?;
-                    let (inner, _) = checked.try_as_type(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
+                    let (inner, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
                     let named = Alloc::alloc(tycker, ss::Named(name, inner), kd, &self.info);
                     TermAnnId::Type(named, kd)
                 }
@@ -94,37 +85,25 @@ impl TermChecker<'_> {
                     let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
                         tycker.type_filled_k(&expected_view)?.to_owned()
                     else {
-                        tycker.err_k(
-                            TyckError::TypeExpected {
-                                expected: "a named value type".to_string(),
-                                found: expected,
-                            },
-                            std::panic::Location::caller(),
-                        )?
+                        tycker.err_k(TyckError::TypeExpected {
+                            expected: "a named value type".to_string(),
+                            found: expected,
+                        })?
                     };
                     if name != expected_name {
-                        tycker.err_k(
-                            TyckError::NamedLabelMismatch {
-                                expected: expected_name,
-                                found: name.clone(),
-                            },
-                            std::panic::Location::caller(),
-                        )?
+                        tycker.err_k(TyckError::NamedLabelMismatch {
+                            expected: expected_name,
+                            found: name.clone(),
+                        })?
                     }
                     let checked = self
                         .mk(inner)
                         .tyck_k(tycker, Action::ana_prepared(inner_ty.into(), &self.info))?;
-                    let (inner, _) = checked.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
+                    let (inner, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
                     let named = Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
                     TermAnnId::Value(named, expected)
                 }
-                | Switch::Ana(AnnId::Set) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                }
+                | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch)?,
             }
         })
     }
@@ -152,9 +131,7 @@ impl TermChecker<'_> {
                                 tycker.statics.kinds_pre.insert_new(id, ss::Fillable::Done(kind));
                                 TermAnnId::Kind(id)
                             }
-                            | crate::query::LabelSynOutcome::Error(error) => {
-                                tycker.err_k(error, std::panic::Location::caller())?
-                            }
+                            | crate::query::LabelSynOutcome::Error(error) => tycker.err_k(error)?,
                         }
                     }
                     | TermAnnId::Type(inner, kind) => {
@@ -165,30 +142,24 @@ impl TermChecker<'_> {
                     }
                 },
                 | Switch::Ana(AnnId::Set) => {
-                    let inner =
-                        self.mk(inner).tyck_k(tycker, Action::ana(AnnId::Set))?.try_as_kind(
-                            tycker,
-                            TyckError::SortMismatch,
-                            std::panic::Location::caller(),
-                        )?;
+                    let inner = self
+                        .mk(inner)
+                        .tyck_k(tycker, Action::ana(AnnId::Set))?
+                        .try_as_kind(tycker, TyckError::SortMismatch)?;
                     let label = Alloc::alloc(tycker, ss::Label(name, inner), (), &());
                     TermAnnId::Kind(label)
                 }
                 | Switch::Ana(AnnId::Kind(kind)) => {
                     let vtype = ss::VType.build(tycker, &self.info);
                     Lub::lub_k(vtype, kind, tycker)?;
-                    let (inner, _) =
-                        self.mk(inner).tyck_k(tycker, Action::ana(vtype.into()))?.try_as_type(
-                            tycker,
-                            TyckError::SortMismatch,
-                            std::panic::Location::caller(),
-                        )?;
+                    let (inner, _) = self
+                        .mk(inner)
+                        .tyck_k(tycker, Action::ana(vtype.into()))?
+                        .try_as_type(tycker, TyckError::SortMismatch)?;
                     let label = Alloc::alloc(tycker, ss::Label(name, inner), vtype, &self.info);
                     TermAnnId::Type(label, vtype)
                 }
-                | Switch::Ana(AnnId::Type(_)) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                }
+                | Switch::Ana(AnnId::Type(_)) => tycker.err_k(TyckError::SortMismatch)?,
             }
         })
     }
@@ -208,13 +179,10 @@ impl TermChecker<'_> {
                     | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
                         self.check_cons_ana_package_k(tycker, items, tail, expected)
                     }
-                    | _ => tycker.err_k(
-                        TyckError::TypeExpected {
-                            expected: "one of `_ * _` or `exists _ . _`".to_string(),
-                            found: expected,
-                        },
-                        std::panic::Location::caller(),
-                    ),
+                    | _ => tycker.err_k(TyckError::TypeExpected {
+                        expected: "one of `_ * _` or `exists _ . _`".to_string(),
+                        found: expected,
+                    }),
                 }
             }
             | Switch::Ana(AnnId::Kind(kd)) => {
@@ -222,9 +190,7 @@ impl TermChecker<'_> {
                 Lub::lub_k(vtype, kd, tycker)?;
                 self.tyck_k(tycker, Action::syn())
             }
-            | Switch::Ana(AnnId::Set) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
-            }
+            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
         }
     }
 
@@ -247,7 +213,7 @@ impl TermChecker<'_> {
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => true,
         });
         if mixed {
-            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+            tycker.err_k(TyckError::SortMismatch)?
         }
         if typed {
             self.check_cons_syn_type_k(tycker, outcomes, components)
@@ -326,13 +292,10 @@ impl TermChecker<'_> {
     ) -> ResultKont<TermAnnId> {
         let ss::Prod(component_tys) = expected.view_prepared_product_k(tycker, &self.info)?;
         if component_tys.len() != items.len() + 1 {
-            tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a product with matching components".to_string(),
-                    found: expected,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "a product with matching components".to_string(),
+                found: expected,
+            })?
         }
         let components = items.into_iter().chain([tail]).zip(component_tys);
         let (cons, ann) = self.check_value_product_k(tycker, components)?;
@@ -351,11 +314,7 @@ impl TermChecker<'_> {
                 let checked = self
                     .mk(item)
                     .tyck_k(tycker, Action::ana_prepared(item_ty.into(), &self.info))?;
-                checked.try_as_value(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )
+                checked.try_as_value(tycker, TyckError::SortMismatch)
             })
             .collect_k::<Vec<_>>()?
             .into_iter()
@@ -396,13 +355,10 @@ impl TermChecker<'_> {
         }
 
         if witnesses.is_empty() {
-            tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "an existential package".to_string(),
-                    found: expected,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "an existential package".to_string(),
+                found: expected,
+            })?
         }
 
         let body_ty = body_ty.materialize_k(tycker)?;
@@ -416,8 +372,7 @@ impl TermChecker<'_> {
         &self, tycker: &mut Tycker<'_>, item: su::TermId, definition: ss::KindId,
     ) -> ResultKont<ss::StaticTermId> {
         let checked = self.mk(item).tyck_k(tycker, Action::ana(AnnId::Set))?;
-        let witness =
-            checked.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let witness = checked.try_as_kind(tycker, TyckError::SortMismatch)?;
         let witness = Lub::lub_k(definition, witness, tycker)?;
         Ok(witness.into())
     }
@@ -430,8 +385,7 @@ impl TermChecker<'_> {
     ) -> ResultKont<(ss::StaticTermId, DeferredTelescopeType)> {
         let domain_kind = binder.domain_kind(tycker);
         let checked = self.mk(item).tyck_k(tycker, Action::ana(domain_kind.into()))?;
-        let (witness, _) =
-            checked.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (witness, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
         let payload = binder.pattern.bind_argument_k(tycker, witness)?;
         let payload = match mode {
             | DeferredTelescopeExistsMode::Abstract => payload,
@@ -454,22 +408,15 @@ impl TermChecker<'_> {
         if body_items.is_empty() {
             let checked =
                 self.mk(tail).tyck_k(tycker, Action::ana_prepared(body_ty.into(), &self.info))?;
-            let (body, _) = checked.try_as_value(
-                tycker,
-                TyckError::SortMismatch,
-                std::panic::Location::caller(),
-            )?;
+            let (body, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
             return Ok(body);
         }
         let ss::Prod(body_component_tys) = body_ty.view_prepared_product_k(tycker, &self.info)?;
         if body_component_tys.len() < body_items.len() {
-            tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a product with matching components".to_string(),
-                    found: body_ty,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "a product with matching components".to_string(),
+                found: body_ty,
+            })?
         }
         let remaining =
             tycker.rest_product_k(&body_component_tys[body_items.len()..], &self.info)?;
@@ -498,7 +445,7 @@ impl TermChecker<'_> {
                             Lub::lub_k(expected, candidate.projected, tycker)?
                         }
                         | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                            tycker.err_k(TyckError::SortMismatch)?
                         }
                     };
                     let projected = FieldProjectionResolver::project_type_k(
@@ -520,7 +467,7 @@ impl TermChecker<'_> {
                             Lub::lub_k(expected, projected_ty, tycker)?
                         }
                         | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                            tycker.err_k(TyckError::SortMismatch)?
                         }
                     };
                     let field = ss::ResolvedField { name, target };
@@ -543,7 +490,7 @@ impl TermChecker<'_> {
                     TermAnnId::Value(outcome.id, outcome.ann)
                 }
                 | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    tycker.err_k(TyckError::SortMismatch)?
                 }
             }
         })

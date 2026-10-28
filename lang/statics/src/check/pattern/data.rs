@@ -14,21 +14,16 @@ impl PatternChecker<'_> {
                 else {
                     unreachable!("constructor pattern judgments are query-produced")
                 };
-                tycker.err_k(error, std::panic::Location::caller())?
+                tycker.err_k(error)?
             }
             | Switch::Ana(ann) => {
-                let AnnId::Type(ann_ty) = ann else {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                };
+                let AnnId::Type(ann_ty) = ann else { tycker.err_k(TyckError::SortMismatch)? };
                 let ann_ty_unroll = ann_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
                 let ss::Type::Data(data_id) = &tycker.type_filled_k(&ann_ty_unroll)? else {
-                    tycker.err_k(
-                        TyckError::TypeExpected {
-                            expected: "data type definition".to_string(),
-                            found: ann_ty_unroll,
-                        },
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err_k(TyckError::TypeExpected {
+                        expected: "data type definition".to_string(),
+                        found: ann_ty_unroll,
+                    })?
                 };
                 let su::Ctor(ctor, args) = pat;
                 use std::collections::HashMap;
@@ -40,10 +35,7 @@ impl PatternChecker<'_> {
                     .cloned()
                 {
                     | Some(ty) => ty,
-                    | None => tycker.err_k(
-                        TyckError::UnknownDataConstructor(ctor.clone()),
-                        std::panic::Location::caller(),
-                    )?,
+                    | None => tycker.err_k(TyckError::UnknownDataConstructor(ctor.clone()))?,
                 };
                 let args_out_ann = self.mk(args).tyck_k(
                     tycker,
@@ -71,31 +63,24 @@ impl PatternChecker<'_> {
         &self, tycker: &mut Tycker<'db>, literal: su::Literal, switch: Switch<AnnId>,
     ) -> ResultKont<CheckedPattern> {
         Ok(match switch {
-            | Switch::Syn => {
-                tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
-            }
+            | Switch::Syn => tycker.err_k(TyckError::MissingAnnotation)?,
             | Switch::Ana(ann) => {
-                let AnnId::Type(expected) = ann else {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                };
+                let AnnId::Type(expected) = ann else { tycker.err_k(TyckError::SortMismatch)? };
                 let expected_unroll = expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
                 match tycker.primitive_type_of(expected_unroll) {
                     | Some(ss::PrimitiveType::Integer(integer_type)) => {
                         use zydeco_syntax::Literal;
                         let Literal::Integer(i) = literal else {
-                            tycker.err_k(
-                                TyckError::Expressivity(
-                                    "literal patterns support integer literals only",
-                                ),
-                                std::panic::Location::caller(),
-                            )?
+                            tycker.err_k(TyckError::Expressivity(
+                                "literal patterns support integer literals only",
+                            ))?
                         };
                         let value = i.value();
                         let Some(i) = i.with_type(integer_type) else {
-                            tycker.err_k(
-                                TyckError::IntegerLiteralOutOfRange { value, integer_type },
-                                std::panic::Location::caller(),
-                            )?
+                            tycker.err_k(TyckError::IntegerLiteralOutOfRange {
+                                value,
+                                integer_type,
+                            })?
                         };
                         let lit = Alloc::alloc(
                             tycker,
@@ -105,13 +90,10 @@ impl PatternChecker<'_> {
                         );
                         self.mk(PatternCheck::new(PatAnnId::Value(lit, expected)))
                     }
-                    | Some(_) | None => tycker.err_k(
-                        TyckError::TypeExpected {
-                            expected: "an integer primitive type".to_string(),
-                            found: expected_unroll,
-                        },
-                        std::panic::Location::caller(),
-                    )?,
+                    | Some(_) | None => tycker.err_k(TyckError::TypeExpected {
+                        expected: "an integer primitive type".to_string(),
+                        found: expected_unroll,
+                    })?,
                 }
             }
         })
@@ -128,7 +110,7 @@ impl PatternChecker<'_> {
                 else {
                     unreachable!("alias pattern judgments are query-produced")
                 };
-                tycker.err_k(error, std::panic::Location::caller())?
+                tycker.err_k(error)?
             }
             | Switch::Ana(AnnId::Type(expected)) => {
                 let members =
@@ -153,16 +135,10 @@ impl PatternChecker<'_> {
                                 PatternAction::ana(expected.into()).with_skolems(skolems.clone()),
                             )?;
                             let TyEnvT { info, inner } = checked;
-                            let (pattern, _) = inner.annotation.try_as_value(
-                                tycker,
-                                TyckError::SortMismatch,
-                                std::panic::Location::caller(),
-                            )?;
+                            let (pattern, _) =
+                                inner.annotation.try_as_value(tycker, TyckError::SortMismatch)?;
                             if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-                                tycker.err_k(
-                                    TyckError::RefutablePatternAlias,
-                                    std::panic::Location::caller(),
-                                )?
+                                tycker.err_k(TyckError::RefutablePatternAlias)?
                             }
                             output.push(pattern);
                             opened.extend(inner.opened);
@@ -182,8 +158,9 @@ impl PatternChecker<'_> {
                     )
                 }
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
-                .err_k(TyckError::PatternAliasRequiresValue, std::panic::Location::caller())?,
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                tycker.err_k(TyckError::PatternAliasRequiresValue)?
+            }
         })
     }
 }

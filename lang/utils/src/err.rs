@@ -37,17 +37,15 @@ impl<T, I: Iterator<Item = ResultKont<T>>> ResultKontIterator<T> for I {}
 pub trait Errorable<E> {
     type Entry;
 
-    /// Throw a pure error.
+    /// Throw a pure error, blaming the caller's source location.
     #[must_use]
-    fn err<T>(
-        &self, error: E, blame: &'static std::panic::Location<'static>,
-    ) -> Result<T, Self::Entry>;
+    #[track_caller]
+    fn err<T>(&self, error: E) -> Result<T, Self::Entry>;
 
-    /// Throw a continuation error (used by `_k` APIs).
+    /// Throw a continuation error (used by `_k` APIs), blaming the caller's source location.
     #[must_use]
-    fn err_k<T>(
-        &mut self, error: E, blame: &'static std::panic::Location<'static>,
-    ) -> ResultKont<T>;
+    #[track_caller]
+    fn err_k<T>(&mut self, error: E) -> ResultKont<T>;
 
     /// Convert a pure result into a continuation result (used by `_k` APIs).
     #[must_use]

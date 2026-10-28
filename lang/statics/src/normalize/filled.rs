@@ -51,15 +51,11 @@ impl KindId {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
                 | Some(AnnId::Kind(kd)) => kd.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Type(_)) => {
-                    let _: ResultKont<()> =
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
+                    let _: ResultKont<()> = tycker.err_k(TyckError::SortMismatch);
                     self
                 }
                 | None => {
-                    let _: ResultKont<()> = tycker.err_k(
-                        TyckError::MissingSolution(vec![fill]),
-                        std::panic::Location::caller(),
-                    );
+                    let _: ResultKont<()> = tycker.err_k(TyckError::MissingSolution(vec![fill]));
                     self
                 }
             },
@@ -113,15 +109,11 @@ impl TypeId {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
                 | Some(AnnId::Type(ty)) => ty.filled_norm_id(tycker, norm)?,
                 | Some(AnnId::Set | AnnId::Kind(_)) => {
-                    let _: ResultKont<()> =
-                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
+                    let _: ResultKont<()> = tycker.err_k(TyckError::SortMismatch);
                     self
                 }
                 | None => {
-                    let _: ResultKont<()> = tycker.err_k(
-                        TyckError::MissingSolution(vec![fill]),
-                        std::panic::Location::caller(),
-                    );
+                    let _: ResultKont<()> = tycker.err_k(TyckError::MissingSolution(vec![fill]));
                     self
                 }
             },

@@ -16,16 +16,13 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
             | Switch::Ana(AnnId::Kind(expected)) => {
                 Lub::lub_k(vtype, expected, tycker)?;
             }
-            | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | Switch::Ana(AnnId::Set | AnnId::Type(_)) => tycker.err_k(TyckError::SortMismatch)?,
         }
 
         let pi = match binder.inner.annotation {
-            | PatAnnId::Kind(_) => tycker.err_k(
-                TyckError::Expressivity("kind quantification is not supported"),
-                std::panic::Location::caller(),
-            )?,
+            | PatAnnId::Kind(_) => {
+                tycker.err_k(TyckError::Expressivity("kind quantification is not supported"))?
+            }
             | PatAnnId::Type(pattern, _) => {
                 let witness = Alloc::alloc(tycker, pattern, (), &());
                 let payload_kind = tycker.statics.annotations_abst[&witness];
@@ -37,11 +34,7 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
                     .info;
                 let codomain =
                     TyEnvT::new(body_env, *codomain).tyck_k(tycker, Action::ana(vtype.into()))?;
-                let (codomain, _) = codomain.try_as_type(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                let (codomain, _) = codomain.try_as_type(tycker, TyckError::SortMismatch)?;
                 ss::ValPi {
                     binder: ss::ValPiBinder::Type(ss::TypeBinder { pattern, witness }),
                     codomain,
@@ -49,35 +42,25 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
             }
             | PatAnnId::Value(pattern, domain) => {
                 if !ValuePatternShape::is_irrefutable(tycker, pattern) {
-                    tycker.err_k(
-                        TyckError::Expressivity(
-                            "value-function parameters must be irrefutable patterns",
-                        ),
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err_k(TyckError::Expressivity(
+                        "value-function parameters must be irrefutable patterns",
+                    ))?
                 }
                 let domain_kind = tycker.statics.type_kind(domain);
                 Lub::lub_k(vtype, domain_kind, tycker)?;
                 let codomain = TyEnvT::new(binder.info.clone(), *codomain)
                     .tyck_k(tycker, Action::ana(vtype.into()))?;
-                let (codomain, _) = codomain.try_as_type(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                let (codomain, _) = codomain.try_as_type(tycker, TyckError::SortMismatch)?;
                 let witnesses = binder.package_telescope_k(tycker)?;
                 let witness_projection = PackageWitnessProjectionBuilder::build(pattern, tycker)?;
                 let projected_arity =
                     PackageWitnessProjectionBuilder::abstract_arity(&witness_projection);
                 let witness_arity = witnesses.as_ref().map_or(0, ss::PackTelescope::len);
                 if projected_arity != witness_arity {
-                    tycker.err_k(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: witness_arity,
-                            found: projected_arity,
-                        },
-                        std::panic::Location::caller(),
-                    )?
+                    tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                        expected: witness_arity,
+                        found: projected_arity,
+                    })?
                 }
                 if witnesses.is_none() {
                     binder.close_scope_k(tycker, codomain)?;
@@ -110,8 +93,7 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
 
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         let ComputationPiFormation { binder, codomain } = &self.inner;
-        let (_, domain) =
-            binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (_, domain) = binder.try_as_value(tycker, TyckError::SortMismatch)?;
 
         let domain_kind = tycker.statics.type_kind(domain);
         let vtype = ss::VType.build(tycker, &self.info);
@@ -120,18 +102,11 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
         // Elaboration may inspect a value through `typeof`. Only the resulting
         // static type participates in the arrow; it cannot retain value terms.
         let codomain = TyEnvT::new(binder.info.clone(), *codomain).tyck_k(tycker, action)?;
-        let (codomain, codomain_kind) = codomain.try_as_type(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (codomain, codomain_kind) = codomain.try_as_type(tycker, TyckError::SortMismatch)?;
         let pi = match tycker.kind_filled_k(&codomain_kind)?.to_owned() {
-            | ss::Kind::VType(_) => tycker.err_k(
-                TyckError::Expressivity(
-                    "value-returning computation arrows are not supported; use `val pi`",
-                ),
-                std::panic::Location::caller(),
-            )?,
+            | ss::Kind::VType(_) => tycker.err_k(TyckError::Expressivity(
+                "value-returning computation arrows are not supported; use `val pi`",
+            ))?,
             | ss::Kind::CType(_) => match binder.package_telescope_k(tycker)? {
                 | None => {
                     binder.close_scope_k(tycker, codomain)?;
@@ -143,9 +118,7 @@ impl<'a> Tyck<'a> for TyEnvT<ComputationPiFormation> {
                     Alloc::alloc(tycker, signature, codomain_kind, &self.info)
                 }
             },
-            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => {
-                tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
-            }
+            | ss::Kind::Arrow(_) | ss::Kind::Label(_) => tycker.err_k(TyckError::KindMismatch)?,
         };
         Ok(TermAnnId::Type(pi, codomain_kind))
     }

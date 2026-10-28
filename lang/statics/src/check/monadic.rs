@@ -35,8 +35,7 @@ impl<'a> MonadicBasisElaboration<'a> {
     ) -> ResultKont<ss::TypeId> {
         let checked =
             TyEnvT { info: self.env.clone(), inner: definition }.tyck_k(tycker, Action::syn())?;
-        let (definition, _) =
-            checked.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (definition, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
         Ok(definition)
     }
 
@@ -100,7 +99,7 @@ impl<'a> AlgebraicTranslation<'a> {
             | TermAnnId::Value(body, _) => CheckedNode::Value(body),
             | TermAnnId::Compu(body, _) => CheckedNode::Computation(body),
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => {
-                return tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
+                return tycker.err_k(TyckError::SortMismatch);
             }
         };
 

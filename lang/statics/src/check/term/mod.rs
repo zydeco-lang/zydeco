@@ -127,9 +127,7 @@ impl TermChecker<'_> {
             | TermAnnId::Hole(_)
             | TermAnnId::Kind(_)
             | TermAnnId::Value(_, _)
-            | TermAnnId::Compu(_, _) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
-            }
+            | TermAnnId::Compu(_, _) => tycker.err_k(TyckError::SortMismatch),
         }
     }
 
@@ -149,7 +147,7 @@ impl TermChecker<'_> {
                 Ok(TermAnnId::Compu(c, ty))
             }
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
+                tycker.err_k(TyckError::SortMismatch)
             }
         }
     }
@@ -229,7 +227,7 @@ impl TermChecker<'_> {
             | TermAnnId::Kind(kd) => kd.into(),
             | TermAnnId::Type(ty, _kd) => ty.into(),
             | TermAnnId::Hole(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                tycker.err_k(TyckError::SortMismatch)?
             }
         };
         let ann = match switch {

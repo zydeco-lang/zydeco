@@ -21,25 +21,17 @@ impl TermChecker<'_> {
         let su::Pi(binder, body) = term;
         match switch {
             | Switch::Syn => self.check_pi_syn_k(tycker, binder, body),
-            | Switch::Ana(AnnId::Set) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
-            }
+            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch),
             | Switch::Ana(AnnId::Kind(kd)) => match tycker.kind_filled_k(&kd)?.to_owned() {
-                | ss::Kind::VType(_) => tycker.err_k(
-                    TyckError::Expressivity("use `val pi` to classify a value function"),
-                    std::panic::Location::caller(),
-                ),
+                | ss::Kind::VType(_) => tycker
+                    .err_k(TyckError::Expressivity("use `val pi` to classify a value function")),
                 | ss::Kind::CType(ss::CType) => self.check_pi_ana_ctype_k(tycker, binder, body),
                 | ss::Kind::Arrow(kd_arr) => {
                     self.check_pi_ana_kind_arrow_k(tycker, binder, body, kd_arr)
                 }
-                | ss::Kind::Label(_) => {
-                    tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())
-                }
+                | ss::Kind::Label(_) => tycker.err_k(TyckError::KindMismatch),
             },
-            | Switch::Ana(AnnId::Type(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
-            }
+            | Switch::Ana(AnnId::Type(_)) => tycker.err_k(TyckError::SortMismatch),
         }
     }
 
@@ -50,10 +42,9 @@ impl TermChecker<'_> {
     ) -> ResultKont<TermAnnId> {
         let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
         match binder_out_ann.annotation {
-            | PatAnnId::Kind(_) => tycker.err_k(
-                TyckError::Expressivity("kind quantification is not supported"),
-                std::panic::Location::caller(),
-            ),
+            | PatAnnId::Kind(_) => {
+                tycker.err_k(TyckError::Expressivity("kind quantification is not supported"))
+            }
             | PatAnnId::Type(tpat, kd_1) => {
                 self.check_pi_syn_type_binder_k(tycker, tpat, kd_1, body)
             }
@@ -111,10 +102,9 @@ impl TermChecker<'_> {
         kd_2: ss::KindId,
     ) -> ResultKont<TermAnnId> {
         let arm = match tycker.kind_filled_k(&kd_2)?.to_owned() {
-            | ss::Kind::VType(_) => tycker.err_k(
-                TyckError::Expressivity("value-level universal types use `val pi`"),
-                std::panic::Location::caller(),
-            )?,
+            | ss::Kind::VType(_) => {
+                tycker.err_k(TyckError::Expressivity("value-level universal types use `val pi`"))?
+            }
             | ss::Kind::CType(_) => crate::query::PiSynArm::Forall { ty_2, kd_2 },
             | ss::Kind::Arrow(_) | ss::Kind::Label(_) => crate::query::PiSynArm::KindMismatch,
         };
@@ -125,9 +115,7 @@ impl TermChecker<'_> {
                 tycker.store_env(id, &self.info);
                 Ok(TermAnnId::Type(id, kd))
             }
-            | crate::query::PiSynOutcome::Error(error) => {
-                tycker.err_k(error, std::panic::Location::caller())
-            }
+            | crate::query::PiSynOutcome::Error(error) => tycker.err_k(error),
             | crate::query::PiSynOutcome::Kind { .. } => {
                 unreachable!("the type arm of pi judgments is query-produced")
             }
@@ -144,7 +132,7 @@ impl TermChecker<'_> {
         let crate::query::PiSynOutcome::Error(error) = outcome else {
             unreachable!("the rejection arms of pi judgments are query-produced")
         };
-        tycker.err_k(error, std::panic::Location::caller())
+        tycker.err_k(error)
     }
 
     /// Check a pi against `CType`: a type binder forms a universal type, a
@@ -155,10 +143,9 @@ impl TermChecker<'_> {
         // synthesize the binder
         let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
         match binder_out_ann.annotation {
-            | PatAnnId::Kind(_) => tycker.err_k(
-                TyckError::Expressivity("kind quantification is not supported"),
-                std::panic::Location::caller(),
-            ),
+            | PatAnnId::Kind(_) => {
+                tycker.err_k(TyckError::Expressivity("kind quantification is not supported"))
+            }
             | PatAnnId::Type(tpat, _kd_1) => {
                 let ctype = ss::CType.build(tycker, &self.info);
                 let abst = Alloc::alloc(tycker, tpat, (), &());
@@ -172,11 +159,7 @@ impl TermChecker<'_> {
                 };
                 let ty_2 =
                     self.mk_add(subst_vec, body).tyck_k(tycker, Action::ana(ctype.into()))?;
-                let (ty_2, _ctype) = ty_2.try_as_type(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                let (ty_2, _ctype) = ty_2.try_as_type(tycker, TyckError::SortMismatch)?;
                 let binder = ss::TypeBinder { pattern: tpat, witness: abst };
                 let forall = Alloc::alloc(tycker, ss::Forall(binder, ty_2), ctype, &self.info);
                 Ok(TermAnnId::Type(forall, ctype))
@@ -197,15 +180,10 @@ impl TermChecker<'_> {
         let ss::Arrow(kd_1, kd_2) = kd_arr;
         // ana binder with kd_1
         let binder_out_ann = self.mk(binder).tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
-        let (_, kd_1) = binder_out_ann.try_as_type(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (_, kd_1) = binder_out_ann.try_as_type(tycker, TyckError::SortMismatch)?;
         // ana body with kd_2
         let body = self.mk(body).tyck_k(tycker, Action::ana(kd_2.into()))?;
-        let kd_2 =
-            body.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let kd_2 = body.try_as_kind(tycker, TyckError::SortMismatch)?;
         let arr = Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
         Ok(TermAnnId::Kind(arr))
     }

@@ -128,9 +128,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
                 }
                 env
             }
-            | TermAnnId::Compu(_, _) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | TermAnnId::Compu(_, _) => tycker.err_k(TyckError::SortMismatch)?,
         };
 
         Ok(env)
@@ -158,17 +156,13 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
                 unreachable!("recursive groups contain definitions")
             };
             if BindingCycle::has_value_body(tycker, bindee) {
-                tycker.err_k(
-                    TyckError::InvalidBindingCycle(binder),
-                    std::panic::Location::caller(),
-                )?;
+                tycker.err_k(TyckError::InvalidBindingCycle(binder))?;
             }
             let sealed = bindee.syntactically_sealed(tycker);
             let bindee = sealed.unwrap_or(bindee);
             // the type definition is self referencing, need to get the annotation
             let Some(syn_ann) = bindee.syntactically_annotated(tycker) else {
-                tycker
-                    .err_k(TyckError::InvalidBindingCycle(binder), std::panic::Location::caller())?
+                tycker.err_k(TyckError::InvalidBindingCycle(binder))?
             };
             if matches!(tycker.scoped.terms[&syn_ann], su::Term::Hole(_))
                 || tycker
@@ -176,21 +170,14 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
                     .iter()
                     .any(|definition| tycker.statics.annotations_var.get(definition).is_none())
             {
-                tycker.err_k(
-                    TyckError::InvalidBindingCycle(binder),
-                    std::panic::Location::caller(),
-                )?;
+                tycker.err_k(TyckError::InvalidBindingCycle(binder))?;
             }
             // try synthesizing the kind
             let ann = env.mk(syn_ann).tyck_k(tycker, Action::syn())?;
             // the binder should be a type; register it before analyzing the bindee
-            let kd = ann.try_as_kind(
-                tycker,
-                TyckError::InvalidBindingCycle(binder),
-                std::panic::Location::caller(),
-            )?;
+            let kd = ann.try_as_kind(tycker, TyckError::InvalidBindingCycle(binder))?;
             if sealed.is_none() {
-                tycker.err_k(TyckError::MissingSeal, std::panic::Location::caller())?;
+                tycker.err_k(TyckError::MissingSeal)?;
             }
             let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
             let (binder, _kd) = binder.as_type();
@@ -234,11 +221,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
             // remove seal
             let Some(bindee) = bindee.syntactically_sealed(tycker) else { unreachable!() };
             let bindee = env.mk(bindee).tyck_k(tycker, Action::syn())?;
-            let (bindee, _kd) = bindee.try_as_type(
-                tycker,
-                TyckError::SortMismatch,
-                std::panic::Location::caller(),
-            )?;
+            let (bindee, _kd) = bindee.try_as_type(tycker, TyckError::SortMismatch)?;
             // subst vars in bindee
             let bindee_subst = bindee.subst_env_k(tycker, &env.info)?;
             if let (Some(def), _) = binder.try_destruct_def(tycker) {

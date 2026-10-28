@@ -86,9 +86,7 @@ impl TermChecker<'_> {
                     | TermAnnId::Hole(_)
                     | TermAnnId::Kind(_)
                     | TermAnnId::Value(_, _)
-                    | TermAnnId::Compu(_, _) => {
-                        tycker.err_k(TyckError::SignatureNotType, std::panic::Location::caller())?
-                    }
+                    | TermAnnId::Compu(_, _) => tycker.err_k(TyckError::SignatureNotType)?,
                 }
             })?;
             checked.reconcile_k(tycker, switch)?

@@ -322,32 +322,26 @@ impl FieldProjectionResolver {
             &mut std::collections::HashSet::new(),
         )?;
         match (values.as_slice(), packages.as_slice()) {
-            | ([], []) => tycker.err_k(
-                TyckError::MissingNamedField { field: field.clone(), found: root },
-                std::panic::Location::caller(),
-            ),
+            | ([], []) => {
+                tycker.err_k(TyckError::MissingNamedField { field: field.clone(), found: root })
+            }
             | ([candidate], []) => Ok(candidate.clone().materialize_k(tycker)?),
             | ([], [candidate]) => {
                 if candidate.sealed {
-                    return tycker.err_k(
-                        TyckError::SealedNamedField { field: field.clone(), found: root },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker
+                        .err_k(TyckError::SealedNamedField { field: field.clone(), found: root });
                 }
                 match &candidate.terminal {
-                    | PackageFieldTerminal::Entry { .. } => tycker.err_k(
-                        TyckError::StaticNamedField { field: field.clone(), found: root },
-                        std::panic::Location::caller(),
-                    ),
+                    | PackageFieldTerminal::Entry { .. } => tycker
+                        .err_k(TyckError::StaticNamedField { field: field.clone(), found: root }),
                     | PackageFieldTerminal::Label { .. } => {
                         Self::materialize_package_candidate_k(tycker, env, root, candidate)
                     }
                 }
             }
-            | _ => tycker.err_k(
-                TyckError::DuplicateNamedField { field: field.clone(), found: root },
-                std::panic::Location::caller(),
-            ),
+            | _ => {
+                tycker.err_k(TyckError::DuplicateNamedField { field: field.clone(), found: root })
+            }
         }
     }
 
@@ -362,15 +356,12 @@ impl FieldProjectionResolver {
             &mut std::collections::HashSet::new(),
         )?;
         match candidates.as_slice() {
-            | [] => tycker.err_k(
-                TyckError::MissingNamedTypeField { field: field.clone(), found: root },
-                std::panic::Location::caller(),
-            ),
+            | [] => {
+                tycker.err_k(TyckError::MissingNamedTypeField { field: field.clone(), found: root })
+            }
             | [candidate] => Ok(candidate.clone()),
-            | _ => tycker.err_k(
-                TyckError::AmbiguousNamedTypeField { field: field.clone(), found: root },
-                std::panic::Location::caller(),
-            ),
+            | _ => tycker
+                .err_k(TyckError::AmbiguousNamedTypeField { field: field.clone(), found: root }),
         }
     }
 

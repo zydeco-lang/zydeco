@@ -152,8 +152,7 @@ impl ValuePatternShape {
         tycker: &mut Tycker<'_>, source: su::PatId, pattern: ss::VPatId,
     ) -> ResultKont<()> {
         if !Self::is_irrefutable(tycker, pattern) && !tycker.scoped.allows_partial_binding(source) {
-            return tycker
-                .err_k(TyckError::RefutableBinding(source), std::panic::Location::caller());
+            return tycker.err_k(TyckError::RefutableBinding(source));
         }
         Ok(())
     }
@@ -211,20 +210,13 @@ impl CheckedPatternExt for CheckedPattern {
         let Some((first, rest)) = self.inner.opened.split_first() else {
             return Ok(None);
         };
-        let (pattern, _) = self.inner.annotation.try_as_value(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (pattern, _) = self.inner.annotation.try_as_value(tycker, TyckError::SortMismatch)?;
         let boundary_arity = pattern.package_witness_arity(tycker).unwrap_or_default();
         if boundary_arity < self.inner.opened.len() {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch {
-                    expected: self.inner.opened.len(),
-                    found: boundary_arity,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::PackageWitnessArityMismatch {
+                expected: self.inner.opened.len(),
+                found: boundary_arity,
+            })?
         }
         Ok(Some(ss::PackTelescope::new(*first, rest.iter().copied())))
     }

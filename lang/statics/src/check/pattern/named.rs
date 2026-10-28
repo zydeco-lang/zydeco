@@ -25,7 +25,7 @@ impl PatternChecker<'_> {
                 let crate::query::PatNamedAnaOutcome::Error(error) = outcome else {
                     unreachable!("the set arm of named pattern judgments is query-produced")
                 };
-                tycker.err_k(error, std::panic::Location::caller())
+                tycker.err_k(error)
             }
         }
     }
@@ -49,9 +49,7 @@ impl PatternChecker<'_> {
                         tycker.statics.env_tpat.insert_new(named_id, self.info.clone());
                         Ok(checked.with_annotation(PatAnnId::Type(named_id, kind_id)))
                     }
-                    | crate::query::PatNamedSynOutcome::Error(error) => {
-                        tycker.err_k(error, std::panic::Location::caller())
-                    }
+                    | crate::query::PatNamedSynOutcome::Error(error) => tycker.err_k(error),
                 }
             }
             | PatAnnId::Value(inner, inner_ty) => {
@@ -74,19 +72,18 @@ impl PatternChecker<'_> {
         let ss::Kind::Label(ss::Label(expected_name, inner_kind)) =
             tycker.kind_filled_k(&expected)?.to_owned()
         else {
-            tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
+            tycker.err_k(TyckError::KindMismatch)?
         };
         if name != expected_name {
-            tycker.err_k(
-                TyckError::NamedLabelMismatch { expected: expected_name, found: name.clone() },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::NamedLabelMismatch {
+                expected: expected_name,
+                found: name.clone(),
+            })?
         }
         let checked = self
             .mk(inner)
             .tyck_k(tycker, PatternAction::ana(inner_kind.into()).with_skolems(skolems.clone()))?;
-        let (inner, _) =
-            checked.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (inner, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
         let input = crate::query::InternedPatNamedAna::new(
             tycker.db,
             crate::query::PatNamedAnaArm::Kind { name, inner, expected },
@@ -110,28 +107,21 @@ impl PatternChecker<'_> {
         let ss::Type::Label(ss::Label(expected_name, inner_ty)) =
             tycker.type_filled_k(&expected_view)?.to_owned()
         else {
-            tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a named value type".to_string(),
-                    found: expected,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "a named value type".to_string(),
+                found: expected,
+            })?
         };
         if name != expected_name {
-            tycker.err_k(
-                TyckError::NamedLabelMismatch { expected: expected_name, found: name.clone() },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::NamedLabelMismatch {
+                expected: expected_name,
+                found: name.clone(),
+            })?
         }
         let checked = self
             .mk(inner)
             .tyck_k(tycker, PatternAction::ana(inner_ty.into()).with_skolems(skolems.clone()))?;
-        let (inner, _) = checked.try_as_value(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let (inner, _) = checked.try_as_value(tycker, TyckError::SortMismatch)?;
         let input = crate::query::InternedPatNamedAna::new(
             tycker.db,
             crate::query::PatNamedAnaArm::Type { name, inner, expected },
@@ -158,7 +148,7 @@ impl PatternChecker<'_> {
                 else {
                     unreachable!("projection pattern judgments are query-produced")
                 };
-                tycker.err_k(error, std::panic::Location::caller())?
+                tycker.err_k(error)?
             }
             | Switch::Ana(AnnId::Kind(expected)) => {
                 let candidate = FieldProjectionResolver::r#type(tycker, expected, &field)?;
@@ -166,11 +156,7 @@ impl PatternChecker<'_> {
                     tycker,
                     PatternAction::ana(candidate.projected.into()).with_skolems(skolems.clone()),
                 )?;
-                let (payload, _) = checked.try_as_type(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                let (payload, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
                 let pattern = FieldProjectionResolver::type_pattern(
                     tycker, &self.info, expected, candidate, payload,
                 );
@@ -188,9 +174,7 @@ impl PatternChecker<'_> {
                     skolems.clone(),
                 )?
             }
-            | Switch::Ana(AnnId::Set) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | Switch::Ana(AnnId::Set) => tycker.err_k(TyckError::SortMismatch)?,
         })
     }
 }

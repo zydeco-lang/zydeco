@@ -70,9 +70,7 @@ impl TypeId {
             let solu = match tycker.statics.solus.get(&fill).cloned() {
                 | None => break,
                 | Some(AnnId::Type(ty)) => ty,
-                | Some(AnnId::Set | AnnId::Kind(_)) => {
-                    tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
-                }
+                | Some(AnnId::Set | AnnId::Kind(_)) => tycker.err(TyckError::SortMismatch)?,
             };
             res = solu;
             if let Some(resolved) = resolver.types.get(&res).copied() {
@@ -132,9 +130,7 @@ impl<'a> Tycker<'a> {
                     | Some(AnnId::Kind(kind)) => {
                         self.filling(&kind.into(), f_set, f_kind, f_type, f_fill)
                     }
-                    | Some(_) => {
-                        self.err(TyckError::SortMismatch, std::panic::Location::caller())?
-                    }
+                    | Some(_) => self.err(TyckError::SortMismatch)?,
                     | None => f_fill(self, fill),
                 },
                 | Fillable::Done(kind) => f_kind(self, kind),
@@ -144,9 +140,7 @@ impl<'a> Tycker<'a> {
                     | Some(AnnId::Type(ty)) => {
                         self.filling(&ty.into(), f_set, f_kind, f_type, f_fill)
                     }
-                    | Some(_) => {
-                        self.err(TyckError::SortMismatch, std::panic::Location::caller())?
-                    }
+                    | Some(_) => self.err(TyckError::SortMismatch)?,
                     | None => f_fill(self, fill),
                 },
                 | Fillable::Done(ty) => f_type(self, ty),
@@ -166,9 +160,7 @@ impl<'a> Tycker<'a> {
             |_tycker| unreachable!(),
             |_tycker, kd| Ok(kd),
             |_tycker, _ty| unreachable!(),
-            |tycker, fill| {
-                tycker.err(TyckError::MissingSolution(vec![fill]), std::panic::Location::caller())
-            },
+            |tycker, fill| tycker.err(TyckError::MissingSolution(vec![fill])),
         )
     }
 
@@ -184,9 +176,7 @@ impl<'a> Tycker<'a> {
             |_tycker| unreachable!(),
             |_tycker, _kd| unreachable!(),
             |_tycker, ty| Ok(ty),
-            |tycker, fill| {
-                tycker.err(TyckError::MissingSolution(vec![fill]), std::panic::Location::caller())
-            },
+            |tycker, fill| tycker.err(TyckError::MissingSolution(vec![fill])),
         )
     }
 }

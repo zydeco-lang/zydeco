@@ -15,10 +15,10 @@ impl PatternChecker<'_> {
                 | TermAnnId::Type(ty, _) => ty.into(),
                 | TermAnnId::Hole(_) => {
                     // Fixme: I forgor
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    tycker.err_k(TyckError::SortMismatch)?
                 }
                 | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    tycker.err_k(TyckError::SortMismatch)?
                 }
             };
             match switch {
@@ -41,9 +41,7 @@ impl PatternChecker<'_> {
         Ok({
             let su::Hole = pat;
             match switch {
-                | Switch::Syn => {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
-                }
+                | Switch::Syn => tycker.err_k(TyckError::MissingAnnotation)?,
                 | Switch::Ana(ann) => {
                     let ann = PatternLeaf::Hole.materialize(tycker, &self.info, ann);
                     self.mk(PatternCheck::new(ann))
@@ -89,32 +87,22 @@ impl PatternChecker<'_> {
     ) -> ResultKont<CheckedPattern> {
         Ok({
             let function = self.mk(function).tyck_k(tycker, Action::syn())?;
-            let (function, function_ty) = function.try_as_value(
-                tycker,
-                TyckError::SortMismatch,
-                std::panic::Location::caller(),
-            )?;
+            let (function, function_ty) = function.try_as_value(tycker, TyckError::SortMismatch)?;
             let function_kind = tycker.statics.type_kind(function_ty);
             let function_ty = function_ty.normalize_k(tycker, function_kind)?;
             let function_view = function_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
             let ss::Type::ValPi(pi) = tycker.type_filled_k(&function_view)?.to_owned() else {
-                tycker.err_k(
-                    TyckError::TypeExpected {
-                        expected: "a value function with a runtime parameter".to_string(),
-                        found: function_view,
-                    },
-                    std::panic::Location::caller(),
-                )?
+                tycker.err_k(TyckError::TypeExpected {
+                    expected: "a value function with a runtime parameter".to_string(),
+                    found: function_view,
+                })?
             };
             let ss::ValPi { binder, codomain } = *pi;
             let ss::ValPiBinder::Value(parameter) = binder else {
-                tycker.err_k(
-                    TyckError::TypeExpected {
-                        expected: "a value function with a runtime parameter".to_string(),
-                        found: function_view,
-                    },
-                    std::panic::Location::caller(),
-                )?
+                tycker.err_k(TyckError::TypeExpected {
+                    expected: "a value function with a runtime parameter".to_string(),
+                    found: function_view,
+                })?
             };
             let domain = match switch {
                 | Switch::Syn => parameter.domain,
@@ -122,7 +110,7 @@ impl PatternChecker<'_> {
                     Lub::lub_k(expected, parameter.domain, tycker)?
                 }
                 | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    tycker.err_k(TyckError::SortMismatch)?
                 }
             };
             let (pattern_env, codomain, mut opened) = match parameter.witnesses {
@@ -136,11 +124,7 @@ impl PatternChecker<'_> {
                 tycker,
                 PatternAction::ana(codomain.into()).with_skolems(skolems.clone()),
             )?;
-            let (pattern, _) = nested.annotation.try_as_value(
-                tycker,
-                TyckError::SortMismatch,
-                std::panic::Location::caller(),
-            )?;
+            let (pattern, _) = nested.annotation.try_as_value(tycker, TyckError::SortMismatch)?;
             opened.extend(nested.inner.opened.iter().copied());
             let view_pattern = Alloc::alloc(
                 tycker,
@@ -181,9 +165,7 @@ impl PatternChecker<'_> {
                 let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
                 self.mk(PatternCheck::new(PatAnnId::Value(triv, ann)))
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch)?,
         })
     }
 }

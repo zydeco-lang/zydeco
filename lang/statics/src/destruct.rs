@@ -186,15 +186,13 @@ impl TypeId {
         match tycker.kind_filled(&kind)?.to_owned() {
             | Kind::Label(Label(found, inner_kind)) => {
                 if &found != expected {
-                    return tycker.err(
-                        TyckError::NamedLabelMismatch { expected: expected.clone(), found },
-                        std::panic::Location::caller(),
-                    );
+                    return tycker
+                        .err(TyckError::NamedLabelMismatch { expected: expected.clone(), found });
                 }
                 Lub::lub(inner_kind, payload_kind, tycker)?;
             }
             | _ => {
-                return tycker.err(TyckError::KindMismatch, std::panic::Location::caller());
+                return tycker.err(TyckError::KindMismatch);
             }
         }
 
@@ -203,10 +201,7 @@ impl TypeId {
                 if &found == expected {
                     Ok(inner)
                 } else {
-                    tycker.err(
-                        TyckError::NamedLabelMismatch { expected: expected.clone(), found },
-                        std::panic::Location::caller(),
-                    )
+                    tycker.err(TyckError::NamedLabelMismatch { expected: expected.clone(), found })
                 }
             }
             | _ => {

@@ -129,7 +129,7 @@ impl CheckedTerm {
         self, tycker: &mut Tycker<'_>, error: TyckError,
     ) -> ResultKont<Self> {
         match self.0 {
-            | TermAnnId::Hole(_) => tycker.err_k(error, std::panic::Location::caller()),
+            | TermAnnId::Hole(_) => tycker.err_k(error),
             | TermAnnId::Kind(_)
             | TermAnnId::Type(_, _)
             | TermAnnId::Value(_, _)
@@ -152,7 +152,7 @@ impl CheckedTerm {
             | TermAnnId::Type(_, kind) => AnnId::Kind(kind),
             | TermAnnId::Value(_, ty) | TermAnnId::Compu(_, ty) => AnnId::Type(ty),
             | TermAnnId::Hole(_) => {
-                return tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller());
+                return tycker.err_k(TyckError::MissingAnnotation);
             }
         };
         Lub::lub_k(expected, synthesized, tycker)?;
@@ -225,9 +225,7 @@ impl InferenceRegion {
                 unconstrained.push(fill);
                 continue;
             };
-            let AnnId::Type(solution) = solution else {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            };
+            let AnnId::Type(solution) = solution else { tycker.err_k(TyckError::SortMismatch)? };
             let (_, pending) = solution.solution_k(tycker)?;
             if pending.into_iter().any(|fill| !self.inherited.contains(&fill)) {
                 unconstrained.push(fill);
@@ -238,10 +236,7 @@ impl InferenceRegion {
         if unconstrained.is_empty() {
             Ok(())
         } else {
-            tycker.err_k(
-                TyckError::UnconstrainedInference(unconstrained),
-                std::panic::Location::caller(),
-            )
+            tycker.err_k(TyckError::UnconstrainedInference(unconstrained))
         }
     }
 }
@@ -431,7 +426,7 @@ mod tests {
                     tycker.synthesize_once_k(provider, &environment, |tycker| {
                         TyEnvT::new(environment.clone(), provider).tyck_k(tycker, Action::syn())
                     })?;
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())
+                    tycker.err_k(TyckError::MissingAnnotation)
                 });
                 assert_eq!(rejected, Err(KontFailure));
                 let repeated = tycker.synthesize_once_k(provider, &environment, |_| {

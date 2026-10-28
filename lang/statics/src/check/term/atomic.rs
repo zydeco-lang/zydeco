@@ -24,7 +24,7 @@ impl TermChecker<'_> {
                 }
                 | Switch::Ana(AnnId::Set) => {
                     // can't deduce kind for now
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    tycker.err_k(TyckError::SortMismatch)?
                 }
                 | Switch::Ana(AnnId::Kind(kd)) => {
                     // a type hole, with a specific kind in mind
@@ -104,7 +104,7 @@ impl TermChecker<'_> {
                             TermAnnId::Compu(id, ann)
                         }
                         | ss::Kind::Arrow(_) | ss::Kind::Label(_) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                            tycker.err_k(TyckError::SortMismatch)?
                         }
                     }
                 }
@@ -209,9 +209,7 @@ impl TermChecker<'_> {
                 let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
                 TermAnnId::Value(triv, ann)
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-            }
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch)?,
         })
     }
 
@@ -236,9 +234,7 @@ impl TermChecker<'_> {
                         tycker.statics.env_value.insert_new(id, self.info.clone());
                         TermAnnId::Value(id, ty)
                     }
-                    | crate::query::LiteralSynOutcome::Error(error) => {
-                        tycker.err_k(error, std::panic::Location::caller())?
-                    }
+                    | crate::query::LiteralSynOutcome::Error(error) => tycker.err_k(error)?,
                 }
             }
             | Switch::Ana(annotation) => {
@@ -252,10 +248,7 @@ impl TermChecker<'_> {
                         | Switch::Syn => unreachable!("the synth path is query-produced"),
                         | Switch::Ana(annotation) => {
                             let AnnId::Type(ty) = annotation else {
-                                tycker.err_k(
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?
+                                tycker.err_k(TyckError::SortMismatch)?
                             };
                             Lub::lub_k(ty, literal_ty, tycker)
                         }
@@ -279,15 +272,16 @@ impl TermChecker<'_> {
                                     (ty, ss::IntegerType::Int)
                                 }
                             },
-                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
-                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                                tycker.err_k(TyckError::SortMismatch)?
+                            }
                         };
                         let value = i.value();
                         let Some(i) = i.with_type(integer_type) else {
-                            tycker.err_k(
-                                TyckError::IntegerLiteralOutOfRange { value, integer_type },
-                                std::panic::Location::caller(),
-                            )?
+                            tycker.err_k(TyckError::IntegerLiteralOutOfRange {
+                                value,
+                                integer_type,
+                            })?
                         };
                         (Lit::Integer(i), ty)
                     }
@@ -305,18 +299,16 @@ impl TermChecker<'_> {
                                     (ty, ss::FloatType::Float64)
                                 }
                             },
-                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker
-                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
+                            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                                tycker.err_k(TyckError::SortMismatch)?
+                            }
                         };
                         let original = value;
                         let Some(value) = value.with_type(float_type) else {
-                            tycker.err_k(
-                                TyckError::FloatLiteralOutOfRange {
-                                    value: original.value(),
-                                    float_type,
-                                },
-                                std::panic::Location::caller(),
-                            )?
+                            tycker.err_k(TyckError::FloatLiteralOutOfRange {
+                                value: original.value(),
+                                float_type,
+                            })?
                         };
                         (Lit::Float(value), ty)
                     }

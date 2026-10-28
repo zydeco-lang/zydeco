@@ -16,11 +16,7 @@ impl ConsScope {
         &mut self, tycker: &mut Tycker<'_>, item: su::PatId, action: PatternAction,
     ) -> ResultKont<(ss::VPatId, ss::TypeId)> {
         let checked = TyEnvT::new(self.env.clone(), item).tyck_k(tycker, action)?;
-        let component = checked.try_as_value(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let component = checked.try_as_value(tycker, TyckError::SortMismatch)?;
         self.env = checked.info;
         self.opened.extend(checked.inner.opened);
         Ok(component)
@@ -87,11 +83,7 @@ impl PackageOpening {
     ) -> ResultKont<()> {
         let checked = TyEnvT::new(self.scope.env.clone(), item)
             .tyck_k(tycker, PatternAction::ana(AnnId::Set).with_skolems(skolems.clone()))?;
-        let pattern = checked.annotation.try_as_kind(
-            tycker,
-            TyckError::SortMismatch,
-            std::panic::Location::caller(),
-        )?;
+        let pattern = checked.annotation.try_as_kind(tycker, TyckError::SortMismatch)?;
         self.scope.env = TyEnvT::new(self.scope.env.clone(), Assign(pattern, definition))
             .tyck_k(tycker, ())?
             .info;
@@ -109,8 +101,7 @@ impl PackageOpening {
         let payload_kind = source_binder.payload_kind(tycker);
         let checked = TyEnvT::new(self.scope.env.clone(), item)
             .tyck_k(tycker, PatternAction::ana(domain_kind.into()).with_skolems(skolems.clone()))?;
-        let (witness, _) =
-            checked.try_as_type(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        let (witness, _) = checked.try_as_type(tycker, TyckError::SortMismatch)?;
         self.scope.env = checked.info;
         self.scope.opened.extend(checked.inner.opened);
         let next_ty = match mode {
@@ -204,18 +195,13 @@ impl PatternChecker<'_> {
                     | ss::Type::Exists(_) | ss::Type::ManifestKind(_) => {
                         self.check_cons_ana_package_k(tycker, items, tail, expected, skolems)
                     }
-                    | _ => tycker.err_k(
-                        TyckError::TypeExpected {
-                            expected: "one of `_ * _` or `exists _ . _`".to_string(),
-                            found: expected,
-                        },
-                        std::panic::Location::caller(),
-                    ),
+                    | _ => tycker.err_k(TyckError::TypeExpected {
+                        expected: "one of `_ * _` or `exists _ . _`".to_string(),
+                        found: expected,
+                    }),
                 }
             }
-            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
-                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())
-            }
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => tycker.err_k(TyckError::SortMismatch),
         }
     }
 
@@ -247,13 +233,10 @@ impl PatternChecker<'_> {
     ) -> ResultKont<CheckedPattern> {
         let ss::Prod(component_tys) = expected.view_product_k(tycker, &self.info)?;
         if component_tys.len() != items.len() + 1 {
-            tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a product with matching components".to_string(),
-                    found: expected,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "a product with matching components".to_string(),
+                found: expected,
+            })?
         }
         let mut scope = ConsScope { env: self.info.clone(), opened: Vec::new() };
         let (components, tail) =
@@ -325,13 +308,10 @@ impl PatternChecker<'_> {
         }
 
         if opening.static_patterns.is_empty() {
-            tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "an existential package".to_string(),
-                    found: expected,
-                },
-                std::panic::Location::caller(),
-            )?
+            tycker.err_k(TyckError::TypeExpected {
+                expected: "an existential package".to_string(),
+                found: expected,
+            })?
         }
 
         let body_ty = body_ty.with_environment(&opening.scope.env).materialize_k(tycker)?;

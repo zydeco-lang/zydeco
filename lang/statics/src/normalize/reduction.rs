@@ -277,7 +277,7 @@ impl TypeId {
                         Lub::lub(arg_kd_, arg_kd, tycker)?;
                         body_kd
                     }
-                    | _ => tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?,
+                    | _ => tycker.err(TyckError::KindMismatch)?,
                 };
                 steps.push(TypeApplicationStep { argument, result_kind, original: None });
                 Ok((result_kind, steps))

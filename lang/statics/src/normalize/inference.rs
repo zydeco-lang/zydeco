@@ -13,13 +13,12 @@ impl InferenceRefinement {
             match tycker.statics.types_pre[&current] {
                 | Fillable::Done(_) => return Ok(None),
                 | Fillable::Fill(fill) if !visited.insert(fill) => {
-                    return tycker
-                        .err(TyckError::OccursCheck(fill), std::panic::Location::caller());
+                    return tycker.err(TyckError::OccursCheck(fill));
                 }
                 | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).copied() {
                     | Some(AnnId::Type(solution)) => current = solution,
                     | Some(AnnId::Set | AnnId::Kind(_)) => {
-                        return tycker.err(TyckError::SortMismatch, std::panic::Location::caller());
+                        return tycker.err(TyckError::SortMismatch);
                     }
                     | None => return Ok(Some(fill)),
                 },
@@ -128,13 +127,10 @@ impl TypeId {
     ) -> ResultKont<Prod<TypeId>> {
         match self.reveal_or_refine_product_k(tycker, env)? {
             | Type::Prod(product) => Ok(product),
-            | _ => tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a product with enough components".to_string(),
-                    found: self,
-                },
-                std::panic::Location::caller(),
-            ),
+            | _ => tycker.err_k(TyckError::TypeExpected {
+                expected: "a product with enough components".to_string(),
+                found: self,
+            }),
         }
     }
 
@@ -144,13 +140,10 @@ impl TypeId {
     ) -> ResultKont<Prod<TypeId>> {
         match self.reveal_or_refine_prepared_product_k(tycker, env)? {
             | Type::Prod(product) => Ok(product),
-            | _ => tycker.err_k(
-                TyckError::TypeExpected {
-                    expected: "a product with enough components".to_string(),
-                    found: self,
-                },
-                std::panic::Location::caller(),
-            ),
+            | _ => tycker.err_k(TyckError::TypeExpected {
+                expected: "a product with enough components".to_string(),
+                found: self,
+            }),
         }
     }
 }
@@ -167,7 +160,7 @@ impl FillId {
             return Ok(tycker.statics.solus.get(self).copied().unwrap_or(annotation));
         }
         if InferenceOccurs::new(*self).in_annotation(candidate, tycker)? {
-            return tycker.err(TyckError::OccursCheck(*self), std::panic::Location::caller());
+            return tycker.err(TyckError::OccursCheck(*self));
         }
 
         let solutions = tycker.statics.solus.clone();
@@ -179,7 +172,7 @@ impl FillId {
             if !matches!(Self::unresolved_head(tycker, solution), Some((head, _)) if head == *self)
                 && InferenceOccurs::new(*self).in_annotation(solution, tycker)?
             {
-                return tycker.err(TyckError::OccursCheck(*self), std::panic::Location::caller());
+                return tycker.err(TyckError::OccursCheck(*self));
             }
             self.constrain_solution(tycker, solution)?;
             let _ = tycker.statics.solus.upsert(*self, solution);
