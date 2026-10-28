@@ -1,7 +1,7 @@
 # Typed fields and checked header-array updates
 
-This 2026-09-15 study extends the [raw-kernel study](../2026-09-15-memory-kernels/README.md)
-through the implemented storage/codec split, typed fields, fixed views, and checked array access.
+This 2026-09-15 study measures raw memory kernels through the implemented storage/codec split,
+typed fields, fixed views, and checked array access.
 The source migration is `7d3e3772`; the address-binding planner change and these measurements are committed together.
 Check out the commit containing this study to reproduce its compiler and library.
 The [compiler reference](../../references/compiler.md#raw-memory-kernels) owns the implemented contract;
@@ -43,7 +43,7 @@ These are different workloads; their total counts are context, not comparisons w
 
 | Workload | Scanned allocation sites, boxed / local | Opaque allocation sites, boxed / local | Local raw kernels |
 | --- | ---: | ---: | ---: |
-| Earlier raw scalar update | 10 / 10 | 8 / 4 | 1 |
+| [Earlier raw scalar update](raw-int64.zy) | 10 / 10 | 8 / 4 | 1 |
 | Typed field and fixed view | 30 / 30 | 10 / 7 | 1 |
 | Direct checked header update | 55 / 55 | 6 / 3 | 1 |
 | Typed checked header update | 76 / 76 | 6 / 3 | 1 |

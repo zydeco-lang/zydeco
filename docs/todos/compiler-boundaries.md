@@ -169,8 +169,7 @@ without abstracting the synthesized body.
 Rechecked with the debug CLI on 2026-10-20,
 `pack (X : VType) is Int where 0 : X end` synthesizes `exists (X : VType) . Int`,
 while an expected `exists (X : VType) . X` rejects with `tyck.type-mismatch`.
-The [2026-09-07 audit](../evaluations/2026-09-07-bug-hunt/README.md#documented-behavior-retained-from-the-audit)
-observed that this difference is not reported.
+This difference is not reported.
 
 - [ ] Retain both probes and decide whether a concrete exported body should warn about the annotation
   or whether the expected-existential spelling needs clearer documentation.

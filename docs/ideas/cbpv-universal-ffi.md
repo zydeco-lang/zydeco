@@ -195,7 +195,7 @@ The repository supplies preliminary engineering evidence, with each current cont
 | Foreign entry and exit | [C imports and scalar exports](../references/language.md#14-foreign-interfaces) exercise concrete conversions. Foreign callbacks and general exported values remain deferred. |
 | Separate compilation | [Native unit artifacts](../references/compiler.md#native-unit-artifacts) carry explicit structural interfaces and support source-free composition. They do not provide a persistent foreign host API. |
 | Representation discipline | [Scalar boundaries](../references/compiler.md#scalar-value-boundaries) distinguish ordinary values from raw bits and verify local scalar programs. This is bounded compiler validation, not an interoperability soundness theorem. |
-| Compilation costs | The [memory-abstraction study](../evaluations/2026-09-14-memory-abstractions/README.md) and [raw-memory-kernel study](../evaluations/2026-09-15-memory-kernels/README.md) record reproducible code-site counts. They establish neither general FFI overhead nor runtime speedups. |
+| Compilation costs | The [typed memory study](../evaluations/2026-09-15-typed-memory/README.md) records reproducible code-site counts. They establish neither general FFI overhead nor runtime speedups. |
 
 The concrete [foreign-interface proposal](../proposals/c-ffi.md), [Zydeco ABI proposal](../proposals/zydeco-abi.md),
 and [Rust host survey](../proposals/rust-host.md) own implementation options and staging.

@@ -4,7 +4,7 @@
   "compiler_build": "cargo build --offline --bin zydeco (dev profile)",
   "target": "AMD64; default high-SPS normalization",
   "source_sha256": {
-    "docs/evaluations/2026-09-15-memory-kernels/raw-int64.zy": "c93d3c9d56c5e727cd4212bd2c7fdcdb602e8ca5bdf9371b24d73a62259baef7",
+    "docs/evaluations/2026-09-15-typed-memory/raw-int64.zy": "c93d3c9d56c5e727cd4212bd2c7fdcdb602e8ca5bdf9371b24d73a62259baef7",
     "lib/tests/std/typed-memory-kernel.zy": "3c3f75b0c90f9d9977b7678e27ed788ce421c738dd19508a27160e53baa9f0f3",
     "docs/evaluations/2026-09-15-typed-memory/header-raw.zy": "1bf4c4c89ef647fe105b37beefafe7d871583857e37545bd798df326b07a0eea",
     "docs/evaluations/2026-09-15-typed-memory/header-typed.zy": "90ccb1557ff29bbe54e710d4e986e2510438a6725063d35a1ab5ede7bde6979c",

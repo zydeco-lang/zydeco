@@ -2921,10 +2921,8 @@ check full-width wrapping and runtime operands across all backends, preserve err
 and exercise the size limit, overlapping unaligned addresses, and retained pure address bindings.
 The [typed field update](../../lib/tests/std/typed-memory-kernel.zy) composes record state transitions,
 field projection, and a fixed view with these same scalar operations.
-The [dated probe](../evaluations/2026-09-15-memory-kernels/README.md) records whole-program allocation sites separately
-from the allocation-free kernel.
 The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) exercises this boundary
-through std recipes and records residual allocation outside it.
+through std recipes and records whole-program allocation sites outside the allocation-free kernel.
 Calls, joins, managed components, and broader contification remain
 in [memory compilation](../proposals/memory-compilation.md#44-carry-raw-components-only-across-agreeing-entries).
 

@@ -27,9 +27,8 @@ Remove resolved entries once their repair and durable rationale have reached the
   The representation decision must cover destruction as well as lookup, including recursive destruction,
   closure environments, and cycles; list construction and traversal regressions should keep repeated references
   to one value and check deep-value teardown separately.
-  The 2026-09-07 audit's scaling and deep-teardown observations are retained
-  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#interpreter-value-lookup);
-  they describe `e00b91f0` and were not rerun.
+  At `e00b91f0` a 5,000-cell list took 2.4 seconds and 15,000 cells 22 seconds,
+  and a 20,000-cell value overflowed the host stack; those thresholds were not rerun.
 - Evaluate long-running host-resource retention
   under the current [runtime-instance lifetime](../references/compiler.md#runtime-instances)
   and [memory extension questions](../proposals/bytes.md#remaining-questions).
@@ -38,15 +37,13 @@ Remove resolved entries once their repair and durable rationale have reached the
   Any reclamation account must preserve live aliases, host callbacks, and the borrowed buffers
   of the [C FFI contract](../proposals/c-ffi.md), treat strings and bytes separately,
   and start from allocation and reclamation accounting plus workloads whose live result stays bounded.
-  Historical RSS figures from `e00b91f0` are retained
-  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#long-running-host-retention)
-  as background for the long-running case, not as evidence about entry teardown;
-  allocator retention makes immediate RSS reduction an unreliable sole assertion.
+  Allocator retention makes immediate RSS reduction an unreliable sole assertion.
 - Choose a checker host-stack strategy that covers the CLI, REPL, and editor entry points rather than relying
   on a launcher's stack size, and run its regressions in child processes so an abort cannot take down the test harness.
-  The 2026-09-07 audit's approximate failure thresholds and their platform dependence are retained
-  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#checker-host-stack);
-  deep checker recursion and [residual-code growth](../ideas/README.md#residual-code-sharing) remain separate questions.
+  At `e00b91f0` an 8 MiB main thread overflowed at about 1,500 nested `let`s, 2,000 nested functions or thunks,
+  and 8,000 nested type applications, while parsing succeeded on its explicit stack;
+  those thresholds are platform-dependent and were not rerun.
+  Deep checker recursion and [residual-code growth](../ideas/README.md#residual-code-sharing) remain separate questions.
 - Exercise product-suffix layouts through the backend boundary.
   [ProductLayout](../../lang/assembly/src/syntax.rs) distinguishes physical arity
   from logical stack elements, so a final element may point into an existing product suffix
@@ -57,8 +54,6 @@ Remove resolved entries once their repair and durable rationale have reached the
   Construct the layouts explicitly in backend regressions before adding a source producer: cover field order,
   packing and unpacking, a suffix retained after its original pointer is dropped,
   collection while that suffix is live, interpreter/native agreement, and the corresponding WebAssembly lowering.
-  The audit's code-inspection finding and limits are
-  in the [dated evidence record](../evaluations/2026-09-07-bug-hunt/README.md#product-suffix-layouts).
 
 Concrete unimplemented designs belong in [proposals](../proposals/README.md);
 exploratory questions and evaluation directions belong in [design ideas](../ideas/README.md).

@@ -242,8 +242,8 @@ Matching the raw Zydeco API is an intermediate milestone because that path also 
 `Ptr L S` has no state or layout fields, and fixed fields need no carried displacement.
 Ordinary products, operation thunks, captured values,
 and continuation frames still follow the [compiler representation policy](../references/compiler.md#policy-selection).
-The [small View comparison](../evaluations/2026-09-14-memory-abstractions/README.md) shows one fixed view
-matching its raw baseline, while a library header view retains extra generated work.
+The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) shows a fixed view forming
+the same local kernel as its raw baseline, while the checked header abstraction retains extra generated sites.
 Its counts are static code sites, not executed allocations or timings.
 
 ### 4.1 Specialize known operations
@@ -316,7 +316,7 @@ Contification alone supplies neither a stack-allocation lifetime nor permission 
 
 The implemented [raw memory kernels](../references/compiler.md#raw-memory-kernels) handle
 bounded load–arithmetic–store chains of wide scalars with no implicit allocation inside the kernel.
-Their [code-generation probe](../evaluations/2026-09-15-memory-kernels/README.md) separately counts
+The [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) separately counts
 ordinary boundary costs; raw stack homes and Wasm virtual-memory imports remain.
 This is a local computation contract.
 Unknown callbacks, shared results, and other control edges still use the existing source calling convention,

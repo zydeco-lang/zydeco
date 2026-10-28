@@ -12,7 +12,7 @@ def main():
     study = Path(__file__).resolve().parent
     repository = study.parents[2]
     sources = {
-        "raw_scalar": study.parent / "2026-09-15-memory-kernels/raw-int64.zy",
+        "raw_scalar": study / "raw-int64.zy",
         "typed_field_view": repository / "lib/tests/std/typed-memory-kernel.zy",
         "raw_header_update": study / "header-raw.zy",
         "typed_header_update": study / "header-typed.zy",
