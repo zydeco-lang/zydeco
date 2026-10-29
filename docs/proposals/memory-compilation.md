@@ -19,9 +19,7 @@ and the geometry-only record/array factories are implemented. Their contracts no
 [Bounded raw memory kernels](../references/compiler.md#raw-memory-kernels) connect wide scalar accesses to arithmetic;
 the [typed field/header comparison](../evaluations/2026-09-15-typed-memory/README.md) verifies that local boundary while
 exposing remaining allocation sites around checked views. Raw component transport across calls remains proposed compiler
-work. The [interface example](../examples/memory-compilation/interfaces.zy) imports the implemented sealed std
-interfaces and demonstrates geometry queries and explicit codec materialization. No source lifetimes, linearity rules,
-or new universe of layout types is required.
+work. No source lifetimes, linearity rules, or new universe of layout types is required.
 
 ## 1. Start with the bytes
 

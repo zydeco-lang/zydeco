@@ -473,7 +473,7 @@ fn obsolete_forms_conflicting_definitions_and_implicit_captures_are_rejected() {
 
 #[test]
 fn checked_in_file_packages_check_run_and_test_without_selectors() {
-    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/examples/packages");
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/packages");
     let library = directory.join("library.zy").to_str().unwrap().to_owned();
     let binary = directory.join("main.zy").to_str().unwrap().to_owned();
     let show = Fixture::success_in(&directory, &["show"]);

@@ -17,7 +17,7 @@ pub const STATE_VERSION: u32 = 1;
 /// Directories whose contents test executables read at runtime. Changes here
 /// can alter test outcomes without changing a test executable.
 const TEST_INPUT_DIRECTORIES: &[&str] =
-    &["lib", "runtime", "lang/tests/cases", "lang/tests/templates", "docs/examples"];
+    &["lib", "runtime", "lang/tests/cases", "lang/tests/templates", "cli/tests/fixtures"];
 
 /// Individual files outside [`TEST_INPUT_DIRECTORIES`] that tests consume.
 const TEST_INPUT_FILES: &[&str] = &["workspace.zy"];
