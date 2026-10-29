@@ -55,6 +55,16 @@ impl AdminArena {
     pub(crate) fn insert_def(&mut self, id: DefId, name: VarName) {
         self.defs.insert_new(id, name);
     }
+
+    /// The typed source term that originated a generated node, if any.
+    pub fn term_site(&self, id: impl Into<TermId>) -> Option<ss::TermId> {
+        self.terms.back(&id.into()).copied()
+    }
+
+    /// The typed source pattern that originated a generated pattern, if any.
+    pub fn pattern_site(&self, id: VPatId) -> Option<ss::PatId> {
+        self.pats.back(&id).copied()
+    }
 }
 
 impl DefinitionNames for AdminArena {
@@ -164,6 +174,17 @@ impl SpsProgram {
             target: SpsArena { admin, inner: SpsInnerArena { protocols, ..Default::default() } },
             root,
         }
+    }
+}
+
+impl SpsArena {
+    /// Wrap `tail` in stack let-bindings naming `frames`, the first outermost.
+    pub(crate) fn name_frames(
+        &mut self, frames: Vec<StackId>, tail: CompuId, site: Option<ss::TermId>,
+    ) -> CompuId {
+        frames.into_iter().rev().fold(tail, |tail, frame| {
+            Let { binder: StackVar, bindee: frame, tail }.build(self, site)
+        })
     }
 }
 

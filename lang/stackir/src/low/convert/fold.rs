@@ -305,7 +305,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     }
 
     fn finish_value(&mut self, source: high::ValueId, value: impl Into<low::Value>) {
-        let site = self.conversion.value_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let value = value.into().build(self.conversion, site);
         if let Some(protocol) = self.conversion.source.inner.value_protocols.get(&source) {
             self.conversion.arena.inner.value_protocols.insert_new(value, protocol.clone());
@@ -314,7 +314,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     }
 
     fn finish_computation(&mut self, source: high::CompuId, compu: impl Into<low::Computation>) {
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         self.computations.push(compu.into().build(self.conversion, site));
     }
 
@@ -433,7 +433,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
 
     fn resume_closure(&mut self, source: high::ValueId, captures: Captures) -> Step<Self> {
         let body = self.computation();
-        let site = self.conversion.value_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let protocol = match self.conversion.source.inner.value_protocols.get(&source) {
             | Some(ValueProtocol::Thunk(protocol)) => *protocol.clone(),
             | _ => StackProtocol::Unknown,
@@ -458,7 +458,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     fn visit_stack(&mut self, source: high::StackId, env: RenameEnvId) -> Step<Self> {
         match self.conversion.source.inner.stacks[&source].clone() {
             | high::Stack::Var(_) => {
-                let site = self.conversion.stack_site(source);
+                let site = self.conversion.source.admin.term_site(source);
                 self.stacks.push(low::StackVar.build(self.conversion, site));
             }
             | high::Stack::Arg(high::Cons(value, rest)) => {
@@ -502,14 +502,14 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     fn resume_finish_arg(&mut self, source: high::StackId) -> Step<Self> {
         let rest = self.stack();
         let value = self.value();
-        let site = self.conversion.stack_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         self.stacks.push(low::Cons(value, rest).build(self.conversion, site));
         Step::Return(())
     }
 
     fn resume_finish_tag(&mut self, source: high::StackId, tag: high::DtorIdx) -> Step<Self> {
         let rest = self.stack();
-        let site = self.conversion.stack_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         self.stacks.push(low::Cons(tag, rest).build(self.conversion, site));
         Step::Return(())
     }
@@ -519,7 +519,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         captures: Captures,
     ) -> Step<Self> {
         let body = self.computation();
-        let site = self.conversion.stack_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let protocol = self
             .conversion
             .source
@@ -776,7 +776,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     }
 
     fn resume_finish_force(&mut self, source: high::CompuId) -> Step<Self> {
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let package = self.value();
         let stack = self.stack();
         let environment_def = self.conversion.alloc_def(VarName("__environment__".into()));
@@ -798,7 +798,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     }
 
     fn resume_finish_return(&mut self, source: high::CompuId) -> Step<Self> {
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let package = self.stack();
         let value = self.value();
         let code_def = self.conversion.alloc_def(VarName("__continuation_code__".into()));
@@ -924,7 +924,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
             .map(|(dtor, tail)| low::CoMatcher { dtor, tail })
             .collect();
         let scrut = self.stack();
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let output = low::SCoMatch { scrut, arms }.build(self.conversion, site);
         if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
             self.conversion.arena.inner.case_protocols.insert_new(output, protocol.clone());
@@ -953,7 +953,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         label: high::DefId,
     ) -> Step<Self> {
         let body = self.computation();
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let environment = self.conversion.captured_value_inside(&captures.bindings, site);
         let code: low::ValueId = label.build(self.conversion, site);
         let closure = low::ClosurePackage { environment, code }.build(self.conversion, site);
@@ -984,7 +984,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         parameters: Vec<(high::DefId, high::DefId)>, tail: high::CompuId, env: RenameEnvId,
     ) -> Step<Self> {
         let body = self.computation();
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let pushed = parameters.len();
         // A closed label pops the variables each jump pushes, the first on top.
         let body = parameters.into_iter().rev().fold(body, |body, (_, parameter)| {
@@ -1005,7 +1005,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
     ) -> Step<Self> {
         let tail = self.computation();
         let body = self.computation();
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let node = low::LetLabel { label, kind, body, tail }.build(self.conversion, site);
         // Jumps supply the procedure's stack under the variables a closed label pops.
         if let Some(protocol) = self.conversion.source.inner.compu_protocols.get(&source) {
@@ -1022,7 +1022,7 @@ impl<'a, 'source, D: Driver> ConversionFolder<'a, 'source, D> {
         &mut self, source: high::CompuId, env: RenameEnvId, procedure: high::DefId,
     ) -> Step<Self> {
         let stack = self.stack();
-        let site = self.conversion.compu_site(source);
+        let site = self.conversion.source.admin.term_site(source);
         let label = self.conversion.renamed_def(env, procedure);
         let variables = self.conversion.labels[&label].clone();
         let jump = if self.conversion.scheme.names_frames() {

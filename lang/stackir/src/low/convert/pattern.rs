@@ -26,7 +26,7 @@ impl Folder for PatternFolder<'_, '_> {
     type Frame = PatternFrame;
 
     fn enter(&mut self, source: high::VPatId) -> Step<Self> {
-        let site = self.conversion.pattern_site(source);
+        let site = self.conversion.source.admin.pattern_site(source);
         let translated = match &self.conversion.source.inner.vpats[&source] {
             | high::ValuePattern::Hole(_) => PatternTranslation {
                 pattern: low::Hole.build(self.conversion, site),
@@ -60,7 +60,7 @@ impl Folder for PatternFolder<'_, '_> {
     fn resume(&mut self, frame: PatternFrame, child: PatternTranslation) -> Step<Self> {
         match frame {
             | PatternFrame::Constructor { source, tag } => {
-                let site = self.conversion.pattern_site(source);
+                let site = self.conversion.source.admin.pattern_site(source);
                 let pattern = low::Ctor(tag, child.pattern).build(self.conversion, site);
                 self.finish(source, PatternTranslation { pattern, bindings: child.bindings })
             }
@@ -102,7 +102,7 @@ impl PatternFolder<'_, '_> {
             }
             | _ => unreachable!("pattern fields"),
         };
-        let site = self.conversion.pattern_site(source);
+        let site = self.conversion.source.admin.pattern_site(source);
         let pattern = translated.build(self.conversion, site);
         self.finish(source, PatternTranslation { pattern, bindings })
     }

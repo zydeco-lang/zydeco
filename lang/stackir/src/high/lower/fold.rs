@@ -824,7 +824,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
         &mut self, frame: StackId, steps: Vec<ValueStep>, site: Option<ss::TermId>,
     ) -> Step<Self> {
         let tail = self.computation();
-        let named = self.lo.name_frames(vec![frame], tail, site);
+        let named = self.lo.arena.name_frames(vec![frame], tail, site);
         self.computations.push(ValuePlan { steps, value: () }.bind(self.lo, named));
         Step::Return(())
     }
@@ -1174,7 +1174,7 @@ impl<'lo, 'source> LoweringFolder<'lo, 'source> {
             self.lo.push_onto(frame, &mut named, site)
         });
         let call = SForce { thunk: operator, stack }.build(self.lo, site);
-        self.computations.push(self.lo.name_frames(named, call, site));
+        self.computations.push(self.lo.arena.name_frames(named, call, site));
         Step::Return(())
     }
 }

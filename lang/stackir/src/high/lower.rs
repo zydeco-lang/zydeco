@@ -331,15 +331,6 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// Wrap a computation in stack let-bindings naming `frames`, the first outermost.
-    fn name_frames(
-        &mut self, frames: Vec<StackId>, tail: CompuId, site: Option<ss::TermId>,
-    ) -> CompuId {
-        frames.into_iter().rev().fold(tail, |tail, frame| {
-            Let { binder: StackVar, bindee: frame, tail }.build(self, site)
-        })
-    }
-
     /// Guard a branch with the stack its arms share, when the scheme names it.
     /// `None` names the ambient stack itself.
     fn join(
@@ -410,7 +401,7 @@ impl RootLowerer<'_> {
             stack = lowerer.push_onto(frame, &mut named, None);
         }
         let root = LoweringFolder::new(&mut lowerer).lower::<D>(root, stack);
-        let root = lowerer.name_frames(named, root, None);
+        let root = lowerer.arena.name_frames(named, root, None);
         lowerer.finish(root)
     }
 }

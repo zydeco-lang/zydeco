@@ -158,22 +158,6 @@ impl<'a> ClosureConversion<'a> {
         self.alloc_def(VarName(format!("__{role}_code__")))
     }
 
-    fn compu_site(&self, id: high::CompuId) -> Option<ss::TermId> {
-        self.source.admin.terms.back(&high::TermId::Compu(id)).copied()
-    }
-
-    fn value_site(&self, id: high::ValueId) -> Option<ss::TermId> {
-        self.source.admin.terms.back(&high::TermId::Value(id)).copied()
-    }
-
-    fn stack_site(&self, id: high::StackId) -> Option<ss::TermId> {
-        self.source.admin.terms.back(&high::TermId::Stack(id)).copied()
-    }
-
-    fn pattern_site(&self, id: high::VPatId) -> Option<ss::PatId> {
-        self.source.admin.pats.back(&id).copied()
-    }
-
     /// The variables a body reads under `env`. A call to a closed procedure reads the variables
     /// that its jump pushes; a label itself is static code, never captured.
     fn sorted_free_vars(

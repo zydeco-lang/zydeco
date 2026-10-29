@@ -293,15 +293,6 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         (spine, demands)
     }
 
-    /// Wrap a computation in stack let-bindings naming `spine`, the deepest frame outermost.
-    fn name_spine(
-        &mut self, spine: Vec<StackId>, tail: CompuId, site: Option<ss::TermId>,
-    ) -> CompuId {
-        spine.into_iter().rev().fold(tail, |tail, frame| {
-            Let { binder: StackVar, bindee: frame, tail }.build(self.norm, site)
-        })
-    }
-
     fn computation(&mut self) -> Residual<CompuId> {
         self.computations.pop().expect("completed computation child")
     }
@@ -311,17 +302,17 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         &mut self, source: CompuId, compu: impl Into<Computation<LetJoin>>, spine: Vec<StackId>,
         demands: Demands,
     ) {
-        let site = self.norm.source.admin.terms.back(&TermId::Compu(source)).copied();
+        let site = self.norm.source.admin.term_site(source);
         let node = compu.into().build(self.norm, site);
         if let Some(protocol) = self.norm.source.inner.compu_protocols.get(&source) {
             self.norm.arena.inner.compu_protocols.insert_new(node, protocol.clone());
         }
-        let node = self.name_spine(spine, node, site);
+        let node = self.norm.arena.name_frames(spine, node, site);
         self.computations.push(Residual { node, demands });
     }
 
     fn visit_value(&mut self, id: ValueId, env: EnvId, demand: Demand) -> Step<Self> {
-        let site = self.norm.source.admin.terms.back(&TermId::Value(id)).copied();
+        let site = self.norm.source.admin.term_site(id);
         if demand.is_absent() && self.norm.discardable(id) {
             self.values
                 .push(Residual { node: Triv.build(self.norm, site), demands: Demands::default() });
@@ -402,7 +393,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     fn build_value(
         &mut self, source: ValueId, value: impl Into<Value>, demands: Demands, protocol: bool,
     ) {
-        let site = self.norm.source.admin.terms.back(&TermId::Value(source)).copied();
+        let site = self.norm.source.admin.term_site(source);
         let node = value.into().build(self.norm, site);
         if let Some(role) = self.norm.source.inner.builtin_functions.get(&source) {
             self.norm.arena.inner.builtin_functions.insert_new(node, *role);
@@ -417,7 +408,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let ScopedStack { node: id, scope } = self.norm.resolve_stack(stack);
         match self.norm.source.inner.stacks[&id].clone() {
             | Stack::Var(stack_var) => {
-                let site = self.norm.source.admin.terms.back(&TermId::Stack(id)).copied();
+                let site = self.norm.source.admin.term_site(id);
                 self.stacks.push(StackResidual {
                     node: stack_var.build(self.norm, site),
                     spine: Vec::new(),
@@ -458,7 +449,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     // Remaining worklist: split computation normalization by form.
     #[allow(clippy::too_many_lines)]
     fn visit_computation(&mut self, id: CompuId, scope: Scope) -> Step<Self> {
-        let site = self.norm.source.admin.terms.back(&TermId::Compu(id)).copied();
+        let site = self.norm.source.admin.term_site(id);
         match self.norm.source.inner.compus[&id].clone() {
             | Computation::Memory(step) => {
                 let env = scope.values;
@@ -904,7 +895,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
     }
 
     fn resume_finish_stack(&mut self, source: StackId, parent: StackParent) -> Step<Self> {
-        let site = self.norm.source.admin.terms.back(&TermId::Stack(source)).copied();
+        let site = self.norm.source.admin.term_site(source);
         let tail = self.stack();
         let (rest, spine, rest_demands) = self.consumed(tail);
         let (stack, demands): (Stack, _) = match parent {
@@ -925,7 +916,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
             body.demands.remove(&def);
         }
         let binder = self.norm.pattern::<D>(binder);
-        let site = self.norm.source.admin.terms.back(&TermId::Stack(source)).copied();
+        let site = self.norm.source.admin.term_site(source);
         let node = Kont { binder, body: body.node }.build(self.norm, site);
         self.stacks.push(StackResidual { node, spine: Vec::new(), demands: body.demands });
         Step::Return(())
@@ -1210,7 +1201,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let bindee = self.stack();
         let tail = self.computation();
         let (spine, bindee_demands) = self.spine_of(bindee);
-        let node = self.name_spine(spine, tail.node, site);
+        let node = self.norm.arena.name_frames(spine, tail.node, site);
         self.computations.push(Residual { node, demands: tail.demands.join(bindee_demands) });
         Step::Return(())
     }
@@ -1244,7 +1235,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let first = self.value();
         let when_false = self.computation();
         let when_true = self.computation();
-        let branch_site = self.norm.source.admin.terms.back(&TermId::Compu(source)).copied();
+        let branch_site = self.norm.source.admin.term_site(source);
         let tail = CompareBranch {
             operation: compare.operation,
             operands: [first.node, second.node],
@@ -1344,7 +1335,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
             .into_iter()
             .map(|(arm, _, _)| arm)
             .collect();
-        let branch_site = self.norm.source.admin.terms.back(&TermId::Compu(tail)).copied();
+        let branch_site = self.norm.source.admin.term_site(tail);
         let tail = SCoprodMatch { scrut: scrut.node, arms }.build(self.norm, branch_site);
         self.join_branch(tail, demands.join(scrut.demands), join, site)
     }
@@ -1357,7 +1348,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         // frame above it; a branch-join guard names the whole stack its arms share.
         let (node, stack_demands) = if self.norm.scheme.names_frames() {
             let (spine, stack_demands) = self.spine_of(stack);
-            (self.name_spine(spine, tail, site), stack_demands)
+            (self.norm.arena.name_frames(spine, tail, site), stack_demands)
         } else {
             let node = Let { binder: StackVar, bindee: stack.node, tail }.build(self.norm, site);
             (node, stack.demands)
@@ -1442,7 +1433,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let stack = self.stack();
         let (stack, spine, demands) = self.consumed(stack);
         let node = SReturn { stack, value: value.node }.build(self.norm, site);
-        let node = self.name_spine(spine, node, site);
+        let node = self.norm.arena.name_frames(spine, node, site);
         self.computations.push(Residual { node, demands: demands.join(value.demands) });
         Step::Return(())
     }
@@ -1468,7 +1459,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let first = defs[0].build(self.norm, None);
         let node =
             Let { binder: Cons(first, StackVar), bindee: stack, tail }.build(self.norm, site);
-        let node = self.name_spine(spine, node, site);
+        let node = self.norm.arena.name_frames(spine, node, site);
         self.computations.push(Residual { node, demands });
         Step::Return(())
     }
@@ -1479,7 +1470,7 @@ impl<'a, D: Driver> NormalizationFolder<'a, D> {
         let stack = self.stack();
         let (stack, spine, demands) = self.consumed(stack);
         let node = ExternCall { function, stack }.build(self.norm, site);
-        let node = self.name_spine(spine, node, site);
+        let node = self.norm.arena.name_frames(spine, node, site);
         self.computations.push(Residual { node, demands });
         Step::Return(())
     }

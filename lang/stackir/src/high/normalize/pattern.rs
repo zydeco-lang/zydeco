@@ -54,7 +54,7 @@ impl PatternFolder<'_> {
         if let Some(&mut input) = frame.child() {
             return Step::Call { input, frame };
         }
-        let site = self.norm.source.admin.pats.back(&frame.source).copied();
+        let site = self.norm.source.admin.pattern_site(frame.source);
         let pattern = match frame.pattern {
             | ValuePattern::VCons(VCons { items, layout }) => VCons::new(items, layout).into(),
             | ValuePattern::Var(def) => {

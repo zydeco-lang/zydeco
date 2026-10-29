@@ -249,7 +249,7 @@ impl SubtreeCopy<'_> {
         let arena = &mut *self.arena;
         match (source, layer) {
             | (EntityId::Pattern(source), Layer::Pattern(pattern)) => {
-                let site = arena.admin.pats.back(&source).copied();
+                let site = arena.admin.pattern_site(source);
                 let copy = pattern.build(arena, site);
                 if let Some(protocol) = arena.inner.pattern_protocols.get(&source).cloned() {
                     arena.inner.pattern_protocols.insert_new(copy, protocol);
@@ -257,7 +257,7 @@ impl SubtreeCopy<'_> {
                 copy.into()
             }
             | (EntityId::Value(source), Layer::Value(value)) => {
-                let site = arena.admin.terms.back(&TermId::Value(source)).copied();
+                let site = arena.admin.term_site(source);
                 let copy = value.build(arena, site);
                 if let Some(protocol) = arena.inner.value_protocols.get(&source).cloned() {
                     arena.inner.value_protocols.insert_new(copy, protocol);
@@ -268,11 +268,11 @@ impl SubtreeCopy<'_> {
                 copy.into()
             }
             | (EntityId::Stack(source), Layer::Stack(stack)) => {
-                let site = arena.admin.terms.back(&TermId::Stack(source)).copied();
+                let site = arena.admin.term_site(source);
                 stack.build(arena, site).into()
             }
             | (EntityId::Computation(source), Layer::Computation(computation)) => {
-                let site = arena.admin.terms.back(&TermId::Compu(source)).copied();
+                let site = arena.admin.term_site(source);
                 let copy = computation.build(arena, site);
                 if let Some(protocol) = arena.inner.compu_protocols.get(&source).cloned() {
                     arena.inner.compu_protocols.insert_new(copy, protocol);
