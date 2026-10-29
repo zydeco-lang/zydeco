@@ -317,6 +317,12 @@ impl SourceQueryDb for CompilerSession {
 }
 
 impl CompilerSession {
+    /// The input of an analysis root, with a load failure reported as an analysis error.
+    fn analysis_root(&self, root: &Path) -> Result<SourceInput, AnalysisError> {
+        self.source_input(root.to_path_buf())
+            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })
+    }
+
     /// Expand explicitly authored discovery rules once into the project's source inputs.
     pub fn project(&self, sources: &[PathBuf]) -> Result<super::Project, SourceLoadError> {
         let mut prepared = std::collections::BTreeSet::new();
@@ -412,9 +418,7 @@ impl CompilerSession {
     pub fn analyze_package(
         &self, id: &super::PackageId, project: Arc<super::Project>,
     ) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
-        let root = self
-            .source_input(id.path.clone())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(&id.path)?;
         analyze_source(self, root, id.name.clone(), project)
     }
     /// Create a consistent read snapshot for a request.
@@ -486,9 +490,7 @@ impl CompilerSession {
 
     /// Analyze one root through type checking, retaining partial facts after type errors.
     pub fn analyze(&self, root: impl AsRef<Path>) -> Result<Arc<ProgramAnalysis>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         analyze_source(self, root, None, Arc::default())
     }
 
@@ -499,9 +501,7 @@ impl CompilerSession {
     pub fn materialize_arena(
         &self, analysis: &ProgramAnalysis,
     ) -> Result<Arc<zydeco_statics::arena::StaticsArena>, AnalysisError> {
-        let root = self
-            .source_input(analysis.root_path().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(analysis.root_path())?;
         let (_, output) =
             rechecked(self, root, analysis.package.clone(), analysis.project.clone())?;
         Ok(output.outcome.statics_arc())
@@ -599,9 +599,7 @@ impl CompilerSession {
     pub fn normalized_type(
         &self, root: impl AsRef<Path>, id: zydeco_statics::syntax::TypeId,
     ) -> Result<Option<zydeco_statics::syntax::Type>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         let id = zydeco_statics::query::InternedType::new(self, id);
         Ok(normalized_type_at(self, root, id))
     }
@@ -610,9 +608,7 @@ impl CompilerSession {
     pub fn diagnostics(
         &self, root: impl AsRef<Path>,
     ) -> Result<Option<zydeco_statics::check::TyckDiagnostics>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         Ok(diagnostics_at(self, root))
     }
 
@@ -620,9 +616,7 @@ impl CompilerSession {
     pub fn coverage(
         &self, root: impl AsRef<Path>,
     ) -> Result<Vec<zydeco_statics::validate::CoverageError>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         Ok(coverage_at(self, root))
     }
 
@@ -630,9 +624,7 @@ impl CompilerSession {
     pub fn fill_solution(
         &self, root: impl AsRef<Path>, fill: zydeco_statics::syntax::FillId,
     ) -> Result<Option<zydeco_statics::syntax::AnnId>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         let fill = zydeco_statics::query::InternedFill::new(self, fill);
         Ok(fill_solution_at(self, root, fill))
     }
@@ -641,9 +633,7 @@ impl CompilerSession {
     pub fn annotation_of_def(
         &self, root: impl AsRef<Path>, def: zydeco_statics::syntax::DefId,
     ) -> Result<Option<zydeco_statics::syntax::AnnId>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         let def = zydeco_statics::query::InternedDef::new(self, def);
         Ok(annotation_of_def(self, root, def))
     }
@@ -652,9 +642,7 @@ impl CompilerSession {
     pub fn type_definition_of_def(
         &self, root: impl AsRef<Path>, def: zydeco_statics::syntax::DefId,
     ) -> Result<Option<zydeco_statics::syntax::TypeId>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         let def = zydeco_statics::query::InternedDef::new(self, def);
         Ok(type_definition_of_def(self, root, def))
     }
@@ -663,9 +651,7 @@ impl CompilerSession {
     pub fn annotation_of_term(
         &self, root: impl AsRef<Path>, term: zydeco_statics::surface_syntax::TermId,
     ) -> Result<Option<zydeco_statics::syntax::TermAnnId>, AnalysisError> {
-        let root = self
-            .source_input(root.as_ref().to_path_buf())
-            .map_err(|error| AnalysisError::Source { error: Arc::new(error.into()) })?;
+        let root = self.analysis_root(root.as_ref())?;
         let term = zydeco_statics::query::InternedTerm::new(self, term);
         Ok(term_annotation_at(self, root, term))
     }
