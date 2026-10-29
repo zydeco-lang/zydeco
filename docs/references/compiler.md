@@ -143,29 +143,26 @@ let mut lowering = SpsLowPipeline { scoped: &scoped, statics: &statics }
 let sps_low = lowering.run_infallible(sps);
 ```
 
-#### Runtime Sequences and Execution Adapters
+#### Runtime Sequences
 
 [`PassSequence<'p, Ir, E>`](../../lang/utils/src/pass/sequence.rs) stores a vector
 of configured passes sharing one input/output contract and error type.
 Static composition retains concrete pass types; a runtime sequence boxes passes at its storage boundary.
-`with_pass` appends an occurrence and retains its position, including duplicates.
+`with_pass` appends an occurrence and retains its position, including duplicates,
+so a sequence repeats a pass by appending it again.
 An empty sequence and `Identity` return their input.
-`when(enabled)` conditionally runs a stage that preserves its IR type;
-`repeat(times)` executes the whole enclosed stage or group exactly that many times, stopping at the first error.
-A disabled stage or zero repetitions return the input without invoking the enclosed pass.
 Configuration is constructed once, while each invocation receives the preceding invocation's output.
 
-`by_ref` allows a sequence to borrow an existing configured pass,
-and the sequence lifetime permits borrowed dependencies without imposing `Clone`, `Send`, or `'static` on every pass.
-Failure does not roll back ownership of an input consumed by a pass.
-This makes reuse explicit while leaving each pass responsible for its temporary construction state.
+The sequence lifetime permits borrowed dependencies without imposing `Clone`, `Send`, or `'static` on every pass.
+Failure does not roll back ownership of an input consumed by a pass, and each pass remains responsible
+for its temporary construction state.
 
 #### Observation and Failures
 
 [`with_observer`](../../lang/utils/src/pass/observe.rs) wraps a pass with typed before/after hooks
 for inspection, verification, or rendering.
 `PassLocation` identifies its occurrence with a name and structural index path;
-the wrapper counts invocations, including repetitions and reuse across outer executions.
+the wrapper counts invocations, including reuse across outer executions.
 Paths are stored with zero-based indices and displayed with one-based positions.
 Observers borrow the program, and timing measures pass execution separately from observer callbacks.
 A rejected before hook prevents the pass from running; a rejected after hook prevents downstream execution.

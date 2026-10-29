@@ -92,7 +92,8 @@ fn one_plan_instantiates_independent_observed_runs_with_borrowed_output() {
         };
         let observed =
             plan.instantiate_observed(&mut observer).run(Fixture::program(false)).unwrap();
-        let direct = Normalizer.repeat(2).run_infallible(Fixture::program(false));
+        let direct =
+            zydeco_utils::pipeline![Normalizer, Normalizer].run_infallible(Fixture::program(false));
         let format = |program: &FragmentProgram| {
             let program = program.as_program();
             let arena = program.arena();

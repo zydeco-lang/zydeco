@@ -3,7 +3,7 @@
 use std::convert::Infallible;
 
 mod sequence;
-pub use sequence::{Identity, PassRef, PassSequence, Repeat, When};
+pub use sequence::{Identity, PassSequence};
 mod observe;
 pub use observe::{
     Observed, PassFailure, PassFailureCause, PassInvocation, PassLocation, PassObserver,
@@ -15,30 +15,6 @@ pub trait CompilerPass<Input> {
     type Error;
 
     fn run(&mut self, input: Input) -> Result<Self::Output, Self::Error>;
-
-    /// Borrow a configured pass for composition without moving it.
-    fn by_ref(&mut self) -> PassRef<'_, Self>
-    where
-        Self: Sized,
-    {
-        PassRef(self)
-    }
-
-    /// Execute a same-IR pass conditionally; a disabled pass returns its input.
-    fn when(self, enabled: bool) -> When<Self>
-    where
-        Self: Sized + CompilerPass<Input, Output = Input>,
-    {
-        When { pass: self, enabled }
-    }
-
-    /// Execute a same-IR pass or nested pipeline exactly `times` times.
-    fn repeat(self, times: usize) -> Repeat<Self>
-    where
-        Self: Sized + CompilerPass<Input, Output = Input>,
-    {
-        Repeat { pass: self, times }
-    }
 
     /// Observe this configured pass occurrence.
     fn with_observer<O>(self, location: PassLocation, observer: O) -> Observed<Self, O>

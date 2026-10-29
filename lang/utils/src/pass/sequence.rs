@@ -14,18 +14,6 @@ impl<Input> CompilerPass<Input> for Identity {
     }
 }
 
-/// A borrow of a pass, including its configuration and invocation state.
-pub struct PassRef<'p, P: ?Sized>(pub &'p mut P);
-
-impl<Input, P: CompilerPass<Input> + ?Sized> CompilerPass<Input> for PassRef<'_, P> {
-    type Output = P::Output;
-    type Error = P::Error;
-
-    fn run(&mut self, input: Input) -> Result<Self::Output, Self::Error> {
-        self.0.run(input)
-    }
-}
-
 /// A runtime-selected sequence preserving one IR and error type.
 ///
 /// ```
@@ -80,35 +68,5 @@ impl<Ir, E> CompilerPass<Ir> for PassSequence<'_, Ir, E> {
 
     fn run(&mut self, input: Ir) -> Result<Ir, E> {
         self.passes.iter_mut().try_fold(input, |ir, pass| pass.run(ir))
-    }
-}
-
-/// Conditionally execute the enclosed pass.
-pub struct When<P> {
-    pub pass: P,
-    pub enabled: bool,
-}
-
-impl<Ir, P: CompilerPass<Ir, Output = Ir>> CompilerPass<Ir> for When<P> {
-    type Output = Ir;
-    type Error = P::Error;
-
-    fn run(&mut self, input: Ir) -> Result<Ir, P::Error> {
-        if self.enabled { self.pass.run(input) } else { Ok(input) }
-    }
-}
-
-/// Repeat the enclosed pass a fixed number of times.
-pub struct Repeat<P> {
-    pub pass: P,
-    pub times: usize,
-}
-
-impl<Ir, P: CompilerPass<Ir, Output = Ir>> CompilerPass<Ir> for Repeat<P> {
-    type Output = Ir;
-    type Error = P::Error;
-
-    fn run(&mut self, input: Ir) -> Result<Ir, P::Error> {
-        (0..self.times).try_fold(input, |ir, _| self.pass.run(ir))
     }
 }

@@ -141,9 +141,9 @@ fn runtime_sequences_match_static_order_and_borrow_non_clone_configuration() {
     for text in [&b, &a] {
         dynamic = dynamic.with_pass(Append(text));
     }
+    let mut nested = pipeline![Identity, dynamic];
     for source in ["", "again:"] {
         let expected = fixed.run_infallible(Program(source.into()));
-        let mut nested = pipeline![Identity, dynamic.by_ref()];
         assert_eq!(nested.run_infallible(Program(source.into())), expected);
     }
     let mut empty = PassSequence::<Program, Infallible>::new();
@@ -166,29 +166,6 @@ fn runtime_sequence_failure_keeps_the_error_and_stops_at_each_position() {
         assert_eq!(passes.run(true), Ok(true));
         assert_eq!(calls.take(), [0, 1, 2]);
     }
-}
-
-#[test]
-fn conditional_and_repeated_groups_obey_bounds_and_stop_on_failure() {
-    let append = |mut value: String| {
-        value.push('a');
-        Ok::<_, Infallible>(value)
-    };
-    let double = |value: String| Ok::<_, Infallible>(value.repeat(2));
-    let mut group = pipeline![append, double].repeat(2);
-    assert_eq!(group.run_infallible(String::new()), "aaaaaa");
-    for mut disabled in [append.when(false).repeat(3), append.when(true).repeat(0)] {
-        assert_eq!(disabled.run_infallible("input".into()), "input");
-    }
-    assert_eq!(append.when(true).run_infallible(String::new()), "a");
-
-    let calls = RefCell::new(0);
-    let step = |value: u32| {
-        *calls.borrow_mut() += 1;
-        if value == 2 { Err(CompileError::Zero) } else { Ok(value + 1) }
-    };
-    assert_eq!(step.repeat(5).run(0), Err(CompileError::Zero));
-    assert_eq!(*calls.borrow(), 3);
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -232,18 +209,20 @@ impl PassObserver<u32, u32, InvalidValue> for Observer<'_> {
 }
 
 #[test]
-fn static_and_runtime_observation_agree_and_identify_repetitions() {
+fn static_and_runtime_observation_agree_and_count_repeated_runs() {
     let events = RefCell::new(Vec::new());
     let stage = |index| {
         let observer = Observer { events: &events, reject_before: false, reject_after: false };
         let location = PassLocation { path: vec![index], name: "increment".into() };
         (|value: u32| Ok::<_, InvalidValue>(value + 1)).with_observer(location, observer)
     };
-    let mut fixed = pipeline![stage(0), stage(1)].repeat(2);
-    assert_eq!(fixed.run(0).unwrap(), 4);
+    let mut fixed = pipeline![stage(0), stage(1)];
+    assert_eq!(fixed.run(0).unwrap(), 2);
+    assert_eq!(fixed.run(2).unwrap(), 4);
     let expected = events.take();
-    let mut dynamic = PassSequence::new().with_pass(stage(0)).with_pass(stage(1)).repeat(2);
-    assert_eq!(dynamic.run(0).unwrap(), 4);
+    let mut dynamic = PassSequence::new().with_pass(stage(0)).with_pass(stage(1));
+    assert_eq!(dynamic.run(0).unwrap(), 2);
+    assert_eq!(dynamic.run(2).unwrap(), 4);
     assert_eq!(events.take(), expected);
     let Observation::Before(last, 3) = &expected[6] else { panic!("second iteration") };
     assert_eq!(last.location.path, [1]);
